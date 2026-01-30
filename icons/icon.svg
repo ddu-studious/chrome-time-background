@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+    <!-- 背景圆 -->
+    <circle cx="64" cy="64" r="60" fill="#2196F3"/>
+    
+    <!-- 山水风景 -->
+    <path d="M24 88 L44 48 L64 68 L84 38 L104 88 Z" fill="#4CAF50"/>
+    <path d="M14 98 L114 98 L114 108 L14 108 Z" fill="#795548"/>
+    
+    <!-- 时钟外圈 -->
+    <circle cx="64" cy="64" r="40" fill="none" stroke="white" stroke-width="4"/>
+    
+    <!-- 时钟刻度 -->
+    <line x1="64" y1="28" x2="64" y2="34" stroke="white" stroke-width="2"/>
+    <line x1="100" y1="64" x2="94" y2="64" stroke="white" stroke-width="2"/>
+    <line x1="64" y1="100" x2="64" y2="94" stroke="white" stroke-width="2"/>
+    <line x1="28" y1="64" x2="34" y2="64" stroke="white" stroke-width="2"/>
+    
+    <!-- 时钟指针 -->
+    <line x1="64" y1="64" x2="64" y2="40" stroke="white" stroke-width="4" stroke-linecap="round"/>
+    <line x1="64" y1="64" x2="85" y2="64" stroke="white" stroke-width="4" stroke-linecap="round"/>
+    
+    <!-- 中心点 -->
+    <circle cx="64" cy="64" r="3" fill="white"/>
+</svg>

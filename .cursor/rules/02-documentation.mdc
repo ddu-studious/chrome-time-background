@@ -1,0 +1,425 @@
+# 中国风景时钟 - 开发规范
+
+## 项目结构规范
+
+### 文件组织
+
+```
+chrome-time-background/
+├── manifest.json          # 必须在根目录
+├── index.html             # 新标签页入口
+├── css/                   # 样式文件
+│   └── style.css
+├── js/                    # JavaScript 模块
+│   ├── main.js            # 主入口
+│   ├── clock.js           # 时钟模块
+│   ├── lunar.js           # 农历模块
+│   ├── holidays.js        # 节假日模块
+│   ├── weather.js         # 天气模块
+│   ├── settings.js        # 设置模块
+│   ├── i18n.js            # 国际化模块
+│   ├── memo.js            # 备忘录模块
+│   └── background.js      # Service Worker
+├── icons/                 # 图标资源
+├── test/                  # 测试文件
+├── docs/                  # 项目文档
+│   └── requirements/      # 需求文档
+├── README.md              # 项目说明
+├── CHANGELOG.md           # 变更日志
+└── ROADMAP.md             # 路线图
+```
+
+### 命名规范
+
+| 类型 | 规范 | 示例 |
+|------|------|------|
+| 文件名 | kebab-case | `memo.js`, `style.css` |
+| 变量/函数 | camelCase | `settingsManager`, `loadMemos()` |
+| 类名 | PascalCase | `MemoManager`, `WeatherService` |
+| CSS 类名 | kebab-case | `.memo-item`, `.time-container` |
+| CSS 变量 | kebab-case | `--color-primary`, `--glass-bg` |
+
+---
+
+## JavaScript 开发规范
+
+### 模块化设计
+
+每个功能模块作为类导出到 `window` 对象：
+
+```javascript
+// 模块定义示例 (memo.js)
+class MemoManager {
+    constructor() {
+        this.STORAGE_KEY = 'memos';
+        this.memos = [];
+    }
+    
+    async loadMemos() { /* ... */ }
+    async saveMemos() { /* ... */ }
+}
+
+// 导出到全局
+window.memoManager = new MemoManager();
+```
+
+### 异步处理
+
+优先使用 `async/await`：
+
+```javascript
+// ✅ 推荐
+async function loadMemos() {
+    const result = await chrome.storage.sync.get('memos');
+    return result.memos || [];
+}
+
+// ❌ 避免回调地狱
+chrome.storage.sync.get('memos', function(result) {
+    chrome.storage.local.get('settings', function(settings) {
+        // ...
+    });
+});
+```
+
+### Chrome Storage API 使用
+
+```javascript
+// 同步存储（用户设置，最大 100KB，8KB/项）
+const result = await chrome.storage.sync.get('settings');
+await chrome.storage.sync.set({ settings: {...} });
+
+// 本地存储（大量数据，最大 10MB）
+const data = await chrome.storage.local.get('memos');
+await chrome.storage.local.set({ memos: [...] });
+
+// 监听存储变化
+chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'sync' && changes.settings) {
+        applySettings(changes.settings.newValue);
+    }
+});
+```
+
+### Chrome Alarms API 使用
+
+```javascript
+// 创建定时提醒
+await chrome.alarms.create('task-reminder', {
+    when: Date.now() + 60000,  // 1分钟后
+    // 或者
+    delayInMinutes: 1,         // 延迟1分钟
+    periodInMinutes: 60        // 每60分钟重复
+});
+
+// 监听闹钟触发
+chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === 'task-reminder') {
+        showNotification();
+    }
+});
+
+// 清除闹钟
+await chrome.alarms.clear('task-reminder');
+```
+
+### Chrome Notifications API 使用
+
+```javascript
+// 创建通知
+await chrome.notifications.create('task-due', {
+    type: 'basic',
+    iconUrl: 'icons/icon128.png',
+    title: '任务提醒',
+    message: '您有一个任务即将到期',
+    priority: 2,
+    requireInteraction: true  // 保持显示直到用户操作
+});
+
+// 监听通知点击
+chrome.notifications.onClicked.addListener((notificationId) => {
+    if (notificationId === 'task-due') {
+        // 打开相关页面
+    }
+});
+```
+
+### 错误处理
+
+```javascript
+try {
+    const result = await chrome.storage.sync.get('memos');
+    this.memos = result.memos || [];
+} catch (error) {
+    console.error('加载备忘录失败:', error);
+    this.memos = [];
+}
+```
+
+---
+
+## CSS 开发规范
+
+### 磨砂玻璃效果
+
+```css
+.glass-panel {
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+```
+
+### CSS 变量
+
+```css
+:root {
+    /* 颜色 */
+    --color-primary: #1890ff;
+    --color-success: #52c41a;
+    --color-warning: #faad14;
+    --color-danger: #ff4d4f;
+    
+    /* 磨砂玻璃 */
+    --glass-bg: rgba(255, 255, 255, 0.15);
+    --glass-border: rgba(255, 255, 255, 0.2);
+    --glass-blur: 10px;
+    
+    /* 字体 */
+    --font-size-base: 14px;
+    --font-size-lg: 16px;
+    --font-size-xl: 24px;
+    
+    /* 动画 */
+    --transition-fast: 0.2s ease;
+    --transition-normal: 0.3s ease;
+}
+```
+
+### 响应式布局
+
+```css
+.container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+}
+
+.time-container {
+    text-align: center;
+}
+
+.memo-panel {
+    position: fixed;
+    left: 20px;
+    top: 20px;
+    width: 300px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+```
+
+---
+
+## HTML 结构规范
+
+### 新标签页结构
+
+```html
+<body>
+    <div class="container">
+        <!-- 时间显示 -->
+        <div class="time-wrapper">
+            <div class="time-container">
+                <div class="time" id="time">20:58:40</div>
+                <div class="date" id="date">2025年02月24日 星期一</div>
+                <div class="lunar" id="lunar">农历甲辰年正月十五</div>
+                <div class="holiday" id="holiday">元宵节</div>
+            </div>
+        </div>
+        
+        <!-- 天气显示 -->
+        <div class="weather-wrapper">
+            <div class="weather-container" id="weather">...</div>
+            <div class="forecast-container" id="forecast">...</div>
+        </div>
+    </div>
+    
+    <!-- 背景来源 -->
+    <div class="background-credit" id="background-credit">...</div>
+    
+    <!-- 操作按钮 -->
+    <div class="action-buttons">
+        <button id="memo-toggle-btn" class="action-btn">...</button>
+    </div>
+    
+    <!-- 按顺序加载脚本 -->
+    <script src="js/settings.js"></script>
+    <script src="js/i18n.js"></script>
+    <script src="js/lunar.js"></script>
+    <script src="js/clock.js"></script>
+    <script src="js/weather.js"></script>
+    <script src="js/holidays.js"></script>
+    <script src="js/memo.js"></script>
+    <script src="js/background.js"></script>
+    <script src="js/main.js"></script>
+</body>
+```
+
+---
+
+## Manifest V3 规范
+
+### 权限声明
+
+```json
+{
+    "manifest_version": 3,
+    "permissions": [
+        "storage",      // 数据存储
+        "geolocation",  // 地理位置
+        "tabs",         // 标签页管理
+        "alarms",       // 定时任务（需要添加）
+        "notifications" // 通知功能（需要添加）
+    ],
+    "host_permissions": [
+        "https://*.unsplash.com/*",
+        "https://devapi.qweather.com/*"
+    ],
+    "chrome_url_overrides": {
+        "newtab": "index.html"
+    }
+}
+```
+
+### Service Worker
+
+```json
+{
+    "background": {
+        "service_worker": "js/background.js"
+    }
+}
+```
+
+---
+
+## 功能扩展规范
+
+### 添加新的备忘录功能
+
+在 `js/memo.js` 中扩展 `MemoManager` 类：
+
+```javascript
+class MemoManager {
+    // 添加每日任务功能
+    async addDailyTask(task) {
+        const newTask = {
+            id: this.generateId(),
+            title: task.title,
+            dueDate: task.dueDate,
+            completed: false,
+            createdAt: Date.now()
+        };
+        this.memos.push(newTask);
+        await this.saveMemos();
+        return newTask;
+    }
+    
+    // 检查过期任务
+    checkOverdueTasks() {
+        const now = new Date();
+        return this.memos.filter(memo => {
+            if (!memo.dueDate || memo.completed) return false;
+            return new Date(memo.dueDate) < now;
+        });
+    }
+}
+```
+
+### 添加提醒功能
+
+在 `js/background.js` 中：
+
+```javascript
+// 设置定期检查
+chrome.alarms.create('check-due-tasks', {
+    periodInMinutes: 30
+});
+
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+    if (alarm.name === 'check-due-tasks') {
+        await checkAndNotifyDueTasks();
+    }
+});
+
+async function checkAndNotifyDueTasks() {
+    const { memos } = await chrome.storage.local.get('memos');
+    const now = new Date();
+    
+    for (const memo of memos || []) {
+        if (memo.dueDate && !memo.completed) {
+            const dueDate = new Date(memo.dueDate);
+            const diff = dueDate - now;
+            
+            // 24小时内到期
+            if (diff > 0 && diff < 24 * 60 * 60 * 1000) {
+                await chrome.notifications.create(`task-${memo.id}`, {
+                    type: 'basic',
+                    iconUrl: 'icons/icon128.png',
+                    title: '任务提醒',
+                    message: `任务 "${memo.title}" 将在 24 小时内到期`,
+                    priority: 2
+                });
+            }
+        }
+    }
+}
+```
+
+---
+
+## 调试技巧
+
+### 控制台调试
+
+```javascript
+// 在 memo.js 中添加调试日志
+console.log('备忘录数量:', this.memos.length);
+console.log('当前设置:', await window.settingsManager.get());
+```
+
+### 查看日志位置
+
+- **新标签页日志**: 右键页面 -> 检查 -> Console
+- **Background 日志**: chrome://extensions/ -> 详情 -> 检查视图: Service Worker
+
+### 重新加载扩展
+
+1. chrome://extensions/
+2. 点击扩展卡片上的刷新按钮
+3. 打开新标签页测试
+
+---
+
+## 版本发布检查清单
+
+- [ ] 更新 `manifest.json` 中的版本号
+- [ ] 更新 `CHANGELOG.md` 版本历史
+- [ ] 更新 `ROADMAP.md` 进度状态
+- [ ] 更新 `README.md` 版本号
+- [ ] 测试时钟功能
+- [ ] 测试天气功能
+- [ ] 测试备忘录功能
+- [ ] 测试背景切换
+- [ ] 测试多语言切换
+- [ ] 检查控制台无报错
+
+---
+
+**最后更新**: 2026-01-30

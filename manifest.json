@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "中国风景时钟",
+  "version": "1.4.1",
+  "description": "一个展示中国风景的新标签页时钟，支持天气显示、多语言和备忘录功能",
+  "permissions": [
+    "storage",
+    "geolocation",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://*.unsplash.com/*",
+    "https://devapi.qweather.com/*"
+  ],
+  "chrome_url_overrides": {
+    "newtab": "index.html"
+  },
+  "action": {
+    "default_title": "中国风景时钟",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "js/background.js"
+  }
+}

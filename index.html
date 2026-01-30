@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>新标签页 - 中国风景时钟</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <div class="time-wrapper">
+            <div class="time-container">
+                <div class="time" id="time">20:58:40</div>
+                <div class="date" id="date">2025年02月24日 星期一</div>
+                <div class="lunar" id="lunar">农历甲辰年正月十五</div>
+                <div class="holiday" id="holiday">元宵节</div>
+            </div>
+        </div>
+        <div class="weather-wrapper">
+            <div class="weather-container" id="weather">
+                <div class="current-weather">
+                    <span class="weather-icon">🌤</span>
+                    <span class="weather-temp">23°C</span>
+                    <span class="weather-desc">晴朗</span>
+                    <span class="weather-city">北京市</span>
+                </div>
+            </div>
+            <div class="forecast-container" id="forecast">
+                <!-- 天气预报将在这里显示 -->
+            </div>
+        </div>
+    </div>
+    <div class="background-credit" id="background-credit">
+        长城 - 慕田峪长城
+    </div>
+    <div class="keyboard-hint">按空格键切换背景</div>
+    
+    <div class="action-buttons">
+        <button id="memo-toggle-btn" class="action-btn" title="备忘录">
+            <i class="fas fa-sticky-note"></i>
+        </button>
+    </div>
+
+    <script src="js/settings.js"></script>
+    <script src="js/i18n.js"></script>
+    <script src="js/lunar.js"></script>
+    <script src="js/clock.js"></script>
+    <script src="js/weather.js"></script>
+    <script src="js/holidays.js"></script>
+    <script src="js/memo.js"></script>
+    <script src="js/background.js"></script>
+    <script src="js/main.js"></script>
+  </body>
+</html>
