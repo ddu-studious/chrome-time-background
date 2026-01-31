@@ -386,8 +386,16 @@
      * 获取今天的日期字符串 (YYYY-MM-DD)
      * @returns {string} 日期字符串
      */
+    function formatLocalDateYMD(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+
     function getTodayDate() {
-        return new Date().toISOString().split('T')[0];
+        // 本地日期语义：dueDate 是 YYYY-MM-DD（本地），这里也应按本地计算
+        return formatLocalDateYMD(new Date());
     }
 
     /**
@@ -641,7 +649,8 @@
             // 推迟到明天
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
-            task.dueDate = tomorrow.toISOString().split('T')[0];
+            tomorrow.setHours(0, 0, 0, 0);
+            task.dueDate = formatLocalDateYMD(tomorrow);
             task.updatedAt = Date.now();
             task.overdueNotified = false;  // 重置过期通知标记
             await chrome.storage.local.set({ memos });

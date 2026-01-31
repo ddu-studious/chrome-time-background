@@ -181,6 +181,9 @@ class MemoManager {
             <button class="sidebar-tool-btn" id="sidebar-stats-btn" title="统计分析">
                 <i class="fas fa-chart-line"></i>
             </button>
+            <button class="sidebar-tool-btn" id="sidebar-calendar-btn" title="日历 / 回看完成">
+                <i class="fas fa-calendar-days"></i>
+            </button>
             <button class="sidebar-settings-btn" id="sidebar-settings-btn" title="管理分类">
                 <i class="fas fa-cog"></i>
             </button>
@@ -319,6 +322,12 @@ class MemoManager {
         const statsBtn = document.getElementById('sidebar-stats-btn');
         if (statsBtn) {
             statsBtn.addEventListener('click', () => this.showTaskStatistics());
+        }
+
+        // 日历按钮
+        const calendarBtn = document.getElementById('sidebar-calendar-btn');
+        if (calendarBtn) {
+            calendarBtn.addEventListener('click', () => this.showCalendarPanel());
         }
         
         // 设置按钮（分类管理）
@@ -855,7 +864,8 @@ class MemoManager {
         const day = d.getDay();
         const diff = d.getDate() - day + (day === 0 ? -6 : 1); // 调整到周一
         d.setDate(diff);
-        return d.toISOString().split('T')[0];
+        d.setHours(0, 0, 0, 0);
+        return this.formatLocalDateYMD(d);
     }
     
     /**
@@ -866,7 +876,8 @@ class MemoManager {
     getDateString(offset) {
         const date = new Date();
         date.setDate(date.getDate() + offset);
-        return date.toISOString().split('T')[0];
+        date.setHours(0, 0, 0, 0);
+        return this.formatLocalDateYMD(date);
     }
     
     /**
@@ -876,7 +887,7 @@ class MemoManager {
      */
     formatDateFromTimestamp(timestamp) {
         if (!timestamp) return null;
-        return new Date(timestamp).toISOString().split('T')[0];
+        return this.formatLocalDateYMD(new Date(timestamp));
     }
     
     /**
@@ -1645,6 +1656,390 @@ class MemoManager {
             });
         }
     }
+
+    /**
+     * 显示日历面板（按日期回看完成任务）
+     */
+    showCalendarPanel() {
+        const existingPanel = document.getElementById('calendar-panel');
+        if (existingPanel) existingPanel.remove();
+
+        this.calendarViewDate = this.calendarViewDate || new Date();
+        // 统一将 viewDate 对齐到当月 1 号，避免跨月边界计算复杂度
+        this.calendarViewDate = new Date(this.calendarViewDate.getFullYear(), this.calendarViewDate.getMonth(), 1);
+
+        // 默认选中“今天”
+        this.calendarSelectedDate = this.calendarSelectedDate || this.formatLocalDateYMD(new Date());
+
+        const panel = document.createElement('div');
+        panel.id = 'calendar-panel';
+        panel.className = 'calendar-panel';
+
+        this.renderCalendarPanelContent(panel);
+        document.body.appendChild(panel);
+        this.bindCalendarPanelEvents(panel);
+
+        requestAnimationFrame(() => panel.classList.add('active'));
+    }
+
+    /**
+     * 渲染日历面板内容
+     * @param {HTMLElement} panel
+     */
+    renderCalendarPanelContent(panel) {
+        const viewYear = this.calendarViewDate.getFullYear();
+        const viewMonth = this.calendarViewDate.getMonth(); // 0-11
+
+        const taskMap = this.buildTaskMapByCreatedDate();
+        const selectedKey = this.calendarSelectedDate;
+        const selectedTasks = taskMap.get(selectedKey) || [];
+
+        const monthLabel = `${viewYear}年${viewMonth + 1}月`;
+
+        panel.innerHTML = `
+            <div class="calendar-overlay"></div>
+            <div class="calendar-content">
+                <div class="calendar-header">
+                    <h3><i class="fas fa-calendar-days"></i> 日历回看</h3>
+                    <button class="calendar-close" id="calendar-close"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="calendar-body">
+                    <div class="calendar-left">
+                        <div class="calendar-month-nav">
+                            <button class="calendar-nav-btn" id="calendar-prev-month" title="上个月">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <div class="calendar-month-label">${monthLabel}</div>
+                            <button class="calendar-nav-btn" id="calendar-next-month" title="下个月">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                            <button class="calendar-today-btn" id="calendar-today-btn" title="回到今天">今天</button>
+                        </div>
+                        ${this.renderCalendarMonthGrid(viewYear, viewMonth, taskMap)}
+                    </div>
+                    <div class="calendar-details">
+                        <div class="calendar-details-header">
+                            <div class="calendar-details-date">${selectedKey}</div>
+                            <div class="calendar-details-subtitle">共 ${selectedTasks.length} 项任务</div>
+                        </div>
+                        <div class="calendar-task-list">
+                            ${this.renderCalendarTaskList(selectedTasks)}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * 渲染当前月网格（周一作为一周起始）
+     * @param {number} year
+     * @param {number} month 0-11
+     * @param {Map<string, Object[]>} taskMap
+     * @returns {string}
+     */
+    renderCalendarMonthGrid(year, month, taskMap) {
+        const firstDay = new Date(year, month, 1);
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const lastMonthDays = new Date(year, month, 0).getDate();
+
+        // 周一为起始：JS getDay() 周日=0 → 转换为 周一=0...周日=6
+        const firstWeekday = (firstDay.getDay() + 6) % 7;
+        const totalCells = Math.ceil((firstWeekday + daysInMonth) / 7) * 7;
+
+        const todayKey = this.formatLocalDateYMD(new Date());
+        const cells = [];
+
+        for (let i = 0; i < totalCells; i++) {
+            const dayOffset = i - firstWeekday + 1; // 1..daysInMonth
+            let cellDate;
+            let dayNumber;
+            let isOutside = false;
+
+            if (dayOffset < 1) {
+                // 上月补位
+                isOutside = true;
+                dayNumber = lastMonthDays + dayOffset;
+                cellDate = new Date(year, month - 1, dayNumber);
+            } else if (dayOffset > daysInMonth) {
+                // 下月补位
+                isOutside = true;
+                dayNumber = dayOffset - daysInMonth;
+                cellDate = new Date(year, month + 1, dayNumber);
+            } else {
+                dayNumber = dayOffset;
+                cellDate = new Date(year, month, dayNumber);
+            }
+
+            const key = this.formatLocalDateYMD(cellDate);
+            const count = (taskMap.get(key) || []).length;
+            const selected = key === this.calendarSelectedDate;
+            const isToday = key === todayKey;
+            
+            // 获取农历信息
+            const lunarInfo = this.getLunarInfoForDate(cellDate);
+
+            cells.push(`
+                <div class="calendar-day ${isOutside ? 'outside' : ''} ${selected ? 'selected' : ''} ${isToday ? 'today' : ''}"
+                     data-date="${key}">
+                    <div class="calendar-day-number">${dayNumber}</div>
+                    <div class="calendar-day-lunar ${lunarInfo.type}">${lunarInfo.text}</div>
+                    ${count > 0 ? `<div class="calendar-day-badge">${count}</div>` : ''}
+                </div>
+            `);
+        }
+
+        return `
+            <div class="calendar-grid">
+                <div class="calendar-weekdays">
+                    <div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div><div>日</div>
+                </div>
+                <div class="calendar-days">
+                    ${cells.join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * 获取指定日期的农历信息
+     * @param {Date} date 
+     * @returns {{text: string, type: string}} 显示文本和类型(festival/jieqi/normal)
+     */
+    getLunarInfoForDate(date) {
+        // 检查 lunar-javascript 库是否可用
+        if (typeof Solar === 'undefined') {
+            return { text: '', type: '' };
+        }
+        
+        try {
+            const y = date.getFullYear();
+            const m = date.getMonth() + 1;
+            const d = date.getDate();
+            
+            const solar = Solar.fromYmd(y, m, d);
+            const lunar = solar.getLunar();
+            
+            // 优先级：节气 > 农历节日 > 公历节日 > 农历初一(显示月份) > 农历日期
+            
+            // 1. 检查节气
+            const jieQi = lunar.getJieQi();
+            if (jieQi) {
+                return { text: jieQi, type: 'jieqi' };
+            }
+            
+            // 2. 检查农历节日
+            const lunarFestivals = lunar.getFestivals();
+            if (lunarFestivals && lunarFestivals.length > 0) {
+                // 取第一个节日，截取前3个字符以免太长
+                const festivalName = lunarFestivals[0];
+                return { 
+                    text: festivalName.length > 3 ? festivalName.substring(0, 3) : festivalName, 
+                    type: 'festival' 
+                };
+            }
+            
+            // 3. 检查公历节日
+            const solarFestivals = solar.getFestivals();
+            if (solarFestivals && solarFestivals.length > 0) {
+                const festivalName = solarFestivals[0];
+                return { 
+                    text: festivalName.length > 3 ? festivalName.substring(0, 3) : festivalName, 
+                    type: 'festival' 
+                };
+            }
+            
+            // 4. 农历初一显示月份，其他显示日期
+            const lunarDay = lunar.getDay();
+            if (lunarDay === 1) {
+                return { text: lunar.getMonthInChinese() + '月', type: '' };
+            }
+            
+            return { text: lunar.getDayInChinese(), type: '' };
+            
+        } catch (e) {
+            console.warn('获取农历信息失败:', e);
+            return { text: '', type: '' };
+        }
+    }
+
+    /**
+     * 渲染选中日期的“完成任务列表”
+     * @param {Object[]} tasks
+     * @returns {string}
+     */
+    renderCalendarTaskList(tasks) {
+        if (!tasks || tasks.length === 0) {
+            return `
+                <div class="calendar-empty">
+                    <i class="fas fa-mug-hot"></i>
+                    <p>当天无任务</p>
+                </div>
+            `;
+        }
+
+        return tasks.map(task => {
+            const createdTime = task.createdAt ? this.formatLocalTimeHM(task.createdAt) : '';
+            const title = this.escapeHtml(task.title || '无标题');
+            const text = task.text ? this.escapeHtml(task.text.substring(0, 80)) : '';
+            const categoryName = task.categoryId ? this.escapeHtml(this.getCategoryName(task.categoryId) || '') : '';
+            const isCompleted = task.completed;
+            
+            return `
+                <div class="calendar-task-item ${isCompleted ? 'completed' : ''}" data-task-id="${task.id}">
+                    <div class="calendar-task-status">
+                        <i class="fas ${isCompleted ? 'fa-check-circle' : 'fa-circle'}"></i>
+                    </div>
+                    <div class="calendar-task-main">
+                        <div class="calendar-task-title">${title}</div>
+                        ${text ? `<div class="calendar-task-desc">${text}${task.text && task.text.length > 80 ? '...' : ''}</div>` : ''}
+                        <div class="calendar-task-meta">
+                            ${createdTime ? `<span class="calendar-task-time"><i class="far fa-clock"></i> ${createdTime}</span>` : ''}
+                            ${categoryName ? `<span class="calendar-task-category"><i class="fas fa-folder"></i> ${categoryName}</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="calendar-task-action" title="编辑任务"><i class="fas fa-pen"></i></div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    /**
+     * 绑定日历面板事件
+     * @param {HTMLElement} panel
+     */
+    bindCalendarPanelEvents(panel) {
+        const closePanel = () => {
+            panel.classList.remove('active');
+            setTimeout(() => panel.remove(), 300);
+        };
+
+        const closeBtn = panel.querySelector('#calendar-close');
+        if (closeBtn) closeBtn.addEventListener('click', closePanel);
+
+        const overlay = panel.querySelector('.calendar-overlay');
+        if (overlay) overlay.addEventListener('click', closePanel);
+
+        // 月份切换
+        const prevBtn = panel.querySelector('#calendar-prev-month');
+        const nextBtn = panel.querySelector('#calendar-next-month');
+        if (prevBtn) {
+            prevBtn.addEventListener('click', () => {
+                this.calendarViewDate = new Date(this.calendarViewDate.getFullYear(), this.calendarViewDate.getMonth() - 1, 1);
+                this.renderCalendarPanelContent(panel);
+                this.bindCalendarPanelEvents(panel);
+            });
+        }
+        if (nextBtn) {
+            nextBtn.addEventListener('click', () => {
+                this.calendarViewDate = new Date(this.calendarViewDate.getFullYear(), this.calendarViewDate.getMonth() + 1, 1);
+                this.renderCalendarPanelContent(panel);
+                this.bindCalendarPanelEvents(panel);
+            });
+        }
+
+        // 回到今天
+        const todayBtn = panel.querySelector('#calendar-today-btn');
+        if (todayBtn) {
+            todayBtn.addEventListener('click', () => {
+                const today = new Date();
+                this.calendarViewDate = new Date(today.getFullYear(), today.getMonth(), 1);
+                this.calendarSelectedDate = this.formatLocalDateYMD(today);
+                this.renderCalendarPanelContent(panel);
+                this.bindCalendarPanelEvents(panel);
+            });
+        }
+
+        // 日期点击
+        panel.querySelectorAll('.calendar-day').forEach(el => {
+            el.addEventListener('click', () => {
+                const dateKey = el.dataset.date;
+                if (!dateKey) return;
+                this.calendarSelectedDate = dateKey;
+
+                // 若点击了“本月外日期”，跟随切换月份
+                const dateObj = new Date(dateKey + 'T00:00:00');
+                this.calendarViewDate = new Date(dateObj.getFullYear(), dateObj.getMonth(), 1);
+
+                this.renderCalendarPanelContent(panel);
+                this.bindCalendarPanelEvents(panel);
+            });
+        });
+
+        // 任务条目点击：先关闭日历面板，再打开编辑表单
+        panel.querySelectorAll('.calendar-task-item').forEach(el => {
+            el.addEventListener('click', () => {
+                const taskId = el.dataset.taskId;
+                if (!taskId) return;
+                const task = this.memos.find(m => m.id === taskId);
+                if (task) {
+                    // 先关闭日历面板
+                    closePanel();
+                    // 延迟打开编辑表单，确保日历面板动画完成
+                    setTimeout(() => {
+                        this.showSidebarForm(task);
+                    }, 100);
+                }
+            });
+        });
+    }
+
+    /**
+     * 将已完成任务按“完成日(YYYY-MM-DD)”聚合
+     * @returns {Map<string, Object[]>}
+     */
+    buildTaskMapByCreatedDate() {
+        const map = new Map();
+        for (const memo of this.memos) {
+            if (!memo || !memo.createdAt) continue;
+
+            // 复用任务列表的日期归类逻辑（本地日期 YYYY-MM-DD）
+            const key = this.formatDateFromTimestamp(memo.createdAt);
+            if (!key) continue;
+            if (!map.has(key)) map.set(key, []);
+            map.get(key).push(memo);
+        }
+        // 按创建时间倒序排列
+        for (const [key, arr] of map.entries()) {
+            arr.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+            map.set(key, arr);
+        }
+        return map;
+    }
+
+    /**
+     * 格式化本地日期为 YYYY-MM-DD（避免 UTC 跨日）
+     * @param {Date} date
+     * @returns {string}
+     */
+    formatLocalDateYMD(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+
+    /**
+     * 格式化本地时间为 HH:MM
+     * @param {number} ts
+     * @returns {string}
+     */
+    formatLocalTimeHM(ts) {
+        const date = new Date(ts);
+        const hh = String(date.getHours()).padStart(2, '0');
+        const mm = String(date.getMinutes()).padStart(2, '0');
+        return `${hh}:${mm}`;
+    }
+
+    /**
+     * 若日历面板开启，则刷新其内容（用于完成状态变化后的即时更新）
+     */
+    refreshCalendarPanelIfOpen() {
+        const panel = document.getElementById('calendar-panel');
+        if (!panel) return;
+        this.renderCalendarPanelContent(panel);
+        this.bindCalendarPanelEvents(panel);
+    }
     
     /**
      * 计算任务统计数据
@@ -2362,10 +2757,12 @@ class MemoManager {
         if (!task) return;
         
         task.completed = !task.completed;
+        task.completedAt = task.completed ? Date.now() : null;
         task.updatedAt = Date.now();
         
         await this.saveMemos();
         this.renderSidebarTaskList();
+        this.refreshCalendarPanelIfOpen();
     }
     
     /**
@@ -2648,7 +3045,8 @@ class MemoManager {
      * @returns {string} 日期字符串
      */
     getTodayDate() {
-        return new Date().toISOString().split('T')[0];
+        // 本地日期语义：避免 UTC 跨日导致“今天/昨天”判断错位
+        return this.formatLocalDateYMD(new Date());
     }
 
     /**
@@ -3013,6 +3411,7 @@ class MemoManager {
         if (!memo) return false;
         
         memo.completed = !memo.completed;
+        memo.completedAt = memo.completed ? Date.now() : null;
         memo.updatedAt = Date.now();
         
         // 找到对应的任务项元素
@@ -3042,6 +3441,7 @@ class MemoManager {
         }
         
         this.saveMemos();
+        this.refreshCalendarPanelIfOpen();
         return true;
     }
 
@@ -4472,10 +4872,12 @@ class MemoManager {
         if (!task) return;
         
         task.completed = !task.completed;
+        task.completedAt = task.completed ? Date.now() : null;
         task.updatedAt = Date.now();
         
         await this.saveMemos();
         this.renderPanelTaskList();
+        this.refreshCalendarPanelIfOpen();
     }
     
     /**
