@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>任务统计仪表盘 - 可视化分析</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+            color: #fff;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 40px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+        }
+        
+        .stat-card.total::before { background: #64b4ff; }
+        .stat-card.completed::before { background: #5cd85c; }
+        .stat-card.pending::before { background: #ffc857; }
+        .stat-card.overdue::before { background: #ff6b6b; }
+        
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            margin-bottom: 16px;
+        }
+        
+        .stat-card.total .stat-icon { background: rgba(100, 180, 255, 0.2); color: #64b4ff; }
+        .stat-card.completed .stat-icon { background: rgba(92, 216, 92, 0.2); color: #5cd85c; }
+        .stat-card.pending .stat-icon { background: rgba(255, 200, 87, 0.2); color: #ffc857; }
+        .stat-card.overdue .stat-icon { background: rgba(255, 107, 107, 0.2); color: #ff6b6b; }
+        
+        .stat-value {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+        
+        .stat-change {
+            font-size: 12px;
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .stat-change.up { color: #5cd85c; }
+        .stat-change.down { color: #ff6b6b; }
+        
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .chart-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .chart-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .chart-title i {
+            color: #64b4ff;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 250px;
+        }
+        
+        .recent-tasks {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .recent-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .recent-title i {
+            color: #5cd85c;
+        }
+        
+        .task-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .task-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+        
+        .task-status {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        
+        .task-status.completed { background: #5cd85c; }
+        .task-status.pending { background: #ffc857; }
+        .task-status.overdue { background: #ff6b6b; }
+        
+        .task-info {
+            flex: 1;
+        }
+        
+        .task-title {
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+        
+        .task-meta {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .task-date {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.4);
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: rgba(255, 255, 255, 0.4);
+        }
+        
+        .empty-state i {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+        
+        .date-range {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 30px;
+            justify-content: center;
+        }
+        
+        .date-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.7);
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s ease;
+        }
+        
+        .date-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        .date-btn.active {
+            background: rgba(100, 180, 255, 0.3);
+            color: #64b4ff;
+        }
+        
+        .productivity-score {
+            text-align: center;
+            padding: 30px;
+            background: linear-gradient(135deg, rgba(100, 180, 255, 0.2), rgba(92, 216, 92, 0.2));
+            border-radius: 16px;
+            margin-bottom: 30px;
+        }
+        
+        .score-value {
+            font-size: 72px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #64b4ff, #5cd85c);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .score-label {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-top: 8px;
+        }
+        
+        .score-desc {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1><i class="fas fa-chart-line"></i> 任务统计仪表盘</h1>
+        <p class="subtitle">可视化你的任务完成情况和生产力趋势</p>
+        
+        <!-- 日期范围选择 -->
+        <div class="date-range">
+            <button class="date-btn" data-range="7">近 7 天</button>
+            <button class="date-btn active" data-range="30">近 30 天</button>
+            <button class="date-btn" data-range="90">近 90 天</button>
+            <button class="date-btn" data-range="all">全部</button>
+        </div>
+        
+        <!-- 生产力评分 -->
+        <div class="productivity-score">
+            <div class="score-value" id="productivity-score">--</div>
+            <div class="score-label">生产力评分</div>
+            <div class="score-desc" id="score-desc">正在计算...</div>
+        </div>
+        
+        <!-- 统计卡片 -->
+        <div class="stats-grid">
+            <div class="stat-card total">
+                <div class="stat-icon"><i class="fas fa-tasks"></i></div>
+                <div class="stat-value" id="stat-total">0</div>
+                <div class="stat-label">总任务数</div>
+            </div>
+            <div class="stat-card completed">
+                <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+                <div class="stat-value" id="stat-completed">0</div>
+                <div class="stat-label">已完成</div>
+                <div class="stat-change up" id="completion-rate">
+                    <i class="fas fa-arrow-up"></i> 完成率 --%
+                </div>
+            </div>
+            <div class="stat-card pending">
+                <div class="stat-icon"><i class="fas fa-hourglass-half"></i></div>
+                <div class="stat-value" id="stat-pending">0</div>
+                <div class="stat-label">待完成</div>
+            </div>
+            <div class="stat-card overdue">
+                <div class="stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                <div class="stat-value" id="stat-overdue">0</div>
+                <div class="stat-label">已过期</div>
+            </div>
+        </div>
+        
+        <!-- 图表区域 -->
+        <div class="charts-grid">
+            <div class="chart-card">
+                <div class="chart-title">
+                    <i class="fas fa-chart-bar"></i>
+                    每日任务完成趋势
+                </div>
+                <div class="chart-container">
+                    <canvas id="dailyChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="chart-card">
+                <div class="chart-title">
+                    <i class="fas fa-chart-pie"></i>
+                    任务状态分布
+                </div>
+                <div class="chart-container">
+                    <canvas id="statusChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="chart-card">
+                <div class="chart-title">
+                    <i class="fas fa-chart-line"></i>
+                    优先级分布
+                </div>
+                <div class="chart-container">
+                    <canvas id="priorityChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="chart-card">
+                <div class="chart-title">
+                    <i class="fas fa-folder"></i>
+                    分类分布
+                </div>
+                <div class="chart-container">
+                    <canvas id="categoryChart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 最近完成的任务 -->
+        <div class="recent-tasks">
+            <div class="recent-title">
+                <i class="fas fa-history"></i>
+                最近完成的任务
+            </div>
+            <div class="task-list" id="recent-task-list">
+                <div class="empty-state">
+                    <i class="fas fa-inbox"></i>
+                    <p>暂无完成的任务</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 任务统计仪表盘
+        class TaskStatistics {
+            constructor() {
+                this.data = { memos: [], categories: [] };
+                this.dateRange = 30;
+                this.charts = {};
+                
+                this.initElements();
+                this.bindEvents();
+                this.loadData();
+            }
+            
+            initElements() {
+                this.statTotal = document.getElementById('stat-total');
+                this.statCompleted = document.getElementById('stat-completed');
+                this.statPending = document.getElementById('stat-pending');
+                this.statOverdue = document.getElementById('stat-overdue');
+                this.completionRate = document.getElementById('completion-rate');
+                this.productivityScore = document.getElementById('productivity-score');
+                this.scoreDesc = document.getElementById('score-desc');
+                this.recentTaskList = document.getElementById('recent-task-list');
+            }
+            
+            bindEvents() {
+                document.querySelectorAll('.date-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        document.querySelectorAll('.date-btn').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        this.dateRange = btn.dataset.range === 'all' ? 9999 : parseInt(btn.dataset.range);
+                        this.updateStats();
+                        this.updateCharts();
+                    });
+                });
+            }
+            
+            async loadData() {
+                try {
+                    const result = await new Promise(resolve => {
+                        if (typeof chrome !== 'undefined' && chrome.storage) {
+                            chrome.storage.local.get(['memos', 'memosCategories'], resolve);
+                        } else {
+                            // 演示数据
+                            const demoMemos = this.generateDemoData();
+                            resolve({
+                                memos: demoMemos,
+                                memosCategories: [
+                                    { id: '1', name: '工作', color: '#ff6b6b' },
+                                    { id: '2', name: '学习', color: '#64b4ff' },
+                                    { id: '3', name: '生活', color: '#5cd85c' }
+                                ]
+                            });
+                        }
+                    });
+                    
+                    this.data.memos = result.memos || [];
+                    this.data.categories = result.memosCategories || [];
+                    
+                    this.updateStats();
+                    this.initCharts();
+                    this.updateRecentTasks();
+                } catch (error) {
+                    console.error('加载数据失败:', error);
+                }
+            }
+            
+            generateDemoData() {
+                const memos = [];
+                const priorities = ['high', 'medium', 'low', 'none'];
+                const categoryIds = ['1', '2', '3', null];
+                
+                for (let i = 0; i < 50; i++) {
+                    const daysAgo = Math.floor(Math.random() * 60);
+                    const date = new Date();
+                    date.setDate(date.getDate() - daysAgo);
+                    
+                    const completed = Math.random() > 0.3;
+                    const isOverdue = !completed && Math.random() > 0.7;
+                    
+                    let dueDate = new Date();
+                    if (isOverdue) {
+                        dueDate.setDate(dueDate.getDate() - Math.floor(Math.random() * 10));
+                    } else {
+                        dueDate.setDate(dueDate.getDate() + Math.floor(Math.random() * 30));
+                    }
+                    
+                    memos.push({
+                        id: String(i + 1),
+                        title: `示例任务 ${i + 1}`,
+                        completed: completed,
+                        createdAt: date.getTime(),
+                        updatedAt: completed ? (date.getTime() + Math.random() * 86400000 * 3) : date.getTime(),
+                        priority: priorities[Math.floor(Math.random() * priorities.length)],
+                        categoryId: categoryIds[Math.floor(Math.random() * categoryIds.length)],
+                        dueDate: dueDate.toISOString().split('T')[0]
+                    });
+                }
+                
+                return memos;
+            }
+            
+            getFilteredMemos() {
+                const cutoffDate = new Date();
+                cutoffDate.setDate(cutoffDate.getDate() - this.dateRange);
+                
+                return this.data.memos.filter(memo => {
+                    const memoDate = new Date(memo.createdAt);
+                    return memoDate >= cutoffDate;
+                });
+            }
+            
+            updateStats() {
+                const memos = this.getFilteredMemos();
+                const today = new Date().toISOString().split('T')[0];
+                
+                const total = memos.length;
+                const completed = memos.filter(m => m.completed).length;
+                const pending = total - completed;
+                const overdue = memos.filter(m => !m.completed && m.dueDate && m.dueDate < today).length;
+                
+                this.statTotal.textContent = total;
+                this.statCompleted.textContent = completed;
+                this.statPending.textContent = pending;
+                this.statOverdue.textContent = overdue;
+                
+                const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
+                this.completionRate.innerHTML = `<i class="fas fa-arrow-${rate >= 50 ? 'up' : 'down'}"></i> 完成率 ${rate}%`;
+                this.completionRate.className = `stat-change ${rate >= 50 ? 'up' : 'down'}`;
+                
+                // 计算生产力评分
+                this.calculateProductivityScore(total, completed, overdue);
+            }
+            
+            calculateProductivityScore(total, completed, overdue) {
+                if (total === 0) {
+                    this.productivityScore.textContent = '--';
+                    this.scoreDesc.textContent = '暂无任务数据';
+                    return;
+                }
+                
+                // 评分算法：完成率 * 0.7 + (1 - 过期率) * 0.3
+                const completionRate = completed / total;
+                const overdueRate = overdue / total;
+                const score = Math.round((completionRate * 0.7 + (1 - overdueRate) * 0.3) * 100);
+                
+                this.productivityScore.textContent = score;
+                
+                let desc;
+                if (score >= 90) desc = '太棒了！你的生产力非常高！🌟';
+                else if (score >= 70) desc = '做得不错，继续保持！💪';
+                else if (score >= 50) desc = '还有提升空间，加油！🎯';
+                else desc = '需要改进任务管理策略 📝';
+                
+                this.scoreDesc.textContent = desc;
+            }
+            
+            initCharts() {
+                Chart.defaults.color = 'rgba(255, 255, 255, 0.7)';
+                Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.1)';
+                
+                this.initDailyChart();
+                this.initStatusChart();
+                this.initPriorityChart();
+                this.initCategoryChart();
+            }
+            
+            initDailyChart() {
+                const ctx = document.getElementById('dailyChart').getContext('2d');
+                const { labels, completed, created } = this.getDailyData();
+                
+                this.charts.daily = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: '完成',
+                                data: completed,
+                                backgroundColor: 'rgba(92, 216, 92, 0.6)',
+                                borderRadius: 4
+                            },
+                            {
+                                label: '创建',
+                                data: created,
+                                backgroundColor: 'rgba(100, 180, 255, 0.6)',
+                                borderRadius: 4
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'top' }
+                        },
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
+                });
+            }
+            
+            getDailyData() {
+                const days = Math.min(this.dateRange, 14);
+                const labels = [];
+                const completed = [];
+                const created = [];
+                
+                for (let i = days - 1; i >= 0; i--) {
+                    const date = new Date();
+                    date.setDate(date.getDate() - i);
+                    const dateStr = date.toISOString().split('T')[0];
+                    
+                    labels.push(date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }));
+                    
+                    const dayMemos = this.data.memos.filter(m => {
+                        const memoDate = new Date(m.createdAt).toISOString().split('T')[0];
+                        return memoDate === dateStr;
+                    });
+                    
+                    const dayCompleted = this.data.memos.filter(m => {
+                        if (!m.completed || !m.updatedAt) return false;
+                        const updateDate = new Date(m.updatedAt).toISOString().split('T')[0];
+                        return updateDate === dateStr;
+                    });
+                    
+                    created.push(dayMemos.length);
+                    completed.push(dayCompleted.length);
+                }
+                
+                return { labels, completed, created };
+            }
+            
+            initStatusChart() {
+                const ctx = document.getElementById('statusChart').getContext('2d');
+                const memos = this.getFilteredMemos();
+                const today = new Date().toISOString().split('T')[0];
+                
+                const completed = memos.filter(m => m.completed).length;
+                const pending = memos.filter(m => !m.completed && (!m.dueDate || m.dueDate >= today)).length;
+                const overdue = memos.filter(m => !m.completed && m.dueDate && m.dueDate < today).length;
+                
+                this.charts.status = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['已完成', '待完成', '已过期'],
+                        datasets: [{
+                            data: [completed, pending, overdue],
+                            backgroundColor: [
+                                'rgba(92, 216, 92, 0.8)',
+                                'rgba(255, 200, 87, 0.8)',
+                                'rgba(255, 107, 107, 0.8)'
+                            ],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'right' }
+                        }
+                    }
+                });
+            }
+            
+            initPriorityChart() {
+                const ctx = document.getElementById('priorityChart').getContext('2d');
+                const memos = this.getFilteredMemos();
+                
+                const priorities = {
+                    high: memos.filter(m => m.priority === 'high').length,
+                    medium: memos.filter(m => m.priority === 'medium').length,
+                    low: memos.filter(m => m.priority === 'low').length,
+                    none: memos.filter(m => !m.priority || m.priority === 'none').length
+                };
+                
+                this.charts.priority = new Chart(ctx, {
+                    type: 'polarArea',
+                    data: {
+                        labels: ['高优先级', '中优先级', '低优先级', '无优先级'],
+                        datasets: [{
+                            data: [priorities.high, priorities.medium, priorities.low, priorities.none],
+                            backgroundColor: [
+                                'rgba(255, 107, 107, 0.7)',
+                                'rgba(255, 200, 87, 0.7)',
+                                'rgba(92, 216, 92, 0.7)',
+                                'rgba(150, 150, 150, 0.7)'
+                            ],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'right' }
+                        }
+                    }
+                });
+            }
+            
+            initCategoryChart() {
+                const ctx = document.getElementById('categoryChart').getContext('2d');
+                const memos = this.getFilteredMemos();
+                
+                const categoryData = {};
+                this.data.categories.forEach(cat => {
+                    categoryData[cat.id] = { name: cat.name, count: 0 };
+                });
+                categoryData['none'] = { name: '未分类', count: 0 };
+                
+                memos.forEach(memo => {
+                    const catId = memo.categoryId || 'none';
+                    if (categoryData[catId]) {
+                        categoryData[catId].count++;
+                    } else {
+                        categoryData['none'].count++;
+                    }
+                });
+                
+                const labels = Object.values(categoryData).map(c => c.name);
+                const data = Object.values(categoryData).map(c => c.count);
+                
+                const colors = [
+                    'rgba(255, 107, 107, 0.7)',
+                    'rgba(100, 180, 255, 0.7)',
+                    'rgba(92, 216, 92, 0.7)',
+                    'rgba(180, 140, 255, 0.7)',
+                    'rgba(255, 200, 87, 0.7)',
+                    'rgba(150, 150, 150, 0.7)'
+                ];
+                
+                this.charts.category = new Chart(ctx, {
+                    type: 'pie',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: data,
+                            backgroundColor: colors.slice(0, labels.length),
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'right' }
+                        }
+                    }
+                });
+            }
+            
+            updateCharts() {
+                // 更新所有图表
+                Object.values(this.charts).forEach(chart => chart.destroy());
+                this.initCharts();
+            }
+            
+            updateRecentTasks() {
+                const completedTasks = this.data.memos
+                    .filter(m => m.completed)
+                    .sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt))
+                    .slice(0, 5);
+                
+                if (completedTasks.length === 0) {
+                    this.recentTaskList.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-inbox"></i>
+                            <p>暂无完成的任务</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                this.recentTaskList.innerHTML = completedTasks.map(task => {
+                    const date = new Date(task.updatedAt || task.createdAt);
+                    const dateStr = date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    
+                    return `
+                        <div class="task-item">
+                            <div class="task-status completed"></div>
+                            <div class="task-info">
+                                <div class="task-title">${task.title}</div>
+                                <div class="task-meta">完成于 ${dateStr}</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+        
+        // 初始化
+        const stats = new TaskStatistics();
+    </script>
+</body>
+</html>

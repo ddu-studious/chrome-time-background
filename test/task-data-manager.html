@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>任务数据管理器 - 导入导出工具</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+            color: #fff;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 40px;
+        }
+        
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .card-header i {
+            font-size: 24px;
+            color: #64b4ff;
+        }
+        
+        .card-header h2 {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .card-header p {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 4px;
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #64b4ff, #5090dd);
+            color: #fff;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(100, 180, 255, 0.4);
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #5cd85c, #4ac84a);
+            color: #fff;
+        }
+        
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(92, 216, 92, 0.4);
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a5a);
+            color: #fff;
+        }
+        
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+        }
+        
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #64b4ff;
+        }
+        
+        .stat-value.warning { color: #ffc857; }
+        .stat-value.success { color: #5cd85c; }
+        .stat-value.danger { color: #ff6b6b; }
+        
+        .stat-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 4px;
+        }
+        
+        .drop-zone {
+            border: 2px dashed rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+        }
+        
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: #64b4ff;
+            background: rgba(100, 180, 255, 0.1);
+        }
+        
+        .drop-zone i {
+            font-size: 48px;
+            color: rgba(255, 255, 255, 0.3);
+            margin-bottom: 16px;
+        }
+        
+        .drop-zone p {
+            color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .preview {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            padding: 16px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            color: rgba(255, 255, 255, 0.7);
+        }
+        
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .alert-success {
+            background: rgba(92, 216, 92, 0.2);
+            color: #5cd85c;
+        }
+        
+        .alert-error {
+            background: rgba(255, 107, 107, 0.2);
+            color: #ff6b6b;
+        }
+        
+        .alert-info {
+            background: rgba(100, 180, 255, 0.2);
+            color: #64b4ff;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+        
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1><i class="fas fa-database"></i> 任务数据管理器</h1>
+        <p class="subtitle">备份、恢复和管理你的任务数据</p>
+        
+        <!-- 数据统计 -->
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-chart-pie"></i>
+                <div>
+                    <h2>数据概览</h2>
+                    <p>当前存储的任务数据统计</p>
+                </div>
+            </div>
+            
+            <div class="stats-grid" id="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="total-tasks">-</div>
+                    <div class="stat-label">总任务数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value success" id="completed-tasks">-</div>
+                    <div class="stat-label">已完成</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value warning" id="pending-tasks">-</div>
+                    <div class="stat-label">待完成</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value danger" id="overdue-tasks">-</div>
+                    <div class="stat-label">已过期</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="categories-count">-</div>
+                    <div class="stat-label">分类数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="storage-size">-</div>
+                    <div class="stat-label">存储大小</div>
+                </div>
+            </div>
+            
+            <button class="btn btn-secondary" id="btn-refresh">
+                <i class="fas fa-sync-alt"></i> 刷新数据
+            </button>
+        </div>
+        
+        <!-- 导出数据 -->
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-download"></i>
+                <div>
+                    <h2>导出数据</h2>
+                    <p>将任务数据备份为 JSON 文件</p>
+                </div>
+            </div>
+            
+            <div class="btn-group">
+                <button class="btn btn-primary" id="btn-export-all">
+                    <i class="fas fa-file-export"></i> 导出全部数据
+                </button>
+                <button class="btn btn-secondary" id="btn-export-tasks">
+                    <i class="fas fa-tasks"></i> 仅导出任务
+                </button>
+                <button class="btn btn-secondary" id="btn-export-categories">
+                    <i class="fas fa-folder"></i> 仅导出分类
+                </button>
+            </div>
+        </div>
+        
+        <!-- 导入数据 -->
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-upload"></i>
+                <div>
+                    <h2>导入数据</h2>
+                    <p>从 JSON 文件恢复任务数据</p>
+                </div>
+            </div>
+            
+            <div class="drop-zone" id="drop-zone">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <p>拖拽文件到这里，或点击选择文件</p>
+            </div>
+            <input type="file" id="file-input" accept=".json">
+            
+            <div id="import-preview" class="hidden">
+                <div class="section-title">预览导入数据：</div>
+                <div class="preview" id="preview-content"></div>
+                <div class="btn-group" style="margin-top: 16px;">
+                    <button class="btn btn-success" id="btn-confirm-import">
+                        <i class="fas fa-check"></i> 确认导入
+                    </button>
+                    <button class="btn btn-secondary" id="btn-cancel-import">
+                        <i class="fas fa-times"></i> 取消
+                    </button>
+                </div>
+            </div>
+            
+            <div id="alert-container"></div>
+        </div>
+        
+        <!-- 危险操作 -->
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-exclamation-triangle" style="color: #ff6b6b;"></i>
+                <div>
+                    <h2>危险操作</h2>
+                    <p>这些操作不可撤销，请谨慎使用</p>
+                </div>
+            </div>
+            
+            <div class="btn-group">
+                <button class="btn btn-danger" id="btn-clear-completed">
+                    <i class="fas fa-broom"></i> 清除已完成任务
+                </button>
+                <button class="btn btn-danger" id="btn-clear-all">
+                    <i class="fas fa-trash-alt"></i> 清除所有数据
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 任务数据管理器
+        class TaskDataManager {
+            constructor() {
+                this.data = {
+                    memos: [],
+                    categories: [],
+                    tags: []
+                };
+                this.pendingImportData = null;
+                
+                this.initElements();
+                this.bindEvents();
+                this.loadData();
+            }
+            
+            initElements() {
+                this.statsElements = {
+                    total: document.getElementById('total-tasks'),
+                    completed: document.getElementById('completed-tasks'),
+                    pending: document.getElementById('pending-tasks'),
+                    overdue: document.getElementById('overdue-tasks'),
+                    categories: document.getElementById('categories-count'),
+                    storage: document.getElementById('storage-size')
+                };
+                
+                this.dropZone = document.getElementById('drop-zone');
+                this.fileInput = document.getElementById('file-input');
+                this.importPreview = document.getElementById('import-preview');
+                this.previewContent = document.getElementById('preview-content');
+                this.alertContainer = document.getElementById('alert-container');
+            }
+            
+            bindEvents() {
+                // 刷新
+                document.getElementById('btn-refresh').addEventListener('click', () => this.loadData());
+                
+                // 导出
+                document.getElementById('btn-export-all').addEventListener('click', () => this.exportData('all'));
+                document.getElementById('btn-export-tasks').addEventListener('click', () => this.exportData('tasks'));
+                document.getElementById('btn-export-categories').addEventListener('click', () => this.exportData('categories'));
+                
+                // 导入
+                this.dropZone.addEventListener('click', () => this.fileInput.click());
+                this.dropZone.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    this.dropZone.classList.add('dragover');
+                });
+                this.dropZone.addEventListener('dragleave', () => {
+                    this.dropZone.classList.remove('dragover');
+                });
+                this.dropZone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    this.dropZone.classList.remove('dragover');
+                    const file = e.dataTransfer.files[0];
+                    if (file) this.handleFile(file);
+                });
+                this.fileInput.addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    if (file) this.handleFile(file);
+                });
+                
+                document.getElementById('btn-confirm-import').addEventListener('click', () => this.confirmImport());
+                document.getElementById('btn-cancel-import').addEventListener('click', () => this.cancelImport());
+                
+                // 危险操作
+                document.getElementById('btn-clear-completed').addEventListener('click', () => this.clearCompleted());
+                document.getElementById('btn-clear-all').addEventListener('click', () => this.clearAll());
+            }
+            
+            async loadData() {
+                try {
+                    // 从 chrome.storage.local 加载
+                    const result = await new Promise(resolve => {
+                        if (typeof chrome !== 'undefined' && chrome.storage) {
+                            chrome.storage.local.get(['memos', 'memosCategories', 'memosTags'], resolve);
+                        } else {
+                            // 演示数据
+                            resolve({
+                                memos: [
+                                    { id: '1', title: '示例任务1', completed: true, dueDate: '2026-01-30' },
+                                    { id: '2', title: '示例任务2', completed: false, dueDate: '2026-02-01' },
+                                    { id: '3', title: '过期任务', completed: false, dueDate: '2026-01-20' }
+                                ],
+                                memosCategories: [{ id: '1', name: '工作' }, { id: '2', name: '生活' }],
+                                memosTags: []
+                            });
+                        }
+                    });
+                    
+                    this.data.memos = result.memos || [];
+                    this.data.categories = result.memosCategories || [];
+                    this.data.tags = result.memosTags || [];
+                    
+                    this.updateStats();
+                    this.showAlert('数据加载成功', 'success');
+                } catch (error) {
+                    console.error('加载数据失败:', error);
+                    this.showAlert('加载数据失败: ' + error.message, 'error');
+                }
+            }
+            
+            updateStats() {
+                const today = new Date().toISOString().split('T')[0];
+                const total = this.data.memos.length;
+                const completed = this.data.memos.filter(m => m.completed).length;
+                const pending = total - completed;
+                const overdue = this.data.memos.filter(m => 
+                    !m.completed && m.dueDate && m.dueDate < today
+                ).length;
+                
+                this.statsElements.total.textContent = total;
+                this.statsElements.completed.textContent = completed;
+                this.statsElements.pending.textContent = pending;
+                this.statsElements.overdue.textContent = overdue;
+                this.statsElements.categories.textContent = this.data.categories.length;
+                
+                // 估算存储大小
+                const dataStr = JSON.stringify(this.data);
+                const sizeKB = (new Blob([dataStr]).size / 1024).toFixed(1);
+                this.statsElements.storage.textContent = sizeKB + 'KB';
+            }
+            
+            exportData(type) {
+                let exportData, filename;
+                const timestamp = new Date().toISOString().slice(0, 10);
+                
+                switch (type) {
+                    case 'all':
+                        exportData = this.data;
+                        filename = `tasks-backup-${timestamp}.json`;
+                        break;
+                    case 'tasks':
+                        exportData = { memos: this.data.memos };
+                        filename = `tasks-only-${timestamp}.json`;
+                        break;
+                    case 'categories':
+                        exportData = { categories: this.data.categories };
+                        filename = `categories-${timestamp}.json`;
+                        break;
+                }
+                
+                const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(url);
+                
+                this.showAlert(`已导出: ${filename}`, 'success');
+            }
+            
+            handleFile(file) {
+                if (!file.name.endsWith('.json')) {
+                    this.showAlert('请选择 JSON 文件', 'error');
+                    return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        this.pendingImportData = data;
+                        this.showImportPreview(data);
+                    } catch (error) {
+                        this.showAlert('JSON 解析失败: ' + error.message, 'error');
+                    }
+                };
+                reader.readAsText(file);
+            }
+            
+            showImportPreview(data) {
+                let summary = '';
+                if (data.memos) summary += `任务: ${data.memos.length} 条\n`;
+                if (data.categories) summary += `分类: ${data.categories.length} 个\n`;
+                if (data.tags) summary += `标签: ${data.tags.length} 个\n`;
+                summary += '\n预览数据:\n' + JSON.stringify(data, null, 2).substring(0, 1000);
+                if (JSON.stringify(data).length > 1000) summary += '\n...（数据已截断）';
+                
+                this.previewContent.textContent = summary;
+                this.importPreview.classList.remove('hidden');
+            }
+            
+            async confirmImport() {
+                if (!this.pendingImportData) return;
+                
+                try {
+                    const data = this.pendingImportData;
+                    
+                    // 合并数据
+                    if (data.memos) {
+                        this.data.memos = [...this.data.memos, ...data.memos];
+                    }
+                    if (data.categories) {
+                        this.data.categories = [...this.data.categories, ...data.categories];
+                    }
+                    if (data.tags) {
+                        this.data.tags = [...this.data.tags, ...data.tags];
+                    }
+                    
+                    // 保存到 storage
+                    if (typeof chrome !== 'undefined' && chrome.storage) {
+                        await chrome.storage.local.set({
+                            memos: this.data.memos,
+                            memosCategories: this.data.categories,
+                            memosTags: this.data.tags
+                        });
+                    }
+                    
+                    this.updateStats();
+                    this.cancelImport();
+                    this.showAlert('数据导入成功！', 'success');
+                } catch (error) {
+                    this.showAlert('导入失败: ' + error.message, 'error');
+                }
+            }
+            
+            cancelImport() {
+                this.pendingImportData = null;
+                this.importPreview.classList.add('hidden');
+                this.fileInput.value = '';
+            }
+            
+            async clearCompleted() {
+                if (!confirm('确定要清除所有已完成的任务吗？此操作不可撤销！')) return;
+                
+                const before = this.data.memos.length;
+                this.data.memos = this.data.memos.filter(m => !m.completed);
+                const after = this.data.memos.length;
+                
+                if (typeof chrome !== 'undefined' && chrome.storage) {
+                    await chrome.storage.local.set({ memos: this.data.memos });
+                }
+                
+                this.updateStats();
+                this.showAlert(`已清除 ${before - after} 条已完成任务`, 'success');
+            }
+            
+            async clearAll() {
+                if (!confirm('⚠️ 警告：这将删除所有任务数据！\n\n建议先导出备份。\n\n确定要继续吗？')) return;
+                if (!confirm('再次确认：真的要删除所有数据吗？')) return;
+                
+                this.data = { memos: [], categories: [], tags: [] };
+                
+                if (typeof chrome !== 'undefined' && chrome.storage) {
+                    await chrome.storage.local.set({
+                        memos: [],
+                        memosCategories: [],
+                        memosTags: []
+                    });
+                }
+                
+                this.updateStats();
+                this.showAlert('所有数据已清除', 'info');
+            }
+            
+            showAlert(message, type = 'info') {
+                const alert = document.createElement('div');
+                alert.className = `alert alert-${type}`;
+                alert.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'times-circle' : 'info-circle'}"></i> ${message}`;
+                
+                this.alertContainer.innerHTML = '';
+                this.alertContainer.appendChild(alert);
+                
+                setTimeout(() => alert.remove(), 3000);
+            }
+        }
+        
+        // 初始化
+        const manager = new TaskDataManager();
+    </script>
+</body>
+</html>

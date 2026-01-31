@@ -1,7 +1,8 @@
 /**
  * 备忘录功能模块
- * 版本: 1.4.0
+ * 版本: 1.5.0
  * 功能: 提供备忘录的添加、编辑、删除和分类管理功能
+ *       支持每日任务管理、截止时间、任务提醒
  */
 
 // 使用全局变量
@@ -101,82 +102,1470 @@ class MemoManager {
 
     /**
      * 初始化备忘录管理器
+     * @returns {Promise} 初始化完成的 Promise
      */
-    init() {
+    async init() {
         console.log('开始初始化备忘录管理器...');
         
-        // 加载备忘录数据
-        Promise.all([
-            this.loadMemos(),
-            this.loadCategories(),
-            this.loadTags()
-        ]).then(() => {
+        try {
+            // 加载备忘录数据
+            await Promise.all([
+                this.loadMemos(),
+                this.loadCategories(),
+                this.loadTags()
+            ]);
+            
             console.log('备忘录数据加载完成，开始创建UI');
             console.log('备忘录数量:', this.memos.length);
             console.log('分类数量:', this.categories.length);
             console.log('标签数量:', this.tags.length);
             
-            try {
-                // 创建备忘录UI
-                this.createMemoUI();
-                console.log('备忘录UI创建完成');
-                
-                // 初始化键盘快捷键
-                this.initKeyboardShortcuts();
-                console.log('键盘快捷键初始化完成');
-                
-                // 更新排序选项的名称
-                this.updateSortOptionNames();
-                console.log('排序选项名称更新完成');
-                
-                console.log('备忘录管理器初始化完成');
-                this.initialized = true;
-            } catch (error) {
-                console.error('备忘录UI创建过程中发生错误:', error);
+            // 渲染到侧边栏（新的双栏布局）
+            this.renderSidebarContent();
+            console.log('侧边栏内容渲染完成');
+            
+            // 恢复侧边栏折叠状态
+            await this.restoreSidebarState();
+            
+            // 初始化键盘快捷键
+            this.initKeyboardShortcuts();
+            console.log('键盘快捷键初始化完成');
+            
+            // 更新排序选项的名称
+            this.updateSortOptionNames();
+            console.log('排序选项名称更新完成');
+            
+            console.log('备忘录管理器初始化完成');
+            this.initialized = true;
+            
+            return true;
+        } catch (error) {
+            console.error('备忘录初始化失败:', error);
+            throw error;
+        }
+    }
+    
+    /**
+     * 渲染侧边栏内容（新的双栏布局）
+     */
+    renderSidebarContent() {
+        const sidebarContent = document.getElementById('sidebar-content');
+        if (!sidebarContent) {
+            console.warn('未找到侧边栏容器，回退到悬浮面板模式');
+            this.createMemoUI();
+            return;
+        }
+        
+        // 清空现有内容
+        sidebarContent.innerHTML = '';
+        
+        // 创建工具栏
+        const toolbar = document.createElement('div');
+        toolbar.className = 'sidebar-toolbar';
+        toolbar.innerHTML = `
+            <input type="text" class="sidebar-search" id="sidebar-search" placeholder="搜索任务...">
+            <button class="sidebar-add-btn" id="sidebar-add-btn" title="新增任务">
+                <i class="fas fa-plus"></i>
+            </button>
+            <button class="sidebar-settings-btn" id="sidebar-settings-btn" title="管理分类">
+                <i class="fas fa-cog"></i>
+            </button>
+        `;
+        
+        // 创建筛选器
+        const filterBar = document.createElement('div');
+        filterBar.className = 'sidebar-filter';
+        filterBar.innerHTML = `
+            <select class="sidebar-filter-select" id="sidebar-filter-select">
+                <option value="all">全部任务</option>
+                <option value="uncompleted">未完成</option>
+                <option value="completed">已完成</option>
+                <option value="today">今日</option>
+                <option value="overdue">已过期</option>
+            </select>
+            <select class="sidebar-category-select" id="sidebar-category-select">
+                <option value="all">全部分类</option>
+                ${this.categories.map(cat => `<option value="${cat.id}">${this.escapeHtml(cat.name)}</option>`).join('')}
+            </select>
+        `;
+        
+        // 创建任务列表容器
+        const taskList = document.createElement('div');
+        taskList.className = 'sidebar-task-list';
+        taskList.id = 'sidebar-task-list';
+        
+        // 创建任务表单弹窗
+        const formModal = document.createElement('div');
+        formModal.className = 'sidebar-form-modal hidden';
+        formModal.id = 'sidebar-form-modal';
+        formModal.innerHTML = `
+            <div class="sidebar-form-content">
+                <div class="sidebar-form-header">
+                    <h3 id="sidebar-form-title">新增任务</h3>
+                    <button class="sidebar-form-close" id="sidebar-form-close">&times;</button>
+                </div>
+                <div class="sidebar-form-body">
+                    <div class="form-group">
+                        <label for="sidebar-task-title">标题</label>
+                        <input type="text" id="sidebar-task-title" placeholder="输入任务标题..." required>
+                    </div>
+                    <div class="form-group">
+                        <label for="sidebar-task-text">详情</label>
+                        <textarea id="sidebar-task-text" placeholder="输入任务详情..." rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>图片附件</label>
+                        <div class="image-upload-area" id="image-upload-area">
+                            <input type="file" id="sidebar-task-images" accept="image/*" multiple hidden>
+                            <div class="image-preview-list" id="image-preview-list"></div>
+                            <button type="button" class="image-upload-btn" id="image-upload-btn">
+                                <i class="fas fa-image"></i>
+                                <span>添加图片</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="sidebar-task-priority">优先级</label>
+                            <select id="sidebar-task-priority">
+                                <option value="none">无</option>
+                                <option value="low">低</option>
+                                <option value="medium">中</option>
+                                <option value="high">高</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="sidebar-task-due">截止日期</label>
+                            <input type="date" id="sidebar-task-due">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="sidebar-task-category">分类</label>
+                        <select id="sidebar-task-category">
+                            <option value="">无分类</option>
+                            ${this.categories.map(cat => `<option value="${cat.id}">${this.escapeHtml(cat.name)}</option>`).join('')}
+                        </select>
+                    </div>
+                </div>
+                <div class="sidebar-form-footer">
+                    <button class="btn-cancel" id="sidebar-form-cancel">取消</button>
+                    <button class="btn-save" id="sidebar-form-save">保存</button>
+                </div>
+            </div>
+        `;
+        
+        // 组装内容
+        sidebarContent.appendChild(toolbar);
+        sidebarContent.appendChild(filterBar);
+        sidebarContent.appendChild(taskList);
+        sidebarContent.appendChild(formModal);
+        
+        // 绑定事件
+        this.bindSidebarEvents();
+        
+        // 渲染任务列表
+        this.renderSidebarTaskList();
+    }
+    
+    /**
+     * 绑定侧边栏事件
+     */
+    bindSidebarEvents() {
+        // 搜索
+        const searchInput = document.getElementById('sidebar-search');
+        if (searchInput) {
+            searchInput.addEventListener('input', () => this.renderSidebarTaskList());
+        }
+        
+        // 筛选
+        const filterSelect = document.getElementById('sidebar-filter-select');
+        if (filterSelect) {
+            filterSelect.addEventListener('change', () => this.renderSidebarTaskList());
+        }
+        
+        // 分类筛选
+        const categorySelect = document.getElementById('sidebar-category-select');
+        if (categorySelect) {
+            categorySelect.addEventListener('change', () => this.renderSidebarTaskList());
+        }
+        
+        // 新增按钮
+        const addBtn = document.getElementById('sidebar-add-btn');
+        if (addBtn) {
+            addBtn.addEventListener('click', () => this.showSidebarForm());
+        }
+        
+        // 设置按钮（分类管理）
+        const settingsBtn = document.getElementById('sidebar-settings-btn');
+        if (settingsBtn) {
+            settingsBtn.addEventListener('click', () => this.showCategoryManager());
+        }
+        
+        // 表单关闭
+        const closeBtn = document.getElementById('sidebar-form-close');
+        const cancelBtn = document.getElementById('sidebar-form-cancel');
+        if (closeBtn) closeBtn.addEventListener('click', () => this.hideSidebarForm());
+        if (cancelBtn) cancelBtn.addEventListener('click', () => this.hideSidebarForm());
+        
+        // 表单保存
+        const saveBtn = document.getElementById('sidebar-form-save');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', () => this.saveSidebarTask());
+        }
+        
+        // 表单回车保存
+        const titleInput = document.getElementById('sidebar-task-title');
+        if (titleInput) {
+            titleInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    this.saveSidebarTask();
+                }
+            });
+        }
+        
+        // 点击遮罩关闭
+        const modal = document.getElementById('sidebar-form-modal');
+        if (modal) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) this.hideSidebarForm();
+            });
+        }
+        
+        // 侧边栏折叠按钮
+        const collapseBtn = document.getElementById('sidebar-collapse-btn');
+        if (collapseBtn) {
+            collapseBtn.addEventListener('click', () => this.toggleSidebar());
+        }
+        
+        // 图片上传按钮
+        const imageUploadBtn = document.getElementById('image-upload-btn');
+        const imageInput = document.getElementById('sidebar-task-images');
+        if (imageUploadBtn && imageInput) {
+            imageUploadBtn.addEventListener('click', () => imageInput.click());
+            imageInput.addEventListener('change', (e) => this.handleImageUpload(e));
+        }
+    }
+    
+    /**
+     * 处理图片上传
+     */
+    async handleImageUpload(event) {
+        const files = event.target.files;
+        if (!files || files.length === 0) return;
+        
+        const previewList = document.getElementById('image-preview-list');
+        if (!previewList) return;
+        
+        // 初始化临时图片数组
+        if (!this.tempImages) this.tempImages = [];
+        
+        for (const file of files) {
+            // 验证文件类型
+            if (!file.type.startsWith('image/')) continue;
+            
+            // 验证文件大小（最大 5MB）
+            if (file.size > 5 * 1024 * 1024) {
+                console.warn('图片文件过大，已跳过:', file.name);
+                continue;
             }
-        }).catch(error => {
-            console.error('备忘录数据加载失败:', error);
+            
+            try {
+                // 生成缩略图（用于列表显示）和大图（用于灯箱查看）
+                const thumbnail = await this.compressImage(file, 80, 0.6);  // 小缩略图
+                const fullImage = await this.compressImage(file, 800, 0.85);  // 大图用于查看
+                const imageId = this.generateId();
+                
+                // 存储到临时数组
+                this.tempImages.push({
+                    id: imageId,
+                    file: file,
+                    thumbnail: thumbnail,
+                    fullImage: fullImage
+                });
+                
+                // 创建预览元素
+                const previewItem = document.createElement('div');
+                previewItem.className = 'image-preview-item';
+                previewItem.dataset.imageId = imageId;
+                previewItem.innerHTML = `
+                    <img src="${thumbnail}" alt="预览">
+                    <button type="button" class="remove-image" title="移除">
+                        <i class="fas fa-times"></i>
+                    </button>
+                `;
+                
+                // 绑定移除事件
+                previewItem.querySelector('.remove-image').addEventListener('click', () => {
+                    this.removePreviewImage(imageId);
+                });
+                
+                previewList.appendChild(previewItem);
+            } catch (err) {
+                console.error('图片处理失败:', err);
+            }
+        }
+        
+        // 清空 input 以便再次选择同一文件
+        event.target.value = '';
+    }
+    
+    /**
+     * 压缩图片
+     */
+    compressImage(file, maxSize, quality) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+                    
+                    // 计算缩放比例
+                    if (width > maxSize || height > maxSize) {
+                        if (width > height) {
+                            height = (height / width) * maxSize;
+                            width = maxSize;
+                        } else {
+                            width = (width / height) * maxSize;
+                            height = maxSize;
+                        }
+                    }
+                    
+                    canvas.width = width;
+                    canvas.height = height;
+                    
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    resolve(canvas.toDataURL('image/jpeg', quality));
+                };
+                img.onerror = reject;
+                img.src = e.target.result;
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
         });
+    }
+    
+    /**
+     * 移除预览图片
+     */
+    removePreviewImage(imageId) {
+        // 从临时数组移除
+        if (this.tempImages) {
+            this.tempImages = this.tempImages.filter(img => img.id !== imageId);
+        }
+        
+        // 从 DOM 移除
+        const previewItem = document.querySelector(`.image-preview-item[data-image-id="${imageId}"]`);
+        if (previewItem) {
+            previewItem.remove();
+        }
+    }
+    
+    /**
+     * 渲染侧边栏任务列表
+     */
+    renderSidebarTaskList() {
+        const container = document.getElementById('sidebar-task-list');
+        if (!container) return;
+        
+        const searchInput = document.getElementById('sidebar-search');
+        const filterSelect = document.getElementById('sidebar-filter-select');
+        
+        const categorySelect = document.getElementById('sidebar-category-select');
+        
+        const searchText = searchInput ? searchInput.value.toLowerCase().trim() : '';
+        const filterValue = filterSelect ? filterSelect.value : 'all';
+        const categoryValue = categorySelect ? categorySelect.value : 'all';
+        
+        // 筛选任务
+        let filteredMemos = [...this.memos];
+        
+        // 文本搜索
+        if (searchText) {
+            filteredMemos = filteredMemos.filter(memo => 
+                (memo.title || '').toLowerCase().includes(searchText) ||
+                (memo.text || '').toLowerCase().includes(searchText)
+            );
+        }
+        
+        // 分类筛选
+        if (categoryValue !== 'all') {
+            filteredMemos = filteredMemos.filter(m => m.categoryId === categoryValue);
+        }
+        
+        // 状态筛选
+        const today = this.getTodayDate();
+        switch (filterValue) {
+            case 'completed':
+                filteredMemos = filteredMemos.filter(m => m.completed);
+                break;
+            case 'uncompleted':
+                filteredMemos = filteredMemos.filter(m => !m.completed);
+                break;
+            case 'today':
+                filteredMemos = filteredMemos.filter(m => m.dueDate === today);
+                break;
+            case 'overdue':
+                filteredMemos = filteredMemos.filter(m => m.dueDate && m.dueDate < today && !m.completed);
+                break;
+        }
+        
+        // 排序
+        const priorityOrder = { high: 0, medium: 1, low: 2, none: 3 };
+        filteredMemos.sort((a, b) => {
+            if (a.completed !== b.completed) return a.completed ? 1 : -1;
+            const pa = priorityOrder[a.priority] ?? 3;
+            const pb = priorityOrder[b.priority] ?? 3;
+            if (pa !== pb) return pa - pb;
+            if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+            if (a.dueDate) return -1;
+            if (b.dueDate) return 1;
+            return b.createdAt - a.createdAt;
+        });
+        
+        // 计算统计数据
+        const totalTasks = this.memos.length;
+        const completedTasks = this.memos.filter(m => m.completed).length;
+        const filteredCount = filteredMemos.length;
+        
+        // 更新任务统计显示
+        this.updateTaskStats(totalTasks, completedTasks, filteredCount);
+        
+        // 渲染
+        if (filteredMemos.length === 0) {
+            // 搜索无结果时，显示快速添加按钮
+            if (searchText) {
+                container.innerHTML = `
+                    <div class="sidebar-empty search-empty">
+                        <i class="fas fa-search"></i>
+                        <p>没有找到 "${this.escapeHtml(searchText)}"</p>
+                        <button class="sidebar-quick-add" id="sidebar-quick-add">
+                            <i class="fas fa-plus-circle"></i> 快速创建任务 "${this.escapeHtml(searchText.substring(0, 30))}${searchText.length > 30 ? '...' : ''}"
+                        </button>
+                    </div>
+                `;
+                const quickAddBtn = document.getElementById('sidebar-quick-add');
+                if (quickAddBtn) {
+                    quickAddBtn.addEventListener('click', () => this.quickAddTask(searchText));
+                }
+            } else {
+                container.innerHTML = `
+                    <div class="sidebar-empty">
+                        <i class="fas fa-clipboard-list"></i>
+                        <p>${categoryValue !== 'all' ? '该分类下暂无任务' : '暂无任务'}</p>
+                        <button class="sidebar-empty-add" id="sidebar-empty-add">
+                            <i class="fas fa-plus"></i> 添加第一个任务
+                        </button>
+                    </div>
+                `;
+                const emptyAddBtn = document.getElementById('sidebar-empty-add');
+                if (emptyAddBtn) {
+                    emptyAddBtn.addEventListener('click', () => this.showSidebarForm());
+                }
+            }
+            return;
+        }
+        
+        container.innerHTML = '';
+        
+        // 按日期分组渲染任务
+        const groupedTasks = this.groupTasksByDate(filteredMemos);
+        let globalIndex = 0;
+        
+        Object.entries(groupedTasks).forEach(([dateKey, tasks]) => {
+            // 创建日期分组标题
+            const groupHeader = this.createDateGroupHeader(dateKey, tasks);
+            container.appendChild(groupHeader);
+            
+            // 渲染该日期下的任务
+            tasks.forEach(task => {
+                globalIndex++;
+                const item = this.createSidebarTaskItem(task, globalIndex, filteredCount);
+                container.appendChild(item);
+            });
+        });
+    }
+    
+    /**
+     * 按日期分组任务
+     * @param {Array} tasks 任务数组
+     * @returns {Object} 按日期分组的任务对象
+     */
+    groupTasksByDate(tasks) {
+        const groups = {};
+        const today = this.getTodayDate();
+        const yesterday = this.getDateString(-1);
+        const tomorrow = this.getDateString(1);
+        
+        tasks.forEach(task => {
+            // 使用截止日期或创建日期进行分组
+            let dateKey = task.dueDate || this.formatDateFromTimestamp(task.createdAt);
+            
+            // 转换为友好的日期键
+            if (dateKey === today) {
+                dateKey = 'today';
+            } else if (dateKey === yesterday) {
+                dateKey = 'yesterday';
+            } else if (dateKey === tomorrow) {
+                dateKey = 'tomorrow';
+            } else if (dateKey && dateKey < today) {
+                dateKey = 'overdue';
+            } else if (!dateKey) {
+                dateKey = 'no-date';
+            }
+            
+            if (!groups[dateKey]) {
+                groups[dateKey] = [];
+            }
+            groups[dateKey].push(task);
+        });
+        
+        // 按照优先级排序分组：过期 > 今天 > 明天 > 其他日期 > 无日期
+        const sortedGroups = {};
+        const order = ['overdue', 'today', 'tomorrow'];
+        
+        order.forEach(key => {
+            if (groups[key]) {
+                sortedGroups[key] = groups[key];
+            }
+        });
+        
+        // 添加其他日期（按日期排序）
+        Object.keys(groups)
+            .filter(key => !order.includes(key) && key !== 'no-date')
+            .sort()
+            .forEach(key => {
+                sortedGroups[key] = groups[key];
+            });
+        
+        // 最后添加无日期的任务
+        if (groups['no-date']) {
+            sortedGroups['no-date'] = groups['no-date'];
+        }
+        
+        return sortedGroups;
+    }
+    
+    /**
+     * 获取相对日期字符串
+     * @param {number} offset 偏移天数
+     * @returns {string} YYYY-MM-DD 格式
+     */
+    getDateString(offset) {
+        const date = new Date();
+        date.setDate(date.getDate() + offset);
+        return date.toISOString().split('T')[0];
+    }
+    
+    /**
+     * 从时间戳格式化日期
+     * @param {number} timestamp 时间戳
+     * @returns {string} YYYY-MM-DD 格式
+     */
+    formatDateFromTimestamp(timestamp) {
+        if (!timestamp) return null;
+        return new Date(timestamp).toISOString().split('T')[0];
+    }
+    
+    /**
+     * 创建日期分组标题
+     * @param {string} dateKey 日期键
+     * @param {Array} tasks 该日期下的任务
+     * @returns {HTMLElement} 分组标题元素
+     */
+    createDateGroupHeader(dateKey, tasks) {
+        const header = document.createElement('div');
+        header.className = 'date-group-header';
+        
+        const completedCount = tasks.filter(t => t.completed).length;
+        const totalCount = tasks.length;
+        
+        // 获取显示文本和图标
+        let displayText, icon, extraClass = '';
+        switch (dateKey) {
+            case 'overdue':
+                displayText = '已过期';
+                icon = 'fa-exclamation-circle';
+                extraClass = 'overdue';
+                break;
+            case 'today':
+                displayText = '今天';
+                icon = 'fa-calendar-day';
+                extraClass = 'today';
+                break;
+            case 'yesterday':
+                displayText = '昨天';
+                icon = 'fa-history';
+                break;
+            case 'tomorrow':
+                displayText = '明天';
+                icon = 'fa-calendar-plus';
+                extraClass = 'tomorrow';
+                break;
+            case 'no-date':
+                displayText = '未设置日期';
+                icon = 'fa-calendar-times';
+                extraClass = 'no-date';
+                break;
+            default:
+                // 其他日期，显示具体日期
+                displayText = this.formatDisplayDate(dateKey);
+                icon = 'fa-calendar';
+                break;
+        }
+        
+        header.innerHTML = `
+            <div class="date-group-title ${extraClass}">
+                <i class="fas ${icon}"></i>
+                <span>${displayText}</span>
+            </div>
+            <div class="date-group-stats">
+                <span class="completed-count">${completedCount}</span>/<span class="total-count">${totalCount}</span>
+            </div>
+        `;
+        
+        return header;
+    }
+    
+    /**
+     * 格式化显示日期
+     * @param {string} dateStr YYYY-MM-DD 格式
+     * @returns {string} 友好的日期显示
+     */
+    formatDisplayDate(dateStr) {
+        if (!dateStr) return '未知日期';
+        const date = new Date(dateStr + 'T00:00:00');
+        const month = date.getMonth() + 1;
+        const day = date.getDate();
+        const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+        const weekday = weekdays[date.getDay()];
+        return `${month}月${day}日 ${weekday}`;
+    }
+    
+    /**
+     * 更新任务统计显示
+     */
+    updateTaskStats(total, completed, filtered) {
+        let statsEl = document.getElementById('sidebar-task-stats');
+        if (!statsEl) {
+            const filterBar = document.querySelector('.sidebar-filter');
+            if (filterBar) {
+                statsEl = document.createElement('div');
+                statsEl.id = 'sidebar-task-stats';
+                statsEl.className = 'sidebar-task-stats';
+                filterBar.insertAdjacentElement('afterend', statsEl);
+            }
+        }
+        
+        if (statsEl) {
+            const pendingTasks = total - completed;
+            statsEl.innerHTML = `
+                <span class="stats-total" title="总任务数">
+                    <i class="fas fa-tasks"></i> ${total}
+                </span>
+                <span class="stats-pending" title="待完成">
+                    <i class="fas fa-hourglass-half"></i> ${pendingTasks}
+                </span>
+                <span class="stats-completed" title="已完成">
+                    <i class="fas fa-check-circle"></i> ${completed}
+                </span>
+                ${filtered !== total ? `<span class="stats-filtered" title="当前筛选"><i class="fas fa-filter"></i> ${filtered}</span>` : ''}
+            `;
+        }
+    }
+    
+    /**
+     * 创建侧边栏任务项
+     * @param {Object} task 任务对象
+     * @param {number} index 当前任务在列表中的序号（1起始）
+     * @param {number} total 当前筛选后的任务总数
+     */
+    createSidebarTaskItem(task, index = 0, total = 0) {
+        const item = document.createElement('div');
+        item.className = `sidebar-task-item ${task.completed ? 'completed' : ''} priority-${task.priority || 'none'}`;
+        item.dataset.id = task.id;
+        item.dataset.index = index;
+        
+        const today = this.getTodayDate();
+        const isOverdue = task.dueDate && task.dueDate < today && !task.completed;
+        if (isOverdue) item.classList.add('overdue');
+        
+        const priorityColors = { high: '#ff6b6b', medium: '#ffc857', low: '#5cd85c', none: 'transparent' };
+        const priorityColor = priorityColors[task.priority] || 'transparent';
+        const priorityLabels = { high: '高', medium: '中', low: '低' };
+        
+        // 生成图片预览 HTML
+        let imagesHtml = '';
+        if (task.images && task.images.length > 0) {
+            const displayImages = task.images.slice(0, 3);
+            const moreCount = task.images.length - 3;
+            imagesHtml = `
+                <div class="task-images" data-task-id="${task.id}">
+                    ${displayImages.map((img, idx) => `<img src="${img.thumbnail}" alt="图片" data-image-index="${idx}" class="task-image-preview">`).join('')}
+                    ${moreCount > 0 ? `<span class="task-images-more">+${moreCount}</span>` : ''}
+                </div>
+            `;
+        }
+        
+        // 获取分类名称
+        const categoryName = task.categoryId ? this.getCategoryName(task.categoryId) : '';
+        
+        item.innerHTML = `
+            <div class="task-checkbox" title="${task.completed ? '标记为未完成' : '标记为已完成'}">
+                <i class="${task.completed ? 'fas fa-check-circle' : 'far fa-circle'}"></i>
+            </div>
+            <div class="task-body">
+                <div class="task-header">
+                    ${index > 0 ? `<span class="task-index">#${index}</span>` : ''}
+                    <div class="task-title">${this.escapeHtml(task.title || '无标题')}</div>
+                </div>
+                ${task.text ? `<div class="task-desc">${this.escapeHtml(task.text.substring(0, 60))}${task.text.length > 60 ? '...' : ''}</div>` : ''}
+                ${imagesHtml}
+                <div class="task-meta">
+                    ${categoryName ? `<span class="task-category-tag"><i class="fas fa-folder"></i> ${this.escapeHtml(categoryName)}</span>` : ''}
+                    ${task.dueDate ? `<span class="task-due ${isOverdue ? 'overdue' : ''}"><i class="far fa-calendar"></i> ${task.dueDate}</span>` : ''}
+                    ${task.priority && task.priority !== 'none' ? `<span class="task-priority-tag" style="background:${priorityColor}">${priorityLabels[task.priority]}</span>` : ''}
+                </div>
+            </div>
+            <div class="task-actions">
+                <button class="task-edit-btn" title="编辑"><i class="fas fa-pen"></i></button>
+                <button class="task-delete-btn" title="删除"><i class="fas fa-trash"></i></button>
+            </div>
+        `;
+        
+        // 绑定事件
+        item.querySelector('.task-checkbox').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggleSidebarTaskComplete(task.id);
+        });
+        
+        item.querySelector('.task-edit-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.showSidebarForm(task);
+        });
+        
+        item.querySelector('.task-delete-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (confirm('确定要删除这个任务吗？')) {
+                this.deleteSidebarTask(task.id);
+            }
+        });
+        
+        // 点击任务项编辑
+        item.addEventListener('click', () => this.showSidebarForm(task));
+        
+        // 图片点击放大事件
+        const taskImages = item.querySelector('.task-images');
+        if (taskImages) {
+            taskImages.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const imgEl = e.target.closest('.task-image-preview');
+                if (imgEl) {
+                    const idx = parseInt(imgEl.dataset.imageIndex) || 0;
+                    this.showImageLightbox(task.images, idx);
+                }
+            });
+        }
+        
+        return item;
+    }
+    
+    /**
+     * 显示图片灯箱
+     */
+    showImageLightbox(images, startIndex = 0) {
+        if (!images || images.length === 0) return;
+        
+        // 移除已有的灯箱
+        const existingLightbox = document.getElementById('image-lightbox');
+        if (existingLightbox) existingLightbox.remove();
+        
+        let currentIndex = startIndex;
+        
+        // 获取当前图片的大图（兼容旧数据）
+        const getFullImage = (img) => img.fullImage || img.thumbnail;
+        
+        // 创建灯箱
+        const lightbox = document.createElement('div');
+        lightbox.id = 'image-lightbox';
+        lightbox.className = 'image-lightbox';
+        lightbox.innerHTML = `
+            <div class="lightbox-overlay"></div>
+            <div class="lightbox-content">
+                <button class="lightbox-close" title="关闭">&times;</button>
+                <button class="lightbox-prev" title="上一张" ${images.length <= 1 ? 'style="display:none"' : ''}>
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <div class="lightbox-image-container">
+                    <img src="${getFullImage(images[currentIndex])}" alt="图片预览" class="lightbox-image">
+                </div>
+                <button class="lightbox-next" title="下一张" ${images.length <= 1 ? 'style="display:none"' : ''}>
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+                <div class="lightbox-counter">${currentIndex + 1} / ${images.length}</div>
+            </div>
+        `;
+        
+        document.body.appendChild(lightbox);
+        
+        // 获取元素
+        const imgEl = lightbox.querySelector('.lightbox-image');
+        const counterEl = lightbox.querySelector('.lightbox-counter');
+        const prevBtn = lightbox.querySelector('.lightbox-prev');
+        const nextBtn = lightbox.querySelector('.lightbox-next');
+        const closeBtn = lightbox.querySelector('.lightbox-close');
+        const overlay = lightbox.querySelector('.lightbox-overlay');
+        
+        // 更新显示（使用大图）
+        const updateImage = () => {
+            imgEl.src = getFullImage(images[currentIndex]);
+            counterEl.textContent = `${currentIndex + 1} / ${images.length}`;
+        };
+        
+        // 上一张
+        prevBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            currentIndex = (currentIndex - 1 + images.length) % images.length;
+            updateImage();
+        });
+        
+        // 下一张
+        nextBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            currentIndex = (currentIndex + 1) % images.length;
+            updateImage();
+        });
+        
+        // 关闭
+        const closeLightbox = () => lightbox.remove();
+        closeBtn.addEventListener('click', closeLightbox);
+        overlay.addEventListener('click', closeLightbox);
+        
+        // 键盘事件
+        const handleKeydown = (e) => {
+            if (e.key === 'Escape') {
+                closeLightbox();
+                document.removeEventListener('keydown', handleKeydown);
+            } else if (e.key === 'ArrowLeft' && images.length > 1) {
+                currentIndex = (currentIndex - 1 + images.length) % images.length;
+                updateImage();
+            } else if (e.key === 'ArrowRight' && images.length > 1) {
+                currentIndex = (currentIndex + 1) % images.length;
+                updateImage();
+            }
+        };
+        document.addEventListener('keydown', handleKeydown);
+        
+        // 显示动画
+        requestAnimationFrame(() => lightbox.classList.add('active'));
+    }
+    
+    /**
+     * 显示分类管理面板
+     */
+    showCategoryManager() {
+        // 移除已有的面板
+        const existingPanel = document.getElementById('category-manager');
+        if (existingPanel) existingPanel.remove();
+        
+        // 创建分类管理面板
+        const panel = document.createElement('div');
+        panel.id = 'category-manager';
+        panel.className = 'category-manager';
+        panel.innerHTML = `
+            <div class="category-manager-overlay"></div>
+            <div class="category-manager-content">
+                <div class="category-manager-header">
+                    <h3>分类管理</h3>
+                    <button class="category-manager-close" id="category-manager-close">&times;</button>
+                </div>
+                <div class="category-manager-body">
+                    <div class="category-add-form">
+                        <input type="text" id="new-category-name" placeholder="输入分类名称..." maxlength="20">
+                        <input type="color" id="new-category-color" value="#64b4ff" title="选择颜色">
+                        <button id="add-category-btn" title="添加分类">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    <div class="category-list" id="category-list">
+                        ${this.renderCategoryManagerList()}
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(panel);
+        
+        // 绑定事件
+        const closeBtn = panel.querySelector('#category-manager-close');
+        const overlay = panel.querySelector('.category-manager-overlay');
+        const addBtn = panel.querySelector('#add-category-btn');
+        const nameInput = panel.querySelector('#new-category-name');
+        
+        const closePanel = () => panel.remove();
+        closeBtn.addEventListener('click', closePanel);
+        overlay.addEventListener('click', closePanel);
+        
+        // 添加分类
+        addBtn.addEventListener('click', () => this.addNewCategory(panel));
+        nameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') this.addNewCategory(panel);
+        });
+        
+        // 绑定已有分类项的事件
+        this.bindCategoryItemEvents(panel);
+        
+        // 显示动画
+        requestAnimationFrame(() => panel.classList.add('active'));
+        nameInput.focus();
+    }
+    
+    /**
+     * 渲染分类管理列表（返回 HTML 字符串）
+     */
+    renderCategoryManagerList() {
+        if (this.categories.length === 0) {
+            return '<div class="category-empty">暂无分类，请添加</div>';
+        }
+        
+        return this.categories.map(cat => `
+            <div class="category-item" data-id="${cat.id}">
+                <span class="category-color" style="background: ${cat.color || '#64b4ff'}"></span>
+                <span class="category-name">${this.escapeHtml(cat.name)}</span>
+                <div class="category-actions">
+                    <button class="category-edit-btn" data-id="${cat.id}" title="编辑">
+                        <i class="fas fa-pen"></i>
+                    </button>
+                    <button class="category-delete-btn" data-id="${cat.id}" title="删除">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    /**
+     * 添加新分类
+     */
+    async addNewCategory(panel) {
+        const nameInput = panel.querySelector('#new-category-name');
+        const colorInput = panel.querySelector('#new-category-color');
+        const name = nameInput.value.trim();
+        
+        if (!name) {
+            nameInput.classList.add('input-error');
+            setTimeout(() => nameInput.classList.remove('input-error'), 800);
+            return;
+        }
+        
+        // 检查重复
+        if (this.categories.some(c => c.name === name)) {
+            nameInput.classList.add('input-error');
+            nameInput.placeholder = '分类已存在';
+            setTimeout(() => {
+                nameInput.classList.remove('input-error');
+                nameInput.placeholder = '输入分类名称...';
+            }, 1500);
+            return;
+        }
+        
+        // 添加分类
+        const newCategory = {
+            id: this.generateId(),
+            name: name,
+            color: colorInput.value
+        };
+        this.categories.push(newCategory);
+        await this.saveCategories();
+        
+        // 更新界面
+        const listEl = panel.querySelector('#category-list');
+        listEl.innerHTML = this.renderCategoryManagerList();
+        this.bindCategoryItemEvents(panel);
+        
+        // 更新分类筛选下拉框
+        this.updateCategorySelects();
+        
+        // 清空输入
+        nameInput.value = '';
+        nameInput.focus();
+    }
+    
+    /**
+     * 绑定分类项事件
+     */
+    bindCategoryItemEvents(panel) {
+        const listEl = panel.querySelector('#category-list');
+        
+        // 编辑按钮
+        listEl.querySelectorAll('.category-edit-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = e.currentTarget.dataset.id;
+                this.editCategory(id, panel);
+            });
+        });
+        
+        // 删除按钮
+        listEl.querySelectorAll('.category-delete-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const id = e.currentTarget.dataset.id;
+                if (confirm('确定要删除这个分类吗？相关任务将变为无分类。')) {
+                    await this.deleteCategoryById(id);
+                    listEl.innerHTML = this.renderCategoryManagerList();
+                    this.bindCategoryItemEvents(panel);
+                    this.updateCategorySelects();
+                    this.renderSidebarTaskList();
+                }
+            });
+        });
+    }
+    
+    /**
+     * 编辑分类
+     */
+    editCategory(categoryId, panel) {
+        const category = this.categories.find(c => c.id === categoryId);
+        if (!category) return;
+        
+        const itemEl = panel.querySelector(`.category-item[data-id="${categoryId}"]`);
+        if (!itemEl) return;
+        
+        // 替换为编辑表单
+        itemEl.innerHTML = `
+            <input type="color" class="edit-category-color" value="${category.color || '#64b4ff'}">
+            <input type="text" class="edit-category-name" value="${this.escapeHtml(category.name)}" maxlength="20">
+            <div class="category-actions">
+                <button class="category-save-btn" title="保存">
+                    <i class="fas fa-check"></i>
+                </button>
+                <button class="category-cancel-btn" title="取消">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `;
+        
+        const nameInput = itemEl.querySelector('.edit-category-name');
+        const colorInput = itemEl.querySelector('.edit-category-color');
+        const saveBtn = itemEl.querySelector('.category-save-btn');
+        const cancelBtn = itemEl.querySelector('.category-cancel-btn');
+        
+        nameInput.focus();
+        nameInput.select();
+        
+        // 保存
+        const saveEdit = async () => {
+            const newName = nameInput.value.trim();
+            if (!newName) return;
+            
+            category.name = newName;
+            category.color = colorInput.value;
+            await this.saveCategories();
+            
+            const listEl = panel.querySelector('#category-list');
+            listEl.innerHTML = this.renderCategoryManagerList();
+            this.bindCategoryItemEvents(panel);
+            this.updateCategorySelects();
+            this.renderSidebarTaskList();
+        };
+        
+        saveBtn.addEventListener('click', saveEdit);
+        nameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') saveEdit();
+            if (e.key === 'Escape') cancelEdit();
+        });
+        
+        // 取消
+        const cancelEdit = () => {
+            const listEl = panel.querySelector('#category-list');
+            listEl.innerHTML = this.renderCategoryManagerList();
+            this.bindCategoryItemEvents(panel);
+        };
+        cancelBtn.addEventListener('click', cancelEdit);
+    }
+    
+    /**
+     * 删除分类
+     */
+    async deleteCategoryById(categoryId) {
+        this.categories = this.categories.filter(c => c.id !== categoryId);
+        await this.saveCategories();
+        
+        // 清除使用该分类的任务的分类ID
+        let needSave = false;
+        this.memos.forEach(memo => {
+            if (memo.categoryId === categoryId) {
+                memo.categoryId = null;
+                needSave = true;
+            }
+        });
+        if (needSave) {
+            await this.saveMemos();
+        }
+    }
+    
+    /**
+     * 更新分类选择下拉框
+     */
+    updateCategorySelects() {
+        // 更新筛选下拉框
+        const filterSelect = document.getElementById('sidebar-category-select');
+        if (filterSelect) {
+            const currentValue = filterSelect.value;
+            filterSelect.innerHTML = `
+                <option value="all">全部分类</option>
+                ${this.categories.map(cat => `<option value="${cat.id}">${this.escapeHtml(cat.name)}</option>`).join('')}
+            `;
+            filterSelect.value = currentValue;
+        }
+        
+        // 更新任务表单分类下拉框
+        const taskCategorySelect = document.getElementById('sidebar-task-category');
+        if (taskCategorySelect) {
+            const currentValue = taskCategorySelect.value;
+            taskCategorySelect.innerHTML = `
+                <option value="">无分类</option>
+                ${this.categories.map(cat => `<option value="${cat.id}">${this.escapeHtml(cat.name)}</option>`).join('')}
+            `;
+            taskCategorySelect.value = currentValue;
+        }
+    }
+    
+    /**
+     * 快速添加任务（从搜索框直接创建）
+     * @param {string} title 任务标题
+     */
+    async quickAddTask(title) {
+        if (!title || !title.trim()) return;
+        
+        const newTask = {
+            id: this.generateId(),
+            title: title.trim(),
+            text: '',
+            completed: false,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            categoryId: null,
+            tagIds: [],
+            priority: 'none',
+            dueDate: this.getTodayDate(),  // 默认今天
+            images: []
+        };
+        
+        this.memos.unshift(newTask);
+        await this.saveMemos();
+        
+        // 清空搜索框
+        const searchInput = document.getElementById('sidebar-search');
+        if (searchInput) {
+            searchInput.value = '';
+        }
+        
+        // 重新渲染
+        this.renderSidebarTaskList();
+        
+        // 显示成功提示
+        this.showToast(`任务 "${title.substring(0, 20)}${title.length > 20 ? '...' : ''}" 已创建`);
+    }
+    
+    /**
+     * 显示轻量提示消息
+     * @param {string} message 消息内容
+     * @param {number} duration 显示时长（毫秒）
+     */
+    showToast(message, duration = 2000) {
+        // 移除已有的 toast
+        const existingToast = document.querySelector('.memo-toast');
+        if (existingToast) existingToast.remove();
+        
+        const toast = document.createElement('div');
+        toast.className = 'memo-toast';
+        toast.innerHTML = `<i class="fas fa-check-circle"></i> ${this.escapeHtml(message)}`;
+        document.body.appendChild(toast);
+        
+        // 显示动画
+        requestAnimationFrame(() => toast.classList.add('show'));
+        
+        // 自动消失
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }, duration);
+    }
+    
+    /**
+     * 显示侧边栏任务表单
+     */
+    showSidebarForm(task = null) {
+        const modal = document.getElementById('sidebar-form-modal');
+        if (!modal) return;
+        
+        const titleEl = document.getElementById('sidebar-form-title');
+        const titleInput = document.getElementById('sidebar-task-title');
+        const textInput = document.getElementById('sidebar-task-text');
+        const prioritySelect = document.getElementById('sidebar-task-priority');
+        const dueInput = document.getElementById('sidebar-task-due');
+        const categorySelect = document.getElementById('sidebar-task-category');
+        const previewList = document.getElementById('image-preview-list');
+        
+        // 清空临时图片
+        this.tempImages = [];
+        if (previewList) previewList.innerHTML = '';
+        
+        // 更新分类选项
+        if (categorySelect) {
+            categorySelect.innerHTML = `
+                <option value="">无分类</option>
+                ${this.categories.map(cat => `<option value="${cat.id}">${this.escapeHtml(cat.name)}</option>`).join('')}
+            `;
+        }
+        
+        if (task) {
+            titleEl.textContent = '编辑任务';
+            modal.dataset.taskId = task.id;
+            titleInput.value = task.title || '';
+            textInput.value = task.text || '';
+            prioritySelect.value = task.priority || 'none';
+            dueInput.value = task.dueDate || '';
+            if (categorySelect) categorySelect.value = task.categoryId || '';
+            
+            // 加载已有图片
+            if (task.images && task.images.length > 0 && previewList) {
+                task.images.forEach(img => {
+                    this.tempImages.push({
+                        id: img.id,
+                        thumbnail: img.thumbnail,
+                        fullImage: img.fullImage || img.thumbnail,  // 兼容旧数据
+                        existing: true  // 标记为已有图片
+                    });
+                    
+                    const previewItem = document.createElement('div');
+                    previewItem.className = 'image-preview-item';
+                    previewItem.dataset.imageId = img.id;
+                    previewItem.innerHTML = `
+                        <img src="${img.thumbnail}" alt="预览">
+                        <button type="button" class="remove-image" title="移除">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    `;
+                    
+                    previewItem.querySelector('.remove-image').addEventListener('click', () => {
+                        this.removePreviewImage(img.id);
+                    });
+                    
+                    previewList.appendChild(previewItem);
+                });
+            }
+        } else {
+            titleEl.textContent = '新增任务';
+            delete modal.dataset.taskId;
+            titleInput.value = '';
+            textInput.value = '';
+            prioritySelect.value = 'none';
+            dueInput.value = this.getTodayDate();
+            if (categorySelect) categorySelect.value = '';
+        }
+        
+        modal.classList.remove('hidden');
+        titleInput.focus();
+    }
+    
+    /**
+     * 隐藏侧边栏任务表单
+     */
+    hideSidebarForm() {
+        const modal = document.getElementById('sidebar-form-modal');
+        if (modal) {
+            modal.classList.add('hidden');
+            delete modal.dataset.taskId;
+        }
+        // 清空临时图片
+        this.tempImages = [];
+        const previewList = document.getElementById('image-preview-list');
+        if (previewList) previewList.innerHTML = '';
+    }
+    
+    /**
+     * 保存侧边栏任务
+     */
+    async saveSidebarTask() {
+        const modal = document.getElementById('sidebar-form-modal');
+        const titleInput = document.getElementById('sidebar-task-title');
+        const textInput = document.getElementById('sidebar-task-text');
+        const prioritySelect = document.getElementById('sidebar-task-priority');
+        const dueInput = document.getElementById('sidebar-task-due');
+        const categorySelect = document.getElementById('sidebar-task-category');
+        
+        const title = titleInput.value.trim();
+        if (!title) {
+            titleInput.focus();
+            titleInput.classList.add('input-error');
+            setTimeout(() => titleInput.classList.remove('input-error'), 800);
+            return;
+        }
+        
+        // 处理图片数据（保存缩略图和大图）
+        const images = this.tempImages ? this.tempImages.map(img => ({
+            id: img.id,
+            thumbnail: img.thumbnail,
+            fullImage: img.fullImage || img.thumbnail  // 兼容旧数据
+        })) : [];
+        
+        const taskData = {
+            title: title,
+            text: textInput.value.trim(),
+            priority: prioritySelect.value,
+            dueDate: dueInput.value || null,
+            images: images,
+            categoryId: categorySelect ? categorySelect.value || null : null
+        };
+        
+        const taskId = modal.dataset.taskId;
+        
+        if (taskId) {
+            const task = this.memos.find(m => m.id === taskId);
+            if (task) {
+                Object.assign(task, taskData);
+                task.updatedAt = Date.now();
+            }
+        } else {
+            const newTask = {
+                id: this.generateId(),
+                ...taskData,
+                completed: false,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                tagIds: []
+            };
+            this.memos.unshift(newTask);
+        }
+        
+        await this.saveMemos();
+        this.tempImages = []; // 清空临时图片
+        this.hideSidebarForm();
+        this.renderSidebarTaskList();
+    }
+    
+    /**
+     * 切换侧边栏任务完成状态
+     */
+    async toggleSidebarTaskComplete(taskId) {
+        const task = this.memos.find(m => m.id === taskId);
+        if (!task) return;
+        
+        task.completed = !task.completed;
+        task.updatedAt = Date.now();
+        
+        await this.saveMemos();
+        this.renderSidebarTaskList();
+    }
+    
+    /**
+     * 删除侧边栏任务
+     */
+    async deleteSidebarTask(taskId) {
+        const index = this.memos.findIndex(m => m.id === taskId);
+        if (index === -1) return;
+        
+        this.memos.splice(index, 1);
+        await this.saveMemos();
+        this.renderSidebarTaskList();
+    }
+    
+    /**
+     * 切换侧边栏显示/隐藏
+     */
+    toggleSidebar() {
+        const sidebar = document.getElementById('task-sidebar');
+        if (sidebar) {
+            sidebar.classList.toggle('collapsed');
+            const isCollapsed = sidebar.classList.contains('collapsed');
+            
+            // 更新右下角按钮图标
+            const toggleBtn = document.getElementById('memo-toggle-btn');
+            if (toggleBtn) {
+                const icon = toggleBtn.querySelector('i');
+                if (icon) {
+                    icon.className = isCollapsed ? 'fas fa-tasks' : 'fas fa-chevron-left';
+                }
+            }
+            
+            // 保存状态
+            chrome.storage.local.set({ sidebarCollapsed: isCollapsed });
+        }
+    }
+    
+    /**
+     * 恢复侧边栏状态
+     */
+    async restoreSidebarState() {
+        try {
+            const result = await chrome.storage.local.get('sidebarCollapsed');
+            if (result.sidebarCollapsed) {
+                const sidebar = document.getElementById('task-sidebar');
+                if (sidebar) {
+                    sidebar.classList.add('collapsed');
+                }
+                // 更新按钮图标
+                const toggleBtn = document.getElementById('memo-toggle-btn');
+                if (toggleBtn) {
+                    const icon = toggleBtn.querySelector('i');
+                    if (icon) {
+                        icon.className = 'fas fa-tasks';
+                    }
+                }
+            }
+        } catch (e) {
+            console.log('恢复侧边栏状态失败', e);
+        }
     }
 
     /**
      * 从Chrome存储中加载备忘录
+     * 优先从 chrome.storage.local 加载，兼容旧的 settings 数据
      */
     async loadMemos() {
         try {
-            // 从设置中加载备忘录
-            const settings = window.settingsManager.settings;
+            // 优先从 local storage 加载（支持大数据量）
+            const localResult = await new Promise(resolve => {
+                chrome.storage.local.get('memos', result => resolve(result));
+            });
             
-            if (!settings) {
-                console.warn('设置管理器未初始化或设置为空');
-                this.memos = [];
-                return;
-            }
+            let memosData = [];
             
-            // 检查memos是否为数组
-            if (Array.isArray(settings.memos)) {
-                this.memos = settings.memos;
+            if (Array.isArray(localResult.memos) && localResult.memos.length > 0) {
+                // 使用 local storage 的数据
+                memosData = localResult.memos;
+                console.log('从 local storage 加载备忘录');
             } else {
-                console.warn('备忘录数据不是数组格式，将使用空数组');
-                this.memos = [];
+                // 降级：尝试从旧的 settings 加载（兼容旧版本）
+                const settings = window.settingsManager?.settings;
+                if (settings && Array.isArray(settings.memos)) {
+                    memosData = settings.memos;
+                    console.log('从 settings 加载备忘录（旧版本兼容）');
+                    // 迁移到 local storage
+                    await chrome.storage.local.set({ memos: memosData });
+                }
             }
             
             // 验证每个备忘录对象的结构
-            this.memos = this.memos.map(memo => {
-                // 确保每个备忘录都有必要的属性
-                return {
-                    id: memo.id || this.generateId(),
-                    title: memo.title || '',
-                    text: memo.text || '',
-                    completed: !!memo.completed,
-                    createdAt: memo.createdAt || Date.now(),
-                    updatedAt: memo.updatedAt || Date.now(),
-                    categoryId: memo.categoryId || null,
-                    tags: Array.isArray(memo.tags) ? memo.tags : [],
-                    priority: memo.priority || 'normal',
-                    dueDate: memo.dueDate || null
-                };
-            });
+            this.memos = memosData.map(memo => ({
+                id: memo.id || this.generateId(),
+                title: memo.title || '',
+                text: memo.text || '',
+                completed: !!memo.completed,
+                createdAt: memo.createdAt || Date.now(),
+                updatedAt: memo.updatedAt || Date.now(),
+                categoryId: memo.categoryId || null,
+                tagIds: Array.isArray(memo.tagIds) ? memo.tagIds : (Array.isArray(memo.tags) ? memo.tags : []),
+                priority: memo.priority || 'none',
+                dueDate: memo.dueDate || null,
+                images: Array.isArray(memo.images) ? memo.images : []
+            }));
             
             console.log('备忘录加载成功，数量:', this.memos.length);
         } catch (error) {
@@ -187,16 +1576,219 @@ class MemoManager {
 
     /**
      * 保存备忘录到Chrome存储
+     * 注意：只使用 chrome.storage.local，不同步到 settings
+     * 因为 storage.sync 有 8KB/item 的限制，带图片的数据会超出
      */
     async saveMemos() {
         try {
-            // 保存备忘录到设置
-            window.settingsManager.settings.memos = this.memos;
-            await window.settingsManager.saveSettings();
+            // 只保存到 local 存储（最大 10MB）
+            await chrome.storage.local.set({ memos: this.memos });
+            
+            // 不再同步到 settingsManager，避免 sync storage 配额超限
+            // window.settingsManager.settings.memos = this.memos;
+            // await window.settingsManager.saveSettings();
+            
+            // 通知 background.js 更新任务提醒
+            try {
+                chrome.runtime.sendMessage({ action: 'setupTaskReminder' });
+            } catch (e) {
+                // 忽略消息发送失败（background 可能未激活）
+            }
+            
             console.log('备忘录保存成功');
         } catch (error) {
             console.error('保存备忘录失败', error);
         }
+    }
+
+    // ==================== 每日任务功能 ====================
+
+    /**
+     * 获取今天的日期字符串 (YYYY-MM-DD)
+     * @returns {string} 日期字符串
+     */
+    getTodayDate() {
+        return new Date().toISOString().split('T')[0];
+    }
+
+    /**
+     * 添加每日任务
+     * @param {Object} task 任务对象
+     * @returns {Object} 创建的任务
+     */
+    async addDailyTask(task) {
+        const newTask = {
+            id: this.generateId(),
+            title: task.title || '',
+            text: task.text || '',
+            completed: false,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            categoryId: task.categoryId || null,
+            tagIds: task.tagIds || [],
+            priority: task.priority || 'none',
+            dueDate: task.dueDate || this.getTodayDate(),
+            dueTime: task.dueTime || null,  // 新增：具体时间
+            isDaily: true  // 标记为每日任务
+        };
+        
+        this.memos.push(newTask);
+        await this.saveMemos();
+        
+        return newTask;
+    }
+
+    /**
+     * 获取今日任务
+     * @returns {Array} 今日任务列表
+     */
+    getTodayTasks() {
+        const today = this.getTodayDate();
+        return this.memos.filter(memo => 
+            memo.dueDate === today && !memo.completed
+        );
+    }
+
+    /**
+     * 获取过期任务
+     * @returns {Array} 过期任务列表
+     */
+    getOverdueTasks() {
+        const today = this.getTodayDate();
+        return this.memos.filter(memo => 
+            memo.dueDate && 
+            memo.dueDate < today && 
+            !memo.completed
+        );
+    }
+
+    /**
+     * 获取本周任务
+     * @returns {Array} 本周任务列表
+     */
+    getWeekTasks() {
+        const today = new Date();
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - today.getDay());
+        startOfWeek.setHours(0, 0, 0, 0);
+        
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 7);
+        
+        return this.memos.filter(memo => {
+            if (!memo.dueDate) return false;
+            const dueDate = new Date(memo.dueDate);
+            return dueDate >= startOfWeek && dueDate < endOfWeek;
+        });
+    }
+
+    /**
+     * 推迟任务到明天
+     * @param {string} taskId 任务ID
+     * @returns {boolean} 是否成功
+     */
+    async postponeTask(taskId) {
+        const task = this.memos.find(memo => memo.id === taskId);
+        if (!task) return false;
+        
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        task.dueDate = tomorrow.toISOString().split('T')[0];
+        task.updatedAt = Date.now();
+        task.overdueNotified = false;  // 重置过期通知标记
+        
+        await this.saveMemos();
+        return true;
+    }
+
+    /**
+     * 推迟任务到下周一
+     * @param {string} taskId 任务ID
+     * @returns {boolean} 是否成功
+     */
+    async postponeToNextWeek(taskId) {
+        const task = this.memos.find(memo => memo.id === taskId);
+        if (!task) return false;
+        
+        const today = new Date();
+        const daysUntilMonday = (8 - today.getDay()) % 7 || 7;
+        const nextMonday = new Date(today);
+        nextMonday.setDate(today.getDate() + daysUntilMonday);
+        
+        task.dueDate = nextMonday.toISOString().split('T')[0];
+        task.updatedAt = Date.now();
+        task.overdueNotified = false;
+        
+        await this.saveMemos();
+        return true;
+    }
+
+    /**
+     * 复制任务
+     * @param {string} taskId 任务ID
+     * @returns {Object|null} 复制的任务
+     */
+    async copyTask(taskId) {
+        const task = this.memos.find(memo => memo.id === taskId);
+        if (!task) return null;
+        
+        const newTask = {
+            ...task,
+            id: this.generateId(),
+            title: task.title + ' (副本)',
+            completed: false,
+            completedAt: null,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            overdueNotified: false
+        };
+        
+        this.memos.push(newTask);
+        await this.saveMemos();
+        
+        return newTask;
+    }
+
+    /**
+     * 清理已完成的旧任务（超过30天）
+     * @returns {number} 清理的任务数量
+     */
+    async cleanOldCompletedTasks() {
+        const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        const originalCount = this.memos.length;
+        
+        this.memos = this.memos.filter(memo => 
+            !memo.completed || 
+            (memo.completedAt && memo.completedAt > thirtyDaysAgo)
+        );
+        
+        const cleanedCount = originalCount - this.memos.length;
+        
+        if (cleanedCount > 0) {
+            await this.saveMemos();
+            console.log(`已清理 ${cleanedCount} 个旧任务`);
+        }
+        
+        return cleanedCount;
+    }
+
+    /**
+     * 获取任务统计
+     * @returns {Object} 统计信息
+     */
+    getTaskStats() {
+        const today = this.getTodayDate();
+        
+        return {
+            total: this.memos.length,
+            completed: this.memos.filter(m => m.completed).length,
+            pending: this.memos.filter(m => !m.completed).length,
+            todayTotal: this.memos.filter(m => m.dueDate === today).length,
+            todayCompleted: this.memos.filter(m => m.dueDate === today && m.completed).length,
+            todayPending: this.memos.filter(m => m.dueDate === today && !m.completed).length,
+            overdue: this.getOverdueTasks().length,
+            highPriority: this.memos.filter(m => m.priority === 'high' && !m.completed).length
+        };
     }
     
     /**
@@ -411,6 +2003,171 @@ class MemoManager {
         
         this.saveMemos();
         return true;
+    }
+
+    /**
+     * 编辑备忘录
+     * @param {string} id 备忘录ID
+     */
+    editMemo(id) {
+        const memo = this.memos.find(m => m.id === id);
+        if (memo) {
+            this.showMemoForm(memo);
+        }
+    }
+
+    /**
+     * 删除备忘录
+     * @param {string} id 备忘录ID
+     * @returns {boolean} 是否成功删除
+     */
+    async deleteMemo(id) {
+        const index = this.memos.findIndex(m => m.id === id);
+        if (index === -1) return false;
+        
+        this.memos.splice(index, 1);
+        await this.saveMemos();
+        
+        // 重新渲染列表
+        this.renderFloatingTaskList();
+        
+        return true;
+    }
+
+    /**
+     * 隐藏备忘录表单
+     */
+    hideMemoForm() {
+        const formContainer = document.getElementById('memo-form-container');
+        if (formContainer) {
+            formContainer.style.display = 'none';
+            this.isFormVisible = false;
+            delete formContainer.dataset.id;
+        }
+    }
+
+    /**
+     * 保存备忘录表单
+     */
+    async saveMemoForm() {
+        try {
+            const formContainer = document.getElementById('memo-form-container');
+            const titleInput = document.getElementById('memo-title');
+            const textInput = document.getElementById('memo-text');
+            const categorySelect = document.getElementById('memo-category');
+            const prioritySelect = document.getElementById('memo-priority');
+            const dueDateInput = document.getElementById('memo-due-date');
+            const dueTimeInput = document.getElementById('memo-due-time');
+            
+            if (!titleInput || !titleInput.value.trim()) {
+                alert(window.i18nManager.getText('titleRequired') || '请输入任务标题');
+                return;
+            }
+            
+            // 获取选中的标签
+            const selectedTags = [];
+            const tagCheckboxes = document.querySelectorAll('#memo-tags-list .tag-checkbox:checked');
+            tagCheckboxes.forEach(checkbox => {
+                selectedTags.push(checkbox.value);
+            });
+            
+            const memoData = {
+                title: titleInput.value.trim(),
+                text: textInput ? textInput.value.trim() : '',
+                categoryId: categorySelect ? categorySelect.value : null,
+                priority: prioritySelect ? prioritySelect.value : 'none',
+                dueDate: dueDateInput ? dueDateInput.value : null,
+                dueTime: dueTimeInput ? dueTimeInput.value : null,
+                tagIds: selectedTags
+            };
+            
+            const editId = formContainer ? formContainer.dataset.id : null;
+            
+            if (editId) {
+                // 编辑现有备忘录
+                const memo = this.memos.find(m => m.id === editId);
+                if (memo) {
+                    Object.assign(memo, memoData);
+                    memo.updatedAt = Date.now();
+                }
+            } else {
+                // 创建新备忘录
+                const newMemo = {
+                    id: this.generateId(),
+                    ...memoData,
+                    completed: false,
+                    createdAt: Date.now(),
+                    updatedAt: Date.now()
+                };
+                this.memos.push(newMemo);
+            }
+            
+            await this.saveMemos();
+            this.hideMemoForm();
+            this.renderFloatingTaskList();
+            
+            console.log('备忘录保存成功');
+        } catch (error) {
+            console.error('保存备忘录时发生错误:', error);
+            alert(window.i18nManager.getText('saveFailed') || '保存失败');
+        }
+    }
+
+    /**
+     * 生成唯一ID
+     * @returns {string} 唯一ID
+     */
+    generateId() {
+        return 'memo_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+
+    /**
+     * 筛选任务
+     */
+    filterTasks() {
+        try {
+            const searchInput = document.querySelector('.search-input');
+            const statusFilter = document.querySelector('.status-filter');
+            
+            const searchText = searchInput ? searchInput.value.toLowerCase().trim() : '';
+            const statusValue = statusFilter ? statusFilter.value : 'all';
+            
+            let filteredMemos = [...this.memos];
+            
+            // 文本搜索
+            if (searchText) {
+                filteredMemos = filteredMemos.filter(memo => 
+                    (memo.title || '').toLowerCase().includes(searchText) ||
+                    (memo.text || '').toLowerCase().includes(searchText)
+                );
+            }
+            
+            // 状态筛选
+            switch (statusValue) {
+                case 'completed':
+                    filteredMemos = filteredMemos.filter(memo => memo.completed);
+                    break;
+                case 'uncompleted':
+                    filteredMemos = filteredMemos.filter(memo => !memo.completed);
+                    break;
+                case 'today':
+                    const today = this.getTodayDate();
+                    filteredMemos = filteredMemos.filter(memo => memo.dueDate === today);
+                    break;
+                case 'overdue':
+                    filteredMemos = this.getOverdueTasks();
+                    break;
+                case 'week':
+                    filteredMemos = this.getWeekTasks();
+                    break;
+                // 'all' 不需要额外过滤
+            }
+            
+            // 重新渲染
+            this.renderFloatingTaskList(filteredMemos);
+        } catch (error) {
+            console.error('筛选任务时发生错误:', error);
+        }
     }
 
     /**
@@ -1053,41 +2810,49 @@ class MemoManager {
 
     /**
      * 切换备忘录面板显示状态
+     * 在双栏布局中，切换侧边栏的展开/折叠
      */
-    toggle() {
+    async toggle() {
         try {
             console.log('切换备忘录显示状态...');
             
             // 检查是否已经初始化
             if (!this.initialized) {
                 console.log('备忘录管理器尚未初始化，正在初始化...');
-                this.init().then(() => {
-                    this.toggle();
-                });
+                try {
+                    await this.init();
+                } catch (error) {
+                    console.error('备忘录初始化失败:', error);
+                }
+            }
+
+            // 优先检查双栏布局的侧边栏
+            const sidebar = document.getElementById('task-sidebar');
+            if (sidebar) {
+                this.toggleSidebar();
+                console.log('切换侧边栏状态完成');
                 return;
             }
-            
-            // 检查是否存在碎片式备忘录
-            const existingMemos = document.querySelectorAll('.memo-item');
-            
-            if (existingMemos.length > 0) {
-                // 如果已经有碎片式备忘录，则隐藏它们
-                console.log('隐藏碎片式备忘录...');
-                existingMemos.forEach(memo => memo.remove());
-                
-                // 移除搜索和添加按钮
-                const searchButton = document.querySelector('.memo-search-button');
-                if (searchButton) searchButton.remove();
-                
-                const searchContainer = document.querySelector('.memo-search-container');
-                if (searchContainer) searchContainer.remove();
-                
-                const addButton = document.querySelector('.memo-add-button');
-                if (addButton) addButton.remove();
-            } else {
-                // 否则显示碎片式备忘录
-                console.log('显示碎片式备忘录...');
-                this.renderFloatingTaskList();
+
+            // 兜底：切换悬浮面板（旧版模式）
+            let panel = document.querySelector('.floating-panel');
+            if (!panel) {
+                panel = this.createMemoUI();
+            }
+
+            if (panel) {
+                const isHidden = panel.classList.contains('hidden');
+                if (isHidden) {
+                    console.log('显示悬浮面板...');
+                    panel.classList.remove('hidden');
+                    const searchInput = panel.querySelector('.search-input');
+                    if (searchInput) {
+                        setTimeout(() => searchInput.focus(), 50);
+                    }
+                } else {
+                    console.log('隐藏悬浮面板...');
+                    panel.classList.add('hidden');
+                }
             }
             
             console.log('备忘录显示状态切换完成');
@@ -1285,57 +3050,416 @@ class MemoManager {
         try {
             console.log('开始创建备忘录内容...');
             
-            // 创建搜索和筛选区域
-            const filterContainer = document.createElement('div');
-            filterContainer.className = 'filter-container';
+            // 创建工具栏（搜索 + 新增按钮）
+            const toolbar = document.createElement('div');
+            toolbar.className = 'memo-toolbar';
             
             // 创建搜索输入框
             const searchInput = document.createElement('input');
             searchInput.type = 'text';
             searchInput.className = 'search-input';
-            searchInput.placeholder = window.i18nManager.getText('searchTasks') || '搜索备忘录...';
-            searchInput.addEventListener('input', () => this.filterTasks());
+            searchInput.id = 'panel-search-input';
+            searchInput.placeholder = window.i18nManager?.getText('searchTasks') || '搜索任务...';
+            searchInput.addEventListener('input', () => this.renderPanelTaskList());
+            
+            // 创建新增任务按钮
+            const addBtn = document.createElement('button');
+            addBtn.className = 'add-task-btn';
+            addBtn.innerHTML = '<i class="fas fa-plus"></i> 新增';
+            addBtn.title = '新增任务 (Ctrl+N)';
+            addBtn.addEventListener('click', () => this.showTaskFormModal());
+            
+            toolbar.appendChild(searchInput);
+            toolbar.appendChild(addBtn);
             
             // 创建状态筛选下拉菜单
+            const filterContainer = document.createElement('div');
+            filterContainer.className = 'filter-container';
+            
             const statusFilter = document.createElement('select');
             statusFilter.className = 'status-filter';
-            statusFilter.addEventListener('change', () => this.filterTasks());
+            statusFilter.id = 'panel-status-filter';
+            statusFilter.addEventListener('change', () => this.renderPanelTaskList());
             
             // 添加状态选项
-            const allStatusOption = document.createElement('option');
-            allStatusOption.value = 'all';
-            allStatusOption.textContent = window.i18nManager.getText('allTasks') || '所有任务';
-            statusFilter.appendChild(allStatusOption);
+            const options = [
+                { value: 'all', text: '所有任务' },
+                { value: 'uncompleted', text: '未完成' },
+                { value: 'completed', text: '已完成' },
+                { value: 'today', text: '今日任务' },
+                { value: 'overdue', text: '已过期' }
+            ];
+            options.forEach(opt => {
+                const option = document.createElement('option');
+                option.value = opt.value;
+                option.textContent = window.i18nManager?.getText(opt.value + 'Tasks') || opt.text;
+                statusFilter.appendChild(option);
+            });
             
-            const completedOption = document.createElement('option');
-            completedOption.value = 'completed';
-            completedOption.textContent = window.i18nManager.getText('completedTasks') || '已完成';
-            statusFilter.appendChild(completedOption);
-            
-            const uncompletedOption = document.createElement('option');
-            uncompletedOption.value = 'uncompleted';
-            uncompletedOption.textContent = window.i18nManager.getText('uncompletedTasks') || '未完成';
-            statusFilter.appendChild(uncompletedOption);
-            
-            // 添加筛选组件到筛选容器
-            filterContainer.appendChild(searchInput);
             filterContainer.appendChild(statusFilter);
             
-            // 创建任务列表
-            const taskList = document.createElement('div');
-            taskList.className = 'task-list';
+            // 创建任务列表容器
+            const taskListContainer = document.createElement('div');
+            taskListContainer.className = 'panel-task-list';
+            taskListContainer.id = 'panel-task-list';
             
-            // 添加筛选容器和任务列表到内容容器
+            // 组装内容
+            container.appendChild(toolbar);
             container.appendChild(filterContainer);
-            container.appendChild(taskList);
+            container.appendChild(taskListContainer);
+            
+            // 创建任务表单弹窗（隐藏状态）
+            this.createTaskFormModal(container);
             
             // 渲染任务列表
-            this.filterTasks();
+            this.renderPanelTaskList();
             
             console.log('备忘录内容创建完成');
         } catch (error) {
             console.error('创建备忘录内容时发生错误:', error);
         }
+    }
+    
+    /**
+     * 创建任务表单弹窗
+     * @param {HTMLElement} container - 容器元素
+     */
+    createTaskFormModal(container) {
+        const modal = document.createElement('div');
+        modal.className = 'task-form-modal hidden';
+        modal.id = 'task-form-modal';
+        
+        modal.innerHTML = `
+            <div class="task-form-content">
+                <div class="task-form-header">
+                    <h3 id="task-form-title">新增任务</h3>
+                    <button class="task-form-close" id="task-form-close">&times;</button>
+                </div>
+                <div class="task-form-body">
+                    <div class="form-group">
+                        <label for="task-title-input">标题 *</label>
+                        <input type="text" id="task-title-input" placeholder="输入任务标题..." required>
+                    </div>
+                    <div class="form-group">
+                        <label for="task-text-input">详情</label>
+                        <textarea id="task-text-input" placeholder="输入任务详情..." rows="3"></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="task-priority-select">优先级</label>
+                            <select id="task-priority-select">
+                                <option value="none">无</option>
+                                <option value="low">低</option>
+                                <option value="medium">中</option>
+                                <option value="high">高</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="task-due-date-input">截止日期</label>
+                            <input type="date" id="task-due-date-input">
+                        </div>
+                    </div>
+                </div>
+                <div class="task-form-footer">
+                    <button class="btn-cancel" id="task-form-cancel">取消</button>
+                    <button class="btn-save" id="task-form-save">保存</button>
+                </div>
+            </div>
+        `;
+        
+        container.appendChild(modal);
+        
+        // 绑定事件
+        document.getElementById('task-form-close').addEventListener('click', () => this.hideTaskFormModal());
+        document.getElementById('task-form-cancel').addEventListener('click', () => this.hideTaskFormModal());
+        document.getElementById('task-form-save').addEventListener('click', () => this.saveTaskFromModal());
+        
+        // 点击遮罩关闭
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) this.hideTaskFormModal();
+        });
+        
+        // 回车保存
+        document.getElementById('task-title-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                this.saveTaskFromModal();
+            }
+        });
+    }
+    
+    /**
+     * 显示任务表单弹窗
+     * @param {Object} task - 要编辑的任务，null 表示新增
+     */
+    showTaskFormModal(task = null) {
+        const modal = document.getElementById('task-form-modal');
+        if (!modal) return;
+        
+        const titleEl = document.getElementById('task-form-title');
+        const titleInput = document.getElementById('task-title-input');
+        const textInput = document.getElementById('task-text-input');
+        const prioritySelect = document.getElementById('task-priority-select');
+        const dueDateInput = document.getElementById('task-due-date-input');
+        
+        if (task) {
+            // 编辑模式
+            titleEl.textContent = '编辑任务';
+            modal.dataset.taskId = task.id;
+            titleInput.value = task.title || '';
+            textInput.value = task.text || '';
+            prioritySelect.value = task.priority || 'none';
+            dueDateInput.value = task.dueDate || '';
+        } else {
+            // 新增模式
+            titleEl.textContent = '新增任务';
+            delete modal.dataset.taskId;
+            titleInput.value = '';
+            textInput.value = '';
+            prioritySelect.value = 'none';
+            dueDateInput.value = this.getTodayDate();
+        }
+        
+        modal.classList.remove('hidden');
+        titleInput.focus();
+    }
+    
+    /**
+     * 隐藏任务表单弹窗
+     */
+    hideTaskFormModal() {
+        const modal = document.getElementById('task-form-modal');
+        if (modal) {
+            modal.classList.add('hidden');
+            delete modal.dataset.taskId;
+        }
+    }
+    
+    /**
+     * 从弹窗保存任务
+     */
+    async saveTaskFromModal() {
+        const modal = document.getElementById('task-form-modal');
+        const titleInput = document.getElementById('task-title-input');
+        const textInput = document.getElementById('task-text-input');
+        const prioritySelect = document.getElementById('task-priority-select');
+        const dueDateInput = document.getElementById('task-due-date-input');
+        
+        const title = titleInput.value.trim();
+        if (!title) {
+            titleInput.focus();
+            titleInput.classList.add('input-error');
+            setTimeout(() => titleInput.classList.remove('input-error'), 1000);
+            return;
+        }
+        
+        const taskData = {
+            title: title,
+            text: textInput.value.trim(),
+            priority: prioritySelect.value,
+            dueDate: dueDateInput.value || null
+        };
+        
+        const taskId = modal.dataset.taskId;
+        
+        if (taskId) {
+            // 编辑现有任务
+            const task = this.memos.find(m => m.id === taskId);
+            if (task) {
+                Object.assign(task, taskData);
+                task.updatedAt = Date.now();
+            }
+        } else {
+            // 新增任务
+            const newTask = {
+                id: this.generateId(),
+                ...taskData,
+                completed: false,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                categoryId: null,
+                tagIds: []
+            };
+            this.memos.unshift(newTask);
+        }
+        
+        await this.saveMemos();
+        this.hideTaskFormModal();
+        this.renderPanelTaskList();
+        
+        console.log(taskId ? '任务已更新' : '任务已新增');
+    }
+    
+    /**
+     * 渲染面板内任务列表
+     */
+    renderPanelTaskList() {
+        const container = document.getElementById('panel-task-list');
+        if (!container) return;
+        
+        const searchInput = document.getElementById('panel-search-input');
+        const statusFilter = document.getElementById('panel-status-filter');
+        
+        const searchText = searchInput ? searchInput.value.toLowerCase().trim() : '';
+        const statusValue = statusFilter ? statusFilter.value : 'all';
+        
+        // 筛选任务
+        let filteredMemos = [...this.memos];
+        
+        // 文本搜索
+        if (searchText) {
+            filteredMemos = filteredMemos.filter(memo => 
+                (memo.title || '').toLowerCase().includes(searchText) ||
+                (memo.text || '').toLowerCase().includes(searchText)
+            );
+        }
+        
+        // 状态筛选
+        const today = this.getTodayDate();
+        switch (statusValue) {
+            case 'completed':
+                filteredMemos = filteredMemos.filter(m => m.completed);
+                break;
+            case 'uncompleted':
+                filteredMemos = filteredMemos.filter(m => !m.completed);
+                break;
+            case 'today':
+                filteredMemos = filteredMemos.filter(m => m.dueDate === today);
+                break;
+            case 'overdue':
+                filteredMemos = filteredMemos.filter(m => m.dueDate && m.dueDate < today && !m.completed);
+                break;
+        }
+        
+        // 排序：未完成在前，按优先级、截止日期排序
+        const priorityOrder = { high: 0, medium: 1, low: 2, none: 3 };
+        filteredMemos.sort((a, b) => {
+            if (a.completed !== b.completed) return a.completed ? 1 : -1;
+            const pa = priorityOrder[a.priority] ?? 3;
+            const pb = priorityOrder[b.priority] ?? 3;
+            if (pa !== pb) return pa - pb;
+            if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+            if (a.dueDate) return -1;
+            if (b.dueDate) return 1;
+            return b.createdAt - a.createdAt;
+        });
+        
+        // 渲染
+        if (filteredMemos.length === 0) {
+            container.innerHTML = `
+                <div class="empty-task-list">
+                    <i class="fas fa-tasks"></i>
+                    <p>${searchText ? '没有找到匹配的任务' : '暂无任务，点击上方按钮新增'}</p>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = '';
+        filteredMemos.forEach(task => {
+            const item = this.createPanelTaskItem(task);
+            container.appendChild(item);
+        });
+    }
+    
+    /**
+     * 创建面板内的任务项
+     * @param {Object} task - 任务对象
+     * @returns {HTMLElement}
+     */
+    createPanelTaskItem(task) {
+        const item = document.createElement('div');
+        item.className = `panel-task-item ${task.completed ? 'completed' : ''} priority-${task.priority || 'none'}`;
+        item.dataset.id = task.id;
+        
+        // 判断是否过期
+        const today = this.getTodayDate();
+        const isOverdue = task.dueDate && task.dueDate < today && !task.completed;
+        if (isOverdue) item.classList.add('overdue');
+        
+        // 优先级颜色
+        const priorityColors = { high: '#ff4757', medium: '#ffa502', low: '#2ed573', none: 'transparent' };
+        const priorityColor = priorityColors[task.priority] || 'transparent';
+        
+        item.innerHTML = `
+            <div class="task-checkbox" title="${task.completed ? '标记为未完成' : '标记为已完成'}">
+                <i class="${task.completed ? 'fas fa-check-circle' : 'far fa-circle'}"></i>
+            </div>
+            <div class="task-info">
+                <div class="task-title">${this.escapeHtml(task.title || '无标题')}</div>
+                ${task.text ? `<div class="task-desc">${this.escapeHtml(task.text.substring(0, 50))}${task.text.length > 50 ? '...' : ''}</div>` : ''}
+                <div class="task-meta">
+                    ${task.dueDate ? `<span class="task-due ${isOverdue ? 'overdue' : ''}">${isOverdue ? '已过期: ' : ''}${task.dueDate}</span>` : ''}
+                    ${task.priority && task.priority !== 'none' ? `<span class="task-priority" style="background:${priorityColor}">${task.priority === 'high' ? '高' : task.priority === 'medium' ? '中' : '低'}</span>` : ''}
+                </div>
+            </div>
+            <div class="task-actions">
+                <button class="task-action-btn edit-btn" title="编辑"><i class="fas fa-edit"></i></button>
+                <button class="task-action-btn delete-btn" title="删除"><i class="fas fa-trash"></i></button>
+            </div>
+        `;
+        
+        // 绑定事件
+        item.querySelector('.task-checkbox').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggleTaskComplete(task.id);
+        });
+        
+        item.querySelector('.edit-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.showTaskFormModal(task);
+        });
+        
+        item.querySelector('.delete-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (confirm('确定要删除这个任务吗？')) {
+                this.deleteTask(task.id);
+            }
+        });
+        
+        // 点击任务项也可以编辑
+        item.addEventListener('click', () => this.showTaskFormModal(task));
+        
+        return item;
+    }
+    
+    /**
+     * 切换任务完成状态
+     * @param {string} taskId - 任务ID
+     */
+    async toggleTaskComplete(taskId) {
+        const task = this.memos.find(m => m.id === taskId);
+        if (!task) return;
+        
+        task.completed = !task.completed;
+        task.updatedAt = Date.now();
+        
+        await this.saveMemos();
+        this.renderPanelTaskList();
+    }
+    
+    /**
+     * 删除任务
+     * @param {string} taskId - 任务ID
+     */
+    async deleteTask(taskId) {
+        const index = this.memos.findIndex(m => m.id === taskId);
+        if (index === -1) return;
+        
+        this.memos.splice(index, 1);
+        await this.saveMemos();
+        this.renderPanelTaskList();
+    }
+    
+    /**
+     * HTML 转义
+     * @param {string} str - 原始字符串
+     * @returns {string}
+     */
+    escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
     }
     
     /**
@@ -1437,7 +3561,7 @@ class MemoManager {
             
             // 定义快捷键映射
             this.shortcuts = [
-                { key: 'n', ctrlKey: true, action: this.showMemoForm.bind(this), description: 'shortcutAdd' },
+                { key: 'n', ctrlKey: true, action: this.showTaskFormModal.bind(this), description: 'shortcutAdd' },
                 { key: 'h', ctrlKey: true, action: this.toggleMinimize.bind(this), description: 'shortcutTogglePanel' },
                 { key: '?', ctrlKey: true, action: this.showShortcutsHelp.bind(this), description: 'shortcutHelp' }
             ];

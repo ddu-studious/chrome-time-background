@@ -59,22 +59,424 @@
         }
     ];
 
+    // ==================== 任务提醒功能 ====================
+
+    /**
+     * 获取下一个指定时间的时间戳
+     * @param {number} hour 小时（0-23）
+     * @param {number} minute 分钟（0-59）
+     * @returns {number} 时间戳（毫秒）
+     */
+    function getNextDailyTime(hour, minute) {
+        const now = new Date();
+        const reminder = new Date(now);
+        reminder.setHours(hour, minute, 0, 0);
+        
+        // 如果今天的时间已经过了，则设置为明天
+        if (reminder <= now) {
+            reminder.setDate(reminder.getDate() + 1);
+        }
+        
+        return reminder.getTime();
+    }
+
+    /**
+     * 获取今天的日期字符串 (YYYY-MM-DD)
+     * @returns {string} 日期字符串
+     */
+    function getTodayDate() {
+        return new Date().toISOString().split('T')[0];
+    }
+
+    /**
+     * 初始化定时任务
+     */
+    async function initAlarms() {
+        console.log('初始化任务提醒闹钟...');
+        
+        // 获取任务提醒设置
+        const { dailyTaskSettings } = await chrome.storage.sync.get('dailyTaskSettings');
+        const settings = dailyTaskSettings || {
+            enableNotifications: true,
+            defaultReminderTime: '09:00',
+            showOverdueFirst: true
+        };
+        
+        if (!settings.enableNotifications) {
+            console.log('通知已禁用，跳过闹钟初始化');
+            return;
+        }
+        
+        // 清除旧闹钟
+        await chrome.alarms.clearAll();
+        
+        // 解析默认提醒时间
+        const [hour, minute] = (settings.defaultReminderTime || '09:00').split(':').map(Number);
+        
+        // 每日摘要提醒
+        await chrome.alarms.create('daily-summary', {
+            when: getNextDailyTime(hour, minute),
+            periodInMinutes: 24 * 60  // 每天重复
+        });
+        console.log(`已设置每日摘要提醒: ${hour}:${minute}`);
+        
+        // 定期检查过期任务（每30分钟）
+        await chrome.alarms.create('check-overdue', {
+            periodInMinutes: 30
+        });
+        console.log('已设置过期任务检查: 每30分钟');
+        
+        // 设置单个任务的提醒
+        await setupTaskReminders();
+    }
+
+    /**
+     * 为所有任务设置提醒
+     */
+    async function setupTaskReminders() {
+        const { memos } = await chrome.storage.local.get('memos');
+        if (!memos || !Array.isArray(memos)) return;
+        
+        const now = Date.now();
+        
+        for (const task of memos) {
+            if (task.completed) continue;
+            if (!task.dueDate) continue;
+            
+            // 计算提醒时间
+            const dueTime = task.dueTime || '09:00';
+            const dueDateTime = new Date(`${task.dueDate}T${dueTime}`);
+            
+            // 提前30分钟提醒
+            const reminderTime = dueDateTime.getTime() - 30 * 60 * 1000;
+            
+            // 只设置未来的提醒
+            if (reminderTime > now) {
+                await chrome.alarms.create(`task-reminder-${task.id}`, {
+                    when: reminderTime
+                });
+                console.log(`已设置任务提醒: ${task.title} - ${new Date(reminderTime).toLocaleString()}`);
+            }
+        }
+    }
+
+    /**
+     * 发送每日摘要通知
+     */
+    async function sendDailySummary() {
+        console.log('发送每日任务摘要...');
+        
+        const { memos } = await chrome.storage.local.get('memos');
+        if (!memos || !Array.isArray(memos)) {
+            console.log('没有任务数据');
+            return;
+        }
+        
+        const today = getTodayDate();
+        
+        // 统计今日任务
+        const todayTasks = memos.filter(task => 
+            task.dueDate === today && !task.completed
+        );
+        
+        // 统计过期任务
+        const overdueTasks = memos.filter(task => 
+            task.dueDate && task.dueDate < today && !task.completed
+        );
+        
+        // 如果没有任务，不发送通知
+        if (todayTasks.length === 0 && overdueTasks.length === 0) {
+            console.log('没有待处理的任务');
+            return;
+        }
+        
+        // 构建通知消息
+        let message = '';
+        if (todayTasks.length > 0) {
+            message += `今日任务: ${todayTasks.length} 个`;
+        }
+        if (overdueTasks.length > 0) {
+            if (message) message += '\n';
+            message += `过期任务: ${overdueTasks.length} 个`;
+        }
+        
+        // 发送通知
+        try {
+            await chrome.notifications.create('daily-summary', {
+                type: 'basic',
+                iconUrl: 'icons/icon128.png',
+                title: '📋 每日任务摘要',
+                message: message,
+                priority: overdueTasks.length > 0 ? 2 : 1,
+                requireInteraction: overdueTasks.length > 0
+            });
+            console.log('每日摘要通知已发送');
+        } catch (error) {
+            console.error('发送通知失败:', error);
+        }
+    }
+
+    /**
+     * 检查并提醒过期任务
+     */
+    async function checkOverdueTasks() {
+        console.log('检查过期任务...');
+        
+        const { memos } = await chrome.storage.local.get('memos');
+        if (!memos || !Array.isArray(memos)) return;
+        
+        const today = getTodayDate();
+        
+        const overdueTasks = memos.filter(task => 
+            task.dueDate && 
+            task.dueDate < today && 
+            !task.completed &&
+            !task.overdueNotified  // 避免重复通知
+        );
+        
+        if (overdueTasks.length === 0) {
+            console.log('没有新的过期任务');
+            return;
+        }
+        
+        // 发送过期任务通知
+        try {
+            await chrome.notifications.create('overdue-tasks', {
+                type: 'basic',
+                iconUrl: 'icons/icon128.png',
+                title: '⚠️ 任务过期提醒',
+                message: `您有 ${overdueTasks.length} 个任务已过期，请及时处理`,
+                priority: 2,
+                requireInteraction: true
+            });
+            
+            // 标记已通知
+            for (const task of overdueTasks) {
+                task.overdueNotified = true;
+            }
+            await chrome.storage.local.set({ memos });
+            
+            console.log('过期任务通知已发送');
+        } catch (error) {
+            console.error('发送通知失败:', error);
+        }
+    }
+
+    /**
+     * 发送单个任务提醒
+     * @param {string} taskId 任务ID
+     */
+    async function sendTaskReminder(taskId) {
+        console.log(`发送任务提醒: ${taskId}`);
+        
+        const { memos } = await chrome.storage.local.get('memos');
+        if (!memos || !Array.isArray(memos)) return;
+        
+        const task = memos.find(t => t.id === taskId);
+        if (!task || task.completed) {
+            console.log('任务不存在或已完成');
+            return;
+        }
+        
+        // 构建优先级提示
+        let priorityIcon = '';
+        switch (task.priority) {
+            case 'high': priorityIcon = '🔴 '; break;
+            case 'medium': priorityIcon = '🟡 '; break;
+            case 'low': priorityIcon = '🟢 '; break;
+        }
+        
+        try {
+            await chrome.notifications.create(`task-${taskId}`, {
+                type: 'basic',
+                iconUrl: 'icons/icon128.png',
+                title: '⏰ 任务提醒',
+                message: `${priorityIcon}${task.title}\n截止: ${task.dueDate} ${task.dueTime || ''}`,
+                priority: task.priority === 'high' ? 2 : 1,
+                requireInteraction: true,
+                buttons: [
+                    { title: '✅ 完成' },
+                    { title: '⏰ 推迟' }
+                ]
+            });
+            console.log('任务提醒通知已发送');
+        } catch (error) {
+            console.error('发送通知失败:', error);
+        }
+    }
+
+    /**
+     * 标记任务为已完成
+     * @param {string} taskId 任务ID
+     */
+    async function markTaskCompleted(taskId) {
+        const { memos } = await chrome.storage.local.get('memos');
+        if (!memos || !Array.isArray(memos)) return;
+        
+        const task = memos.find(t => t.id === taskId);
+        if (task) {
+            task.completed = true;
+            task.completedAt = Date.now();
+            task.updatedAt = Date.now();
+            await chrome.storage.local.set({ memos });
+            console.log(`任务已完成: ${task.title}`);
+            
+            // 清除该任务的提醒闹钟
+            await chrome.alarms.clear(`task-reminder-${taskId}`);
+        }
+    }
+
+    /**
+     * 推迟任务到明天
+     * @param {string} taskId 任务ID
+     */
+    async function postponeTask(taskId) {
+        const { memos } = await chrome.storage.local.get('memos');
+        if (!memos || !Array.isArray(memos)) return;
+        
+        const task = memos.find(t => t.id === taskId);
+        if (task) {
+            // 推迟到明天
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            task.dueDate = tomorrow.toISOString().split('T')[0];
+            task.updatedAt = Date.now();
+            task.overdueNotified = false;  // 重置过期通知标记
+            await chrome.storage.local.set({ memos });
+            console.log(`任务已推迟到明天: ${task.title}`);
+            
+            // 重新设置提醒
+            await setupTaskReminders();
+        }
+    }
+
+    // ==================== 事件监听 ====================
+
     // 监听扩展图标点击事件
     chrome.action.onClicked.addListener(() => {
         // 创建新标签页
         chrome.tabs.create({ url: 'index.html' });
     });
 
-    // 监听安装事件
-    chrome.runtime.onInstalled.addListener(() => {
-        console.log('Chrome Time Extension installed');
+    // 监听安装/更新事件
+    chrome.runtime.onInstalled.addListener(async (details) => {
+        console.log('Chrome Time Extension installed/updated:', details.reason);
+        
+        // 初始化默认设置
+        if (details.reason === 'install') {
+            await chrome.storage.sync.set({
+                dailyTaskSettings: {
+                    enableNotifications: true,
+                    defaultReminderTime: '09:00',
+                    showOverdueFirst: true,
+                    reminderAdvanceMinutes: 30
+                }
+            });
+        }
+        
+        // 初始化闹钟
+        await initAlarms();
+    });
+
+    // 监听浏览器启动事件
+    chrome.runtime.onStartup.addListener(async () => {
+        console.log('浏览器启动，重新初始化闹钟...');
+        await initAlarms();
+    });
+
+    // 监听闹钟事件
+    chrome.alarms.onAlarm.addListener(async (alarm) => {
+        console.log('闹钟触发:', alarm.name);
+        
+        switch (alarm.name) {
+            case 'daily-summary':
+                await sendDailySummary();
+                break;
+            case 'check-overdue':
+                await checkOverdueTasks();
+                break;
+            default:
+                // 处理单个任务提醒
+                if (alarm.name.startsWith('task-reminder-')) {
+                    const taskId = alarm.name.replace('task-reminder-', '');
+                    await sendTaskReminder(taskId);
+                }
+        }
+    });
+
+    // 监听通知按钮点击
+    chrome.notifications.onButtonClicked.addListener(async (notificationId, buttonIndex) => {
+        console.log('通知按钮点击:', notificationId, buttonIndex);
+        
+        if (notificationId.startsWith('task-')) {
+            const taskId = notificationId.replace('task-', '');
+            
+            if (buttonIndex === 0) {
+                // 完成任务
+                await markTaskCompleted(taskId);
+            } else if (buttonIndex === 1) {
+                // 推迟任务
+                await postponeTask(taskId);
+            }
+            
+            // 清除通知
+            await chrome.notifications.clear(notificationId);
+        }
+    });
+
+    // 监听通知点击
+    chrome.notifications.onClicked.addListener(async (notificationId) => {
+        console.log('通知点击:', notificationId);
+        
+        // 打开新标签页
+        await chrome.tabs.create({ url: 'chrome://newtab/' });
+        
+        // 清除通知
+        await chrome.notifications.clear(notificationId);
     });
 
     // 监听消息事件
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.action === 'getBackgrounds') {
             sendResponse({ backgrounds: backgrounds });
+            return true;
         }
-        return true;
+        
+        if (message.action === 'setupTaskReminder') {
+            // 设置单个任务的提醒
+            setupTaskReminders().then(() => {
+                sendResponse({ success: true });
+            }).catch(error => {
+                console.error('设置任务提醒失败:', error);
+                sendResponse({ success: false, error: error.message });
+            });
+            return true;
+        }
+        
+        if (message.action === 'refreshAlarms') {
+            // 刷新所有闹钟
+            initAlarms().then(() => {
+                sendResponse({ success: true });
+            }).catch(error => {
+                console.error('刷新闹钟失败:', error);
+                sendResponse({ success: false, error: error.message });
+            });
+            return true;
+        }
+        
+        return false;
+    });
+
+    // 监听存储变化
+    chrome.storage.onChanged.addListener(async (changes, area) => {
+        if (area === 'sync' && changes.dailyTaskSettings) {
+            console.log('任务设置已更改，重新初始化闹钟...');
+            await initAlarms();
+        }
+        
+        if (area === 'local' && changes.memos) {
+            console.log('任务数据已更改，更新任务提醒...');
+            await setupTaskReminders();
+        }
     });
 })();

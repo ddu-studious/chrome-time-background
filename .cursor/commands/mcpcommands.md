@@ -4,11 +4,12 @@
 
 ```json
 {
-  "cursor.commands": {
-    "browser": "@cursor-ide-browser",
-    "thinking": "@sequential-thinking",
-    "git": "@github"
-  }
+    "cursor.commands": {
+        "browser": "@cursor-ide-browser",
+        "thinking": "@sequential-thinking",
+        "git": "@github",
+        "docs": "@Context7"
+    }
 }
 ```
 
@@ -18,12 +19,14 @@
 
 ```
 # 测试扩展功能
-@browser 打开 chrome://extensions/ 加载扩展
+@browser 打开新标签页测试时钟显示
+@browser 测试备忘录添加和编辑功能
+@browser 验证天气信息是否正确显示
 
 # 验证 UI
-@browser 测试搜索功能是否正常
-@browser 验证深色模式切换
-@browser 检查快捷键是否响应
+@browser 测试背景图片切换
+@browser 验证磨砂玻璃效果
+@browser 检查多语言切换
 
 # 调试
 @browser 打开开发者工具查看控制台日志
@@ -33,16 +36,16 @@
 
 ```
 # 功能设计
-@thinking 设计新的搜索语法实现方案
-@thinking 分析智能排序算法优化
+@thinking 设计每日任务管理功能的实现方案
+@thinking 分析任务提醒系统的架构
 
 # 问题排查
-@thinking 分析搜索结果不准确的可能原因
-@thinking 排查 Favicon 加载失败问题
+@thinking 分析备忘录保存失败的可能原因
+@thinking 排查天气数据不更新的问题
 
 # 方案对比
-@thinking 对比不同的多选实现方案
-@thinking 评估性能优化策略
+@thinking 对比 storage.sync 和 storage.local 的使用场景
+@thinking 评估不同的通知策略
 ```
 
 ### Git 操作 (@github)
@@ -53,17 +56,30 @@
 @git 提交当前更改
 
 # 发布相关
-@git 创建新版本标签 v1.3.4
+@git 创建新版本标签 v1.5.0
 @git 查看版本提交历史
 ```
 
-## Chrome 扩展开发专用命令
+### Chrome API 文档 (@Context7)
+
+```
+# 查询 API
+@docs 查询 chrome.storage API 的使用方法
+@docs 查询 chrome.alarms API 的定时任务
+@docs 查询 chrome.notifications API 的通知格式
+
+# 最佳实践
+@docs Chrome 扩展存储最佳实践
+@docs Manifest V3 权限配置
+```
+
+## 中国风景时钟专用命令
 
 ### 调试命令
 
 ```bash
 # 查看扩展日志
-# Popup: 右键扩展图标 -> 检查弹出窗口 -> Console
+# 新标签页: 右键 -> 检查 -> Console
 # Background: chrome://extensions/ -> 详情 -> 检查视图
 
 # 重新加载扩展
@@ -74,9 +90,8 @@
 
 ```
 chrome://extensions/     # 扩展管理页面
-chrome://bookmarks/      # 书签管理器
-chrome://history/        # 历史记录
-chrome://downloads/      # 下载内容
+chrome://newtab/         # 新标签页（被扩展覆盖）
+chrome://settings/       # Chrome 设置
 ```
 
 ## 自动触发场景
@@ -88,58 +103,65 @@ AI 会根据上下文自动选择合适的 MCP 工具：
 | 需要测试 UI 交互 | Browser |
 | 复杂问题、多步骤分析 | Sequential Thinking |
 | 版本管理、代码提交 | GitHub |
+| 查询 Chrome API | Context7 |
 
 ## 项目特定查询示例
 
-### 搜索功能相关
+### 备忘录功能相关
 
 ```
-@thinking 如何优化搜索结果的相关度排序
-@thinking 分析 site: 语法的匹配逻辑
-@thinking 设计新的时间过滤语法
+@thinking 如何优化备忘录的存储结构
+@thinking 分析每日任务的重复逻辑
+@thinking 设计任务提醒的触发机制
 ```
 
 ### UI/UX 相关
 
 ```
-@browser 测试深色模式下的对比度
-@browser 验证快捷键提示的显示效果
-@thinking 分析批量操作工具栏的 UX 优化方案
+@browser 测试备忘录面板的拖拽功能
+@browser 验证任务完成动画效果
+@thinking 分析磨砂玻璃效果的性能影响
 ```
 
 ### 性能优化
 
 ```
-@thinking 分析大量书签时的搜索性能
-@thinking 评估 Favicon 缓存策略
-@thinking 优化首次加载时间
+@thinking 分析大量任务时的渲染性能
+@thinking 评估存储数据的清理策略
+@thinking 优化 Service Worker 的启动时间
 ```
 
 ## 组合使用示例
 
-### 新增搜索语法
+### 新增每日任务功能
 
 ```
-# 1. 分析实现方案
-@thinking 设计 "folder:" 语法实现方案
+# 1. 查询 API
+@docs chrome.alarms 定时任务使用方法
 
-# 2. 实现后测试
-@browser 测试新语法功能是否正常
+# 2. 分析实现方案
+@thinking 设计每日任务的数据结构和提醒逻辑
 
-# 3. 提交代码
-@git 提交新增 folder: 搜索语法
+# 3. 实现后测试
+@browser 测试新功能是否正常工作
+
+# 4. 提交代码
+@git 提交新增每日任务功能
 ```
 
 ### 修复 Bug
 
 ```
 # 1. 分析问题
-@thinking 分析搜索结果为空的可能原因
+@thinking 分析任务保存失败的可能原因
 
-# 2. 验证修复
-@browser 测试修复后的搜索功能
+# 2. 查询文档
+@docs chrome.storage 错误处理
 
-# 3. 提交修复
+# 3. 验证修复
+@browser 测试修复后的保存功能
+
+# 4. 提交修复
 @git 提交 Bug 修复
 ```
 
@@ -150,7 +172,7 @@ AI 会根据上下文自动选择合适的 MCP 工具：
 @browser 全面测试所有功能
 
 # 2. 更新版本
-# 手动更新 manifest.json 和 PUBLISH.md
+# 手动更新 manifest.json、CHANGELOG.md、README.md
 
 # 3. 提交发布
 @git 创建版本标签并提交
@@ -160,10 +182,11 @@ AI 会根据上下文自动选择合适的 MCP 工具：
 
 | 命令 | 用途 | 示例 |
 |------|------|------|
-| `@browser` | 浏览器测试 | `@browser 测试搜索功能` |
-| `@thinking` | 复杂问题分析 | `@thinking 设计新功能方案` |
+| `@browser` | 浏览器测试 | `@browser 测试备忘录功能` |
+| `@thinking` | 复杂问题分析 | `@thinking 设计任务提醒方案` |
 | `@git` | Git 操作 | `@git 提交代码` |
+| `@docs` | 查询文档 | `@docs chrome.alarms API` |
 
 ---
 
-**最后更新**: 2025-01-30
+**最后更新**: 2026-01-30

@@ -8,42 +8,78 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
-    <div class="container">
-        <div class="time-wrapper">
-            <div class="time-container">
-                <div class="time" id="time">20:58:40</div>
-                <div class="date" id="date">2025年02月24日 星期一</div>
-                <div class="lunar" id="lunar">农历甲辰年正月十五</div>
-                <div class="holiday" id="holiday">元宵节</div>
+    <!-- 主布局容器 -->
+    <div class="main-layout">
+        <!-- 左侧：任务面板（常驻） -->
+        <aside class="task-sidebar" id="task-sidebar">
+            <div class="sidebar-header">
+                <h2 class="sidebar-title">
+                    <i class="fas fa-tasks"></i>
+                    <span>任务</span>
+                </h2>
+                <button class="sidebar-collapse-btn" id="sidebar-collapse-btn" title="折叠面板">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
             </div>
-        </div>
-        <div class="weather-wrapper">
-            <div class="weather-container" id="weather">
-                <div class="current-weather">
-                    <span class="weather-icon">🌤</span>
-                    <span class="weather-temp">23°C</span>
-                    <span class="weather-desc">晴朗</span>
-                    <span class="weather-city">北京市</span>
+            <div class="sidebar-content" id="sidebar-content">
+                <!-- 初始骨架屏，数据加载后替换 -->
+                <div class="sidebar-skeleton">
+                    <div class="skeleton-toolbar">
+                        <div class="skeleton-search"></div>
+                        <div class="skeleton-btn"></div>
+                    </div>
+                    <div class="skeleton-filter"></div>
+                    <div class="skeleton-list">
+                        <div class="skeleton-item"></div>
+                        <div class="skeleton-item"></div>
+                        <div class="skeleton-item"></div>
+                    </div>
                 </div>
             </div>
-            <div class="forecast-container" id="forecast">
-                <!-- 天气预报将在这里显示 -->
+        </aside>
+        
+        <!-- 右侧：时间和天气 -->
+        <main class="main-content">
+            <div class="time-wrapper">
+                <div class="time-container">
+                    <div class="time" id="time">00:00:00</div>
+                    <div class="date" id="date">2026年1月31日 星期六</div>
+                    <div class="lunar" id="lunar">农历乙巳年正月初三</div>
+                    <div class="holiday" id="holiday"></div>
+                </div>
             </div>
-        </div>
+            <div class="weather-wrapper">
+                <div class="weather-container" id="weather">
+                    <div class="current-weather">
+                        <span class="weather-icon">🌤</span>
+                        <span class="weather-temp">23°C</span>
+                        <span class="weather-desc">晴朗</span>
+                        <span class="weather-city">北京市</span>
+                    </div>
+                </div>
+                <div class="forecast-container" id="forecast">
+                    <!-- 天气预报将在这里显示 -->
+                </div>
+            </div>
+        </main>
     </div>
+    
+    <!-- 底部信息 -->
     <div class="background-credit" id="background-credit">
         长城 - 慕田峪长城
     </div>
     <div class="keyboard-hint">按空格键切换背景</div>
     
+    <!-- 悬浮操作按钮 -->
     <div class="action-buttons">
-        <button id="memo-toggle-btn" class="action-btn" title="备忘录">
-            <i class="fas fa-sticky-note"></i>
+        <button id="memo-toggle-btn" class="action-btn" title="展开/折叠任务面板">
+            <i class="fas fa-tasks"></i>
         </button>
     </div>
 
     <script src="js/settings.js"></script>
     <script src="js/i18n.js"></script>
+    <script src="js/lunar-lib.js"></script>
     <script src="js/lunar.js"></script>
     <script src="js/clock.js"></script>
     <script src="js/weather.js"></script>

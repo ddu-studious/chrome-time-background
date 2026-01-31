@@ -1,43 +1,46 @@
-# Chrome Bookmarks Search 项目上下文
+# 中国风景时钟项目上下文
 
 ## 项目信息
 
-- **项目名称**: Chrome Bookmarks Search (Chrome 书签搜索扩展)
-- **版本**: v1.3.3
+- **项目名称**: 中国风景时钟 (China Scenery Clock)
+- **版本**: v1.5.1
 - **类型**: Chrome Extension (Manifest V3)
 
 ## 技术栈
 
 - **平台**: Chrome Extension (Manifest V3)
 - **语言**: JavaScript (ES6+), HTML5, CSS3
-- **Chrome APIs**: bookmarks, tabs, history, downloads, storage, favicon
+- **Chrome APIs**: storage, geolocation, tabs, alarms, notifications
+- **外部 API**: 和风天气 API
 
 ## 核心功能
 
-1. **书签搜索**: 搜索所有保存的书签
-2. **标签页搜索**: 搜索当前打开的标签页
-3. **历史记录搜索**: 搜索最近30天的浏览历史
-4. **下载搜索**: 搜索下载的文件
-5. **高级搜索语法**: site:、type:、in:、after:、before:
-6. **智能排序**: 相关度、时间、访问频率
-7. **主题切换**: 深色/浅色/跟随系统
-8. **批量操作**: 多选打开、复制链接
+1. **时间显示**: 实时时钟（12/24小时制）
+2. **日期显示**: 公历、农历、节假日
+3. **天气功能**: 实时天气、三天预报
+4. **背景轮播**: 中国风景图片
+5. **备忘录功能**: 任务管理、分类、标签、优先级、截止日期
+6. **多语言支持**: 中文/英文
 
 ## 关键文件路径
 
 ### 核心文件
 - 配置文件: `manifest.json`
-- 弹出窗口: `popup.html`
-- 后台脚本: `background.js`
+- 新标签页: `index.html`
+- Service Worker: `js/background.js`
 
 ### JavaScript 模块
-- 主逻辑: `js/popup.js`
+- 主入口: `js/main.js`
+- 时钟模块: `js/clock.js`
+- 农历模块: `js/lunar.js`
+- 节假日模块: `js/holidays.js`
+- 天气模块: `js/weather.js`
 - 设置管理: `js/settings.js`
-- 搜索解析器: `js/search-parser.js`
-- 智能排序: `js/smart-sort.js`
+- 国际化: `js/i18n.js`
+- 备忘录: `js/memo.js`（最核心，2000+ 行）
 
 ### 样式
-- 主样式: `css/popup.css`
+- 主样式: `css/style.css`（磨砂玻璃效果）
 
 ### 资源
 - 图标: `icons/` (icon.svg, icon16.png, icon48.png, icon128.png)
@@ -54,75 +57,82 @@
 # 重新加载（代码修改后）
 在 chrome://extensions/ 点击扩展卡片上的刷新按钮
 
-# 调试 Popup
-右键扩展图标 -> 检查弹出窗口
+# 调试新标签页
+右键新标签页 -> 检查
 
 # 调试 Service Worker
 chrome://extensions/ -> 详情 -> 检查视图: Service Worker
 ```
 
-## 搜索语法示例
+## 备忘录数据结构
 
-```
-# 限定网站
-site:github.com react
-
-# 文件类型
-type:pdf javascript
-
-# 搜索范围
-in:title 会议
-in:url github
-
-# 时间过滤
-after:2024-01 before:2024-06 报告
-
-# 组合使用
-site:github.com type:pdf in:title docs
+```javascript
+{
+    id: string,           // 唯一ID
+    title: string,        // 标题
+    text: string,         // 内容
+    completed: boolean,   // 完成状态
+    createdAt: number,    // 创建时间戳
+    updatedAt: number,    // 更新时间戳
+    categoryId: string,   // 分类ID
+    tagIds: string[],     // 标签ID数组
+    priority: string,     // 'high' | 'medium' | 'low' | 'none'
+    dueDate: string       // 'YYYY-MM-DD'
+}
 ```
 
 ## 快捷键
 
 | 快捷键 | 功能 |
 |--------|------|
-| `Alt + B` | 打开扩展 |
-| `↑/↓` | 上下选择结果 |
-| `←/→` | 切换搜索模式 |
-| `Enter` | 打开选中项 |
-| `Esc` | 关闭弹窗 |
-| `Ctrl/Cmd + Click` | 多选 |
-| `Shift + Click` | 范围选择 |
+| `空格` | 切换背景图片 |
+| `Ctrl + N` | 添加新任务 |
+| `Ctrl + H` | 显示/隐藏备忘录面板 |
+| `Ctrl + ?` | 显示快捷键帮助 |
+| `↑/↓` | 导航任务列表 |
+| `Space` | 切换任务完成状态 |
+| `E` | 编辑选中任务 |
+| `Delete` | 删除选中任务 |
 
 ## MCP 工具使用
 
 - **Browser**: 测试扩展功能、验证 UI 交互
 - **Sequential Thinking**: 分析复杂功能实现方案
 - **GitHub**: 代码提交、版本管理
+- **Context7**: 查询 Chrome API 文档
 
 ## 开发注意事项
 
 1. **Manifest V3**: 使用 Service Worker 而非 Background Page
-2. **权限最小化**: 只申请必要的权限
-3. **本地处理**: 所有数据在本地处理，不传输到服务器
-4. **主题支持**: 样式使用 CSS 变量，便于主题切换
+2. **存储选择**: 
+   - `sync`: 用户设置（100KB 限制）
+   - `local`: 备忘录数据（10MB 限制）
+3. **权限最小化**: 只申请必要的权限
+4. **磨砂玻璃效果**: 使用 `backdrop-filter: blur()`
 5. **模块化**: 每个功能模块导出到 `window` 对象
 
 ## 版本发布
 
 - 发布平台: Chrome Web Store
-- 发布文档: `PUBLISH.md`
-- 路线图: `ROADMAP.md`
+- 更新文档: `CHANGELOG.md`, `README.md`, `ROADMAP.md`
 
 ## 项目路线图（当前进度）
 
 ### 已完成
-- [x] v1.0.0 - 基础搜索功能
-- [x] v1.1.0 - 深色模式、字体调节
-- [x] v1.2.0 - 高级搜索语法、智能排序
-- [x] v1.3.0 - 批量操作、右键菜单（部分）
-
-### 进行中
-- [ ] v1.3.x - 全局快捷键优化
+- [x] v1.0.0 - 基础时钟功能
+- [x] v1.1.0 - 背景轮播、节假日
+- [x] v1.2.0 - 天气功能
+- [x] v1.3.0 - 设置面板、多语言
+- [x] v1.4.0 - 备忘录功能
+- [x] v1.5.0 - 每日任务管理
+- [x] v1.5.1 - 任务分类筛选、计数统计、图片放大
 
 ### 规划中
-- [ ] v1.4.0 - 智能推荐、上下文感知
+- [ ] v1.6.0 - 任务提醒、重复任务、子任务
+- [ ] v1.7.0 - 番茄钟、习惯追踪、标签系统
+- [ ] v1.8.0 - 日历视图、数据统计
+- [ ] v2.0.0 - 智能功能（建议、推荐）
+
+---
+
+**最后更新**: 2026-01-30

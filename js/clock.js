@@ -75,20 +75,28 @@ class Clock {
         
         // 更新时间
         if (this.timeElement) {
-            // 使用textContent而不是innerHTML，性能更好
-            this.timeElement.textContent = this.formatTime(now);
+            const timeString = this.formatTime(now);
+            // 只有内容变化时才更新，避免不必要的重绘
+            if (this.timeElement.textContent !== timeString) {
+                this.timeElement.textContent = timeString;
+            }
         }
         
-        // 更新日期
+        // 更新日期（只有日期变化时才更新，避免闪烁）
         if (this.dateElement) {
             const dateString = this.formatDate(now);
-            // 只有当日期字符串为空时才隐藏元素，否则保持显示
-            // 这样可以避免元素的显示/隐藏切换导致的页面晃动
             if (dateString === '') {
-                this.dateElement.style.display = 'none';
+                if (this.dateElement.style.display !== 'none') {
+                    this.dateElement.style.display = 'none';
+                }
             } else {
-                this.dateElement.style.display = 'flex';
-                this.dateElement.textContent = dateString;
+                if (this.dateElement.style.display === 'none') {
+                    this.dateElement.style.display = 'flex';
+                }
+                // 只有内容变化时才更新，避免每秒闪烁
+                if (this.dateElement.textContent !== dateString) {
+                    this.dateElement.textContent = dateString;
+                }
             }
         }
     }

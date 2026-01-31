@@ -1,12 +1,14 @@
 {
   "manifest_version": 3,
   "name": "中国风景时钟",
-  "version": "1.4.1",
-  "description": "一个展示中国风景的新标签页时钟，支持天气显示、多语言和备忘录功能",
+  "version": "1.5.0",
+  "description": "一个展示中国风景的新标签页时钟，支持天气显示、多语言、备忘录和每日任务提醒功能",
   "permissions": [
     "storage",
     "geolocation",
-    "tabs"
+    "tabs",
+    "alarms",
+    "notifications"
   ],
   "host_permissions": [
     "https://*.unsplash.com/*",

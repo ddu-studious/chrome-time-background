@@ -12,6 +12,13 @@ class SettingsManager {
             language: 'zh', // 'zh' or 'en'
             memos: [], // 备忘录数据
             memoCategories: ['工作', '生活', '学习', '其他'], // 备忘录分类
+            // 每日任务设置
+            dailyTaskSettings: {
+                enableNotifications: true,      // 启用通知
+                defaultReminderTime: '09:00',   // 默认提醒时间
+                showOverdueFirst: true,         // 过期任务置顶
+                reminderAdvanceMinutes: 30      // 提前提醒时间（分钟）
+            }
         };
         this.settings = { ...this.defaults };
         this.listeners = new Set();
