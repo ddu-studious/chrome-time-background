@@ -9,6 +9,8 @@
 
 /* 左侧任务侧边栏 */
 .task-sidebar {
+    position: relative;
+    z-index: 10;
     width: 720px;
     min-width: 720px;
     height: 100vh;
@@ -43,6 +45,8 @@
 
 /* 侧边栏头部 */
 .sidebar-header {
+    position: relative;
+    z-index: 2;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -73,6 +77,9 @@
 }
 
 .sidebar-collapse-btn {
+    position: relative;
+    z-index: 3;
+    pointer-events: auto;
     background: rgba(255, 255, 255, 0.08);
     border: none;
     color: rgba(255, 255, 255, 0.7);
@@ -84,6 +91,54 @@
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
+}
+
+/* 侧边栏折叠态：左侧抽出按钮 + 热区（用于自动展开） */
+.sidebar-edge-hotzone {
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100vh;
+    width: 14px;
+    z-index: 120;
+    pointer-events: none;
+}
+
+.sidebar-edge-hotzone.active {
+    pointer-events: auto;
+}
+
+.sidebar-expand-btn {
+    position: fixed;
+    left: 10px;
+    top: 86px;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: rgba(255, 255, 255, 0.9);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 121;
+    opacity: 0;
+    transform: translateX(-120%);
+    transition: transform 0.25s ease, opacity 0.25s ease, background 0.2s ease;
+    pointer-events: none;
+}
+
+.sidebar-expand-btn.visible {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+}
+
+.sidebar-expand-btn:hover {
+    background: rgba(0, 0, 0, 0.6);
 }
 
 .sidebar-collapse-btn:hover {
@@ -337,19 +392,47 @@
     font-size: 10px;
 }
 
-/* 日期分组标题 */
+/* 日期分组 */
+.date-group {
+    margin-bottom: 4px;
+}
+
+.date-group:first-child .date-group-header {
+    margin-top: 0;
+}
+
 .date-group-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 12px 6px;
+    padding: 10px 12px;
     margin-top: 8px;
-    border-radius: 8px 8px 0 0;
-    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
 }
 
-.date-group-header:first-child {
-    margin-top: 0;
+.date-group-header:hover {
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.date-group.collapsed .date-group-header {
+    border-radius: 8px;
+    margin-bottom: 0;
+}
+
+.date-group-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.group-chevron {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.4);
+    transition: transform 0.2s ease;
 }
 
 .date-group-title {
@@ -369,12 +452,20 @@
     color: rgba(100, 180, 255, 0.95);
 }
 
-.date-group-title.tomorrow {
-    color: rgba(92, 216, 92, 0.9);
+.date-group-title.yesterday {
+    color: rgba(180, 140, 255, 0.9);
 }
 
-.date-group-title.overdue {
-    color: rgba(255, 107, 107, 0.95);
+.date-group-title.older {
+    color: rgba(255, 255, 255, 0.55);
+}
+
+.date-group-title.week {
+    color: rgba(255, 200, 87, 0.85);
+}
+
+.date-group-title.month {
+    color: rgba(92, 216, 92, 0.8);
 }
 
 .date-group-title.no-date {
@@ -392,6 +483,10 @@
 
 .date-group-stats .total-count {
     color: rgba(255, 255, 255, 0.5);
+}
+
+.date-group-tasks {
+    padding-left: 0;
 }
 
 /* 任务列表 */
@@ -764,6 +859,716 @@
     background: rgba(0, 0, 0, 0.4);
     padding: 4px 12px;
     border-radius: 12px;
+}
+
+/* 工具栏按钮 */
+.sidebar-tool-btn {
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.25s;
+}
+
+.sidebar-tool-btn:hover {
+    background: rgba(100, 180, 255, 0.2);
+    color: rgba(100, 180, 255, 0.95);
+}
+
+/* ===== 番茄钟面板 ===== */
+.pomodoro-panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10002;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.pomodoro-panel.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.pomodoro-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+}
+
+.pomodoro-content {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.9);
+    width: 340px;
+    background: linear-gradient(135deg, rgba(40, 40, 50, 0.98), rgba(30, 30, 40, 0.98));
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    transition: transform 0.3s ease;
+}
+
+.pomodoro-panel.active .pomodoro-content {
+    transform: translate(-50%, -50%) scale(1);
+}
+
+.pomodoro-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.pomodoro-header h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.pomodoro-header h3 i {
+    color: #ff6b6b;
+}
+
+.pomodoro-close {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.pomodoro-close:hover {
+    background: rgba(255, 107, 107, 0.2);
+    color: #ff6b6b;
+}
+
+.pomodoro-body {
+    padding: 24px;
+}
+
+.pomodoro-mode-tabs {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 24px;
+}
+
+.pomodoro-tab {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.25s;
+}
+
+.pomodoro-tab:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.pomodoro-tab.active {
+    background: rgba(255, 107, 107, 0.25);
+    color: #ff6b6b;
+}
+
+.pomodoro-timer-display {
+    text-align: center;
+    font-size: 72px;
+    font-weight: 700;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+    margin-bottom: 24px;
+    text-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.pomodoro-controls {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    margin-bottom: 24px;
+}
+
+.pomodoro-btn {
+    width: 56px;
+    height: 56px;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.25s;
+}
+
+.pomodoro-btn.primary {
+    background: linear-gradient(135deg, #5cd85c, #4ac84a);
+    color: #fff;
+    box-shadow: 0 4px 15px rgba(92, 216, 92, 0.4);
+}
+
+.pomodoro-btn.primary.running {
+    background: linear-gradient(135deg, #ff6b6b, #ee5a5a);
+    box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+}
+
+.pomodoro-btn.primary:hover {
+    transform: scale(1.1);
+}
+
+.pomodoro-btn.secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.pomodoro-btn.secondary:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: scale(1.05);
+}
+
+.pomodoro-stats {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.pomodoro-stat {
+    text-align: center;
+}
+
+.pomodoro-stat-value {
+    display: block;
+    font-size: 28px;
+    font-weight: 700;
+    color: #ff6b6b;
+}
+
+.pomodoro-stat-label {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+/* ===== 统计面板 ===== */
+.stats-panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10002;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.stats-panel.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.stats-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+}
+
+.stats-content {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.9);
+    width: min(70vw, 1100px);
+    min-width: 520px;
+    max-height: 85vh;
+    overflow-y: auto;
+    background: linear-gradient(135deg, rgba(40, 40, 50, 0.98), rgba(30, 30, 40, 0.98));
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    transition: transform 0.3s ease;
+}
+
+@media (max-width: 900px) {
+    .stats-content {
+        width: 92vw;
+        min-width: 0;
+    }
+}
+
+/* 大屏统计面板：两栏排版，提升信息密度 */
+@media (min-width: 900px) {
+    .stats-body {
+        column-count: 2;
+        column-gap: 22px;
+    }
+
+    .stats-date-range,
+    .stats-summary,
+    .stats-productivity {
+        break-inside: avoid;
+        -webkit-column-break-inside: avoid;
+        column-span: all;
+        -webkit-column-span: all;
+    }
+
+    .stats-section,
+    .stats-footer {
+        break-inside: avoid;
+        -webkit-column-break-inside: avoid;
+    }
+}
+
+.stats-panel.active .stats-content {
+    transform: translate(-50%, -50%) scale(1);
+}
+
+.stats-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    position: sticky;
+    top: 0;
+    background: inherit;
+    z-index: 1;
+}
+
+.stats-header h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.stats-header h3 i {
+    color: #5cd85c;
+}
+
+.stats-close {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.stats-close:hover {
+    background: rgba(255, 107, 107, 0.2);
+    color: #ff6b6b;
+}
+
+.stats-body {
+    padding: 24px;
+}
+
+.stats-summary {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.stats-card {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 16px 12px;
+    text-align: center;
+}
+
+.stats-card-value {
+    font-size: 24px;
+    font-weight: 700;
+    display: block;
+}
+
+.stats-card.total .stats-card-value { color: #64b4ff; }
+.stats-card.completed .stats-card-value { color: #5cd85c; }
+.stats-card.pending .stats-card-value { color: #ffc857; }
+.stats-card.overdue .stats-card-value { color: #ff6b6b; }
+
+.stats-card-label {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 4px;
+}
+
+.stats-productivity {
+    text-align: center;
+    padding: 20px;
+    background: linear-gradient(135deg, rgba(100, 180, 255, 0.15), rgba(92, 216, 92, 0.15));
+    border-radius: 16px;
+    margin-bottom: 24px;
+}
+
+.stats-score {
+    font-size: 56px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #64b4ff, #5cd85c);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.stats-score-label {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.6);
+    margin-top: 4px;
+}
+
+.stats-score-desc {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.4);
+    margin-top: 8px;
+}
+
+.stats-section {
+    margin-bottom: 20px;
+}
+
+.stats-section h4 {
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.stats-section h4 i {
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 12px;
+}
+
+.stats-chart {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    height: 100px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+}
+
+.chart-bar-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    height: 100%;
+}
+
+.chart-bar {
+    width: 24px;
+    background: linear-gradient(180deg, #5cd85c, #4ac84a);
+    border-radius: 4px 4px 0 0;
+    position: relative;
+    margin-top: auto;
+    min-height: 4px;
+}
+
+.chart-value {
+    position: absolute;
+    top: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.chart-label {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.4);
+    margin-top: 8px;
+}
+
+.stats-categories {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.stats-category-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.stats-category-name {
+    width: 70px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.stats-category-progress {
+    flex: 1;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.stats-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #64b4ff, #5cd85c);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.stats-category-count {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+    width: 40px;
+    text-align: right;
+}
+
+.stats-empty {
+    text-align: center;
+    padding: 20px;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 13px;
+}
+
+.stats-footer {
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    margin-top: 8px;
+}
+
+.stats-storage-info {
+    margin-bottom: 16px;
+}
+
+.stats-storage-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    margin-bottom: 8px;
+}
+
+.stats-storage-row i {
+    color: rgba(100, 180, 255, 0.7);
+    margin-right: 6px;
+}
+
+.stats-storage-row strong {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.stats-storage-bar {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+.stats-storage-used {
+    height: 100%;
+    background: linear-gradient(90deg, #5cd85c, #ffc857);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+.stats-storage-detail {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.stats-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.stats-action-btn {
+    flex: 1;
+    min-width: 140px;
+    padding: 10px 14px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.25s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.stats-action-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+}
+
+.stats-action-btn.danger {
+    background: rgba(255, 107, 107, 0.15);
+    color: rgba(255, 107, 107, 0.9);
+}
+
+.stats-action-btn.danger:hover {
+    background: rgba(255, 107, 107, 0.25);
+}
+
+.stats-action-btn i {
+    font-size: 11px;
+}
+
+/* 日期范围选择 */
+.stats-date-range {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    justify-content: center;
+}
+
+.date-range-btn {
+    padding: 6px 14px;
+    border: none;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.25s;
+}
+
+.date-range-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.date-range-btn.active {
+    background: rgba(100, 180, 255, 0.25);
+    color: #64b4ff;
+}
+
+/* 优先级分布 */
+.stats-priority-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.priority-stat-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.priority-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.priority-label {
+    width: 20px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.priority-bar-wrapper {
+    flex: 1;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.priority-bar {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+.priority-count {
+    width: 24px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+    text-align: right;
+}
+
+/* 最近完成列表 */
+.stats-recent-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.recent-task-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+}
+
+.recent-task-item i {
+    color: #5cd85c;
+    font-size: 12px;
+}
+
+.recent-task-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.recent-task-title {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.8);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.recent-task-time {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.4);
+    margin-top: 2px;
 }
 
 /* ===== 分类管理面板 ===== */

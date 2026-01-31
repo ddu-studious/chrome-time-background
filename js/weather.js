@@ -28,12 +28,17 @@ class WeatherService {
             //特殊天气
             '900': '🌪', '901': '🌡', '999': '❓'
         };
+        this._initialized = false;
+        this._updateIntervalId = null;
     }
 
     async init() {
+        // 防止重复初始化（main.js 与本文件曾同时触发）
+        if (this._initialized) return;
+        this._initialized = true;
         try {
             await this.updateWeather();
-            setInterval(() => this.updateWeather(), this.updateInterval);
+            this._updateIntervalId = setInterval(() => this.updateWeather(), this.updateInterval);
         } catch (error) {
             console.error('Weather initialization failed:', error);
             this.showError('');
@@ -50,12 +55,40 @@ class WeatherService {
         setTimeout(async () => {
             try {
                 await this.updateWeather();
-                setInterval(() => this.updateWeather(), this.updateInterval);
+                if (!this._updateIntervalId) {
+                    this._updateIntervalId = setInterval(() => this.updateWeather(), this.updateInterval);
+                }
             } catch (error) {
                 console.error(`Retry ${retryCount + 1} failed:`, error);
                 this.retryInit(retryCount + 1);
             }
         }, this.retryTimeout);
+    }
+
+    async getCachedLocation() {
+        try {
+            if (!chrome?.storage?.local) return null;
+            const { lastKnownLocation } = await chrome.storage.local.get('lastKnownLocation');
+            if (!lastKnownLocation?.latitude || !lastKnownLocation?.longitude) return null;
+            return lastKnownLocation;
+        } catch {
+            return null;
+        }
+    }
+
+    async cacheLocation(location) {
+        try {
+            if (!chrome?.storage?.local) return;
+            await chrome.storage.local.set({
+                lastKnownLocation: {
+                    latitude: location.latitude,
+                    longitude: location.longitude,
+                    ts: Date.now()
+                }
+            });
+        } catch {
+            // ignore
+        }
     }
 
     async getLocation() {
@@ -66,8 +99,9 @@ class WeatherService {
             }
 
             const options = {
-                enableHighAccuracy: true,
-                timeout: 10000,
+                // 高精度定位更慢也更容易超时，这里默认关闭以提升首屏体验
+                enableHighAccuracy: false,
+                timeout: 6000,
                 maximumAge: 30000
             };
 
@@ -77,7 +111,7 @@ class WeatherService {
                     longitude: position.coords.longitude.toFixed(4)
                 }),
                 error => {
-                    console.error('Geolocation error:', error);
+                    console.warn('Geolocation error:', { code: error.code, message: error.message });
                     let errorMessage = '无法获取您的位置';
                     
                     // 根据错误代码提供更具体的错误消息
@@ -208,11 +242,20 @@ class WeatherService {
             let location;
             try {
                 location = await this.getLocation();
+                // 缓存最后一次成功定位，便于后续降级使用
+                this.cacheLocation(location);
             } catch (error) {
                 // 地理位置错误单独处理
-                console.error('Location error:', error);
-                this.showError(error.message);
-                return; // 如果无法获取位置，直接返回
+                console.warn('Location error:', error);
+                
+                // 尝试使用缓存位置降级
+                const cached = await this.getCachedLocation();
+                if (cached) {
+                    location = cached;
+                } else {
+                    this.showError(error.message);
+                    return; // 如果无法获取位置，直接返回
+                }
             }
             
             // 尝试获取天气数据
@@ -273,9 +316,4 @@ const weatherManager = new WeatherService();
 // 将天气管理器设置为全局变量
 window.weatherManager = weatherManager;
 
-// 页面加载完成后初始化天气服务
-document.addEventListener('DOMContentLoaded', () => {
-    weatherManager.init().catch(error => {
-        console.error('Weather service initialization failed:', error);
-    });
-});
+// 注意：统一在 main.js 中初始化，避免重复启动与重复计时器

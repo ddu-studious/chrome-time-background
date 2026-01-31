@@ -12,7 +12,9 @@
   ],
   "host_permissions": [
     "https://*.unsplash.com/*",
-    "https://devapi.qweather.com/*"
+    "https://devapi.qweather.com/*",
+    "https://commons.wikimedia.org/*",
+    "https://upload.wikimedia.org/*"
   ],
   "chrome_url_overrides": {
     "newtab": "index.html"

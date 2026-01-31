@@ -59,6 +59,131 @@
         }
     ];
 
+    // ==================== 动态背景源（Wikimedia Commons）====================
+
+    const DYNAMIC_BG_CACHE_KEY = 'dynamicBackgroundsCache';
+    const DYNAMIC_BG_CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12小时
+
+    const COMMONS_CATEGORIES = [
+        'Category:Landscapes',
+        'Category:Landscape_photographs',
+        'Category:Images_of_landscapes'
+    ];
+
+    function stripHtml(html) {
+        if (!html) return '';
+        return String(html)
+            .replace(/<[^>]*>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    function normalizeCommonsBackgrounds(pages) {
+        const items = [];
+        for (const pageId of Object.keys(pages || {})) {
+            const page = pages[pageId];
+            const info = page?.imageinfo?.[0];
+            if (!info) continue;
+
+            // 优先用缩放后的 URL（节省带宽，适合新标签页背景）
+            const url = info.thumburl || info.url;
+            if (!url) continue;
+
+            const meta = info.extmetadata || {};
+            const desc = stripHtml(meta.ImageDescription?.value) || stripHtml(page.title) || 'Wikimedia Commons';
+            const artist = stripHtml(meta.Artist?.value) || 'Wikimedia Commons';
+
+            // 尽量过滤掉明显不是图片的资源
+            const lower = url.toLowerCase();
+            if (!(/\.(jpg|jpeg|png|webp)(\?|$)/.test(lower))) continue;
+
+            items.push({
+                url,
+                location: 'Wikimedia Commons',
+                description: desc.slice(0, 60),
+                photographer: artist.slice(0, 60),
+                source: 'wikimedia-commons',
+                license: stripHtml(meta.LicenseShortName?.value) || '',
+                licenseUrl: stripHtml(meta.LicenseUrl?.value) || ''
+            });
+        }
+
+        // 去重
+        const seen = new Set();
+        return items.filter(it => {
+            if (seen.has(it.url)) return false;
+            seen.add(it.url);
+            return true;
+        });
+    }
+
+    async function getCachedDynamicBackgrounds() {
+        try {
+            const { [DYNAMIC_BG_CACHE_KEY]: cache } = await chrome.storage.local.get(DYNAMIC_BG_CACHE_KEY);
+            if (!cache?.ts || !Array.isArray(cache.items)) return null;
+            if (Date.now() - cache.ts > DYNAMIC_BG_CACHE_TTL_MS) return null;
+            if (cache.items.length === 0) return null;
+            return cache.items;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    async function setCachedDynamicBackgrounds(items) {
+        try {
+            await chrome.storage.local.set({
+                [DYNAMIC_BG_CACHE_KEY]: {
+                    ts: Date.now(),
+                    items
+                }
+            });
+        } catch (e) {
+            // ignore
+        }
+    }
+
+    async function fetchCommonsByCategory(categoryTitle) {
+        const url =
+            'https://commons.wikimedia.org/w/api.php' +
+            '?action=query' +
+            '&generator=categorymembers' +
+            `&gcmtitle=${encodeURIComponent(categoryTitle)}` +
+            '&gcmtype=file' +
+            '&gcmlimit=50' +
+            '&prop=imageinfo' +
+            '&iiprop=url|extmetadata' +
+            '&iiurlwidth=1920' +
+            '&format=json' +
+            '&origin=*';
+
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`Commons API HTTP ${res.status}`);
+        const data = await res.json();
+        const pages = data?.query?.pages;
+        if (!pages) return [];
+        return normalizeCommonsBackgrounds(pages);
+    }
+
+    async function getDynamicBackgrounds() {
+        const cached = await getCachedDynamicBackgrounds();
+        if (cached) return cached;
+
+        for (const cat of COMMONS_CATEGORIES) {
+            try {
+                const items = await fetchCommonsByCategory(cat);
+                if (items.length > 0) {
+                    await setCachedDynamicBackgrounds(items);
+                    return items;
+                }
+            } catch (e) {
+                // 尝试下一个分类
+                console.warn('动态背景拉取失败（尝试下一个分类）:', cat, e?.message || e);
+            }
+        }
+
+        return null;
+    }
+
     // ==================== 任务提醒功能 ====================
 
     /**
@@ -438,8 +563,21 @@
     // 监听消息事件
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.action === 'getBackgrounds') {
-            sendResponse({ backgrounds: backgrounds });
-            return true;
+            (async () => {
+                try {
+                    const dynamic = await getDynamicBackgrounds();
+                    if (dynamic && dynamic.length > 0) {
+                        sendResponse({ backgrounds: dynamic, source: 'dynamic' });
+                        return;
+                    }
+                } catch (e) {
+                    // ignore and fallback
+                }
+
+                // 兜底：继续使用当前内置背景源
+                sendResponse({ backgrounds: backgrounds, source: 'fallback' });
+            })();
+            return true; // 异步响应
         }
         
         if (message.action === 'setupTaskReminder') {

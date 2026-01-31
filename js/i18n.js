@@ -117,7 +117,7 @@ class I18nManager {
                 backgroundInfo: '背景信息',
                 photographer: '摄影师',
                 location: '位置',
-                changeBackground: '按空格键切换背景',
+                changeBackground: '按 Ctrl/⌘ + Shift + B 切换背景',
                 
                 // 任务优先级相关
                 priority: '优先级',

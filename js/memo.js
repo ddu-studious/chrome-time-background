@@ -98,6 +98,11 @@ class MemoManager {
         
         // 初始化状态
         this.initialized = false;
+
+        // 侧边栏折叠态交互
+        this._sidebarAutoExpanded = false;
+        this._sidebarAutoCollapseTimer = null;
+        this._sidebarCollapseUIBound = false;
     }
 
     /**
@@ -126,6 +131,9 @@ class MemoManager {
             
             // 恢复侧边栏折叠状态
             await this.restoreSidebarState();
+
+            // 折叠态：左侧抽出按钮 + 靠近自动展开/远离自动收起
+            this.ensureSidebarCollapseUI();
             
             // 初始化键盘快捷键
             this.initKeyboardShortcuts();
@@ -166,6 +174,12 @@ class MemoManager {
             <input type="text" class="sidebar-search" id="sidebar-search" placeholder="搜索任务...">
             <button class="sidebar-add-btn" id="sidebar-add-btn" title="新增任务">
                 <i class="fas fa-plus"></i>
+            </button>
+            <button class="sidebar-tool-btn" id="sidebar-pomodoro-btn" title="番茄钟">
+                <i class="fas fa-clock"></i>
+            </button>
+            <button class="sidebar-tool-btn" id="sidebar-stats-btn" title="统计分析">
+                <i class="fas fa-chart-line"></i>
             </button>
             <button class="sidebar-settings-btn" id="sidebar-settings-btn" title="管理分类">
                 <i class="fas fa-cog"></i>
@@ -293,6 +307,18 @@ class MemoManager {
         const addBtn = document.getElementById('sidebar-add-btn');
         if (addBtn) {
             addBtn.addEventListener('click', () => this.showSidebarForm());
+        }
+        
+        // 番茄钟按钮
+        const pomodoroBtn = document.getElementById('sidebar-pomodoro-btn');
+        if (pomodoroBtn) {
+            pomodoroBtn.addEventListener('click', () => this.showPomodoroTimer());
+        }
+        
+        // 统计按钮
+        const statsBtn = document.getElementById('sidebar-stats-btn');
+        if (statsBtn) {
+            statsBtn.addEventListener('click', () => this.showTaskStatistics());
         }
         
         // 设置按钮（分类管理）
@@ -573,50 +599,218 @@ class MemoManager {
         
         container.innerHTML = '';
         
+        // 取消/替换上一次的渲染（用于搜索/筛选快速触发）
+        this._sidebarRenderToken = (this._sidebarRenderToken || 0) + 1;
+        const renderToken = this._sidebarRenderToken;
+        
         // 按日期分组渲染任务
         const groupedTasks = this.groupTasksByDate(filteredMemos);
-        let globalIndex = 0;
+        const recentGroups = ['today', 'yesterday', 'two-days-ago']; // 近3天不折叠
         
-        Object.entries(groupedTasks).forEach(([dateKey, tasks]) => {
-            // 创建日期分组标题
-            const groupHeader = this.createDateGroupHeader(dateKey, tasks);
-            container.appendChild(groupHeader);
+        // 先渲染分组壳子（标题/折叠），默认折叠的分组不渲染任务项（展开时再懒加载）
+        const groupEntries = Object.entries(groupedTasks);
+        const eagerGroups = []; // 需要首屏渲染任务的分组（近3天）
+        const lazyGroups = [];  // 默认折叠分组：只渲染标题，任务展开时渲染
+        
+        // 预计算每个分组的起始 index（用于渲染序号稳定）
+        let cumulative = 0;
+        groupEntries.forEach(([dateKey, tasks]) => {
+            const startIndex = cumulative + 1;
+            cumulative += tasks.length;
+
+            // 判断是否应该默认折叠（近3天之外的都折叠）
+            const shouldCollapse = !recentGroups.includes(dateKey);
             
-            // 渲染该日期下的任务
-            tasks.forEach(task => {
-                globalIndex++;
-                const item = this.createSidebarTaskItem(task, globalIndex, filteredCount);
-                container.appendChild(item);
+            // 创建日期分组
+            const group = document.createElement('div');
+            group.className = `date-group ${shouldCollapse ? 'collapsed' : ''}`;
+            group.dataset.groupKey = dateKey;
+            
+            // 创建分组标题（可点击折叠）
+            const groupHeader = this.createDateGroupHeader(dateKey, tasks, shouldCollapse);
+            group.appendChild(groupHeader);
+            
+            // 创建任务容器
+            const tasksContainer = document.createElement('div');
+            tasksContainer.className = 'date-group-tasks';
+            if (shouldCollapse) tasksContainer.style.display = 'none';
+            
+            group.appendChild(tasksContainer);
+            container.appendChild(group);
+            
+            // 绑定折叠事件
+            groupHeader.addEventListener('click', () => {
+                const isCollapsed = group.classList.toggle('collapsed');
+                tasksContainer.style.display = isCollapsed ? 'none' : 'block';
+                const chevron = groupHeader.querySelector('.group-chevron');
+                if (chevron) chevron.style.transform = isCollapsed ? 'rotate(-90deg)' : 'rotate(0)';
+
+                // 懒加载：首次展开时才渲染任务，避免首屏卡顿
+                if (!isCollapsed && group.dataset.rendered !== 'true') {
+                    group.dataset.rendered = 'true';
+                    this.renderTasksIncrementally(tasksContainer, tasks, startIndex, filteredCount, renderToken);
+                }
             });
+
+            if (shouldCollapse) {
+                lazyGroups.push({ tasks, tasksContainer, startIndex, group });
+            } else {
+                eagerGroups.push({ tasks, tasksContainer, startIndex });
+            }
         });
+        
+        // 仅渲染近 3 天的任务（其余分组展开时再渲染）
+        const eagerTaskCount = eagerGroups.reduce((sum, g) => sum + g.tasks.length, 0);
+        if (eagerTaskCount === 0) return;
+
+        // 小数据量直接同步渲染（更快）
+        if (eagerTaskCount <= 120) {
+            for (const { tasks, tasksContainer, startIndex } of eagerGroups) {
+                const frag = document.createDocumentFragment();
+                for (let i = 0; i < tasks.length; i++) {
+                    frag.appendChild(this.createSidebarTaskItem(tasks[i], startIndex + i, filteredCount));
+                }
+                tasksContainer.appendChild(frag);
+            }
+            return;
+        }
+
+        // 大数据量：增量渲染近 3 天分组
+        let groupIdx = 0;
+        let idxInGroup = 0;
+        const CHUNK_SIZE = 20;
+
+        const renderChunk = () => {
+            if (this._sidebarRenderToken !== renderToken) return;
+
+            const frameStart = performance.now();
+            while (groupIdx < eagerGroups.length) {
+                const { tasks, tasksContainer, startIndex } = eagerGroups[groupIdx];
+                const frag = document.createDocumentFragment();
+                let appended = 0;
+
+                while (idxInGroup < tasks.length && appended < CHUNK_SIZE) {
+                    const i = idxInGroup;
+                    frag.appendChild(this.createSidebarTaskItem(tasks[i], startIndex + i, filteredCount));
+                    idxInGroup++;
+                    appended++;
+                }
+
+                if (appended > 0) tasksContainer.appendChild(frag);
+
+                if (idxInGroup >= tasks.length) {
+                    // 标记首屏分组已渲染
+                    const groupEl = tasksContainer.closest('.date-group');
+                    if (groupEl) groupEl.dataset.rendered = 'true';
+
+                    groupIdx++;
+                    idxInGroup = 0;
+                }
+
+                if (performance.now() - frameStart > 12) break;
+            }
+
+            if (groupIdx < eagerGroups.length) requestAnimationFrame(renderChunk);
+        };
+
+        requestAnimationFrame(renderChunk);
+    }
+
+    /**
+     * 用于“展开分组时”的增量渲染（懒加载）
+     */
+    renderTasksIncrementally(tasksContainer, tasks, startIndex, totalCount, renderToken) {
+        if (!tasksContainer) return;
+        const CHUNK_SIZE = 20;
+        let i = 0;
+
+        const renderChunk = () => {
+            if (this._sidebarRenderToken !== renderToken) return;
+            const frameStart = performance.now();
+
+            while (i < tasks.length) {
+                const frag = document.createDocumentFragment();
+                let appended = 0;
+
+                while (i < tasks.length && appended < CHUNK_SIZE) {
+                    frag.appendChild(this.createSidebarTaskItem(tasks[i], startIndex + i, totalCount));
+                    i++;
+                    appended++;
+                }
+                tasksContainer.appendChild(frag);
+
+                if (performance.now() - frameStart > 12) break;
+            }
+
+            if (i < tasks.length) requestAnimationFrame(renderChunk);
+        };
+
+        requestAnimationFrame(renderChunk);
     }
     
     /**
-     * 按日期分组任务
+     * 按创建时间分组任务（支持跨周/跨月）
      * @param {Array} tasks 任务数组
      * @returns {Object} 按日期分组的任务对象
      */
     groupTasksByDate(tasks) {
         const groups = {};
-        const today = this.getTodayDate();
-        const yesterday = this.getDateString(-1);
-        const tomorrow = this.getDateString(1);
+        const today = new Date();
+        const todayStr = this.getTodayDate();
+        const yesterdayStr = this.getDateString(-1);
+        const twoDaysAgoStr = this.getDateString(-2);
+        
+        // 获取本周一的日期
+        const thisWeekStart = this.getWeekStart(today);
+        const lastWeekStart = this.getWeekStart(new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000));
+        
+        // 获取本月和上月
+        const thisMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+        const lastMonth = today.getMonth() === 0 
+            ? `${today.getFullYear() - 1}-12`
+            : `${today.getFullYear()}-${String(today.getMonth()).padStart(2, '0')}`;
         
         tasks.forEach(task => {
-            // 使用截止日期或创建日期进行分组
-            let dateKey = task.dueDate || this.formatDateFromTimestamp(task.createdAt);
+            const dateStr = this.formatDateFromTimestamp(task.createdAt);
+            if (!dateStr) {
+                if (!groups['no-date']) groups['no-date'] = [];
+                groups['no-date'].push(task);
+                return;
+            }
             
-            // 转换为友好的日期键
-            if (dateKey === today) {
+            const taskDate = new Date(dateStr + 'T00:00:00');
+            const taskMonth = `${taskDate.getFullYear()}-${String(taskDate.getMonth() + 1).padStart(2, '0')}`;
+            const taskWeekStart = this.getWeekStart(taskDate);
+            
+            let dateKey;
+            
+            // 近3天单独分组
+            if (dateStr === todayStr) {
                 dateKey = 'today';
-            } else if (dateKey === yesterday) {
+            } else if (dateStr === yesterdayStr) {
                 dateKey = 'yesterday';
-            } else if (dateKey === tomorrow) {
-                dateKey = 'tomorrow';
-            } else if (dateKey && dateKey < today) {
-                dateKey = 'overdue';
-            } else if (!dateKey) {
-                dateKey = 'no-date';
+            } else if (dateStr === twoDaysAgoStr) {
+                dateKey = 'two-days-ago';
+            }
+            // 本周（除近3天外）
+            else if (taskWeekStart === thisWeekStart && taskMonth === thisMonth) {
+                dateKey = 'this-week';
+            }
+            // 上周
+            else if (taskWeekStart === lastWeekStart) {
+                dateKey = 'last-week';
+            }
+            // 本月（除本周和上周外）
+            else if (taskMonth === thisMonth) {
+                dateKey = 'this-month';
+            }
+            // 上月
+            else if (taskMonth === lastMonth) {
+                dateKey = 'last-month';
+            }
+            // 更早的按月分组
+            else {
+                dateKey = `month-${taskMonth}`;
             }
             
             if (!groups[dateKey]) {
@@ -625,9 +819,9 @@ class MemoManager {
             groups[dateKey].push(task);
         });
         
-        // 按照优先级排序分组：过期 > 今天 > 明天 > 其他日期 > 无日期
+        // 按照时间顺序排序分组
         const sortedGroups = {};
-        const order = ['overdue', 'today', 'tomorrow'];
+        const order = ['today', 'yesterday', 'two-days-ago', 'this-week', 'last-week', 'this-month', 'last-month'];
         
         order.forEach(key => {
             if (groups[key]) {
@@ -635,10 +829,10 @@ class MemoManager {
             }
         });
         
-        // 添加其他日期（按日期排序）
+        // 添加更早的月份（按日期倒序）
         Object.keys(groups)
-            .filter(key => !order.includes(key) && key !== 'no-date')
-            .sort()
+            .filter(key => key.startsWith('month-'))
+            .sort((a, b) => b.localeCompare(a))
             .forEach(key => {
                 sortedGroups[key] = groups[key];
             });
@@ -649,6 +843,19 @@ class MemoManager {
         }
         
         return sortedGroups;
+    }
+    
+    /**
+     * 获取某日期所在周的周一日期字符串
+     * @param {Date} date 日期对象
+     * @returns {string} 周一的 YYYY-MM-DD
+     */
+    getWeekStart(date) {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1); // 调整到周一
+        d.setDate(diff);
+        return d.toISOString().split('T')[0];
     }
     
     /**
@@ -676,9 +883,10 @@ class MemoManager {
      * 创建日期分组标题
      * @param {string} dateKey 日期键
      * @param {Array} tasks 该日期下的任务
+     * @param {boolean} isCollapsed 是否默认折叠
      * @returns {HTMLElement} 分组标题元素
      */
-    createDateGroupHeader(dateKey, tasks) {
+    createDateGroupHeader(dateKey, tasks, isCollapsed = false) {
         const header = document.createElement('div');
         header.className = 'date-group-header';
         
@@ -688,11 +896,6 @@ class MemoManager {
         // 获取显示文本和图标
         let displayText, icon, extraClass = '';
         switch (dateKey) {
-            case 'overdue':
-                displayText = '已过期';
-                icon = 'fa-exclamation-circle';
-                extraClass = 'overdue';
-                break;
             case 'today':
                 displayText = '今天';
                 icon = 'fa-calendar-day';
@@ -701,28 +904,61 @@ class MemoManager {
             case 'yesterday':
                 displayText = '昨天';
                 icon = 'fa-history';
+                extraClass = 'yesterday';
                 break;
-            case 'tomorrow':
-                displayText = '明天';
-                icon = 'fa-calendar-plus';
-                extraClass = 'tomorrow';
+            case 'two-days-ago':
+                displayText = '前天';
+                icon = 'fa-history';
+                extraClass = 'older';
+                break;
+            case 'this-week':
+                displayText = '本周';
+                icon = 'fa-calendar-week';
+                extraClass = 'week';
+                break;
+            case 'last-week':
+                displayText = '上周';
+                icon = 'fa-calendar-week';
+                extraClass = 'week';
+                break;
+            case 'this-month':
+                displayText = '本月';
+                icon = 'fa-calendar-alt';
+                extraClass = 'month';
+                break;
+            case 'last-month':
+                displayText = '上月';
+                icon = 'fa-calendar-alt';
+                extraClass = 'month';
                 break;
             case 'no-date':
-                displayText = '未设置日期';
+                displayText = '未知时间';
                 icon = 'fa-calendar-times';
                 extraClass = 'no-date';
                 break;
             default:
-                // 其他日期，显示具体日期
-                displayText = this.formatDisplayDate(dateKey);
-                icon = 'fa-calendar';
+                // 更早的月份：month-YYYY-MM
+                if (dateKey.startsWith('month-')) {
+                    const monthStr = dateKey.replace('month-', '');
+                    displayText = this.formatMonthDisplay(monthStr);
+                    icon = 'fa-calendar';
+                    extraClass = 'month';
+                } else {
+                    // 其他日期格式
+                    displayText = this.formatDisplayDate(dateKey);
+                    icon = 'fa-calendar-alt';
+                    extraClass = 'older';
+                }
                 break;
         }
         
         header.innerHTML = `
-            <div class="date-group-title ${extraClass}">
-                <i class="fas ${icon}"></i>
-                <span>${displayText}</span>
+            <div class="date-group-left">
+                <i class="fas fa-chevron-down group-chevron" style="transform: ${isCollapsed ? 'rotate(-90deg)' : 'rotate(0)'}"></i>
+                <div class="date-group-title ${extraClass}">
+                    <i class="fas ${icon}"></i>
+                    <span>${displayText}</span>
+                </div>
             </div>
             <div class="date-group-stats">
                 <span class="completed-count">${completedCount}</span>/<span class="total-count">${totalCount}</span>
@@ -730,6 +966,21 @@ class MemoManager {
         `;
         
         return header;
+    }
+    
+    /**
+     * 格式化月份显示
+     * @param {string} monthStr YYYY-MM 格式
+     * @returns {string} 友好的月份显示
+     */
+    formatMonthDisplay(monthStr) {
+        if (!monthStr) return '未知月份';
+        const [year, month] = monthStr.split('-');
+        const currentYear = new Date().getFullYear();
+        if (parseInt(year) === currentYear) {
+            return `${parseInt(month)}月`;
+        }
+        return `${year}年${parseInt(month)}月`;
     }
     
     /**
@@ -963,6 +1214,659 @@ class MemoManager {
         
         // 显示动画
         requestAnimationFrame(() => lightbox.classList.add('active'));
+    }
+    
+    /**
+     * 显示番茄钟计时器
+     */
+    showPomodoroTimer() {
+        // 移除已有的面板
+        const existingPanel = document.getElementById('pomodoro-panel');
+        if (existingPanel) existingPanel.remove();
+        
+        const panel = document.createElement('div');
+        panel.id = 'pomodoro-panel';
+        panel.className = 'pomodoro-panel';
+        panel.innerHTML = `
+            <div class="pomodoro-overlay"></div>
+            <div class="pomodoro-content">
+                <div class="pomodoro-header">
+                    <h3><i class="fas fa-clock"></i> 番茄钟</h3>
+                    <button class="pomodoro-close" id="pomodoro-close"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="pomodoro-body">
+                    <div class="pomodoro-mode-tabs">
+                        <button class="pomodoro-tab active" data-mode="work">专注</button>
+                        <button class="pomodoro-tab" data-mode="short-break">短休息</button>
+                        <button class="pomodoro-tab" data-mode="long-break">长休息</button>
+                    </div>
+                    <div class="pomodoro-timer-display" id="pomodoro-display">25:00</div>
+                    <div class="pomodoro-controls">
+                        <button class="pomodoro-btn secondary" id="pomodoro-reset" title="重置">
+                            <i class="fas fa-redo"></i>
+                        </button>
+                        <button class="pomodoro-btn primary" id="pomodoro-toggle" title="开始">
+                            <i class="fas fa-play" id="pomodoro-toggle-icon"></i>
+                        </button>
+                        <button class="pomodoro-btn secondary" id="pomodoro-skip" title="跳过">
+                            <i class="fas fa-forward"></i>
+                        </button>
+                    </div>
+                    <div class="pomodoro-stats">
+                        <div class="pomodoro-stat">
+                            <span class="pomodoro-stat-value" id="pomodoro-count">0</span>
+                            <span class="pomodoro-stat-label">今日番茄</span>
+                        </div>
+                        <div class="pomodoro-stat">
+                            <span class="pomodoro-stat-value" id="pomodoro-focus-time">0</span>
+                            <span class="pomodoro-stat-label">专注分钟</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(panel);
+        
+        // 初始化番茄钟逻辑
+        this.initPomodoroTimer(panel);
+        
+        // 显示动画
+        requestAnimationFrame(() => panel.classList.add('active'));
+    }
+    
+    /**
+     * 初始化番茄钟计时器
+     */
+    initPomodoroTimer(panel) {
+        const modes = {
+            work: { duration: 25, label: '专注时间' },
+            'short-break': { duration: 5, label: '短休息' },
+            'long-break': { duration: 15, label: '长休息' }
+        };
+        
+        let currentMode = 'work';
+        let timeLeft = modes.work.duration * 60;
+        let isRunning = false;
+        let interval = null;
+        
+        // 从 localStorage 加载今日统计
+        const today = this.getTodayDate();
+        const stats = JSON.parse(localStorage.getItem('pomodoroStats') || '{}');
+        let pomodoroCount = stats[today]?.count || 0;
+        let totalFocusMinutes = stats[today]?.focusMinutes || 0;
+        
+        const displayEl = panel.querySelector('#pomodoro-display');
+        const toggleBtn = panel.querySelector('#pomodoro-toggle');
+        const toggleIcon = panel.querySelector('#pomodoro-toggle-icon');
+        const resetBtn = panel.querySelector('#pomodoro-reset');
+        const skipBtn = panel.querySelector('#pomodoro-skip');
+        const countEl = panel.querySelector('#pomodoro-count');
+        const focusTimeEl = panel.querySelector('#pomodoro-focus-time');
+        const tabs = panel.querySelectorAll('.pomodoro-tab');
+        
+        // 更新显示
+        const updateDisplay = () => {
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            displayEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        };
+        
+        // 更新统计
+        const updateStats = () => {
+            countEl.textContent = pomodoroCount;
+            focusTimeEl.textContent = Math.floor(totalFocusMinutes);
+        };
+        
+        // 保存统计
+        const saveStats = () => {
+            const stats = JSON.parse(localStorage.getItem('pomodoroStats') || '{}');
+            stats[today] = { count: pomodoroCount, focusMinutes: Math.floor(totalFocusMinutes) };
+            localStorage.setItem('pomodoroStats', JSON.stringify(stats));
+        };
+        
+        // 设置模式
+        const setMode = (mode) => {
+            currentMode = mode;
+            timeLeft = modes[mode].duration * 60;
+            isRunning = false;
+            clearInterval(interval);
+            
+            updateDisplay();
+            toggleIcon.className = 'fas fa-play';
+            toggleBtn.classList.remove('running');
+            
+            tabs.forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.mode === mode);
+            });
+        };
+        
+        // 开始/暂停
+        const toggle = () => {
+            if (isRunning) {
+                isRunning = false;
+                toggleIcon.className = 'fas fa-play';
+                toggleBtn.classList.remove('running');
+                clearInterval(interval);
+            } else {
+                isRunning = true;
+                toggleIcon.className = 'fas fa-pause';
+                toggleBtn.classList.add('running');
+                
+                interval = setInterval(() => {
+                    timeLeft--;
+                    updateDisplay();
+                    
+                    if (currentMode === 'work') {
+                        totalFocusMinutes += 1/60;
+                        focusTimeEl.textContent = Math.floor(totalFocusMinutes);
+                    }
+                    
+                    if (timeLeft <= 0) {
+                        complete();
+                    }
+                }, 1000);
+            }
+        };
+        
+        // 完成
+        const complete = () => {
+            isRunning = false;
+            clearInterval(interval);
+            
+            // 播放提示音
+            this.playPomodoroSound();
+            
+            if (currentMode === 'work') {
+                pomodoroCount++;
+                updateStats();
+                saveStats();
+                this.showToast('番茄完成！休息一下吧 🍅');
+                
+                if (pomodoroCount % 4 === 0) {
+                    setMode('long-break');
+                } else {
+                    setMode('short-break');
+                }
+            } else {
+                this.showToast('休息结束！继续专注吧 💪');
+                setMode('work');
+            }
+        };
+        
+        // 初始化显示
+        updateDisplay();
+        updateStats();
+        
+        // 绑定事件
+        toggleBtn.addEventListener('click', toggle);
+        resetBtn.addEventListener('click', () => setMode(currentMode));
+        skipBtn.addEventListener('click', complete);
+        
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => setMode(tab.dataset.mode));
+        });
+        
+        // 关闭按钮
+        panel.querySelector('#pomodoro-close').addEventListener('click', () => {
+            clearInterval(interval);
+            panel.classList.remove('active');
+            setTimeout(() => panel.remove(), 300);
+        });
+        
+        panel.querySelector('.pomodoro-overlay').addEventListener('click', () => {
+            clearInterval(interval);
+            panel.classList.remove('active');
+            setTimeout(() => panel.remove(), 300);
+        });
+    }
+    
+    /**
+     * 播放番茄钟提示音
+     */
+    playPomodoroSound() {
+        try {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = 800;
+            oscillator.type = 'sine';
+            gainNode.gain.value = 0.3;
+            
+            oscillator.start();
+            setTimeout(() => oscillator.stop(), 200);
+        } catch (e) {
+            console.log('无法播放提示音');
+        }
+    }
+    
+    /**
+     * 显示任务统计面板
+     */
+    showTaskStatistics() {
+        // 移除已有的面板
+        const existingPanel = document.getElementById('stats-panel');
+        if (existingPanel) existingPanel.remove();
+        
+        // 默认时间范围为 30 天
+        this.statsDateRange = 30;
+        
+        const panel = document.createElement('div');
+        panel.id = 'stats-panel';
+        panel.className = 'stats-panel';
+        
+        // 渲染面板内容
+        this.renderStatsPanelContent(panel);
+        
+        document.body.appendChild(panel);
+        
+        // 绑定事件
+        this.bindStatsPanelEvents(panel);
+        
+        // 显示动画
+        requestAnimationFrame(() => panel.classList.add('active'));
+    }
+    
+    /**
+     * 渲染统计面板内容
+     */
+    renderStatsPanelContent(panel) {
+        const stats = this.calculateTaskStats(this.statsDateRange);
+        
+        panel.innerHTML = `
+            <div class="stats-overlay"></div>
+            <div class="stats-content">
+                <div class="stats-header">
+                    <h3><i class="fas fa-chart-line"></i> 任务统计</h3>
+                    <button class="stats-close" id="stats-close"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="stats-body">
+                    <!-- 日期范围选择 -->
+                    <div class="stats-date-range">
+                        <button class="date-range-btn ${this.statsDateRange === 7 ? 'active' : ''}" data-range="7">7天</button>
+                        <button class="date-range-btn ${this.statsDateRange === 30 ? 'active' : ''}" data-range="30">30天</button>
+                        <button class="date-range-btn ${this.statsDateRange === 90 ? 'active' : ''}" data-range="90">90天</button>
+                        <button class="date-range-btn ${this.statsDateRange === 9999 ? 'active' : ''}" data-range="9999">全部</button>
+                    </div>
+                    
+                    <!-- 统计卡片 -->
+                    <div class="stats-summary">
+                        <div class="stats-card total">
+                            <div class="stats-card-value">${stats.total}</div>
+                            <div class="stats-card-label">总任务</div>
+                        </div>
+                        <div class="stats-card completed">
+                            <div class="stats-card-value">${stats.completed}</div>
+                            <div class="stats-card-label">已完成</div>
+                        </div>
+                        <div class="stats-card pending">
+                            <div class="stats-card-value">${stats.pending}</div>
+                            <div class="stats-card-label">待完成</div>
+                        </div>
+                        <div class="stats-card overdue">
+                            <div class="stats-card-value">${stats.overdue}</div>
+                            <div class="stats-card-label">已过期</div>
+                        </div>
+                    </div>
+                    
+                    <!-- 生产力评分 -->
+                    <div class="stats-productivity">
+                        <div class="stats-score">${stats.score}</div>
+                        <div class="stats-score-label">生产力评分</div>
+                        <div class="stats-score-desc">${stats.scoreDesc}</div>
+                    </div>
+                    
+                    <!-- 完成趋势 -->
+                    <div class="stats-section">
+                        <h4><i class="fas fa-chart-bar"></i> 完成趋势</h4>
+                        <div class="stats-chart">
+                            ${this.renderWeeklyChart(stats.weeklyData)}
+                        </div>
+                    </div>
+                    
+                    <!-- 优先级分布 -->
+                    <div class="stats-section">
+                        <h4><i class="fas fa-flag"></i> 优先级分布</h4>
+                        <div class="stats-priority-grid">
+                            ${this.renderPriorityStats(stats.priorityData)}
+                        </div>
+                    </div>
+                    
+                    <!-- 分类分布 -->
+                    <div class="stats-section">
+                        <h4><i class="fas fa-folder"></i> 分类分布</h4>
+                        <div class="stats-categories">
+                            ${this.renderCategoryStats(stats.categoryData)}
+                        </div>
+                    </div>
+                    
+                    <!-- 最近完成 -->
+                    <div class="stats-section">
+                        <h4><i class="fas fa-check-circle"></i> 最近完成</h4>
+                        <div class="stats-recent-list">
+                            ${this.renderRecentCompleted(stats.recentCompleted)}
+                        </div>
+                    </div>
+                    
+                    <!-- 存储与管理 -->
+                    <div class="stats-footer">
+                        <div class="stats-storage-info">
+                            <div class="stats-storage-row">
+                                <span><i class="fas fa-database"></i> 存储使用</span>
+                                <strong>${stats.storageSize}</strong>
+                            </div>
+                            <div class="stats-storage-bar">
+                                <div class="stats-storage-used" style="width: ${Math.min(stats.storagePercent, 100)}%"></div>
+                            </div>
+                            <div class="stats-storage-detail">
+                                任务数据 ${stats.storageSize} / 10 MB 配额 (${stats.storagePercent.toFixed(1)}%)
+                            </div>
+                        </div>
+                        
+                        <div class="stats-actions">
+                            <button class="stats-action-btn" id="stats-clear-completed">
+                                <i class="fas fa-broom"></i> 清理已完成 (${stats.completed})
+                            </button>
+                            <button class="stats-action-btn danger" id="stats-clear-images">
+                                <i class="fas fa-image"></i> 清理图片
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    /**
+     * 绑定统计面板事件
+     */
+    bindStatsPanelEvents(panel) {
+        const closePanel = () => {
+            panel.classList.remove('active');
+            setTimeout(() => panel.remove(), 300);
+        };
+        
+        panel.querySelector('#stats-close').addEventListener('click', closePanel);
+        panel.querySelector('.stats-overlay').addEventListener('click', closePanel);
+        
+        // 日期范围切换
+        panel.querySelectorAll('.date-range-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.statsDateRange = parseInt(btn.dataset.range);
+                this.renderStatsPanelContent(panel);
+                this.bindStatsPanelEvents(panel);
+            });
+        });
+        
+        // 清理已完成任务
+        const clearCompletedBtn = panel.querySelector('#stats-clear-completed');
+        if (clearCompletedBtn) {
+            clearCompletedBtn.addEventListener('click', async () => {
+                const completedCount = this.memos.filter(m => m.completed).length;
+                if (completedCount === 0) {
+                    this.showToast('没有已完成的任务');
+                    return;
+                }
+                if (!confirm(`确定要永久删除 ${completedCount} 个已完成的任务吗？\n\n此操作不可撤销！`)) return;
+                
+                this.memos = this.memos.filter(m => !m.completed);
+                await this.saveMemos();
+                
+                this.showToast(`已删除 ${completedCount} 个任务`);
+                this.renderSidebarTaskList();
+                this.renderStatsPanelContent(panel);
+                this.bindStatsPanelEvents(panel);
+            });
+        }
+        
+        // 清理图片数据
+        const clearImagesBtn = panel.querySelector('#stats-clear-images');
+        if (clearImagesBtn) {
+            clearImagesBtn.addEventListener('click', async () => {
+                const tasksWithImages = this.memos.filter(m => m.images && m.images.length > 0).length;
+                if (tasksWithImages === 0) {
+                    this.showToast('没有图片数据');
+                    return;
+                }
+                
+                if (!confirm(`有 ${tasksWithImages} 个任务包含图片。\n\n确定删除所有图片？任务会保留。`)) return;
+                
+                this.memos.forEach(memo => { if (memo.images) memo.images = []; });
+                await this.saveMemos();
+                
+                this.showToast(`已清理图片数据`);
+                this.renderSidebarTaskList();
+                this.renderStatsPanelContent(panel);
+                this.bindStatsPanelEvents(panel);
+            });
+        }
+    }
+    
+    /**
+     * 计算任务统计数据
+     * @param {number} dateRange 日期范围（天数）
+     */
+    calculateTaskStats(dateRange = 30) {
+        const today = this.getTodayDate();
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - dateRange);
+        
+        // 按日期范围筛选任务
+        const filteredMemos = dateRange >= 9999 
+            ? this.memos 
+            : this.memos.filter(m => new Date(m.createdAt) >= cutoffDate);
+        
+        const total = filteredMemos.length;
+        const completed = filteredMemos.filter(m => m.completed).length;
+        const pending = total - completed;
+        const overdue = filteredMemos.filter(m => !m.completed && m.dueDate && m.dueDate < today).length;
+        
+        // 计算生产力评分
+        let score = 0;
+        let scoreDesc = '暂无数据';
+        if (total > 0) {
+            const completionRate = completed / total;
+            const overdueRate = overdue / total;
+            score = Math.round((completionRate * 0.7 + (1 - overdueRate) * 0.3) * 100);
+            
+            if (score >= 90) scoreDesc = '太棒了！效率超高 🌟';
+            else if (score >= 70) scoreDesc = '做得不错，继续保持 💪';
+            else if (score >= 50) scoreDesc = '还有提升空间 🎯';
+            else scoreDesc = '需要改进策略 📝';
+        }
+        
+        // 近期数据（根据范围调整显示天数）
+        const chartDays = Math.min(dateRange, 14);
+        const weeklyData = [];
+        for (let i = chartDays - 1; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            const dateStr = date.toISOString().split('T')[0];
+            
+            const dayCompleted = this.memos.filter(m => {
+                if (!m.completed || !m.updatedAt) return false;
+                const updateDate = new Date(m.updatedAt).toISOString().split('T')[0];
+                return updateDate === dateStr;
+            }).length;
+            
+            weeklyData.push({
+                label: chartDays <= 7 
+                    ? date.toLocaleDateString('zh-CN', { weekday: 'short' })
+                    : `${date.getMonth() + 1}/${date.getDate()}`,
+                value: dayCompleted
+            });
+        }
+        
+        // 优先级统计
+        const priorityData = {
+            high: filteredMemos.filter(m => m.priority === 'high').length,
+            medium: filteredMemos.filter(m => m.priority === 'medium').length,
+            low: filteredMemos.filter(m => m.priority === 'low').length,
+            none: filteredMemos.filter(m => !m.priority || m.priority === 'none').length
+        };
+        
+        // 分类统计
+        const categoryData = {};
+        this.categories.forEach(cat => {
+            categoryData[cat.id] = { name: cat.name, count: 0, completed: 0 };
+        });
+        categoryData['none'] = { name: '未分类', count: 0, completed: 0 };
+        
+        filteredMemos.forEach(memo => {
+            const catId = memo.categoryId || 'none';
+            if (categoryData[catId]) {
+                categoryData[catId].count++;
+                if (memo.completed) categoryData[catId].completed++;
+            } else {
+                categoryData['none'].count++;
+                if (memo.completed) categoryData['none'].completed++;
+            }
+        });
+        
+        // 最近完成的任务（最多5个）
+        const recentCompleted = this.memos
+            .filter(m => m.completed)
+            .sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt))
+            .slice(0, 5);
+        
+        // 存储大小（chrome.storage.local 配额约 10MB）
+        const dataStr = JSON.stringify(this.memos);
+        const sizeBytes = new Blob([dataStr]).size;
+        const sizeKB = (sizeBytes / 1024).toFixed(1);
+        const maxSizeMB = 10;
+        const storagePercent = (sizeBytes / (maxSizeMB * 1024 * 1024)) * 100;
+        
+        return {
+            total,
+            completed,
+            pending,
+            overdue,
+            score,
+            scoreDesc,
+            weeklyData,
+            priorityData,
+            categoryData,
+            recentCompleted,
+            storageSize: sizeKB + ' KB',
+            storagePercent
+        };
+    }
+    
+    /**
+     * 渲染周统计图表
+     */
+    renderWeeklyChart(data) {
+        const maxValue = Math.max(...data.map(d => d.value), 1);
+        
+        return data.map(d => {
+            const height = Math.max((d.value / maxValue) * 100, 4);
+            return `
+                <div class="chart-bar-wrapper">
+                    <div class="chart-bar" style="height: ${height}%">
+                        <span class="chart-value">${d.value}</span>
+                    </div>
+                    <span class="chart-label">${d.label}</span>
+                </div>
+            `;
+        }).join('');
+    }
+    
+    /**
+     * 渲染分类统计
+     */
+    renderCategoryStats(data) {
+        const categories = Object.values(data).filter(c => c.count > 0);
+        
+        if (categories.length === 0) {
+            return '<div class="stats-empty">暂无分类数据</div>';
+        }
+        
+        return categories.map(cat => {
+            const rate = cat.count > 0 ? Math.round((cat.completed / cat.count) * 100) : 0;
+            return `
+                <div class="stats-category-item">
+                    <div class="stats-category-name">${this.escapeHtml(cat.name)}</div>
+                    <div class="stats-category-progress">
+                        <div class="stats-progress-bar" style="width: ${rate}%"></div>
+                    </div>
+                    <div class="stats-category-count">${cat.completed}/${cat.count}</div>
+                </div>
+            `;
+        }).join('');
+    }
+    
+    /**
+     * 渲染优先级统计
+     */
+    renderPriorityStats(data) {
+        const total = data.high + data.medium + data.low + data.none;
+        if (total === 0) return '<div class="stats-empty">暂无任务数据</div>';
+        
+        const items = [
+            { key: 'high', label: '高', color: '#ff6b6b', count: data.high },
+            { key: 'medium', label: '中', color: '#ffc857', count: data.medium },
+            { key: 'low', label: '低', color: '#5cd85c', count: data.low },
+            { key: 'none', label: '无', color: '#888', count: data.none }
+        ];
+        
+        return items.map(item => {
+            const percent = total > 0 ? Math.round((item.count / total) * 100) : 0;
+            return `
+                <div class="priority-stat-item">
+                    <div class="priority-dot" style="background: ${item.color}"></div>
+                    <div class="priority-label">${item.label}</div>
+                    <div class="priority-bar-wrapper">
+                        <div class="priority-bar" style="width: ${percent}%; background: ${item.color}"></div>
+                    </div>
+                    <div class="priority-count">${item.count}</div>
+                </div>
+            `;
+        }).join('');
+    }
+    
+    /**
+     * 渲染最近完成的任务
+     */
+    renderRecentCompleted(tasks) {
+        if (!tasks || tasks.length === 0) {
+            return '<div class="stats-empty">暂无完成的任务</div>';
+        }
+        
+        return tasks.map(task => {
+            const date = new Date(task.updatedAt || task.createdAt);
+            const dateStr = this.formatRelativeTime(date);
+            return `
+                <div class="recent-task-item">
+                    <i class="fas fa-check-circle"></i>
+                    <div class="recent-task-info">
+                        <div class="recent-task-title">${this.escapeHtml(task.title || '无标题')}</div>
+                        <div class="recent-task-time">${dateStr}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+    
+    /**
+     * 格式化相对时间
+     */
+    formatRelativeTime(date) {
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+        
+        if (diffMins < 1) return '刚刚';
+        if (diffMins < 60) return `${diffMins} 分钟前`;
+        if (diffHours < 24) return `${diffHours} 小时前`;
+        if (diffDays < 7) return `${diffDays} 天前`;
+        
+        return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
     }
     
     /**
@@ -1496,6 +2400,9 @@ class MemoManager {
             
             // 保存状态
             chrome.storage.local.set({ sidebarCollapsed: isCollapsed });
+
+            // 同步折叠态 UI（抽出按钮/热区）
+            this.updateSidebarCollapseUI();
         }
     }
     
@@ -1519,8 +2426,141 @@ class MemoManager {
                     }
                 }
             }
+            // 无论是否折叠，都同步一次折叠态 UI
+            this.updateSidebarCollapseUI();
         } catch (e) {
             console.log('恢复侧边栏状态失败', e);
+        }
+    }
+
+    /**
+     * 创建/绑定：折叠态抽出按钮 + 左侧热区自动展开
+     */
+    ensureSidebarCollapseUI() {
+        if (this._sidebarCollapseUIBound) return;
+        this._sidebarCollapseUIBound = true;
+
+        // 左侧热区（透明，用于 hover 自动展开）
+        let hotzone = document.getElementById('sidebar-edge-hotzone');
+        if (!hotzone) {
+            hotzone = document.createElement('div');
+            hotzone.id = 'sidebar-edge-hotzone';
+            hotzone.className = 'sidebar-edge-hotzone';
+            document.body.appendChild(hotzone);
+        }
+
+        // 左侧抽出“编辑/展开”按钮
+        let expandBtn = document.getElementById('sidebar-expand-btn');
+        if (!expandBtn) {
+            expandBtn = document.createElement('button');
+            expandBtn.id = 'sidebar-expand-btn';
+            expandBtn.className = 'sidebar-expand-btn';
+            expandBtn.title = '展开任务面板 / 新建任务';
+            expandBtn.innerHTML = '<i class="fas fa-pen-to-square"></i>';
+            document.body.appendChild(expandBtn);
+        }
+
+        const sidebar = document.getElementById('task-sidebar');
+
+        const clearAutoCollapseTimer = () => {
+            if (this._sidebarAutoCollapseTimer) {
+                clearTimeout(this._sidebarAutoCollapseTimer);
+                this._sidebarAutoCollapseTimer = null;
+            }
+        };
+
+        const scheduleAutoCollapse = () => {
+            clearAutoCollapseTimer();
+            this._sidebarAutoCollapseTimer = setTimeout(() => {
+                if (!this._sidebarAutoExpanded) return;
+                // 仍在侧边栏附近则不收起
+                const hoveringSidebar = sidebar && sidebar.matches(':hover');
+                const hoveringHotzone = hotzone && hotzone.matches(':hover');
+                if (hoveringSidebar || hoveringHotzone) return;
+
+                // 自动展开的才自动收起；用户手动展开不干预
+                const isCollapsed = sidebar?.classList.contains('collapsed');
+                if (!isCollapsed) {
+                    sidebar?.classList.add('collapsed');
+                    chrome.storage.local.set({ sidebarCollapsed: true });
+                    this.updateSidebarCollapseUI();
+                }
+                this._sidebarAutoExpanded = false;
+            }, 900);
+        };
+
+        // 热区靠近自动展开（只在折叠态生效）
+        hotzone.addEventListener('mouseenter', () => {
+            const isCollapsed = sidebar?.classList.contains('collapsed');
+            if (!isCollapsed) return;
+
+            sidebar?.classList.remove('collapsed');
+            // 这是“自动展开”，不写入永久存储；离开后会自动收起
+            this._sidebarAutoExpanded = true;
+            this.updateSidebarCollapseUI();
+            clearAutoCollapseTimer();
+        });
+
+        hotzone.addEventListener('mouseleave', () => {
+            if (!this._sidebarAutoExpanded) return;
+            scheduleAutoCollapse();
+        });
+
+        // 侧边栏区域：进入取消收起、离开触发收起（仅自动展开场景）
+        if (sidebar) {
+            sidebar.addEventListener('mouseenter', () => {
+                clearAutoCollapseTimer();
+            });
+            sidebar.addEventListener('mouseleave', () => {
+                if (!this._sidebarAutoExpanded) return;
+                scheduleAutoCollapse();
+            });
+        }
+
+        // 抽出按钮：点击后“固定展开”并直接进入新建（编辑入口）
+        expandBtn.addEventListener('click', () => {
+            const isCollapsed = sidebar?.classList.contains('collapsed');
+            if (isCollapsed) {
+                sidebar?.classList.remove('collapsed');
+            }
+            // 用户手动展开：写入存储并关闭自动收起逻辑
+            this._sidebarAutoExpanded = false;
+            chrome.storage.local.set({ sidebarCollapsed: false });
+            this.updateSidebarCollapseUI();
+
+            if (typeof this.showSidebarForm === 'function') {
+                this.showSidebarForm();
+            }
+        });
+
+        // 兜底：全局委托，确保右上折叠按钮点击一定能触发（避免意外覆盖）
+        document.addEventListener('click', (e) => {
+            const btn = e.target?.closest?.('#sidebar-collapse-btn');
+            if (!btn) return;
+            e.preventDefault();
+            this.toggleSidebar();
+        }, true);
+
+        // 初次同步
+        this.updateSidebarCollapseUI();
+    }
+
+    /**
+     * 根据侧边栏状态刷新抽出按钮/热区显隐
+     */
+    updateSidebarCollapseUI() {
+        const sidebar = document.getElementById('task-sidebar');
+        const hotzone = document.getElementById('sidebar-edge-hotzone');
+        const expandBtn = document.getElementById('sidebar-expand-btn');
+        if (!sidebar || !hotzone || !expandBtn) return;
+
+        const isCollapsed = sidebar.classList.contains('collapsed');
+        if (isCollapsed) {
+            hotzone.classList.add('active');
+            expandBtn.classList.add('visible');
+        } else {
+            hotzone.classList.remove('active');
+            expandBtn.classList.remove('visible');
         }
     }
 

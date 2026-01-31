@@ -26,14 +26,6 @@ function initBackgrounds() {
                 <span class="description">${background.description}</span>
             `;
         }
-        
-        // 添加空格键切换背景事件
-        document.addEventListener('keydown', (e) => {
-            if (e.code === 'Space') {
-                e.preventDefault();
-                changeBackground();
-            }
-        });
     }
 }
 
@@ -110,7 +102,11 @@ async function initApp() {
 
     try {
         // 不 await：避免阻塞其它功能；内部会自处理加载与UI创建
-        window.memoManager.init();
+        if (window.memoManager && typeof window.memoManager.init === 'function') {
+            window.memoManager.init();
+        } else {
+            console.warn('备忘录模块未就绪：window.memoManager 不存在或 init 不是函数');
+        }
         console.log('备忘录模块初始化完成');
     } catch (error) {
         console.error('备忘录模块初始化失败:', error);
@@ -122,8 +118,14 @@ async function initApp() {
 // 设置键盘快捷键
 function setupKeyboardShortcuts() {
     document.addEventListener('keydown', (event) => {
-        // 空格键切换背景（仅在非输入状态下）
-        if (event.code === 'Space' && !isInputFocused()) {
+        // Ctrl/⌘ + Shift + B 切换背景（避免与任务空格键冲突）
+        const isSwitchBackground =
+            !isInputFocused() &&
+            event.shiftKey &&
+            (event.ctrlKey || event.metaKey) &&
+            event.code === 'KeyB';
+
+        if (isSwitchBackground) {
             event.preventDefault();
             changeBackground();
         }
@@ -133,7 +135,9 @@ function setupKeyboardShortcuts() {
     const memoToggleBtn = document.getElementById('memo-toggle-btn');
     if (memoToggleBtn) {
         memoToggleBtn.addEventListener('click', () => {
-            window.memoManager.toggle();
+            if (window.memoManager && typeof window.memoManager.toggle === 'function') {
+                window.memoManager.toggle();
+            }
         });
     }
     
@@ -141,7 +145,9 @@ function setupKeyboardShortcuts() {
     const collapseBtn = document.getElementById('sidebar-collapse-btn');
     if (collapseBtn) {
         collapseBtn.addEventListener('click', () => {
-            window.memoManager.toggleSidebar();
+            if (window.memoManager && typeof window.memoManager.toggleSidebar === 'function') {
+                window.memoManager.toggleSidebar();
+            }
         });
     }
 }
