@@ -21,9 +21,14 @@ function initBackgrounds() {
         // 更新背景信息
         const creditElement = document.getElementById('background-credit');
         if (creditElement) {
+            const licenseHtml = background.licenseUrl
+                ? ` · <a href="${background.licenseUrl}" target="_blank" rel="noreferrer">许可</a>`
+                : '';
+            const photographerText = background.photographer ? `摄影/来源：${background.photographer}` : '';
             creditElement.innerHTML = `
                 <span class="location">${background.location}</span> - 
-                <span class="description">${background.description}</span>
+                <span class="description" title="${photographerText}">${background.description}</span>
+                ${licenseHtml}
             `;
         }
     }
@@ -41,9 +46,14 @@ function changeBackground() {
         // 更新背景信息
         const creditElement = document.getElementById('background-credit');
         if (creditElement) {
+            const licenseHtml = background.licenseUrl
+                ? ` · <a href="${background.licenseUrl}" target="_blank" rel="noreferrer">许可</a>`
+                : '';
+            const photographerText = background.photographer ? `摄影/来源：${background.photographer}` : '';
             creditElement.innerHTML = `
                 <span class="location">${background.location}</span> - 
-                <span class="description">${background.description}</span>
+                <span class="description" title="${photographerText}">${background.description}</span>
+                ${licenseHtml}
             `;
         }
     }

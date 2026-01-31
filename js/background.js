@@ -63,12 +63,49 @@
 
     const DYNAMIC_BG_CACHE_KEY = 'dynamicBackgroundsCache';
     const DYNAMIC_BG_CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12小时
+    const DYNAMIC_BG_CURSOR_KEY = 'dynamicBackgroundsCursorV1';
 
-    const COMMONS_CATEGORIES = [
-        'Category:Landscapes',
-        'Category:Landscape_photographs',
-        'Category:Images_of_landscapes'
-    ];
+    /**
+     * 动态背景设置（可后续接入 settings UI；现在先给“优雅默认值”）
+     * - chinaFirst: 优先展示中国风景
+     * - maxCategoriesPerRefresh: 每次刷新最多请求多少个分类（控制请求量）
+     * - minWidth/minHeight: 过滤过小图片
+     * - minAspect/maxAspect: 过滤过窄/过高的图（更适合做背景）
+     * - allowLicenses: 默认过滤掉 NC（非商业）等不适合“可复用资源库”的授权
+     */
+    const DEFAULT_COMMONS_SETTINGS = Object.freeze({
+        chinaFirst: true,
+        maxCategoriesPerRefresh: 2,
+        minWidth: 1920,
+        minHeight: 800,
+        minAspect: 1.15,
+        maxAspect: 4.0,
+        allowLicenses: [
+            'cc-by',
+            'cc-by-sa',
+            'cc0',
+            'public-domain'
+        ]
+    });
+
+    // 你想“更多展示中国风景”，最稳妥的方式是：用 Commons 现成的中国相关分类池作为来源
+    // 同时保留全球兜底分类池，避免某些时候分类返回为空/失败。
+    const COMMONS_CATEGORY_PROFILES = Object.freeze({
+        china: [
+            { title: 'Category:Featured_pictures_of_China', label: '中国·精选' },
+            { title: 'Category:Landscapes_of_China', label: '中国·风景' },
+            { title: 'Category:Mountains_of_China', label: '中国·山川' },
+            { title: 'Category:Lakes_of_China', label: '中国·湖泊' },
+            { title: 'Category:Rivers_of_China', label: '中国·江河' },
+            { title: 'Category:National_parks_of_China', label: '中国·国家公园' },
+            { title: 'Category:UNESCO_World_Heritage_Sites_in_China', label: '中国·世界遗产' }
+        ],
+        global: [
+            { title: 'Category:Landscape_photographs', label: 'Wikimedia Commons' },
+            { title: 'Category:Images_of_landscapes', label: 'Wikimedia Commons' },
+            { title: 'Category:Landscapes', label: 'Wikimedia Commons' }
+        ]
+    });
 
     function stripHtml(html) {
         if (!html) return '';
@@ -78,7 +115,7 @@
             .trim();
     }
 
-    function normalizeCommonsBackgrounds(pages) {
+    function normalizeCommonsBackgrounds(pages, opts) {
         const items = [];
         for (const pageId of Object.keys(pages || {})) {
             const page = pages[pageId];
@@ -99,12 +136,15 @@
 
             items.push({
                 url,
-                location: 'Wikimedia Commons',
+                location: opts?.locationLabel || 'Wikimedia Commons',
                 description: desc.slice(0, 60),
                 photographer: artist.slice(0, 60),
                 source: 'wikimedia-commons',
                 license: stripHtml(meta.LicenseShortName?.value) || '',
-                licenseUrl: stripHtml(meta.LicenseUrl?.value) || ''
+                licenseUrl: stripHtml(meta.LicenseUrl?.value) || '',
+                width: Number(info.width) || 0,
+                height: Number(info.height) || 0,
+                mime: String(info.mime || '').toLowerCase()
             });
         }
 
@@ -115,6 +155,20 @@
             seen.add(it.url);
             return true;
         });
+    }
+
+    function computeSettingsHash(settings) {
+        // 足够用于缓存失效判断；无需加密/长 hash
+        return JSON.stringify(settings);
+    }
+
+    async function getCommonsSettings() {
+        try {
+            const { commonsBackgroundSettings } = await chrome.storage.sync.get('commonsBackgroundSettings');
+            return { ...DEFAULT_COMMONS_SETTINGS, ...(commonsBackgroundSettings || {}) };
+        } catch (e) {
+            return { ...DEFAULT_COMMONS_SETTINGS };
+        }
     }
 
     async function getCachedDynamicBackgrounds() {
@@ -129,12 +183,13 @@
         }
     }
 
-    async function setCachedDynamicBackgrounds(items) {
+    async function setCachedDynamicBackgrounds(items, settingsHash) {
         try {
             await chrome.storage.local.set({
                 [DYNAMIC_BG_CACHE_KEY]: {
                     ts: Date.now(),
-                    items
+                    items,
+                    settingsHash: settingsHash || ''
                 }
             });
         } catch (e) {
@@ -142,16 +197,87 @@
         }
     }
 
-    async function fetchCommonsByCategory(categoryTitle) {
+    async function getCommonsCursor() {
+        try {
+            const { [DYNAMIC_BG_CURSOR_KEY]: cursor } = await chrome.storage.local.get(DYNAMIC_BG_CURSOR_KEY);
+            return cursor && typeof cursor === 'object' ? cursor : {};
+        } catch (e) {
+            return {};
+        }
+    }
+
+    async function setCommonsCursor(cursor) {
+        try {
+            await chrome.storage.local.set({ [DYNAMIC_BG_CURSOR_KEY]: cursor });
+        } catch (e) {
+            // ignore
+        }
+    }
+
+    function isAllowedCommonsLicense(item, settings) {
+        const licUrl = String(item.licenseUrl || '').toLowerCase();
+        const licShort = String(item.license || '').toLowerCase();
+        const combined = `${licUrl} ${licShort}`;
+
+        // 默认：过滤掉 NC（非商业）授权，避免落入“不可复用资源库”的坑
+        if (licUrl.includes('/by-nc') || licShort.includes('nc') || combined.includes('noncommercial')) {
+            return false;
+        }
+
+        const allow = Array.isArray(settings?.allowLicenses) ? settings.allowLicenses : DEFAULT_COMMONS_SETTINGS.allowLicenses;
+        const allowSet = new Set(allow.map(s => String(s).toLowerCase()));
+
+        // 归一化：粗粒度足够用了
+        if (combined.includes('creativecommons.org/licenses/by-sa') || licShort.includes('by-sa')) return allowSet.has('cc-by-sa');
+        if (combined.includes('creativecommons.org/licenses/by/') || licShort.includes('cc by')) return allowSet.has('cc-by');
+        if (combined.includes('creativecommons.org/publicdomain/zero') || licShort.includes('cc0')) return allowSet.has('cc0');
+        if (licShort.includes('public domain') || licShort === 'pd' || combined.includes('public domain')) return allowSet.has('public-domain');
+
+        // 其它（GFDL、FAL、各种自定义）默认不放行，避免授权合规风险
+        return false;
+    }
+
+    function isGoodBackgroundCandidate(item, settings) {
+        if (!item?.url) return false;
+        if (!isAllowedCommonsLicense(item, settings)) return false;
+
+        const w = Number(item.width) || 0;
+        const h = Number(item.height) || 0;
+        const minW = Number(settings?.minWidth) || DEFAULT_COMMONS_SETTINGS.minWidth;
+        const minH = Number(settings?.minHeight) || DEFAULT_COMMONS_SETTINGS.minHeight;
+
+        // 有些条目可能缺失尺寸；缺失则放行（但实际常见都会有）
+        if (w && w < minW) return false;
+        if (h && h < minH) return false;
+
+        if (w && h) {
+            const aspect = w / h;
+            const minA = Number(settings?.minAspect) || DEFAULT_COMMONS_SETTINGS.minAspect;
+            const maxA = Number(settings?.maxAspect) || DEFAULT_COMMONS_SETTINGS.maxAspect;
+            if (aspect < minA || aspect > maxA) return false;
+        }
+
+        // mime 不强制，但如果给了就尽量限制在常见静态图
+        const mime = String(item.mime || '');
+        if (mime && !['image/jpeg', 'image/png', 'image/webp'].includes(mime)) return false;
+
+        return true;
+    }
+
+    async function fetchCommonsByCategory(categoryTitle, opts) {
+        const limit = Math.max(10, Math.min(50, Number(opts?.limit) || 50));
+        const continueToken = opts?.continueToken ? String(opts.continueToken) : '';
+
         const url =
             'https://commons.wikimedia.org/w/api.php' +
             '?action=query' +
             '&generator=categorymembers' +
             `&gcmtitle=${encodeURIComponent(categoryTitle)}` +
             '&gcmtype=file' +
-            '&gcmlimit=50' +
+            `&gcmlimit=${limit}` +
+            (continueToken ? `&gcmcontinue=${encodeURIComponent(continueToken)}&continue=` : '') +
             '&prop=imageinfo' +
-            '&iiprop=url|extmetadata' +
+            '&iiprop=url|size|mime|extmetadata' +
             '&iiurlwidth=1920' +
             '&format=json' +
             '&origin=*';
@@ -160,27 +286,78 @@
         if (!res.ok) throw new Error(`Commons API HTTP ${res.status}`);
         const data = await res.json();
         const pages = data?.query?.pages;
-        if (!pages) return [];
-        return normalizeCommonsBackgrounds(pages);
+        const nextContinue = data?.continue?.gcmcontinue ? String(data.continue.gcmcontinue) : '';
+        if (!pages) return { items: [], nextContinue };
+        return {
+            items: normalizeCommonsBackgrounds(pages, { locationLabel: opts?.locationLabel }),
+            nextContinue
+        };
     }
 
     async function getDynamicBackgrounds() {
-        const cached = await getCachedDynamicBackgrounds();
-        if (cached) return cached;
+        const settings = await getCommonsSettings();
+        const settingsHash = computeSettingsHash(settings);
 
-        for (const cat of COMMONS_CATEGORIES) {
-            try {
-                const items = await fetchCommonsByCategory(cat);
-                if (items.length > 0) {
-                    await setCachedDynamicBackgrounds(items);
-                    return items;
+        // 缓存命中：如果设置没变且 TTL 没过，直接返回
+        try {
+            const { [DYNAMIC_BG_CACHE_KEY]: cache } = await chrome.storage.local.get(DYNAMIC_BG_CACHE_KEY);
+            const ok =
+                cache?.ts &&
+                Array.isArray(cache.items) &&
+                cache.items.length > 0 &&
+                (Date.now() - cache.ts <= DYNAMIC_BG_CACHE_TTL_MS) &&
+                (cache.settingsHash === settingsHash);
+            if (ok) return cache.items;
+        } catch (e) {
+            // ignore -> 走网络拉取
+        }
+
+        const cursor = await getCommonsCursor();
+        const maxCats = Math.max(1, Math.min(4, Number(settings.maxCategoriesPerRefresh) || 2));
+
+        const profiles = [];
+        if (settings.chinaFirst) profiles.push('china');
+        profiles.push('global');
+
+        for (const profileName of profiles) {
+            const pool = COMMONS_CATEGORY_PROFILES[profileName] || [];
+            if (pool.length === 0) continue;
+
+            // 轮询分类池：避免每次都打同一个分类导致重复
+            const rotateKey = `rotateIndex:${profileName}`;
+            const startIndex = Number(cursor[rotateKey] || 0) % pool.length;
+            const picked = [];
+            for (let i = 0; i < Math.min(maxCats, pool.length); i++) {
+                picked.push(pool[(startIndex + i) % pool.length]);
+            }
+            cursor[rotateKey] = (startIndex + picked.length) % pool.length;
+
+            const merged = [];
+            for (const cat of picked) {
+                try {
+                    const catCursorKey = `gcmcontinue:${cat.title}`;
+                    const { items, nextContinue } = await fetchCommonsByCategory(cat.title, {
+                        limit: 50,
+                        continueToken: cursor[catCursorKey],
+                        locationLabel: cat.label
+                    });
+                    if (nextContinue) cursor[catCursorKey] = nextContinue;
+                    merged.push(...items);
+                } catch (e) {
+                    console.warn('动态背景拉取失败（分类）:', cat.title, e?.message || e);
                 }
-            } catch (e) {
-                // 尝试下一个分类
-                console.warn('动态背景拉取失败（尝试下一个分类）:', cat, e?.message || e);
+            }
+
+            const filtered = merged.filter(it => isGoodBackgroundCandidate(it, settings));
+            if (filtered.length > 0) {
+                await setCommonsCursor(cursor);
+                await setCachedDynamicBackgrounds(filtered, settingsHash);
+                return filtered;
             }
         }
 
+        // 网络不可用/分类为空：让调用方兜底
+        await setCommonsCursor(cursor);
         return null;
     }
 
