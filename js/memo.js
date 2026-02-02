@@ -112,44 +112,183 @@ class MemoManager {
     async init() {
         console.log('开始初始化备忘录管理器...');
         
+        // 设置全局错误处理，防止未捕获的错误导致崩溃
+        this.setupGlobalErrorHandler();
+        
         try {
-            // 加载备忘录数据
-            await Promise.all([
-                this.loadMemos(),
-                this.loadCategories(),
-                this.loadTags()
-            ]);
+            // 加载备忘录数据（每个加载独立 try-catch，避免单点失败）
+            await this.safeLoadData();
             
             console.log('备忘录数据加载完成，开始创建UI');
             console.log('备忘录数量:', this.memos.length);
             console.log('分类数量:', this.categories.length);
             console.log('标签数量:', this.tags.length);
             
+            // 检查数据健康状况
+            await this.validateAndRepairData();
+            
             // 渲染到侧边栏（新的双栏布局）
-            this.renderSidebarContent();
-            console.log('侧边栏内容渲染完成');
+            try {
+                this.renderSidebarContent();
+                console.log('侧边栏内容渲染完成');
+            } catch (renderError) {
+                console.error('侧边栏渲染失败，尝试降级渲染:', renderError);
+                this.renderFallbackUI();
+            }
             
             // 恢复侧边栏折叠状态
-            await this.restoreSidebarState();
+            try {
+                await this.restoreSidebarState();
+            } catch (e) {
+                console.warn('恢复侧边栏状态失败:', e);
+            }
 
             // 折叠态：左侧抽出按钮 + 靠近自动展开/远离自动收起
-            this.ensureSidebarCollapseUI();
+            try {
+                this.ensureSidebarCollapseUI();
+            } catch (e) {
+                console.warn('折叠UI初始化失败:', e);
+            }
             
             // 初始化键盘快捷键
-            this.initKeyboardShortcuts();
-            console.log('键盘快捷键初始化完成');
+            try {
+                this.initKeyboardShortcuts();
+                console.log('键盘快捷键初始化完成');
+            } catch (e) {
+                console.warn('键盘快捷键初始化失败:', e);
+            }
             
             // 更新排序选项的名称
-            this.updateSortOptionNames();
-            console.log('排序选项名称更新完成');
+            try {
+                this.updateSortOptionNames();
+                console.log('排序选项名称更新完成');
+            } catch (e) {
+                console.warn('排序选项名称更新失败:', e);
+            }
             
             console.log('备忘录管理器初始化完成');
             this.initialized = true;
             
+            // 检查备份提醒
+            this.checkBackupReminder();
+            
             return true;
         } catch (error) {
             console.error('备忘录初始化失败:', error);
-            throw error;
+            // 即使失败也标记为已初始化，避免重复初始化
+            this.initialized = true;
+            this.renderFallbackUI();
+            return false;
+        }
+    }
+    
+    /**
+     * 设置全局错误处理器
+     */
+    setupGlobalErrorHandler() {
+        // 防止重复设置
+        if (this._errorHandlerSetup) return;
+        this._errorHandlerSetup = true;
+        
+        // 捕获未处理的 Promise 错误
+        window.addEventListener('unhandledrejection', (event) => {
+            console.error('未处理的 Promise 错误:', event.reason);
+            // 阻止默认行为（避免控制台报错）
+            event.preventDefault();
+        });
+        
+        // 捕获全局错误
+        window.addEventListener('error', (event) => {
+            // 只处理来自 memo.js 的错误
+            if (event.filename && event.filename.includes('memo.js')) {
+                console.error('备忘录模块错误:', event.message);
+                event.preventDefault();
+            }
+        });
+    }
+    
+    /**
+     * 安全加载数据
+     */
+    async safeLoadData() {
+        // 使用 Promise.allSettled 替代 Promise.all，避免单个失败导致全部失败
+        const results = await Promise.allSettled([
+            this.loadMemos(),
+            this.loadCategories(),
+            this.loadTags()
+        ]);
+        
+        results.forEach((result, index) => {
+            if (result.status === 'rejected') {
+                const names = ['备忘录', '分类', '标签'];
+                console.error(`加载${names[index]}失败:`, result.reason);
+            }
+        });
+    }
+    
+    /**
+     * 验证并修复数据
+     */
+    async validateAndRepairData() {
+        let needsSave = false;
+        
+        // 检查并修复损坏的数据
+        this.memos = this.memos.filter(memo => {
+            // 过滤掉无效数据
+            if (!memo || typeof memo !== 'object') {
+                console.warn('发现无效备忘录数据，已过滤');
+                needsSave = true;
+                return false;
+            }
+            
+            // 确保 ID 存在
+            if (!memo.id) {
+                memo.id = this.generateId();
+                needsSave = true;
+            }
+            
+            // 确保必要字段存在
+            memo.title = memo.title || '';
+            memo.text = memo.text || '';
+            memo.completed = !!memo.completed;
+            memo.createdAt = memo.createdAt || Date.now();
+            memo.updatedAt = memo.updatedAt || Date.now();
+            
+            // 检查图片数据是否损坏
+            if (memo.images && Array.isArray(memo.images)) {
+                memo.images = memo.images.filter(img => {
+                    // 过滤掉损坏的图片数据
+                    if (!img || (!img.thumbnail && !img.fullImage)) {
+                        console.warn('发现损坏的图片数据，已过滤');
+                        needsSave = true;
+                        return false;
+                    }
+                    return true;
+                });
+            }
+            
+            return true;
+        });
+        
+        if (needsSave) {
+            console.log('数据已修复，保存中...');
+            await this.saveMemos();
+        }
+    }
+    
+    /**
+     * 降级 UI 渲染
+     */
+    renderFallbackUI() {
+        const sidebarContent = document.getElementById('sidebar-content');
+        if (sidebarContent) {
+            sidebarContent.innerHTML = `
+                <div class="sidebar-error">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>任务列表加载出现问题</p>
+                    <button onclick="window.memoManager.init()">重新加载</button>
+                </div>
+            `;
         }
     }
     
@@ -183,6 +322,12 @@ class MemoManager {
             </button>
             <button class="sidebar-tool-btn" id="sidebar-calendar-btn" title="日历 / 回看完成">
                 <i class="fas fa-calendar-days"></i>
+            </button>
+            <button class="sidebar-tool-btn" id="sidebar-backup-btn" title="备份与恢复">
+                <i class="fas fa-cloud-download-alt"></i>
+            </button>
+            <button class="sidebar-tool-btn" id="sidebar-about-btn" title="关于与帮助">
+                <i class="fas fa-info-circle"></i>
             </button>
             <button class="sidebar-settings-btn" id="sidebar-settings-btn" title="管理分类">
                 <i class="fas fa-cog"></i>
@@ -328,6 +473,18 @@ class MemoManager {
         const calendarBtn = document.getElementById('sidebar-calendar-btn');
         if (calendarBtn) {
             calendarBtn.addEventListener('click', () => this.showCalendarPanel());
+        }
+        
+        // 备份与恢复按钮
+        const backupBtn = document.getElementById('sidebar-backup-btn');
+        if (backupBtn) {
+            backupBtn.addEventListener('click', () => this.showBackupPanel());
+        }
+        
+        // 关于与帮助按钮
+        const aboutBtn = document.getElementById('sidebar-about-btn');
+        if (aboutBtn) {
+            aboutBtn.addEventListener('click', () => this.showAboutPanel());
         }
         
         // 设置按钮（分类管理）
@@ -502,9 +659,23 @@ class MemoManager {
     }
     
     /**
-     * 渲染侧边栏任务列表
+     * 渲染侧边栏任务列表（带防抖）
      */
     renderSidebarTaskList() {
+        // 防抖：避免频繁渲染导致的性能问题和潜在崩溃
+        if (this._renderDebounceTimer) {
+            clearTimeout(this._renderDebounceTimer);
+        }
+        
+        this._renderDebounceTimer = setTimeout(() => {
+            this._doRenderSidebarTaskList();
+        }, 16); // 约等于一帧的时间
+    }
+    
+    /**
+     * 实际执行侧边栏任务列表渲染
+     */
+    _doRenderSidebarTaskList() {
         const container = document.getElementById('sidebar-task-list');
         if (!container) return;
         
@@ -1061,14 +1232,14 @@ class MemoManager {
         const priorityColor = priorityColors[task.priority] || 'transparent';
         const priorityLabels = { high: '高', medium: '中', low: '低' };
         
-        // 生成图片预览 HTML
+        // 生成图片预览 HTML（使用懒加载占位符，避免 Base64 直接嵌入 DOM 导致内存问题）
         let imagesHtml = '';
         if (task.images && task.images.length > 0) {
             const displayImages = task.images.slice(0, 3);
             const moreCount = task.images.length - 3;
             imagesHtml = `
                 <div class="task-images" data-task-id="${task.id}">
-                    ${displayImages.map((img, idx) => `<img src="${img.thumbnail}" alt="图片" data-image-index="${idx}" class="task-image-preview">`).join('')}
+                    ${displayImages.map((img, idx) => `<img data-src="${img.id}" data-image-index="${idx}" class="task-image-preview task-image-lazy" alt="图片" loading="lazy">`).join('')}
                     ${moreCount > 0 ? `<span class="task-images-more">+${moreCount}</span>` : ''}
                 </div>
             `;
@@ -1132,9 +1303,64 @@ class MemoManager {
                     this.showImageLightbox(task.images, idx);
                 }
             });
+            
+            // 图片懒加载：使用 IntersectionObserver 延迟加载图片，避免大量 Base64 阻塞主线程
+            this.setupImageLazyLoad(item, task);
         }
         
         return item;
+    }
+    
+    /**
+     * 设置图片懒加载
+     * @param {HTMLElement} item 任务项元素
+     * @param {Object} task 任务对象
+     */
+    setupImageLazyLoad(item, task) {
+        if (!task.images || task.images.length === 0) return;
+        
+        const lazyImages = item.querySelectorAll('.task-image-lazy');
+        if (lazyImages.length === 0) return;
+        
+        // 使用 IntersectionObserver 实现懒加载
+        if ('IntersectionObserver' in window) {
+            const observer = new IntersectionObserver((entries, obs) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const img = entry.target;
+                        const imageId = img.dataset.src;
+                        const imageData = task.images.find(i => i.id === imageId);
+                        if (imageData && imageData.thumbnail) {
+                            // 使用 requestIdleCallback 在空闲时加载，避免阻塞
+                            const loadImage = () => {
+                                img.src = imageData.thumbnail;
+                                img.classList.remove('task-image-lazy');
+                            };
+                            if ('requestIdleCallback' in window) {
+                                requestIdleCallback(loadImage, { timeout: 500 });
+                            } else {
+                                setTimeout(loadImage, 50);
+                            }
+                        }
+                        obs.unobserve(img);
+                    }
+                });
+            }, { rootMargin: '100px' });
+            
+            lazyImages.forEach(img => observer.observe(img));
+        } else {
+            // 降级处理：直接加载（针对不支持 IntersectionObserver 的旧浏览器）
+            lazyImages.forEach(img => {
+                const imageId = img.dataset.src;
+                const imageData = task.images.find(i => i.id === imageId);
+                if (imageData && imageData.thumbnail) {
+                    setTimeout(() => {
+                        img.src = imageData.thumbnail;
+                        img.classList.remove('task-image-lazy');
+                    }, 100);
+                }
+            });
+        }
     }
     
     /**
@@ -1655,6 +1881,785 @@ class MemoManager {
                 this.bindStatsPanelEvents(panel);
             });
         }
+    }
+
+    // ==================== 数据备份与恢复 ====================
+
+    /**
+     * 显示备份与恢复面板
+     */
+    showBackupPanel() {
+        const existingPanel = document.getElementById('backup-panel');
+        if (existingPanel) existingPanel.remove();
+
+        const panel = document.createElement('div');
+        panel.id = 'backup-panel';
+        panel.className = 'backup-panel';
+
+        // 计算存储使用情况
+        const dataStr = JSON.stringify(this.memos);
+        const sizeBytes = new Blob([dataStr]).size;
+        const sizeKB = (sizeBytes / 1024).toFixed(1);
+        const sizeMB = (sizeBytes / (1024 * 1024)).toFixed(2);
+        
+        // 获取上次备份时间
+        const lastBackupTime = localStorage.getItem('lastBackupTime');
+        const lastBackupStr = lastBackupTime 
+            ? new Date(parseInt(lastBackupTime)).toLocaleString('zh-CN')
+            : '从未备份';
+
+        panel.innerHTML = `
+            <div class="backup-overlay"></div>
+            <div class="backup-content">
+                <div class="backup-header">
+                    <h3><i class="fas fa-cloud-download-alt"></i> 数据备份与恢复</h3>
+                    <button class="backup-close" id="backup-close"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="backup-body">
+                    <div class="backup-info">
+                        <div class="backup-stat">
+                            <span class="stat-label">任务总数</span>
+                            <span class="stat-value">${this.memos.length}</span>
+                        </div>
+                        <div class="backup-stat">
+                            <span class="stat-label">数据大小</span>
+                            <span class="stat-value">${sizeMB > 1 ? sizeMB + ' MB' : sizeKB + ' KB'}</span>
+                        </div>
+                        <div class="backup-stat">
+                            <span class="stat-label">上次备份</span>
+                            <span class="stat-value">${lastBackupStr}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="backup-section">
+                        <h4><i class="fas fa-download"></i> 导出数据</h4>
+                        <p class="backup-desc">将所有任务数据导出为 JSON 文件，保存到本地磁盘。建议定期备份以防数据丢失。</p>
+                        <div class="backup-actions">
+                            <button class="backup-btn primary" id="backup-export-all">
+                                <i class="fas fa-file-export"></i> 导出全部数据
+                            </button>
+                            <button class="backup-btn" id="backup-export-completed">
+                                <i class="fas fa-check-circle"></i> 仅导出已完成
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="backup-section">
+                        <h4><i class="fas fa-upload"></i> 导入数据</h4>
+                        <p class="backup-desc">从 JSON 备份文件恢复数据。可选择覆盖或合并现有数据。</p>
+                        <div class="backup-actions">
+                            <button class="backup-btn" id="backup-import-merge">
+                                <i class="fas fa-object-group"></i> 导入并合并
+                            </button>
+                            <button class="backup-btn danger" id="backup-import-replace">
+                                <i class="fas fa-exchange-alt"></i> 导入并覆盖
+                            </button>
+                        </div>
+                        <input type="file" id="backup-file-input" accept=".json" hidden>
+                    </div>
+                    
+                    <div class="backup-section">
+                        <h4><i class="fas fa-cog"></i> 自动备份设置</h4>
+                        <div class="backup-setting">
+                            <label class="backup-checkbox">
+                                <input type="checkbox" id="backup-auto-remind" ${this.getAutoBackupRemind() ? 'checked' : ''}>
+                                <span>每周提醒备份</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="backup-tip">
+                        <i class="fas fa-info-circle"></i>
+                        <span>提示：本扩展已启用无限存储权限，数据不会因空间不足而丢失。但仍建议定期备份到本地。</span>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(panel);
+        this.bindBackupPanelEvents(panel);
+        requestAnimationFrame(() => panel.classList.add('active'));
+    }
+
+    /**
+     * 绑定备份面板事件
+     */
+    bindBackupPanelEvents(panel) {
+        // 关闭按钮
+        const closeBtn = panel.querySelector('#backup-close');
+        const overlay = panel.querySelector('.backup-overlay');
+        
+        const closePanel = () => {
+            panel.classList.remove('active');
+            setTimeout(() => panel.remove(), 300);
+        };
+        
+        closeBtn?.addEventListener('click', closePanel);
+        overlay?.addEventListener('click', closePanel);
+        
+        // 导出全部数据
+        panel.querySelector('#backup-export-all')?.addEventListener('click', () => {
+            this.exportData('all');
+        });
+        
+        // 导出已完成任务
+        panel.querySelector('#backup-export-completed')?.addEventListener('click', () => {
+            this.exportData('completed');
+        });
+        
+        // 导入并合并
+        panel.querySelector('#backup-import-merge')?.addEventListener('click', () => {
+            this.triggerImport('merge');
+        });
+        
+        // 导入并覆盖
+        panel.querySelector('#backup-import-replace')?.addEventListener('click', () => {
+            if (confirm('⚠️ 警告：这将覆盖所有现有数据！\n\n确定要继续吗？')) {
+                this.triggerImport('replace');
+            }
+        });
+        
+        // 文件选择处理
+        const fileInput = panel.querySelector('#backup-file-input');
+        fileInput?.addEventListener('change', (e) => {
+            this.handleImportFile(e, this._importMode);
+        });
+        
+        // 自动备份提醒
+        panel.querySelector('#backup-auto-remind')?.addEventListener('change', (e) => {
+            this.setAutoBackupRemind(e.target.checked);
+        });
+    }
+
+    /**
+     * 导出数据
+     * @param {string} type - 'all' 或 'completed'
+     */
+    async exportData(type) {
+        try {
+            let dataToExport;
+            let filename;
+            
+            if (type === 'completed') {
+                dataToExport = {
+                    version: '1.5.1',
+                    exportDate: new Date().toISOString(),
+                    type: 'completed_tasks',
+                    memos: this.memos.filter(m => m.completed),
+                    categories: this.categories,
+                    tags: this.tags
+                };
+                filename = `tasks-completed-${this.formatLocalDateYMD(new Date())}.json`;
+            } else {
+                dataToExport = {
+                    version: '1.5.1',
+                    exportDate: new Date().toISOString(),
+                    type: 'full_backup',
+                    memos: this.memos,
+                    categories: this.categories,
+                    tags: this.tags
+                };
+                filename = `tasks-backup-${this.formatLocalDateYMD(new Date())}.json`;
+            }
+            
+            const jsonStr = JSON.stringify(dataToExport, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            
+            // 使用 Chrome Downloads API 下载文件
+            if (chrome.downloads) {
+                const url = URL.createObjectURL(blob);
+                await chrome.downloads.download({
+                    url: url,
+                    filename: filename,
+                    saveAs: true
+                });
+                
+                // 记录备份时间
+                localStorage.setItem('lastBackupTime', Date.now().toString());
+                
+                this.showToast(`✅ 数据已导出：${filename}`, 3000);
+                
+                // 刷新面板显示
+                setTimeout(() => {
+                    const panel = document.getElementById('backup-panel');
+                    if (panel) {
+                        this.showBackupPanel(); // 刷新面板
+                    }
+                }, 500);
+            } else {
+                // 降级方案：使用传统下载方式
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                localStorage.setItem('lastBackupTime', Date.now().toString());
+                this.showToast(`✅ 数据已导出：${filename}`, 3000);
+            }
+        } catch (error) {
+            console.error('导出数据失败:', error);
+            this.showToast('❌ 导出失败，请重试', 3000);
+        }
+    }
+
+    /**
+     * 触发导入
+     * @param {string} mode - 'merge' 或 'replace'
+     */
+    triggerImport(mode) {
+        this._importMode = mode;
+        const fileInput = document.getElementById('backup-file-input');
+        if (fileInput) {
+            fileInput.value = ''; // 清空以便重新选择同一文件
+            fileInput.click();
+        }
+    }
+
+    /**
+     * 处理导入文件
+     * @param {Event} event - 文件选择事件
+     * @param {string} mode - 'merge' 或 'replace'
+     */
+    async handleImportFile(event, mode) {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        
+        try {
+            const text = await file.text();
+            const data = JSON.parse(text);
+            
+            // 验证数据格式
+            if (!data.memos || !Array.isArray(data.memos)) {
+                throw new Error('无效的备份文件格式');
+            }
+            
+            if (mode === 'replace') {
+                // 覆盖模式
+                this.memos = data.memos.map(memo => this.normalizeMemo(memo));
+                if (data.categories) this.categories = data.categories;
+                if (data.tags) this.tags = data.tags;
+                
+                await Promise.all([
+                    this.saveMemos(),
+                    this.saveCategories(),
+                    this.saveTags()
+                ]);
+                
+                this.showToast(`✅ 已导入 ${this.memos.length} 个任务（覆盖模式）`, 3000);
+            } else {
+                // 合并模式
+                const existingIds = new Set(this.memos.map(m => m.id));
+                let newCount = 0;
+                let updateCount = 0;
+                
+                for (const memo of data.memos) {
+                    const normalized = this.normalizeMemo(memo);
+                    if (existingIds.has(normalized.id)) {
+                        // 更新已存在的任务（如果导入的更新）
+                        const existing = this.memos.find(m => m.id === normalized.id);
+                        if (existing && normalized.updatedAt > (existing.updatedAt || 0)) {
+                            Object.assign(existing, normalized);
+                            updateCount++;
+                        }
+                    } else {
+                        // 添加新任务
+                        this.memos.push(normalized);
+                        newCount++;
+                    }
+                }
+                
+                // 合并分类和标签
+                if (data.categories) {
+                    const existingCatIds = new Set(this.categories.map(c => c.id));
+                    for (const cat of data.categories) {
+                        if (!existingCatIds.has(cat.id)) {
+                            this.categories.push(cat);
+                        }
+                    }
+                }
+                
+                if (data.tags) {
+                    const existingTagIds = new Set(this.tags.map(t => t.id));
+                    for (const tag of data.tags) {
+                        if (!existingTagIds.has(tag.id)) {
+                            this.tags.push(tag);
+                        }
+                    }
+                }
+                
+                await Promise.all([
+                    this.saveMemos(),
+                    this.saveCategories(),
+                    this.saveTags()
+                ]);
+                
+                this.showToast(`✅ 导入完成：新增 ${newCount} 个，更新 ${updateCount} 个`, 3000);
+            }
+            
+            // 刷新界面
+            this.renderSidebarTaskList();
+            
+            // 关闭备份面板
+            const panel = document.getElementById('backup-panel');
+            if (panel) {
+                panel.classList.remove('active');
+                setTimeout(() => panel.remove(), 300);
+            }
+            
+        } catch (error) {
+            console.error('导入数据失败:', error);
+            this.showToast(`❌ 导入失败：${error.message}`, 4000);
+        }
+    }
+
+    /**
+     * 规范化备忘录数据
+     * @param {Object} memo - 原始备忘录对象
+     * @returns {Object} 规范化后的备忘录
+     */
+    normalizeMemo(memo) {
+        return {
+            id: memo.id || this.generateId(),
+            title: memo.title || '',
+            text: memo.text || '',
+            completed: !!memo.completed,
+            createdAt: memo.createdAt || Date.now(),
+            updatedAt: memo.updatedAt || Date.now(),
+            completedAt: memo.completedAt || null,
+            categoryId: memo.categoryId || null,
+            tagIds: Array.isArray(memo.tagIds) ? memo.tagIds : [],
+            priority: memo.priority || 'none',
+            dueDate: memo.dueDate || null,
+            images: Array.isArray(memo.images) ? memo.images : []
+        };
+    }
+
+    /**
+     * 获取自动备份提醒设置
+     */
+    getAutoBackupRemind() {
+        return localStorage.getItem('autoBackupRemind') !== 'false';
+    }
+
+    /**
+     * 设置自动备份提醒
+     */
+    setAutoBackupRemind(enabled) {
+        localStorage.setItem('autoBackupRemind', enabled.toString());
+        if (enabled) {
+            this.showToast('✅ 已开启每周备份提醒', 2000);
+        } else {
+            this.showToast('已关闭每周备份提醒', 2000);
+        }
+    }
+
+    /**
+     * 检查是否需要备份提醒
+     */
+    checkBackupReminder() {
+        if (!this.getAutoBackupRemind()) return;
+        
+        const lastBackupTime = localStorage.getItem('lastBackupTime');
+        const oneWeek = 7 * 24 * 60 * 60 * 1000;
+        
+        if (!lastBackupTime || (Date.now() - parseInt(lastBackupTime)) > oneWeek) {
+            // 超过一周未备份
+            if (this.memos.length > 0) {
+                setTimeout(() => {
+                    this.showToast('💾 您已超过一周未备份数据，建议点击备份按钮导出数据', 6000);
+                }, 3000);
+            }
+        }
+    }
+
+    // ==================== 关于与帮助面板 ====================
+
+    /**
+     * 显示关于与帮助面板
+     */
+    async showAboutPanel() {
+        const existingPanel = document.getElementById('about-panel');
+        if (existingPanel) existingPanel.remove();
+
+        // 获取存储使用情况
+        const dataStr = JSON.stringify(this.memos);
+        const sizeBytes = new Blob([dataStr]).size;
+        const sizeKB = (sizeBytes / 1024).toFixed(1);
+        const sizeMB = (sizeBytes / (1024 * 1024)).toFixed(2);
+        
+        // 获取扩展版本
+        const manifest = chrome.runtime.getManifest();
+        const version = manifest.version;
+        
+        // 获取任务统计
+        const totalTasks = this.memos.length;
+        const completedTasks = this.memos.filter(m => m.completed).length;
+        const tasksWithImages = this.memos.filter(m => m.images && m.images.length > 0).length;
+
+        const panel = document.createElement('div');
+        panel.id = 'about-panel';
+        panel.className = 'about-panel';
+
+        panel.innerHTML = `
+            <div class="about-overlay"></div>
+            <div class="about-content">
+                <div class="about-header">
+                    <h3><i class="fas fa-info-circle"></i> 关于与帮助</h3>
+                    <button class="about-close" id="about-close"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="about-body">
+                    <!-- 版本信息 -->
+                    <div class="about-hero">
+                        <div class="about-logo">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="about-title-area">
+                            <h2>中国风景时钟</h2>
+                            <span class="about-version">版本 ${version}</span>
+                        </div>
+                    </div>
+                    
+                    <!-- 数据概览 -->
+                    <div class="about-section">
+                        <h4><i class="fas fa-database"></i> 数据概览</h4>
+                        <div class="about-stats">
+                            <div class="about-stat-item">
+                                <span class="stat-number">${totalTasks}</span>
+                                <span class="stat-label">任务总数</span>
+                            </div>
+                            <div class="about-stat-item">
+                                <span class="stat-number">${completedTasks}</span>
+                                <span class="stat-label">已完成</span>
+                            </div>
+                            <div class="about-stat-item">
+                                <span class="stat-number">${tasksWithImages}</span>
+                                <span class="stat-label">含图片</span>
+                            </div>
+                            <div class="about-stat-item">
+                                <span class="stat-number">${sizeMB > 1 ? sizeMB + 'MB' : sizeKB + 'KB'}</span>
+                                <span class="stat-label">数据大小</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 工作原理 -->
+                    <div class="about-section">
+                        <h4><i class="fas fa-cogs"></i> 工作原理</h4>
+                        <div class="about-info-cards">
+                            <div class="info-card">
+                                <div class="info-card-icon"><i class="fas fa-hard-drive"></i></div>
+                                <div class="info-card-content">
+                                    <h5>本地存储</h5>
+                                    <p>所有数据存储在 Chrome 浏览器的本地存储区域（chrome.storage.local），<strong>不会上传到任何服务器</strong>。</p>
+                                </div>
+                            </div>
+                            <div class="info-card">
+                                <div class="info-card-icon"><i class="fas fa-infinity"></i></div>
+                                <div class="info-card-content">
+                                    <h5>无限存储</h5>
+                                    <p>已启用「无限存储」权限，数据不受 10MB 限制，可以放心添加任务和图片。</p>
+                                </div>
+                            </div>
+                            <div class="info-card">
+                                <div class="info-card-icon"><i class="fas fa-shield-halved"></i></div>
+                                <div class="info-card-content">
+                                    <h5>数据安全</h5>
+                                    <p>清除浏览器历史记录<strong>不会</strong>删除扩展数据。但卸载扩展会删除所有数据，请提前备份。</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 数据存储位置 -->
+                    <div class="about-section">
+                        <h4><i class="fas fa-folder-open"></i> 存储位置说明</h4>
+                        <div class="storage-table">
+                            <div class="storage-row header">
+                                <span>数据类型</span>
+                                <span>存储位置</span>
+                                <span>说明</span>
+                            </div>
+                            <div class="storage-row">
+                                <span><i class="fas fa-tasks"></i> 任务数据</span>
+                                <span>chrome.storage.local</span>
+                                <span>标题、内容、状态、图片等</span>
+                            </div>
+                            <div class="storage-row">
+                                <span><i class="fas fa-folder"></i> 分类/标签</span>
+                                <span>chrome.storage.sync</span>
+                                <span>可跨设备同步（需登录 Chrome）</span>
+                            </div>
+                            <div class="storage-row">
+                                <span><i class="fas fa-cog"></i> 用户设置</span>
+                                <span>chrome.storage.sync</span>
+                                <span>时间格式、天气设置等</span>
+                            </div>
+                            <div class="storage-row">
+                                <span><i class="fas fa-image"></i> 背景缓存</span>
+                                <span>chrome.storage.local</span>
+                                <span>动态背景图片缓存</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 备份指南 -->
+                    <div class="about-section">
+                        <h4><i class="fas fa-life-ring"></i> 备份与恢复指南</h4>
+                        <div class="backup-guide">
+                            <div class="guide-step">
+                                <div class="step-number">1</div>
+                                <div class="step-content">
+                                    <h5>定期导出备份</h5>
+                                    <p>点击工具栏的 <i class="fas fa-cloud-download-alt"></i> 按钮，选择「导出全部数据」，将数据保存为 JSON 文件到本地磁盘。</p>
+                                </div>
+                            </div>
+                            <div class="guide-step">
+                                <div class="step-number">2</div>
+                                <div class="step-content">
+                                    <h5>安全存放备份文件</h5>
+                                    <p>建议将备份文件存放在云盘（如 iCloud、Google Drive）或其他安全位置，避免单点故障。</p>
+                                </div>
+                            </div>
+                            <div class="guide-step">
+                                <div class="step-number">3</div>
+                                <div class="step-content">
+                                    <h5>恢复数据</h5>
+                                    <p>需要恢复时，点击 <i class="fas fa-cloud-download-alt"></i> 按钮，选择「导入并合并」或「导入并覆盖」，选择之前保存的 JSON 文件即可。</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 常见问题 -->
+                    <div class="about-section">
+                        <h4><i class="fas fa-question-circle"></i> 常见问题</h4>
+                        <div class="faq-list">
+                            <details class="faq-item">
+                                <summary>卸载扩展后数据会丢失吗？</summary>
+                                <p>是的，卸载扩展会删除所有本地数据。请在卸载前使用备份功能导出数据。重新安装后可以导入恢复。</p>
+                            </details>
+                            <details class="faq-item">
+                                <summary>数据会同步到其他设备吗？</summary>
+                                <p>任务数据存储在本地，不会自动同步。分类和设置会通过 Chrome 同步功能同步（需登录 Chrome 账号）。如需在其他设备使用任务数据，请手动导出并导入。</p>
+                            </details>
+                            <details class="faq-item">
+                                <summary>图片会占用很多空间吗？</summary>
+                                <p>图片会自动压缩。缩略图约 5-10KB，查看原图约 50-100KB。已启用无限存储，通常不用担心空间问题。</p>
+                            </details>
+                            <details class="faq-item">
+                                <summary>如何彻底删除所有数据？</summary>
+                                <div class="faq-detailed">
+                                    <p><strong>方法一：卸载扩展（推荐）</strong></p>
+                                    <p>Chrome 设置 → 扩展程序 → 找到「中国风景时钟」→ 点击「移除」</p>
+                                    <p class="faq-tip">这将删除所有扩展数据，包括任务、分类、设置等。</p>
+                                    
+                                    <p><strong>方法二：手动删除存储文件</strong></p>
+                                    <p>如果需要手动清理，可以删除 Chrome 扩展数据文件夹：</p>
+                                    ${this.getStoragePathHtml()}
+                                    <p class="faq-warning">⚠️ 手动删除前请先关闭 Chrome 浏览器，操作需谨慎。</p>
+                                </div>
+                            </details>
+                        </div>
+                    </div>
+                    
+                    <!-- 快捷键 -->
+                    <div class="about-section">
+                        <h4><i class="fas fa-keyboard"></i> 键盘快捷键</h4>
+                        <div class="shortcuts-list">
+                            <div class="shortcut-item">
+                                <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd>
+                                <span>切换背景图片</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>Space</kbd>
+                                <span>切换选中任务的完成状态</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>↑</kbd> <kbd>↓</kbd>
+                                <span>在任务列表中移动选择</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>Enter</kbd>
+                                <span>编辑选中的任务</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>Esc</kbd>
+                                <span>关闭弹窗/取消编辑</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 页脚 -->
+                    <div class="about-footer">
+                        <p>感谢使用中国风景时钟 ❤️</p>
+                        <p class="about-copyright">数据安全，本地存储，隐私无忧</p>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(panel);
+        this.bindAboutPanelEvents(panel);
+        requestAnimationFrame(() => panel.classList.add('active'));
+    }
+
+    /**
+     * 绑定关于面板事件
+     */
+    bindAboutPanelEvents(panel) {
+        const closeBtn = panel.querySelector('#about-close');
+        const overlay = panel.querySelector('.about-overlay');
+        
+        const closePanel = () => {
+            panel.classList.remove('active');
+            setTimeout(() => panel.remove(), 300);
+        };
+        
+        closeBtn?.addEventListener('click', closePanel);
+        overlay?.addEventListener('click', closePanel);
+        
+        // ESC 关闭
+        const handleEsc = (e) => {
+            if (e.key === 'Escape') {
+                closePanel();
+                document.removeEventListener('keydown', handleEsc);
+            }
+        };
+        document.addEventListener('keydown', handleEsc);
+        
+        // 复制路径按钮
+        panel.querySelectorAll('.copy-path-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const path = btn.dataset.path;
+                if (path) {
+                    navigator.clipboard.writeText(path).then(() => {
+                        const originalText = btn.innerHTML;
+                        btn.innerHTML = '<i class="fas fa-check"></i> 已复制';
+                        btn.classList.add('copied');
+                        setTimeout(() => {
+                            btn.innerHTML = originalText;
+                            btn.classList.remove('copied');
+                        }, 2000);
+                    }).catch(() => {
+                        this.showToast('复制失败，请手动复制', 2000);
+                    });
+                }
+            });
+        });
+    }
+
+    /**
+     * 获取存储路径的 HTML（区分 Windows/Mac/Linux）
+     */
+    getStoragePathHtml() {
+        // 获取扩展 ID
+        const extensionId = chrome.runtime.id || '扩展ID';
+        
+        // 检测操作系统
+        const platform = navigator.platform.toLowerCase();
+        const isMac = platform.includes('mac');
+        const isWindows = platform.includes('win');
+        
+        // 定义各系统路径
+        const macPath = `~/Library/Application Support/Google/Chrome/Default/Local Extension Settings/${extensionId}/`;
+        const winPath = `%LOCALAPPDATA%\\Google\\Chrome\\User Data\\Default\\Local Extension Settings\\${extensionId}\\`;
+        const linuxPath = `~/.config/google-chrome/Default/Local Extension Settings/${extensionId}/`;
+        
+        // 根据当前操作系统，优先显示对应路径，然后折叠显示其他系统
+        let currentSystemHtml = '';
+        let otherSystemsHtml = '';
+        
+        if (isMac) {
+            currentSystemHtml = `
+                <div class="path-box mac-path current-system">
+                    <div class="path-header">
+                        <i class="fab fa-apple"></i> macOS <span class="current-badge">当前系统</span>
+                    </div>
+                    <code>${macPath}</code>
+                    <button class="copy-path-btn" data-path="${macPath}" title="复制路径">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+                <p class="path-tip">💡 <code>~</code> 表示用户主目录，可在访达中按 <kbd>⌘</kbd>+<kbd>⇧</kbd>+<kbd>G</kbd> 输入路径前往</p>
+            `;
+            otherSystemsHtml = `
+                <details class="other-systems">
+                    <summary>查看其他系统路径</summary>
+                    <div class="path-box win-path">
+                        <div class="path-header"><i class="fab fa-windows"></i> Windows</div>
+                        <code>${winPath}</code>
+                        <button class="copy-path-btn" data-path="${winPath}" title="复制路径"><i class="fas fa-copy"></i></button>
+                    </div>
+                    <div class="path-box linux-path">
+                        <div class="path-header"><i class="fab fa-linux"></i> Linux</div>
+                        <code>${linuxPath}</code>
+                        <button class="copy-path-btn" data-path="${linuxPath}" title="复制路径"><i class="fas fa-copy"></i></button>
+                    </div>
+                </details>
+            `;
+        } else if (isWindows) {
+            currentSystemHtml = `
+                <div class="path-box win-path current-system">
+                    <div class="path-header">
+                        <i class="fab fa-windows"></i> Windows <span class="current-badge">当前系统</span>
+                    </div>
+                    <code>${winPath}</code>
+                    <button class="copy-path-btn" data-path="${winPath}" title="复制路径">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+                <p class="path-tip">💡 可以在文件资源管理器地址栏直接粘贴路径，<code>%LOCALAPPDATA%</code> 会自动展开</p>
+            `;
+            otherSystemsHtml = `
+                <details class="other-systems">
+                    <summary>查看其他系统路径</summary>
+                    <div class="path-box mac-path">
+                        <div class="path-header"><i class="fab fa-apple"></i> macOS</div>
+                        <code>${macPath}</code>
+                        <button class="copy-path-btn" data-path="${macPath}" title="复制路径"><i class="fas fa-copy"></i></button>
+                    </div>
+                    <div class="path-box linux-path">
+                        <div class="path-header"><i class="fab fa-linux"></i> Linux</div>
+                        <code>${linuxPath}</code>
+                        <button class="copy-path-btn" data-path="${linuxPath}" title="复制路径"><i class="fas fa-copy"></i></button>
+                    </div>
+                </details>
+            `;
+        } else {
+            // Linux 或其他系统
+            currentSystemHtml = `
+                <div class="path-box linux-path current-system">
+                    <div class="path-header">
+                        <i class="fab fa-linux"></i> Linux <span class="current-badge">当前系统</span>
+                    </div>
+                    <code>${linuxPath}</code>
+                    <button class="copy-path-btn" data-path="${linuxPath}" title="复制路径">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+            `;
+            otherSystemsHtml = `
+                <details class="other-systems">
+                    <summary>查看其他系统路径</summary>
+                    <div class="path-box mac-path">
+                        <div class="path-header"><i class="fab fa-apple"></i> macOS</div>
+                        <code>${macPath}</code>
+                        <button class="copy-path-btn" data-path="${macPath}" title="复制路径"><i class="fas fa-copy"></i></button>
+                    </div>
+                    <div class="path-box win-path">
+                        <div class="path-header"><i class="fab fa-windows"></i> Windows</div>
+                        <code>${winPath}</code>
+                        <button class="copy-path-btn" data-path="${winPath}" title="复制路径"><i class="fas fa-copy"></i></button>
+                    </div>
+                </details>
+            `;
+        }
+        
+        return currentSystemHtml + otherSystemsHtml;
     }
 
     /**
@@ -3017,24 +4022,155 @@ class MemoManager {
      * 因为 storage.sync 有 8KB/item 的限制，带图片的数据会超出
      */
     async saveMemos() {
+        // 防抖：避免频繁保存导致的性能问题
+        if (this._saveDebounceTimer) {
+            clearTimeout(this._saveDebounceTimer);
+        }
+        
+        return new Promise((resolve, reject) => {
+            this._saveDebounceTimer = setTimeout(async () => {
+                try {
+                    // 检查存储配额
+                    const quotaCheck = await this.checkStorageQuota();
+                    if (!quotaCheck.safe) {
+                        console.warn('存储空间警告:', quotaCheck.message);
+                        
+                        // 如果超过警告阈值，尝试压缩图片数据
+                        if (quotaCheck.percent >= 90) {
+                            console.log('尝试压缩图片数据以释放空间...');
+                            await this.compressStoredImages();
+                        }
+                        
+                        // 如果仍然超过 95%，显示警告
+                        if (quotaCheck.percent >= 95) {
+                            this.showToast('存储空间即将用尽，请删除一些旧任务或图片', 5000);
+                        }
+                    }
+                    
+                    // 只保存到 local 存储（最大 10MB）
+                    await chrome.storage.local.set({ memos: this.memos });
+                    
+                    // 通知 background.js 更新任务提醒（使用 try-catch 避免阻塞）
+                    try {
+                        chrome.runtime.sendMessage({ action: 'setupTaskReminder' });
+                    } catch (e) {
+                        // 忽略消息发送失败（background 可能未激活）
+                    }
+                    
+                    console.log('备忘录保存成功');
+                    resolve(true);
+                } catch (error) {
+                    console.error('保存备忘录失败', error);
+                    
+                    // 处理配额超限错误
+                    if (error.message && error.message.includes('QUOTA_BYTES')) {
+                        this.showToast('存储空间已满，请删除一些任务或图片后重试', 5000);
+                        // 尝试自动清理
+                        await this.emergencyCleanup();
+                    }
+                    
+                    reject(error);
+                }
+            }, 100); // 100ms 防抖
+        });
+    }
+    
+    /**
+     * 检查存储配额使用情况
+     * @returns {Object} { safe, percent, sizeKB, message }
+     */
+    async checkStorageQuota() {
         try {
-            // 只保存到 local 存储（最大 10MB）
-            await chrome.storage.local.set({ memos: this.memos });
+            const dataStr = JSON.stringify(this.memos);
+            const sizeBytes = new Blob([dataStr]).size;
+            const maxBytes = 10 * 1024 * 1024; // 10MB
+            const percent = (sizeBytes / maxBytes) * 100;
+            const sizeKB = (sizeBytes / 1024).toFixed(1);
             
-            // 不再同步到 settingsManager，避免 sync storage 配额超限
-            // window.settingsManager.settings.memos = this.memos;
-            // await window.settingsManager.saveSettings();
+            let message = '';
+            let safe = true;
             
-            // 通知 background.js 更新任务提醒
-            try {
-                chrome.runtime.sendMessage({ action: 'setupTaskReminder' });
-            } catch (e) {
-                // 忽略消息发送失败（background 可能未激活）
+            if (percent >= 95) {
+                message = `存储空间严重不足！已使用 ${percent.toFixed(1)}% (${sizeKB} KB)`;
+                safe = false;
+            } else if (percent >= 80) {
+                message = `存储空间警告：已使用 ${percent.toFixed(1)}% (${sizeKB} KB)`;
+                safe = false;
             }
             
-            console.log('备忘录保存成功');
+            return { safe, percent, sizeKB, message };
         } catch (error) {
-            console.error('保存备忘录失败', error);
+            console.error('检查存储配额失败:', error);
+            return { safe: true, percent: 0, sizeKB: '0', message: '' };
+        }
+    }
+    
+    /**
+     * 压缩已存储的图片数据
+     * 将 fullImage 替换为 thumbnail 以节省空间
+     */
+    async compressStoredImages() {
+        let compressed = 0;
+        
+        for (const memo of this.memos) {
+            if (memo.images && memo.images.length > 0) {
+                for (const img of memo.images) {
+                    // 如果 fullImage 比 thumbnail 大很多，删除 fullImage
+                    if (img.fullImage && img.thumbnail) {
+                        const fullSize = img.fullImage.length;
+                        const thumbSize = img.thumbnail.length;
+                        if (fullSize > thumbSize * 2) {
+                            img.fullImage = img.thumbnail; // 用缩略图替代
+                            compressed++;
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (compressed > 0) {
+            console.log(`已压缩 ${compressed} 张图片`);
+        }
+    }
+    
+    /**
+     * 紧急清理：当存储空间严重不足时调用
+     * 由于已添加 unlimitedStorage 权限，此方法仅作为最后手段
+     * 优先提醒用户备份数据
+     */
+    async emergencyCleanup() {
+        console.log('存储空间不足，提示用户备份...');
+        
+        // 优先提醒用户备份，而不是直接删除数据
+        const shouldClean = confirm(
+            '⚠️ 存储空间不足\n\n' +
+            '建议您先导出备份数据，然后手动删除一些旧任务或图片。\n\n' +
+            '点击"确定"打开备份面板\n' +
+            '点击"取消"尝试自动清理旧图片'
+        );
+        
+        if (shouldClean) {
+            // 打开备份面板
+            this.showBackupPanel();
+            return;
+        }
+        
+        // 用户选择自动清理
+        const completedWithImages = this.memos
+            .filter(m => m.completed && m.images && m.images.length > 0)
+            .sort((a, b) => (a.completedAt || a.updatedAt || 0) - (b.completedAt || b.updatedAt || 0));
+        
+        let cleaned = 0;
+        for (const memo of completedWithImages.slice(0, 5)) {
+            memo.images = []; // 删除图片
+            cleaned++;
+        }
+        
+        if (cleaned > 0) {
+            console.log(`紧急清理：已删除 ${cleaned} 个任务的图片`);
+            this.showToast(`已自动清理 ${cleaned} 个旧任务的图片以释放空间`, 3000);
+        } else {
+            this.showToast('无法自动清理，请手动删除一些任务', 3000);
         }
     }
 
