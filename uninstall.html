@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>感谢使用 - 中国风景时钟</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #1a1c2e 0%, #2d3561 50%, #1a1c2e 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: #fff;
+        }
+
+        .container {
+            max-width: 600px;
+            width: 100%;
+        }
+
+        .card {
+            background: linear-gradient(
+                135deg,
+                rgba(255, 255, 255, 0.1) 0%,
+                rgba(255, 255, 255, 0.05) 100%
+            );
+            backdrop-filter: blur(24px);
+            border-radius: 20px;
+            padding: 40px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            text-align: center;
+        }
+
+        .icon {
+            font-size: 64px;
+            margin-bottom: 24px;
+            animation: wave 2s ease-in-out infinite;
+        }
+
+        @keyframes wave {
+            0%, 100% { transform: rotate(0deg); }
+            25% { transform: rotate(15deg); }
+            75% { transform: rotate(-15deg); }
+        }
+
+        h1 {
+            font-size: 28px;
+            margin-bottom: 16px;
+            color: rgba(255, 255, 255, 0.95);
+        }
+
+        .subtitle {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 32px;
+            line-height: 1.6;
+        }
+
+        .warning-box {
+            background: rgba(255, 107, 107, 0.15);
+            border: 1px solid rgba(255, 107, 107, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+            text-align: left;
+        }
+
+        .warning-box h3 {
+            color: #ff6b6b;
+            font-size: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .warning-box p {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .info-box {
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+            text-align: left;
+        }
+
+        .info-box h3 {
+            color: #6366f1;
+            font-size: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .info-box ul {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 14px;
+            line-height: 1.8;
+            padding-left: 20px;
+        }
+
+        .info-box li {
+            margin-bottom: 4px;
+        }
+
+        .tips-box {
+            background: rgba(16, 185, 129, 0.15);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+            text-align: left;
+        }
+
+        .tips-box h3 {
+            color: #10b981;
+            font-size: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tips-box p {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+
+        .tips-box code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 13px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 24px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-size: 14px;
+            text-decoration: none;
+            transition: all 0.2s;
+            cursor: pointer;
+            border: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .feedback {
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .feedback h4 {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 12px;
+        }
+
+        .feedback-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        .feedback-btn {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            background: rgba(255, 255, 255, 0.08);
+            color: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .feedback-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .footer {
+            margin-top: 24px;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .footer a {
+            color: #6366f1;
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="icon">👋</div>
+            <h1>感谢您使用中国风景时钟</h1>
+            <p class="subtitle">很遗憾看到您离开，希望我们能做得更好</p>
+
+            <div class="warning-box">
+                <h3><i class="fas fa-exclamation-triangle"></i> 数据已删除</h3>
+                <p>扩展卸载后，您在扩展中保存的所有任务、备忘录数据已被删除。如果您之前导出过备份文件，可以在重新安装扩展后恢复数据。</p>
+            </div>
+
+            <div class="info-box">
+                <h3><i class="fas fa-lightbulb"></i> 如何恢复数据？</h3>
+                <ul>
+                    <li>重新安装「中国风景时钟」扩展</li>
+                    <li>打开新标签页，进入设置面板</li>
+                    <li>找到「数据备份」功能</li>
+                    <li>点击「导入数据」，选择您之前导出的 JSON 文件</li>
+                </ul>
+            </div>
+
+            <div class="tips-box">
+                <h3><i class="fas fa-shield-alt"></i> 建议：定期备份数据</h3>
+                <p>为防止数据丢失，建议您在使用扩展时：</p>
+                <p>• 每周导出一次数据备份<br>
+                   • 开启「每周备份提醒」功能<br>
+                   • 将备份文件保存在安全的位置（如云盘）</p>
+            </div>
+
+            <div class="actions">
+                <a href="https://chromewebstore.google.com/detail/%E4%B8%AD%E5%9B%BD%E9%A3%8E%E6%99%AF%E6%97%B6%E9%92%9F/manpkkekblchikbahoaejfjgbiagjocb" class="btn btn-primary" target="_blank">
+                    <i class="fas fa-download"></i> 重新安装扩展
+                </a>
+                <a href="https://github.com/nicescene/chrome-time-background/issues" class="btn btn-secondary" target="_blank">
+                    <i class="fas fa-bug"></i> 反馈问题
+                </a>
+            </div>
+
+            <div class="feedback">
+                <h4>请告诉我们您卸载的原因（可选）</h4>
+                <div class="feedback-options">
+                    <button class="feedback-btn" data-reason="不需要了">不需要了</button>
+                    <button class="feedback-btn" data-reason="功能不满足需求">功能不满足需求</button>
+                    <button class="feedback-btn" data-reason="占用太多资源">占用太多资源</button>
+                    <button class="feedback-btn" data-reason="界面不喜欢">界面不喜欢</button>
+                    <button class="feedback-btn" data-reason="有Bug">有 Bug</button>
+                    <button class="feedback-btn" data-reason="找到更好的替代品">找到更好的替代品</button>
+                </div>
+            </div>
+
+            <div class="footer">
+                <p>如果您有任何建议或问题，欢迎 <a href="https://github.com/nicescene/chrome-time-background/issues" target="_blank">提交反馈</a></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 反馈按钮点击事件
+        document.querySelectorAll('.feedback-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const reason = this.dataset.reason;
+                
+                // 高亮选中的按钮
+                document.querySelectorAll('.feedback-btn').forEach(b => {
+                    b.style.background = 'rgba(255, 255, 255, 0.08)';
+                    b.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                });
+                this.style.background = 'rgba(99, 102, 241, 0.3)';
+                this.style.borderColor = '#6366f1';
+                
+                // 这里可以发送统计数据（需要配置后端服务）
+                console.log('用户反馈卸载原因:', reason);
+                
+                // 显示感谢提示
+                setTimeout(() => {
+                    alert('感谢您的反馈！我们会努力改进 🙏');
+                }, 300);
+            });
+        });
+    </script>
+</body>
+</html>

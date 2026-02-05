@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>任务进度功能测试 - 纯百分比模式</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #1a1c2e 0%, #2d3561 50%, #1a1c2e 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+            color: #fff;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 24px;
+        }
+
+        .demo-section {
+            background: linear-gradient(
+                135deg,
+                rgba(255, 255, 255, 0.08) 0%,
+                rgba(255, 255, 255, 0.03) 100%
+            );
+            backdrop-filter: blur(24px);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .demo-section h2 {
+            font-size: 16px;
+            margin-bottom: 16px;
+            color: rgba(255, 255, 255, 0.9);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* 任务列表效果 */
+        .task-item {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border-left: 4px solid #ff6b6b;
+        }
+
+        .task-title {
+            font-size: 15px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 8px;
+        }
+
+        .task-progress {
+            margin: 12px 0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .task-progress-bar {
+            flex: 1;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .task-progress-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+            position: relative;
+        }
+
+        .task-progress-fill.low {
+            background: linear-gradient(90deg, #f59e0b, #fbbf24);
+        }
+
+        .task-progress-fill.medium {
+            background: linear-gradient(90deg, #6366f1, #8b5cf6);
+        }
+
+        .task-progress-fill.high {
+            background: linear-gradient(90deg, #10b981, #34d399);
+        }
+
+        .task-progress-fill.complete {
+            background: linear-gradient(90deg, #10b981, #34d399);
+        }
+
+        /* 动画条纹 */
+        .task-progress-fill:not(.complete) {
+            background-size: 100% 100%, 16px 16px;
+            background-image: linear-gradient(90deg, currentColor, currentColor),
+                linear-gradient(
+                    45deg,
+                    rgba(255, 255, 255, 0.15) 25%,
+                    transparent 25%,
+                    transparent 50%,
+                    rgba(255, 255, 255, 0.15) 50%,
+                    rgba(255, 255, 255, 0.15) 75%,
+                    transparent 75%,
+                    transparent
+                );
+            animation: progress-stripe 1s linear infinite;
+        }
+
+        @keyframes progress-stripe {
+            from { background-position: 0 0, 0 0; }
+            to { background-position: 0 0, 16px 0; }
+        }
+
+        .task-progress-text {
+            display: flex;
+            align-items: center;
+            min-width: 40px;
+        }
+
+        .task-progress-percentage {
+            font-size: 13px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.85);
+        }
+
+        .task-meta {
+            display: flex;
+            gap: 8px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .task-meta span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* 表单样式 */
+        .form-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.7);
+            cursor: pointer;
+        }
+
+        .progress-inputs {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 16px;
+            margin-top: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        /* 新版滑块 + 百分比输入布局 */
+        .progress-slider-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        /* 滑块样式 */
+        .progress-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            flex: 1;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            cursor: pointer;
+            outline: none;
+        }
+
+        .progress-slider::-webkit-slider-runnable-track {
+            height: 8px;
+            border-radius: 4px;
+            background: linear-gradient(90deg, 
+                var(--slider-color, #6366f1) var(--slider-percentage, 0%), 
+                rgba(255, 255, 255, 0.1) var(--slider-percentage, 0%));
+        }
+
+        .progress-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            margin-top: -6px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: grab;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            border: 2px solid rgba(99, 102, 241, 0.5);
+        }
+
+        .progress-slider::-webkit-slider-thumb:active {
+            cursor: grabbing;
+            transform: scale(1.1);
+        }
+
+        .progress-slider::-moz-range-track {
+            height: 8px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .progress-slider::-moz-range-progress {
+            height: 8px;
+            border-radius: 4px;
+            background: var(--slider-color, #6366f1);
+        }
+
+        .progress-slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: grab;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            border: 2px solid rgba(99, 102, 241, 0.5);
+        }
+
+        /* 百分比输入框 */
+        .progress-percent-input {
+            display: flex;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 0 8px 0 0;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .progress-percent-input .progress-number-input {
+            width: 50px;
+            padding: 8px 4px 8px 10px;
+            text-align: right;
+            font-size: 15px;
+            font-weight: 600;
+            background: transparent;
+            border: none;
+            color: #fff;
+            -moz-appearance: textfield;
+            appearance: textfield;
+            outline: none;
+        }
+
+        .progress-percent-input .progress-number-input::-webkit-outer-spin-button,
+        .progress-percent-input .progress-number-input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .progress-percent-input .percent-sign {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .progress-preview {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .progress-preview-bar {
+            flex: 1;
+            height: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        .progress-preview-fill {
+            height: 100%;
+            border-radius: 5px;
+            transition: width 0.3s ease, background 0.3s ease;
+            background: linear-gradient(90deg, #6366f1, #8b5cf6);
+        }
+
+        .progress-preview-fill.low {
+            background: linear-gradient(90deg, #f59e0b, #fbbf24);
+        }
+
+        .progress-preview-fill.medium {
+            background: linear-gradient(90deg, #6366f1, #8b5cf6);
+        }
+
+        .progress-preview-fill.high {
+            background: linear-gradient(90deg, #10b981, #34d399);
+        }
+
+        .progress-preview-fill.complete {
+            background: linear-gradient(90deg, #10b981, #34d399);
+        }
+
+        .feature-list {
+            background: rgba(99, 102, 241, 0.1);
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 20px;
+        }
+
+        .feature-list h3 {
+            font-size: 14px;
+            margin-bottom: 12px;
+            color: #6366f1;
+        }
+
+        .feature-list ul {
+            padding-left: 20px;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.8;
+        }
+
+        code {
+            background: rgba(0,0,0,0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+        }
+
+        .test-result {
+            margin-top: 12px;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        .test-result.success {
+            background: rgba(16, 185, 129, 0.2);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #34d399;
+        }
+
+        .test-result.info {
+            background: rgba(99, 102, 241, 0.2);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            color: #a5b4fc;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1><i class="fas fa-chart-line"></i> 任务进度功能演示 - 纯百分比模式</h1>
+
+        <!-- 任务列表展示 -->
+        <div class="demo-section">
+            <h2><i class="fas fa-tasks"></i> 任务列表效果预览</h2>
+
+            <div class="task-item" style="border-left-color: #ff6b6b;">
+                <div class="task-title">会员中心等级模块支持鸿蒙</div>
+                <div class="task-progress">
+                    <div class="task-progress-bar">
+                        <div class="task-progress-fill medium" style="width: 60%"></div>
+                    </div>
+                    <div class="task-progress-text">
+                        <span class="task-progress-percentage">60%</span>
+                    </div>
+                </div>
+                <div class="task-meta">
+                    <span><i class="far fa-calendar"></i> 2026-02-05</span>
+                    <span style="background:#ff6b6b; padding: 2px 8px; border-radius: 4px;">高</span>
+                </div>
+            </div>
+
+            <div class="task-item" style="border-left-color: #ffc857;">
+                <div class="task-title">调研飞书文档块替换能力</div>
+                <div class="task-progress">
+                    <div class="task-progress-bar">
+                        <div class="task-progress-fill low" style="width: 25%"></div>
+                    </div>
+                    <div class="task-progress-text">
+                        <span class="task-progress-percentage">25%</span>
+                    </div>
+                </div>
+                <div class="task-meta">
+                    <span><i class="far fa-calendar"></i> 2026-02-06</span>
+                    <span style="background:#ffc857; padding: 2px 8px; border-radius: 4px;">中</span>
+                </div>
+            </div>
+
+            <div class="task-item" style="border-left-color: #5cd85c;">
+                <div class="task-title">优化首页加载性能</div>
+                <div class="task-progress">
+                    <div class="task-progress-bar">
+                        <div class="task-progress-fill complete" style="width: 100%"></div>
+                    </div>
+                    <div class="task-progress-text">
+                        <span class="task-progress-percentage">100%</span>
+                    </div>
+                </div>
+                <div class="task-meta">
+                    <span><i class="far fa-calendar"></i> 2026-02-04</span>
+                    <span style="background:#5cd85c; padding: 2px 8px; border-radius: 4px;">低</span>
+                </div>
+            </div>
+
+            <div class="task-item" style="border-left-color: #6366f1;">
+                <div class="task-title">重构用户认证模块</div>
+                <div class="task-progress">
+                    <div class="task-progress-bar">
+                        <div class="task-progress-fill high" style="width: 90%"></div>
+                    </div>
+                    <div class="task-progress-text">
+                        <span class="task-progress-percentage">90%</span>
+                    </div>
+                </div>
+                <div class="task-meta">
+                    <span><i class="far fa-calendar"></i> 2026-02-05</span>
+                    <span style="background:#6366f1; padding: 2px 8px; border-radius: 4px;">中</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 表单交互演示 -->
+        <div class="demo-section">
+            <h2><i class="fas fa-edit"></i> 进度设置交互演示</h2>
+            <p style="color: rgba(255,255,255,0.6); font-size: 13px; margin-bottom: 16px;">
+                拖动滑块或直接输入百分比数值，两者会自动同步
+            </p>
+
+            <div class="form-section">
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="demo-progress-enable" checked>
+                        启用进度追踪
+                    </label>
+                </div>
+                <div class="progress-inputs" id="demo-progress-inputs">
+                    <div class="progress-slider-row">
+                        <input type="range" id="demo-slider" 
+                               min="0" max="100" value="60" step="1" class="progress-slider">
+                        <div class="progress-percent-input">
+                            <input type="number" id="demo-percent" 
+                                   min="0" max="100" value="60" class="progress-number-input">
+                            <span class="percent-sign">%</span>
+                        </div>
+                    </div>
+                    <div class="progress-preview">
+                        <div class="progress-preview-bar">
+                            <div class="progress-preview-fill medium" id="demo-fill" style="width: 60%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="test-result info" id="test-result">
+                <i class="fas fa-info-circle"></i> 
+                当前进度: <strong id="result-value">60%</strong> - 
+                拖动滑块到 90% 测试是否会跳到 100%
+            </div>
+        </div>
+
+        <!-- 功能说明 -->
+        <div class="demo-section">
+            <h2><i class="fas fa-info-circle"></i> 纯百分比模式说明</h2>
+            <div class="feature-list">
+                <h3>新版改进</h3>
+                <ul>
+                    <li><strong>简化交互</strong>：移除「步数」模式，只保留纯百分比设置</li>
+                    <li><strong>双向同步</strong>：滑块和输入框实时同步，选择更灵活</li>
+                    <li><strong>精确控制</strong>：支持直接输入 0-100 的任意数值</li>
+                    <li><strong>修复问题</strong>：解决了旧版 90% 自动跳到 100% 的 bug</li>
+                </ul>
+            </div>
+            <div class="feature-list" style="margin-top: 12px; background: rgba(16, 185, 129, 0.1);">
+                <h3 style="color: #10b981;">数据存储</h3>
+                <ul>
+                    <li>进度数据存储为纯数字 <code>progress: 60</code>（百分比）</li>
+                    <li>旧版 <code>{ current: 3, total: 5 }</code> 格式会自动转换</li>
+                    <li>只有 100% 时任务才会自动标记为已完成</li>
+                    <li>支持 0% 到 100% 的任意整数值</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 交互演示
+        const enableCheckbox = document.getElementById('demo-progress-enable');
+        const progressInputs = document.getElementById('demo-progress-inputs');
+        const sliderInput = document.getElementById('demo-slider');
+        const percentInput = document.getElementById('demo-percent');
+        const fillEl = document.getElementById('demo-fill');
+        const resultEl = document.getElementById('result-value');
+        const testResultEl = document.getElementById('test-result');
+
+        enableCheckbox.addEventListener('change', () => {
+            progressInputs.style.display = enableCheckbox.checked ? 'block' : 'none';
+        });
+
+        function getProgressClass(percentage) {
+            if (percentage >= 100) return 'complete';
+            if (percentage >= 60) return 'high';
+            if (percentage > 30) return 'medium';
+            return 'low';
+        }
+
+        function getSliderColor(percentage) {
+            if (percentage >= 60) return '#10b981';
+            if (percentage > 30) return '#6366f1';
+            return '#f59e0b';
+        }
+
+        function updatePreview(value) {
+            let percentage = parseInt(value) || 0;
+            percentage = Math.max(0, Math.min(100, percentage));
+            
+            // 更新滑块颜色
+            const color = getSliderColor(percentage);
+            sliderInput.style.setProperty('--slider-percentage', percentage + '%');
+            sliderInput.style.setProperty('--slider-color', color);
+            
+            // 更新预览条
+            fillEl.style.width = percentage + '%';
+            fillEl.className = 'progress-preview-fill ' + getProgressClass(percentage);
+            
+            // 更新结果显示
+            resultEl.textContent = percentage + '%';
+            
+            // 测试结果
+            if (percentage === 90) {
+                testResultEl.className = 'test-result success';
+                testResultEl.innerHTML = '<i class="fas fa-check-circle"></i> 90% 正确显示！没有跳到 100%';
+            } else if (percentage === 100) {
+                testResultEl.className = 'test-result info';
+                testResultEl.innerHTML = '<i class="fas fa-info-circle"></i> 100% - 任务将标记为已完成';
+            } else {
+                testResultEl.className = 'test-result info';
+                testResultEl.innerHTML = `<i class="fas fa-info-circle"></i> 当前进度: <strong>${percentage}%</strong> - 拖动滑块到 90% 测试是否会跳到 100%`;
+            }
+        }
+
+        // 滑块 -> 输入框同步
+        sliderInput.addEventListener('input', () => {
+            percentInput.value = sliderInput.value;
+            updatePreview(sliderInput.value);
+        });
+
+        // 输入框 -> 滑块同步
+        percentInput.addEventListener('input', () => {
+            let value = parseInt(percentInput.value) || 0;
+            value = Math.max(0, Math.min(100, value));
+            sliderInput.value = value;
+            updatePreview(value);
+        });
+
+        percentInput.addEventListener('blur', () => {
+            let value = parseInt(percentInput.value) || 0;
+            value = Math.max(0, Math.min(100, value));
+            percentInput.value = value;
+            sliderInput.value = value;
+            updatePreview(value);
+        });
+
+        // 初始化
+        updatePreview(60);
+    </script>
+</body>
+</html>

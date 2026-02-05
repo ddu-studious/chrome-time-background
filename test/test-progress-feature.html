@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>进度功能测试</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #1a1c2e 0%, #2d3561 50%, #1a1c2e 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+            color: #fff;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 24px;
+        }
+
+        .demo-section {
+            background: linear-gradient(
+                135deg,
+                rgba(255, 255, 255, 0.08) 0%,
+                rgba(255, 255, 255, 0.03) 100%
+            );
+            backdrop-filter: blur(24px);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .demo-section h2 {
+            font-size: 16px;
+            margin-bottom: 16px;
+            color: rgba(255, 255, 255, 0.9);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* 复用扩展中的进度条样式 */
+        .task-item {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border-left: 4px solid #ff6b6b;
+        }
+
+        .task-title {
+            font-size: 15px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 8px;
+        }
+
+        .task-progress {
+            margin: 12px 0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .task-progress-bar {
+            flex: 1;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .task-progress-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+            position: relative;
+        }
+
+        .task-progress-fill.low {
+            background: linear-gradient(90deg, #f59e0b, #fbbf24);
+        }
+
+        .task-progress-fill.medium {
+            background: linear-gradient(90deg, #6366f1, #8b5cf6);
+        }
+
+        .task-progress-fill.high {
+            background: linear-gradient(90deg, #10b981, #34d399);
+        }
+
+        .task-progress-fill.complete {
+            background: linear-gradient(90deg, #10b981, #34d399);
+        }
+
+        /* 动画条纹 */
+        .task-progress-fill:not(.complete) {
+            background-size: 16px 16px;
+            background-image: linear-gradient(
+                45deg,
+                rgba(255, 255, 255, 0.1) 25%,
+                transparent 25%,
+                transparent 50%,
+                rgba(255, 255, 255, 0.1) 50%,
+                rgba(255, 255, 255, 0.1) 75%,
+                transparent 75%,
+                transparent
+            );
+            animation: progress-stripe 1s linear infinite;
+        }
+
+        @keyframes progress-stripe {
+            from { background-position: 0 0; }
+            to { background-position: 16px 0; }
+        }
+
+        .task-progress-text {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            min-width: 70px;
+        }
+
+        .task-progress-percentage {
+            font-size: 14px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .task-progress-detail {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .task-meta {
+            display: flex;
+            gap: 8px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .task-meta span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* 表单样式 */
+        .form-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.7);
+            cursor: pointer;
+        }
+
+        .progress-inputs {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 16px;
+            margin-top: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .progress-input-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .progress-number-input {
+            width: 60px;
+            padding: 8px 10px;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            color: #fff;
+            -moz-appearance: textfield;
+        }
+
+        .progress-number-input::-webkit-outer-spin-button,
+        .progress-number-input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .progress-preview {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .progress-preview-bar {
+            flex: 1;
+            height: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        .progress-preview-fill {
+            height: 100%;
+            border-radius: 5px;
+            transition: width 0.3s ease, background 0.3s ease;
+            background: linear-gradient(90deg, #6366f1, #8b5cf6);
+        }
+
+        .progress-preview-text {
+            font-size: 14px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+            min-width: 40px;
+            text-align: right;
+        }
+
+        .feature-list {
+            background: rgba(99, 102, 241, 0.1);
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 20px;
+        }
+
+        .feature-list h3 {
+            font-size: 14px;
+            margin-bottom: 12px;
+            color: #6366f1;
+        }
+
+        .feature-list ul {
+            padding-left: 20px;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1><i class="fas fa-chart-line"></i> 任务进度功能演示</h1>
+
+        <!-- 任务列表展示 -->
+        <div class="demo-section">
+            <h2><i class="fas fa-tasks"></i> 任务列表效果预览</h2>
+
+            <div class="task-item" style="border-left-color: #ff6b6b;">
+                <div class="task-title">会员中心等级模块支持鸿蒙</div>
+                <div class="task-progress">
+                    <div class="task-progress-bar">
+                        <div class="task-progress-fill medium" style="width: 60%"></div>
+                    </div>
+                    <div class="task-progress-text">
+                        <span class="task-progress-percentage">60%</span>
+                        <span class="task-progress-detail">3/5 完成</span>
+                    </div>
+                </div>
+                <div class="task-meta">
+                    <span><i class="far fa-calendar"></i> 2026-02-05</span>
+                    <span style="background:#ff6b6b; padding: 2px 8px; border-radius: 4px;">高</span>
+                </div>
+            </div>
+
+            <div class="task-item" style="border-left-color: #ffc857;">
+                <div class="task-title">调研飞书文档块替换能力</div>
+                <div class="task-progress">
+                    <div class="task-progress-bar">
+                        <div class="task-progress-fill low" style="width: 33%"></div>
+                    </div>
+                    <div class="task-progress-text">
+                        <span class="task-progress-percentage">33%</span>
+                        <span class="task-progress-detail">1/3 完成</span>
+                    </div>
+                </div>
+                <div class="task-meta">
+                    <span><i class="far fa-calendar"></i> 2026-02-06</span>
+                    <span style="background:#ffc857; padding: 2px 8px; border-radius: 4px;">中</span>
+                </div>
+            </div>
+
+            <div class="task-item" style="border-left-color: #5cd85c;">
+                <div class="task-title">优化首页加载性能</div>
+                <div class="task-progress">
+                    <div class="task-progress-bar">
+                        <div class="task-progress-fill complete" style="width: 100%"></div>
+                    </div>
+                    <div class="task-progress-text">
+                        <span class="task-progress-percentage">100%</span>
+                        <span class="task-progress-detail">5/5 完成</span>
+                    </div>
+                </div>
+                <div class="task-meta">
+                    <span><i class="far fa-calendar"></i> 2026-02-04</span>
+                    <span style="background:#5cd85c; padding: 2px 8px; border-radius: 4px;">低</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 表单交互演示 -->
+        <div class="demo-section">
+            <h2><i class="fas fa-edit"></i> 进度设置交互演示</h2>
+            <p style="color: rgba(255,255,255,0.6); font-size: 13px; margin-bottom: 16px;">
+                在任务编辑表单中，勾选「启用进度追踪」后可设置进度
+            </p>
+
+            <div class="form-section">
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="demo-progress-enable" checked>
+                        启用进度追踪
+                    </label>
+                </div>
+                <div class="progress-inputs" id="demo-progress-inputs">
+                    <div class="progress-input-row">
+                        <span>已完成</span>
+                        <input type="number" id="demo-current" min="0" value="3" class="progress-number-input">
+                        <span>/</span>
+                        <input type="number" id="demo-total" min="1" value="5" class="progress-number-input">
+                        <span>项</span>
+                    </div>
+                    <div class="progress-preview">
+                        <div class="progress-preview-bar">
+                            <div class="progress-preview-fill" id="demo-fill" style="width: 60%"></div>
+                        </div>
+                        <span class="progress-preview-text" id="demo-text">60%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 功能说明 -->
+        <div class="demo-section">
+            <h2><i class="fas fa-info-circle"></i> 进度功能说明</h2>
+            <div class="feature-list">
+                <h3>使用方式</h3>
+                <ul>
+                    <li><strong>手动设置进度</strong>：编辑任务时勾选「启用进度追踪」，输入已完成数量和总数量</li>
+                    <li><strong>自动完成</strong>：当进度达到 100% 时，任务会自动标记为已完成</li>
+                    <li><strong>进度颜色</strong>：0-30% 橙色、30-60% 紫色、60-100% 绿色</li>
+                    <li><strong>动画效果</strong>：进行中的任务会显示条纹动画，已完成的任务动画停止</li>
+                </ul>
+            </div>
+            <div class="feature-list" style="margin-top: 12px; background: rgba(16, 185, 129, 0.1);">
+                <h3 style="color: #10b981;">进度逻辑</h3>
+                <ul>
+                    <li>进度数据存储为 <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px;">{ current: 3, total: 5 }</code></li>
+                    <li>百分比 = current / total × 100%</li>
+                    <li>支持随时修改已完成数和总数</li>
+                    <li>不启用进度时，任务只有「完成/未完成」两种状态</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 交互演示
+        const enableCheckbox = document.getElementById('demo-progress-enable');
+        const progressInputs = document.getElementById('demo-progress-inputs');
+        const currentInput = document.getElementById('demo-current');
+        const totalInput = document.getElementById('demo-total');
+        const fillEl = document.getElementById('demo-fill');
+        const textEl = document.getElementById('demo-text');
+
+        enableCheckbox.addEventListener('change', () => {
+            progressInputs.style.display = enableCheckbox.checked ? 'block' : 'none';
+        });
+
+        function updatePreview() {
+            let current = parseInt(currentInput.value) || 0;
+            let total = parseInt(totalInput.value) || 1;
+            
+            if (total < 1) total = 1;
+            if (current > total) current = total;
+            if (current < 0) current = 0;
+            
+            const percentage = Math.round((current / total) * 100);
+            fillEl.style.width = percentage + '%';
+            textEl.textContent = percentage + '%';
+        }
+
+        currentInput.addEventListener('input', updatePreview);
+        totalInput.addEventListener('input', updatePreview);
+    </script>
+</body>
+</html>

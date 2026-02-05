@@ -386,8 +386,16 @@
      * 获取今天的日期字符串 (YYYY-MM-DD)
      * @returns {string} 日期字符串
      */
+    function formatLocalDateYMD(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+
     function getTodayDate() {
-        return new Date().toISOString().split('T')[0];
+        // 本地日期语义：dueDate 是 YYYY-MM-DD（本地），这里也应按本地计算
+        return formatLocalDateYMD(new Date());
     }
 
     /**
@@ -428,8 +436,91 @@
         });
         console.log('已设置过期任务检查: 每30分钟');
         
+        // 每日检查备份提醒（每天检查一次）
+        await chrome.alarms.create('check-backup-reminder', {
+            when: getNextDailyTime(10, 0),  // 每天上午10点检查
+            periodInMinutes: 24 * 60
+        });
+        console.log('已设置备份提醒检查: 每天上午10点');
+        
         // 设置单个任务的提醒
         await setupTaskReminders();
+    }
+    
+    /**
+     * 检查是否需要提醒用户备份数据
+     */
+    async function checkBackupReminder() {
+        console.log('检查备份提醒...');
+        
+        try {
+            const { backupSettings, memos } = await chrome.storage.local.get(['backupSettings', 'memos']);
+            
+            // 如果没有任务数据，不需要提醒
+            if (!memos || !Array.isArray(memos) || memos.length === 0) {
+                console.log('没有任务数据，跳过备份提醒');
+                return;
+            }
+            
+            const settings = backupSettings || {
+                autoRemindBackup: true,
+                lastBackupDate: null,
+                backupReminderDays: 7
+            };
+            
+            // 如果关闭了自动提醒，跳过
+            if (!settings.autoRemindBackup) {
+                console.log('备份提醒已关闭');
+                return;
+            }
+            
+            const now = Date.now();
+            const reminderDays = settings.backupReminderDays || 7;
+            const reminderInterval = reminderDays * 24 * 60 * 60 * 1000;
+            
+            // 如果从未备份过，或者距离上次备份已超过提醒间隔
+            if (!settings.lastBackupDate || (now - settings.lastBackupDate > reminderInterval)) {
+                // 检查距离上次提醒是否超过1天（避免频繁打扰）
+                const lastReminderKey = 'lastBackupReminderTime';
+                const { [lastReminderKey]: lastReminder } = await chrome.storage.local.get(lastReminderKey);
+                
+                if (lastReminder && (now - lastReminder < 24 * 60 * 60 * 1000)) {
+                    console.log('今天已经提醒过了');
+                    return;
+                }
+                
+                // 发送备份提醒通知
+                const taskCount = memos.length;
+                const daysSinceBackup = settings.lastBackupDate 
+                    ? Math.floor((now - settings.lastBackupDate) / (24 * 60 * 60 * 1000))
+                    : null;
+                
+                let message = `您有 ${taskCount} 个任务数据`;
+                if (daysSinceBackup !== null) {
+                    message += `，已 ${daysSinceBackup} 天未备份`;
+                } else {
+                    message += '，建议定期备份以防数据丢失';
+                }
+                
+                await chrome.notifications.create('backup-reminder', {
+                    type: 'basic',
+                    iconUrl: 'icons/icon128.png',
+                    title: '💾 数据备份提醒',
+                    message: message,
+                    priority: 1,
+                    buttons: [
+                        { title: '📤 立即备份' },
+                        { title: '⏰ 稍后提醒' }
+                    ]
+                });
+                
+                // 记录提醒时间
+                await chrome.storage.local.set({ [lastReminderKey]: now });
+                console.log('备份提醒通知已发送');
+            }
+        } catch (error) {
+            console.error('检查备份提醒失败:', error);
+        }
     }
 
     /**
@@ -641,7 +732,8 @@
             // 推迟到明天
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
-            task.dueDate = tomorrow.toISOString().split('T')[0];
+            tomorrow.setHours(0, 0, 0, 0);
+            task.dueDate = formatLocalDateYMD(tomorrow);
             task.updatedAt = Date.now();
             task.overdueNotified = false;  // 重置过期通知标记
             await chrome.storage.local.set({ memos });
@@ -664,6 +756,15 @@
     chrome.runtime.onInstalled.addListener(async (details) => {
         console.log('Chrome Time Extension installed/updated:', details.reason);
         
+        // 设置卸载页面 URL - 提醒用户数据已丢失
+        // 使用 GitHub Pages 托管卸载页面
+        try {
+            chrome.runtime.setUninstallURL('https://ddu-studious.github.io/chrome-time-background/uninstall.html');
+            console.log('卸载页面 URL 已设置');
+        } catch (error) {
+            console.warn('设置卸载页面失败:', error);
+        }
+        
         // 初始化默认设置
         if (details.reason === 'install') {
             await chrome.storage.sync.set({
@@ -672,6 +773,15 @@
                     defaultReminderTime: '09:00',
                     showOverdueFirst: true,
                     reminderAdvanceMinutes: 30
+                }
+            });
+            
+            // 初始化备份设置
+            await chrome.storage.local.set({
+                backupSettings: {
+                    autoRemindBackup: true,
+                    lastBackupDate: null,
+                    backupReminderDays: 7  // 每7天提醒一次
                 }
             });
         }
@@ -696,6 +806,9 @@
                 break;
             case 'check-overdue':
                 await checkOverdueTasks();
+                break;
+            case 'check-backup-reminder':
+                await checkBackupReminder();
                 break;
             default:
                 // 处理单个任务提醒
@@ -722,6 +835,20 @@
             }
             
             // 清除通知
+            await chrome.notifications.clear(notificationId);
+        }
+        
+        // 处理备份提醒通知
+        if (notificationId === 'backup-reminder') {
+            if (buttonIndex === 0) {
+                // 立即备份 - 打开新标签页并触发备份
+                await chrome.tabs.create({ url: 'chrome://newtab/' });
+                // 发送消息给前端触发备份面板
+                // 由于新标签页可能还没加载完，使用 storage 来传递意图
+                await chrome.storage.local.set({ pendingAction: 'openBackupPanel' });
+            }
+            // 稍后提醒 - 什么都不做，下次检查时会再提醒
+            
             await chrome.notifications.clear(notificationId);
         }
     });

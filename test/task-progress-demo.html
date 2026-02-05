@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>任务进度展示方案 Demo</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #1a1c2e 0%, #2d3561 50%, #1a1c2e 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+            color: #fff;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 16px;
+            font-size: 28px;
+            color: rgba(255, 255, 255, 0.95);
+        }
+
+        .description {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 40px;
+            font-size: 14px;
+        }
+
+        .demo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .demo-card {
+            background: linear-gradient(
+                135deg,
+                rgba(255, 255, 255, 0.08) 0%,
+                rgba(255, 255, 255, 0.03) 100%
+            );
+            backdrop-filter: blur(24px);
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .demo-card h2 {
+            font-size: 18px;
+            margin-bottom: 8px;
+            color: rgba(255, 255, 255, 0.95);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .demo-card h2 .badge {
+            font-size: 12px;
+            padding: 2px 8px;
+            background: rgba(99, 102, 241, 0.3);
+            border-radius: 12px;
+            font-weight: normal;
+        }
+
+        .demo-card .demo-desc {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 13px;
+            margin-bottom: 20px;
+        }
+
+        .task-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        /* ===== 通用任务项样式 ===== */
+        .task-item {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 16px;
+            border-left: 4px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .task-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .task-item.priority-high {
+            border-left-color: #ff6b6b;
+        }
+
+        .task-item.priority-medium {
+            border-left-color: #ffc857;
+        }
+
+        .task-item.priority-low {
+            border-left-color: #5cd85c;
+        }
+
+        .task-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .task-title {
+            font-size: 15px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.9);
+            flex: 1;
+        }
+
+        .task-meta {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 8px;
+        }
+
+        .task-meta i {
+            margin-right: 4px;
+        }
+
+        /* ===== 方案1: 数字分数式 (1/5) ===== */
+        .progress-fraction {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 14px;
+        }
+
+        .progress-fraction .current {
+            color: #6366f1;
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .progress-fraction .divider {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .progress-fraction .total {
+            font-weight: 500;
+        }
+
+        .progress-fraction-bar {
+            flex: 1;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-left: 8px;
+        }
+
+        .progress-fraction-bar .fill {
+            height: 100%;
+            background: linear-gradient(90deg, #6366f1, #8b5cf6);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+
+        /* ===== 方案2: 百分比圆环 ===== */
+        .progress-circle {
+            position: relative;
+            width: 48px;
+            height: 48px;
+            flex-shrink: 0;
+        }
+
+        .progress-circle svg {
+            transform: rotate(-90deg);
+        }
+
+        .progress-circle .bg {
+            fill: none;
+            stroke: rgba(255, 255, 255, 0.1);
+            stroke-width: 4;
+        }
+
+        .progress-circle .progress {
+            fill: none;
+            stroke-width: 4;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 0.3s ease;
+        }
+
+        .progress-circle .percentage {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 11px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        /* 不同进度的颜色 */
+        .progress-circle[data-progress="low"] .progress { stroke: #ff6b6b; }
+        .progress-circle[data-progress="medium"] .progress { stroke: #ffc857; }
+        .progress-circle[data-progress="high"] .progress { stroke: #5cd85c; }
+        .progress-circle[data-progress="complete"] .progress { stroke: #10b981; }
+
+        /* ===== 方案3: 步骤条/检查点 ===== */
+        .progress-steps {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-top: 12px;
+        }
+
+        .progress-step {
+            flex: 1;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-step.completed {
+            background: linear-gradient(90deg, #6366f1, #8b5cf6);
+        }
+
+        .progress-step.current {
+            background: rgba(99, 102, 241, 0.3);
+        }
+
+        .progress-step.current::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 50%;
+            background: linear-gradient(90deg, #6366f1, #8b5cf6);
+            border-radius: 4px;
+        }
+
+        .progress-steps-label {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 6px;
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        /* ===== 方案4: 子任务清单式 ===== */
+        .subtask-list {
+            margin-top: 12px;
+            padding-left: 8px;
+            border-left: 2px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .subtask-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .subtask-item.completed {
+            color: rgba(255, 255, 255, 0.4);
+            text-decoration: line-through;
+        }
+
+        .subtask-checkbox {
+            width: 18px;
+            height: 18px;
+            border-radius: 4px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .subtask-checkbox:hover {
+            border-color: #6366f1;
+        }
+
+        .subtask-item.completed .subtask-checkbox {
+            background: #6366f1;
+            border-color: #6366f1;
+        }
+
+        .subtask-checkbox i {
+            font-size: 10px;
+            color: #fff;
+        }
+
+        .subtask-summary {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px dashed rgba(255, 255, 255, 0.1);
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .subtask-summary .count {
+            color: #6366f1;
+            font-weight: 600;
+        }
+
+        /* ===== 方案5: 进度条+数字混合式 ===== */
+        .progress-hybrid {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .progress-hybrid-bar {
+            flex: 1;
+            height: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-hybrid-bar .fill {
+            height: 100%;
+            border-radius: 5px;
+            transition: width 0.3s ease;
+            position: relative;
+        }
+
+        .progress-hybrid-bar .fill.gradient-blue {
+            background: linear-gradient(90deg, #6366f1, #8b5cf6);
+        }
+
+        .progress-hybrid-bar .fill.gradient-green {
+            background: linear-gradient(90deg, #10b981, #34d399);
+        }
+
+        .progress-hybrid-bar .fill.gradient-orange {
+            background: linear-gradient(90deg, #f59e0b, #fbbf24);
+        }
+
+        .progress-hybrid-bar .fill.animated {
+            background-size: 20px 20px;
+            background-image: linear-gradient(
+                45deg,
+                rgba(255, 255, 255, 0.15) 25%,
+                transparent 25%,
+                transparent 50%,
+                rgba(255, 255, 255, 0.15) 50%,
+                rgba(255, 255, 255, 0.15) 75%,
+                transparent 75%,
+                transparent
+            );
+            animation: progress-stripe 1s linear infinite;
+        }
+
+        @keyframes progress-stripe {
+            from { background-position: 0 0; }
+            to { background-position: 20px 0; }
+        }
+
+        .progress-hybrid-text {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            min-width: 60px;
+        }
+
+        .progress-hybrid-text .percentage {
+            font-size: 16px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .progress-hybrid-text .detail {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        /* ===== 交互演示控件 ===== */
+        .demo-controls {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .demo-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .demo-btn.primary {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: #fff;
+        }
+
+        .demo-btn.primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+        }
+
+        .demo-btn.secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .demo-btn.secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        /* ===== 推荐标签 ===== */
+        .recommend-tag {
+            background: linear-gradient(135deg, #10b981, #34d399);
+            color: #fff;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 500;
+        }
+
+        /* ===== 底部总结 ===== */
+        .summary-section {
+            background: linear-gradient(
+                135deg,
+                rgba(99, 102, 241, 0.15) 0%,
+                rgba(139, 92, 246, 0.1) 100%
+            );
+            border-radius: 16px;
+            padding: 24px;
+            margin-top: 40px;
+            border: 1px solid rgba(99, 102, 241, 0.2);
+        }
+
+        .summary-section h3 {
+            font-size: 18px;
+            margin-bottom: 16px;
+            color: rgba(255, 255, 255, 0.95);
+        }
+
+        .summary-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .summary-table th,
+        .summary-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .summary-table th {
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 500;
+            font-size: 13px;
+        }
+
+        .summary-table td {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 14px;
+        }
+
+        .summary-table .pros {
+            color: #34d399;
+        }
+
+        .summary-table .cons {
+            color: #f87171;
+        }
+
+        /* ===== 投票按钮 ===== */
+        .vote-section {
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .vote-section h4 {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 16px;
+        }
+
+        .vote-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .vote-btn {
+            padding: 12px 20px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.8);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+
+        .vote-btn:hover {
+            border-color: #6366f1;
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .vote-btn.selected {
+            border-color: #6366f1;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.2));
+            color: #fff;
+        }
+
+        .vote-btn i {
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1><i class="fas fa-tasks"></i> 任务进度展示方案 Demo</h1>
+        <p class="description">以下展示 5 种不同的任务完成进度展示风格，请选择您最喜欢的方案</p>
+
+        <div class="demo-grid">
+            <!-- 方案1: 数字分数式 -->
+            <div class="demo-card">
+                <h2>
+                    <i class="fas fa-hashtag"></i> 方案1: 数字分数式
+                    <span class="badge">简洁直观</span>
+                </h2>
+                <p class="demo-desc">使用 "已完成/总数" 的形式展示进度，配合小型进度条</p>
+                
+                <div class="task-list">
+                    <div class="task-item priority-high">
+                        <div class="task-header">
+                            <div class="task-title">会员中心等级模块支持鸿蒙</div>
+                            <div class="progress-fraction">
+                                <span class="current">3</span>
+                                <span class="divider">/</span>
+                                <span class="total">5</span>
+                                <div class="progress-fraction-bar">
+                                    <div class="fill" style="width: 60%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="task-meta">
+                            <span><i class="far fa-calendar"></i> 2026-02-05</span>
+                            <span class="task-priority-tag" style="background:#ff6b6b">高</span>
+                        </div>
+                    </div>
+                    
+                    <div class="task-item priority-medium">
+                        <div class="task-header">
+                            <div class="task-title">调研飞书文档块替换能力</div>
+                            <div class="progress-fraction">
+                                <span class="current">1</span>
+                                <span class="divider">/</span>
+                                <span class="total">3</span>
+                                <div class="progress-fraction-bar">
+                                    <div class="fill" style="width: 33%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="task-meta">
+                            <span><i class="far fa-calendar"></i> 2026-02-06</span>
+                            <span class="task-priority-tag" style="background:#ffc857">中</span>
+                        </div>
+                    </div>
+
+                    <div class="task-item priority-low">
+                        <div class="task-header">
+                            <div class="task-title">优化首页加载性能</div>
+                            <div class="progress-fraction">
+                                <span class="current">5</span>
+                                <span class="divider">/</span>
+                                <span class="total">5</span>
+                                <div class="progress-fraction-bar">
+                                    <div class="fill" style="width: 100%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="task-meta">
+                            <span><i class="far fa-calendar"></i> 2026-02-04</span>
+                            <span class="task-priority-tag" style="background:#5cd85c">低</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 方案2: 百分比圆环 -->
+            <div class="demo-card">
+                <h2>
+                    <i class="fas fa-circle-notch"></i> 方案2: 百分比圆环
+                    <span class="recommend-tag">推荐</span>
+                </h2>
+                <p class="demo-desc">使用圆形进度环展示完成百分比，视觉效果突出</p>
+                
+                <div class="task-list">
+                    <div class="task-item priority-high">
+                        <div class="task-header">
+                            <div class="progress-circle" data-progress="medium">
+                                <svg width="48" height="48">
+                                    <circle class="bg" cx="24" cy="24" r="20"></circle>
+                                    <circle class="progress" cx="24" cy="24" r="20" 
+                                            stroke-dasharray="125.6" stroke-dashoffset="50.24"></circle>
+                                </svg>
+                                <span class="percentage">60%</span>
+                            </div>
+                            <div style="flex:1">
+                                <div class="task-title">会员中心等级模块支持鸿蒙</div>
+                                <div class="task-meta">
+                                    <span><i class="far fa-calendar"></i> 2026-02-05</span>
+                                    <span class="task-priority-tag" style="background:#ff6b6b">高</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="task-item priority-medium">
+                        <div class="task-header">
+                            <div class="progress-circle" data-progress="low">
+                                <svg width="48" height="48">
+                                    <circle class="bg" cx="24" cy="24" r="20"></circle>
+                                    <circle class="progress" cx="24" cy="24" r="20" 
+                                            stroke-dasharray="125.6" stroke-dashoffset="83.73"></circle>
+                                </svg>
+                                <span class="percentage">33%</span>
+                            </div>
+                            <div style="flex:1">
+                                <div class="task-title">调研飞书文档块替换能力</div>
+                                <div class="task-meta">
+                                    <span><i class="far fa-calendar"></i> 2026-02-06</span>
+                                    <span class="task-priority-tag" style="background:#ffc857">中</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="task-item priority-low">
+                        <div class="task-header">
+                            <div class="progress-circle" data-progress="complete">
+                                <svg width="48" height="48">
+                                    <circle class="bg" cx="24" cy="24" r="20"></circle>
+                                    <circle class="progress" cx="24" cy="24" r="20" 
+                                            stroke-dasharray="125.6" stroke-dashoffset="0"></circle>
+                                </svg>
+                                <span class="percentage">100%</span>
+                            </div>
+                            <div style="flex:1">
+                                <div class="task-title">优化首页加载性能</div>
+                                <div class="task-meta">
+                                    <span><i class="far fa-calendar"></i> 2026-02-04</span>
+                                    <span class="task-priority-tag" style="background:#5cd85c">低</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 方案3: 步骤条/检查点 -->
+            <div class="demo-card">
+                <h2>
+                    <i class="fas fa-shoe-prints"></i> 方案3: 步骤条式
+                    <span class="badge">阶段清晰</span>
+                </h2>
+                <p class="demo-desc">将任务拆分为多个步骤，每个步骤独立展示完成状态</p>
+                
+                <div class="task-list">
+                    <div class="task-item priority-high">
+                        <div class="task-header">
+                            <div class="task-title">会员中心等级模块支持鸿蒙</div>
+                        </div>
+                        <div class="progress-steps">
+                            <div class="progress-step completed"></div>
+                            <div class="progress-step completed"></div>
+                            <div class="progress-step completed"></div>
+                            <div class="progress-step current"></div>
+                            <div class="progress-step"></div>
+                        </div>
+                        <div class="progress-steps-label">
+                            <span>需求分析</span>
+                            <span>设计</span>
+                            <span>开发</span>
+                            <span>测试</span>
+                            <span>上线</span>
+                        </div>
+                        <div class="task-meta">
+                            <span><i class="far fa-calendar"></i> 2026-02-05</span>
+                            <span class="task-priority-tag" style="background:#ff6b6b">高</span>
+                        </div>
+                    </div>
+                    
+                    <div class="task-item priority-medium">
+                        <div class="task-header">
+                            <div class="task-title">调研飞书文档块替换能力</div>
+                        </div>
+                        <div class="progress-steps">
+                            <div class="progress-step completed"></div>
+                            <div class="progress-step current"></div>
+                            <div class="progress-step"></div>
+                        </div>
+                        <div class="progress-steps-label">
+                            <span>调研</span>
+                            <span>方案设计</span>
+                            <span>文档输出</span>
+                        </div>
+                        <div class="task-meta">
+                            <span><i class="far fa-calendar"></i> 2026-02-06</span>
+                            <span class="task-priority-tag" style="background:#ffc857">中</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 方案4: 子任务清单式 -->
+            <div class="demo-card">
+                <h2>
+                    <i class="fas fa-list-check"></i> 方案4: 子任务清单式
+                    <span class="badge">细节可控</span>
+                </h2>
+                <p class="demo-desc">展开显示所有子任务，可单独勾选每个子项</p>
+                
+                <div class="task-list">
+                    <div class="task-item priority-high">
+                        <div class="task-header">
+                            <div class="task-title">会员中心等级模块支持鸿蒙</div>
+                        </div>
+                        <div class="subtask-list">
+                            <div class="subtask-item completed">
+                                <div class="subtask-checkbox"><i class="fas fa-check"></i></div>
+                                <span>API 接口对接</span>
+                            </div>
+                            <div class="subtask-item completed">
+                                <div class="subtask-checkbox"><i class="fas fa-check"></i></div>
+                                <span>UI 组件适配</span>
+                            </div>
+                            <div class="subtask-item completed">
+                                <div class="subtask-checkbox"><i class="fas fa-check"></i></div>
+                                <span>数据存储方案</span>
+                            </div>
+                            <div class="subtask-item">
+                                <div class="subtask-checkbox"></div>
+                                <span>联调测试</span>
+                            </div>
+                            <div class="subtask-item">
+                                <div class="subtask-checkbox"></div>
+                                <span>灰度发布</span>
+                            </div>
+                        </div>
+                        <div class="subtask-summary">
+                            <span>完成 <span class="count">3/5</span> 个子任务</span>
+                        </div>
+                        <div class="task-meta">
+                            <span><i class="far fa-calendar"></i> 2026-02-05</span>
+                            <span class="task-priority-tag" style="background:#ff6b6b">高</span>
+                        </div>
+                    </div>
+                    
+                    <div class="task-item priority-medium">
+                        <div class="task-header">
+                            <div class="task-title">调研飞书文档块替换能力</div>
+                        </div>
+                        <div class="subtask-list">
+                            <div class="subtask-item completed">
+                                <div class="subtask-checkbox"><i class="fas fa-check"></i></div>
+                                <span>收集竞品方案</span>
+                            </div>
+                            <div class="subtask-item">
+                                <div class="subtask-checkbox"></div>
+                                <span>测试 API 可行性</span>
+                            </div>
+                            <div class="subtask-item">
+                                <div class="subtask-checkbox"></div>
+                                <span>输出调研文档</span>
+                            </div>
+                        </div>
+                        <div class="subtask-summary">
+                            <span>完成 <span class="count">1/3</span> 个子任务</span>
+                        </div>
+                        <div class="task-meta">
+                            <span><i class="far fa-calendar"></i> 2026-02-06</span>
+                            <span class="task-priority-tag" style="background:#ffc857">中</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 方案5: 进度条+数字混合式 -->
+            <div class="demo-card">
+                <h2>
+                    <i class="fas fa-bars-progress"></i> 方案5: 进度条混合式
+                    <span class="recommend-tag">推荐</span>
+                </h2>
+                <p class="demo-desc">大进度条配合百分比数字，支持动画效果，视觉冲击力强</p>
+                
+                <div class="task-list">
+                    <div class="task-item priority-high">
+                        <div class="task-header">
+                            <div class="task-title">会员中心等级模块支持鸿蒙</div>
+                        </div>
+                        <div class="progress-hybrid">
+                            <div class="progress-hybrid-bar">
+                                <div class="fill gradient-blue animated" style="width: 60%"></div>
+                            </div>
+                            <div class="progress-hybrid-text">
+                                <span class="percentage">60%</span>
+                                <span class="detail">3/5 完成</span>
+                            </div>
+                        </div>
+                        <div class="task-meta">
+                            <span><i class="far fa-calendar"></i> 2026-02-05</span>
+                            <span class="task-priority-tag" style="background:#ff6b6b">高</span>
+                        </div>
+                    </div>
+                    
+                    <div class="task-item priority-medium">
+                        <div class="task-header">
+                            <div class="task-title">调研飞书文档块替换能力</div>
+                        </div>
+                        <div class="progress-hybrid">
+                            <div class="progress-hybrid-bar">
+                                <div class="fill gradient-orange" style="width: 33%"></div>
+                            </div>
+                            <div class="progress-hybrid-text">
+                                <span class="percentage">33%</span>
+                                <span class="detail">1/3 完成</span>
+                            </div>
+                        </div>
+                        <div class="task-meta">
+                            <span><i class="far fa-calendar"></i> 2026-02-06</span>
+                            <span class="task-priority-tag" style="background:#ffc857">中</span>
+                        </div>
+                    </div>
+
+                    <div class="task-item priority-low">
+                        <div class="task-header">
+                            <div class="task-title">优化首页加载性能</div>
+                        </div>
+                        <div class="progress-hybrid">
+                            <div class="progress-hybrid-bar">
+                                <div class="fill gradient-green" style="width: 100%"></div>
+                            </div>
+                            <div class="progress-hybrid-text">
+                                <span class="percentage">100%</span>
+                                <span class="detail">5/5 完成</span>
+                            </div>
+                        </div>
+                        <div class="task-meta">
+                            <span><i class="far fa-calendar"></i> 2026-02-04</span>
+                            <span class="task-priority-tag" style="background:#5cd85c">低</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 方案对比总结 -->
+        <div class="summary-section">
+            <h3><i class="fas fa-balance-scale"></i> 方案对比总结</h3>
+            <table class="summary-table">
+                <thead>
+                    <tr>
+                        <th>方案</th>
+                        <th>适用场景</th>
+                        <th class="pros">优点</th>
+                        <th class="cons">缺点</th>
+                        <th>实现复杂度</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>数字分数式</strong></td>
+                        <td>任务拆分明确，子项数量固定</td>
+                        <td class="pros">简洁直观，占用空间小</td>
+                        <td class="cons">视觉效果一般</td>
+                        <td>⭐ 简单</td>
+                    </tr>
+                    <tr>
+                        <td><strong>百分比圆环</strong></td>
+                        <td>需要突出进度的场景</td>
+                        <td class="pros">视觉效果好，一目了然</td>
+                        <td class="cons">占用横向空间</td>
+                        <td>⭐⭐ 中等</td>
+                    </tr>
+                    <tr>
+                        <td><strong>步骤条式</strong></td>
+                        <td>流程化任务，阶段明确</td>
+                        <td class="pros">阶段清晰，进度直观</td>
+                        <td class="cons">需要预定义步骤</td>
+                        <td>⭐⭐ 中等</td>
+                    </tr>
+                    <tr>
+                        <td><strong>子任务清单式</strong></td>
+                        <td>需要细分管理的复杂任务</td>
+                        <td class="pros">细节可控，灵活性高</td>
+                        <td class="cons">展开后占用空间大</td>
+                        <td>⭐⭐⭐ 复杂</td>
+                    </tr>
+                    <tr>
+                        <td><strong>进度条混合式</strong></td>
+                        <td>通用场景，追求视觉效果</td>
+                        <td class="pros">信息完整，动画吸引眼球</td>
+                        <td class="cons">稍占用纵向空间</td>
+                        <td>⭐⭐ 中等</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="vote-section">
+                <h4><i class="fas fa-hand-pointer"></i> 请选择您最喜欢的方案（可多选）：</h4>
+                <div class="vote-buttons">
+                    <button class="vote-btn" data-scheme="1" onclick="toggleVote(this)">
+                        <i class="fas fa-hashtag"></i> 方案1: 数字分数式
+                    </button>
+                    <button class="vote-btn" data-scheme="2" onclick="toggleVote(this)">
+                        <i class="fas fa-circle-notch"></i> 方案2: 百分比圆环
+                    </button>
+                    <button class="vote-btn" data-scheme="3" onclick="toggleVote(this)">
+                        <i class="fas fa-shoe-prints"></i> 方案3: 步骤条式
+                    </button>
+                    <button class="vote-btn" data-scheme="4" onclick="toggleVote(this)">
+                        <i class="fas fa-list-check"></i> 方案4: 子任务清单
+                    </button>
+                    <button class="vote-btn" data-scheme="5" onclick="toggleVote(this)">
+                        <i class="fas fa-bars-progress"></i> 方案5: 进度条混合
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleVote(btn) {
+            btn.classList.toggle('selected');
+            
+            // 输出选中的方案
+            const selected = document.querySelectorAll('.vote-btn.selected');
+            const schemes = Array.from(selected).map(b => b.dataset.scheme);
+            console.log('选中的方案:', schemes);
+        }
+
+        // 模拟子任务点击
+        document.querySelectorAll('.subtask-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('click', function() {
+                const item = this.closest('.subtask-item');
+                item.classList.toggle('completed');
+                
+                if (item.classList.contains('completed')) {
+                    this.innerHTML = '<i class="fas fa-check"></i>';
+                } else {
+                    this.innerHTML = '';
+                }
+
+                // 更新汇总
+                const list = item.closest('.subtask-list');
+                const total = list.querySelectorAll('.subtask-item').length;
+                const completed = list.querySelectorAll('.subtask-item.completed').length;
+                const summary = list.nextElementSibling;
+                if (summary && summary.classList.contains('subtask-summary')) {
+                    summary.querySelector('.count').textContent = `${completed}/${total}`;
+                }
+            });
+        });
+    </script>
+</body>
+</html>

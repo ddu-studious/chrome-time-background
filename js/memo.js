@@ -112,44 +112,194 @@ class MemoManager {
     async init() {
         console.log('开始初始化备忘录管理器...');
         
+        // 设置全局错误处理，防止未捕获的错误导致崩溃
+        this.setupGlobalErrorHandler();
+        
         try {
-            // 加载备忘录数据
-            await Promise.all([
-                this.loadMemos(),
-                this.loadCategories(),
-                this.loadTags()
-            ]);
+            // 加载备忘录数据（每个加载独立 try-catch，避免单点失败）
+            await this.safeLoadData();
             
             console.log('备忘录数据加载完成，开始创建UI');
             console.log('备忘录数量:', this.memos.length);
             console.log('分类数量:', this.categories.length);
             console.log('标签数量:', this.tags.length);
             
+            // 检查数据健康状况
+            await this.validateAndRepairData();
+            
             // 渲染到侧边栏（新的双栏布局）
-            this.renderSidebarContent();
-            console.log('侧边栏内容渲染完成');
+            try {
+                this.renderSidebarContent();
+                console.log('侧边栏内容渲染完成');
+            } catch (renderError) {
+                console.error('侧边栏渲染失败，尝试降级渲染:', renderError);
+                this.renderFallbackUI();
+            }
             
             // 恢复侧边栏折叠状态
-            await this.restoreSidebarState();
+            try {
+                await this.restoreSidebarState();
+            } catch (e) {
+                console.warn('恢复侧边栏状态失败:', e);
+            }
 
             // 折叠态：左侧抽出按钮 + 靠近自动展开/远离自动收起
-            this.ensureSidebarCollapseUI();
+            try {
+                this.ensureSidebarCollapseUI();
+            } catch (e) {
+                console.warn('折叠UI初始化失败:', e);
+            }
             
             // 初始化键盘快捷键
-            this.initKeyboardShortcuts();
-            console.log('键盘快捷键初始化完成');
+            try {
+                this.initKeyboardShortcuts();
+                console.log('键盘快捷键初始化完成');
+            } catch (e) {
+                console.warn('键盘快捷键初始化失败:', e);
+            }
             
             // 更新排序选项的名称
-            this.updateSortOptionNames();
-            console.log('排序选项名称更新完成');
+            try {
+                this.updateSortOptionNames();
+                console.log('排序选项名称更新完成');
+            } catch (e) {
+                console.warn('排序选项名称更新失败:', e);
+            }
             
             console.log('备忘录管理器初始化完成');
             this.initialized = true;
             
+            // 检查备份提醒
+            this.checkBackupReminder();
+            
             return true;
         } catch (error) {
             console.error('备忘录初始化失败:', error);
-            throw error;
+            // 即使失败也标记为已初始化，避免重复初始化
+            this.initialized = true;
+            this.renderFallbackUI();
+            return false;
+        }
+    }
+    
+    /**
+     * 设置全局错误处理器
+     */
+    setupGlobalErrorHandler() {
+        // 防止重复设置
+        if (this._errorHandlerSetup) return;
+        this._errorHandlerSetup = true;
+        
+        // 捕获未处理的 Promise 错误
+        window.addEventListener('unhandledrejection', (event) => {
+            console.error('未处理的 Promise 错误:', event.reason);
+            // 阻止默认行为（避免控制台报错）
+            event.preventDefault();
+        });
+        
+        // 捕获全局错误
+        window.addEventListener('error', (event) => {
+            // 只处理来自 memo.js 的错误
+            if (event.filename && event.filename.includes('memo.js')) {
+                console.error('备忘录模块错误:', event.message);
+                event.preventDefault();
+            }
+        });
+    }
+    
+    /**
+     * 安全加载数据
+     */
+    async safeLoadData() {
+        // 使用 Promise.allSettled 替代 Promise.all，避免单个失败导致全部失败
+        const results = await Promise.allSettled([
+            this.loadMemos(),
+            this.loadCategories(),
+            this.loadTags()
+        ]);
+        
+        results.forEach((result, index) => {
+            if (result.status === 'rejected') {
+                const names = ['备忘录', '分类', '标签'];
+                console.error(`加载${names[index]}失败:`, result.reason);
+            }
+        });
+    }
+    
+    /**
+     * 验证并修复数据
+     */
+    async validateAndRepairData() {
+        let needsSave = false;
+        
+        // 检查并修复损坏的数据
+        this.memos = this.memos.filter(memo => {
+            // 过滤掉无效数据
+            if (!memo || typeof memo !== 'object') {
+                console.warn('发现无效备忘录数据，已过滤');
+                needsSave = true;
+                return false;
+            }
+            
+            // 确保 ID 存在
+            if (!memo.id) {
+                memo.id = this.generateId();
+                needsSave = true;
+            }
+            
+            // 确保必要字段存在
+            memo.title = memo.title || '';
+            memo.text = memo.text || '';
+            memo.completed = !!memo.completed;
+            memo.createdAt = memo.createdAt || Date.now();
+            memo.updatedAt = memo.updatedAt || Date.now();
+            
+            // 进度字段迁移（v1.6.0 新增）
+            // progress: number (0-100 百分比) 或 null
+            if (memo.progress !== undefined && memo.progress !== null) {
+                // 兼容旧格式 { current, total } 转换为纯百分比
+                if (typeof memo.progress === 'object' && memo.progress.total) {
+                    memo.progress = Math.round((memo.progress.current / memo.progress.total) * 100);
+                }
+                // 确保是 0-100 的数字
+                memo.progress = Math.max(0, Math.min(100, parseInt(memo.progress) || 0));
+            }
+            
+            // 检查图片数据是否损坏
+            if (memo.images && Array.isArray(memo.images)) {
+                memo.images = memo.images.filter(img => {
+                    // 过滤掉损坏的图片数据
+                    if (!img || (!img.thumbnail && !img.fullImage)) {
+                        console.warn('发现损坏的图片数据，已过滤');
+                        needsSave = true;
+                        return false;
+                    }
+                    return true;
+                });
+            }
+            
+            return true;
+        });
+        
+        if (needsSave) {
+            console.log('数据已修复，保存中...');
+            await this.saveMemos();
+        }
+    }
+    
+    /**
+     * 降级 UI 渲染
+     */
+    renderFallbackUI() {
+        const sidebarContent = document.getElementById('sidebar-content');
+        if (sidebarContent) {
+            sidebarContent.innerHTML = `
+                <div class="sidebar-error">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>任务列表加载出现问题</p>
+                    <button onclick="window.memoManager.init()">重新加载</button>
+                </div>
+            `;
         }
     }
     
@@ -180,6 +330,15 @@ class MemoManager {
             </button>
             <button class="sidebar-tool-btn" id="sidebar-stats-btn" title="统计分析">
                 <i class="fas fa-chart-line"></i>
+            </button>
+            <button class="sidebar-tool-btn" id="sidebar-calendar-btn" title="日历 / 回看完成">
+                <i class="fas fa-calendar-days"></i>
+            </button>
+            <button class="sidebar-tool-btn" id="sidebar-backup-btn" title="备份与恢复">
+                <i class="fas fa-cloud-download-alt"></i>
+            </button>
+            <button class="sidebar-tool-btn" id="sidebar-about-btn" title="关于与帮助">
+                <i class="fas fa-info-circle"></i>
             </button>
             <button class="sidebar-settings-btn" id="sidebar-settings-btn" title="管理分类">
                 <i class="fas fa-cog"></i>
@@ -260,6 +419,28 @@ class MemoManager {
                             ${this.categories.map(cat => `<option value="${cat.id}">${this.escapeHtml(cat.name)}</option>`).join('')}
                         </select>
                     </div>
+                    <div class="form-group progress-group">
+                        <label>
+                            <input type="checkbox" id="sidebar-task-progress-enable">
+                            启用进度追踪
+                        </label>
+                        <div class="progress-inputs hidden" id="progress-inputs">
+                            <div class="progress-slider-row">
+                                <input type="range" id="sidebar-task-progress-slider" 
+                                       min="0" max="100" value="0" step="1" class="progress-slider">
+                                <div class="progress-percent-input">
+                                    <input type="number" id="sidebar-task-progress-percent" 
+                                           min="0" max="100" value="0" class="progress-number-input">
+                                    <span class="percent-sign">%</span>
+                                </div>
+                            </div>
+                            <div class="progress-preview">
+                                <div class="progress-preview-bar">
+                                    <div class="progress-preview-fill" id="progress-preview-fill" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="sidebar-form-footer">
                     <button class="btn-cancel" id="sidebar-form-cancel">取消</button>
@@ -320,6 +501,24 @@ class MemoManager {
         if (statsBtn) {
             statsBtn.addEventListener('click', () => this.showTaskStatistics());
         }
+
+        // 日历按钮
+        const calendarBtn = document.getElementById('sidebar-calendar-btn');
+        if (calendarBtn) {
+            calendarBtn.addEventListener('click', () => this.showCalendarPanel());
+        }
+        
+        // 备份与恢复按钮
+        const backupBtn = document.getElementById('sidebar-backup-btn');
+        if (backupBtn) {
+            backupBtn.addEventListener('click', () => this.showBackupPanel());
+        }
+        
+        // 关于与帮助按钮
+        const aboutBtn = document.getElementById('sidebar-about-btn');
+        if (aboutBtn) {
+            aboutBtn.addEventListener('click', () => this.showAboutPanel());
+        }
         
         // 设置按钮（分类管理）
         const settingsBtn = document.getElementById('sidebar-settings-btn');
@@ -347,6 +546,37 @@ class MemoManager {
                     e.preventDefault();
                     this.saveSidebarTask();
                 }
+            });
+        }
+        
+        // 进度追踪开关
+        const progressEnable = document.getElementById('sidebar-task-progress-enable');
+        const progressInputs = document.getElementById('progress-inputs');
+        if (progressEnable && progressInputs) {
+            progressEnable.addEventListener('change', () => {
+                progressInputs.classList.toggle('hidden', !progressEnable.checked);
+                if (progressEnable.checked) {
+                    this.updateProgressPreview();
+                }
+            });
+        }
+        
+        // 进度滑块拖动
+        const progressSlider = document.getElementById('sidebar-task-progress-slider');
+        const progressPercent = document.getElementById('sidebar-task-progress-percent');
+        if (progressSlider) {
+            progressSlider.addEventListener('input', () => this.updateProgressFromSlider());
+        }
+        
+        // 进度百分比输入
+        if (progressPercent) {
+            progressPercent.addEventListener('input', () => this.updateProgressFromPercent());
+            // 失去焦点时确保值在有效范围内
+            progressPercent.addEventListener('blur', () => {
+                let value = parseInt(progressPercent.value) || 0;
+                value = Math.max(0, Math.min(100, value));
+                progressPercent.value = value;
+                this.updateProgressFromPercent();
             });
         }
         
@@ -493,9 +723,23 @@ class MemoManager {
     }
     
     /**
-     * 渲染侧边栏任务列表
+     * 渲染侧边栏任务列表（带防抖）
      */
     renderSidebarTaskList() {
+        // 防抖：避免频繁渲染导致的性能问题和潜在崩溃
+        if (this._renderDebounceTimer) {
+            clearTimeout(this._renderDebounceTimer);
+        }
+        
+        this._renderDebounceTimer = setTimeout(() => {
+            this._doRenderSidebarTaskList();
+        }, 16); // 约等于一帧的时间
+    }
+    
+    /**
+     * 实际执行侧边栏任务列表渲染
+     */
+    _doRenderSidebarTaskList() {
         const container = document.getElementById('sidebar-task-list');
         if (!container) return;
         
@@ -855,7 +1099,8 @@ class MemoManager {
         const day = d.getDay();
         const diff = d.getDate() - day + (day === 0 ? -6 : 1); // 调整到周一
         d.setDate(diff);
-        return d.toISOString().split('T')[0];
+        d.setHours(0, 0, 0, 0);
+        return this.formatLocalDateYMD(d);
     }
     
     /**
@@ -866,7 +1111,8 @@ class MemoManager {
     getDateString(offset) {
         const date = new Date();
         date.setDate(date.getDate() + offset);
-        return date.toISOString().split('T')[0];
+        date.setHours(0, 0, 0, 0);
+        return this.formatLocalDateYMD(date);
     }
     
     /**
@@ -876,7 +1122,7 @@ class MemoManager {
      */
     formatDateFromTimestamp(timestamp) {
         if (!timestamp) return null;
-        return new Date(timestamp).toISOString().split('T')[0];
+        return this.formatLocalDateYMD(new Date(timestamp));
     }
     
     /**
@@ -1050,14 +1296,14 @@ class MemoManager {
         const priorityColor = priorityColors[task.priority] || 'transparent';
         const priorityLabels = { high: '高', medium: '中', low: '低' };
         
-        // 生成图片预览 HTML
+        // 生成图片预览 HTML（使用懒加载占位符，避免 Base64 直接嵌入 DOM 导致内存问题）
         let imagesHtml = '';
         if (task.images && task.images.length > 0) {
             const displayImages = task.images.slice(0, 3);
             const moreCount = task.images.length - 3;
             imagesHtml = `
                 <div class="task-images" data-task-id="${task.id}">
-                    ${displayImages.map((img, idx) => `<img src="${img.thumbnail}" alt="图片" data-image-index="${idx}" class="task-image-preview">`).join('')}
+                    ${displayImages.map((img, idx) => `<img data-src="${img.id}" data-image-index="${idx}" class="task-image-preview task-image-lazy" alt="图片" loading="lazy">`).join('')}
                     ${moreCount > 0 ? `<span class="task-images-more">+${moreCount}</span>` : ''}
                 </div>
             `;
@@ -1065,6 +1311,27 @@ class MemoManager {
         
         // 获取分类名称
         const categoryName = task.categoryId ? this.getCategoryName(task.categoryId) : '';
+        
+        // 生成进度条 HTML（纯百分比模式）
+        let progressHtml = '';
+        if (task.progress !== null && task.progress !== undefined) {
+            const percentage = parseInt(task.progress) || 0;
+            let progressClass = 'low';
+            if (percentage === 100) progressClass = 'complete';
+            else if (percentage >= 60) progressClass = 'high';
+            else if (percentage >= 30) progressClass = 'medium';
+            
+            progressHtml = `
+                <div class="task-progress">
+                    <div class="task-progress-bar">
+                        <div class="task-progress-fill ${progressClass}" style="width: ${percentage}%"></div>
+                    </div>
+                    <div class="task-progress-text">
+                        <span class="task-progress-percentage">${percentage}%</span>
+                    </div>
+                </div>
+            `;
+        }
         
         item.innerHTML = `
             <div class="task-checkbox" title="${task.completed ? '标记为未完成' : '标记为已完成'}">
@@ -1076,6 +1343,7 @@ class MemoManager {
                     <div class="task-title">${this.escapeHtml(task.title || '无标题')}</div>
                 </div>
                 ${task.text ? `<div class="task-desc">${this.escapeHtml(task.text.substring(0, 60))}${task.text.length > 60 ? '...' : ''}</div>` : ''}
+                ${progressHtml}
                 ${imagesHtml}
                 <div class="task-meta">
                     ${categoryName ? `<span class="task-category-tag"><i class="fas fa-folder"></i> ${this.escapeHtml(categoryName)}</span>` : ''}
@@ -1121,9 +1389,64 @@ class MemoManager {
                     this.showImageLightbox(task.images, idx);
                 }
             });
+            
+            // 图片懒加载：使用 IntersectionObserver 延迟加载图片，避免大量 Base64 阻塞主线程
+            this.setupImageLazyLoad(item, task);
         }
         
         return item;
+    }
+    
+    /**
+     * 设置图片懒加载
+     * @param {HTMLElement} item 任务项元素
+     * @param {Object} task 任务对象
+     */
+    setupImageLazyLoad(item, task) {
+        if (!task.images || task.images.length === 0) return;
+        
+        const lazyImages = item.querySelectorAll('.task-image-lazy');
+        if (lazyImages.length === 0) return;
+        
+        // 使用 IntersectionObserver 实现懒加载
+        if ('IntersectionObserver' in window) {
+            const observer = new IntersectionObserver((entries, obs) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const img = entry.target;
+                        const imageId = img.dataset.src;
+                        const imageData = task.images.find(i => i.id === imageId);
+                        if (imageData && imageData.thumbnail) {
+                            // 使用 requestIdleCallback 在空闲时加载，避免阻塞
+                            const loadImage = () => {
+                                img.src = imageData.thumbnail;
+                                img.classList.remove('task-image-lazy');
+                            };
+                            if ('requestIdleCallback' in window) {
+                                requestIdleCallback(loadImage, { timeout: 500 });
+                            } else {
+                                setTimeout(loadImage, 50);
+                            }
+                        }
+                        obs.unobserve(img);
+                    }
+                });
+            }, { rootMargin: '100px' });
+            
+            lazyImages.forEach(img => observer.observe(img));
+        } else {
+            // 降级处理：直接加载（针对不支持 IntersectionObserver 的旧浏览器）
+            lazyImages.forEach(img => {
+                const imageId = img.dataset.src;
+                const imageData = task.images.find(i => i.id === imageId);
+                if (imageData && imageData.thumbnail) {
+                    setTimeout(() => {
+                        img.src = imageData.thumbnail;
+                        img.classList.remove('task-image-lazy');
+                    }, 100);
+                }
+            });
+        }
     }
     
     /**
@@ -1644,6 +1967,1169 @@ class MemoManager {
                 this.bindStatsPanelEvents(panel);
             });
         }
+    }
+
+    // ==================== 数据备份与恢复 ====================
+
+    /**
+     * 显示备份与恢复面板
+     */
+    showBackupPanel() {
+        const existingPanel = document.getElementById('backup-panel');
+        if (existingPanel) existingPanel.remove();
+
+        const panel = document.createElement('div');
+        panel.id = 'backup-panel';
+        panel.className = 'backup-panel';
+
+        // 计算存储使用情况
+        const dataStr = JSON.stringify(this.memos);
+        const sizeBytes = new Blob([dataStr]).size;
+        const sizeKB = (sizeBytes / 1024).toFixed(1);
+        const sizeMB = (sizeBytes / (1024 * 1024)).toFixed(2);
+        
+        // 获取上次备份时间
+        const lastBackupTime = localStorage.getItem('lastBackupTime');
+        const lastBackupStr = lastBackupTime 
+            ? new Date(parseInt(lastBackupTime)).toLocaleString('zh-CN')
+            : '从未备份';
+
+        panel.innerHTML = `
+            <div class="backup-overlay"></div>
+            <div class="backup-content">
+                <div class="backup-header">
+                    <h3><i class="fas fa-cloud-download-alt"></i> 数据备份与恢复</h3>
+                    <button class="backup-close" id="backup-close"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="backup-body">
+                    <div class="backup-info">
+                        <div class="backup-stat">
+                            <span class="stat-label">任务总数</span>
+                            <span class="stat-value">${this.memos.length}</span>
+                        </div>
+                        <div class="backup-stat">
+                            <span class="stat-label">数据大小</span>
+                            <span class="stat-value">${sizeMB > 1 ? sizeMB + ' MB' : sizeKB + ' KB'}</span>
+                        </div>
+                        <div class="backup-stat">
+                            <span class="stat-label">上次备份</span>
+                            <span class="stat-value">${lastBackupStr}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="backup-section">
+                        <h4><i class="fas fa-download"></i> 导出数据</h4>
+                        <p class="backup-desc">将所有任务数据导出为 JSON 文件，保存到本地磁盘。建议定期备份以防数据丢失。</p>
+                        <div class="backup-actions">
+                            <button class="backup-btn primary" id="backup-export-all">
+                                <i class="fas fa-file-export"></i> 导出全部数据
+                            </button>
+                            <button class="backup-btn" id="backup-export-completed">
+                                <i class="fas fa-check-circle"></i> 仅导出已完成
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="backup-section">
+                        <h4><i class="fas fa-upload"></i> 导入数据</h4>
+                        <p class="backup-desc">从 JSON 备份文件恢复数据。可选择覆盖或合并现有数据。</p>
+                        <div class="backup-actions">
+                            <button class="backup-btn" id="backup-import-merge">
+                                <i class="fas fa-object-group"></i> 导入并合并
+                            </button>
+                            <button class="backup-btn danger" id="backup-import-replace">
+                                <i class="fas fa-exchange-alt"></i> 导入并覆盖
+                            </button>
+                        </div>
+                        <input type="file" id="backup-file-input" accept=".json" hidden>
+                    </div>
+                    
+                    <div class="backup-section">
+                        <h4><i class="fas fa-cog"></i> 自动备份设置</h4>
+                        <div class="backup-setting">
+                            <label class="backup-checkbox">
+                                <input type="checkbox" id="backup-auto-remind" ${this.getAutoBackupRemind() ? 'checked' : ''}>
+                                <span>每周提醒备份</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="backup-tip">
+                        <i class="fas fa-info-circle"></i>
+                        <span>提示：本扩展已启用无限存储权限，数据不会因空间不足而丢失。但仍建议定期备份到本地。</span>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(panel);
+        this.bindBackupPanelEvents(panel);
+        requestAnimationFrame(() => panel.classList.add('active'));
+    }
+
+    /**
+     * 绑定备份面板事件
+     */
+    bindBackupPanelEvents(panel) {
+        // 关闭按钮
+        const closeBtn = panel.querySelector('#backup-close');
+        const overlay = panel.querySelector('.backup-overlay');
+        
+        const closePanel = () => {
+            panel.classList.remove('active');
+            setTimeout(() => panel.remove(), 300);
+        };
+        
+        closeBtn?.addEventListener('click', closePanel);
+        overlay?.addEventListener('click', closePanel);
+        
+        // 导出全部数据
+        panel.querySelector('#backup-export-all')?.addEventListener('click', () => {
+            this.exportData('all');
+        });
+        
+        // 导出已完成任务
+        panel.querySelector('#backup-export-completed')?.addEventListener('click', () => {
+            this.exportData('completed');
+        });
+        
+        // 导入并合并
+        panel.querySelector('#backup-import-merge')?.addEventListener('click', () => {
+            this.triggerImport('merge');
+        });
+        
+        // 导入并覆盖
+        panel.querySelector('#backup-import-replace')?.addEventListener('click', () => {
+            if (confirm('⚠️ 警告：这将覆盖所有现有数据！\n\n确定要继续吗？')) {
+                this.triggerImport('replace');
+            }
+        });
+        
+        // 文件选择处理
+        const fileInput = panel.querySelector('#backup-file-input');
+        fileInput?.addEventListener('change', (e) => {
+            this.handleImportFile(e, this._importMode);
+        });
+        
+        // 自动备份提醒
+        panel.querySelector('#backup-auto-remind')?.addEventListener('change', (e) => {
+            this.setAutoBackupRemind(e.target.checked);
+        });
+    }
+
+    /**
+     * 导出数据
+     * @param {string} type - 'all' 或 'completed'
+     */
+    async exportData(type) {
+        try {
+            let dataToExport;
+            let filename;
+            
+            if (type === 'completed') {
+                dataToExport = {
+                    version: '1.6.0 ',
+                    exportDate: new Date().toISOString(),
+                    type: 'completed_tasks',
+                    memos: this.memos.filter(m => m.completed),
+                    categories: this.categories,
+                    tags: this.tags
+                };
+                filename = `tasks-completed-${this.formatLocalDateYMD(new Date())}.json`;
+            } else {
+                dataToExport = {
+                    version: '1.6.0',
+                    exportDate: new Date().toISOString(),
+                    type: 'full_backup',
+                    memos: this.memos,
+                    categories: this.categories,
+                    tags: this.tags
+                };
+                filename = `tasks-backup-${this.formatLocalDateYMD(new Date())}.json`;
+            }
+            
+            const jsonStr = JSON.stringify(dataToExport, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            
+            // 使用 Chrome Downloads API 下载文件
+            if (chrome.downloads) {
+                const url = URL.createObjectURL(blob);
+                await chrome.downloads.download({
+                    url: url,
+                    filename: filename,
+                    saveAs: true
+                });
+                
+                // 记录备份时间
+                localStorage.setItem('lastBackupTime', Date.now().toString());
+                
+                this.showToast(`✅ 数据已导出：${filename}`, 3000);
+                
+                // 刷新面板显示
+                setTimeout(() => {
+                    const panel = document.getElementById('backup-panel');
+                    if (panel) {
+                        this.showBackupPanel(); // 刷新面板
+                    }
+                }, 500);
+            } else {
+                // 降级方案：使用传统下载方式
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                localStorage.setItem('lastBackupTime', Date.now().toString());
+                this.showToast(`✅ 数据已导出：${filename}`, 3000);
+            }
+        } catch (error) {
+            console.error('导出数据失败:', error);
+            this.showToast('❌ 导出失败，请重试', 3000);
+        }
+    }
+
+    /**
+     * 触发导入
+     * @param {string} mode - 'merge' 或 'replace'
+     */
+    triggerImport(mode) {
+        this._importMode = mode;
+        const fileInput = document.getElementById('backup-file-input');
+        if (fileInput) {
+            fileInput.value = ''; // 清空以便重新选择同一文件
+            fileInput.click();
+        }
+    }
+
+    /**
+     * 处理导入文件
+     * @param {Event} event - 文件选择事件
+     * @param {string} mode - 'merge' 或 'replace'
+     */
+    async handleImportFile(event, mode) {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        
+        try {
+            const text = await file.text();
+            const data = JSON.parse(text);
+            
+            // 验证数据格式
+            if (!data.memos || !Array.isArray(data.memos)) {
+                throw new Error('无效的备份文件格式');
+            }
+            
+            if (mode === 'replace') {
+                // 覆盖模式
+                this.memos = data.memos.map(memo => this.normalizeMemo(memo));
+                if (data.categories) this.categories = data.categories;
+                if (data.tags) this.tags = data.tags;
+                
+                await Promise.all([
+                    this.saveMemos(),
+                    this.saveCategories(),
+                    this.saveTags()
+                ]);
+                
+                this.showToast(`✅ 已导入 ${this.memos.length} 个任务（覆盖模式）`, 3000);
+            } else {
+                // 合并模式
+                const existingIds = new Set(this.memos.map(m => m.id));
+                let newCount = 0;
+                let updateCount = 0;
+                
+                for (const memo of data.memos) {
+                    const normalized = this.normalizeMemo(memo);
+                    if (existingIds.has(normalized.id)) {
+                        // 更新已存在的任务（如果导入的更新）
+                        const existing = this.memos.find(m => m.id === normalized.id);
+                        if (existing && normalized.updatedAt > (existing.updatedAt || 0)) {
+                            Object.assign(existing, normalized);
+                            updateCount++;
+                        }
+                    } else {
+                        // 添加新任务
+                        this.memos.push(normalized);
+                        newCount++;
+                    }
+                }
+                
+                // 合并分类和标签
+                if (data.categories) {
+                    const existingCatIds = new Set(this.categories.map(c => c.id));
+                    for (const cat of data.categories) {
+                        if (!existingCatIds.has(cat.id)) {
+                            this.categories.push(cat);
+                        }
+                    }
+                }
+                
+                if (data.tags) {
+                    const existingTagIds = new Set(this.tags.map(t => t.id));
+                    for (const tag of data.tags) {
+                        if (!existingTagIds.has(tag.id)) {
+                            this.tags.push(tag);
+                        }
+                    }
+                }
+                
+                await Promise.all([
+                    this.saveMemos(),
+                    this.saveCategories(),
+                    this.saveTags()
+                ]);
+                
+                this.showToast(`✅ 导入完成：新增 ${newCount} 个，更新 ${updateCount} 个`, 3000);
+            }
+            
+            // 刷新界面
+            this.renderSidebarTaskList();
+            
+            // 关闭备份面板
+            const panel = document.getElementById('backup-panel');
+            if (panel) {
+                panel.classList.remove('active');
+                setTimeout(() => panel.remove(), 300);
+            }
+            
+        } catch (error) {
+            console.error('导入数据失败:', error);
+            this.showToast(`❌ 导入失败：${error.message}`, 4000);
+        }
+    }
+
+    /**
+     * 规范化备忘录数据
+     * @param {Object} memo - 原始备忘录对象
+     * @returns {Object} 规范化后的备忘录
+     */
+    normalizeMemo(memo) {
+        return {
+            id: memo.id || this.generateId(),
+            title: memo.title || '',
+            text: memo.text || '',
+            completed: !!memo.completed,
+            createdAt: memo.createdAt || Date.now(),
+            updatedAt: memo.updatedAt || Date.now(),
+            completedAt: memo.completedAt || null,
+            categoryId: memo.categoryId || null,
+            tagIds: Array.isArray(memo.tagIds) ? memo.tagIds : [],
+            priority: memo.priority || 'none',
+            dueDate: memo.dueDate || null,
+            images: Array.isArray(memo.images) ? memo.images : []
+        };
+    }
+
+    /**
+     * 获取自动备份提醒设置
+     */
+    getAutoBackupRemind() {
+        return localStorage.getItem('autoBackupRemind') !== 'false';
+    }
+
+    /**
+     * 设置自动备份提醒
+     */
+    setAutoBackupRemind(enabled) {
+        localStorage.setItem('autoBackupRemind', enabled.toString());
+        if (enabled) {
+            this.showToast('✅ 已开启每周备份提醒', 2000);
+        } else {
+            this.showToast('已关闭每周备份提醒', 2000);
+        }
+    }
+
+    /**
+     * 检查是否需要备份提醒
+     */
+    checkBackupReminder() {
+        if (!this.getAutoBackupRemind()) return;
+        
+        const lastBackupTime = localStorage.getItem('lastBackupTime');
+        const oneWeek = 7 * 24 * 60 * 60 * 1000;
+        
+        if (!lastBackupTime || (Date.now() - parseInt(lastBackupTime)) > oneWeek) {
+            // 超过一周未备份
+            if (this.memos.length > 0) {
+                setTimeout(() => {
+                    this.showToast('💾 您已超过一周未备份数据，建议点击备份按钮导出数据', 6000);
+                }, 3000);
+            }
+        }
+    }
+
+    // ==================== 关于与帮助面板 ====================
+
+    /**
+     * 显示关于与帮助面板
+     */
+    async showAboutPanel() {
+        const existingPanel = document.getElementById('about-panel');
+        if (existingPanel) existingPanel.remove();
+
+        // 获取存储使用情况
+        const dataStr = JSON.stringify(this.memos);
+        const sizeBytes = new Blob([dataStr]).size;
+        const sizeKB = (sizeBytes / 1024).toFixed(1);
+        const sizeMB = (sizeBytes / (1024 * 1024)).toFixed(2);
+        
+        // 获取扩展版本
+        const manifest = chrome.runtime.getManifest();
+        const version = manifest.version;
+        
+        // 获取任务统计
+        const totalTasks = this.memos.length;
+        const completedTasks = this.memos.filter(m => m.completed).length;
+        const tasksWithImages = this.memos.filter(m => m.images && m.images.length > 0).length;
+
+        const panel = document.createElement('div');
+        panel.id = 'about-panel';
+        panel.className = 'about-panel';
+
+        panel.innerHTML = `
+            <div class="about-overlay"></div>
+            <div class="about-content">
+                <div class="about-header">
+                    <h3><i class="fas fa-info-circle"></i> 关于与帮助</h3>
+                    <button class="about-close" id="about-close"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="about-body">
+                    <!-- 版本信息 -->
+                    <div class="about-hero">
+                        <div class="about-logo">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="about-title-area">
+                            <h2>中国风景时钟</h2>
+                            <span class="about-version">版本 ${version}</span>
+                        </div>
+                    </div>
+                    
+                    <!-- 数据概览 -->
+                    <div class="about-section">
+                        <h4><i class="fas fa-database"></i> 数据概览</h4>
+                        <div class="about-stats">
+                            <div class="about-stat-item">
+                                <span class="stat-number">${totalTasks}</span>
+                                <span class="stat-label">任务总数</span>
+                            </div>
+                            <div class="about-stat-item">
+                                <span class="stat-number">${completedTasks}</span>
+                                <span class="stat-label">已完成</span>
+                            </div>
+                            <div class="about-stat-item">
+                                <span class="stat-number">${tasksWithImages}</span>
+                                <span class="stat-label">含图片</span>
+                            </div>
+                            <div class="about-stat-item">
+                                <span class="stat-number">${sizeMB > 1 ? sizeMB + 'MB' : sizeKB + 'KB'}</span>
+                                <span class="stat-label">数据大小</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 工作原理 -->
+                    <div class="about-section">
+                        <h4><i class="fas fa-cogs"></i> 工作原理</h4>
+                        <div class="about-info-cards">
+                            <div class="info-card">
+                                <div class="info-card-icon"><i class="fas fa-hard-drive"></i></div>
+                                <div class="info-card-content">
+                                    <h5>本地存储</h5>
+                                    <p>所有数据存储在 Chrome 浏览器的本地存储区域（chrome.storage.local），<strong>不会上传到任何服务器</strong>。</p>
+                                </div>
+                            </div>
+                            <div class="info-card">
+                                <div class="info-card-icon"><i class="fas fa-infinity"></i></div>
+                                <div class="info-card-content">
+                                    <h5>无限存储</h5>
+                                    <p>已启用「无限存储」权限，数据不受 10MB 限制，可以放心添加任务和图片。</p>
+                                </div>
+                            </div>
+                            <div class="info-card">
+                                <div class="info-card-icon"><i class="fas fa-shield-halved"></i></div>
+                                <div class="info-card-content">
+                                    <h5>数据安全</h5>
+                                    <p>清除浏览器历史记录<strong>不会</strong>删除扩展数据。但卸载扩展会删除所有数据，请提前备份。</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 数据存储位置 -->
+                    <div class="about-section">
+                        <h4><i class="fas fa-folder-open"></i> 存储位置说明</h4>
+                        <div class="storage-table">
+                            <div class="storage-row header">
+                                <span>数据类型</span>
+                                <span>存储位置</span>
+                                <span>说明</span>
+                            </div>
+                            <div class="storage-row">
+                                <span><i class="fas fa-tasks"></i> 任务数据</span>
+                                <span>chrome.storage.local</span>
+                                <span>标题、内容、状态、图片等</span>
+                            </div>
+                            <div class="storage-row">
+                                <span><i class="fas fa-folder"></i> 分类/标签</span>
+                                <span>chrome.storage.sync</span>
+                                <span>可跨设备同步（需登录 Chrome）</span>
+                            </div>
+                            <div class="storage-row">
+                                <span><i class="fas fa-cog"></i> 用户设置</span>
+                                <span>chrome.storage.sync</span>
+                                <span>时间格式、天气设置等</span>
+                            </div>
+                            <div class="storage-row">
+                                <span><i class="fas fa-image"></i> 背景缓存</span>
+                                <span>chrome.storage.local</span>
+                                <span>动态背景图片缓存</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 备份指南 -->
+                    <div class="about-section">
+                        <h4><i class="fas fa-life-ring"></i> 备份与恢复指南</h4>
+                        <div class="backup-guide">
+                            <div class="guide-step">
+                                <div class="step-number">1</div>
+                                <div class="step-content">
+                                    <h5>定期导出备份</h5>
+                                    <p>点击工具栏的 <i class="fas fa-cloud-download-alt"></i> 按钮，选择「导出全部数据」，将数据保存为 JSON 文件到本地磁盘。</p>
+                                </div>
+                            </div>
+                            <div class="guide-step">
+                                <div class="step-number">2</div>
+                                <div class="step-content">
+                                    <h5>安全存放备份文件</h5>
+                                    <p>建议将备份文件存放在云盘（如 iCloud、Google Drive）或其他安全位置，避免单点故障。</p>
+                                </div>
+                            </div>
+                            <div class="guide-step">
+                                <div class="step-number">3</div>
+                                <div class="step-content">
+                                    <h5>恢复数据</h5>
+                                    <p>需要恢复时，点击 <i class="fas fa-cloud-download-alt"></i> 按钮，选择「导入并合并」或「导入并覆盖」，选择之前保存的 JSON 文件即可。</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 常见问题 -->
+                    <div class="about-section">
+                        <h4><i class="fas fa-question-circle"></i> 常见问题</h4>
+                        <div class="faq-list">
+                            <details class="faq-item">
+                                <summary>卸载扩展后数据会丢失吗？</summary>
+                                <p>是的，卸载扩展会删除所有本地数据。请在卸载前使用备份功能导出数据。重新安装后可以导入恢复。</p>
+                            </details>
+                            <details class="faq-item">
+                                <summary>数据会同步到其他设备吗？</summary>
+                                <p>任务数据存储在本地，不会自动同步。分类和设置会通过 Chrome 同步功能同步（需登录 Chrome 账号）。如需在其他设备使用任务数据，请手动导出并导入。</p>
+                            </details>
+                            <details class="faq-item">
+                                <summary>图片会占用很多空间吗？</summary>
+                                <p>图片会自动压缩。缩略图约 5-10KB，查看原图约 50-100KB。已启用无限存储，通常不用担心空间问题。</p>
+                            </details>
+                            <details class="faq-item">
+                                <summary>如何彻底删除所有数据？</summary>
+                                <div class="faq-detailed">
+                                    <p><strong>方法一：卸载扩展（推荐）</strong></p>
+                                    <p>Chrome 设置 → 扩展程序 → 找到「中国风景时钟」→ 点击「移除」</p>
+                                    <p class="faq-tip">这将删除所有扩展数据，包括任务、分类、设置等。</p>
+                                    
+                                    <p><strong>方法二：手动删除存储文件</strong></p>
+                                    <p>如果需要手动清理，可以删除 Chrome 扩展数据文件夹：</p>
+                                    ${this.getStoragePathHtml()}
+                                    <p class="faq-warning">⚠️ 手动删除前请先关闭 Chrome 浏览器，操作需谨慎。</p>
+                                </div>
+                            </details>
+                        </div>
+                    </div>
+                    
+                    <!-- 快捷键 -->
+                    <div class="about-section">
+                        <h4><i class="fas fa-keyboard"></i> 键盘快捷键</h4>
+                        <div class="shortcuts-list">
+                            <div class="shortcut-item">
+                                <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd>
+                                <span>切换背景图片</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>Space</kbd>
+                                <span>切换选中任务的完成状态</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>↑</kbd> <kbd>↓</kbd>
+                                <span>在任务列表中移动选择</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>Enter</kbd>
+                                <span>编辑选中的任务</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>Esc</kbd>
+                                <span>关闭弹窗/取消编辑</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 页脚 -->
+                    <div class="about-footer">
+                        <p>感谢使用中国风景时钟 ❤️</p>
+                        <p class="about-copyright">数据安全，本地存储，隐私无忧</p>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(panel);
+        this.bindAboutPanelEvents(panel);
+        requestAnimationFrame(() => panel.classList.add('active'));
+    }
+
+    /**
+     * 绑定关于面板事件
+     */
+    bindAboutPanelEvents(panel) {
+        const closeBtn = panel.querySelector('#about-close');
+        const overlay = panel.querySelector('.about-overlay');
+        
+        const closePanel = () => {
+            panel.classList.remove('active');
+            setTimeout(() => panel.remove(), 300);
+        };
+        
+        closeBtn?.addEventListener('click', closePanel);
+        overlay?.addEventListener('click', closePanel);
+        
+        // ESC 关闭
+        const handleEsc = (e) => {
+            if (e.key === 'Escape') {
+                closePanel();
+                document.removeEventListener('keydown', handleEsc);
+            }
+        };
+        document.addEventListener('keydown', handleEsc);
+        
+        // 复制路径按钮
+        panel.querySelectorAll('.copy-path-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const path = btn.dataset.path;
+                if (path) {
+                    navigator.clipboard.writeText(path).then(() => {
+                        const originalText = btn.innerHTML;
+                        btn.innerHTML = '<i class="fas fa-check"></i> 已复制';
+                        btn.classList.add('copied');
+                        setTimeout(() => {
+                            btn.innerHTML = originalText;
+                            btn.classList.remove('copied');
+                        }, 2000);
+                    }).catch(() => {
+                        this.showToast('复制失败，请手动复制', 2000);
+                    });
+                }
+            });
+        });
+    }
+
+    /**
+     * 获取存储路径的 HTML（区分 Windows/Mac/Linux）
+     */
+    getStoragePathHtml() {
+        // 获取扩展 ID
+        const extensionId = chrome.runtime.id || '扩展ID';
+        
+        // 检测操作系统
+        const platform = navigator.platform.toLowerCase();
+        const isMac = platform.includes('mac');
+        const isWindows = platform.includes('win');
+        
+        // 定义各系统路径
+        const macPath = `~/Library/Application Support/Google/Chrome/Default/Local Extension Settings/${extensionId}/`;
+        const winPath = `%LOCALAPPDATA%\\Google\\Chrome\\User Data\\Default\\Local Extension Settings\\${extensionId}\\`;
+        const linuxPath = `~/.config/google-chrome/Default/Local Extension Settings/${extensionId}/`;
+        
+        // 根据当前操作系统，优先显示对应路径，然后折叠显示其他系统
+        let currentSystemHtml = '';
+        let otherSystemsHtml = '';
+        
+        if (isMac) {
+            currentSystemHtml = `
+                <div class="path-box mac-path current-system">
+                    <div class="path-header">
+                        <i class="fab fa-apple"></i> macOS <span class="current-badge">当前系统</span>
+                    </div>
+                    <code>${macPath}</code>
+                    <button class="copy-path-btn" data-path="${macPath}" title="复制路径">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+                <p class="path-tip">💡 <code>~</code> 表示用户主目录，可在访达中按 <kbd>⌘</kbd>+<kbd>⇧</kbd>+<kbd>G</kbd> 输入路径前往</p>
+            `;
+            otherSystemsHtml = `
+                <details class="other-systems">
+                    <summary>查看其他系统路径</summary>
+                    <div class="path-box win-path">
+                        <div class="path-header"><i class="fab fa-windows"></i> Windows</div>
+                        <code>${winPath}</code>
+                        <button class="copy-path-btn" data-path="${winPath}" title="复制路径"><i class="fas fa-copy"></i></button>
+                    </div>
+                    <div class="path-box linux-path">
+                        <div class="path-header"><i class="fab fa-linux"></i> Linux</div>
+                        <code>${linuxPath}</code>
+                        <button class="copy-path-btn" data-path="${linuxPath}" title="复制路径"><i class="fas fa-copy"></i></button>
+                    </div>
+                </details>
+            `;
+        } else if (isWindows) {
+            currentSystemHtml = `
+                <div class="path-box win-path current-system">
+                    <div class="path-header">
+                        <i class="fab fa-windows"></i> Windows <span class="current-badge">当前系统</span>
+                    </div>
+                    <code>${winPath}</code>
+                    <button class="copy-path-btn" data-path="${winPath}" title="复制路径">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+                <p class="path-tip">💡 可以在文件资源管理器地址栏直接粘贴路径，<code>%LOCALAPPDATA%</code> 会自动展开</p>
+            `;
+            otherSystemsHtml = `
+                <details class="other-systems">
+                    <summary>查看其他系统路径</summary>
+                    <div class="path-box mac-path">
+                        <div class="path-header"><i class="fab fa-apple"></i> macOS</div>
+                        <code>${macPath}</code>
+                        <button class="copy-path-btn" data-path="${macPath}" title="复制路径"><i class="fas fa-copy"></i></button>
+                    </div>
+                    <div class="path-box linux-path">
+                        <div class="path-header"><i class="fab fa-linux"></i> Linux</div>
+                        <code>${linuxPath}</code>
+                        <button class="copy-path-btn" data-path="${linuxPath}" title="复制路径"><i class="fas fa-copy"></i></button>
+                    </div>
+                </details>
+            `;
+        } else {
+            // Linux 或其他系统
+            currentSystemHtml = `
+                <div class="path-box linux-path current-system">
+                    <div class="path-header">
+                        <i class="fab fa-linux"></i> Linux <span class="current-badge">当前系统</span>
+                    </div>
+                    <code>${linuxPath}</code>
+                    <button class="copy-path-btn" data-path="${linuxPath}" title="复制路径">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+            `;
+            otherSystemsHtml = `
+                <details class="other-systems">
+                    <summary>查看其他系统路径</summary>
+                    <div class="path-box mac-path">
+                        <div class="path-header"><i class="fab fa-apple"></i> macOS</div>
+                        <code>${macPath}</code>
+                        <button class="copy-path-btn" data-path="${macPath}" title="复制路径"><i class="fas fa-copy"></i></button>
+                    </div>
+                    <div class="path-box win-path">
+                        <div class="path-header"><i class="fab fa-windows"></i> Windows</div>
+                        <code>${winPath}</code>
+                        <button class="copy-path-btn" data-path="${winPath}" title="复制路径"><i class="fas fa-copy"></i></button>
+                    </div>
+                </details>
+            `;
+        }
+        
+        return currentSystemHtml + otherSystemsHtml;
+    }
+
+    /**
+     * 显示日历面板（按日期回看完成任务）
+     */
+    showCalendarPanel() {
+        const existingPanel = document.getElementById('calendar-panel');
+        if (existingPanel) existingPanel.remove();
+
+        this.calendarViewDate = this.calendarViewDate || new Date();
+        // 统一将 viewDate 对齐到当月 1 号，避免跨月边界计算复杂度
+        this.calendarViewDate = new Date(this.calendarViewDate.getFullYear(), this.calendarViewDate.getMonth(), 1);
+
+        // 默认选中“今天”
+        this.calendarSelectedDate = this.calendarSelectedDate || this.formatLocalDateYMD(new Date());
+
+        const panel = document.createElement('div');
+        panel.id = 'calendar-panel';
+        panel.className = 'calendar-panel';
+
+        this.renderCalendarPanelContent(panel);
+        document.body.appendChild(panel);
+        this.bindCalendarPanelEvents(panel);
+
+        requestAnimationFrame(() => panel.classList.add('active'));
+    }
+
+    /**
+     * 渲染日历面板内容
+     * @param {HTMLElement} panel
+     */
+    renderCalendarPanelContent(panel) {
+        const viewYear = this.calendarViewDate.getFullYear();
+        const viewMonth = this.calendarViewDate.getMonth(); // 0-11
+
+        const taskMap = this.buildTaskMapByCreatedDate();
+        const selectedKey = this.calendarSelectedDate;
+        const selectedTasks = taskMap.get(selectedKey) || [];
+
+        const monthLabel = `${viewYear}年${viewMonth + 1}月`;
+
+        panel.innerHTML = `
+            <div class="calendar-overlay"></div>
+            <div class="calendar-content">
+                <div class="calendar-header">
+                    <h3><i class="fas fa-calendar-days"></i> 日历回看</h3>
+                    <button class="calendar-close" id="calendar-close"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="calendar-body">
+                    <div class="calendar-left">
+                        <div class="calendar-month-nav">
+                            <button class="calendar-nav-btn" id="calendar-prev-month" title="上个月">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <div class="calendar-month-label">${monthLabel}</div>
+                            <button class="calendar-nav-btn" id="calendar-next-month" title="下个月">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                            <button class="calendar-today-btn" id="calendar-today-btn" title="回到今天">今天</button>
+                        </div>
+                        ${this.renderCalendarMonthGrid(viewYear, viewMonth, taskMap)}
+                    </div>
+                    <div class="calendar-details">
+                        <div class="calendar-details-header">
+                            <div class="calendar-details-date">${selectedKey}</div>
+                            <div class="calendar-details-subtitle">共 ${selectedTasks.length} 项任务</div>
+                        </div>
+                        <div class="calendar-task-list">
+                            ${this.renderCalendarTaskList(selectedTasks)}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * 渲染当前月网格（周一作为一周起始）
+     * @param {number} year
+     * @param {number} month 0-11
+     * @param {Map<string, Object[]>} taskMap
+     * @returns {string}
+     */
+    renderCalendarMonthGrid(year, month, taskMap) {
+        const firstDay = new Date(year, month, 1);
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const lastMonthDays = new Date(year, month, 0).getDate();
+
+        // 周一为起始：JS getDay() 周日=0 → 转换为 周一=0...周日=6
+        const firstWeekday = (firstDay.getDay() + 6) % 7;
+        const totalCells = Math.ceil((firstWeekday + daysInMonth) / 7) * 7;
+
+        const todayKey = this.formatLocalDateYMD(new Date());
+        const cells = [];
+
+        for (let i = 0; i < totalCells; i++) {
+            const dayOffset = i - firstWeekday + 1; // 1..daysInMonth
+            let cellDate;
+            let dayNumber;
+            let isOutside = false;
+
+            if (dayOffset < 1) {
+                // 上月补位
+                isOutside = true;
+                dayNumber = lastMonthDays + dayOffset;
+                cellDate = new Date(year, month - 1, dayNumber);
+            } else if (dayOffset > daysInMonth) {
+                // 下月补位
+                isOutside = true;
+                dayNumber = dayOffset - daysInMonth;
+                cellDate = new Date(year, month + 1, dayNumber);
+            } else {
+                dayNumber = dayOffset;
+                cellDate = new Date(year, month, dayNumber);
+            }
+
+            const key = this.formatLocalDateYMD(cellDate);
+            const count = (taskMap.get(key) || []).length;
+            const selected = key === this.calendarSelectedDate;
+            const isToday = key === todayKey;
+            
+            // 获取农历信息
+            const lunarInfo = this.getLunarInfoForDate(cellDate);
+
+            cells.push(`
+                <div class="calendar-day ${isOutside ? 'outside' : ''} ${selected ? 'selected' : ''} ${isToday ? 'today' : ''}"
+                     data-date="${key}">
+                    <div class="calendar-day-number">${dayNumber}</div>
+                    <div class="calendar-day-lunar ${lunarInfo.type}">${lunarInfo.text}</div>
+                    ${count > 0 ? `<div class="calendar-day-badge">${count}</div>` : ''}
+                </div>
+            `);
+        }
+
+        return `
+            <div class="calendar-grid">
+                <div class="calendar-weekdays">
+                    <div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div><div>日</div>
+                </div>
+                <div class="calendar-days">
+                    ${cells.join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * 获取指定日期的农历信息
+     * @param {Date} date 
+     * @returns {{text: string, type: string}} 显示文本和类型(festival/jieqi/normal)
+     */
+    getLunarInfoForDate(date) {
+        // 检查 lunar-javascript 库是否可用
+        if (typeof Solar === 'undefined') {
+            return { text: '', type: '' };
+        }
+        
+        try {
+            const y = date.getFullYear();
+            const m = date.getMonth() + 1;
+            const d = date.getDate();
+            
+            const solar = Solar.fromYmd(y, m, d);
+            const lunar = solar.getLunar();
+            
+            // 优先级：节气 > 农历节日 > 公历节日 > 农历初一(显示月份) > 农历日期
+            
+            // 1. 检查节气
+            const jieQi = lunar.getJieQi();
+            if (jieQi) {
+                return { text: jieQi, type: 'jieqi' };
+            }
+            
+            // 2. 检查农历节日
+            const lunarFestivals = lunar.getFestivals();
+            if (lunarFestivals && lunarFestivals.length > 0) {
+                // 取第一个节日，截取前3个字符以免太长
+                const festivalName = lunarFestivals[0];
+                return { 
+                    text: festivalName.length > 3 ? festivalName.substring(0, 3) : festivalName, 
+                    type: 'festival' 
+                };
+            }
+            
+            // 3. 检查公历节日
+            const solarFestivals = solar.getFestivals();
+            if (solarFestivals && solarFestivals.length > 0) {
+                const festivalName = solarFestivals[0];
+                return { 
+                    text: festivalName.length > 3 ? festivalName.substring(0, 3) : festivalName, 
+                    type: 'festival' 
+                };
+            }
+            
+            // 4. 农历初一显示月份，其他显示日期
+            const lunarDay = lunar.getDay();
+            if (lunarDay === 1) {
+                return { text: lunar.getMonthInChinese() + '月', type: '' };
+            }
+            
+            return { text: lunar.getDayInChinese(), type: '' };
+            
+        } catch (e) {
+            console.warn('获取农历信息失败:', e);
+            return { text: '', type: '' };
+        }
+    }
+
+    /**
+     * 渲染选中日期的“完成任务列表”
+     * @param {Object[]} tasks
+     * @returns {string}
+     */
+    renderCalendarTaskList(tasks) {
+        if (!tasks || tasks.length === 0) {
+            return `
+                <div class="calendar-empty">
+                    <i class="fas fa-mug-hot"></i>
+                    <p>当天无任务</p>
+                </div>
+            `;
+        }
+
+        return tasks.map(task => {
+            const createdTime = task.createdAt ? this.formatLocalTimeHM(task.createdAt) : '';
+            const title = this.escapeHtml(task.title || '无标题');
+            const text = task.text ? this.escapeHtml(task.text.substring(0, 80)) : '';
+            const categoryName = task.categoryId ? this.escapeHtml(this.getCategoryName(task.categoryId) || '') : '';
+            const isCompleted = task.completed;
+            
+            return `
+                <div class="calendar-task-item ${isCompleted ? 'completed' : ''}" data-task-id="${task.id}">
+                    <div class="calendar-task-status">
+                        <i class="fas ${isCompleted ? 'fa-check-circle' : 'fa-circle'}"></i>
+                    </div>
+                    <div class="calendar-task-main">
+                        <div class="calendar-task-title">${title}</div>
+                        ${text ? `<div class="calendar-task-desc">${text}${task.text && task.text.length > 80 ? '...' : ''}</div>` : ''}
+                        <div class="calendar-task-meta">
+                            ${createdTime ? `<span class="calendar-task-time"><i class="far fa-clock"></i> ${createdTime}</span>` : ''}
+                            ${categoryName ? `<span class="calendar-task-category"><i class="fas fa-folder"></i> ${categoryName}</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="calendar-task-action" title="编辑任务"><i class="fas fa-pen"></i></div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    /**
+     * 绑定日历面板事件
+     * @param {HTMLElement} panel
+     */
+    bindCalendarPanelEvents(panel) {
+        const closePanel = () => {
+            panel.classList.remove('active');
+            setTimeout(() => panel.remove(), 300);
+        };
+
+        const closeBtn = panel.querySelector('#calendar-close');
+        if (closeBtn) closeBtn.addEventListener('click', closePanel);
+
+        const overlay = panel.querySelector('.calendar-overlay');
+        if (overlay) overlay.addEventListener('click', closePanel);
+
+        // 月份切换
+        const prevBtn = panel.querySelector('#calendar-prev-month');
+        const nextBtn = panel.querySelector('#calendar-next-month');
+        if (prevBtn) {
+            prevBtn.addEventListener('click', () => {
+                this.calendarViewDate = new Date(this.calendarViewDate.getFullYear(), this.calendarViewDate.getMonth() - 1, 1);
+                this.renderCalendarPanelContent(panel);
+                this.bindCalendarPanelEvents(panel);
+            });
+        }
+        if (nextBtn) {
+            nextBtn.addEventListener('click', () => {
+                this.calendarViewDate = new Date(this.calendarViewDate.getFullYear(), this.calendarViewDate.getMonth() + 1, 1);
+                this.renderCalendarPanelContent(panel);
+                this.bindCalendarPanelEvents(panel);
+            });
+        }
+
+        // 回到今天
+        const todayBtn = panel.querySelector('#calendar-today-btn');
+        if (todayBtn) {
+            todayBtn.addEventListener('click', () => {
+                const today = new Date();
+                this.calendarViewDate = new Date(today.getFullYear(), today.getMonth(), 1);
+                this.calendarSelectedDate = this.formatLocalDateYMD(today);
+                this.renderCalendarPanelContent(panel);
+                this.bindCalendarPanelEvents(panel);
+            });
+        }
+
+        // 日期点击
+        panel.querySelectorAll('.calendar-day').forEach(el => {
+            el.addEventListener('click', () => {
+                const dateKey = el.dataset.date;
+                if (!dateKey) return;
+                this.calendarSelectedDate = dateKey;
+
+                // 若点击了“本月外日期”，跟随切换月份
+                const dateObj = new Date(dateKey + 'T00:00:00');
+                this.calendarViewDate = new Date(dateObj.getFullYear(), dateObj.getMonth(), 1);
+
+                this.renderCalendarPanelContent(panel);
+                this.bindCalendarPanelEvents(panel);
+            });
+        });
+
+        // 任务条目点击：先关闭日历面板，再打开编辑表单
+        panel.querySelectorAll('.calendar-task-item').forEach(el => {
+            el.addEventListener('click', () => {
+                const taskId = el.dataset.taskId;
+                if (!taskId) return;
+                const task = this.memos.find(m => m.id === taskId);
+                if (task) {
+                    // 先关闭日历面板
+                    closePanel();
+                    // 延迟打开编辑表单，确保日历面板动画完成
+                    setTimeout(() => {
+                        this.showSidebarForm(task);
+                    }, 100);
+                }
+            });
+        });
+    }
+
+    /**
+     * 将已完成任务按“完成日(YYYY-MM-DD)”聚合
+     * @returns {Map<string, Object[]>}
+     */
+    buildTaskMapByCreatedDate() {
+        const map = new Map();
+        for (const memo of this.memos) {
+            if (!memo || !memo.createdAt) continue;
+
+            // 复用任务列表的日期归类逻辑（本地日期 YYYY-MM-DD）
+            const key = this.formatDateFromTimestamp(memo.createdAt);
+            if (!key) continue;
+            if (!map.has(key)) map.set(key, []);
+            map.get(key).push(memo);
+        }
+        // 按创建时间倒序排列
+        for (const [key, arr] of map.entries()) {
+            arr.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+            map.set(key, arr);
+        }
+        return map;
+    }
+
+    /**
+     * 格式化本地日期为 YYYY-MM-DD（避免 UTC 跨日）
+     * @param {Date} date
+     * @returns {string}
+     */
+    formatLocalDateYMD(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+
+    /**
+     * 格式化本地时间为 HH:MM
+     * @param {number} ts
+     * @returns {string}
+     */
+    formatLocalTimeHM(ts) {
+        const date = new Date(ts);
+        const hh = String(date.getHours()).padStart(2, '0');
+        const mm = String(date.getMinutes()).padStart(2, '0');
+        return `${hh}:${mm}`;
+    }
+
+    /**
+     * 若日历面板开启，则刷新其内容（用于完成状态变化后的即时更新）
+     */
+    refreshCalendarPanelIfOpen() {
+        const panel = document.getElementById('calendar-panel');
+        if (!panel) return;
+        this.renderCalendarPanelContent(panel);
+        this.bindCalendarPanelEvents(panel);
     }
     
     /**
@@ -2202,6 +3688,80 @@ class MemoManager {
     }
     
     /**
+     * 更新进度预览（纯百分比模式）
+     * @param {number} percentage - 百分比 (0-100)
+     */
+    updateProgressPreview(percentage = null) {
+        const previewFill = document.getElementById('progress-preview-fill');
+        const slider = document.getElementById('sidebar-task-progress-slider');
+        const percentInput = document.getElementById('sidebar-task-progress-percent');
+        
+        if (percentage === null) {
+            // 从滑块或输入框获取当前值
+            percentage = parseInt(slider?.value) || parseInt(percentInput?.value) || 0;
+        }
+        
+        // 确保在有效范围内
+        percentage = Math.max(0, Math.min(100, percentage));
+        
+        // 更新预览进度条
+        if (previewFill) {
+            previewFill.style.width = `${percentage}%`;
+            // 根据进度设置颜色
+            if (percentage === 100) {
+                previewFill.className = 'progress-preview-fill complete';
+            } else if (percentage >= 60) {
+                previewFill.className = 'progress-preview-fill high';
+            } else if (percentage >= 30) {
+                previewFill.className = 'progress-preview-fill medium';
+            } else {
+                previewFill.className = 'progress-preview-fill low';
+            }
+        }
+    }
+    
+    /**
+     * 从滑块更新进度
+     */
+    updateProgressFromSlider() {
+        const slider = document.getElementById('sidebar-task-progress-slider');
+        const percentInput = document.getElementById('sidebar-task-progress-percent');
+        
+        if (!slider) return;
+        
+        const percentage = parseInt(slider.value) || 0;
+        
+        // 同步到百分比输入框
+        if (percentInput) {
+            percentInput.value = percentage;
+        }
+        
+        this.updateProgressPreview(percentage);
+    }
+    
+    /**
+     * 从百分比输入框更新进度
+     */
+    updateProgressFromPercent() {
+        const slider = document.getElementById('sidebar-task-progress-slider');
+        const percentInput = document.getElementById('sidebar-task-progress-percent');
+        
+        if (!percentInput) return;
+        
+        let percentage = parseInt(percentInput.value) || 0;
+        
+        // 确保在有效范围内
+        percentage = Math.max(0, Math.min(100, percentage));
+        
+        // 同步到滑块
+        if (slider) {
+            slider.value = percentage;
+        }
+        
+        this.updateProgressPreview(percentage);
+    }
+    
+    /**
      * 显示侧边栏任务表单
      */
     showSidebarForm(task = null) {
@@ -2215,6 +3775,12 @@ class MemoManager {
         const dueInput = document.getElementById('sidebar-task-due');
         const categorySelect = document.getElementById('sidebar-task-category');
         const previewList = document.getElementById('image-preview-list');
+        
+        // 进度相关元素（纯百分比模式）
+        const progressEnable = document.getElementById('sidebar-task-progress-enable');
+        const progressInputs = document.getElementById('progress-inputs');
+        const progressSlider = document.getElementById('sidebar-task-progress-slider');
+        const progressPercent = document.getElementById('sidebar-task-progress-percent');
         
         // 清空临时图片
         this.tempImages = [];
@@ -2236,6 +3802,22 @@ class MemoManager {
             prioritySelect.value = task.priority || 'none';
             dueInput.value = task.dueDate || '';
             if (categorySelect) categorySelect.value = task.categoryId || '';
+            
+            // 加载进度数据（纯百分比）
+            if (task.progress !== null && task.progress !== undefined && progressEnable && progressInputs) {
+                const percentage = parseInt(task.progress) || 0;
+                progressEnable.checked = true;
+                progressInputs.classList.remove('hidden');
+                if (progressSlider) progressSlider.value = percentage;
+                if (progressPercent) progressPercent.value = percentage;
+                this.updateProgressPreview(percentage);
+            } else if (progressEnable && progressInputs) {
+                progressEnable.checked = false;
+                progressInputs.classList.add('hidden');
+                if (progressSlider) progressSlider.value = 0;
+                if (progressPercent) progressPercent.value = 0;
+                this.updateProgressPreview(0);
+            }
             
             // 加载已有图片
             if (task.images && task.images.length > 0 && previewList) {
@@ -2272,6 +3854,13 @@ class MemoManager {
             prioritySelect.value = 'none';
             dueInput.value = this.getTodayDate();
             if (categorySelect) categorySelect.value = '';
+            
+            // 重置进度（纯百分比模式）
+            if (progressEnable) progressEnable.checked = false;
+            if (progressInputs) progressInputs.classList.add('hidden');
+            if (progressSlider) progressSlider.value = 0;
+            if (progressPercent) progressPercent.value = 0;
+            this.updateProgressPreview(0);
         }
         
         modal.classList.remove('hidden');
@@ -2304,6 +3893,11 @@ class MemoManager {
         const dueInput = document.getElementById('sidebar-task-due');
         const categorySelect = document.getElementById('sidebar-task-category');
         
+        // 进度相关（纯百分比模式）
+        const progressEnable = document.getElementById('sidebar-task-progress-enable');
+        const progressSlider = document.getElementById('sidebar-task-progress-slider');
+        const progressPercent = document.getElementById('sidebar-task-progress-percent');
+        
         const title = titleInput.value.trim();
         if (!title) {
             titleInput.focus();
@@ -2319,13 +3913,25 @@ class MemoManager {
             fullImage: img.fullImage || img.thumbnail  // 兼容旧数据
         })) : [];
         
+        // 处理进度数据（纯百分比：0-100 的整数，或 null）
+        let progress = null;
+        if (progressEnable && progressEnable.checked) {
+            // 优先从输入框获取，如果为空则从滑块获取
+            let percentage = parseInt(progressPercent?.value);
+            if (isNaN(percentage)) {
+                percentage = parseInt(progressSlider?.value) || 0;
+            }
+            progress = Math.max(0, Math.min(100, percentage));
+        }
+        
         const taskData = {
             title: title,
             text: textInput.value.trim(),
             priority: prioritySelect.value,
             dueDate: dueInput.value || null,
             images: images,
-            categoryId: categorySelect ? categorySelect.value || null : null
+            categoryId: categorySelect ? categorySelect.value || null : null,
+            progress: progress
         };
         
         const taskId = modal.dataset.taskId;
@@ -2335,12 +3941,19 @@ class MemoManager {
             if (task) {
                 Object.assign(task, taskData);
                 task.updatedAt = Date.now();
+                
+                // 只有进度达到 100% 才自动标记为已完成
+                if (progress === 100 && !task.completed) {
+                    task.completed = true;
+                    task.completedAt = Date.now();
+                }
             }
         } else {
             const newTask = {
                 id: this.generateId(),
                 ...taskData,
-                completed: false,
+                completed: progress === 100,
+                completedAt: progress === 100 ? Date.now() : null,
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
                 tagIds: []
@@ -2362,10 +3975,12 @@ class MemoManager {
         if (!task) return;
         
         task.completed = !task.completed;
+        task.completedAt = task.completed ? Date.now() : null;
         task.updatedAt = Date.now();
         
         await this.saveMemos();
         this.renderSidebarTaskList();
+        this.refreshCalendarPanelIfOpen();
     }
     
     /**
@@ -2604,7 +4219,12 @@ class MemoManager {
                 tagIds: Array.isArray(memo.tagIds) ? memo.tagIds : (Array.isArray(memo.tags) ? memo.tags : []),
                 priority: memo.priority || 'none',
                 dueDate: memo.dueDate || null,
-                images: Array.isArray(memo.images) ? memo.images : []
+                images: Array.isArray(memo.images) ? memo.images : [],
+                // v1.6.0 新增：进度追踪字段
+                progress: memo.progress && typeof memo.progress === 'object' ? {
+                    current: Math.max(0, parseInt(memo.progress.current) || 0),
+                    total: Math.max(1, parseInt(memo.progress.total) || 1)
+                } : null
             }));
             
             console.log('备忘录加载成功，数量:', this.memos.length);
@@ -2620,24 +4240,155 @@ class MemoManager {
      * 因为 storage.sync 有 8KB/item 的限制，带图片的数据会超出
      */
     async saveMemos() {
+        // 防抖：避免频繁保存导致的性能问题
+        if (this._saveDebounceTimer) {
+            clearTimeout(this._saveDebounceTimer);
+        }
+        
+        return new Promise((resolve, reject) => {
+            this._saveDebounceTimer = setTimeout(async () => {
+                try {
+                    // 检查存储配额
+                    const quotaCheck = await this.checkStorageQuota();
+                    if (!quotaCheck.safe) {
+                        console.warn('存储空间警告:', quotaCheck.message);
+                        
+                        // 如果超过警告阈值，尝试压缩图片数据
+                        if (quotaCheck.percent >= 90) {
+                            console.log('尝试压缩图片数据以释放空间...');
+                            await this.compressStoredImages();
+                        }
+                        
+                        // 如果仍然超过 95%，显示警告
+                        if (quotaCheck.percent >= 95) {
+                            this.showToast('存储空间即将用尽，请删除一些旧任务或图片', 5000);
+                        }
+                    }
+                    
+                    // 只保存到 local 存储（最大 10MB）
+                    await chrome.storage.local.set({ memos: this.memos });
+                    
+                    // 通知 background.js 更新任务提醒（使用 try-catch 避免阻塞）
+                    try {
+                        chrome.runtime.sendMessage({ action: 'setupTaskReminder' });
+                    } catch (e) {
+                        // 忽略消息发送失败（background 可能未激活）
+                    }
+                    
+                    console.log('备忘录保存成功');
+                    resolve(true);
+                } catch (error) {
+                    console.error('保存备忘录失败', error);
+                    
+                    // 处理配额超限错误
+                    if (error.message && error.message.includes('QUOTA_BYTES')) {
+                        this.showToast('存储空间已满，请删除一些任务或图片后重试', 5000);
+                        // 尝试自动清理
+                        await this.emergencyCleanup();
+                    }
+                    
+                    reject(error);
+                }
+            }, 100); // 100ms 防抖
+        });
+    }
+    
+    /**
+     * 检查存储配额使用情况
+     * @returns {Object} { safe, percent, sizeKB, message }
+     */
+    async checkStorageQuota() {
         try {
-            // 只保存到 local 存储（最大 10MB）
-            await chrome.storage.local.set({ memos: this.memos });
+            const dataStr = JSON.stringify(this.memos);
+            const sizeBytes = new Blob([dataStr]).size;
+            const maxBytes = 10 * 1024 * 1024; // 10MB
+            const percent = (sizeBytes / maxBytes) * 100;
+            const sizeKB = (sizeBytes / 1024).toFixed(1);
             
-            // 不再同步到 settingsManager，避免 sync storage 配额超限
-            // window.settingsManager.settings.memos = this.memos;
-            // await window.settingsManager.saveSettings();
+            let message = '';
+            let safe = true;
             
-            // 通知 background.js 更新任务提醒
-            try {
-                chrome.runtime.sendMessage({ action: 'setupTaskReminder' });
-            } catch (e) {
-                // 忽略消息发送失败（background 可能未激活）
+            if (percent >= 95) {
+                message = `存储空间严重不足！已使用 ${percent.toFixed(1)}% (${sizeKB} KB)`;
+                safe = false;
+            } else if (percent >= 80) {
+                message = `存储空间警告：已使用 ${percent.toFixed(1)}% (${sizeKB} KB)`;
+                safe = false;
             }
             
-            console.log('备忘录保存成功');
+            return { safe, percent, sizeKB, message };
         } catch (error) {
-            console.error('保存备忘录失败', error);
+            console.error('检查存储配额失败:', error);
+            return { safe: true, percent: 0, sizeKB: '0', message: '' };
+        }
+    }
+    
+    /**
+     * 压缩已存储的图片数据
+     * 将 fullImage 替换为 thumbnail 以节省空间
+     */
+    async compressStoredImages() {
+        let compressed = 0;
+        
+        for (const memo of this.memos) {
+            if (memo.images && memo.images.length > 0) {
+                for (const img of memo.images) {
+                    // 如果 fullImage 比 thumbnail 大很多，删除 fullImage
+                    if (img.fullImage && img.thumbnail) {
+                        const fullSize = img.fullImage.length;
+                        const thumbSize = img.thumbnail.length;
+                        if (fullSize > thumbSize * 2) {
+                            img.fullImage = img.thumbnail; // 用缩略图替代
+                            compressed++;
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (compressed > 0) {
+            console.log(`已压缩 ${compressed} 张图片`);
+        }
+    }
+    
+    /**
+     * 紧急清理：当存储空间严重不足时调用
+     * 由于已添加 unlimitedStorage 权限，此方法仅作为最后手段
+     * 优先提醒用户备份数据
+     */
+    async emergencyCleanup() {
+        console.log('存储空间不足，提示用户备份...');
+        
+        // 优先提醒用户备份，而不是直接删除数据
+        const shouldClean = confirm(
+            '⚠️ 存储空间不足\n\n' +
+            '建议您先导出备份数据，然后手动删除一些旧任务或图片。\n\n' +
+            '点击"确定"打开备份面板\n' +
+            '点击"取消"尝试自动清理旧图片'
+        );
+        
+        if (shouldClean) {
+            // 打开备份面板
+            this.showBackupPanel();
+            return;
+        }
+        
+        // 用户选择自动清理
+        const completedWithImages = this.memos
+            .filter(m => m.completed && m.images && m.images.length > 0)
+            .sort((a, b) => (a.completedAt || a.updatedAt || 0) - (b.completedAt || b.updatedAt || 0));
+        
+        let cleaned = 0;
+        for (const memo of completedWithImages.slice(0, 5)) {
+            memo.images = []; // 删除图片
+            cleaned++;
+        }
+        
+        if (cleaned > 0) {
+            console.log(`紧急清理：已删除 ${cleaned} 个任务的图片`);
+            this.showToast(`已自动清理 ${cleaned} 个旧任务的图片以释放空间`, 3000);
+        } else {
+            this.showToast('无法自动清理，请手动删除一些任务', 3000);
         }
     }
 
@@ -2648,7 +4399,8 @@ class MemoManager {
      * @returns {string} 日期字符串
      */
     getTodayDate() {
-        return new Date().toISOString().split('T')[0];
+        // 本地日期语义：避免 UTC 跨日导致“今天/昨天”判断错位
+        return this.formatLocalDateYMD(new Date());
     }
 
     /**
@@ -3013,6 +4765,7 @@ class MemoManager {
         if (!memo) return false;
         
         memo.completed = !memo.completed;
+        memo.completedAt = memo.completed ? Date.now() : null;
         memo.updatedAt = Date.now();
         
         // 找到对应的任务项元素
@@ -3042,6 +4795,7 @@ class MemoManager {
         }
         
         this.saveMemos();
+        this.refreshCalendarPanelIfOpen();
         return true;
     }
 
@@ -4472,10 +6226,12 @@ class MemoManager {
         if (!task) return;
         
         task.completed = !task.completed;
+        task.completedAt = task.completed ? Date.now() : null;
         task.updatedAt = Date.now();
         
         await this.saveMemos();
         this.renderPanelTaskList();
+        this.refreshCalendarPanelIfOpen();
     }
     
     /**
