@@ -254,6 +254,17 @@ class MemoManager {
             memo.createdAt = memo.createdAt || Date.now();
             memo.updatedAt = memo.updatedAt || Date.now();
             
+            // 进度字段迁移（v1.6.0 新增）
+            // progress: number (0-100 百分比) 或 null
+            if (memo.progress !== undefined && memo.progress !== null) {
+                // 兼容旧格式 { current, total } 转换为纯百分比
+                if (typeof memo.progress === 'object' && memo.progress.total) {
+                    memo.progress = Math.round((memo.progress.current / memo.progress.total) * 100);
+                }
+                // 确保是 0-100 的数字
+                memo.progress = Math.max(0, Math.min(100, parseInt(memo.progress) || 0));
+            }
+            
             // 检查图片数据是否损坏
             if (memo.images && Array.isArray(memo.images)) {
                 memo.images = memo.images.filter(img => {
@@ -408,6 +419,28 @@ class MemoManager {
                             ${this.categories.map(cat => `<option value="${cat.id}">${this.escapeHtml(cat.name)}</option>`).join('')}
                         </select>
                     </div>
+                    <div class="form-group progress-group">
+                        <label>
+                            <input type="checkbox" id="sidebar-task-progress-enable">
+                            启用进度追踪
+                        </label>
+                        <div class="progress-inputs hidden" id="progress-inputs">
+                            <div class="progress-slider-row">
+                                <input type="range" id="sidebar-task-progress-slider" 
+                                       min="0" max="100" value="0" step="1" class="progress-slider">
+                                <div class="progress-percent-input">
+                                    <input type="number" id="sidebar-task-progress-percent" 
+                                           min="0" max="100" value="0" class="progress-number-input">
+                                    <span class="percent-sign">%</span>
+                                </div>
+                            </div>
+                            <div class="progress-preview">
+                                <div class="progress-preview-bar">
+                                    <div class="progress-preview-fill" id="progress-preview-fill" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="sidebar-form-footer">
                     <button class="btn-cancel" id="sidebar-form-cancel">取消</button>
@@ -513,6 +546,37 @@ class MemoManager {
                     e.preventDefault();
                     this.saveSidebarTask();
                 }
+            });
+        }
+        
+        // 进度追踪开关
+        const progressEnable = document.getElementById('sidebar-task-progress-enable');
+        const progressInputs = document.getElementById('progress-inputs');
+        if (progressEnable && progressInputs) {
+            progressEnable.addEventListener('change', () => {
+                progressInputs.classList.toggle('hidden', !progressEnable.checked);
+                if (progressEnable.checked) {
+                    this.updateProgressPreview();
+                }
+            });
+        }
+        
+        // 进度滑块拖动
+        const progressSlider = document.getElementById('sidebar-task-progress-slider');
+        const progressPercent = document.getElementById('sidebar-task-progress-percent');
+        if (progressSlider) {
+            progressSlider.addEventListener('input', () => this.updateProgressFromSlider());
+        }
+        
+        // 进度百分比输入
+        if (progressPercent) {
+            progressPercent.addEventListener('input', () => this.updateProgressFromPercent());
+            // 失去焦点时确保值在有效范围内
+            progressPercent.addEventListener('blur', () => {
+                let value = parseInt(progressPercent.value) || 0;
+                value = Math.max(0, Math.min(100, value));
+                progressPercent.value = value;
+                this.updateProgressFromPercent();
             });
         }
         
@@ -1248,6 +1312,27 @@ class MemoManager {
         // 获取分类名称
         const categoryName = task.categoryId ? this.getCategoryName(task.categoryId) : '';
         
+        // 生成进度条 HTML（纯百分比模式）
+        let progressHtml = '';
+        if (task.progress !== null && task.progress !== undefined) {
+            const percentage = parseInt(task.progress) || 0;
+            let progressClass = 'low';
+            if (percentage === 100) progressClass = 'complete';
+            else if (percentage >= 60) progressClass = 'high';
+            else if (percentage >= 30) progressClass = 'medium';
+            
+            progressHtml = `
+                <div class="task-progress">
+                    <div class="task-progress-bar">
+                        <div class="task-progress-fill ${progressClass}" style="width: ${percentage}%"></div>
+                    </div>
+                    <div class="task-progress-text">
+                        <span class="task-progress-percentage">${percentage}%</span>
+                    </div>
+                </div>
+            `;
+        }
+        
         item.innerHTML = `
             <div class="task-checkbox" title="${task.completed ? '标记为未完成' : '标记为已完成'}">
                 <i class="${task.completed ? 'fas fa-check-circle' : 'far fa-circle'}"></i>
@@ -1258,6 +1343,7 @@ class MemoManager {
                     <div class="task-title">${this.escapeHtml(task.title || '无标题')}</div>
                 </div>
                 ${task.text ? `<div class="task-desc">${this.escapeHtml(task.text.substring(0, 60))}${task.text.length > 60 ? '...' : ''}</div>` : ''}
+                ${progressHtml}
                 ${imagesHtml}
                 <div class="task-meta">
                     ${categoryName ? `<span class="task-category-tag"><i class="fas fa-folder"></i> ${this.escapeHtml(categoryName)}</span>` : ''}
@@ -2042,7 +2128,7 @@ class MemoManager {
             
             if (type === 'completed') {
                 dataToExport = {
-                    version: '1.5.1',
+                    version: '1.6.0 ',
                     exportDate: new Date().toISOString(),
                     type: 'completed_tasks',
                     memos: this.memos.filter(m => m.completed),
@@ -2052,7 +2138,7 @@ class MemoManager {
                 filename = `tasks-completed-${this.formatLocalDateYMD(new Date())}.json`;
             } else {
                 dataToExport = {
-                    version: '1.5.1',
+                    version: '1.6.0',
                     exportDate: new Date().toISOString(),
                     type: 'full_backup',
                     memos: this.memos,
@@ -3602,6 +3688,80 @@ class MemoManager {
     }
     
     /**
+     * 更新进度预览（纯百分比模式）
+     * @param {number} percentage - 百分比 (0-100)
+     */
+    updateProgressPreview(percentage = null) {
+        const previewFill = document.getElementById('progress-preview-fill');
+        const slider = document.getElementById('sidebar-task-progress-slider');
+        const percentInput = document.getElementById('sidebar-task-progress-percent');
+        
+        if (percentage === null) {
+            // 从滑块或输入框获取当前值
+            percentage = parseInt(slider?.value) || parseInt(percentInput?.value) || 0;
+        }
+        
+        // 确保在有效范围内
+        percentage = Math.max(0, Math.min(100, percentage));
+        
+        // 更新预览进度条
+        if (previewFill) {
+            previewFill.style.width = `${percentage}%`;
+            // 根据进度设置颜色
+            if (percentage === 100) {
+                previewFill.className = 'progress-preview-fill complete';
+            } else if (percentage >= 60) {
+                previewFill.className = 'progress-preview-fill high';
+            } else if (percentage >= 30) {
+                previewFill.className = 'progress-preview-fill medium';
+            } else {
+                previewFill.className = 'progress-preview-fill low';
+            }
+        }
+    }
+    
+    /**
+     * 从滑块更新进度
+     */
+    updateProgressFromSlider() {
+        const slider = document.getElementById('sidebar-task-progress-slider');
+        const percentInput = document.getElementById('sidebar-task-progress-percent');
+        
+        if (!slider) return;
+        
+        const percentage = parseInt(slider.value) || 0;
+        
+        // 同步到百分比输入框
+        if (percentInput) {
+            percentInput.value = percentage;
+        }
+        
+        this.updateProgressPreview(percentage);
+    }
+    
+    /**
+     * 从百分比输入框更新进度
+     */
+    updateProgressFromPercent() {
+        const slider = document.getElementById('sidebar-task-progress-slider');
+        const percentInput = document.getElementById('sidebar-task-progress-percent');
+        
+        if (!percentInput) return;
+        
+        let percentage = parseInt(percentInput.value) || 0;
+        
+        // 确保在有效范围内
+        percentage = Math.max(0, Math.min(100, percentage));
+        
+        // 同步到滑块
+        if (slider) {
+            slider.value = percentage;
+        }
+        
+        this.updateProgressPreview(percentage);
+    }
+    
+    /**
      * 显示侧边栏任务表单
      */
     showSidebarForm(task = null) {
@@ -3615,6 +3775,12 @@ class MemoManager {
         const dueInput = document.getElementById('sidebar-task-due');
         const categorySelect = document.getElementById('sidebar-task-category');
         const previewList = document.getElementById('image-preview-list');
+        
+        // 进度相关元素（纯百分比模式）
+        const progressEnable = document.getElementById('sidebar-task-progress-enable');
+        const progressInputs = document.getElementById('progress-inputs');
+        const progressSlider = document.getElementById('sidebar-task-progress-slider');
+        const progressPercent = document.getElementById('sidebar-task-progress-percent');
         
         // 清空临时图片
         this.tempImages = [];
@@ -3636,6 +3802,22 @@ class MemoManager {
             prioritySelect.value = task.priority || 'none';
             dueInput.value = task.dueDate || '';
             if (categorySelect) categorySelect.value = task.categoryId || '';
+            
+            // 加载进度数据（纯百分比）
+            if (task.progress !== null && task.progress !== undefined && progressEnable && progressInputs) {
+                const percentage = parseInt(task.progress) || 0;
+                progressEnable.checked = true;
+                progressInputs.classList.remove('hidden');
+                if (progressSlider) progressSlider.value = percentage;
+                if (progressPercent) progressPercent.value = percentage;
+                this.updateProgressPreview(percentage);
+            } else if (progressEnable && progressInputs) {
+                progressEnable.checked = false;
+                progressInputs.classList.add('hidden');
+                if (progressSlider) progressSlider.value = 0;
+                if (progressPercent) progressPercent.value = 0;
+                this.updateProgressPreview(0);
+            }
             
             // 加载已有图片
             if (task.images && task.images.length > 0 && previewList) {
@@ -3672,6 +3854,13 @@ class MemoManager {
             prioritySelect.value = 'none';
             dueInput.value = this.getTodayDate();
             if (categorySelect) categorySelect.value = '';
+            
+            // 重置进度（纯百分比模式）
+            if (progressEnable) progressEnable.checked = false;
+            if (progressInputs) progressInputs.classList.add('hidden');
+            if (progressSlider) progressSlider.value = 0;
+            if (progressPercent) progressPercent.value = 0;
+            this.updateProgressPreview(0);
         }
         
         modal.classList.remove('hidden');
@@ -3704,6 +3893,11 @@ class MemoManager {
         const dueInput = document.getElementById('sidebar-task-due');
         const categorySelect = document.getElementById('sidebar-task-category');
         
+        // 进度相关（纯百分比模式）
+        const progressEnable = document.getElementById('sidebar-task-progress-enable');
+        const progressSlider = document.getElementById('sidebar-task-progress-slider');
+        const progressPercent = document.getElementById('sidebar-task-progress-percent');
+        
         const title = titleInput.value.trim();
         if (!title) {
             titleInput.focus();
@@ -3719,13 +3913,25 @@ class MemoManager {
             fullImage: img.fullImage || img.thumbnail  // 兼容旧数据
         })) : [];
         
+        // 处理进度数据（纯百分比：0-100 的整数，或 null）
+        let progress = null;
+        if (progressEnable && progressEnable.checked) {
+            // 优先从输入框获取，如果为空则从滑块获取
+            let percentage = parseInt(progressPercent?.value);
+            if (isNaN(percentage)) {
+                percentage = parseInt(progressSlider?.value) || 0;
+            }
+            progress = Math.max(0, Math.min(100, percentage));
+        }
+        
         const taskData = {
             title: title,
             text: textInput.value.trim(),
             priority: prioritySelect.value,
             dueDate: dueInput.value || null,
             images: images,
-            categoryId: categorySelect ? categorySelect.value || null : null
+            categoryId: categorySelect ? categorySelect.value || null : null,
+            progress: progress
         };
         
         const taskId = modal.dataset.taskId;
@@ -3735,12 +3941,19 @@ class MemoManager {
             if (task) {
                 Object.assign(task, taskData);
                 task.updatedAt = Date.now();
+                
+                // 只有进度达到 100% 才自动标记为已完成
+                if (progress === 100 && !task.completed) {
+                    task.completed = true;
+                    task.completedAt = Date.now();
+                }
             }
         } else {
             const newTask = {
                 id: this.generateId(),
                 ...taskData,
-                completed: false,
+                completed: progress === 100,
+                completedAt: progress === 100 ? Date.now() : null,
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
                 tagIds: []
@@ -4006,7 +4219,12 @@ class MemoManager {
                 tagIds: Array.isArray(memo.tagIds) ? memo.tagIds : (Array.isArray(memo.tags) ? memo.tags : []),
                 priority: memo.priority || 'none',
                 dueDate: memo.dueDate || null,
-                images: Array.isArray(memo.images) ? memo.images : []
+                images: Array.isArray(memo.images) ? memo.images : [],
+                // v1.6.0 新增：进度追踪字段
+                progress: memo.progress && typeof memo.progress === 'object' ? {
+                    current: Math.max(0, parseInt(memo.progress.current) || 0),
+                    total: Math.max(1, parseInt(memo.progress.total) || 1)
+                } : null
             }));
             
             console.log('备忘录加载成功，数量:', this.memos.length);

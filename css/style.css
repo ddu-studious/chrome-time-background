@@ -6035,3 +6035,303 @@ body:hover .keyboard-hint {
     text-align: center;
     padding: 1rem;
 }
+
+/* ===== 任务进度条样式 ===== */
+
+/* 表单中的进度控件 */
+.sidebar-form-body .progress-group label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    margin-bottom: 12px;
+}
+
+.sidebar-form-body .progress-group label input[type="checkbox"] {
+    width: auto;
+    padding: 0;
+    margin: 0;
+    accent-color: #6366f1;
+}
+
+.progress-inputs {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    padding: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.progress-inputs.hidden {
+    display: none;
+}
+
+/* 滑块 + 百分比输入布局 */
+.progress-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+/* 滑块样式 */
+.progress-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 1;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    cursor: pointer;
+    outline: none;
+}
+
+.progress-slider::-webkit-slider-runnable-track {
+    height: 8px;
+    background: linear-gradient(to right, 
+        #6366f1 0%, 
+        #6366f1 var(--progress, 0%), 
+        rgba(255, 255, 255, 0.1) var(--progress, 0%), 
+        rgba(255, 255, 255, 0.1) 100%
+    );
+    border-radius: 4px;
+}
+
+.progress-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #fff;
+    cursor: grab;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    border: 2px solid rgba(99, 102, 241, 0.5);
+    margin-top: -6px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.progress-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.progress-slider::-webkit-slider-thumb:active {
+    cursor: grabbing;
+    transform: scale(1.05);
+}
+
+.progress-slider::-moz-range-track {
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+}
+
+.progress-slider::-moz-range-progress {
+    height: 8px;
+    background: linear-gradient(90deg, #6366f1, #8b5cf6);
+    border-radius: 4px;
+}
+
+.progress-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #fff;
+    cursor: grab;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    border: 2px solid rgba(99, 102, 241, 0.5);
+}
+
+/* 百分比输入框 */
+.progress-percent-input {
+    display: flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 0 8px 0 0;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.progress-percent-input .progress-number-input {
+    width: 50px !important;
+    padding: 8px 4px 8px 10px !important;
+    text-align: right;
+    font-size: 15px !important;
+    font-weight: 600;
+    background: transparent !important;
+    border: none !important;
+    color: #fff;
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+.progress-percent-input .progress-number-input:focus {
+    outline: none;
+    box-shadow: none !important;
+}
+
+.progress-percent-input .progress-number-input::-webkit-outer-spin-button,
+.progress-percent-input .progress-number-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.progress-percent-input .percent-sign {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.progress-preview {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.progress-preview-bar {
+    flex: 1;
+    height: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.progress-preview-fill {
+    height: 100%;
+    border-radius: 5px;
+    transition: width 0.3s ease, background 0.3s ease;
+    background: linear-gradient(90deg, #6366f1, #8b5cf6);
+}
+
+.progress-preview-fill.low {
+    background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.progress-preview-fill.medium {
+    background: linear-gradient(90deg, #6366f1, #8b5cf6);
+}
+
+.progress-preview-fill.high {
+    background: linear-gradient(90deg, #10b981, #34d399);
+}
+
+.progress-preview-fill.complete {
+    background: linear-gradient(90deg, #10b981, #34d399);
+}
+
+.progress-preview-text {
+    font-size: 14px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    min-width: 40px;
+    text-align: right;
+}
+
+/* 任务列表中的进度条 */
+.task-progress {
+    margin: 10px 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.task-progress-bar {
+    flex: 1;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.task-progress-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s ease;
+    position: relative;
+}
+
+/* 进度条颜色分级 */
+/* 0-30%：橙色（低进度） */
+.task-progress-fill.low {
+    background-color: #f59e0b;
+    background-image: linear-gradient(90deg, #f59e0b, #fbbf24),
+        linear-gradient(45deg,
+            rgba(255, 255, 255, 0.15) 25%,
+            transparent 25%,
+            transparent 50%,
+            rgba(255, 255, 255, 0.15) 50%,
+            rgba(255, 255, 255, 0.15) 75%,
+            transparent 75%,
+            transparent
+        );
+    background-size: 100% 100%, 16px 16px;
+    animation: progress-stripe 1s linear infinite;
+}
+
+/* 30-60%：紫色（中等进度） */
+.task-progress-fill.medium {
+    background-color: #6366f1;
+    background-image: linear-gradient(90deg, #6366f1, #8b5cf6),
+        linear-gradient(45deg,
+            rgba(255, 255, 255, 0.15) 25%,
+            transparent 25%,
+            transparent 50%,
+            rgba(255, 255, 255, 0.15) 50%,
+            rgba(255, 255, 255, 0.15) 75%,
+            transparent 75%,
+            transparent
+        );
+    background-size: 100% 100%, 16px 16px;
+    animation: progress-stripe 1s linear infinite;
+}
+
+/* 60-100%：绿色（高进度） */
+.task-progress-fill.high {
+    background-color: #10b981;
+    background-image: linear-gradient(90deg, #10b981, #34d399),
+        linear-gradient(45deg,
+            rgba(255, 255, 255, 0.15) 25%,
+            transparent 25%,
+            transparent 50%,
+            rgba(255, 255, 255, 0.15) 50%,
+            rgba(255, 255, 255, 0.15) 75%,
+            transparent 75%,
+            transparent
+        );
+    background-size: 100% 100%, 16px 16px;
+    animation: progress-stripe 1s linear infinite;
+}
+
+/* 100%：绿色（完成状态，无条纹动画） */
+.task-progress-fill.complete {
+    background: linear-gradient(90deg, #10b981, #34d399);
+    animation: none;
+}
+
+@keyframes progress-stripe {
+    from { background-position: 0 0; }
+    to { background-position: 16px 0; }
+}
+
+.task-progress-text {
+    display: flex;
+    align-items: center;
+    min-width: 40px;
+}
+
+.task-progress-percentage {
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+/* 已完成任务的进度条 */
+.sidebar-task-item.completed .task-progress-fill {
+    animation: none;
+    opacity: 0.6;
+}
+
+.sidebar-task-item.completed .task-progress-percentage {
+    opacity: 0.6;
+}
