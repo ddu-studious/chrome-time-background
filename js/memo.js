@@ -4220,11 +4220,12 @@ class MemoManager {
                 priority: memo.priority || 'none',
                 dueDate: memo.dueDate || null,
                 images: Array.isArray(memo.images) ? memo.images : [],
-                // v1.6.0 新增：进度追踪字段
-                progress: memo.progress && typeof memo.progress === 'object' ? {
-                    current: Math.max(0, parseInt(memo.progress.current) || 0),
-                    total: Math.max(1, parseInt(memo.progress.total) || 1)
-                } : null
+                // v1.6.0 新增：进度追踪字段（纯百分比：0-100 的整数或 null）
+                progress: memo.progress !== undefined && memo.progress !== null ? (
+                    typeof memo.progress === 'object' && memo.progress.total
+                        ? Math.round((memo.progress.current / memo.progress.total) * 100)
+                        : Math.max(0, Math.min(100, parseInt(memo.progress) || 0))
+                ) : null
             }));
             
             console.log('备忘录加载成功，数量:', this.memos.length);

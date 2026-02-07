@@ -3,6 +3,7 @@ class WeatherService {
         this.API_KEY = '95c944325dfa427d836b3a32875d1b77';
         this.weatherContainer = document.getElementById('weather');
         this.forecastContainer = document.getElementById('forecast');
+        this.weatherWrapper = document.querySelector('.weather-wrapper');
         this.updateInterval = 30 * 60 * 1000; // 30分钟更新一次
         this.retryTimeout = 5000; // 5秒后重试
         this.maxRetries = 3; // 最大重试次数
@@ -36,6 +37,20 @@ class WeatherService {
         // 防止重复初始化（main.js 与本文件曾同时触发）
         if (this._initialized) return;
         this._initialized = true;
+
+        // 监听设置变更
+        if (window.settingsManager) {
+            window.settingsManager.addChangeListener((settings) => {
+                this.onSettingsChange(settings);
+            });
+            // 初始化时检查 showWeather 设置
+            const showWeather = window.settingsManager.getSetting('showWeather');
+            if (showWeather === false) {
+                this.hideWeatherArea();
+                return;
+            }
+        }
+
         try {
             await this.updateWeather();
             this._updateIntervalId = setInterval(() => this.updateWeather(), this.updateInterval);
@@ -43,6 +58,45 @@ class WeatherService {
             console.error('Weather initialization failed:', error);
             this.showError('');
             this.retryInit();
+        }
+    }
+
+    /**
+     * 响应设置变更
+     */
+    onSettingsChange(settings) {
+        if (settings.showWeather === false) {
+            this.hideWeatherArea();
+            // 停止定时更新
+            if (this._updateIntervalId) {
+                clearInterval(this._updateIntervalId);
+                this._updateIntervalId = null;
+            }
+        } else {
+            this.showWeatherArea();
+            // 重新启动天气更新
+            this.updateWeather();
+            if (!this._updateIntervalId) {
+                this._updateIntervalId = setInterval(() => this.updateWeather(), this.updateInterval);
+            }
+        }
+    }
+
+    /**
+     * 隐藏天气区域
+     */
+    hideWeatherArea() {
+        if (this.weatherWrapper) {
+            this.weatherWrapper.style.display = 'none';
+        }
+    }
+
+    /**
+     * 显示天气区域
+     */
+    showWeatherArea() {
+        if (this.weatherWrapper) {
+            this.weatherWrapper.style.display = '';
         }
     }
 
@@ -171,6 +225,18 @@ class WeatherService {
             const locationId = geoData.location[0].id;
             const cityName = geoData.location[0].name;
 
+            return await this.fetchWeatherDataByCity(locationId, cityName);
+        } catch (error) {
+            console.error('API request failed:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * 根据城市ID获取天气数据
+     */
+    async fetchWeatherDataByCity(locationId, cityName) {
+        try {
             // 获取实时天气
             const weatherUrl = `https://devapi.qweather.com/v7/weather/now?location=${locationId}&key=${this.API_KEY}`;
             const weatherData = await this.fetchWithTimeout(weatherUrl);
@@ -194,7 +260,7 @@ class WeatherService {
             };
         } catch (error) {
             console.error('API request failed:', error);
-            throw error; // 传递原始错误，保留错误消息
+            throw error;
         }
     }
 
@@ -236,40 +302,95 @@ class WeatherService {
         return weekdays[date.getDay()];
     }
 
+    /**
+     * 通过城市名称查询城市ID
+     */
+    async lookupCityByName(cityName) {
+        const geoUrl = `https://geoapi.qweather.com/v2/city/lookup?location=${encodeURIComponent(cityName)}&key=${this.API_KEY}`;
+        const geoData = await this.fetchWithTimeout(geoUrl);
+        if (geoData.code !== '200' || !geoData.location?.[0]?.id) {
+            throw new Error(`无法找到城市"${cityName}"，请检查城市名称`);
+        }
+        return {
+            id: geoData.location[0].id,
+            name: geoData.location[0].name
+        };
+    }
+
+    /**
+     * 获取温度单位
+     */
+    getTemperatureUnit() {
+        return window.settingsManager?.getSetting('temperatureUnit') || 'C';
+    }
+
+    /**
+     * 格式化温度显示
+     */
+    formatTemp(tempC, withUnit = true) {
+        const unit = this.getTemperatureUnit();
+        let temp = parseInt(tempC);
+        if (unit === 'F') {
+            temp = Math.round(temp * 9 / 5 + 32);
+        }
+        return withUnit ? `${temp}°${unit}` : `${temp}°`;
+    }
+
     async updateWeather() {
         try {
-            // 尝试获取地理位置
-            let location;
-            try {
-                location = await this.getLocation();
-                // 缓存最后一次成功定位，便于后续降级使用
-                this.cacheLocation(location);
-            } catch (error) {
-                // 地理位置错误单独处理
-                console.warn('Location error:', error);
-                
-                // 尝试使用缓存位置降级
-                const cached = await this.getCachedLocation();
-                if (cached) {
-                    location = cached;
-                } else {
-                    this.showError(error.message);
-                    return; // 如果无法获取位置，直接返回
-                }
+            // 检查 showWeather 设置
+            const showWeather = window.settingsManager?.getSetting('showWeather');
+            if (showWeather === false) {
+                this.hideWeatherArea();
+                return;
             }
-            
-            // 尝试获取天气数据
-            const weatherData = await this.fetchWeatherData(location.latitude, location.longitude);
+
+            let weatherData;
+            const manualCity = window.settingsManager?.getSetting('weatherCity');
+
+            if (manualCity && manualCity.trim()) {
+                // 使用手动设置的城市名称
+                try {
+                    const cityInfo = await this.lookupCityByName(manualCity.trim());
+                    weatherData = await this.fetchWeatherDataByCity(cityInfo.id, cityInfo.name);
+                } catch (error) {
+                    console.error('Manual city weather failed:', error);
+                    this.showError(error.message);
+                    return;
+                }
+            } else {
+                // 自动定位模式
+                let location;
+                try {
+                    location = await this.getLocation();
+                    this.cacheLocation(location);
+                } catch (error) {
+                    console.warn('Location error:', error);
+                    const cached = await this.getCachedLocation();
+                    if (cached) {
+                        location = cached;
+                    } else {
+                        // 自动定位失败且无缓存，也无手动城市 → 隐藏天气区域
+                        console.warn('无法获取位置，且未设置手动城市，隐藏天气区域');
+                        this.hideWeatherArea();
+                        return;
+                    }
+                }
+                weatherData = await this.fetchWeatherData(location.latitude, location.longitude);
+            }
             
             if (!this.weatherContainer || !this.forecastContainer) {
                 throw new Error('找不到天气显示容器');
             }
 
+            // 确保天气区域可见
+            this.showWeatherArea();
+
             // 更新当前天气
             this.weatherContainer.innerHTML = `
                 <div class="current-weather">
                     <span class="weather-icon">${this.getWeatherIcon(weatherData.current.icon)}</span>
-                    <span class="weather-temp">${weatherData.current.temp}°C</span>
+                    <span class="weather-temp">${this.formatTemp(weatherData.current.temp)}</span>
                     <span class="weather-desc">${weatherData.current.text}</span>
                     <span class="weather-city">${weatherData.city}</span>
                 </div>
@@ -281,8 +402,8 @@ class WeatherService {
                     <span class="forecast-date">${this.formatDate(day.fxDate)}</span>
                     <span class="forecast-icon">${this.getWeatherIcon(day.iconDay)}</span>
                     <div class="forecast-temp">
-                        <span class="temp-max">${day.tempMax}°</span>
-                        <span class="temp-min">${day.tempMin}°</span>
+                        <span class="temp-max">${this.formatTemp(day.tempMax, false)}</span>
+                        <span class="temp-min">${this.formatTemp(day.tempMin, false)}</span>
                     </div>
                 </div>
             `).join('');

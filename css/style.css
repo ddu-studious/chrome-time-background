@@ -76,6 +76,36 @@
     opacity: 0.8;
 }
 
+.sidebar-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sidebar-manage-btn {
+    position: relative;
+    z-index: 3;
+    pointer-events: auto;
+    background: rgba(255, 255, 255, 0.08);
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    text-decoration: none;
+    font-size: 13px;
+}
+
+.sidebar-manage-btn:hover {
+    background: rgba(100, 180, 255, 0.15);
+    color: #64b4ff;
+}
+
 .sidebar-collapse-btn {
     position: relative;
     z-index: 3;
@@ -4329,6 +4359,40 @@ body:hover .keyboard-hint {
 .setting-item select:hover,
 .setting-item input[type="number"]:hover {
     border-color: rgba(255, 255, 255, 0.4);
+}
+
+.settings-input {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    padding: 0.5rem 0.75rem;
+    border-radius: 4px;
+    margin-left: 1rem;
+    width: 140px;
+    font-size: 0.9rem;
+    transition: border-color 0.2s;
+}
+
+.settings-input:hover {
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.settings-input:focus {
+    outline: none;
+    border-color: rgba(100, 180, 255, 0.6);
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.settings-input::placeholder {
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 0.85rem;
+}
+
+.setting-hint {
+    margin: 0.4rem 0 0;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.4);
+    line-height: 1.4;
 }
 
 .setting-item input[type="checkbox"] {

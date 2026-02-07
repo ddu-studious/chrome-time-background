@@ -10,6 +10,7 @@ class SettingsManager {
             showHolidays: true, // 显示节假日
             theme: 'auto', // 'light', 'dark', or 'auto'
             language: 'zh', // 'zh' or 'en'
+            weatherCity: '', // 手动设置的城市名称（为空则自动定位）
             memos: [], // 备忘录数据
             memoCategories: ['工作', '生活', '学习', '其他'], // 备忘录分类
             // 每日任务设置
@@ -90,6 +91,23 @@ class SettingsManager {
                 await this.saveSettings();
             }
         });
+
+        // 文本输入框在失焦时保存（避免每次按键都保存）
+        settingsPanel.querySelectorAll('input[type="text"]').forEach(input => {
+            input.addEventListener('blur', async (e) => {
+                const target = e.target;
+                if (target.name && target.name in this.settings && this.settings[target.name] !== target.value) {
+                    this.settings[target.name] = target.value.trim();
+                    await this.saveSettings();
+                }
+            });
+            // 回车键也触发保存
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.target.blur();
+                }
+            });
+        });
     }
 
     generateSettingsHTML() {
@@ -140,6 +158,13 @@ class SettingsManager {
                                 <option value="F" ${this.settings.temperatureUnit === 'F' ? 'selected' : ''}>华氏度 (°F)</option>
                             </select>
                         </label>
+                    </div>
+                    <div class="setting-item">
+                        <label>
+                            手动设置城市
+                            <input type="text" name="weatherCity" value="${this.escapeAttr(this.settings.weatherCity || '')}" placeholder="留空则自动定位" class="settings-input">
+                        </label>
+                        <p class="setting-hint">无法自动定位时，可手动输入城市名（如：北京、上海）</p>
                     </div>
                 </div>
 
@@ -192,6 +217,10 @@ class SettingsManager {
                 </div>
             </div>
         `;
+    }
+
+    escapeAttr(str) {
+        return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
     addChangeListener(listener) {
