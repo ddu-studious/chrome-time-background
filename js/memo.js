@@ -127,6 +127,14 @@ class MemoManager {
             // 检查数据健康状况
             await this.validateAndRepairData();
             
+            // 更新每日重复任务状态
+            try {
+                await this.updateDailyRecurringTasks();
+                console.log('每日重复任务状态更新完成');
+            } catch (e) {
+                console.warn('每日重复任务更新失败:', e);
+            }
+            
             // 渲染到侧边栏（新的双栏布局）
             try {
                 this.renderSidebarContent();
@@ -278,6 +286,50 @@ class MemoManager {
                 });
             }
             
+            // 习惯任务数据完整性检查
+            if (memo.recurrence?.enabled && memo.recurrence?.type === 'daily') {
+                if (!memo.habit) {
+                    memo.habit = {
+                        streak: 0,
+                        bestStreak: 0,
+                        completedDates: [],
+                        totalCompletions: 0
+                    };
+                    needsSave = true;
+                }
+                // 确保 completedDates 是数组
+                if (!Array.isArray(memo.habit.completedDates)) {
+                    memo.habit.completedDates = [];
+                    needsSave = true;
+                }
+                // 确保 habitCard 存在
+                if (!memo.habitCard) {
+                    memo.habitCard = { icon: '📋', color: '#4caf50' };
+                    needsSave = true;
+                }
+            }
+            
+            // 兼容旧 isDaily 标记迁移
+            if (memo.isDaily && !memo.recurrence) {
+                memo.recurrence = {
+                    enabled: true,
+                    type: 'daily',
+                    interval: 1,
+                    weekDays: null,
+                    monthDay: null,
+                    endDate: null
+                };
+                memo.habit = memo.habit || {
+                    streak: 0,
+                    bestStreak: 0,
+                    completedDates: [],
+                    totalCompletions: 0
+                };
+                memo.habitCard = memo.habitCard || { icon: '📋', color: '#4caf50' };
+                delete memo.isDaily;
+                needsSave = true;
+            }
+            
             return true;
         });
         
@@ -355,6 +407,7 @@ class MemoManager {
                 <option value="completed">已完成</option>
                 <option value="today">今日</option>
                 <option value="overdue">已过期</option>
+                <option value="habits">每日习惯</option>
             </select>
             <select class="sidebar-category-select" id="sidebar-category-select">
                 <option value="all">全部分类</option>
@@ -418,6 +471,16 @@ class MemoManager {
                             <option value="">无分类</option>
                             ${this.categories.map(cat => `<option value="${cat.id}">${this.escapeHtml(cat.name)}</option>`).join('')}
                         </select>
+                    </div>
+                    <div class="form-group recurrence-group">
+                        <label for="sidebar-task-recurrence">重复类型</label>
+                        <div class="recurrence-row">
+                            <select id="sidebar-task-recurrence">
+                                <option value="none">不重复</option>
+                                <option value="daily">每日重复</option>
+                            </select>
+                            <input type="text" id="sidebar-task-habit-icon" class="habit-icon-input" placeholder="📋" maxlength="2" title="习惯图标（emoji）">
+                        </div>
                     </div>
                     <div class="form-group progress-group">
                         <label>
@@ -546,6 +609,14 @@ class MemoManager {
                     e.preventDefault();
                     this.saveSidebarTask();
                 }
+            });
+        }
+        
+        // 重复类型选择器
+        const recurrenceSelect = document.getElementById('sidebar-task-recurrence');
+        if (recurrenceSelect) {
+            recurrenceSelect.addEventListener('change', () => {
+                this.toggleHabitIconVisibility(recurrenceSelect.value);
             });
         }
         
@@ -783,6 +854,9 @@ class MemoManager {
             case 'overdue':
                 filteredMemos = filteredMemos.filter(m => m.dueDate && m.dueDate < today && !m.completed);
                 break;
+            case 'habits':
+                filteredMemos = filteredMemos.filter(m => m.recurrence?.enabled && m.recurrence?.type === 'daily');
+                break;
         }
         
         // 排序
@@ -805,6 +879,10 @@ class MemoManager {
         
         // 更新任务统计显示
         this.updateTaskStats(totalTasks, completedTasks, filteredCount);
+        
+        // 分离习惯任务和普通任务
+        const habitTasks = filteredMemos.filter(m => m.recurrence?.enabled && m.recurrence?.type === 'daily');
+        const regularTasks = filteredMemos.filter(m => !(m.recurrence?.enabled && m.recurrence?.type === 'daily'));
         
         // 渲染
         if (filteredMemos.length === 0) {
@@ -847,8 +925,24 @@ class MemoManager {
         this._sidebarRenderToken = (this._sidebarRenderToken || 0) + 1;
         const renderToken = this._sidebarRenderToken;
         
+        // ========== 渲染习惯任务分组（折叠式习惯列表） ==========
+        if (habitTasks.length > 0) {
+            const habitsGroup = this.createHabitGroup(habitTasks, filteredCount, renderToken);
+            container.appendChild(habitsGroup);
+        }
+        
+        // ========== 渲染普通任务（按日期分组） ==========
+        const tasksToGroup = regularTasks.length > 0 ? regularTasks : [];
+        
+        if (tasksToGroup.length === 0 && habitTasks.length > 0) {
+            // 只有习惯任务，没有普通任务时不需要后续渲染
+            return;
+        }
+        
+        if (tasksToGroup.length === 0) return;
+        
         // 按日期分组渲染任务
-        const groupedTasks = this.groupTasksByDate(filteredMemos);
+        const groupedTasks = this.groupTasksByDate(tasksToGroup);
         const recentGroups = ['today', 'yesterday', 'two-days-ago']; // 近3天不折叠
         
         // 先渲染分组壳子（标题/折叠），默认折叠的分组不渲染任务项（展开时再懒加载）
@@ -857,7 +951,7 @@ class MemoManager {
         const lazyGroups = [];  // 默认折叠分组：只渲染标题，任务展开时渲染
         
         // 预计算每个分组的起始 index（用于渲染序号稳定）
-        let cumulative = 0;
+        let cumulative = habitTasks.length; // 序号从习惯任务之后开始
         groupEntries.forEach(([dateKey, tasks]) => {
             const startIndex = cumulative + 1;
             cumulative += tasks.length;
@@ -990,6 +1084,401 @@ class MemoManager {
         };
 
         requestAnimationFrame(renderChunk);
+    }
+    
+    // ==================== 习惯任务渲染 ====================
+    
+    /**
+     * 创建习惯区域（方案五：顶部卡片 + 折叠详情列表）
+     * @param {Array} habits 习惯任务数组
+     * @param {number} totalCount 总任务数
+     * @param {number} renderToken 渲染令牌
+     * @returns {HTMLElement} 习惯区域容器
+     */
+    createHabitGroup(habits, totalCount, renderToken) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'habits-section';
+        
+        const today = this.getTodayDate();
+        
+        // 计算习惯统计
+        const todayCompleted = habits.filter(h => h.habit?.completedDates?.includes(today)).length;
+        const maxStreak = Math.max(0, ...habits.map(h => h.habit?.streak || 0));
+        const allDone = todayCompleted === habits.length && habits.length > 0;
+        
+        // ===== 1. 顶部标题栏 =====
+        const header = document.createElement('div');
+        header.className = 'habits-section-header';
+        header.innerHTML = `
+            <div class="habits-section-title">
+                <i class="fas fa-fire habits-fire-icon"></i>
+                <span>每日习惯</span>
+                <span class="habits-progress-badge ${allDone ? 'all-done' : ''}">${todayCompleted}/${habits.length}</span>
+            </div>
+            <div class="habits-section-actions">
+                ${maxStreak > 0 ? `<span class="habits-max-streak"><span class="streak-fire">🔥</span>${maxStreak}天</span>` : ''}
+                <button class="habits-add-btn-mini" title="添加习惯"><i class="fas fa-plus"></i></button>
+            </div>
+        `;
+        header.querySelector('.habits-add-btn-mini').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.showSidebarForm(null, { recurrenceType: 'daily' });
+        });
+        wrapper.appendChild(header);
+        
+        // ===== 2. 顶部卡片网格（快速打卡入口） =====
+        const cardsGrid = document.createElement('div');
+        cardsGrid.className = 'habits-cards-grid';
+        
+        habits.forEach(habit => {
+            const card = this.createHabitCard(habit);
+            cardsGrid.appendChild(card);
+        });
+        
+        // "添加" 卡片
+        const addCard = document.createElement('div');
+        addCard.className = 'habit-card habit-card-add';
+        addCard.innerHTML = `<i class="fas fa-plus"></i>`;
+        addCard.title = '添加新习惯';
+        addCard.addEventListener('click', () => this.showSidebarForm(null, { recurrenceType: 'daily' }));
+        cardsGrid.appendChild(addCard);
+        
+        wrapper.appendChild(cardsGrid);
+        
+        // ===== 3. 展开详情区域（点击标题展开/折叠） =====
+        const detailToggle = document.createElement('div');
+        detailToggle.className = 'habits-detail-toggle';
+        detailToggle.innerHTML = `
+            <span class="habits-detail-toggle-text">详情</span>
+            <i class="fas fa-chevron-down habits-detail-chevron"></i>
+        `;
+        wrapper.appendChild(detailToggle);
+        
+        const detailContent = document.createElement('div');
+        detailContent.className = 'habits-detail-content collapsed';
+        
+        habits.forEach((habit, index) => {
+            const habitItem = this.createHabitTaskItem(habit, index + 1, totalCount);
+            detailContent.appendChild(habitItem);
+        });
+        
+        wrapper.appendChild(detailContent);
+        
+        // 折叠/展开事件
+        detailToggle.addEventListener('click', () => {
+            const isCollapsed = detailContent.classList.toggle('collapsed');
+            const chevron = detailToggle.querySelector('.habits-detail-chevron');
+            if (chevron) chevron.style.transform = isCollapsed ? '' : 'rotate(180deg)';
+            const text = detailToggle.querySelector('.habits-detail-toggle-text');
+            if (text) text.textContent = isCollapsed ? '详情' : '收起';
+        });
+        
+        return wrapper;
+    }
+    
+    /**
+     * 创建习惯卡片（紧凑版，用于顶部快速打卡）
+     * @param {Object} habit 习惯任务
+     * @returns {HTMLElement}
+     */
+    createHabitCard(habit) {
+        const today = this.getTodayDate();
+        const isTodayCompleted = habit.habit?.completedDates?.includes(today) || false;
+        const streak = habit.habit?.streak || 0;
+        const icon = habit.habitCard?.icon || '📋';
+        
+        const card = document.createElement('div');
+        card.className = `habit-card ${isTodayCompleted ? 'habit-card-done' : ''}`;
+        card.dataset.id = habit.id;
+        
+        // 本周完成情况（迷你版）
+        const weekView = this.getHabitWeekCompletion(habit);
+        const weekDotsHtml = weekView.days.map(day => {
+            const cls = ['hc-dot'];
+            if (day.completed) cls.push('done');
+            if (day.isToday) cls.push('now');
+            return `<span class="${cls.join(' ')}"></span>`;
+        }).join('');
+        
+        card.innerHTML = `
+            <div class="hc-top">
+                <span class="hc-icon">${icon}</span>
+                <button class="hc-check" title="${isTodayCompleted ? '取消' : '打卡'}">
+                    <i class="${isTodayCompleted ? 'fas fa-check-circle' : 'far fa-circle'}"></i>
+                </button>
+            </div>
+            <div class="hc-title">${this.escapeHtml(habit.title || '无标题')}</div>
+            <div class="hc-meta">
+                ${streak > 0 ? `<span class="hc-streak"><span class="streak-fire">🔥</span>${streak}</span>` : '<span class="hc-streak-empty">开始吧</span>'}
+            </div>
+            <div class="hc-week">${weekDotsHtml}</div>
+        `;
+        
+        // 打卡按钮
+        card.querySelector('.hc-check').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggleHabitCompletion(habit.id);
+        });
+        
+        // 点击卡片编辑
+        card.addEventListener('click', () => this.showSidebarForm(habit));
+        
+        return card;
+    }
+    
+    /**
+     * 创建习惯任务项
+     * @param {Object} habit 习惯任务对象
+     * @param {number} index 序号
+     * @param {number} total 总数
+     * @returns {HTMLElement} 习惯任务项
+     */
+    createHabitTaskItem(habit, index, total) {
+        const item = document.createElement('div');
+        const today = this.getTodayDate();
+        const isTodayCompleted = habit.habit?.completedDates?.includes(today) || false;
+        
+        item.className = `sidebar-task-item habit-task-item ${isTodayCompleted ? 'habit-completed' : ''} priority-${habit.priority || 'none'}`;
+        item.dataset.id = habit.id;
+        
+        const streak = habit.habit?.streak || 0;
+        const totalCompletions = habit.habit?.totalCompletions || 0;
+        const icon = habit.habitCard?.icon || '📋';
+        
+        // 本周完成情况
+        const weekView = this.getHabitWeekCompletion(habit);
+        const weekDaysHtml = weekView.days.map(day => {
+            const classes = ['habit-week-dot'];
+            if (day.completed) classes.push('completed');
+            if (day.isToday) classes.push('today');
+            return `<div class="${classes.join(' ')}" title="${day.date} ${day.completed ? '✓' : '○'}">
+                <span class="dot-label">${day.label}</span>
+            </div>`;
+        }).join('');
+        
+        item.innerHTML = `
+            <div class="habit-check" title="${isTodayCompleted ? '取消今日打卡' : '今日打卡'}">
+                <i class="${isTodayCompleted ? 'fas fa-check-circle' : 'far fa-circle'}"></i>
+            </div>
+            <div class="habit-body">
+                <div class="habit-main-row">
+                    <span class="habit-icon">${icon}</span>
+                    <span class="habit-title">${this.escapeHtml(habit.title || '无标题')}</span>
+                    ${streak > 0 ? `<span class="habit-streak-badge"><span class="streak-fire">🔥</span> ${streak}</span>` : ''}
+                </div>
+                <div class="habit-week-view">
+                    ${weekDaysHtml}
+                </div>
+                ${habit.text ? `<div class="habit-desc">${this.escapeHtml(habit.text.substring(0, 40))}${habit.text.length > 40 ? '...' : ''}</div>` : ''}
+            </div>
+            <div class="habit-actions">
+                <button class="task-edit-btn" title="编辑"><i class="fas fa-pen"></i></button>
+                <button class="task-delete-btn" title="删除"><i class="fas fa-trash"></i></button>
+            </div>
+        `;
+        
+        // 绑定打卡事件
+        item.querySelector('.habit-check').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggleHabitCompletion(habit.id);
+        });
+        
+        // 绑定编辑事件
+        item.querySelector('.task-edit-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.showSidebarForm(habit);
+        });
+        
+        // 绑定删除事件
+        item.querySelector('.task-delete-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (confirm('确定要删除这个习惯吗？所有打卡记录将丢失。')) {
+                this.deleteSidebarTask(habit.id);
+            }
+        });
+        
+        // 点击查看详情
+        item.addEventListener('click', () => this.showSidebarForm(habit));
+        
+        return item;
+    }
+    
+    /**
+     * 获取习惯本周完成情况
+     * @param {Object} habit 习惯任务
+     * @returns {Object} 本周数据
+     */
+    getHabitWeekCompletion(habit) {
+        const today = new Date();
+        const weekStart = new Date(today);
+        // 调整到周一（中国习惯周一为起始）
+        const day = weekStart.getDay();
+        const diff = day === 0 ? -6 : 1 - day;
+        weekStart.setDate(weekStart.getDate() + diff);
+        weekStart.setHours(0, 0, 0, 0);
+        
+        const labels = ['一', '二', '三', '四', '五', '六', '日'];
+        const todayStr = this.getTodayDate();
+        const weekData = { completed: 0, days: [] };
+        
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(weekStart);
+            date.setDate(weekStart.getDate() + i);
+            const dateStr = this.formatLocalDateYMD(date);
+            const isCompleted = habit.habit?.completedDates?.includes(dateStr) || false;
+            const isToday = dateStr === todayStr;
+            
+            weekData.days.push({
+                date: dateStr,
+                completed: isCompleted,
+                isToday: isToday,
+                label: labels[i]
+            });
+            
+            if (isCompleted) weekData.completed++;
+        }
+        
+        return weekData;
+    }
+    
+    /**
+     * 切换习惯完成状态（打卡/取消打卡）
+     * @param {string} habitId 习惯任务ID
+     */
+    async toggleHabitCompletion(habitId) {
+        const habit = this.memos.find(m => m.id === habitId);
+        if (!habit) return;
+        
+        const today = this.getTodayDate();
+        
+        // 确保 habit 数据结构存在
+        if (!habit.habit) {
+            habit.habit = {
+                streak: 0,
+                bestStreak: 0,
+                completedDates: [],
+                totalCompletions: 0
+            };
+        }
+        
+        const isCompleted = habit.habit.completedDates.includes(today);
+        
+        if (isCompleted) {
+            // 取消打卡
+            habit.habit.completedDates = habit.habit.completedDates.filter(d => d !== today);
+            habit.habit.totalCompletions = Math.max(0, habit.habit.totalCompletions - 1);
+            habit.completed = false;
+            habit.completedAt = null;
+        } else {
+            // 打卡
+            habit.habit.completedDates.push(today);
+            habit.habit.totalCompletions++;
+            habit.completed = true;
+            habit.completedAt = Date.now();
+        }
+        
+        // 重新计算连续天数
+        habit.habit.streak = this.calculateHabitStreak(habit.habit.completedDates);
+        if (habit.habit.streak > habit.habit.bestStreak) {
+            habit.habit.bestStreak = habit.habit.streak;
+        }
+        
+        habit.updatedAt = Date.now();
+        
+        await this.saveMemos();
+        this.renderSidebarTaskList();
+        
+        // 打卡成功反馈
+        if (!isCompleted) {
+            this.showToast(`✅ 已打卡！连续 ${habit.habit.streak} 天`, 2000);
+        }
+    }
+    
+    /**
+     * 计算连续完成天数
+     * @param {Array} completedDates 完成日期数组
+     * @returns {number} 连续天数
+     */
+    calculateHabitStreak(completedDates) {
+        if (!completedDates || completedDates.length === 0) return 0;
+        
+        const sorted = [...completedDates].sort().reverse();
+        let streak = 0;
+        let expectedDate = this.getTodayDate();
+        
+        // 如果今天还没完成，从昨天开始算
+        if (!sorted.includes(expectedDate)) {
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            expectedDate = this.formatLocalDateYMD(yesterday);
+        }
+        
+        for (const dateStr of sorted) {
+            if (dateStr === expectedDate) {
+                streak++;
+                const dateObj = new Date(dateStr + 'T00:00:00');
+                dateObj.setDate(dateObj.getDate() - 1);
+                expectedDate = this.formatLocalDateYMD(dateObj);
+            } else if (dateStr < expectedDate) {
+                break;
+            }
+        }
+        
+        return streak;
+    }
+    
+    /**
+     * 每日重复任务更新（页面加载时调用）
+     * 确保每日习惯任务的 dueDate 是今天，且重置 completed 状态
+     */
+    async updateDailyRecurringTasks() {
+        const today = this.getTodayDate();
+        let changed = false;
+        
+        for (const task of this.memos) {
+            if (!task.recurrence?.enabled) continue;
+            
+            if (task.recurrence.type === 'daily') {
+                // 确保 habit 数据结构存在
+                if (!task.habit) {
+                    task.habit = {
+                        streak: 0,
+                        bestStreak: 0,
+                        completedDates: [],
+                        totalCompletions: 0
+                    };
+                    changed = true;
+                }
+                
+                // 更新 dueDate 为今天
+                if (task.dueDate !== today) {
+                    task.dueDate = today;
+                    changed = true;
+                }
+                
+                // 根据今天是否已打卡决定 completed 状态
+                const isTodayDone = task.habit.completedDates.includes(today);
+                if (task.completed !== isTodayDone) {
+                    task.completed = isTodayDone;
+                    task.completedAt = isTodayDone ? Date.now() : null;
+                    changed = true;
+                }
+                
+                // 重新计算连续天数
+                const newStreak = this.calculateHabitStreak(task.habit.completedDates);
+                if (task.habit.streak !== newStreak) {
+                    task.habit.streak = newStreak;
+                    if (newStreak > task.habit.bestStreak) {
+                        task.habit.bestStreak = newStreak;
+                    }
+                    changed = true;
+                }
+            }
+        }
+        
+        if (changed) {
+            await this.saveMemos();
+        }
     }
     
     /**
@@ -2308,7 +2797,7 @@ class MemoManager {
      * @returns {Object} 规范化后的备忘录
      */
     normalizeMemo(memo) {
-        return {
+        const normalized = {
             id: memo.id || this.generateId(),
             title: memo.title || '',
             text: memo.text || '',
@@ -2320,8 +2809,35 @@ class MemoManager {
             tagIds: Array.isArray(memo.tagIds) ? memo.tagIds : [],
             priority: memo.priority || 'none',
             dueDate: memo.dueDate || null,
-            images: Array.isArray(memo.images) ? memo.images : []
+            images: Array.isArray(memo.images) ? memo.images : [],
+            progress: memo.progress !== undefined ? memo.progress : null,
+            // 重复任务配置
+            recurrence: memo.recurrence || null,
+            // 习惯追踪数据
+            habit: memo.habit || null,
+            // 习惯卡片配置
+            habitCard: memo.habitCard || null
         };
+        
+        // 兼容旧数据：如果存在 isDaily 标记但没有 recurrence，自动迁移
+        if (memo.isDaily && !memo.recurrence) {
+            normalized.recurrence = {
+                enabled: true,
+                type: 'daily',
+                interval: 1,
+                weekDays: null,
+                monthDay: null,
+                endDate: null
+            };
+            normalized.habit = {
+                streak: 0,
+                bestStreak: 0,
+                completedDates: [],
+                totalCompletions: 0
+            };
+        }
+        
+        return normalized;
     }
 
     /**
@@ -3764,7 +4280,7 @@ class MemoManager {
     /**
      * 显示侧边栏任务表单
      */
-    showSidebarForm(task = null) {
+    showSidebarForm(task = null, options = {}) {
         const modal = document.getElementById('sidebar-form-modal');
         if (!modal) return;
         
@@ -3794,14 +4310,28 @@ class MemoManager {
             `;
         }
         
+        // 重复任务相关元素
+        const recurrenceSelect = document.getElementById('sidebar-task-recurrence');
+        const habitIconInput = document.getElementById('sidebar-task-habit-icon');
+        
         if (task) {
-            titleEl.textContent = '编辑任务';
+            titleEl.textContent = task.recurrence?.enabled ? '编辑习惯' : '编辑任务';
             modal.dataset.taskId = task.id;
             titleInput.value = task.title || '';
             textInput.value = task.text || '';
             prioritySelect.value = task.priority || 'none';
             dueInput.value = task.dueDate || '';
             if (categorySelect) categorySelect.value = task.categoryId || '';
+            
+            // 加载重复任务配置
+            if (recurrenceSelect) {
+                recurrenceSelect.value = task.recurrence?.enabled ? task.recurrence.type : 'none';
+            }
+            if (habitIconInput) {
+                habitIconInput.value = task.habitCard?.icon || '';
+            }
+            // 控制图标输入框可见性
+            this.toggleHabitIconVisibility(recurrenceSelect?.value);
             
             // 加载进度数据（纯百分比）
             if (task.progress !== null && task.progress !== undefined && progressEnable && progressInputs) {
@@ -3847,13 +4377,22 @@ class MemoManager {
                 });
             }
         } else {
-            titleEl.textContent = '新增任务';
+            titleEl.textContent = options.recurrenceType === 'daily' ? '新增习惯' : '新增任务';
             delete modal.dataset.taskId;
             titleInput.value = '';
             textInput.value = '';
             prioritySelect.value = 'none';
             dueInput.value = this.getTodayDate();
             if (categorySelect) categorySelect.value = '';
+            
+            // 设置重复类型（支持从习惯区域添加）
+            if (recurrenceSelect) {
+                recurrenceSelect.value = options.recurrenceType || 'none';
+            }
+            if (habitIconInput) {
+                habitIconInput.value = '';
+            }
+            this.toggleHabitIconVisibility(options.recurrenceType || 'none');
             
             // 重置进度（纯百分比模式）
             if (progressEnable) progressEnable.checked = false;
@@ -3865,6 +4404,16 @@ class MemoManager {
         
         modal.classList.remove('hidden');
         titleInput.focus();
+    }
+    
+    /**
+     * 控制习惯图标输入框的显示/隐藏
+     */
+    toggleHabitIconVisibility(recurrenceType) {
+        const habitIconInput = document.getElementById('sidebar-task-habit-icon');
+        if (habitIconInput) {
+            habitIconInput.style.display = recurrenceType === 'daily' ? '' : 'none';
+        }
     }
     
     /**
@@ -3924,6 +4473,28 @@ class MemoManager {
             progress = Math.max(0, Math.min(100, percentage));
         }
         
+        // 处理重复任务配置
+        const recurrenceSelect = document.getElementById('sidebar-task-recurrence');
+        const habitIconInput = document.getElementById('sidebar-task-habit-icon');
+        const recurrenceType = recurrenceSelect ? recurrenceSelect.value : 'none';
+        
+        let recurrence = null;
+        let habitCard = null;
+        if (recurrenceType !== 'none') {
+            recurrence = {
+                enabled: true,
+                type: recurrenceType,
+                interval: 1,
+                weekDays: null,
+                monthDay: null,
+                endDate: null
+            };
+            habitCard = {
+                icon: habitIconInput?.value?.trim() || '📋',
+                color: '#4caf50'
+            };
+        }
+        
         const taskData = {
             title: title,
             text: textInput.value.trim(),
@@ -3931,7 +4502,9 @@ class MemoManager {
             dueDate: dueInput.value || null,
             images: images,
             categoryId: categorySelect ? categorySelect.value || null : null,
-            progress: progress
+            progress: progress,
+            recurrence: recurrence,
+            habitCard: habitCard
         };
         
         const taskId = modal.dataset.taskId;
@@ -3939,11 +4512,33 @@ class MemoManager {
         if (taskId) {
             const task = this.memos.find(m => m.id === taskId);
             if (task) {
+                // 保存旧的 habit 数据，防止被覆盖
+                const existingHabit = task.habit;
+                
                 Object.assign(task, taskData);
                 task.updatedAt = Date.now();
                 
-                // 只有进度达到 100% 才自动标记为已完成
-                if (progress === 100 && !task.completed) {
+                // 如果是新设为每日重复，初始化 habit
+                if (recurrence?.enabled && recurrence?.type === 'daily' && !existingHabit) {
+                    task.habit = {
+                        streak: 0,
+                        bestStreak: 0,
+                        completedDates: [],
+                        totalCompletions: 0
+                    };
+                } else if (existingHabit) {
+                    // 保留已有的 habit 数据
+                    task.habit = existingHabit;
+                }
+                
+                // 如果从每日重复改为不重复，清理 habit 数据
+                if (!recurrence?.enabled && existingHabit) {
+                    task.habit = null;
+                    task.habitCard = null;
+                }
+                
+                // 只有进度达到 100% 才自动标记为已完成（非习惯任务）
+                if (progress === 100 && !task.completed && !recurrence?.enabled) {
                     task.completed = true;
                     task.completedAt = Date.now();
                 }
@@ -3952,11 +4547,18 @@ class MemoManager {
             const newTask = {
                 id: this.generateId(),
                 ...taskData,
-                completed: progress === 100,
-                completedAt: progress === 100 ? Date.now() : null,
+                completed: progress === 100 && !recurrence?.enabled,
+                completedAt: (progress === 100 && !recurrence?.enabled) ? Date.now() : null,
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
-                tagIds: []
+                tagIds: [],
+                // 每日重复任务初始化 habit 数据
+                habit: recurrence?.enabled && recurrence?.type === 'daily' ? {
+                    streak: 0,
+                    bestStreak: 0,
+                    completedDates: [],
+                    totalCompletions: 0
+                } : null
             };
             this.memos.unshift(newTask);
         }
@@ -4207,26 +4809,21 @@ class MemoManager {
                 }
             }
             
-            // 验证每个备忘录对象的结构
-            this.memos = memosData.map(memo => ({
-                id: memo.id || this.generateId(),
-                title: memo.title || '',
-                text: memo.text || '',
-                completed: !!memo.completed,
-                createdAt: memo.createdAt || Date.now(),
-                updatedAt: memo.updatedAt || Date.now(),
-                categoryId: memo.categoryId || null,
-                tagIds: Array.isArray(memo.tagIds) ? memo.tagIds : (Array.isArray(memo.tags) ? memo.tags : []),
-                priority: memo.priority || 'none',
-                dueDate: memo.dueDate || null,
-                images: Array.isArray(memo.images) ? memo.images : [],
-                // v1.6.0 新增：进度追踪字段（纯百分比：0-100 的整数或 null）
-                progress: memo.progress !== undefined && memo.progress !== null ? (
-                    typeof memo.progress === 'object' && memo.progress.total
-                        ? Math.round((memo.progress.current / memo.progress.total) * 100)
-                        : Math.max(0, Math.min(100, parseInt(memo.progress) || 0))
-                ) : null
-            }));
+            // 验证每个备忘录对象的结构（统一使用 normalizeMemo，确保新字段不丢失）
+            this.memos = memosData.map(memo => {
+                const normalized = this.normalizeMemo(memo);
+                // 兼容旧版标签字段
+                if (!normalized.tagIds.length && Array.isArray(memo.tags)) {
+                    normalized.tagIds = memo.tags;
+                }
+                // v1.6.0 兼容旧版进度格式 { current, total }
+                if (memo.progress !== undefined && memo.progress !== null) {
+                    if (typeof memo.progress === 'object' && memo.progress.total) {
+                        normalized.progress = Math.round((memo.progress.current / memo.progress.total) * 100);
+                    }
+                }
+                return normalized;
+            });
             
             console.log('备忘录加载成功，数量:', this.memos.length);
         } catch (error) {

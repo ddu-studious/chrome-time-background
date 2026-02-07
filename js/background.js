@@ -443,6 +443,13 @@
         });
         console.log('已设置备份提醒检查: 每天上午10点');
         
+        // 每日凌晨重置习惯任务状态（00:05 触发，避免恰好卡零点）
+        await chrome.alarms.create('reset-daily-habits', {
+            when: getNextDailyTime(0, 5),
+            periodInMinutes: 24 * 60
+        });
+        console.log('已设置每日习惯重置: 每天 00:05');
+        
         // 设置单个任务的提醒
         await setupTaskReminders();
     }
@@ -744,6 +751,100 @@
         }
     }
 
+    /**
+     * 每日重置习惯任务状态
+     * 在凌晨执行：将所有每日习惯任务的 completed 重置为 false，
+     * 更新 dueDate 为今天，重新计算连续天数
+     */
+    async function resetDailyHabits() {
+        console.log('执行每日习惯任务重置...');
+        
+        try {
+            const { memos } = await chrome.storage.local.get('memos');
+            if (!memos || !Array.isArray(memos)) return;
+            
+            const today = getTodayDate();
+            let changed = false;
+            
+            for (const task of memos) {
+                if (!task.recurrence?.enabled || task.recurrence?.type !== 'daily') continue;
+                
+                // 确保 habit 数据结构存在
+                if (!task.habit) {
+                    task.habit = {
+                        streak: 0,
+                        bestStreak: 0,
+                        completedDates: [],
+                        totalCompletions: 0
+                    };
+                    changed = true;
+                }
+                
+                // 更新 dueDate 为今天
+                if (task.dueDate !== today) {
+                    task.dueDate = today;
+                    changed = true;
+                }
+                
+                // 重置今日完成状态
+                const isTodayDone = task.habit.completedDates.includes(today);
+                if (task.completed !== isTodayDone) {
+                    task.completed = isTodayDone;
+                    task.completedAt = isTodayDone ? Date.now() : null;
+                    changed = true;
+                }
+                
+                // 重新计算连续天数
+                const newStreak = calculateStreak(task.habit.completedDates, today);
+                if (task.habit.streak !== newStreak) {
+                    task.habit.streak = newStreak;
+                    if (newStreak > task.habit.bestStreak) {
+                        task.habit.bestStreak = newStreak;
+                    }
+                    changed = true;
+                }
+            }
+            
+            if (changed) {
+                await chrome.storage.local.set({ memos });
+                console.log('每日习惯任务状态已重置');
+            }
+        } catch (error) {
+            console.error('重置每日习惯任务失败:', error);
+        }
+    }
+    
+    /**
+     * 计算习惯连续天数（后台版本）
+     */
+    function calculateStreak(completedDates, today) {
+        if (!completedDates || completedDates.length === 0) return 0;
+        
+        const sorted = [...completedDates].sort().reverse();
+        let streak = 0;
+        let expectedDate = today;
+        
+        // 如果今天还没完成，从昨天开始算
+        if (!sorted.includes(expectedDate)) {
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            expectedDate = formatLocalDateYMD(yesterday);
+        }
+        
+        for (const dateStr of sorted) {
+            if (dateStr === expectedDate) {
+                streak++;
+                const dateObj = new Date(dateStr + 'T00:00:00');
+                dateObj.setDate(dateObj.getDate() - 1);
+                expectedDate = formatLocalDateYMD(dateObj);
+            } else if (dateStr < expectedDate) {
+                break;
+            }
+        }
+        
+        return streak;
+    }
+
     // ==================== 事件监听 ====================
 
     // 监听扩展图标点击事件
@@ -809,6 +910,9 @@
                 break;
             case 'check-backup-reminder':
                 await checkBackupReminder();
+                break;
+            case 'reset-daily-habits':
+                await resetDailyHabits();
                 break;
             default:
                 // 处理单个任务提醒
