@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>子任务 Demo 2 - 时间轴模式</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        h2 { text-align: center; margin-bottom: 12px; font-size: 14px; opacity: 0.6; }
+        .task-card {
+            width: 360px;
+            background: rgba(255,255,255,0.08);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        .task-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        .task-desc {
+            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+            margin-bottom: 16px;
+        }
+
+        /* 环形进度 + 分数 */
+        .progress-ring-section {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .ring-container {
+            position: relative;
+            width: 56px;
+            height: 56px;
+            flex-shrink: 0;
+        }
+        .ring-container svg { transform: rotate(-90deg); }
+        .ring-bg { stroke: rgba(255,255,255,0.08); }
+        .ring-fill {
+            stroke: #42a5f5;
+            transition: stroke-dashoffset 0.6s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.3s;
+        }
+        .ring-fill.complete { stroke: #4caf50; }
+        .ring-text {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 700;
+        }
+        .ring-info {
+            flex: 1;
+        }
+        .ring-info .label { font-size: 11px; color: rgba(255,255,255,0.4); }
+        .ring-info .time-estimate {
+            font-size: 12px;
+            color: rgba(255,255,255,0.7);
+            margin-top: 2px;
+        }
+        .time-bar {
+            height: 3px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 2px;
+            margin-top: 6px;
+            overflow: hidden;
+        }
+        .time-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff9800, #ffc107);
+            border-radius: 2px;
+            transition: width 0.5s;
+        }
+
+        /* 时间轴子任务 */
+        .timeline { position: relative; padding-left: 24px; }
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 9px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: rgba(255,255,255,0.1);
+        }
+        .timeline-item {
+            position: relative;
+            padding: 8px 0 16px;
+            cursor: pointer;
+        }
+        .timeline-item:last-child { padding-bottom: 0; }
+        .timeline-dot {
+            position: absolute;
+            left: -24px;
+            top: 10px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.06);
+            border: 2px solid rgba(255,255,255,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 8px;
+            color: transparent;
+            transition: all 0.3s;
+            z-index: 1;
+        }
+        .timeline-item.completed .timeline-dot {
+            background: #4caf50;
+            border-color: #4caf50;
+            color: white;
+            box-shadow: 0 0 8px rgba(76,175,80,0.4);
+        }
+        .timeline-item.active .timeline-dot {
+            border-color: #42a5f5;
+            background: rgba(66,165,245,0.15);
+            box-shadow: 0 0 8px rgba(66,165,245,0.3);
+        }
+        .timeline-item:hover .timeline-dot {
+            transform: scale(1.2);
+        }
+        .timeline-content {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid transparent;
+            border-radius: 10px;
+            padding: 10px 12px;
+            transition: all 0.2s;
+        }
+        .timeline-item:hover .timeline-content {
+            background: rgba(255,255,255,0.08);
+            border-color: rgba(255,255,255,0.08);
+        }
+        .timeline-item.completed .timeline-content {
+            opacity: 0.55;
+        }
+        .timeline-item.completed .timeline-text {
+            text-decoration: line-through;
+        }
+        .timeline-text {
+            font-size: 13px;
+            font-weight: 500;
+            margin-bottom: 4px;
+            transition: all 0.3s;
+        }
+        .timeline-meta {
+            display: flex;
+            gap: 12px;
+            font-size: 10px;
+            color: rgba(255,255,255,0.35);
+        }
+        .timeline-meta i { margin-right: 3px; }
+
+        /* 脉冲动画（当前步骤） */
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(66,165,245,0.4); }
+            50% { box-shadow: 0 0 0 6px rgba(66,165,245,0); }
+        }
+        .timeline-item.active .timeline-dot {
+            animation: pulse 2s infinite;
+        }
+
+        .demo-label {
+            text-align: center;
+            margin-top: 16px;
+            font-size: 11px;
+            color: rgba(255,255,255,0.3);
+        }
+    </style>
+</head>
+<body>
+    <div>
+        <h2>Demo 2 · 时间轴模式 — 子任务按步骤推进，带时间估算</h2>
+        <div class="task-card">
+            <div class="task-title">🎯 发布 v2.0 版本</div>
+            <div class="task-desc">预计总耗时 6.5 小时</div>
+
+            <div class="progress-ring-section">
+                <div class="ring-container">
+                    <svg width="56" height="56" viewBox="0 0 56 56">
+                        <circle class="ring-bg" cx="28" cy="28" r="24" fill="none" stroke-width="4"/>
+                        <circle class="ring-fill" id="ring-fill" cx="28" cy="28" r="24" fill="none" stroke-width="4"
+                            stroke-dasharray="150.8" stroke-dashoffset="150.8" stroke-linecap="round"/>
+                    </svg>
+                    <div class="ring-text" id="ring-text">0%</div>
+                </div>
+                <div class="ring-info">
+                    <div class="label">已用时间 / 预估时间</div>
+                    <div class="time-estimate">
+                        <span id="time-used">0h</span> / <span id="time-total">6.5h</span>
+                    </div>
+                    <div class="time-bar">
+                        <div class="time-bar-fill" id="time-bar-fill" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline" id="timeline">
+                <div class="timeline-item active" data-duration="1">
+                    <div class="timeline-dot"><i class="fas fa-check"></i></div>
+                    <div class="timeline-content">
+                        <div class="timeline-text">代码审查与合并</div>
+                        <div class="timeline-meta">
+                            <span><i class="far fa-clock"></i> ~1h</span>
+                            <span><i class="fas fa-code-branch"></i> 3 PR</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="timeline-item" data-duration="2">
+                    <div class="timeline-dot"><i class="fas fa-check"></i></div>
+                    <div class="timeline-content">
+                        <div class="timeline-text">单元测试与集成测试</div>
+                        <div class="timeline-meta">
+                            <span><i class="far fa-clock"></i> ~2h</span>
+                            <span><i class="fas fa-vial"></i> 128 cases</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="timeline-item" data-duration="1.5">
+                    <div class="timeline-dot"><i class="fas fa-check"></i></div>
+                    <div class="timeline-content">
+                        <div class="timeline-text">编写更新文档</div>
+                        <div class="timeline-meta">
+                            <span><i class="far fa-clock"></i> ~1.5h</span>
+                            <span><i class="fas fa-file-alt"></i> CHANGELOG</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="timeline-item" data-duration="1">
+                    <div class="timeline-dot"><i class="fas fa-check"></i></div>
+                    <div class="timeline-content">
+                        <div class="timeline-text">构建打包与签名</div>
+                        <div class="timeline-meta">
+                            <span><i class="far fa-clock"></i> ~1h</span>
+                            <span><i class="fas fa-box"></i> Production</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="timeline-item" data-duration="1">
+                    <div class="timeline-dot"><i class="fas fa-check"></i></div>
+                    <div class="timeline-content">
+                        <div class="timeline-text">发布到 Chrome Web Store</div>
+                        <div class="timeline-meta">
+                            <span><i class="far fa-clock"></i> ~1h</span>
+                            <span><i class="fab fa-chrome"></i> Store</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="demo-label">点击步骤完成/取消，进度环和时间条实时联动</div>
+    </div>
+    <script>
+        const timeline = document.getElementById('timeline');
+        const ringFill = document.getElementById('ring-fill');
+        const ringText = document.getElementById('ring-text');
+        const timeUsed = document.getElementById('time-used');
+        const timeBarFill = document.getElementById('time-bar-fill');
+
+        const CIRCUMFERENCE = 2 * Math.PI * 24; // ~150.8
+        const TOTAL_TIME = 6.5;
+
+        function updateProgress() {
+            const items = timeline.querySelectorAll('.timeline-item');
+            const completedItems = timeline.querySelectorAll('.timeline-item.completed');
+            const total = items.length;
+            const done = completedItems.length;
+            const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+
+            // 环形进度
+            const offset = CIRCUMFERENCE - (pct / 100) * CIRCUMFERENCE;
+            ringFill.style.strokeDashoffset = offset;
+            ringFill.classList.toggle('complete', pct === 100);
+            ringText.textContent = pct + '%';
+
+            // 时间进度
+            let usedTime = 0;
+            completedItems.forEach(item => {
+                usedTime += parseFloat(item.dataset.duration) || 0;
+            });
+            timeUsed.textContent = usedTime + 'h';
+            timeBarFill.style.width = (usedTime / TOTAL_TIME * 100) + '%';
+
+            // 更新 active 状态
+            let foundActive = false;
+            items.forEach(item => {
+                item.classList.remove('active');
+                if (!item.classList.contains('completed') && !foundActive) {
+                    item.classList.add('active');
+                    foundActive = true;
+                }
+            });
+        }
+
+        timeline.addEventListener('click', (e) => {
+            const item = e.target.closest('.timeline-item');
+            if (!item) return;
+            item.classList.toggle('completed');
+            updateProgress();
+        });
+
+        updateProgress();
+    </script>
+</body>
+</html>

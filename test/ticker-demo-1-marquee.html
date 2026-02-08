@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ticker Demo 1 - 连续滚动 Marquee + 渐变遮罩</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80') center/cover no-repeat;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 40px;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.3);
+        }
+        h2 {
+            position: relative;
+            z-index: 1;
+            margin-bottom: 20px;
+            font-size: 14px;
+            opacity: 0.7;
+        }
+
+        .ticker-wrapper {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 700px;
+            background: rgba(0,0,0,0.35);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        /* 渐变遮罩 */
+        .ticker-mask {
+            -webkit-mask-image: linear-gradient(
+                90deg,
+                transparent 0%,
+                black 8%,
+                black 92%,
+                transparent 100%
+            );
+            mask-image: linear-gradient(
+                90deg,
+                transparent 0%,
+                black 8%,
+                black 92%,
+                transparent 100%
+            );
+            overflow: hidden;
+            height: 42px;
+            display: flex;
+            align-items: center;
+        }
+
+        .ticker-track {
+            display: flex;
+            align-items: center;
+            animation: marquee var(--duration, 40s) linear infinite;
+            will-change: transform;
+            white-space: nowrap;
+        }
+
+        .ticker-track:hover {
+            animation-play-state: paused;
+        }
+
+        @keyframes marquee {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+
+        .ticker-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 0 24px;
+            flex-shrink: 0;
+            transition: opacity 0.2s;
+        }
+        .ticker-item:hover { opacity: 1; }
+
+        .ticker-icon {
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+        .ticker-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: rgba(255,255,255,0.9);
+            max-width: 250px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .ticker-metric {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+        .metric-stars { color: #f1c40f; background: rgba(241,196,15,0.15); }
+        .metric-score { color: #ff6600; background: rgba(255,102,0,0.15); }
+        .metric-upvotes { color: #ff4500; background: rgba(255,69,0,0.15); }
+        .metric-hearts { color: #e91e63; background: rgba(233,30,99,0.15); }
+
+        .ticker-sep {
+            width: 4px; height: 4px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            flex-shrink: 0;
+        }
+
+        .info { 
+            position: relative; z-index: 1; 
+            margin-top: 20px; font-size: 11px; 
+            color: rgba(255,255,255,0.5);
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h2>Ticker Demo 1 · 纯CSS无缝连续滚动 + 渐变遮罩</h2>
+    <div class="ticker-wrapper">
+        <div class="ticker-mask">
+            <div class="ticker-track" id="ticker-track">
+                <!-- 内容会被JS复制实现无缝 -->
+            </div>
+        </div>
+    </div>
+    <div class="info">悬停暂停 · 点击跳转 · 纯CSS动画 · GPU加速 · 零依赖</div>
+
+    <script>
+        const mockData = [
+            { icon: '🔥', title: 'DeepSeek-V3: 开源推理模型', metric: '⭐ 28.5k', cls: 'metric-stars', url: '#' },
+            { icon: '📰', title: 'Hoot: Scheme on WebAssembly', metric: '▲ 172', cls: 'metric-score', url: '#' },
+            { icon: '💬', title: 'Why Rust is replacing C++ in production', metric: '▲ 1.2k', cls: 'metric-upvotes', url: '#' },
+            { icon: '📝', title: 'Building AI Agents with LangGraph', metric: '❤ 89', cls: 'metric-hearts', url: '#' },
+            { icon: '🔥', title: 'Ollama v0.5: 本地LLM运行框架', metric: '⭐ 15.3k', cls: 'metric-stars', url: '#' },
+            { icon: '📰', title: 'Show HN: 我用Rust写了一个Git替代品', metric: '▲ 445', cls: 'metric-score', url: '#' },
+            { icon: '💬', title: 'PostgreSQL 17 performance benchmarks', metric: '▲ 890', cls: 'metric-upvotes', url: '#' },
+            { icon: '🔥', title: 'Claude Code: AI终端编程助手', metric: '⭐ 9.8k', cls: 'metric-stars', url: '#' },
+        ];
+
+        function buildItems(data) {
+            return data.map((item, i) => `
+                <a class="ticker-item" href="${item.url}" target="_blank" style="text-decoration:none; color:inherit;">
+                    <span class="ticker-icon">${item.icon}</span>
+                    <span class="ticker-title">${item.title}</span>
+                    <span class="ticker-metric ${item.cls}">${item.metric}</span>
+                </a>
+                ${i < data.length - 1 ? '<span class="ticker-sep"></span>' : ''}
+            `).join('');
+        }
+
+        const track = document.getElementById('ticker-track');
+        // 复制内容实现无缝循环
+        const content = buildItems(mockData);
+        track.innerHTML = content + '<span class="ticker-sep"></span>' + content;
+        // 动态计算时长（基于内容量）
+        track.style.setProperty('--duration', Math.max(25, mockData.length * 5) + 's');
+    </script>
+</body>
+</html>

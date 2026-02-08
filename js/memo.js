@@ -482,6 +482,17 @@ class MemoManager {
                             <input type="text" id="sidebar-task-habit-icon" class="habit-icon-input" placeholder="📋" maxlength="2" title="习惯图标（emoji）">
                         </div>
                     </div>
+                    <div class="form-group links-group">
+                        <label>相关链接</label>
+                        <div class="links-list" id="sidebar-task-links-list"></div>
+                        <div class="link-add-row">
+                            <input type="text" id="sidebar-link-title-input" placeholder="链接标题（可选）" class="link-input-title">
+                            <input type="url" id="sidebar-link-url-input" placeholder="https://..." class="link-input-url">
+                            <button type="button" class="link-add-btn" id="sidebar-link-add-btn" title="添加链接">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                    </div>
                     <div class="form-group progress-group">
                         <label>
                             <input type="checkbox" id="sidebar-task-progress-enable">
@@ -671,6 +682,23 @@ class MemoManager {
         if (imageUploadBtn && imageInput) {
             imageUploadBtn.addEventListener('click', () => imageInput.click());
             imageInput.addEventListener('change', (e) => this.handleImageUpload(e));
+        }
+        
+        // 链接添加按钮
+        const linkAddBtn = document.getElementById('sidebar-link-add-btn');
+        if (linkAddBtn) {
+            linkAddBtn.addEventListener('click', () => this.addTempLink());
+        }
+        // 链接URL输入框回车添加
+        const linkUrlInput = document.getElementById('sidebar-link-url-input');
+        if (linkUrlInput) {
+            linkUrlInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.addTempLink();
+                }
+            });
         }
     }
     
@@ -1191,14 +1219,20 @@ class MemoManager {
         card.className = `habit-card ${isTodayCompleted ? 'habit-card-done' : ''}`;
         card.dataset.id = habit.id;
         
-        // 本周完成情况（迷你版）
+        // 本周完成情况（带标签版）
         const weekView = this.getHabitWeekCompletion(habit);
         const weekDotsHtml = weekView.days.map(day => {
             const cls = ['hc-dot'];
             if (day.completed) cls.push('done');
             if (day.isToday) cls.push('now');
-            return `<span class="${cls.join(' ')}"></span>`;
+            return `<span class="${cls.join(' ')}" title="${day.date}">${day.label}</span>`;
         }).join('');
+        
+        // 链接指示器
+        const linksCount = habit.links?.length || 0;
+        const linksHtml = linksCount > 0 
+            ? `<a href="${this.escapeHtml(habit.links[0].url)}" class="hc-link-badge" target="_blank" rel="noopener noreferrer" title="${linksCount > 1 ? linksCount + ' 个链接' : this.escapeHtml(habit.links[0].title || habit.links[0].url)}"><i class="fas fa-link"></i>${linksCount > 1 ? ' ' + linksCount : ''}</a>`
+            : '';
         
         card.innerHTML = `
             <div class="hc-top">
@@ -1210,6 +1244,7 @@ class MemoManager {
             <div class="hc-title">${this.escapeHtml(habit.title || '无标题')}</div>
             <div class="hc-meta">
                 ${streak > 0 ? `<span class="hc-streak"><span class="streak-fire">🔥</span>${streak}</span>` : '<span class="hc-streak-empty">开始吧</span>'}
+                ${linksHtml}
             </div>
             <div class="hc-week">${weekDotsHtml}</div>
         `;
@@ -1219,6 +1254,12 @@ class MemoManager {
             e.stopPropagation();
             this.toggleHabitCompletion(habit.id);
         });
+        
+        // 链接点击（阻止冒泡到卡片）
+        const linkBadge = card.querySelector('.hc-link-badge');
+        if (linkBadge) {
+            linkBadge.addEventListener('click', (e) => e.stopPropagation());
+        }
         
         // 点击卡片编辑
         card.addEventListener('click', () => this.showSidebarForm(habit));
@@ -1270,6 +1311,11 @@ class MemoManager {
                     ${weekDaysHtml}
                 </div>
                 ${habit.text ? `<div class="habit-desc">${this.escapeHtml(habit.text.substring(0, 40))}${habit.text.length > 40 ? '...' : ''}</div>` : ''}
+                ${habit.links && habit.links.length > 0 ? `
+                    <div class="habit-links">
+                        ${habit.links.slice(0, 2).map(link => `<a href="${this.escapeHtml(link.url)}" class="habit-link-tag" target="_blank" rel="noopener noreferrer" title="${this.escapeHtml(link.url)}"><i class="fas fa-external-link-alt"></i> ${this.escapeHtml(link.title || this.extractDomain(link.url))}</a>`).join('')}
+                        ${habit.links.length > 2 ? `<span class="habit-links-more">+${habit.links.length - 2}</span>` : ''}
+                    </div>` : ''}
             </div>
             <div class="habit-actions">
                 <button class="task-edit-btn" title="编辑"><i class="fas fa-pen"></i></button>
@@ -1822,6 +1868,19 @@ class MemoManager {
             `;
         }
         
+        // 生成链接 HTML
+        let linksHtml = '';
+        if (task.links && task.links.length > 0) {
+            const displayLinks = task.links.slice(0, 3);
+            const moreCount = task.links.length - 3;
+            linksHtml = `
+                <div class="task-links">
+                    ${displayLinks.map(link => `<a href="${this.escapeHtml(link.url)}" class="task-link-item" target="_blank" rel="noopener noreferrer" title="${this.escapeHtml(link.url)}"><i class="fas fa-external-link-alt"></i> ${this.escapeHtml(link.title || this.extractDomain(link.url))}</a>`).join('')}
+                    ${moreCount > 0 ? `<span class="task-links-more">+${moreCount}</span>` : ''}
+                </div>
+            `;
+        }
+        
         item.innerHTML = `
             <div class="task-checkbox" title="${task.completed ? '标记为未完成' : '标记为已完成'}">
                 <i class="${task.completed ? 'fas fa-check-circle' : 'far fa-circle'}"></i>
@@ -1833,6 +1892,7 @@ class MemoManager {
                 </div>
                 ${task.text ? `<div class="task-desc">${this.escapeHtml(task.text.substring(0, 60))}${task.text.length > 60 ? '...' : ''}</div>` : ''}
                 ${progressHtml}
+                ${linksHtml}
                 ${imagesHtml}
                 <div class="task-meta">
                     ${categoryName ? `<span class="task-category-tag"><i class="fas fa-folder"></i> ${this.escapeHtml(categoryName)}</span>` : ''}
@@ -1862,6 +1922,14 @@ class MemoManager {
             if (confirm('确定要删除这个任务吗？')) {
                 this.deleteSidebarTask(task.id);
             }
+        });
+        
+        // 链接点击事件（阻止冒泡，避免触发编辑）
+        const taskLinks = item.querySelectorAll('.task-link-item');
+        taskLinks.forEach(linkEl => {
+            linkEl.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
         });
         
         // 点击任务项编辑
@@ -2797,6 +2865,8 @@ class MemoManager {
      * @returns {Object} 规范化后的备忘录
      */
     normalizeMemo(memo) {
+        // ⚠️ 重要：添加新字段时必须在此处声明默认值，否则刷新后数据丢失！
+        // 同时需要更新 js/tasks.js 中的 loadData 方法
         const normalized = {
             id: memo.id || this.generateId(),
             title: memo.title || '',
@@ -2810,6 +2880,7 @@ class MemoManager {
             priority: memo.priority || 'none',
             dueDate: memo.dueDate || null,
             images: Array.isArray(memo.images) ? memo.images : [],
+            links: Array.isArray(memo.links) ? memo.links : [],
             progress: memo.progress !== undefined ? memo.progress : null,
             // 重复任务配置
             recurrence: memo.recurrence || null,
@@ -4298,9 +4369,12 @@ class MemoManager {
         const progressSlider = document.getElementById('sidebar-task-progress-slider');
         const progressPercent = document.getElementById('sidebar-task-progress-percent');
         
-        // 清空临时图片
+        // 清空临时图片和链接
         this.tempImages = [];
+        this.tempLinks = [];
         if (previewList) previewList.innerHTML = '';
+        const linksList = document.getElementById('sidebar-task-links-list');
+        if (linksList) linksList.innerHTML = '';
         
         // 更新分类选项
         if (categorySelect) {
@@ -4376,6 +4450,12 @@ class MemoManager {
                     previewList.appendChild(previewItem);
                 });
             }
+            
+            // 加载已有链接
+            if (task.links && task.links.length > 0) {
+                this.tempLinks = [...task.links];
+                this.renderLinksPreview();
+            }
         } else {
             titleEl.textContent = options.recurrenceType === 'daily' ? '新增习惯' : '新增任务';
             delete modal.dataset.taskId;
@@ -4400,10 +4480,106 @@ class MemoManager {
             if (progressSlider) progressSlider.value = 0;
             if (progressPercent) progressPercent.value = 0;
             this.updateProgressPreview(0);
+            
+            // 重置链接
+            this.tempLinks = [];
         }
         
         modal.classList.remove('hidden');
         titleInput.focus();
+    }
+    
+    /**
+     * 渲染链接预览列表
+     */
+    renderLinksPreview() {
+        const linksList = document.getElementById('sidebar-task-links-list');
+        if (!linksList) return;
+        
+        linksList.innerHTML = '';
+        
+        if (!this.tempLinks || this.tempLinks.length === 0) return;
+        
+        this.tempLinks.forEach((link, index) => {
+            const linkItem = document.createElement('div');
+            linkItem.className = 'link-preview-item';
+            linkItem.innerHTML = `
+                <i class="fas fa-link link-item-icon"></i>
+                <a href="${this.escapeHtml(link.url)}" class="link-item-text" target="_blank" rel="noopener noreferrer" title="${this.escapeHtml(link.url)}">
+                    ${this.escapeHtml(link.title || link.url)}
+                </a>
+                <button type="button" class="link-remove-btn" data-index="${index}" title="移除">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+            
+            // 阻止链接点击冒泡到表单
+            linkItem.querySelector('a').addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+            
+            linkItem.querySelector('.link-remove-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.removeTempLink(index);
+            });
+            
+            linksList.appendChild(linkItem);
+        });
+    }
+    
+    /**
+     * 添加临时链接
+     */
+    addTempLink() {
+        const titleInput = document.getElementById('sidebar-link-title-input');
+        const urlInput = document.getElementById('sidebar-link-url-input');
+        
+        if (!urlInput) return;
+        
+        let url = urlInput.value.trim();
+        if (!url) {
+            urlInput.focus();
+            urlInput.classList.add('input-error');
+            setTimeout(() => urlInput.classList.remove('input-error'), 800);
+            return;
+        }
+        
+        // 自动补全 https://
+        if (!/^https?:\/\//i.test(url)) {
+            url = 'https://' + url;
+        }
+        
+        // 简单的 URL 验证
+        try {
+            new URL(url);
+        } catch {
+            urlInput.classList.add('input-error');
+            setTimeout(() => urlInput.classList.remove('input-error'), 800);
+            return;
+        }
+        
+        if (!this.tempLinks) this.tempLinks = [];
+        
+        this.tempLinks.push({
+            title: titleInput ? titleInput.value.trim() : '',
+            url: url
+        });
+        
+        // 清空输入框
+        if (titleInput) titleInput.value = '';
+        urlInput.value = '';
+        urlInput.focus();
+        
+        this.renderLinksPreview();
+    }
+    
+    /**
+     * 移除临时链接
+     */
+    removeTempLink(index) {
+        if (!this.tempLinks) return;
+        this.tempLinks.splice(index, 1);
+        this.renderLinksPreview();
     }
     
     /**
@@ -4429,6 +4605,10 @@ class MemoManager {
         this.tempImages = [];
         const previewList = document.getElementById('image-preview-list');
         if (previewList) previewList.innerHTML = '';
+        // 清空临时链接
+        this.tempLinks = [];
+        const linksList = document.getElementById('sidebar-task-links-list');
+        if (linksList) linksList.innerHTML = '';
     }
     
     /**
@@ -4495,12 +4675,19 @@ class MemoManager {
             };
         }
         
+        // 处理链接数据
+        const links = this.tempLinks ? this.tempLinks.map(link => ({
+            title: link.title,
+            url: link.url
+        })) : [];
+        
         const taskData = {
             title: title,
             text: textInput.value.trim(),
             priority: prioritySelect.value,
             dueDate: dueInput.value || null,
             images: images,
+            links: links,
             categoryId: categorySelect ? categorySelect.value || null : null,
             progress: progress,
             recurrence: recurrence,
@@ -4565,6 +4752,7 @@ class MemoManager {
         
         await this.saveMemos();
         this.tempImages = []; // 清空临时图片
+        this.tempLinks = [];  // 清空临时链接
         this.hideSidebarForm();
         this.renderSidebarTaskList();
     }
@@ -6854,6 +7042,20 @@ class MemoManager {
         const div = document.createElement('div');
         div.textContent = str;
         return div.innerHTML;
+    }
+    
+    /**
+     * 从 URL 中提取域名作为显示名
+     * @param {string} url URL 字符串
+     * @returns {string} 域名或简短 URL
+     */
+    extractDomain(url) {
+        try {
+            const urlObj = new URL(url);
+            return urlObj.hostname.replace(/^www\./, '');
+        } catch {
+            return url.length > 30 ? url.substring(0, 30) + '...' : url;
+        }
     }
     
     /**

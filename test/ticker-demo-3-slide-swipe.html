@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ticker Demo 3 - 滑动切换 + 手势支持</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80') center/cover no-repeat;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 40px;
+        }
+        body::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,0.3); }
+        h2 { position: relative; z-index: 1; margin-bottom: 20px; font-size: 14px; opacity: 0.7; }
+
+        .ticker-wrapper {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 640px;
+            overflow: hidden;
+            border-radius: 14px;
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255,255,255,0.1);
+            cursor: grab;
+            user-select: none;
+        }
+        .ticker-wrapper:active { cursor: grabbing; }
+
+        .ticker-slides {
+            display: flex;
+            transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            will-change: transform;
+        }
+        .ticker-slides.dragging { transition: none; }
+
+        .ticker-slide {
+            min-width: 100%;
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            gap: 14px;
+        }
+        .ts-icon { font-size: 24px; flex-shrink: 0; }
+        .ts-body { flex: 1; min-width: 0; }
+        .ts-title {
+            font-size: 14px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .ts-desc {
+            font-size: 11px;
+            color: rgba(255,255,255,0.5);
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .ts-right {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+        .ts-metric {
+            font-size: 12px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 6px;
+        }
+        .stars { color: #f1c40f; background: rgba(241,196,15,0.12); }
+        .score { color: #ff6600; background: rgba(255,102,0,0.12); }
+        .upvotes { color: #ff4500; background: rgba(255,69,0,0.12); }
+        .ts-source {
+            font-size: 9px;
+            color: rgba(255,255,255,0.35);
+            padding: 1px 6px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 3px;
+        }
+
+        /* 底部进度条（替代dots） */
+        .ticker-progress {
+            position: relative;
+            z-index: 1;
+            margin-top: 12px;
+            width: 100%;
+            max-width: 640px;
+            display: flex;
+            gap: 3px;
+        }
+        .tp-seg {
+            flex: 1;
+            height: 3px;
+            border-radius: 2px;
+            background: rgba(255,255,255,0.1);
+            overflow: hidden;
+        }
+        .tp-seg.active .tp-fill {
+            width: 100%;
+        }
+        .tp-seg.current .tp-fill {
+            animation: countDown var(--auto-interval) linear forwards;
+        }
+        .tp-fill {
+            width: 0;
+            height: 100%;
+            background: rgba(255,255,255,0.6);
+            border-radius: 2px;
+        }
+        @keyframes countDown {
+            0% { width: 0%; }
+            100% { width: 100%; }
+        }
+
+        .controls {
+            position: relative;
+            z-index: 1;
+            margin-top: 12px;
+            display: flex;
+            gap: 8px;
+        }
+        .ctrl-btn {
+            padding: 6px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.15);
+            background: rgba(255,255,255,0.06);
+            color: rgba(255,255,255,0.6);
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .ctrl-btn:hover { background: rgba(255,255,255,0.15); color: white; }
+        .ctrl-btn.active { background: rgba(100,181,246,0.2); border-color: rgba(100,181,246,0.3); color: #64b5f6; }
+
+        .info { position: relative; z-index: 1; margin-top: 16px; font-size: 11px; color: rgba(255,255,255,0.5); }
+    </style>
+</head>
+<body>
+    <h2>Ticker Demo 3 · 滑动切换 + 鼠标拖拽 + 自动播放进度条</h2>
+    <div class="ticker-wrapper" id="ticker-wrapper">
+        <div class="ticker-slides" id="ticker-slides"></div>
+    </div>
+    <div class="ticker-progress" id="ticker-progress"></div>
+    <div class="controls">
+        <button class="ctrl-btn" id="btn-prev"><i class="fas fa-chevron-left"></i></button>
+        <button class="ctrl-btn active" id="btn-auto"><i class="fas fa-play"></i> 自动</button>
+        <button class="ctrl-btn" id="btn-next"><i class="fas fa-chevron-right"></i></button>
+    </div>
+    <div class="info">拖拽滑动 · 自动播放 · 进度条指示器 · 键盘控制</div>
+
+    <script>
+        const data = [
+            { icon: '🔥', title: 'DeepSeek-V3: 开源推理模型', desc: '新一代开源大语言模型，支持 671B 参数', metric: '⭐ 28.5k', cls: 'stars', source: 'GitHub' },
+            { icon: '📰', title: 'Hoot: Scheme on WebAssembly', desc: '将 Scheme 编译到 WebAssembly 的编译器', metric: '▲ 172', cls: 'score', source: 'Hacker News' },
+            { icon: '💬', title: 'Why Rust is replacing C++ in production', desc: '关于 Rust 在生产环境替代 C++ 的讨论', metric: '▲ 1.2k', cls: 'upvotes', source: 'Reddit' },
+            { icon: '🔥', title: 'Ollama v0.5: 本地运行LLM框架', desc: '一行命令运行 Llama、Mistral 等模型', metric: '⭐ 15.3k', cls: 'stars', source: 'GitHub' },
+            { icon: '📰', title: 'Building Reliable AI Agents', desc: '构建可靠 AI Agent 的工程实践', metric: '▲ 445', cls: 'score', source: 'Hacker News' },
+            { icon: '🔥', title: 'Zed Editor 2.0: 极速代码编辑器', desc: '使用 Rust 构建的下一代代码编辑器', metric: '⭐ 22.1k', cls: 'stars', source: 'GitHub' },
+        ];
+
+        const AUTO_INTERVAL = 5000;
+        let current = 0;
+        let autoPlay = true;
+        let timer = null;
+        let startX = 0;
+        let currentTranslate = 0;
+        let isDragging = false;
+
+        const wrapper = document.getElementById('ticker-wrapper');
+        const slides = document.getElementById('ticker-slides');
+        const progress = document.getElementById('ticker-progress');
+
+        // 构建slides
+        slides.innerHTML = data.map(d => `
+            <div class="ticker-slide">
+                <span class="ts-icon">${d.icon}</span>
+                <div class="ts-body">
+                    <div class="ts-title">${d.title}</div>
+                    <div class="ts-desc">${d.desc}</div>
+                </div>
+                <div class="ts-right">
+                    <span class="ts-metric ${d.cls}">${d.metric}</span>
+                    <span class="ts-source">${d.source}</span>
+                </div>
+            </div>
+        `).join('');
+
+        // 构建进度条
+        progress.innerHTML = data.map(() => `
+            <div class="tp-seg"><div class="tp-fill"></div></div>
+        `).join('');
+        progress.style.setProperty('--auto-interval', AUTO_INTERVAL + 'ms');
+
+        function goTo(index) {
+            current = index;
+            slides.style.transform = `translateX(${-current * 100}%)`;
+            updateProgress();
+        }
+
+        function updateProgress() {
+            progress.querySelectorAll('.tp-seg').forEach((seg, i) => {
+                seg.className = 'tp-seg';
+                if (i < current) seg.classList.add('active');
+                else if (i === current && autoPlay) seg.classList.add('current');
+            });
+        }
+
+        function next() { goTo((current + 1) % data.length); }
+        function prev() { goTo((current - 1 + data.length) % data.length); }
+
+        function startTimer() {
+            clearInterval(timer);
+            if (autoPlay) {
+                timer = setInterval(next, AUTO_INTERVAL);
+                updateProgress();
+            }
+        }
+
+        // 拖拽
+        wrapper.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startX = e.clientX;
+            slides.classList.add('dragging');
+        });
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const diff = e.clientX - startX;
+            currentTranslate = -current * wrapper.offsetWidth + diff;
+            slides.style.transform = `translateX(${currentTranslate}px)`;
+        });
+        window.addEventListener('mouseup', (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+            slides.classList.remove('dragging');
+            const diff = e.clientX - startX;
+            const threshold = wrapper.offsetWidth * 0.2;
+            if (diff < -threshold) next();
+            else if (diff > threshold) prev();
+            else goTo(current);
+            startTimer();
+        });
+
+        document.getElementById('btn-prev').addEventListener('click', () => { prev(); startTimer(); });
+        document.getElementById('btn-next').addEventListener('click', () => { next(); startTimer(); });
+        document.getElementById('btn-auto').addEventListener('click', function() {
+            autoPlay = !autoPlay;
+            this.classList.toggle('active', autoPlay);
+            this.innerHTML = autoPlay ? '<i class="fas fa-play"></i> 自动' : '<i class="fas fa-pause"></i> 暂停';
+            startTimer();
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') { prev(); startTimer(); }
+            if (e.key === 'ArrowRight') { next(); startTimer(); }
+        });
+
+        goTo(0);
+        startTimer();
+    </script>
+</body>
+</html>

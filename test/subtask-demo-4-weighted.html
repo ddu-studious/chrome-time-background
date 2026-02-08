@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>子任务 Demo 4 - 加权进度条模式</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        h2 { text-align: center; margin-bottom: 12px; font-size: 14px; opacity: 0.6; }
+        .task-card {
+            width: 360px;
+            background: rgba(255,255,255,0.08);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        .task-title { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
+
+        /* 多层进度条 */
+        .multi-progress { margin-bottom: 20px; }
+        .multi-progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 8px;
+        }
+        .multi-progress-header .pct {
+            font-size: 24px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #42a5f5, #66bb6a);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            transition: all 0.3s;
+        }
+        .multi-progress-header .pct.complete {
+            background: linear-gradient(135deg, #4caf50, #81c784);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .multi-progress-header .summary {
+            font-size: 11px;
+            color: rgba(255,255,255,0.4);
+        }
+        .multi-bar {
+            height: 10px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 5px;
+            overflow: hidden;
+            display: flex;
+        }
+        .multi-bar-seg {
+            height: 100%;
+            transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+            position: relative;
+        }
+        .multi-bar-seg.done { background: linear-gradient(90deg, #4caf50, #66bb6a); }
+        .multi-bar-seg.partial { background: linear-gradient(90deg, #ff9800, #ffc107); }
+        .multi-bar-seg.empty { background: transparent; }
+
+        /* 子任务（带权重） */
+        .subtask-list { list-style: none; }
+        .subtask-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            margin-bottom: 6px;
+            background: rgba(255,255,255,0.04);
+            border-radius: 10px;
+            transition: all 0.25s;
+            border: 1px solid transparent;
+        }
+        .subtask-item:hover {
+            background: rgba(255,255,255,0.08);
+            border-color: rgba(255,255,255,0.1);
+        }
+        .subtask-item.completed { opacity: 0.5; }
+        .subtask-item.completed .subtask-text { text-decoration: line-through; }
+
+        .subtask-check {
+            width: 22px; height: 22px;
+            border: 2px solid rgba(255,255,255,0.25);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 10px;
+            color: transparent;
+        }
+        .subtask-item.completed .subtask-check {
+            background: #4caf50;
+            border-color: #4caf50;
+            color: white;
+        }
+        .subtask-check:hover {
+            border-color: rgba(100,181,246,0.6);
+            transform: scale(1.1);
+        }
+
+        .subtask-body { flex: 1; min-width: 0; }
+        .subtask-text { font-size: 13px; font-weight: 500; }
+        .subtask-meta {
+            display: flex;
+            gap: 8px;
+            font-size: 10px;
+            color: rgba(255,255,255,0.35);
+            margin-top: 3px;
+        }
+        .weight-badge {
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 9px;
+            font-weight: 700;
+        }
+        .weight-heavy { background: rgba(244,67,54,0.2); color: #ef5350; }
+        .weight-medium { background: rgba(255,152,0,0.2); color: #ffa726; }
+        .weight-light { background: rgba(76,175,80,0.2); color: #66bb6a; }
+
+        .subtask-weight-bar {
+            width: 40px; height: 4px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 2px;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+        .subtask-weight-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.3s;
+        }
+
+        /* 完成弹跳 */
+        @keyframes pop { 0%{transform:scale(0)} 50%{transform:scale(1.3)} 100%{transform:scale(1)} }
+        .subtask-item.just-done .subtask-check { animation: pop 0.35s ease; }
+
+        .demo-label {
+            text-align: center;
+            margin-top: 16px;
+            font-size: 11px;
+            color: rgba(255,255,255,0.3);
+        }
+    </style>
+</head>
+<body>
+    <div>
+        <h2>Demo 4 · 加权进度条 — 不同子任务权重不同，进度按时间长度计算</h2>
+        <div class="task-card">
+            <div class="task-title">🚀 搭建 CI/CD 流水线</div>
+            <div class="multi-progress">
+                <div class="multi-progress-header">
+                    <span class="pct" id="pct-text">0%</span>
+                    <span class="summary" id="summary">0 / 5 完成 · 0h / 8h</span>
+                </div>
+                <div class="multi-bar" id="multi-bar"></div>
+            </div>
+            <ul class="subtask-list" id="subtask-list">
+                <!-- weight: 时间（小时），用作权重 -->
+                <li class="subtask-item" data-weight="1">
+                    <div class="subtask-check"><i class="fas fa-check"></i></div>
+                    <div class="subtask-body">
+                        <div class="subtask-text">配置 GitHub Actions</div>
+                        <div class="subtask-meta">
+                            <span><i class="far fa-clock"></i> 1h</span>
+                            <span class="weight-badge weight-light">轻量</span>
+                        </div>
+                    </div>
+                    <div class="subtask-weight-bar"><div class="subtask-weight-fill" style="width: 12.5%; background: #66bb6a;"></div></div>
+                </li>
+                <li class="subtask-item" data-weight="2">
+                    <div class="subtask-check"><i class="fas fa-check"></i></div>
+                    <div class="subtask-body">
+                        <div class="subtask-text">编写 Dockerfile</div>
+                        <div class="subtask-meta">
+                            <span><i class="far fa-clock"></i> 2h</span>
+                            <span class="weight-badge weight-medium">中等</span>
+                        </div>
+                    </div>
+                    <div class="subtask-weight-bar"><div class="subtask-weight-fill" style="width: 25%; background: #ffa726;"></div></div>
+                </li>
+                <li class="subtask-item" data-weight="3">
+                    <div class="subtask-check"><i class="fas fa-check"></i></div>
+                    <div class="subtask-body">
+                        <div class="subtask-text">配置 K8s 部署清单</div>
+                        <div class="subtask-meta">
+                            <span><i class="far fa-clock"></i> 3h</span>
+                            <span class="weight-badge weight-heavy">重度</span>
+                        </div>
+                    </div>
+                    <div class="subtask-weight-bar"><div class="subtask-weight-fill" style="width: 37.5%; background: #ef5350;"></div></div>
+                </li>
+                <li class="subtask-item" data-weight="1">
+                    <div class="subtask-check"><i class="fas fa-check"></i></div>
+                    <div class="subtask-body">
+                        <div class="subtask-text">添加自动化测试步骤</div>
+                        <div class="subtask-meta">
+                            <span><i class="far fa-clock"></i> 1h</span>
+                            <span class="weight-badge weight-light">轻量</span>
+                        </div>
+                    </div>
+                    <div class="subtask-weight-bar"><div class="subtask-weight-fill" style="width: 12.5%; background: #66bb6a;"></div></div>
+                </li>
+                <li class="subtask-item" data-weight="1">
+                    <div class="subtask-check"><i class="fas fa-check"></i></div>
+                    <div class="subtask-body">
+                        <div class="subtask-text">配置通知与监控</div>
+                        <div class="subtask-meta">
+                            <span><i class="far fa-clock"></i> 1h</span>
+                            <span class="weight-badge weight-light">轻量</span>
+                        </div>
+                    </div>
+                    <div class="subtask-weight-bar"><div class="subtask-weight-fill" style="width: 12.5%; background: #66bb6a;"></div></div>
+                </li>
+            </ul>
+        </div>
+        <div class="demo-label">权重越大，完成后进度前进越多（按时间比例计算）</div>
+    </div>
+    <script>
+        const list = document.getElementById('subtask-list');
+        const pctText = document.getElementById('pct-text');
+        const summary = document.getElementById('summary');
+        const multiBar = document.getElementById('multi-bar');
+
+        function getWeights() {
+            const items = list.querySelectorAll('.subtask-item');
+            let totalWeight = 0;
+            const data = [];
+            items.forEach(item => {
+                const w = parseFloat(item.dataset.weight) || 1;
+                totalWeight += w;
+                data.push({
+                    el: item,
+                    weight: w,
+                    completed: item.classList.contains('completed')
+                });
+            });
+            return { data, totalWeight };
+        }
+
+        function updateProgress() {
+            const { data, totalWeight } = getWeights();
+            let doneWeight = 0;
+            let doneCount = 0;
+
+            data.forEach(d => {
+                if (d.completed) {
+                    doneWeight += d.weight;
+                    doneCount++;
+                }
+            });
+
+            const pct = totalWeight === 0 ? 0 : Math.round((doneWeight / totalWeight) * 100);
+            pctText.textContent = pct + '%';
+            pctText.className = 'pct' + (pct === 100 ? ' complete' : '');
+            summary.textContent = `${doneCount} / ${data.length} 完成 · ${doneWeight}h / ${totalWeight}h`;
+
+            // 多段进度条
+            multiBar.innerHTML = '';
+            data.forEach(d => {
+                const seg = document.createElement('div');
+                seg.className = 'multi-bar-seg ' + (d.completed ? 'done' : 'empty');
+                seg.style.width = (d.weight / totalWeight * 100) + '%';
+                seg.title = d.el.querySelector('.subtask-text').textContent + ` (${d.weight}h)`;
+                multiBar.appendChild(seg);
+            });
+        }
+
+        list.addEventListener('click', (e) => {
+            const check = e.target.closest('.subtask-check');
+            if (!check) return;
+            const item = check.closest('.subtask-item');
+            item.classList.toggle('completed');
+            if (item.classList.contains('completed')) {
+                item.classList.add('just-done');
+                setTimeout(() => item.classList.remove('just-done'), 400);
+            }
+            updateProgress();
+        });
+
+        updateProgress();
+    </script>
+</body>
+</html>

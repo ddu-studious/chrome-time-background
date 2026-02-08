@@ -60,6 +60,8 @@ class TaskManager {
             this.tags = Array.isArray(tagsResult.memosTags) ? tagsResult.memosTags : [];
 
             // 规范化数据
+            // ⚠️ 重要：添加新字段时必须在此处声明默认值，否则任务管理页数据丢失！
+            // 同时需要更新 js/memo.js 中的 normalizeMemo 方法
             this.memos = memosData.map(memo => ({
                 id: memo.id || '',
                 title: memo.title || '',
@@ -73,11 +75,15 @@ class TaskManager {
                 priority: memo.priority || 'none',
                 dueDate: memo.dueDate || null,
                 images: Array.isArray(memo.images) ? memo.images : [],
+                links: Array.isArray(memo.links) ? memo.links : [],
                 progress: memo.progress !== undefined && memo.progress !== null ? (
                     typeof memo.progress === 'object' && memo.progress.total
                         ? Math.round((memo.progress.current / memo.progress.total) * 100)
                         : Math.max(0, Math.min(100, parseInt(memo.progress) || 0))
-                ) : null
+                ) : null,
+                recurrence: memo.recurrence || null,
+                habit: memo.habit || null,
+                habitCard: memo.habitCard || null
             }));
 
             console.log(`加载了 ${this.memos.length} 个任务`);
@@ -601,6 +607,24 @@ class TaskManager {
                     </div>
                 </div>
             </div>
+
+            <!-- 链接 -->
+            ${task.links && task.links.length > 0 ? `
+            <div class="detail-section">
+                <div class="detail-section-title">相关链接 (${task.links.length})</div>
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    ${task.links.map(link => `
+                        <a href="${this.escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer"
+                           style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: rgba(100,181,246,0.08); border: 1px solid rgba(100,181,246,0.15); border-radius: 8px; color: #64b5f6; text-decoration: none; font-size: 0.8rem; transition: all 0.2s;"
+                           onmouseover="this.style.background='rgba(100,181,246,0.15)';this.style.borderColor='rgba(100,181,246,0.3)'"
+                           onmouseout="this.style.background='rgba(100,181,246,0.08)';this.style.borderColor='rgba(100,181,246,0.15)'">
+                            <i class="fas fa-external-link-alt" style="font-size: 0.7rem; opacity: 0.7;"></i>
+                            <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(link.title || link.url)}</span>
+                        </a>
+                    `).join('')}
+                </div>
+            </div>
+            ` : ''}
 
             <!-- 图片 -->
             ${task.images && task.images.length > 0 ? `

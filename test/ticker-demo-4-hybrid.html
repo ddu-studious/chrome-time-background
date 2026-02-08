@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ticker Demo 4 - 混合双层模式</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80') center/cover no-repeat;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 40px;
+        }
+        body::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,0.3); }
+        h2 { position: relative; z-index: 1; margin-bottom: 20px; font-size: 14px; opacity: 0.7; }
+
+        .ticker-hybrid {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 680px;
+        }
+
+        /* 主信息卡片 */
+        .ticker-main {
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 14px 14px 0 0;
+            display: flex;
+            align-items: center;
+            padding: 14px 18px;
+            gap: 14px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .ticker-main:hover { background: rgba(0,0,0,0.5); }
+
+        .tm-icon {
+            width: 38px; height: 38px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+        .tm-body { flex: 1; min-width: 0; }
+        .tm-title {
+            font-size: 14px;
+            font-weight: 700;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            transition: opacity 0.3s, transform 0.3s;
+        }
+        .tm-title.fade-out { opacity: 0; transform: translateY(-8px); }
+        .tm-title.fade-in { opacity: 1; transform: translateY(0); }
+        .tm-desc {
+            font-size: 11px;
+            color: rgba(255,255,255,0.5);
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            transition: opacity 0.3s, transform 0.3s;
+        }
+        .tm-desc.fade-out { opacity: 0; transform: translateY(8px); }
+        .tm-desc.fade-in { opacity: 1; transform: translateY(0); }
+
+        .tm-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+        .tm-metric {
+            font-size: 13px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 8px;
+        }
+        .stars { color: #f1c40f; background: rgba(241,196,15,0.12); }
+        .score { color: #ff6600; background: rgba(255,102,0,0.12); }
+        .upvotes { color: #ff4500; background: rgba(255,69,0,0.12); }
+        .hearts { color: #e91e63; background: rgba(233,30,99,0.12); }
+
+        .tm-controls {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .tm-btn {
+            width: 24px; height: 24px;
+            border-radius: 6px;
+            border: none;
+            background: rgba(255,255,255,0.06);
+            color: rgba(255,255,255,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 9px;
+            transition: all 0.2s;
+        }
+        .tm-btn:hover { background: rgba(255,255,255,0.15); color: white; }
+
+        /* 底部迷你滚动栏 */
+        .ticker-mini {
+            background: rgba(0,0,0,0.3);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-top: none;
+            border-radius: 0 0 14px 14px;
+            overflow: hidden;
+            height: 28px;
+        }
+        .mini-mask {
+            -webkit-mask-image: linear-gradient(90deg, transparent 0%, black 5%, black 95%, transparent 100%);
+            mask-image: linear-gradient(90deg, transparent 0%, black 5%, black 95%, transparent 100%);
+            height: 100%;
+            display: flex;
+            align-items: center;
+        }
+        .mini-track {
+            display: flex;
+            align-items: center;
+            animation: miniScroll 30s linear infinite;
+            white-space: nowrap;
+            will-change: transform;
+        }
+        .mini-track:hover { animation-play-state: paused; }
+        @keyframes miniScroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+        .mini-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 0 16px;
+            font-size: 11px;
+            color: rgba(255,255,255,0.55);
+            flex-shrink: 0;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .mini-item:hover { color: rgba(255,255,255,0.9); }
+        .mini-icon { font-size: 10px; }
+        .mini-sep {
+            width: 3px; height: 3px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.15);
+            flex-shrink: 0;
+        }
+
+        .info { position: relative; z-index: 1; margin-top: 20px; font-size: 11px; color: rgba(255,255,255,0.5); text-align: center; line-height: 1.6; }
+    </style>
+</head>
+<body>
+    <h2>Ticker Demo 4 · 混合双层模式 — 上层卡片切换 + 下层连续滚动</h2>
+    <div class="ticker-hybrid">
+        <div class="ticker-main" id="ticker-main">
+            <div class="tm-icon" id="tm-icon">🔥</div>
+            <div class="tm-body">
+                <div class="tm-title" id="tm-title">加载中...</div>
+                <div class="tm-desc" id="tm-desc"></div>
+            </div>
+            <div class="tm-right">
+                <span class="tm-metric" id="tm-metric"></span>
+                <div class="tm-controls">
+                    <button class="tm-btn" id="btn-prev"><i class="fas fa-chevron-left"></i></button>
+                    <button class="tm-btn" id="btn-next"><i class="fas fa-chevron-right"></i></button>
+                    <button class="tm-btn" id="btn-collapse" title="折叠"><i class="fas fa-chevron-up"></i></button>
+                </div>
+            </div>
+        </div>
+        <div class="ticker-mini" id="ticker-mini">
+            <div class="mini-mask">
+                <div class="mini-track" id="mini-track"></div>
+            </div>
+        </div>
+    </div>
+    <div class="info">
+        上层：重点信息自动切换（淡入淡出）<br>
+        下层：所有信息连续滚动，悬停暂停<br>
+        点击折叠按钮可收起展开
+    </div>
+
+    <script>
+        const featured = [
+            { icon: '🔥', title: 'DeepSeek-V3: 开源推理模型', desc: '新一代开源大语言模型，671B 参数，支持 128K 上下文', metric: '⭐ 28.5k', cls: 'stars' },
+            { icon: '📰', title: 'Show HN: AI Code Review Tool', desc: 'LLM驱动的代码审查工具，支持多种语言', metric: '▲ 445', cls: 'score' },
+            { icon: '🔥', title: 'Zed Editor 2.0: 极速代码编辑器', desc: '使用 Rust 构建，启动速度快10倍', metric: '⭐ 22.1k', cls: 'stars' },
+        ];
+
+        const allItems = [
+            { icon: '🔥', title: 'DeepSeek-V3', metric: '⭐28.5k' },
+            { icon: '📰', title: 'Hoot: Scheme on WASM', metric: '▲172' },
+            { icon: '💬', title: 'Rust replacing C++', metric: '▲1.2k' },
+            { icon: '🔥', title: 'Ollama v0.5', metric: '⭐15.3k' },
+            { icon: '📰', title: 'AI Code Review', metric: '▲445' },
+            { icon: '❤', title: 'Building AI Agents', metric: '❤89' },
+            { icon: '🔥', title: 'Zed Editor 2.0', metric: '⭐22.1k' },
+            { icon: '💬', title: 'PostgreSQL vs MySQL', metric: '▲890' },
+            { icon: '🔥', title: 'Claude Code', metric: '⭐9.8k' },
+            { icon: '📰', title: 'WebGPU in Production', metric: '▲203' },
+        ];
+
+        let mainIndex = 0;
+        let isPaused = false;
+
+        // 主信息卡片
+        function renderMain(item) {
+            const title = document.getElementById('tm-title');
+            const desc = document.getElementById('tm-desc');
+            title.classList.add('fade-out');
+            desc.classList.add('fade-out');
+            setTimeout(() => {
+                document.getElementById('tm-icon').innerHTML = `<span style="font-size:20px">${item.icon}</span>`;
+                title.textContent = item.title;
+                desc.textContent = item.desc;
+                const metric = document.getElementById('tm-metric');
+                metric.textContent = item.metric;
+                metric.className = 'tm-metric ' + item.cls;
+                title.classList.remove('fade-out');
+                title.classList.add('fade-in');
+                desc.classList.remove('fade-out');
+                desc.classList.add('fade-in');
+            }, 250);
+        }
+
+        function nextMain() {
+            mainIndex = (mainIndex + 1) % featured.length;
+            renderMain(featured[mainIndex]);
+        }
+        function prevMain() {
+            mainIndex = (mainIndex - 1 + featured.length) % featured.length;
+            renderMain(featured[mainIndex]);
+        }
+
+        // 迷你滚动栏
+        const miniTrack = document.getElementById('mini-track');
+        const miniContent = allItems.map((item, i) => `
+            <span class="mini-item">
+                <span class="mini-icon">${item.icon}</span>
+                ${item.title}
+                <span style="opacity:0.5;font-weight:600;">${item.metric}</span>
+            </span>
+            ${i < allItems.length - 1 ? '<span class="mini-sep"></span>' : ''}
+        `).join('');
+        miniTrack.innerHTML = miniContent + '<span class="mini-sep"></span>' + miniContent;
+
+        // 控制
+        document.getElementById('btn-prev').addEventListener('click', (e) => { e.stopPropagation(); prevMain(); });
+        document.getElementById('btn-next').addEventListener('click', (e) => { e.stopPropagation(); nextMain(); });
+
+        // 折叠
+        let collapsed = false;
+        document.getElementById('btn-collapse').addEventListener('click', (e) => {
+            e.stopPropagation();
+            collapsed = !collapsed;
+            const mini = document.getElementById('ticker-mini');
+            const icon = e.currentTarget.querySelector('i');
+            if (collapsed) {
+                mini.style.height = '0';
+                mini.style.borderWidth = '0';
+                icon.className = 'fas fa-chevron-down';
+            } else {
+                mini.style.height = '28px';
+                mini.style.borderWidth = '1px';
+                icon.className = 'fas fa-chevron-up';
+            }
+        });
+
+        document.getElementById('ticker-main').addEventListener('mouseenter', () => isPaused = true);
+        document.getElementById('ticker-main').addEventListener('mouseleave', () => isPaused = false);
+
+        // 自动切换
+        setInterval(() => { if (!isPaused) nextMain(); }, 6000);
+
+        renderMain(featured[0]);
+    </script>
+</body>
+</html>

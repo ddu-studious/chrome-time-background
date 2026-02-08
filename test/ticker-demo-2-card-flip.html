@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ticker Demo 2 - 卡片翻转切换</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80') center/cover no-repeat;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 40px;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.3);
+        }
+        h2 { position: relative; z-index: 1; margin-bottom: 20px; font-size: 14px; opacity: 0.7; }
+
+        .ticker-container {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 640px;
+            height: 56px;
+            perspective: 800px;
+        }
+
+        .ticker-card {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            padding: 0 18px;
+            gap: 14px;
+            cursor: pointer;
+            transition: background 0.2s;
+            transform-style: preserve-3d;
+        }
+        .ticker-card:hover { background: rgba(0,0,0,0.5); }
+
+        /* 翻转动画 */
+        .ticker-card.flip-out {
+            animation: flipOut 0.35s ease-in forwards;
+        }
+        .ticker-card.flip-in {
+            animation: flipIn 0.35s ease-out forwards;
+        }
+        @keyframes flipOut {
+            0% { transform: rotateX(0); opacity: 1; }
+            100% { transform: rotateX(90deg); opacity: 0; }
+        }
+        @keyframes flipIn {
+            0% { transform: rotateX(-90deg); opacity: 0; }
+            100% { transform: rotateX(0); opacity: 1; }
+        }
+
+        .tc-icon { font-size: 22px; flex-shrink: 0; }
+        .tc-body { flex: 1; min-width: 0; }
+        .tc-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: rgba(255,255,255,0.92);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .tc-desc {
+            font-size: 11px;
+            color: rgba(255,255,255,0.45);
+            margin-top: 1px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .tc-metric {
+            font-size: 13px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 8px;
+            flex-shrink: 0;
+        }
+        .stars { color: #f1c40f; background: rgba(241,196,15,0.12); }
+        .score { color: #ff6600; background: rgba(255,102,0,0.12); }
+        .upvotes { color: #ff4500; background: rgba(255,69,0,0.12); }
+
+        .tc-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+        .tc-counter {
+            font-size: 10px;
+            color: rgba(255,255,255,0.4);
+            min-width: 30px;
+            text-align: center;
+        }
+        .tc-btn {
+            width: 26px; height: 26px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(255,255,255,0.05);
+            color: rgba(255,255,255,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 10px;
+            transition: all 0.2s;
+        }
+        .tc-btn:hover {
+            background: rgba(255,255,255,0.15);
+            color: white;
+            border-color: rgba(255,255,255,0.25);
+        }
+
+        /* 底部进度点 */
+        .ticker-dots {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+            margin-top: 12px;
+        }
+        .ticker-dot {
+            width: 6px; height: 6px;
+            border-radius: 3px;
+            background: rgba(255,255,255,0.15);
+            transition: all 0.3s;
+        }
+        .ticker-dot.active {
+            background: rgba(255,255,255,0.7);
+            width: 18px;
+        }
+
+        .info {
+            position: relative; z-index: 1;
+            margin-top: 16px; font-size: 11px;
+            color: rgba(255,255,255,0.5);
+        }
+    </style>
+</head>
+<body>
+    <h2>Ticker Demo 2 · 3D卡片翻转切换 + 进度点指示器</h2>
+    <div class="ticker-container" id="ticker-container">
+        <div class="ticker-card" id="ticker-card">
+            <span class="tc-icon" id="tc-icon">🔥</span>
+            <div class="tc-body">
+                <div class="tc-title" id="tc-title">加载中...</div>
+                <div class="tc-desc" id="tc-desc"></div>
+            </div>
+            <span class="tc-metric" id="tc-metric"></span>
+            <div class="tc-controls">
+                <span class="tc-counter" id="tc-counter">1/8</span>
+                <button class="tc-btn" id="btn-prev"><i class="fas fa-chevron-left"></i></button>
+                <button class="tc-btn" id="btn-next"><i class="fas fa-chevron-right"></i></button>
+            </div>
+        </div>
+    </div>
+    <div class="ticker-dots" id="ticker-dots"></div>
+    <div class="info">自动翻转 · 悬停暂停 · 键盘←→切换 · 3D翻转效果</div>
+
+    <script>
+        const data = [
+            { icon: '🔥', title: 'DeepSeek-V3: 开源大语言模型', desc: 'github.com/deepseek-ai', metric: '⭐ 28.5k', cls: 'stars' },
+            { icon: '📰', title: 'Hoot: Scheme on WebAssembly', desc: 'spritely.institute', metric: '▲ 172', cls: 'score' },
+            { icon: '💬', title: 'Why Rust is ready for enterprise', desc: 'r/programming · 342 评论', metric: '▲ 1.2k', cls: 'upvotes' },
+            { icon: '🔥', title: 'Ollama v0.5: Run LLMs Locally', desc: 'github.com/ollama/ollama', metric: '⭐ 15.3k', cls: 'stars' },
+            { icon: '📰', title: 'Show HN: AI Code Review Tool', desc: 'news.ycombinator.com', metric: '▲ 445', cls: 'score' },
+            { icon: '🔥', title: 'Zed Editor 2.0: 超快代码编辑器', desc: 'github.com/zed-industries/zed', metric: '⭐ 22.1k', cls: 'stars' },
+            { icon: '💬', title: 'PostgreSQL vs MySQL in 2026', desc: 'r/database · 189 评论', metric: '▲ 890', cls: 'upvotes' },
+            { icon: '🔥', title: 'Claude Code: AI Terminal Assistant', desc: 'github.com/anthropics', metric: '⭐ 9.8k', cls: 'stars' },
+        ];
+
+        let currentIndex = 0;
+        let timer = null;
+        let isPaused = false;
+
+        const card = document.getElementById('ticker-card');
+        const dotsContainer = document.getElementById('ticker-dots');
+
+        // 创建 dots
+        data.forEach((_, i) => {
+            const dot = document.createElement('div');
+            dot.className = 'ticker-dot' + (i === 0 ? ' active' : '');
+            dot.addEventListener('click', () => goTo(i));
+            dotsContainer.appendChild(dot);
+        });
+
+        function render(item) {
+            document.getElementById('tc-icon').textContent = item.icon;
+            document.getElementById('tc-title').textContent = item.title;
+            document.getElementById('tc-desc').textContent = item.desc;
+            const metric = document.getElementById('tc-metric');
+            metric.textContent = item.metric;
+            metric.className = 'tc-metric ' + item.cls;
+            document.getElementById('tc-counter').textContent = `${currentIndex + 1}/${data.length}`;
+
+            // 更新 dots
+            dotsContainer.querySelectorAll('.ticker-dot').forEach((d, i) => {
+                d.classList.toggle('active', i === currentIndex);
+            });
+        }
+
+        function flipTo(index) {
+            card.classList.remove('flip-in');
+            card.classList.add('flip-out');
+            setTimeout(() => {
+                currentIndex = index;
+                render(data[currentIndex]);
+                card.classList.remove('flip-out');
+                card.classList.add('flip-in');
+            }, 350);
+        }
+
+        function goTo(index) {
+            if (index === currentIndex) return;
+            flipTo(index);
+            resetTimer();
+        }
+
+        function next() { flipTo((currentIndex + 1) % data.length); }
+        function prev() { flipTo((currentIndex - 1 + data.length) % data.length); }
+
+        function startTimer() {
+            timer = setInterval(() => {
+                if (!isPaused) next();
+            }, 5000);
+        }
+        function resetTimer() { clearInterval(timer); startTimer(); }
+
+        document.getElementById('btn-prev').addEventListener('click', (e) => { e.stopPropagation(); prev(); resetTimer(); });
+        document.getElementById('btn-next').addEventListener('click', (e) => { e.stopPropagation(); next(); resetTimer(); });
+
+        card.addEventListener('mouseenter', () => isPaused = true);
+        card.addEventListener('mouseleave', () => isPaused = false);
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') { prev(); resetTimer(); }
+            if (e.key === 'ArrowRight') { next(); resetTimer(); }
+        });
+
+        render(data[0]);
+        startTimer();
+    </script>
+</body>
+</html>

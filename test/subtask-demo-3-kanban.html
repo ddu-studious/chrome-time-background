@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>子任务 Demo 3 - 看板拖拽模式</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        h2 { text-align: center; margin-bottom: 12px; font-size: 14px; opacity: 0.6; }
+        .task-card {
+            width: 380px;
+            background: rgba(255,255,255,0.08);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        .task-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .task-title { font-size: 16px; font-weight: 700; }
+
+        /* 分段进度条 */
+        .segmented-progress {
+            display: flex;
+            gap: 3px;
+            height: 8px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .seg {
+            flex: 1;
+            background: rgba(255,255,255,0.08);
+            transition: background 0.4s ease, box-shadow 0.4s;
+            position: relative;
+        }
+        .seg.todo { background: rgba(255,255,255,0.08); }
+        .seg.doing {
+            background: linear-gradient(90deg, #ff9800, #ffc107);
+            box-shadow: 0 0 6px rgba(255,152,0,0.4);
+        }
+        .seg.done {
+            background: linear-gradient(90deg, #4caf50, #66bb6a);
+            box-shadow: 0 0 6px rgba(76,175,80,0.3);
+        }
+
+        .progress-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: rgba(255,255,255,0.4);
+            margin-bottom: 16px;
+        }
+        .progress-labels span.active { color: rgba(255,255,255,0.8); font-weight: 600; }
+
+        /* 三列看板 */
+        .kanban {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+            min-height: 200px;
+        }
+        .kanban-column {
+            background: rgba(255,255,255,0.03);
+            border-radius: 10px;
+            padding: 8px;
+            min-height: 160px;
+        }
+        .kanban-column-title {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+            padding: 2px 6px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .kanban-column-title .count {
+            background: rgba(255,255,255,0.12);
+            border-radius: 4px;
+            padding: 0 4px;
+            font-size: 9px;
+        }
+        .col-todo .kanban-column-title { color: rgba(255,255,255,0.5); }
+        .col-doing .kanban-column-title { color: #ffc107; }
+        .col-done .kanban-column-title { color: #4caf50; }
+
+        .kanban-items { display: flex; flex-direction: column; gap: 4px; }
+        .kanban-item {
+            padding: 8px 10px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px;
+            font-size: 11px;
+            cursor: grab;
+            transition: all 0.2s;
+            user-select: none;
+        }
+        .kanban-item:hover {
+            background: rgba(255,255,255,0.12);
+            border-color: rgba(255,255,255,0.15);
+            transform: translateY(-1px);
+        }
+        .kanban-item:active { cursor: grabbing; opacity: 0.7; }
+        .kanban-item .item-title { font-weight: 500; margin-bottom: 3px; }
+        .kanban-item .item-time {
+            font-size: 9px;
+            color: rgba(255,255,255,0.35);
+        }
+
+        .kanban-column.drag-over {
+            background: rgba(100,181,246,0.08);
+            border: 1px dashed rgba(100,181,246,0.3);
+        }
+
+        /* 操作按钮 */
+        .kanban-item-actions {
+            display: flex;
+            gap: 4px;
+            margin-top: 6px;
+        }
+        .move-btn {
+            font-size: 9px;
+            padding: 2px 6px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 4px;
+            color: rgba(255,255,255,0.5);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .move-btn:hover {
+            background: rgba(100,181,246,0.2);
+            color: #64b5f6;
+        }
+
+        .demo-label {
+            text-align: center;
+            margin-top: 16px;
+            font-size: 11px;
+            color: rgba(255,255,255,0.3);
+        }
+    </style>
+</head>
+<body>
+    <div>
+        <h2>Demo 3 · 看板模式 — 拖拽子任务在待做/进行/完成间流转</h2>
+        <div class="task-card">
+            <div class="task-header">
+                <div class="task-title">🏗️ 重构用户模块</div>
+            </div>
+
+            <div class="segmented-progress" id="seg-bar"></div>
+            <div class="progress-labels">
+                <span id="label-todo">待做 3</span>
+                <span id="label-doing">进行 0</span>
+                <span id="label-done">完成 0</span>
+            </div>
+
+            <div class="kanban">
+                <div class="kanban-column col-todo" id="col-todo" data-status="todo">
+                    <div class="kanban-column-title">
+                        <i class="far fa-circle"></i> 待做 <span class="count" id="count-todo">3</span>
+                    </div>
+                    <div class="kanban-items" id="items-todo">
+                        <div class="kanban-item" data-id="1" draggable="true">
+                            <div class="item-title">提取公共组件</div>
+                            <div class="item-time"><i class="far fa-clock"></i> ~2h</div>
+                            <div class="kanban-item-actions">
+                                <button class="move-btn" data-target="doing">→ 进行</button>
+                            </div>
+                        </div>
+                        <div class="kanban-item" data-id="2" draggable="true">
+                            <div class="item-title">重写 API 接口</div>
+                            <div class="item-time"><i class="far fa-clock"></i> ~3h</div>
+                            <div class="kanban-item-actions">
+                                <button class="move-btn" data-target="doing">→ 进行</button>
+                            </div>
+                        </div>
+                        <div class="kanban-item" data-id="3" draggable="true">
+                            <div class="item-title">更新单元测试</div>
+                            <div class="item-time"><i class="far fa-clock"></i> ~1.5h</div>
+                            <div class="kanban-item-actions">
+                                <button class="move-btn" data-target="doing">→ 进行</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="kanban-column col-doing" id="col-doing" data-status="doing">
+                    <div class="kanban-column-title">
+                        <i class="fas fa-spinner fa-spin"></i> 进行 <span class="count" id="count-doing">0</span>
+                    </div>
+                    <div class="kanban-items" id="items-doing"></div>
+                </div>
+                <div class="kanban-column col-done" id="col-done" data-status="done">
+                    <div class="kanban-column-title">
+                        <i class="fas fa-check-circle"></i> 完成 <span class="count" id="count-done">0</span>
+                    </div>
+                    <div class="kanban-items" id="items-done"></div>
+                </div>
+            </div>
+        </div>
+        <div class="demo-label">点击按钮或拖拽移动子任务，分段进度条实时更新</div>
+    </div>
+    <script>
+        function updateUI() {
+            const todo = document.querySelectorAll('#items-todo .kanban-item').length;
+            const doing = document.querySelectorAll('#items-doing .kanban-item').length;
+            const done = document.querySelectorAll('#items-done .kanban-item').length;
+            const total = todo + doing + done;
+
+            document.getElementById('count-todo').textContent = todo;
+            document.getElementById('count-doing').textContent = doing;
+            document.getElementById('count-done').textContent = done;
+
+            document.getElementById('label-todo').textContent = `待做 ${todo}`;
+            document.getElementById('label-doing').textContent = `进行 ${doing}`;
+            document.getElementById('label-done').textContent = `完成 ${done}`;
+
+            // 分段进度条
+            const segBar = document.getElementById('seg-bar');
+            segBar.innerHTML = '';
+            for (let i = 0; i < total; i++) {
+                const seg = document.createElement('div');
+                seg.className = 'seg';
+                if (i < done) seg.classList.add('done');
+                else if (i < done + doing) seg.classList.add('doing');
+                else seg.classList.add('todo');
+                segBar.appendChild(seg);
+            }
+
+            // 更新按钮
+            document.querySelectorAll('#items-todo .kanban-item .kanban-item-actions').forEach(el => {
+                el.innerHTML = '<button class="move-btn" data-target="doing">→ 进行</button>';
+            });
+            document.querySelectorAll('#items-doing .kanban-item .kanban-item-actions').forEach(el => {
+                el.innerHTML = '<button class="move-btn" data-target="todo">← 待做</button><button class="move-btn" data-target="done">→ 完成</button>';
+            });
+            document.querySelectorAll('#items-done .kanban-item .kanban-item-actions').forEach(el => {
+                el.innerHTML = '<button class="move-btn" data-target="doing">← 撤回</button>';
+            });
+        }
+
+        // 按钮点击
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('.move-btn');
+            if (!btn) return;
+            const item = btn.closest('.kanban-item');
+            const target = document.getElementById('items-' + btn.dataset.target);
+            if (item && target) {
+                target.appendChild(item);
+                updateUI();
+            }
+        });
+
+        // 拖拽
+        document.addEventListener('dragstart', (e) => {
+            const item = e.target.closest('.kanban-item');
+            if (item) e.dataTransfer.setData('text/plain', item.dataset.id);
+        });
+        document.querySelectorAll('.kanban-items').forEach(col => {
+            col.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                col.closest('.kanban-column').classList.add('drag-over');
+            });
+            col.addEventListener('dragleave', () => {
+                col.closest('.kanban-column').classList.remove('drag-over');
+            });
+            col.addEventListener('drop', (e) => {
+                e.preventDefault();
+                col.closest('.kanban-column').classList.remove('drag-over');
+                const id = e.dataTransfer.getData('text/plain');
+                const item = document.querySelector(`.kanban-item[data-id="${id}"]`);
+                if (item) { col.appendChild(item); updateUI(); }
+            });
+        });
+
+        updateUI();
+    </script>
+</body>
+</html>

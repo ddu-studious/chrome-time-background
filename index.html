@@ -45,6 +45,22 @@
         
         <!-- 右侧：时间和天气 -->
         <main class="main-content">
+            <!-- 顶部滚动信息栏（单条轮播） -->
+            <div class="tech-ticker" id="tech-ticker">
+                <div class="ticker-source-icon" id="ticker-source-icon">🔥</div>
+                <div class="ticker-body" id="ticker-body">
+                    <div class="ticker-title" id="ticker-title">正在加载热门资讯...</div>
+                    <div class="ticker-desc" id="ticker-desc"></div>
+                </div>
+                <div class="ticker-metric" id="ticker-metric"></div>
+                <div class="ticker-controls">
+                    <span class="ticker-counter" id="ticker-counter"></span>
+                    <button class="ticker-btn" id="ticker-prev-btn" title="上一条"><i class="fas fa-chevron-left"></i></button>
+                    <button class="ticker-btn" id="ticker-next-btn" title="下一条"><i class="fas fa-chevron-right"></i></button>
+                    <button class="ticker-btn ticker-refresh-btn" id="ticker-refresh-btn" title="刷新"><i class="fas fa-sync-alt"></i></button>
+                    <button class="ticker-btn ticker-toggle-btn" id="ticker-toggle-btn" title="折叠"><i class="fas fa-chevron-up"></i></button>
+                </div>
+            </div>
             <div class="time-wrapper">
                 <div class="time-container">
                     <div class="time" id="time">00:00:00</div>
@@ -91,6 +107,7 @@
     <script src="js/weather.js"></script>
     <script src="js/holidays.js"></script>
     <script src="js/memo.js"></script>
+    <script src="js/ticker.js"></script>
     <script src="js/background.js"></script>
     <script src="js/main.js"></script>
   </body>

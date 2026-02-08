@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ticker Demo 5 - 垂直滚动模式</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80') center/cover no-repeat;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 40px;
+        }
+        body::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,0.3); }
+        h2 { position: relative; z-index: 1; margin-bottom: 20px; font-size: 14px; opacity: 0.7; }
+
+        .ticker-vertical {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 640px;
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 14px;
+            overflow: hidden;
+        }
+
+        .ticker-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 16px 6px;
+        }
+        .ticker-header-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            color: rgba(255,255,255,0.5);
+            font-weight: 600;
+        }
+        .ticker-header-left .dot {
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: #4caf50;
+            animation: liveDot 2s infinite;
+        }
+        @keyframes liveDot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        .ticker-header-right {
+            display: flex;
+            gap: 4px;
+        }
+        .th-btn {
+            width: 22px; height: 22px;
+            border-radius: 5px;
+            border: none;
+            background: rgba(255,255,255,0.06);
+            color: rgba(255,255,255,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 9px;
+            transition: all 0.2s;
+        }
+        .th-btn:hover { background: rgba(255,255,255,0.15); color: white; }
+
+        /* 垂直滚动区域 */
+        .ticker-viewport {
+            height: 46px;
+            overflow: hidden;
+            position: relative;
+        }
+        .ticker-viewport::before,
+        .ticker-viewport::after {
+            content: '';
+            position: absolute;
+            left: 0; right: 0;
+            height: 12px;
+            z-index: 2;
+            pointer-events: none;
+        }
+        .ticker-viewport::before {
+            top: 0;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.4), transparent);
+        }
+        .ticker-viewport::after {
+            bottom: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.4), transparent);
+        }
+
+        .ticker-vert-track {
+            transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            will-change: transform;
+        }
+
+        .vert-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 11px 16px;
+            height: 46px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .vert-item:hover { background: rgba(255,255,255,0.04); }
+
+        .vi-icon { font-size: 16px; flex-shrink: 0; }
+        .vi-body { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; }
+        .vi-title {
+            font-size: 13px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .vi-desc {
+            font-size: 10px;
+            color: rgba(255,255,255,0.4);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .vi-metric {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 5px;
+            flex-shrink: 0;
+        }
+        .stars { color: #f1c40f; background: rgba(241,196,15,0.12); }
+        .score { color: #ff6600; background: rgba(255,102,0,0.12); }
+        .upvotes { color: #ff4500; background: rgba(255,69,0,0.12); }
+        .hearts { color: #e91e63; background: rgba(233,30,99,0.12); }
+
+        .vi-index {
+            font-size: 9px;
+            font-weight: 700;
+            color: rgba(255,255,255,0.2);
+            width: 16px;
+            text-align: right;
+            flex-shrink: 0;
+        }
+
+        .info { position: relative; z-index: 1; margin-top: 20px; font-size: 11px; color: rgba(255,255,255,0.5); text-align: center; line-height: 1.6; }
+    </style>
+</head>
+<body>
+    <h2>Ticker Demo 5 · 垂直滚动模式 — 类似股票行情滚动</h2>
+    <div class="ticker-vertical">
+        <div class="ticker-header">
+            <div class="ticker-header-left">
+                <span class="dot"></span>
+                TECH FEED · <span id="t-counter">1/10</span>
+            </div>
+            <div class="ticker-header-right">
+                <button class="th-btn" id="btn-up"><i class="fas fa-chevron-up"></i></button>
+                <button class="th-btn" id="btn-down"><i class="fas fa-chevron-down"></i></button>
+                <button class="th-btn" id="btn-refresh" title="刷新"><i class="fas fa-sync-alt"></i></button>
+                <button class="th-btn" id="btn-expand" title="展开"><i class="fas fa-expand-alt"></i></button>
+            </div>
+        </div>
+        <div class="ticker-viewport" id="viewport">
+            <div class="ticker-vert-track" id="vert-track"></div>
+        </div>
+    </div>
+    <div class="info">
+        垂直滚动 · 类股票行情风格 · 可展开多行<br>
+        自动轮播 · 悬停暂停 · 键盘↑↓控制
+    </div>
+
+    <script>
+        const data = [
+            { icon: '🔥', title: 'DeepSeek-V3', desc: '开源推理模型 · 671B参数', metric: '⭐ 28.5k', cls: 'stars' },
+            { icon: '📰', title: 'Hoot: Scheme on WASM', desc: 'spritely.institute', metric: '▲ 172', cls: 'score' },
+            { icon: '💬', title: 'Rust is replacing C++', desc: 'r/programming · 342评论', metric: '▲ 1.2k', cls: 'upvotes' },
+            { icon: '🔥', title: 'Ollama v0.5', desc: '本地运行LLM框架', metric: '⭐ 15.3k', cls: 'stars' },
+            { icon: '📰', title: 'AI Code Review Tool', desc: 'news.ycombinator.com', metric: '▲ 445', cls: 'score' },
+            { icon: '❤', title: 'Building AI Agents', desc: 'LangGraph 实践指南', metric: '❤ 89', cls: 'hearts' },
+            { icon: '🔥', title: 'Zed Editor 2.0', desc: 'Rust极速编辑器', metric: '⭐ 22.1k', cls: 'stars' },
+            { icon: '💬', title: 'PostgreSQL vs MySQL', desc: 'r/database · 189评论', metric: '▲ 890', cls: 'upvotes' },
+            { icon: '🔥', title: 'Claude Code', desc: 'AI终端编程助手', metric: '⭐ 9.8k', cls: 'stars' },
+            { icon: '📰', title: 'WebGPU in Production', desc: '浏览器GPU计算', metric: '▲ 203', cls: 'score' },
+        ];
+
+        const ITEM_HEIGHT = 46;
+        let current = 0;
+        let expanded = false;
+        let isPaused = false;
+
+        const track = document.getElementById('vert-track');
+        const viewport = document.getElementById('viewport');
+        const counter = document.getElementById('t-counter');
+
+        function buildTrack() {
+            track.innerHTML = data.map((d, i) => `
+                <div class="vert-item" data-url="#">
+                    <span class="vi-index">${i + 1}</span>
+                    <span class="vi-icon">${d.icon}</span>
+                    <div class="vi-body">
+                        <div>
+                            <span class="vi-title">${d.title}</span>
+                            <span class="vi-desc">${d.desc}</span>
+                        </div>
+                    </div>
+                    <span class="vi-metric ${d.cls}">${d.metric}</span>
+                </div>
+            `).join('');
+        }
+
+        function goTo(index) {
+            current = ((index % data.length) + data.length) % data.length;
+            track.style.transform = `translateY(${-current * ITEM_HEIGHT}px)`;
+            counter.textContent = `${current + 1}/${data.length}`;
+        }
+
+        function next() { goTo(current + 1); }
+        function prev() { goTo(current - 1); }
+
+        document.getElementById('btn-up').addEventListener('click', prev);
+        document.getElementById('btn-down').addEventListener('click', next);
+
+        document.getElementById('btn-expand').addEventListener('click', function() {
+            expanded = !expanded;
+            viewport.style.height = expanded ? (ITEM_HEIGHT * Math.min(4, data.length)) + 'px' : ITEM_HEIGHT + 'px';
+            this.querySelector('i').className = expanded ? 'fas fa-compress-alt' : 'fas fa-expand-alt';
+        });
+
+        document.getElementById('btn-refresh').addEventListener('click', function() {
+            this.querySelector('i').style.animation = 'spin 0.5s';
+            setTimeout(() => this.querySelector('i').style.animation = '', 500);
+        });
+
+        viewport.addEventListener('mouseenter', () => isPaused = true);
+        viewport.addEventListener('mouseleave', () => isPaused = false);
+
+        // 滚轮控制
+        viewport.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            if (e.deltaY > 0) next();
+            else prev();
+        }, { passive: false });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowUp') { prev(); e.preventDefault(); }
+            if (e.key === 'ArrowDown') { next(); e.preventDefault(); }
+        });
+
+        // 自动轮播
+        setInterval(() => { if (!isPaused) next(); }, 4000);
+
+        buildTrack();
+        goTo(0);
+    </script>
+</body>
+</html>

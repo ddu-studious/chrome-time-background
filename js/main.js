@@ -122,6 +122,16 @@ async function initApp() {
         console.error('备忘录模块初始化失败:', error);
     }
 
+    // 初始化滚动信息栏（延迟加载，不阻塞主功能）
+    try {
+        if (window.techTicker && typeof window.techTicker.init === 'function') {
+            window.techTicker.init();
+        }
+        console.log('滚动信息栏初始化完成');
+    } catch (error) {
+        console.error('滚动信息栏初始化失败:', error);
+    }
+
     console.log('应用初始化完成（可能部分模块降级）');
 }
 

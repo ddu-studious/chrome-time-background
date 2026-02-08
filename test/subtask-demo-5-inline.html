@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>子任务 Demo 5 - 内联紧凑模式</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        h2 { text-align: center; margin-bottom: 12px; font-size: 14px; opacity: 0.6; }
+
+        .container {
+            width: 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        /* 方案A: 与描述区域切换的模式 */
+        .task-card {
+            background: rgba(255,255,255,0.08);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 14px;
+            padding: 14px 16px;
+            box-shadow: 0 6px 24px rgba(0,0,0,0.25);
+        }
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .card-check {
+            width: 20px; height: 20px;
+            border: 2px solid rgba(255,255,255,0.25);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 9px;
+            color: transparent;
+        }
+        .card-title { font-size: 14px; font-weight: 600; flex: 1; }
+
+        /* 切换标签 */
+        .tab-switch {
+            display: flex;
+            gap: 0;
+            margin-bottom: 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            padding: 2px;
+        }
+        .tab-btn {
+            flex: 1;
+            text-align: center;
+            padding: 5px 0;
+            font-size: 11px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: rgba(255,255,255,0.5);
+            border: none;
+            background: none;
+        }
+        .tab-btn.active {
+            background: rgba(255,255,255,0.12);
+            color: white;
+            font-weight: 600;
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .desc-text {
+            font-size: 12px;
+            color: rgba(255,255,255,0.6);
+            line-height: 1.6;
+        }
+
+        /* 紧凑子任务列表 */
+        .compact-subtasks { list-style: none; }
+        .compact-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 2px;
+        }
+        .compact-item:hover { background: rgba(255,255,255,0.06); }
+        .compact-item.done { opacity: 0.45; }
+        .compact-item.done .compact-text { text-decoration: line-through; }
+
+        .compact-dot {
+            width: 14px; height: 14px;
+            border: 1.5px solid rgba(255,255,255,0.25);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 7px;
+            color: transparent;
+            transition: all 0.25s;
+        }
+        .compact-item.done .compact-dot {
+            background: #4caf50;
+            border-color: #4caf50;
+            color: white;
+        }
+        .compact-text { font-size: 12px; flex: 1; }
+        .compact-weight {
+            font-size: 9px;
+            color: rgba(255,255,255,0.3);
+            padding: 1px 4px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 3px;
+        }
+
+        /* 底部进度 */
+        .card-footer {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255,255,255,0.06);
+        }
+        .footer-bar {
+            flex: 1;
+            height: 4px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .footer-fill {
+            height: 100%;
+            border-radius: 2px;
+            background: linear-gradient(90deg, #42a5f5, #66bb6a);
+            transition: width 0.4s;
+        }
+        .footer-fill.complete { background: linear-gradient(90deg, #4caf50, #81c784); }
+        .footer-pct {
+            font-size: 11px;
+            font-weight: 700;
+            color: rgba(255,255,255,0.7);
+            min-width: 28px;
+            text-align: right;
+        }
+
+        /* 方案B: 折叠展开模式 */
+        .expand-header {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            font-size: 11px;
+            color: rgba(255,255,255,0.5);
+            margin-bottom: 4px;
+            padding: 4px 0;
+        }
+        .expand-header i { font-size: 9px; transition: transform 0.2s; }
+        .expand-header.open i { transform: rotate(90deg); }
+        .expand-body { display: none; }
+        .expand-body.open { display: block; }
+
+        .demo-label {
+            text-align: center;
+            margin-top: 12px;
+            font-size: 11px;
+            color: rgba(255,255,255,0.3);
+        }
+    </style>
+</head>
+<body>
+    <div>
+        <h2>Demo 5 · 紧凑内联模式 — 描述/子任务切换，节省空间</h2>
+        <div class="container">
+            <!-- 方案A: Tab切换 -->
+            <div class="task-card" id="card-a">
+                <div class="card-header">
+                    <div class="card-check"><i class="fas fa-check"></i></div>
+                    <div class="card-title">📋 设计评审准备</div>
+                </div>
+                <div class="tab-switch">
+                    <button class="tab-btn active" data-tab="desc-a">描述</button>
+                    <button class="tab-btn" data-tab="sub-a">子任务 <span id="sub-count-a">0/4</span></button>
+                </div>
+                <div class="tab-content active" id="tab-desc-a">
+                    <div class="desc-text">
+                        准备下周三的设计评审会议材料。需要完成原型、文档和演示准备，确保团队能理解设计意图。
+                    </div>
+                </div>
+                <div class="tab-content" id="tab-sub-a">
+                    <ul class="compact-subtasks" id="list-a">
+                        <li class="compact-item" data-w="1"><div class="compact-dot"><i class="fas fa-check"></i></div><span class="compact-text">整理设计稿</span><span class="compact-weight">1h</span></li>
+                        <li class="compact-item" data-w="2"><div class="compact-dot"><i class="fas fa-check"></i></div><span class="compact-text">编写设计文档</span><span class="compact-weight">2h</span></li>
+                        <li class="compact-item" data-w="0.5"><div class="compact-dot"><i class="fas fa-check"></i></div><span class="compact-text">制作演示幻灯片</span><span class="compact-weight">30m</span></li>
+                        <li class="compact-item" data-w="0.5"><div class="compact-dot"><i class="fas fa-check"></i></div><span class="compact-text">预约会议室</span><span class="compact-weight">30m</span></li>
+                    </ul>
+                </div>
+                <div class="card-footer">
+                    <div class="footer-bar"><div class="footer-fill" id="fill-a" style="width:0%"></div></div>
+                    <div class="footer-pct" id="pct-a">0%</div>
+                </div>
+            </div>
+
+            <!-- 方案B: 折叠展开 -->
+            <div class="task-card" id="card-b">
+                <div class="card-header">
+                    <div class="card-check"><i class="fas fa-check"></i></div>
+                    <div class="card-title">🔧 修复登录 Bug</div>
+                </div>
+                <div class="desc-text" style="margin-bottom: 8px;">
+                    用户反馈 OAuth 登录后 token 偶发性失效，需排查并修复。
+                </div>
+                <div class="expand-header" id="expand-btn">
+                    <i class="fas fa-chevron-right"></i>
+                    子任务 <span id="sub-count-b">0/3</span>
+                </div>
+                <div class="expand-body" id="expand-body">
+                    <ul class="compact-subtasks" id="list-b">
+                        <li class="compact-item" data-w="1"><div class="compact-dot"><i class="fas fa-check"></i></div><span class="compact-text">复现问题场景</span><span class="compact-weight">1h</span></li>
+                        <li class="compact-item" data-w="2"><div class="compact-dot"><i class="fas fa-check"></i></div><span class="compact-text">修改 token 刷新逻辑</span><span class="compact-weight">2h</span></li>
+                        <li class="compact-item" data-w="1"><div class="compact-dot"><i class="fas fa-check"></i></div><span class="compact-text">编写回归测试</span><span class="compact-weight">1h</span></li>
+                    </ul>
+                </div>
+                <div class="card-footer">
+                    <div class="footer-bar"><div class="footer-fill" id="fill-b" style="width:0%"></div></div>
+                    <div class="footer-pct" id="pct-b">0%</div>
+                </div>
+            </div>
+        </div>
+        <div class="demo-label">方案A: Tab切换描述/子任务 · 方案B: 折叠展开子任务</div>
+    </div>
+    <script>
+        // Tab 切换
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const card = btn.closest('.task-card');
+                card.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                card.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+            });
+        });
+
+        // 折叠展开
+        const expandBtn = document.getElementById('expand-btn');
+        const expandBody = document.getElementById('expand-body');
+        expandBtn.addEventListener('click', () => {
+            expandBtn.classList.toggle('open');
+            expandBody.classList.toggle('open');
+        });
+
+        // 更新进度
+        function updateCard(listId, fillId, pctId, countId) {
+            const list = document.getElementById(listId);
+            const items = list.querySelectorAll('.compact-item');
+            let totalW = 0, doneW = 0, doneCount = 0;
+            items.forEach(item => {
+                const w = parseFloat(item.dataset.w) || 1;
+                totalW += w;
+                if (item.classList.contains('done')) { doneW += w; doneCount++; }
+            });
+            const pct = totalW === 0 ? 0 : Math.round(doneW / totalW * 100);
+            const fill = document.getElementById(fillId);
+            fill.style.width = pct + '%';
+            fill.className = 'footer-fill' + (pct === 100 ? ' complete' : '');
+            document.getElementById(pctId).textContent = pct + '%';
+            document.getElementById(countId).textContent = `${doneCount}/${items.length}`;
+        }
+
+        document.querySelectorAll('.compact-item').forEach(item => {
+            item.addEventListener('click', () => {
+                item.classList.toggle('done');
+                const card = item.closest('.task-card');
+                if (card.id === 'card-a') updateCard('list-a', 'fill-a', 'pct-a', 'sub-count-a');
+                else updateCard('list-b', 'fill-b', 'pct-b', 'sub-count-b');
+            });
+        });
+
+        updateCard('list-a', 'fill-a', 'pct-a', 'sub-count-a');
+        updateCard('list-b', 'fill-b', 'pct-b', 'sub-count-b');
+    </script>
+</body>
+</html>

@@ -818,6 +818,164 @@
     padding: 0 6px;
 }
 
+/* ===== 任务链接展示 ===== */
+.sidebar-task-item .task-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    margin-bottom: 8px;
+}
+
+.sidebar-task-item .task-link-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    background: rgba(100, 181, 246, 0.12);
+    border: 1px solid rgba(100, 181, 246, 0.2);
+    border-radius: 4px;
+    color: rgba(100, 181, 246, 0.9);
+    font-size: 11px;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.sidebar-task-item .task-link-item i {
+    font-size: 9px;
+    flex-shrink: 0;
+}
+
+.sidebar-task-item .task-link-item:hover {
+    background: rgba(100, 181, 246, 0.25);
+    border-color: rgba(100, 181, 246, 0.4);
+    color: #64b5f6;
+    transform: translateY(-1px);
+}
+
+.sidebar-task-item .task-links-more {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+    padding: 2px 6px;
+    align-self: center;
+}
+
+/* ===== 表单链接管理 ===== */
+.links-group .links-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.links-group .link-preview-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.links-group .link-preview-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(100, 181, 246, 0.3);
+}
+
+.links-group .link-item-icon {
+    color: rgba(100, 181, 246, 0.7);
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+.links-group .link-item-text {
+    flex: 1;
+    min-width: 0;
+    color: rgba(100, 181, 246, 0.9);
+    font-size: 12px;
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.links-group .link-item-text:hover {
+    color: #64b5f6;
+    text-decoration: underline;
+}
+
+.links-group .link-remove-btn {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.links-group .link-remove-btn:hover {
+    color: #ff6b6b;
+    background: rgba(255, 107, 107, 0.15);
+}
+
+.links-group .link-add-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.links-group .link-input-title {
+    flex: 0 0 100px;
+    padding: 6px 8px !important;
+    font-size: 12px !important;
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: 6px !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.links-group .link-input-url {
+    flex: 1;
+    padding: 6px 8px !important;
+    font-size: 12px !important;
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: 6px !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.links-group .link-add-btn {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(100, 181, 246, 0.2);
+    border: 1px solid rgba(100, 181, 246, 0.3);
+    border-radius: 6px;
+    color: #64b5f6;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.links-group .link-add-btn:hover {
+    background: rgba(100, 181, 246, 0.3);
+    transform: scale(1.05);
+}
+
 /* ===== 图片灯箱 ===== */
 .image-lightbox {
     position: fixed;
@@ -4404,9 +4562,205 @@ body:hover .keyboard-hint {
 .time-wrapper {
     width: 100%;
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
     margin-bottom: 2rem;
+}
+
+/* ===== 滚动信息栏（Tech Ticker - 单条轮播） ===== */
+.tech-ticker {
+    width: 100%;
+    max-width: 700px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px;
+    margin-bottom: 12px;
+    background: rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    opacity: 0;
+    transform: translateY(-8px);
+    animation: tickerFadeIn 0.6s ease 2s forwards;
+    min-height: 48px;
+}
+
+.tech-ticker:hover {
+    background: rgba(0, 0, 0, 0.45);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+@keyframes tickerFadeIn {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 折叠状态 */
+.tech-ticker.collapsed {
+    min-height: 0;
+    padding: 4px 16px;
+}
+
+.tech-ticker.collapsed .ticker-body,
+.tech-ticker.collapsed .ticker-metric,
+.tech-ticker.collapsed .ticker-counter {
+    display: none;
+}
+
+.tech-ticker.collapsed .ticker-toggle-btn i {
+    transform: rotate(180deg);
+}
+
+/* 数据源图标 */
+.ticker-source-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+    width: 28px;
+    text-align: center;
+    transition: transform 0.3s ease;
+}
+
+.tech-ticker:hover .ticker-source-icon {
+    transform: scale(1.1);
+}
+
+/* 内容主体 */
+.ticker-body {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.ticker-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.ticker-desc {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+    margin-top: 1px;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* 淡入淡出动画 */
+.ticker-title.fade-out,
+.ticker-desc.fade-out {
+    opacity: 0;
+    transform: translateY(-6px);
+}
+
+.ticker-title.fade-in,
+.ticker-desc.fade-in {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* 指标 */
+.ticker-metric {
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+    padding: 3px 8px;
+    border-radius: 6px;
+    transition: opacity 0.3s ease;
+}
+
+.ticker-metric.stars {
+    color: #f1c40f;
+    background: rgba(241, 196, 15, 0.12);
+}
+
+.ticker-metric.score {
+    color: #ff6600;
+    background: rgba(255, 102, 0, 0.12);
+}
+
+.ticker-metric.upvotes {
+    color: #ff4500;
+    background: rgba(255, 69, 0, 0.12);
+}
+
+.ticker-metric.reactions {
+    color: #3b49df;
+    background: rgba(59, 73, 223, 0.12);
+}
+
+/* 控制按钮 */
+.ticker-controls {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.tech-ticker:hover .ticker-controls {
+    opacity: 1;
+}
+
+.ticker-counter {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.35);
+    margin-right: 4px;
+    font-variant-numeric: tabular-nums;
+}
+
+.ticker-btn {
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+    font-size: 10px;
+}
+
+.ticker-btn:hover {
+    color: rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.ticker-refresh-btn.refreshing i {
+    animation: tickerSpin 1s linear infinite;
+}
+
+@keyframes tickerSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.ticker-toggle-btn i {
+    transition: transform 0.3s ease;
+}
+
+/* Ticker 隐藏状态 */
+.tech-ticker.hidden {
+    display: none;
 }
 
 /* ===== 现代磨砂玻璃悬浮面板 ===== */
@@ -6624,32 +6978,69 @@ body:hover .keyboard-hint {
 /* 卡片本周迷你视图 */
 .hc-week {
     display: flex;
-    gap: 3px;
+    gap: 1px;
     align-items: center;
+    justify-content: space-between;
 }
 
 .hc-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
     background: rgba(255, 255, 255, 0.08);
     transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 7px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.35);
+    line-height: 1;
     flex-shrink: 0;
+    overflow: hidden;
 }
 
 .hc-dot.done {
     background: #4caf50;
+    color: rgba(255, 255, 255, 0.9);
     box-shadow: 0 0 4px rgba(76, 175, 80, 0.4);
 }
 
 .hc-dot.now {
-    border: 1.5px solid rgba(100, 181, 246, 0.6);
+    border: 1px solid rgba(100, 181, 246, 0.6);
     background: transparent;
+    color: rgba(100, 181, 246, 0.9);
 }
 
 .hc-dot.now.done {
     background: #4caf50;
     border-color: #4caf50;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* 习惯卡片链接徽章 */
+.hc-link-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 6px;
+    background: rgba(100, 181, 246, 0.15);
+    border: 1px solid rgba(100, 181, 246, 0.25);
+    border-radius: 4px;
+    color: rgba(100, 181, 246, 0.8);
+    font-size: 9px;
+    text-decoration: none;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.hc-link-badge:hover {
+    background: rgba(100, 181, 246, 0.25);
+    color: #64b5f6;
+}
+
+.hc-link-badge i {
+    font-size: 8px;
 }
 
 /* 添加卡片 */
@@ -6841,6 +7232,48 @@ body:hover .keyboard-hint {
     font-size: 11px;
     color: rgba(255, 255, 255, 0.4);
     line-height: 1.4;
+}
+
+/* 习惯链接展示 */
+.habit-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.habit-link-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 6px;
+    background: rgba(100, 181, 246, 0.1);
+    border: 1px solid rgba(100, 181, 246, 0.18);
+    border-radius: 3px;
+    color: rgba(100, 181, 246, 0.8);
+    font-size: 10px;
+    text-decoration: none;
+    transition: all 0.2s;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.habit-link-tag i {
+    font-size: 8px;
+    flex-shrink: 0;
+}
+
+.habit-link-tag:hover {
+    background: rgba(100, 181, 246, 0.2);
+    color: #64b5f6;
+}
+
+.habit-links-more {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.4);
+    align-self: center;
 }
 
 /* 习惯本周视图 */

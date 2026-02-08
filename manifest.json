@@ -16,7 +16,11 @@
     "https://*.unsplash.com/*",
     "https://devapi.qweather.com/*",
     "https://commons.wikimedia.org/*",
-    "https://upload.wikimedia.org/*"
+    "https://upload.wikimedia.org/*",
+    "https://api.github.com/*",
+    "https://hacker-news.firebaseio.com/*",
+    "https://www.reddit.com/*",
+    "https://dev.to/*"
   ],
   "chrome_url_overrides": {
     "newtab": "index.html"
