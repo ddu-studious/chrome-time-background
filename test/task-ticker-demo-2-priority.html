@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo 2: 优先级色带 + 滚动</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+            color: white;
+        }
+
+        h2 {
+            font-size: 14px;
+            opacity: 0.6;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .demo-label {
+            margin-top: 30px;
+            font-size: 12px;
+            opacity: 0.5;
+            text-align: center;
+        }
+
+        .ticker-container {
+            max-width: 700px;
+            width: 100%;
+            height: 32px;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            overflow: hidden;
+            position: relative;
+            mask-image: linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%);
+            -webkit-mask-image: linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%);
+        }
+
+        .marquee-wrapper {
+            display: flex;
+            align-items: center;
+            height: 100%;
+            white-space: nowrap;
+            animation: marquee 30s linear infinite;
+        }
+
+        .ticker-container:hover .marquee-wrapper {
+            animation-play-state: paused;
+        }
+
+        @keyframes marquee {
+            0% {
+                transform: translateX(0);
+            }
+            100% {
+                transform: translateX(-50%);
+            }
+        }
+
+        @keyframes overdueGlow {
+            0%, 100% {
+                opacity: 1;
+                box-shadow: 0 0 4px currentColor;
+            }
+            50% {
+                opacity: 0.7;
+                box-shadow: 0 0 8px currentColor;
+            }
+        }
+
+        .marquee-content {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 0 20px;
+        }
+
+        .task-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: color 0.2s, background-color 0.2s;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .task-item.overdue {
+            color: rgba(255, 150, 150, 0.9);
+        }
+
+        .ticker-container:hover .task-item:hover {
+            color: rgba(255, 255, 255, 1);
+            background-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .priority-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .priority-dot.high {
+            background-color: #ff6b6b;
+        }
+
+        .priority-dot.medium {
+            background-color: #ffc857;
+        }
+
+        .priority-dot.low {
+            background-color: #5cd85c;
+        }
+
+        .priority-dot.overdue {
+            animation: overdueGlow 2s ease-in-out infinite;
+        }
+
+        .separator {
+            color: rgba(255, 255, 255, 0.2);
+            font-size: 8px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Demo 2: 优先级色带 + 滚动 - 按优先级排序，过期任务脉冲提示</h2>
+    
+    <div class="ticker-container">
+        <div class="marquee-wrapper">
+            <div class="marquee-content" id="content1"></div>
+            <div class="marquee-content" id="content2"></div>
+        </div>
+    </div>
+
+    <div class="demo-label">悬停可暂停滚动，点击任务可查看详情</div>
+
+    <script>
+        const tasks = [
+            { id: 1, title: '完成项目提案文档', priority: 'high', dueDate: '2026-02-07', overdue: true },
+            { id: 2, title: '修复登录页面 Bug', priority: 'high', dueDate: '2026-02-08', overdue: false },
+            { id: 3, title: '代码审查 PR #234', priority: 'medium', dueDate: '2026-02-08', overdue: false },
+            { id: 4, title: '编写单元测试', priority: 'medium', dueDate: '2026-02-09', overdue: false },
+            { id: 5, title: '更新 API 文档', priority: 'low', dueDate: '2026-02-10', overdue: false },
+            { id: 6, title: '设计评审准备', priority: 'medium', dueDate: '2026-02-08', overdue: false },
+            { id: 7, title: '部署测试环境', priority: 'low', dueDate: '2026-02-11', overdue: false },
+            { id: 8, title: '团队周会笔记', priority: 'low', dueDate: '2026-02-08', overdue: false },
+        ];
+
+        const priorityOrder = { high: 3, medium: 2, low: 1 };
+
+        // 按优先级排序
+        const sortedTasks = [...tasks].sort((a, b) => {
+            if (a.overdue !== b.overdue) return b.overdue - a.overdue;
+            return priorityOrder[b.priority] - priorityOrder[a.priority];
+        });
+
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${month}-${day}`;
+        }
+
+        function renderTasks(container) {
+            sortedTasks.forEach((task, index) => {
+                const item = document.createElement('span');
+                item.className = `task-item ${task.overdue ? 'overdue' : ''}`;
+                
+                const dot = document.createElement('span');
+                dot.className = `priority-dot ${task.priority} ${task.overdue ? 'overdue' : ''}`;
+                
+                item.appendChild(dot);
+                item.appendChild(document.createTextNode(`${task.title} · ${formatDate(task.dueDate)}`));
+                item.onclick = () => alert(`任务: ${task.title}\n截止日期: ${task.dueDate}\n优先级: ${task.priority}${task.overdue ? '\n⚠️ 已过期' : ''}`);
+                
+                container.appendChild(item);
+                
+                if (index < sortedTasks.length - 1) {
+                    const separator = document.createElement('span');
+                    separator.className = 'separator';
+                    separator.textContent = '•';
+                    container.appendChild(separator);
+                }
+            });
+        }
+
+        renderTasks(document.getElementById('content1'));
+        renderTasks(document.getElementById('content2'));
+    </script>
+</body>
+</html>

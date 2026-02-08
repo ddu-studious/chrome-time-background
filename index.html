@@ -45,20 +45,44 @@
         
         <!-- 右侧：时间和天气 -->
         <main class="main-content">
-            <!-- 顶部滚动信息栏（单条轮播） -->
+            <!-- 顶部滚动信息栏（混合双层模式） -->
             <div class="tech-ticker" id="tech-ticker">
-                <div class="ticker-source-icon" id="ticker-source-icon">🔥</div>
-                <div class="ticker-body" id="ticker-body">
-                    <div class="ticker-title" id="ticker-title">正在加载热门资讯...</div>
-                    <div class="ticker-desc" id="ticker-desc"></div>
+                <!-- 上层：主信息卡片 -->
+                <div class="ticker-main" id="ticker-main">
+                    <div class="ticker-source-icon" id="ticker-source-icon">🔥</div>
+                    <div class="ticker-body" id="ticker-body">
+                        <div class="ticker-title" id="ticker-title">正在加载热门资讯...</div>
+                        <div class="ticker-desc" id="ticker-desc"></div>
+                    </div>
+                    <div class="ticker-metric" id="ticker-metric"></div>
+                    <div class="ticker-controls">
+                        <span class="ticker-counter" id="ticker-counter"></span>
+                        <button class="ticker-btn" id="ticker-prev-btn" title="上一条"><i class="fas fa-chevron-left"></i></button>
+                        <button class="ticker-btn" id="ticker-next-btn" title="下一条"><i class="fas fa-chevron-right"></i></button>
+                        <button class="ticker-btn ticker-refresh-btn" id="ticker-refresh-btn" title="刷新"><i class="fas fa-sync-alt"></i></button>
+                        <button class="ticker-btn ticker-toggle-btn" id="ticker-toggle-btn" title="折叠/展开滚动栏"><i class="fas fa-chevron-up"></i></button>
+                    </div>
                 </div>
-                <div class="ticker-metric" id="ticker-metric"></div>
-                <div class="ticker-controls">
-                    <span class="ticker-counter" id="ticker-counter"></span>
-                    <button class="ticker-btn" id="ticker-prev-btn" title="上一条"><i class="fas fa-chevron-left"></i></button>
-                    <button class="ticker-btn" id="ticker-next-btn" title="下一条"><i class="fas fa-chevron-right"></i></button>
-                    <button class="ticker-btn ticker-refresh-btn" id="ticker-refresh-btn" title="刷新"><i class="fas fa-sync-alt"></i></button>
-                    <button class="ticker-btn ticker-toggle-btn" id="ticker-toggle-btn" title="折叠"><i class="fas fa-chevron-up"></i></button>
+                <!-- 下层：迷你连续滚动栏 -->
+                <div class="ticker-mini" id="ticker-mini">
+                    <div class="ticker-mini-mask">
+                        <div class="ticker-mini-track" id="ticker-mini-track"></div>
+                    </div>
+                </div>
+            </div>
+            <!-- 未完成任务滚动提醒条（分段进度 + 滚动混合） -->
+            <div class="task-ticker" id="task-ticker">
+                <div class="task-ticker-stats" id="task-ticker-stats">
+                    <i class="fas fa-check-circle task-ticker-icon"></i>
+                    <span class="task-ticker-count" id="task-ticker-count">0/0</span>
+                    <div class="task-ticker-bar">
+                        <div class="task-ticker-fill" id="task-ticker-fill"></div>
+                    </div>
+                </div>
+                <div class="task-ticker-scroll">
+                    <div class="task-ticker-mask">
+                        <div class="task-ticker-track" id="task-ticker-track"></div>
+                    </div>
                 </div>
             </div>
             <div class="time-wrapper">
@@ -80,6 +104,19 @@
                 </div>
                 <div class="forecast-container" id="forecast">
                     <!-- 天气预报将在这里显示 -->
+                </div>
+                <!-- 逐小时温度曲线图 -->
+                <div class="hourly-chart-wrapper" id="hourly-chart-container" style="display: none;">
+                    <div class="hourly-chart-header">
+                        <span class="hourly-chart-title">
+                            <i class="fas fa-temperature-half"></i>
+                            24小时温度趋势
+                        </span>
+                        <button class="hourly-chart-toggle-btn" id="hourly-chart-toggle" title="收起温度曲线">
+                            <i class="fas fa-chevron-up"></i>
+                        </button>
+                    </div>
+                    <div class="hourly-chart-body" id="hourly-chart"></div>
                 </div>
             </div>
         </main>

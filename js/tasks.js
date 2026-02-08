@@ -83,7 +83,8 @@ class TaskManager {
                 ) : null,
                 recurrence: memo.recurrence || null,
                 habit: memo.habit || null,
-                habitCard: memo.habitCard || null
+                habitCard: memo.habitCard || null,
+                subtasks: Array.isArray(memo.subtasks) ? memo.subtasks : []
             }));
 
             console.log(`加载了 ${this.memos.length} 个任务`);

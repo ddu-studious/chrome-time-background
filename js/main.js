@@ -132,6 +132,16 @@ async function initApp() {
         console.error('滚动信息栏初始化失败:', error);
     }
 
+    // 初始化任务滚动提醒条
+    try {
+        if (window.taskTicker && typeof window.taskTicker.init === 'function') {
+            window.taskTicker.init();
+        }
+        console.log('任务提醒条初始化完成');
+    } catch (error) {
+        console.error('任务提醒条初始化失败:', error);
+    }
+
     console.log('应用初始化完成（可能部分模块降级）');
 }
 

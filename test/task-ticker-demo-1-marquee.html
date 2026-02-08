@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo 1: 水平连续滚动</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+            color: white;
+        }
+
+        h2 {
+            font-size: 14px;
+            opacity: 0.6;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .demo-label {
+            margin-top: 30px;
+            font-size: 12px;
+            opacity: 0.5;
+            text-align: center;
+        }
+
+        .ticker-container {
+            max-width: 700px;
+            width: 100%;
+            height: 32px;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            overflow: hidden;
+            position: relative;
+            mask-image: linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%);
+            -webkit-mask-image: linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%);
+        }
+
+        .marquee-wrapper {
+            display: flex;
+            align-items: center;
+            height: 100%;
+            white-space: nowrap;
+            animation: marquee 30s linear infinite;
+        }
+
+        .ticker-container:hover .marquee-wrapper {
+            animation-play-state: paused;
+        }
+
+        @keyframes marquee {
+            0% {
+                transform: translateX(0);
+            }
+            100% {
+                transform: translateX(-50%);
+            }
+        }
+
+        .marquee-content {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 0 20px;
+        }
+
+        .marquee-content.duplicate {
+            /* 复制内容用于无缝循环 */
+        }
+
+        .task-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: color 0.2s, background-color 0.2s;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .ticker-container:hover .task-item:hover {
+            color: rgba(255, 255, 255, 1);
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .separator {
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 8px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Demo 1: 水平连续滚动 - Marquee 动画</h2>
+    
+    <div class="ticker-container">
+        <div class="marquee-wrapper">
+            <div class="marquee-content" id="content1"></div>
+            <div class="marquee-content duplicate" id="content2"></div>
+        </div>
+    </div>
+
+    <div class="demo-label">悬停可暂停滚动，点击任务可查看详情</div>
+
+    <script>
+        const tasks = [
+            { id: 1, title: '完成项目提案文档', priority: 'high', dueDate: '2026-02-07', overdue: true },
+            { id: 2, title: '修复登录页面 Bug', priority: 'high', dueDate: '2026-02-08', overdue: false },
+            { id: 3, title: '代码审查 PR #234', priority: 'medium', dueDate: '2026-02-08', overdue: false },
+            { id: 4, title: '编写单元测试', priority: 'medium', dueDate: '2026-02-09', overdue: false },
+            { id: 5, title: '更新 API 文档', priority: 'low', dueDate: '2026-02-10', overdue: false },
+            { id: 6, title: '设计评审准备', priority: 'medium', dueDate: '2026-02-08', overdue: false },
+            { id: 7, title: '部署测试环境', priority: 'low', dueDate: '2026-02-11', overdue: false },
+            { id: 8, title: '团队周会笔记', priority: 'low', dueDate: '2026-02-08', overdue: false },
+        ];
+
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${month}-${day}`;
+        }
+
+        function renderTasks(container) {
+            tasks.forEach((task, index) => {
+                const item = document.createElement('span');
+                item.className = 'task-item';
+                item.innerHTML = `📋 ${task.title} · ${formatDate(task.dueDate)}`;
+                item.onclick = () => alert(`任务: ${task.title}\n截止日期: ${task.dueDate}\n优先级: ${task.priority}`);
+                
+                container.appendChild(item);
+                
+                if (index < tasks.length - 1) {
+                    const separator = document.createElement('span');
+                    separator.className = 'separator';
+                    separator.textContent = '•';
+                    container.appendChild(separator);
+                }
+            });
+        }
+
+        // 渲染两次以实现无缝循环
+        renderTasks(document.getElementById('content1'));
+        renderTasks(document.getElementById('content2'));
+    </script>
+</body>
+</html>

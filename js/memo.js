@@ -431,87 +431,135 @@ class MemoManager {
                     <button class="sidebar-form-close" id="sidebar-form-close">&times;</button>
                 </div>
                 <div class="sidebar-form-body">
-                    <div class="form-group">
-                        <label for="sidebar-task-title">标题</label>
-                        <input type="text" id="sidebar-task-title" placeholder="输入任务标题..." required>
-                    </div>
-                    <div class="form-group">
-                        <label for="sidebar-task-text">详情</label>
-                        <textarea id="sidebar-task-text" placeholder="输入任务详情..." rows="3"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>图片附件</label>
-                        <div class="image-upload-area" id="image-upload-area">
-                            <input type="file" id="sidebar-task-images" accept="image/*" multiple hidden>
-                            <div class="image-preview-list" id="image-preview-list"></div>
-                            <button type="button" class="image-upload-btn" id="image-upload-btn">
-                                <i class="fas fa-image"></i>
-                                <span>添加图片</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="sidebar-task-priority">优先级</label>
-                            <select id="sidebar-task-priority">
-                                <option value="none">无</option>
-                                <option value="low">低</option>
-                                <option value="medium">中</option>
-                                <option value="high">高</option>
-                            </select>
+                    <!-- 卡片1: 基本信息 -->
+                    <div class="form-card">
+                        <div class="form-card-header">
+                            <div class="form-card-icon primary"><i class="fas fa-edit"></i></div>
+                            <div class="form-card-title">基本信息</div>
                         </div>
                         <div class="form-group">
-                            <label for="sidebar-task-due">截止日期</label>
-                            <input type="date" id="sidebar-task-due">
+                            <label for="sidebar-task-title">标题 <span class="required">*</span></label>
+                            <input type="text" id="sidebar-task-title" placeholder="输入任务标题..." required>
                         </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="sidebar-task-category">分类</label>
-                        <select id="sidebar-task-category">
-                            <option value="">无分类</option>
-                            ${this.categories.map(cat => `<option value="${cat.id}">${this.escapeHtml(cat.name)}</option>`).join('')}
-                        </select>
-                    </div>
-                    <div class="form-group recurrence-group">
-                        <label for="sidebar-task-recurrence">重复类型</label>
-                        <div class="recurrence-row">
-                            <select id="sidebar-task-recurrence">
-                                <option value="none">不重复</option>
-                                <option value="daily">每日重复</option>
+                        <div class="form-group">
+                            <label for="sidebar-task-text">详情</label>
+                            <textarea id="sidebar-task-text" placeholder="输入任务详情..." rows="3"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="sidebar-task-category">分类</label>
+                            <select id="sidebar-task-category">
+                                <option value="">无分类</option>
+                                ${this.categories.map(cat => `<option value="${cat.id}">${this.escapeHtml(cat.name)}</option>`).join('')}
                             </select>
-                            <input type="text" id="sidebar-task-habit-icon" class="habit-icon-input" placeholder="📋" maxlength="2" title="习惯图标（emoji）">
                         </div>
                     </div>
-                    <div class="form-group links-group">
-                        <label>相关链接</label>
-                        <div class="links-list" id="sidebar-task-links-list"></div>
-                        <div class="link-add-row">
-                            <input type="text" id="sidebar-link-title-input" placeholder="链接标题（可选）" class="link-input-title">
-                            <input type="url" id="sidebar-link-url-input" placeholder="https://..." class="link-input-url">
-                            <button type="button" class="link-add-btn" id="sidebar-link-add-btn" title="添加链接">
-                                <i class="fas fa-plus"></i>
-                            </button>
+
+                    <!-- 卡片2: 优先级与时间 -->
+                    <div class="form-card">
+                        <div class="form-card-header">
+                            <div class="form-card-icon danger"><i class="fas fa-flag"></i></div>
+                            <div class="form-card-title">优先级与时间</div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="sidebar-task-priority">优先级</label>
+                                <select id="sidebar-task-priority">
+                                    <option value="none">无</option>
+                                    <option value="low">低</option>
+                                    <option value="medium">中</option>
+                                    <option value="high">高</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="sidebar-task-due">截止日期</label>
+                                <input type="date" id="sidebar-task-due">
+                            </div>
+                        </div>
+                        <div class="form-group recurrence-group">
+                            <label for="sidebar-task-recurrence">重复类型</label>
+                            <div class="recurrence-row">
+                                <select id="sidebar-task-recurrence">
+                                    <option value="none">不重复</option>
+                                    <option value="daily">每日重复</option>
+                                </select>
+                                <input type="text" id="sidebar-task-habit-icon" class="habit-icon-input" placeholder="📋" maxlength="2" title="习惯图标（emoji）">
+                            </div>
                         </div>
                     </div>
-                    <div class="form-group progress-group">
-                        <label>
-                            <input type="checkbox" id="sidebar-task-progress-enable">
-                            启用进度追踪
-                        </label>
-                        <div class="progress-inputs hidden" id="progress-inputs">
-                            <div class="progress-slider-row">
-                                <input type="range" id="sidebar-task-progress-slider" 
-                                       min="0" max="100" value="0" step="1" class="progress-slider">
-                                <div class="progress-percent-input">
-                                    <input type="number" id="sidebar-task-progress-percent" 
-                                           min="0" max="100" value="0" class="progress-number-input">
-                                    <span class="percent-sign">%</span>
+
+                    <!-- 卡片3: 进度追踪 -->
+                    <div class="form-card">
+                        <div class="form-card-header">
+                            <div class="form-card-icon success"><i class="fas fa-chart-line"></i></div>
+                            <div class="form-card-title">进度追踪</div>
+                        </div>
+                        <div class="form-group progress-group">
+                            <label>
+                                <input type="checkbox" id="sidebar-task-progress-enable">
+                                启用进度追踪
+                            </label>
+                            <div class="progress-inputs hidden" id="progress-inputs">
+                                <div class="progress-slider-row">
+                                    <input type="range" id="sidebar-task-progress-slider" 
+                                           min="0" max="100" value="0" step="1" class="progress-slider">
+                                    <div class="progress-percent-input">
+                                        <input type="number" id="sidebar-task-progress-percent" 
+                                               min="0" max="100" value="0" class="progress-number-input">
+                                        <span class="percent-sign">%</span>
+                                    </div>
+                                </div>
+                                <div class="progress-preview">
+                                    <div class="progress-preview-bar">
+                                        <div class="progress-preview-fill" id="progress-preview-fill" style="width: 0%"></div>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="progress-preview">
-                                <div class="progress-preview-bar">
-                                    <div class="progress-preview-fill" id="progress-preview-fill" style="width: 0%"></div>
-                                </div>
+                        </div>
+                    </div>
+
+                    <!-- 卡片4: 附件与链接 -->
+                    <div class="form-card">
+                        <div class="form-card-header">
+                            <div class="form-card-icon info"><i class="fas fa-paperclip"></i></div>
+                            <div class="form-card-title">附件与链接</div>
+                        </div>
+                        <div class="form-group">
+                            <label>图片附件</label>
+                            <div class="image-upload-area" id="image-upload-area">
+                                <input type="file" id="sidebar-task-images" accept="image/*" multiple hidden>
+                                <div class="image-preview-list" id="image-preview-list"></div>
+                                <button type="button" class="image-upload-btn" id="image-upload-btn">
+                                    <i class="fas fa-image"></i>
+                                    <span>添加图片</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="form-group links-group">
+                            <label>相关链接</label>
+                            <div class="links-list" id="sidebar-task-links-list"></div>
+                            <div class="link-add-row">
+                                <input type="text" id="sidebar-link-title-input" placeholder="链接标题（可选）" class="link-input-title">
+                                <input type="url" id="sidebar-link-url-input" placeholder="https://..." class="link-input-url">
+                                <button type="button" class="link-add-btn" id="sidebar-link-add-btn" title="添加链接">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 卡片5: 子任务 -->
+                    <div class="form-card">
+                        <div class="form-card-header">
+                            <div class="form-card-icon warning"><i class="fas fa-list-check"></i></div>
+                            <div class="form-card-title">子任务</div>
+                        </div>
+                        <div class="form-group subtasks-group">
+                            <div class="subtasks-edit-list" id="subtasks-edit-list"></div>
+                            <div class="subtask-add-row">
+                                <input type="text" id="subtask-add-input" placeholder="添加子任务..." class="subtask-add-input">
+                                <button type="button" class="subtask-add-btn" id="subtask-add-btn" title="添加子任务">
+                                    <i class="fas fa-plus"></i>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -697,6 +745,33 @@ class MemoManager {
                     e.preventDefault();
                     e.stopPropagation();
                     this.addTempLink();
+                }
+            });
+        }
+        
+        // 子任务添加按钮
+        const subtaskAddBtn = document.getElementById('subtask-add-btn');
+        if (subtaskAddBtn) {
+            subtaskAddBtn.addEventListener('click', () => {
+                const input = document.getElementById('subtask-add-input');
+                if (input && input.value.trim()) {
+                    this.addSubtask(input.value);
+                    input.value = '';
+                    input.focus();
+                }
+            });
+        }
+        // 子任务输入框回车添加
+        const subtaskInput = document.getElementById('subtask-add-input');
+        if (subtaskInput) {
+            subtaskInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (subtaskInput.value.trim()) {
+                        this.addSubtask(subtaskInput.value);
+                        subtaskInput.value = '';
+                    }
                 }
             });
         }
@@ -1848,9 +1923,19 @@ class MemoManager {
         const categoryName = task.categoryId ? this.getCategoryName(task.categoryId) : '';
         
         // 生成进度条 HTML（纯百分比模式）
+        // 有子任务时自动开启进度条，由子任务完成情况驱动
         let progressHtml = '';
-        if (task.progress !== null && task.progress !== undefined) {
-            const percentage = parseInt(task.progress) || 0;
+        const hasSubtasks = task.subtasks && task.subtasks.length > 0;
+        const showProgress = (task.progress !== null && task.progress !== undefined) || hasSubtasks;
+        if (showProgress) {
+            // 有子任务时，进度由子任务自动计算
+            let percentage;
+            if (hasSubtasks) {
+                const doneCount = task.subtasks.filter(st => st.completed).length;
+                percentage = Math.round((doneCount / task.subtasks.length) * 100);
+            } else {
+                percentage = parseInt(task.progress) || 0;
+            }
             let progressClass = 'low';
             if (percentage === 100) progressClass = 'complete';
             else if (percentage >= 60) progressClass = 'high';
@@ -1881,6 +1966,36 @@ class MemoManager {
             `;
         }
         
+        // 生成子任务 HTML（默认展开模式，点击子任务不再折叠）
+        let subtasksHtml = '';
+        if (hasSubtasks) {
+            const doneCount = task.subtasks.filter(st => st.completed).length;
+            const totalCount = task.subtasks.length;
+            const subtaskPct = Math.round((doneCount / totalCount) * 100);
+            subtasksHtml = `
+                <div class="task-subtasks" data-task-id="${task.id}">
+                    <div class="subtask-expand-header open">
+                        <i class="fas fa-chevron-right subtask-expand-icon open"></i>
+                        <span class="subtask-expand-label">子任务</span>
+                        <span class="subtask-expand-count">${doneCount}/${totalCount}</span>
+                        <div class="subtask-mini-bar">
+                            <div class="subtask-mini-fill${subtaskPct === 100 ? ' complete' : ''}" style="width: ${subtaskPct}%"></div>
+                        </div>
+                    </div>
+                    <div class="subtask-expand-body open">
+                        <ul class="subtask-compact-list">
+                            ${task.subtasks.map(st => `
+                                <li class="subtask-compact-item${st.completed ? ' done' : ''}" data-subtask-id="${st.id}">
+                                    <div class="subtask-compact-dot"><i class="fas fa-check"></i></div>
+                                    <span class="subtask-compact-text">${this.escapeHtml(st.title)}</span>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                </div>
+            `;
+        }
+        
         item.innerHTML = `
             <div class="task-checkbox" title="${task.completed ? '标记为未完成' : '标记为已完成'}">
                 <i class="${task.completed ? 'fas fa-check-circle' : 'far fa-circle'}"></i>
@@ -1892,6 +2007,7 @@ class MemoManager {
                 </div>
                 ${task.text ? `<div class="task-desc">${this.escapeHtml(task.text.substring(0, 60))}${task.text.length > 60 ? '...' : ''}</div>` : ''}
                 ${progressHtml}
+                ${subtasksHtml}
                 ${linksHtml}
                 ${imagesHtml}
                 <div class="task-meta">
@@ -1931,6 +2047,32 @@ class MemoManager {
                 e.stopPropagation();
             });
         });
+        
+        // 子任务交互事件
+        const subtasksEl = item.querySelector('.task-subtasks');
+        if (subtasksEl) {
+            // 折叠展开
+            const expandHeader = subtasksEl.querySelector('.subtask-expand-header');
+            const expandBody = subtasksEl.querySelector('.subtask-expand-body');
+            const expandIcon = subtasksEl.querySelector('.subtask-expand-icon');
+            if (expandHeader) {
+                expandHeader.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    expandHeader.classList.toggle('open');
+                    expandBody.classList.toggle('open');
+                    expandIcon.classList.toggle('open');
+                });
+            }
+            
+            // 子任务勾选
+            subtasksEl.querySelectorAll('.subtask-compact-item').forEach(stItem => {
+                stItem.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const stId = stItem.dataset.subtaskId;
+                    this.toggleSubtaskComplete(task.id, stId);
+                });
+            });
+        }
         
         // 点击任务项编辑
         item.addEventListener('click', () => this.showSidebarForm(task));
@@ -2887,7 +3029,9 @@ class MemoManager {
             // 习惯追踪数据
             habit: memo.habit || null,
             // 习惯卡片配置
-            habitCard: memo.habitCard || null
+            habitCard: memo.habitCard || null,
+            // 子任务列表 [{id, title, completed}]
+            subtasks: Array.isArray(memo.subtasks) ? memo.subtasks : []
         };
         
         // 兼容旧数据：如果存在 isDaily 标记但没有 recurrence，自动迁移
@@ -4369,12 +4513,15 @@ class MemoManager {
         const progressSlider = document.getElementById('sidebar-task-progress-slider');
         const progressPercent = document.getElementById('sidebar-task-progress-percent');
         
-        // 清空临时图片和链接
+        // 清空临时图片、链接和子任务
         this.tempImages = [];
         this.tempLinks = [];
+        this.tempSubtasks = [];
         if (previewList) previewList.innerHTML = '';
         const linksList = document.getElementById('sidebar-task-links-list');
         if (linksList) linksList.innerHTML = '';
+        const subtasksList = document.getElementById('subtasks-edit-list');
+        if (subtasksList) subtasksList.innerHTML = '';
         
         // 更新分类选项
         if (categorySelect) {
@@ -4456,6 +4603,12 @@ class MemoManager {
                 this.tempLinks = [...task.links];
                 this.renderLinksPreview();
             }
+            
+            // 加载已有子任务
+            if (task.subtasks && task.subtasks.length > 0) {
+                this.tempSubtasks = task.subtasks.map(st => ({ ...st }));
+                this.renderSubtasksEdit();
+            }
         } else {
             titleEl.textContent = options.recurrenceType === 'daily' ? '新增习惯' : '新增任务';
             delete modal.dataset.taskId;
@@ -4481,8 +4634,9 @@ class MemoManager {
             if (progressPercent) progressPercent.value = 0;
             this.updateProgressPreview(0);
             
-            // 重置链接
+            // 重置链接和子任务
             this.tempLinks = [];
+            this.tempSubtasks = [];
         }
         
         modal.classList.remove('hidden');
@@ -4582,6 +4736,160 @@ class MemoManager {
         this.renderLinksPreview();
     }
     
+    // ========= 子任务管理 =========
+    
+    /**
+     * 渲染子任务编辑列表（表单中使用）
+     */
+    renderSubtasksEdit() {
+        const list = document.getElementById('subtasks-edit-list');
+        if (!list) return;
+        list.innerHTML = '';
+        
+        (this.tempSubtasks || []).forEach((st, idx) => {
+            const item = document.createElement('div');
+            item.className = `subtask-edit-item${st.completed ? ' done' : ''}`;
+            item.innerHTML = `
+                <div class="subtask-edit-dot${st.completed ? ' checked' : ''}" data-idx="${idx}">
+                    <i class="fas fa-check"></i>
+                </div>
+                <input type="text" class="subtask-edit-input" value="${this.escapeHtml(st.title)}" data-idx="${idx}">
+                <button type="button" class="subtask-edit-remove" data-idx="${idx}" title="删除">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+            
+            // 勾选
+            item.querySelector('.subtask-edit-dot').addEventListener('click', () => {
+                this.tempSubtasks[idx].completed = !this.tempSubtasks[idx].completed;
+                this.renderSubtasksEdit();
+            });
+            
+            // 编辑标题
+            item.querySelector('.subtask-edit-input').addEventListener('change', (e) => {
+                this.tempSubtasks[idx].title = e.target.value.trim();
+            });
+            
+            // 删除
+            item.querySelector('.subtask-edit-remove').addEventListener('click', () => {
+                this.tempSubtasks.splice(idx, 1);
+                this.renderSubtasksEdit();
+            });
+            
+            list.appendChild(item);
+        });
+    }
+    
+    /**
+     * 添加新子任务（表单中使用）
+     */
+    addSubtask(title) {
+        if (!title.trim()) return;
+        if (!this.tempSubtasks) this.tempSubtasks = [];
+        this.tempSubtasks.push({
+            id: 'st_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+            title: title.trim(),
+            completed: false
+        });
+        this.renderSubtasksEdit();
+    }
+    
+    /**
+     * 切换子任务完成状态（任务列表中直接使用）
+     * 使用局部更新避免重新渲染整个列表（防止子任务展开状态丢失）
+     */
+    async toggleSubtaskComplete(taskId, subtaskId) {
+        const task = this.memos.find(m => m.id === taskId);
+        if (!task || !task.subtasks) return;
+        
+        const subtask = task.subtasks.find(st => st.id === subtaskId);
+        if (!subtask) return;
+        
+        subtask.completed = !subtask.completed;
+        task.updatedAt = Date.now();
+        
+        // 有子任务时自动启用进度追踪，子任务完成驱动进度条
+        if (task.subtasks.length > 0) {
+            const doneCount = task.subtasks.filter(st => st.completed).length;
+            task.progress = Math.round((doneCount / task.subtasks.length) * 100);
+            
+            // 子任务全部完成 → 自动完成父任务（非习惯任务）
+            const isHabit = task.recurrence?.enabled;
+            if (task.progress === 100 && !task.completed && !isHabit) {
+                task.completed = true;
+                task.completedAt = Date.now();
+            }
+            // 子任务未全部完成 → 如果之前被自动完成的，取消完成状态
+            if (task.progress < 100 && task.completed && task.completedAt) {
+                task.completed = false;
+                task.completedAt = null;
+            }
+        }
+        
+        await this.saveMemos();
+        
+        // 局部更新：只更新当前任务卡片内的子任务区域，保持展开状态
+        this._updateSubtaskUI(taskId, subtaskId, subtask.completed, task);
+    }
+    
+    /**
+     * 局部更新子任务 UI（不重新渲染整个列表）
+     */
+    _updateSubtaskUI(taskId, subtaskId, completed, task) {
+        const subtasksEl = document.querySelector(`.task-subtasks[data-task-id="${taskId}"]`);
+        if (!subtasksEl) return;
+        
+        // 1. 更新子任务项的视觉状态
+        const stItem = subtasksEl.querySelector(`.subtask-compact-item[data-subtask-id="${subtaskId}"]`);
+        if (stItem) {
+            stItem.classList.toggle('done', completed);
+        }
+        
+        // 2. 更新子任务计数
+        const doneCount = task.subtasks.filter(st => st.completed).length;
+        const totalCount = task.subtasks.length;
+        const countEl = subtasksEl.querySelector('.subtask-expand-count');
+        if (countEl) {
+            countEl.textContent = `${doneCount}/${totalCount}`;
+        }
+        
+        // 3. 更新子任务迷你进度条
+        const subtaskPct = Math.round((doneCount / totalCount) * 100);
+        const miniFill = subtasksEl.querySelector('.subtask-mini-fill');
+        if (miniFill) {
+            miniFill.style.width = `${subtaskPct}%`;
+            miniFill.classList.toggle('complete', subtaskPct === 100);
+        }
+        
+        // 4. 同步更新任务卡片的主进度条（如果存在）
+        const taskItem = subtasksEl.closest('.sidebar-task-item');
+        if (taskItem && task.progress !== null && task.progress !== undefined) {
+            const progressFill = taskItem.querySelector('.task-progress-fill');
+            const progressText = taskItem.querySelector('.task-progress-percentage');
+            if (progressFill) {
+                progressFill.style.width = `${task.progress}%`;
+                // 更新进度条颜色类
+                progressFill.className = 'task-progress-fill';
+                if (task.progress === 100) progressFill.classList.add('complete');
+                else if (task.progress >= 60) progressFill.classList.add('high');
+                else if (task.progress >= 30) progressFill.classList.add('medium');
+                else progressFill.classList.add('low');
+            }
+            if (progressText) {
+                progressText.textContent = `${task.progress}%`;
+            }
+        }
+        
+        // 5. 如果任务完成状态发生变化，刷新任务列表以更新视觉
+        if (taskItem) {
+            const wasCompleted = taskItem.classList.contains('completed');
+            if (task.completed !== wasCompleted) {
+                // 完成状态变化：需要重新渲染列表（有排序和分组变动）
+                this.renderSidebarTaskList();
+            }
+        }
+    }
+    
     /**
      * 控制习惯图标输入框的显示/隐藏
      */
@@ -4609,6 +4917,10 @@ class MemoManager {
         this.tempLinks = [];
         const linksList = document.getElementById('sidebar-task-links-list');
         if (linksList) linksList.innerHTML = '';
+        // 清空临时子任务
+        this.tempSubtasks = [];
+        const subtasksList = document.getElementById('subtasks-edit-list');
+        if (subtasksList) subtasksList.innerHTML = '';
     }
     
     /**
@@ -4681,6 +4993,19 @@ class MemoManager {
             url: link.url
         })) : [];
         
+        // 处理子任务数据
+        const subtasks = this.tempSubtasks ? this.tempSubtasks.map(st => ({
+            id: st.id,
+            title: st.title,
+            completed: !!st.completed
+        })) : [];
+        
+        // 有子任务时，自动开启进度追踪并由子任务驱动进度
+        if (subtasks.length > 0) {
+            const doneCount = subtasks.filter(st => st.completed).length;
+            progress = Math.round((doneCount / subtasks.length) * 100);
+        }
+        
         const taskData = {
             title: title,
             text: textInput.value.trim(),
@@ -4688,6 +5013,7 @@ class MemoManager {
             dueDate: dueInput.value || null,
             images: images,
             links: links,
+            subtasks: subtasks,
             categoryId: categorySelect ? categorySelect.value || null : null,
             progress: progress,
             recurrence: recurrence,
@@ -4751,8 +5077,9 @@ class MemoManager {
         }
         
         await this.saveMemos();
-        this.tempImages = []; // 清空临时图片
-        this.tempLinks = [];  // 清空临时链接
+        this.tempImages = [];    // 清空临时图片
+        this.tempLinks = [];     // 清空临时链接
+        this.tempSubtasks = [];  // 清空临时子任务
         this.hideSidebarForm();
         this.renderSidebarTaskList();
     }

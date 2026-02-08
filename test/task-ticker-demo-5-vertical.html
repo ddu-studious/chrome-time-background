@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo 5: 垂直轮播卡片</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+            color: white;
+        }
+
+        h2 {
+            font-size: 14px;
+            opacity: 0.6;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .demo-label {
+            margin-top: 30px;
+            font-size: 12px;
+            opacity: 0.5;
+            text-align: center;
+        }
+
+        .ticker-container {
+            max-width: 700px;
+            width: 100%;
+            height: 36px;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .task-slider {
+            flex: 1;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .task-track {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .ticker-container.paused .task-track {
+            transition: none;
+        }
+
+        .task-card {
+            height: 36px;
+            display: flex;
+            align-items: center;
+            padding: 0 14px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .task-card:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .priority-bar {
+            width: 3px;
+            height: 100%;
+            flex-shrink: 0;
+            margin-right: 10px;
+        }
+
+        .priority-bar.high {
+            background-color: #ff6b6b;
+        }
+
+        .priority-bar.medium {
+            background-color: #ffc857;
+        }
+
+        .priority-bar.low {
+            background-color: #5cd85c;
+        }
+
+        .task-info {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 13px;
+        }
+
+        .task-title {
+            flex: 1;
+        }
+
+        .task-date {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 11px;
+        }
+
+        .task-badge {
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: 500;
+        }
+
+        .task-badge.overdue {
+            background-color: rgba(255, 107, 107, 0.2);
+            color: #ff6b6b;
+        }
+
+        .task-badge.priority-high {
+            background-color: rgba(255, 107, 107, 0.15);
+            color: #ff6b6b;
+        }
+
+        .task-badge.priority-medium {
+            background-color: rgba(255, 200, 87, 0.15);
+            color: #ffc857;
+        }
+
+        .task-badge.priority-low {
+            background-color: rgba(92, 216, 92, 0.15);
+            color: #5cd85c;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            padding: 0 8px;
+            gap: 4px;
+        }
+
+        .control-btn {
+            width: 20px;
+            height: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 10px;
+            transition: color 0.2s, background-color 0.2s;
+            border-radius: 2px;
+        }
+
+        .control-btn:hover {
+            color: rgba(255, 255, 255, 1);
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <h2>Demo 5: 垂直轮播卡片 - 自动向上滚动切换</h2>
+    
+    <div class="ticker-container" id="container">
+        <div class="task-slider">
+            <div class="task-track" id="task-track"></div>
+        </div>
+        <div class="controls">
+            <div class="control-btn" id="btn-up">▲</div>
+            <div class="control-btn" id="btn-down">▼</div>
+        </div>
+    </div>
+
+    <div class="demo-label">每 3 秒自动切换，悬停暂停，可手动上下切换</div>
+
+    <script>
+        const tasks = [
+            { id: 1, title: '完成项目提案文档', priority: 'high', dueDate: '2026-02-07', overdue: true },
+            { id: 2, title: '修复登录页面 Bug', priority: 'high', dueDate: '2026-02-08', overdue: false },
+            { id: 3, title: '代码审查 PR #234', priority: 'medium', dueDate: '2026-02-08', overdue: false },
+            { id: 4, title: '编写单元测试', priority: 'medium', dueDate: '2026-02-09', overdue: false },
+            { id: 5, title: '更新 API 文档', priority: 'low', dueDate: '2026-02-10', overdue: false },
+            { id: 6, title: '设计评审准备', priority: 'medium', dueDate: '2026-02-08', overdue: false },
+            { id: 7, title: '部署测试环境', priority: 'low', dueDate: '2026-02-11', overdue: false },
+            { id: 8, title: '团队周会笔记', priority: 'low', dueDate: '2026-02-08', overdue: false },
+        ];
+
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${month}-${day}`;
+        }
+
+        function getPriorityLabel(priority) {
+            const labels = { high: '高', medium: '中', low: '低' };
+            return labels[priority] || '';
+        }
+
+        const track = document.getElementById('task-track');
+        let currentIndex = 0;
+        let autoScrollInterval = null;
+        let isPaused = false;
+
+        // 渲染所有任务卡片
+        tasks.forEach((task, index) => {
+            const card = document.createElement('div');
+            card.className = 'task-card';
+            
+            const priorityBar = document.createElement('div');
+            priorityBar.className = `priority-bar ${task.priority}`;
+            
+            const info = document.createElement('div');
+            info.className = 'task-info';
+            
+            const title = document.createElement('span');
+            title.className = 'task-title';
+            title.textContent = task.title;
+            
+            const date = document.createElement('span');
+            date.className = 'task-date';
+            date.textContent = formatDate(task.dueDate);
+            
+            if (task.overdue) {
+                const badge = document.createElement('span');
+                badge.className = 'task-badge overdue';
+                badge.textContent = '已过期';
+                info.appendChild(badge);
+            } else {
+                const badge = document.createElement('span');
+                badge.className = `task-badge priority-${task.priority}`;
+                badge.textContent = getPriorityLabel(task.priority);
+                info.appendChild(badge);
+            }
+            
+            info.insertBefore(title, info.firstChild);
+            info.insertBefore(date, info.lastChild);
+            
+            card.appendChild(priorityBar);
+            card.appendChild(info);
+            card.onclick = () => alert(`任务: ${task.title}\n截止日期: ${task.dueDate}\n优先级: ${task.priority}${task.overdue ? '\n⚠️ 已过期' : ''}`);
+            
+            track.appendChild(card);
+        });
+
+        function updatePosition() {
+            const offset = -currentIndex * 36;
+            track.style.transform = `translateY(${offset}px)`;
+        }
+
+        function nextTask() {
+            if (isPaused) return;
+            currentIndex = (currentIndex + 1) % tasks.length;
+            updatePosition();
+        }
+
+        function prevTask() {
+            currentIndex = (currentIndex - 1 + tasks.length) % tasks.length;
+            updatePosition();
+        }
+
+        // 自动滚动
+        function startAutoScroll() {
+            autoScrollInterval = setInterval(nextTask, 3000);
+        }
+
+        function stopAutoScroll() {
+            if (autoScrollInterval) {
+                clearInterval(autoScrollInterval);
+                autoScrollInterval = null;
+            }
+        }
+
+        // 悬停暂停
+        const container = document.getElementById('container');
+        container.addEventListener('mouseenter', () => {
+            isPaused = true;
+            container.classList.add('paused');
+            stopAutoScroll();
+        });
+
+        container.addEventListener('mouseleave', () => {
+            isPaused = false;
+            container.classList.remove('paused');
+            startAutoScroll();
+        });
+
+        // 手动控制
+        document.getElementById('btn-up').addEventListener('click', (e) => {
+            e.stopPropagation();
+            prevTask();
+        });
+
+        document.getElementById('btn-down').addEventListener('click', (e) => {
+            e.stopPropagation();
+            nextTask();
+        });
+
+        // 初始化
+        updatePosition();
+        startAutoScroll();
+    </script>
+</body>
+</html>

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo 4: 分段进度 + 滚动混合 ⭐推荐</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+            color: white;
+        }
+
+        h2 {
+            font-size: 14px;
+            opacity: 0.6;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .demo-label {
+            margin-top: 30px;
+            font-size: 12px;
+            opacity: 0.5;
+            text-align: center;
+        }
+
+        .ticker-container {
+            max-width: 700px;
+            width: 100%;
+            height: 34px;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        .progress-section {
+            width: 120px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0 14px;
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .progress-icon {
+            color: #5cd85c;
+            font-size: 14px;
+        }
+
+        .progress-text {
+            font-size: 13px;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        .progress-bar-wrapper {
+            width: 40px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #5cd85c 0%, #4ec04e 100%);
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
+
+        .scroll-section {
+            flex: 1;
+            height: 100%;
+            overflow: hidden;
+            position: relative;
+            mask-image: linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%);
+            -webkit-mask-image: linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%);
+        }
+
+        .marquee-wrapper {
+            display: flex;
+            align-items: center;
+            height: 100%;
+            white-space: nowrap;
+            animation: marquee 35s linear infinite;
+            padding-left: 10px;
+        }
+
+        .ticker-container:hover .marquee-wrapper {
+            animation-play-state: paused;
+        }
+
+        @keyframes marquee {
+            0% {
+                transform: translateX(0);
+            }
+            100% {
+                transform: translateX(-50%);
+            }
+        }
+
+        .marquee-content {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 0 10px;
+        }
+
+        .task-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            padding: 4px 10px;
+            border-radius: 4px;
+            transition: color 0.2s, background-color 0.2s;
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 13px;
+        }
+
+        .task-item.overdue {
+            color: #ff6b6b;
+            background-color: rgba(255, 107, 107, 0.15);
+        }
+
+        .ticker-container:hover .task-item:hover {
+            color: rgba(255, 255, 255, 1);
+            background-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .task-item.overdue:hover {
+            background-color: rgba(255, 107, 107, 0.25);
+        }
+
+        .priority-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .priority-dot.high {
+            background-color: #ff6b6b;
+        }
+
+        .priority-dot.medium {
+            background-color: #ffc857;
+        }
+
+        .priority-dot.low {
+            background-color: #5cd85c;
+        }
+
+        .separator {
+            color: rgba(255, 255, 255, 0.2);
+            font-size: 8px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Demo 4: 分段进度 + 滚动混合 ⭐推荐方案</h2>
+    
+    <div class="ticker-container">
+        <div class="progress-section">
+            <i class="fas fa-check-circle progress-icon"></i>
+            <span class="progress-text" id="progress-text">5/13</span>
+            <div class="progress-bar-wrapper">
+                <div class="progress-bar" id="progress-bar"></div>
+            </div>
+        </div>
+        <div class="scroll-section">
+            <div class="marquee-wrapper">
+                <div class="marquee-content" id="content1"></div>
+                <div class="marquee-content" id="content2"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="demo-label">左侧显示完成进度，右侧滚动显示任务列表</div>
+
+    <script>
+        const tasks = [
+            { id: 1, title: '完成项目提案文档', priority: 'high', dueDate: '2026-02-07', overdue: true },
+            { id: 2, title: '修复登录页面 Bug', priority: 'high', dueDate: '2026-02-08', overdue: false },
+            { id: 3, title: '代码审查 PR #234', priority: 'medium', dueDate: '2026-02-08', overdue: false },
+            { id: 4, title: '编写单元测试', priority: 'medium', dueDate: '2026-02-09', overdue: false },
+            { id: 5, title: '更新 API 文档', priority: 'low', dueDate: '2026-02-10', overdue: false },
+            { id: 6, title: '设计评审准备', priority: 'medium', dueDate: '2026-02-08', overdue: false },
+            { id: 7, title: '部署测试环境', priority: 'low', dueDate: '2026-02-11', overdue: false },
+            { id: 8, title: '团队周会笔记', priority: 'low', dueDate: '2026-02-08', overdue: false },
+        ];
+
+        const stats = { total: 13, completed: 5, pending: 8, overdue: 1, todayDue: 3 };
+
+        // 更新进度
+        const progressPercent = (stats.completed / stats.total) * 100;
+        document.getElementById('progress-text').textContent = `${stats.completed}/${stats.total}`;
+        document.getElementById('progress-bar').style.width = `${progressPercent}%`;
+
+        function renderTasks(container) {
+            tasks.forEach((task, index) => {
+                const item = document.createElement('span');
+                item.className = `task-item ${task.overdue ? 'overdue' : ''}`;
+                
+                const dot = document.createElement('span');
+                dot.className = `priority-dot ${task.priority}`;
+                
+                item.appendChild(dot);
+                item.appendChild(document.createTextNode(task.title));
+                item.onclick = () => alert(`任务: ${task.title}\n截止日期: ${task.dueDate}\n优先级: ${task.priority}${task.overdue ? '\n⚠️ 已过期' : ''}`);
+                
+                container.appendChild(item);
+                
+                if (index < tasks.length - 1) {
+                    const separator = document.createElement('span');
+                    separator.className = 'separator';
+                    separator.textContent = '•';
+                    container.appendChild(separator);
+                }
+            });
+        }
+
+        renderTasks(document.getElementById('content1'));
+        renderTasks(document.getElementById('content2'));
+    </script>
+</body>
+</html>

@@ -110,6 +110,26 @@
             --color-end: #9a6be5;
         }
         
+        .tool-card.demo-ticker {
+            --color-start: #ff9800;
+            --color-end: #f57c00;
+        }
+        
+        .tool-card.demo-subtask {
+            --color-start: #26c6da;
+            --color-end: #00acc1;
+        }
+        
+        .tool-card.demo-task-ticker {
+            --color-start: #ab47bc;
+            --color-end: #8e24aa;
+        }
+        
+        .tool-card.demo-task-form {
+            --color-start: #ef5350;
+            --color-end: #e53935;
+        }
+        
         .tool-icon {
             width: 64px;
             height: 64px;
@@ -241,6 +261,146 @@
                     <span class="tool-tag">图表</span>
                     <span class="tool-tag">分析</span>
                 </div>
+            </a>
+        </div>
+        
+        <div class="section-title">方案 Demo — 信息栏 Ticker（5 个）</div>
+        
+        <div class="tools-grid">
+            <a href="ticker-demo-1-marquee.html" class="tool-card demo-ticker">
+                <div class="tool-icon"><i class="fas fa-arrows-left-right"></i></div>
+                <div class="tool-name">Demo 1 · CSS Marquee</div>
+                <div class="tool-desc">纯 CSS 连续水平滚动，渐变遮罩淡入淡出，GPU 加速动画。</div>
+                <div class="tool-tags"><span class="tool-tag">Ticker</span><span class="tool-tag">CSS</span></div>
+            </a>
+            <a href="ticker-demo-2-card-flip.html" class="tool-card demo-ticker">
+                <div class="tool-icon"><i class="fas fa-clone"></i></div>
+                <div class="tool-name">Demo 2 · 3D 卡片翻转</div>
+                <div class="tool-desc">3D perspective 翻转切换效果，底部 dots 指示器，键盘支持。</div>
+                <div class="tool-tags"><span class="tool-tag">Ticker</span><span class="tool-tag">3D</span></div>
+            </a>
+            <a href="ticker-demo-3-slide-swipe.html" class="tool-card demo-ticker">
+                <div class="tool-icon"><i class="fas fa-hand-pointer"></i></div>
+                <div class="tool-name">Demo 3 · 滑动拖拽</div>
+                <div class="tool-desc">鼠标拖拽切换，带自动播放进度条，含描述区域。</div>
+                <div class="tool-tags"><span class="tool-tag">Ticker</span><span class="tool-tag">拖拽</span></div>
+            </a>
+            <a href="ticker-demo-4-hybrid.html" class="tool-card demo-ticker">
+                <div class="tool-icon"><i class="fas fa-layer-group"></i></div>
+                <div class="tool-name">Demo 4 · 混合双层 ⭐</div>
+                <div class="tool-desc">上层卡片淡入淡出切换 + 下层 CSS 连续滚动，推荐方案。</div>
+                <div class="tool-tags"><span class="tool-tag new">已采用</span><span class="tool-tag">Ticker</span></div>
+            </a>
+            <a href="ticker-demo-5-vertical.html" class="tool-card demo-ticker">
+                <div class="tool-icon"><i class="fas fa-arrows-up-down"></i></div>
+                <div class="tool-name">Demo 5 · 垂直滚动</div>
+                <div class="tool-desc">类似股票行情垂直滚动，支持展开多行和滚轮操作。</div>
+                <div class="tool-tags"><span class="tool-tag">Ticker</span><span class="tool-tag">垂直</span></div>
+            </a>
+        </div>
+        
+        <div class="section-title">方案 Demo — 子任务 Subtask（5 个）</div>
+        
+        <div class="tools-grid">
+            <a href="subtask-demo-1-checklist.html" class="tool-card demo-subtask">
+                <div class="tool-icon"><i class="fas fa-list-check"></i></div>
+                <div class="tool-name">Demo 1 · 经典清单</div>
+                <div class="tool-desc">勾选子任务驱动进度条，带时间估算，可添加新子任务。</div>
+                <div class="tool-tags"><span class="tool-tag">Subtask</span><span class="tool-tag">清单</span></div>
+            </a>
+            <a href="subtask-demo-2-timeline.html" class="tool-card demo-subtask">
+                <div class="tool-icon"><i class="fas fa-timeline"></i></div>
+                <div class="tool-name">Demo 2 · 时间轴</div>
+                <div class="tool-desc">按步骤推进的时间轴，环形进度 + 时间条联动。</div>
+                <div class="tool-tags"><span class="tool-tag">Subtask</span><span class="tool-tag">时间轴</span></div>
+            </a>
+            <a href="subtask-demo-3-kanban.html" class="tool-card demo-subtask">
+                <div class="tool-icon"><i class="fas fa-columns"></i></div>
+                <div class="tool-name">Demo 3 · 看板</div>
+                <div class="tool-desc">三列看板（待做/进行/完成），支持拖拽，分段进度条。</div>
+                <div class="tool-tags"><span class="tool-tag">Subtask</span><span class="tool-tag">看板</span></div>
+            </a>
+            <a href="subtask-demo-4-weighted.html" class="tool-card demo-subtask">
+                <div class="tool-icon"><i class="fas fa-weight-hanging"></i></div>
+                <div class="tool-name">Demo 4 · 加权进度</div>
+                <div class="tool-desc">按时间权重计算进度，多段彩色进度条。</div>
+                <div class="tool-tags"><span class="tool-tag">Subtask</span><span class="tool-tag">权重</span></div>
+            </a>
+            <a href="subtask-demo-5-inline.html" class="tool-card demo-subtask">
+                <div class="tool-icon"><i class="fas fa-compress"></i></div>
+                <div class="tool-name">Demo 5 · 内联紧凑 ⭐</div>
+                <div class="tool-desc">描述/子任务 Tab 切换 + 折叠展开两种方案，节省空间。</div>
+                <div class="tool-tags"><span class="tool-tag new">已采用</span><span class="tool-tag">Subtask</span></div>
+            </a>
+        </div>
+        
+        <div class="section-title">方案 Demo — 任务滚动提醒条（5 个）</div>
+        
+        <div class="tools-grid">
+            <a href="task-ticker-demo-1-marquee.html" class="tool-card demo-task-ticker">
+                <div class="tool-icon"><i class="fas fa-scroll"></i></div>
+                <div class="tool-name">Demo 1 · 水平滚动</div>
+                <div class="tool-desc">未完成任务标题水平连续滚动，渐变遮罩，悬停暂停。</div>
+                <div class="tool-tags"><span class="tool-tag new">新增</span><span class="tool-tag">任务条</span></div>
+            </a>
+            <a href="task-ticker-demo-2-priority.html" class="tool-card demo-task-ticker">
+                <div class="tool-icon"><i class="fas fa-circle-exclamation"></i></div>
+                <div class="tool-name">Demo 2 · 优先级色带</div>
+                <div class="tool-desc">优先级色点标识，过期任务脉冲高亮，按优先级排序。</div>
+                <div class="tool-tags"><span class="tool-tag new">新增</span><span class="tool-tag">任务条</span></div>
+            </a>
+            <a href="task-ticker-demo-3-summary.html" class="tool-card demo-task-ticker">
+                <div class="tool-icon"><i class="fas fa-square-poll-horizontal"></i></div>
+                <div class="tool-name">Demo 3 · 计数摘要</div>
+                <div class="tool-desc">紧凑摘要行，悬停展开任务列表，过期红色提示。</div>
+                <div class="tool-tags"><span class="tool-tag new">新增</span><span class="tool-tag">任务条</span></div>
+            </a>
+            <a href="task-ticker-demo-4-hybrid.html" class="tool-card demo-task-ticker">
+                <div class="tool-icon"><i class="fas fa-chart-simple"></i></div>
+                <div class="tool-name">Demo 4 · 进度 + 滚动 ⭐</div>
+                <div class="tool-desc">左侧完成进度 + 右侧任务滚动流，信息密度最高，推荐。</div>
+                <div class="tool-tags"><span class="tool-tag new">已采用</span><span class="tool-tag">任务条</span></div>
+            </a>
+            <a href="task-ticker-demo-5-vertical.html" class="tool-card demo-task-ticker">
+                <div class="tool-icon"><i class="fas fa-caret-up"></i></div>
+                <div class="tool-name">Demo 5 · 垂直轮播</div>
+                <div class="tool-desc">单条向上滚动切换，显示完整信息，支持手动切换。</div>
+                <div class="tool-tags"><span class="tool-tag new">新增</span><span class="tool-tag">任务条</span></div>
+            </a>
+        </div>
+        
+        <div class="section-title">方案 Demo — 任务编辑窗口（5 个）</div>
+        
+        <div class="tools-grid">
+            <a href="task-form-demo-1-single-column.html" class="tool-card demo-task-form">
+                <div class="tool-icon"><i class="fas fa-stream"></i></div>
+                <div class="tool-name">Demo 1 · 单列流式</div>
+                <div class="tool-desc">简洁线性布局，字段从上到下依次排列，快速录入，移动端友好。</div>
+                <div class="tool-tags"><span class="tool-tag new">新增</span><span class="tool-tag">编辑窗口</span></div>
+            </a>
+            <a href="task-form-demo-2-two-column.html" class="tool-card demo-task-form">
+                <div class="tool-icon"><i class="fas fa-columns"></i></div>
+                <div class="tool-name">Demo 2 · 双列分组</div>
+                <div class="tool-desc">左右双列分组布局，信息密度高，桌面端复杂任务编辑优选。</div>
+                <div class="tool-tags"><span class="tool-tag new">新增</span><span class="tool-tag">编辑窗口</span></div>
+            </a>
+            <a href="task-form-demo-3-tabs.html" class="tool-card demo-task-form">
+                <div class="tool-icon"><i class="fas fa-folder-open"></i></div>
+                <div class="tool-name">Demo 3 · Tab 标签页</div>
+                <div class="tool-desc">功能分组到多个 Tab 页，渐进式填写，减少视觉负担。</div>
+                <div class="tool-tags"><span class="tool-tag new">新增</span><span class="tool-tag">编辑窗口</span></div>
+            </a>
+            <a href="task-form-demo-4-cards.html" class="tool-card demo-task-form">
+                <div class="tool-icon"><i class="fas fa-th-large"></i></div>
+                <div class="tool-name">Demo 4 · 卡片式分组</div>
+                <div class="tool-desc">字段按功能分为独立卡片，视觉层次清晰，模块化设计。</div>
+                <div class="tool-tags"><span class="tool-tag new">新增</span><span class="tool-tag">编辑窗口</span></div>
+            </a>
+            <a href="task-form-demo-5-sidebar.html" class="tool-card demo-task-form">
+                <div class="tool-icon"><i class="fas fa-eye"></i></div>
+                <div class="tool-name">Demo 5 · 侧边栏详情</div>
+                <div class="tool-desc">左侧表单 + 右侧实时预览，所见即所得，复杂编辑场景。</div>
+                <div class="tool-tags"><span class="tool-tag new">新增</span><span class="tool-tag">编辑窗口</span></div>
             </a>
         </div>
         
