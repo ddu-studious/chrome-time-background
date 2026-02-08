@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>中国热搜 Demo 3 - 全平台排行</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80') center/cover no-repeat;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 40px;
+        }
+        body::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,0.3); }
+        h2 { position: relative; z-index: 1; margin-bottom: 8px; font-size: 14px; opacity: 0.7; font-weight: 400; }
+        .demo-subtitle { position: relative; z-index: 1; margin-bottom: 20px; font-size: 12px; opacity: 0.4; }
+
+        /* ===== 排行 Ticker ===== */
+        .ranking-ticker {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 720px;
+        }
+
+        /* 主容器 */
+        .ranking-main {
+            background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px 12px 0 0;
+            padding: 16px 18px;
+            min-height: 80px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* 平台卡片 - 垂直切换 */
+        .platform-card {
+            display: flex;
+            gap: 16px;
+            transition: opacity 0.4s ease, transform 0.4s ease;
+        }
+        .platform-card.fade-out {
+            opacity: 0;
+            transform: translateY(-12px);
+        }
+        .platform-card.fade-in {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* 平台标识 */
+        .platform-badge {
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            min-width: 60px;
+        }
+        .platform-icon {
+            width: 44px; height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            transition: transform 0.3s;
+        }
+        .platform-icon.weibo { background: rgba(255,69,0,0.15); }
+        .platform-icon.bilibili { background: rgba(0,174,236,0.15); }
+        .platform-icon.zhihu { background: rgba(0,102,255,0.15); }
+        .platform-icon.douyin { background: rgba(254,44,85,0.15); }
+        .ranking-main:hover .platform-icon { transform: scale(1.08); }
+
+        .platform-name {
+            font-size: 11px;
+            color: rgba(255,255,255,0.5);
+            font-weight: 500;
+        }
+
+        /* Top3 列表 */
+        .top3-list {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .top3-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 5px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .top3-item:hover { background: rgba(255,255,255,0.06); }
+
+        .top3-rank {
+            width: 20px; height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 800;
+            border-radius: 5px;
+            flex-shrink: 0;
+        }
+        .top3-rank.r1 { background: rgba(255,69,0,0.2); color: #ff6633; }
+        .top3-rank.r2 { background: rgba(255,140,0,0.2); color: #ff9933; }
+        .top3-rank.r3 { background: rgba(255,200,0,0.15); color: #ffcc33; }
+
+        .top3-title {
+            flex: 1;
+            font-size: 13px;
+            font-weight: 500;
+            color: rgba(255,255,255,0.88);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .top3-heat {
+            font-size: 11px;
+            font-weight: 600;
+            flex-shrink: 0;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+        .top3-heat.weibo { color: #ff4500; background: rgba(255,69,0,0.1); }
+        .top3-heat.bilibili { color: #00aeec; background: rgba(0,174,236,0.1); }
+        .top3-heat.zhihu { color: #0066ff; background: rgba(0,102,255,0.1); }
+        .top3-heat.douyin { color: #fe2c55; background: rgba(254,44,85,0.1); }
+
+        /* 热搜标签 */
+        .top3-tag {
+            font-size: 9px;
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+        .top3-tag.boil { background: rgba(255,0,0,0.22); color: #ff4444; }
+        .top3-tag.hot { background: rgba(255,69,0,0.18); color: #ff6633; }
+        .top3-tag.new { background: rgba(255,200,0,0.18); color: #ffcc33; }
+
+        /* 控制区域 */
+        .ranking-controls {
+            position: absolute;
+            top: 12px;
+            right: 14px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .ranking-main:hover .ranking-controls { opacity: 1; }
+
+        .ranking-counter {
+            font-size: 10px;
+            color: rgba(255,255,255,0.35);
+            margin-right: 2px;
+        }
+        .ranking-btn {
+            width: 22px; height: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            background: transparent;
+            color: rgba(255,255,255,0.4);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 10px;
+            transition: all 0.2s;
+        }
+        .ranking-btn:hover {
+            color: rgba(255,255,255,0.8);
+            background: rgba(255,255,255,0.1);
+        }
+
+        /* 进度指示器 */
+        .platform-dots {
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+            margin-top: 12px;
+        }
+        .platform-dot {
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.15);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .platform-dot.active {
+            width: 18px;
+            border-radius: 3px;
+        }
+        .platform-dot.active.weibo { background: #ff4500; }
+        .platform-dot.active.bilibili { background: #00aeec; }
+        .platform-dot.active.zhihu { background: #0066ff; }
+        .platform-dot.active.douyin { background: #fe2c55; }
+
+        /* 下层滚动栏 */
+        .ticker-mini {
+            background: rgba(0,0,0,0.25);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-top: none;
+            border-radius: 0 0 12px 12px;
+            overflow: hidden;
+            height: 30px;
+        }
+        .ticker-mini-mask {
+            -webkit-mask-image: linear-gradient(90deg, transparent 0%, black 5%, black 95%, transparent 100%);
+            mask-image: linear-gradient(90deg, transparent 0%, black 5%, black 95%, transparent 100%);
+            height: 100%;
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+        }
+        .ticker-mini-track {
+            display: flex;
+            align-items: center;
+            animation: tickerMarquee 60s linear infinite;
+            white-space: nowrap;
+            will-change: transform;
+        }
+        .ticker-mini-track:hover { animation-play-state: paused; }
+        @keyframes tickerMarquee {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+        .ticker-mini-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 0 16px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+            flex-shrink: 0;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .ticker-mini-item:hover { color: rgba(255,255,255,0.9); }
+        .ticker-mini-sep { width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.12); flex-shrink: 0; }
+
+        /* 时间展示 */
+        .time-display {
+            position: relative; z-index: 1; margin-top: 30px; text-align: center;
+        }
+        .time-display .time { font-size: 80px; font-weight: 200; letter-spacing: -2px; text-shadow: 0 2px 20px rgba(0,0,0,0.3); }
+        .time-display .date { font-size: 16px; opacity: 0.6; margin-top: 8px; }
+
+        .demo-label {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            font-size: 11px; opacity: 0.4; z-index: 10;
+        }
+
+        @media (prefers-reduced-motion: reduce) { .ticker-mini-track { animation: none; } }
+    </style>
+</head>
+<body>
+    <h2>Demo 3 · 中国热搜 · 全平台排行</h2>
+    <div class="demo-subtitle">各平台 Top3 自动轮播，进度点指示，下层混合所有热搜</div>
+
+    <div class="ranking-ticker">
+        <div class="ranking-main" id="ranking-main">
+            <div class="platform-card" id="platform-card"></div>
+            <div class="ranking-controls">
+                <span class="ranking-counter" id="ranking-counter"></span>
+                <button class="ranking-btn" id="ranking-prev" title="上一个平台"><i class="fas fa-chevron-left"></i></button>
+                <button class="ranking-btn" id="ranking-next" title="下一个平台"><i class="fas fa-chevron-right"></i></button>
+            </div>
+            <div class="platform-dots" id="platform-dots"></div>
+        </div>
+        <div class="ticker-mini">
+            <div class="ticker-mini-mask">
+                <div class="ticker-mini-track" id="ticker-mini-track"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="time-display">
+        <div class="time" id="clock">--:--:--</div>
+        <div class="date" id="date-display"></div>
+    </div>
+
+    <div class="demo-label">自动轮播平台 · 悬停暂停 · ◀▶ 手动切换 · 底部圆点导航</div>
+
+    <script>
+        // ===== 模拟数据 =====
+        const PLATFORMS = [
+            {
+                id: 'weibo', name: '微博热搜', icon: '🔥',
+                items: [
+                    { title: '央视春晚节目单官宣', heat: '532万', tag: 'boil' },
+                    { title: '科技巨头AI新战略发布', heat: '328万', tag: 'hot' },
+                    { title: '国产大模型突破新里程碑', heat: '215万', tag: 'new' },
+                ]
+            },
+            {
+                id: 'bilibili', name: 'B站热榜', icon: '📺',
+                items: [
+                    { title: '【4K】极致画质！中国最美风景合集', heat: '320万播放' },
+                    { title: '用AI一键生成3D游戏场景', heat: '186万播放' },
+                    { title: '程序员年后面试攻略大全', heat: '95万播放' },
+                ]
+            },
+            {
+                id: 'zhihu', name: '知乎热榜', icon: '💭',
+                items: [
+                    { title: '如何看待AI编程助手取代初级程序员？', heat: '2.8万回答' },
+                    { title: '2026年哪些行业最有前景？', heat: '1.5万回答', tag: 'hot' },
+                    { title: '为什么越来越多年轻人学传统手艺？', heat: '8600回答' },
+                ]
+            },
+            {
+                id: 'douyin', name: '抖音热点', icon: '🎵',
+                items: [
+                    { title: '开工第一天的办公室氛围', heat: '1.2亿播放' },
+                    { title: '春节返程高速实况直播', heat: '8600万播放' },
+                    { title: '年后减肥操跟练第一天', heat: '5200万播放' },
+                ]
+            }
+        ];
+
+        let currentPlatform = 0;
+        let isPaused = false;
+        let rotateTimer = null;
+
+        // ===== 渲染平台卡片 =====
+        function renderPlatform(index, animate = true) {
+            const card = document.getElementById('platform-card');
+            const platform = PLATFORMS[index];
+
+            if (animate) {
+                card.classList.add('fade-out');
+                card.classList.remove('fade-in');
+            }
+
+            const update = () => {
+                card.innerHTML = `
+                    <div class="platform-badge">
+                        <div class="platform-icon ${platform.id}">${platform.icon}</div>
+                        <span class="platform-name">${platform.name}</span>
+                    </div>
+                    <div class="top3-list">
+                        ${platform.items.map((item, i) => `
+                            <div class="top3-item">
+                                <div class="top3-rank r${i + 1}">${i + 1}</div>
+                                <div class="top3-title">${item.title}</div>
+                                ${item.tag ? `<span class="top3-tag ${item.tag}">${item.tag === 'boil' ? '沸' : item.tag === 'hot' ? '热' : '新'}</span>` : ''}
+                                <span class="top3-heat ${platform.id}">${item.heat}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+
+                if (animate) {
+                    card.classList.remove('fade-out');
+                    card.classList.add('fade-in');
+                }
+            };
+
+            if (animate) {
+                setTimeout(update, 250);
+            } else {
+                update();
+            }
+
+            // 更新指示器
+            document.getElementById('ranking-counter').textContent = `${index + 1}/${PLATFORMS.length}`;
+            document.querySelectorAll('.platform-dot').forEach((dot, i) => {
+                dot.classList.toggle('active', i === index);
+                dot.className = `platform-dot${i === index ? ` active ${PLATFORMS[i].id}` : ''}`;
+            });
+        }
+
+        // ===== 渲染指示点 =====
+        function renderDots() {
+            const container = document.getElementById('platform-dots');
+            container.innerHTML = PLATFORMS.map((p, i) =>
+                `<div class="platform-dot${i === 0 ? ` active ${p.id}` : ''}" data-index="${i}"></div>`
+            ).join('');
+            container.addEventListener('click', (e) => {
+                const dot = e.target.closest('.platform-dot');
+                if (!dot) return;
+                currentPlatform = parseInt(dot.dataset.index);
+                renderPlatform(currentPlatform);
+                resetTimer();
+            });
+        }
+
+        // ===== 渲染下层滚动 =====
+        function renderMiniTrack() {
+            const track = document.getElementById('ticker-mini-track');
+            const allItems = [];
+            PLATFORMS.forEach(p => {
+                p.items.forEach(item => allItems.push({ icon: p.icon, title: item.title, heat: item.heat }));
+            });
+            const buildItems = () => allItems.map((item, i) => {
+                const sep = i < allItems.length - 1 ? '<span class="ticker-mini-sep"></span>' : '';
+                return `<span class="ticker-mini-item" title="${item.title}">
+                    <span>${item.icon}</span>
+                    ${item.title.length > 18 ? item.title.substring(0, 18) + '…' : item.title}
+                </span>${sep}`;
+            }).join('');
+            const content = buildItems();
+            track.innerHTML = content + '<span class="ticker-mini-sep"></span>' + content;
+        }
+
+        // ===== 轮播控制 =====
+        function showNext() {
+            currentPlatform = (currentPlatform + 1) % PLATFORMS.length;
+            renderPlatform(currentPlatform);
+            resetTimer();
+        }
+        function showPrev() {
+            currentPlatform = (currentPlatform - 1 + PLATFORMS.length) % PLATFORMS.length;
+            renderPlatform(currentPlatform);
+            resetTimer();
+        }
+        function startRotation() {
+            stopRotation();
+            rotateTimer = setInterval(() => {
+                if (!isPaused) {
+                    currentPlatform = (currentPlatform + 1) % PLATFORMS.length;
+                    renderPlatform(currentPlatform);
+                }
+            }, 6000);
+        }
+        function stopRotation() {
+            if (rotateTimer) { clearInterval(rotateTimer); rotateTimer = null; }
+        }
+        function resetTimer() { startRotation(); }
+
+        // ===== 事件绑定 =====
+        const mainEl = document.getElementById('ranking-main');
+        mainEl.addEventListener('mouseenter', () => { isPaused = true; });
+        mainEl.addEventListener('mouseleave', () => { isPaused = false; });
+        document.getElementById('ranking-prev').addEventListener('click', (e) => { e.stopPropagation(); showPrev(); });
+        document.getElementById('ranking-next').addEventListener('click', (e) => { e.stopPropagation(); showNext(); });
+
+        // ===== 时钟 =====
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock').textContent = now.toTimeString().split(' ')[0];
+            document.getElementById('date-display').textContent = now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+        }
+
+        // ===== 初始化 =====
+        renderDots();
+        renderPlatform(0, false);
+        renderMiniTrack();
+        startRotation();
+        updateClock();
+        setInterval(updateClock, 1000);
+    </script>
+</body>
+</html>

@@ -452,6 +452,16 @@
         
         // 设置单个任务的提醒
         await setupTaskReminders();
+        
+        // 热搜关键字监控（按用户设置的间隔，默认 10 分钟）
+        const kwSettings = await getKeywordSettings();
+        if (kwSettings.enabled) {
+            const interval = Math.max(1, kwSettings.scanInterval || 10);
+            await chrome.alarms.create('keyword-scan', {
+                periodInMinutes: interval
+            });
+            console.log(`已设置关键字扫描: 每${interval}分钟`);
+        }
     }
     
     /**
@@ -870,6 +880,257 @@
         return streak;
     }
 
+    // ==================== 热搜关键字监控引擎 ====================
+
+    const KEYWORD_ALERT_DEFAULTS = Object.freeze({
+        enabled: false,
+        keywords: [],          // [{ text: string, enabled: boolean }]
+        scanInterval: 10,      // 分钟
+        maxNotifications: 5,   // 单次最大通知数
+        quietHoursStart: '',   // 免打扰开始（空=不启用）
+        quietHoursEnd: '',     // 免打扰结束
+        sources: ['weibo', 'bilibili', 'zhihu']
+    });
+
+    const KEYWORD_HISTORY_KEY = 'keywordAlertHistory';
+    const KEYWORD_HISTORY_TTL = 24 * 60 * 60 * 1000; // 24 小时去重
+    const DAILYHOT_API_BASE = 'https://dailyhotapi-production-cad3.up.railway.app';
+
+    /**
+     * 获取关键字监控设置
+     */
+    async function getKeywordSettings() {
+        try {
+            const { keywordAlertSettings } = await chrome.storage.sync.get('keywordAlertSettings');
+            return { ...KEYWORD_ALERT_DEFAULTS, ...(keywordAlertSettings || {}) };
+        } catch {
+            return { ...KEYWORD_ALERT_DEFAULTS };
+        }
+    }
+
+    /**
+     * 获取通知去重历史
+     */
+    async function getAlertHistory() {
+        try {
+            const { [KEYWORD_HISTORY_KEY]: history } = await chrome.storage.local.get(KEYWORD_HISTORY_KEY);
+            return history && typeof history === 'object' ? history : {};
+        } catch {
+            return {};
+        }
+    }
+
+    /**
+     * 保存通知去重历史（自动清理过期条目）
+     */
+    async function saveAlertHistory(history) {
+        const now = Date.now();
+        const cleaned = {};
+        for (const [key, ts] of Object.entries(history)) {
+            if (now - ts < KEYWORD_HISTORY_TTL) {
+                cleaned[key] = ts;
+            }
+        }
+        try {
+            await chrome.storage.local.set({ [KEYWORD_HISTORY_KEY]: cleaned });
+        } catch { /* ignore */ }
+    }
+
+    /**
+     * 简易哈希：生成去重键
+     */
+    function hashAlertKey(source, title) {
+        const str = `${source}:${title}`;
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+        }
+        return 'ka_' + Math.abs(hash).toString(36);
+    }
+
+    /**
+     * 检查是否在免打扰时段
+     */
+    function isQuietHours(settings) {
+        if (!settings.quietHoursStart || !settings.quietHoursEnd) return false;
+        const now = new Date();
+        const hhmm = now.getHours() * 100 + now.getMinutes();
+        const [sh, sm] = settings.quietHoursStart.split(':').map(Number);
+        const [eh, em] = settings.quietHoursEnd.split(':').map(Number);
+        const start = sh * 100 + sm;
+        const end = eh * 100 + em;
+
+        if (start <= end) {
+            return hhmm >= start && hhmm < end;
+        }
+        // 跨午夜（如 23:00 - 07:00）
+        return hhmm >= start || hhmm < end;
+    }
+
+    /**
+     * 平台名称映射
+     */
+    const SOURCE_NAMES = {
+        weibo: '微博热搜',
+        bilibili: 'B站热榜',
+        zhihu: '知乎热榜'
+    };
+    const SOURCE_ICONS = {
+        weibo: '🔥',
+        bilibili: '📺',
+        zhihu: '💭'
+    };
+
+    /**
+     * 核心：扫描热搜关键字
+     */
+    async function scanKeywordAlerts() {
+        console.log('[KeywordAlert] 开始关键字扫描...');
+
+        const settings = await getKeywordSettings();
+        if (!settings.enabled) {
+            console.log('[KeywordAlert] 功能已禁用');
+            return;
+        }
+
+        const activeKeywords = (settings.keywords || [])
+            .filter(k => k.enabled && k.text?.trim())
+            .map(k => k.text.trim());
+
+        if (activeKeywords.length === 0) {
+            console.log('[KeywordAlert] 无激活的关键字');
+            return;
+        }
+
+        // 检查免打扰时段
+        if (isQuietHours(settings)) {
+            console.log('[KeywordAlert] 当前处于免打扰时段');
+            return;
+        }
+
+        // 并行请求所有数据源
+        const sources = settings.sources || ['weibo', 'bilibili', 'zhihu'];
+        const results = await Promise.allSettled(
+            sources.map(async (src) => {
+                const resp = await fetch(`${DAILYHOT_API_BASE}/${src}`, { cache: 'no-store' });
+                if (!resp.ok) throw new Error(`${src} HTTP ${resp.status}`);
+                const json = await resp.json();
+                if (json.code !== 200) throw new Error(`${src} code ${json.code}`);
+                return { source: src, data: json.data || [] };
+            })
+        );
+
+        // 收集匹配结果
+        const matches = [];
+        for (const result of results) {
+            if (result.status !== 'fulfilled') continue;
+            const { source, data } = result.value;
+
+            for (const item of data) {
+                const text = `${item.title || ''} ${item.desc || ''}`;
+                for (const keyword of activeKeywords) {
+                    if (text.toLowerCase().includes(keyword.toLowerCase())) {
+                        matches.push({
+                            source,
+                            title: item.title,
+                            desc: item.desc || '',
+                            url: item.url || item.mobileUrl || '',
+                            keyword
+                        });
+                        break; // 一条热搜只匹配第一个关键字
+                    }
+                }
+            }
+        }
+
+        if (matches.length === 0) {
+            console.log('[KeywordAlert] 本次扫描无匹配');
+            return;
+        }
+
+        console.log(`[KeywordAlert] 发现 ${matches.length} 条匹配`);
+
+        // 去重 + 发送通知
+        const history = await getAlertHistory();
+        let notifyCount = 0;
+        const maxN = settings.maxNotifications || 5;
+
+        for (const match of matches) {
+            if (notifyCount >= maxN) break;
+
+            const key = hashAlertKey(match.source, match.title);
+            if (history[key]) continue; // 已通知过
+
+            // 发送系统通知
+            const sourceName = SOURCE_NAMES[match.source] || match.source;
+            const sourceIcon = SOURCE_ICONS[match.source] || '📢';
+            const notifId = `keyword-alert-${key}-${Date.now()}`;
+
+            try {
+                try {
+                    await chrome.notifications.create(notifId, {
+                        type: 'basic',
+                        iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+                        title: `${sourceIcon} 热搜关键字命中`,
+                        message: `【${sourceName}】${match.title}\n匹配关键字: "${match.keyword}"`,
+                        priority: 2,
+                        requireInteraction: true,
+                        buttons: [
+                            { title: '🔗 查看详情' },
+                            { title: '🔕 知道了' }
+                        ]
+                    });
+                } catch {
+                    // macOS 按钮降级
+                    await chrome.notifications.create(notifId, {
+                        type: 'basic',
+                        iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+                        title: `${sourceIcon} 热搜关键字命中`,
+                        message: `【${sourceName}】${match.title}\n匹配关键字: "${match.keyword}"`,
+                        priority: 2,
+                        requireInteraction: true
+                    });
+                }
+
+                // 记录到去重历史
+                history[key] = Date.now();
+                notifyCount++;
+
+                // 同时存储通知详情供点击跳转使用
+                await chrome.storage.local.set({
+                    [`ka_notif_${notifId}`]: {
+                        url: match.url,
+                        source: match.source,
+                        title: match.title,
+                        keyword: match.keyword,
+                        ts: Date.now()
+                    }
+                });
+
+                console.log(`[KeywordAlert] 通知已发送: ${match.title} (${match.keyword})`);
+            } catch (err) {
+                console.error('[KeywordAlert] 发送通知失败:', err);
+            }
+        }
+
+        await saveAlertHistory(history);
+
+        // 通知前端页面更新匹配高亮
+        if (notifyCount > 0) {
+            try {
+                const tabs = await chrome.tabs.query({});
+                for (const tab of tabs) {
+                    try {
+                        await chrome.tabs.sendMessage(tab.id, {
+                            action: 'keywordMatchesUpdated',
+                            matches: matches.map(m => ({ source: m.source, title: m.title, keyword: m.keyword }))
+                        });
+                    } catch { /* tab may not have content script */ }
+                }
+            } catch { /* ignore */ }
+        }
+    }
+
     // ==================== 事件监听 ====================
 
     // 监听扩展图标点击事件
@@ -939,6 +1200,9 @@
             case 'reset-daily-habits':
                 await resetDailyHabits();
                 break;
+            case 'keyword-scan':
+                await scanKeywordAlerts();
+                break;
             default:
                 // 处理单个任务提醒
                 if (alarm.name.startsWith('task-reminder-')) {
@@ -967,6 +1231,23 @@
             await chrome.notifications.clear(notificationId);
         }
         
+        // 处理关键字监控通知
+        if (notificationId.startsWith('keyword-alert-')) {
+            const detailKey = `ka_notif_${notificationId}`;
+            const { [detailKey]: detail } = await chrome.storage.local.get(detailKey);
+            
+            if (buttonIndex === 0 && detail?.url) {
+                // 查看详情 - 打开热搜链接
+                await chrome.tabs.create({ url: detail.url });
+            }
+            // buttonIndex === 1: 知道了 - 仅关闭通知
+            
+            // 清理存储的通知详情
+            await chrome.storage.local.remove(detailKey);
+            await chrome.notifications.clear(notificationId);
+            return;
+        }
+        
         // 处理备份提醒通知
         if (notificationId === 'backup-reminder') {
             if (buttonIndex === 0) {
@@ -985,6 +1266,22 @@
     // 监听通知点击
     chrome.notifications.onClicked.addListener(async (notificationId) => {
         console.log('通知点击:', notificationId);
+        
+        // 关键字监控通知 - 跳转到热搜链接
+        if (notificationId.startsWith('keyword-alert-')) {
+            const detailKey = `ka_notif_${notificationId}`;
+            const { [detailKey]: detail } = await chrome.storage.local.get(detailKey);
+            
+            if (detail?.url) {
+                await chrome.tabs.create({ url: detail.url });
+            } else {
+                await chrome.tabs.create({ url: 'chrome://newtab/' });
+            }
+            
+            await chrome.storage.local.remove(detailKey);
+            await chrome.notifications.clear(notificationId);
+            return;
+        }
         
         // 打开新标签页
         await chrome.tabs.create({ url: 'chrome://newtab/' });
@@ -1024,6 +1321,44 @@
             return true;
         }
         
+        if (message.action === 'updateKeywordAlertSettings') {
+            // 前端更新了关键字设置，重新初始化扫描闹钟
+            (async () => {
+                try {
+                    const kwSettings = await getKeywordSettings();
+                    // 清除旧的关键字扫描闹钟
+                    await chrome.alarms.clear('keyword-scan');
+                    
+                    if (kwSettings.enabled) {
+                        const interval = Math.max(1, kwSettings.scanInterval || 10);
+                        await chrome.alarms.create('keyword-scan', {
+                            periodInMinutes: interval
+                        });
+                        console.log(`[KeywordAlert] 闹钟已更新: 每${interval}分钟`);
+                        
+                        // 立即执行一次扫描
+                        await scanKeywordAlerts();
+                    }
+                    
+                    sendResponse({ success: true });
+                } catch (error) {
+                    console.error('[KeywordAlert] 更新设置失败:', error);
+                    sendResponse({ success: false, error: error.message });
+                }
+            })();
+            return true;
+        }
+        
+        if (message.action === 'triggerKeywordScan') {
+            // 手动触发一次扫描
+            scanKeywordAlerts().then(() => {
+                sendResponse({ success: true });
+            }).catch(error => {
+                sendResponse({ success: false, error: error.message });
+            });
+            return true;
+        }
+        
         if (message.action === 'refreshAlarms') {
             // 刷新所有闹钟
             initAlarms().then(() => {
@@ -1043,6 +1378,18 @@
         if (area === 'sync' && changes.dailyTaskSettings) {
             console.log('任务设置已更改，重新初始化闹钟...');
             await initAlarms();
+        }
+        
+        if (area === 'sync' && changes.keywordAlertSettings) {
+            console.log('[KeywordAlert] 设置已更改，更新扫描闹钟...');
+            const kwSettings = await getKeywordSettings();
+            await chrome.alarms.clear('keyword-scan');
+            if (kwSettings.enabled) {
+                const interval = Math.max(1, kwSettings.scanInterval || 10);
+                await chrome.alarms.create('keyword-scan', {
+                    periodInMinutes: interval
+                });
+            }
         }
         
         if (area === 'local' && changes.memos) {

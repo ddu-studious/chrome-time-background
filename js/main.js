@@ -18,6 +18,11 @@ function initBackgrounds() {
         document.body.style.backgroundSize = 'cover';
         document.body.style.backgroundPosition = 'center';
         
+        // 自适应亮度检测
+        if (window.adaptiveOverlay) {
+            window.adaptiveOverlay.analyzeAndApply(background.url);
+        }
+        
         // 更新背景信息
         const creditElement = document.getElementById('background-credit');
         if (creditElement) {
@@ -42,6 +47,11 @@ function changeBackground() {
         
         // 设置背景图片
         document.body.style.backgroundImage = `url(${background.url})`;
+        
+        // 自适应亮度检测
+        if (window.adaptiveOverlay) {
+            window.adaptiveOverlay.analyzeAndApply(background.url);
+        }
         
         // 更新背景信息
         const creditElement = document.getElementById('background-credit');

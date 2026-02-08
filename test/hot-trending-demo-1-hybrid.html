@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>中国热搜 Demo 1 - 混合双层模式</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80') center/cover no-repeat;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 40px;
+        }
+        body::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,0.3); }
+        h2 { position: relative; z-index: 1; margin-bottom: 8px; font-size: 14px; opacity: 0.7; font-weight: 400; }
+        .demo-subtitle { position: relative; z-index: 1; margin-bottom: 20px; font-size: 12px; opacity: 0.4; }
+
+        /* ===== 完全复刻现有 Tech Ticker 混合双层样式 ===== */
+        .tech-ticker {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 720px;
+        }
+
+        /* 上层：主信息卡片 */
+        .ticker-main {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 12px 18px;
+            background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px 12px 0 0;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            min-height: 52px;
+        }
+        .ticker-main:hover {
+            background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
+            border-color: rgba(255,255,255,0.15);
+        }
+
+        /* 来源图标 */
+        .ticker-source-icon {
+            width: 36px; height: 36px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
+            transition: transform 0.2s;
+        }
+        .ticker-main:hover .ticker-source-icon { transform: scale(1.1); }
+
+        /* 信息体 */
+        .ticker-body { flex: 1; min-width: 0; overflow: hidden; }
+        .ticker-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: rgba(255,255,255,0.9);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            transition: opacity 0.3s, transform 0.3s;
+        }
+        .ticker-desc {
+            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-top: 2px;
+            transition: opacity 0.3s, transform 0.3s;
+        }
+        .ticker-title.fade-out { opacity: 0; transform: translateY(-6px); }
+        .ticker-title.fade-in { opacity: 1; transform: translateY(0); }
+        .ticker-desc.fade-out { opacity: 0; transform: translateY(6px); }
+        .ticker-desc.fade-in { opacity: 1; transform: translateY(0); }
+
+        /* 热度指标 */
+        .ticker-metric {
+            font-size: 12px;
+            font-weight: 700;
+            flex-shrink: 0;
+            padding: 3px 10px;
+            border-radius: 20px;
+        }
+        .ticker-metric.weibo-hot { color: #ff4500; background: rgba(255,69,0,0.12); }
+        .ticker-metric.bilibili-hot { color: #00aeec; background: rgba(0,174,236,0.12); }
+        .ticker-metric.zhihu-hot { color: #0066ff; background: rgba(0,102,255,0.12); }
+        .ticker-metric.douyin-hot { color: #fe2c55; background: rgba(254,44,85,0.12); }
+        .ticker-metric.baidu-hot { color: #3388ff; background: rgba(51,136,255,0.12); }
+
+        /* 热搜标签 */
+        .ticker-tag {
+            display: inline-block;
+            font-size: 10px;
+            padding: 1px 6px;
+            border-radius: 4px;
+            margin-left: 6px;
+            font-weight: 600;
+        }
+        .ticker-tag.hot { background: rgba(255,69,0,0.2); color: #ff6633; }
+        .ticker-tag.new { background: rgba(255,200,0,0.2); color: #ffcc33; }
+        .ticker-tag.boil { background: rgba(255,0,0,0.25); color: #ff4444; }
+
+        /* 控制按钮 */
+        .ticker-controls {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            opacity: 0;
+            max-width: 0;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        .ticker-main:hover .ticker-controls {
+            opacity: 1;
+            max-width: 160px;
+        }
+        .ticker-counter {
+            font-size: 10px;
+            color: rgba(255,255,255,0.35);
+            margin-right: 4px;
+            white-space: nowrap;
+        }
+        .ticker-btn {
+            width: 22px; height: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            background: transparent;
+            color: rgba(255,255,255,0.4);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 10px;
+            transition: all 0.2s;
+        }
+        .ticker-btn:hover {
+            color: rgba(255,255,255,0.8);
+            background: rgba(255,255,255,0.1);
+        }
+        .ticker-refresh-btn.refreshing i { animation: spin 1s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        /* 下层：迷你连续滚动栏 */
+        .ticker-mini {
+            background: rgba(0,0,0,0.25);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-top: none;
+            border-radius: 0 0 12px 12px;
+            overflow: hidden;
+            height: 30px;
+            transition: height 0.3s ease, opacity 0.3s ease;
+        }
+        .ticker-mini-mask {
+            -webkit-mask-image: linear-gradient(90deg, transparent 0%, black 5%, black 95%, transparent 100%);
+            mask-image: linear-gradient(90deg, transparent 0%, black 5%, black 95%, transparent 100%);
+            height: 100%;
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+        }
+        .ticker-mini-track {
+            display: flex;
+            align-items: center;
+            animation: tickerMarquee 50s linear infinite;
+            white-space: nowrap;
+            will-change: transform;
+        }
+        .ticker-mini-track:hover { animation-play-state: paused; }
+        @keyframes tickerMarquee {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+        .ticker-mini-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 0 16px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+            flex-shrink: 0;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .ticker-mini-item:hover { color: rgba(255,255,255,0.9); }
+        .ticker-mini-icon { font-size: 10px; }
+        .ticker-mini-metric { opacity: 0.6; font-weight: 600; font-size: 10px; }
+        .ticker-mini-sep {
+            width: 3px; height: 3px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.12);
+            flex-shrink: 0;
+        }
+
+        /* 折叠状态 */
+        .tech-ticker.mini-collapsed .ticker-mini { height: 0; opacity: 0; border-width: 0; }
+        .tech-ticker.mini-collapsed .ticker-main { border-radius: 12px; }
+        .tech-ticker.mini-collapsed .ticker-toggle-btn i { transform: rotate(180deg); }
+
+        /* 时间展示（模拟主页效果） */
+        .time-display {
+            position: relative;
+            z-index: 1;
+            margin-top: 30px;
+            text-align: center;
+        }
+        .time-display .time { font-size: 80px; font-weight: 200; letter-spacing: -2px; text-shadow: 0 2px 20px rgba(0,0,0,0.3); }
+        .time-display .date { font-size: 16px; opacity: 0.6; margin-top: 8px; }
+
+        /* 底部说明 */
+        .demo-label {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 11px;
+            opacity: 0.4;
+            z-index: 10;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .ticker-mini-track { animation: none; }
+        }
+    </style>
+</head>
+<body>
+    <h2>Demo 1 · 中国热搜 · 混合双层模式（推荐）</h2>
+    <div class="demo-subtitle">完全复刻现有 Tech Ticker 样式，新增微博/B站/知乎数据源</div>
+
+    <div class="tech-ticker" id="tech-ticker">
+        <!-- 上层：主信息卡片 -->
+        <div class="ticker-main" id="ticker-main">
+            <div class="ticker-source-icon" id="ticker-source-icon">🔥</div>
+            <div class="ticker-body">
+                <div class="ticker-title" id="ticker-title">正在加载热搜...</div>
+                <div class="ticker-desc" id="ticker-desc"></div>
+            </div>
+            <div class="ticker-metric" id="ticker-metric"></div>
+            <div class="ticker-controls">
+                <span class="ticker-counter" id="ticker-counter"></span>
+                <button class="ticker-btn" id="ticker-prev-btn" title="上一条"><i class="fas fa-chevron-left"></i></button>
+                <button class="ticker-btn" id="ticker-next-btn" title="下一条"><i class="fas fa-chevron-right"></i></button>
+                <button class="ticker-btn ticker-refresh-btn" id="ticker-refresh-btn" title="刷新"><i class="fas fa-sync-alt"></i></button>
+                <button class="ticker-btn ticker-toggle-btn" id="ticker-toggle-btn" title="折叠/展开"><i class="fas fa-chevron-up"></i></button>
+            </div>
+        </div>
+        <!-- 下层：迷你连续滚动栏 -->
+        <div class="ticker-mini" id="ticker-mini">
+            <div class="ticker-mini-mask">
+                <div class="ticker-mini-track" id="ticker-mini-track"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 模拟时间展示 -->
+    <div class="time-display">
+        <div class="time" id="clock">--:--:--</div>
+        <div class="date" id="date-display"></div>
+    </div>
+
+    <div class="demo-label">悬停暂停 · 点击跳转 · ◀▶ 切换 · ↻ 刷新 · ▴ 折叠</div>
+
+    <script>
+        // ===== 模拟热搜数据 =====
+        const MOCK_DATA = [
+            // 微博热搜
+            { type: 'weibo', icon: '🔥', title: '央视春晚节目单官宣', desc: '微博 · 热搜第1位', metric: '532万', metricType: 'weibo-hot', tag: 'boil', url: 'https://s.weibo.com' },
+            { type: 'weibo', icon: '🔥', title: '科技巨头AI新战略发布会', desc: '微博 · 热搜第2位', metric: '328万', metricType: 'weibo-hot', tag: 'hot', url: 'https://s.weibo.com' },
+            { type: 'weibo', icon: '🔥', title: '国产大模型突破新里程碑', desc: '微博 · 热搜第3位', metric: '215万', metricType: 'weibo-hot', tag: 'new', url: 'https://s.weibo.com' },
+            { type: 'weibo', icon: '🔥', title: '新能源汽车2月销量创新高', desc: '微博 · 热搜第5位', metric: '189万', metricType: 'weibo-hot', url: 'https://s.weibo.com' },
+            { type: 'weibo', icon: '🔥', title: '北京初雪如约而至', desc: '微博 · 热搜第8位', metric: '146万', metricType: 'weibo-hot', url: 'https://s.weibo.com' },
+            // B站热榜
+            { type: 'bilibili', icon: '📺', title: '【4K】极致画质！中国最美风景合集', desc: 'B站 · 综合热门', metric: '320万播放', metricType: 'bilibili-hot', url: 'https://www.bilibili.com' },
+            { type: 'bilibili', icon: '📺', title: '用AI一键生成3D游戏场景', desc: 'B站 · 科技热门', metric: '186万播放', metricType: 'bilibili-hot', url: 'https://www.bilibili.com' },
+            { type: 'bilibili', icon: '📺', title: '程序员年后面试攻略大全', desc: 'B站 · 知识热门', metric: '95万播放', metricType: 'bilibili-hot', url: 'https://www.bilibili.com' },
+            { type: 'bilibili', icon: '📺', title: '元宵节手工灯笼教程', desc: 'B站 · 生活热门', metric: '72万播放', metricType: 'bilibili-hot', url: 'https://www.bilibili.com' },
+            // 知乎热榜
+            { type: 'zhihu', icon: '💭', title: '如何看待 AI 编程助手取代初级程序员的说法？', desc: '知乎 · 热榜第1位', metric: '2.8万回答', metricType: 'zhihu-hot', url: 'https://www.zhihu.com/hot' },
+            { type: 'zhihu', icon: '💭', title: '2026年哪些行业最有前景？', desc: '知乎 · 热榜第2位', metric: '1.5万回答', metricType: 'zhihu-hot', url: 'https://www.zhihu.com/hot' },
+            { type: 'zhihu', icon: '💭', title: '为什么越来越多年轻人开始学传统手艺？', desc: '知乎 · 热榜第4位', metric: '8600回答', metricType: 'zhihu-hot', url: 'https://www.zhihu.com/hot' },
+            { type: 'zhihu', icon: '💭', title: '有哪些「看似简单实则很难」的技术？', desc: '知乎 · 热榜第6位', metric: '5200回答', metricType: 'zhihu-hot', url: 'https://www.zhihu.com/hot' },
+            // 抖音热点
+            { type: 'douyin', icon: '🎵', title: '开工第一天的办公室氛围', desc: '抖音 · 热点第1位', metric: '1.2亿播放', metricType: 'douyin-hot', url: 'https://www.douyin.com' },
+            { type: 'douyin', icon: '🎵', title: '春节返程高速实况直播', desc: '抖音 · 热点第3位', metric: '8600万播放', metricType: 'douyin-hot', url: 'https://www.douyin.com' },
+        ];
+
+        // ===== 交替排列不同数据源 =====
+        function interleave(items) {
+            const groups = {};
+            items.forEach(item => {
+                if (!groups[item.type]) groups[item.type] = [];
+                groups[item.type].push(item);
+            });
+            const keys = Object.keys(groups);
+            const result = [];
+            const maxLen = Math.max(...keys.map(k => groups[k].length));
+            for (let i = 0; i < maxLen; i++) {
+                for (const key of keys) {
+                    if (i < groups[key].length) result.push(groups[key][i]);
+                }
+            }
+            return result;
+        }
+
+        const tickerItems = interleave(MOCK_DATA);
+        let currentIndex = 0;
+        let isPaused = false;
+        let rotateTimer = null;
+
+        // ===== 渲染上层卡片 =====
+        function renderCurrent() {
+            const item = tickerItems[currentIndex];
+            if (!item) return;
+            const titleEl = document.getElementById('ticker-title');
+            const descEl = document.getElementById('ticker-desc');
+            const iconEl = document.getElementById('ticker-source-icon');
+            const metricEl = document.getElementById('ticker-metric');
+            const counterEl = document.getElementById('ticker-counter');
+
+            titleEl.classList.add('fade-out');
+            titleEl.classList.remove('fade-in');
+            descEl.classList.add('fade-out');
+            descEl.classList.remove('fade-in');
+
+            setTimeout(() => {
+                iconEl.textContent = item.icon;
+                let titleText = item.title;
+                titleEl.innerHTML = titleText + (item.tag ? ` <span class="ticker-tag ${item.tag}">${item.tag === 'boil' ? '沸' : item.tag === 'hot' ? '热' : '新'}</span>` : '');
+                descEl.textContent = item.desc || '';
+                metricEl.textContent = item.metric;
+                metricEl.className = `ticker-metric ${item.metricType}`;
+                counterEl.textContent = `${currentIndex + 1}/${tickerItems.length}`;
+                titleEl.classList.remove('fade-out');
+                titleEl.classList.add('fade-in');
+                descEl.classList.remove('fade-out');
+                descEl.classList.add('fade-in');
+            }, 200);
+        }
+
+        // ===== 渲染下层滚动栏 =====
+        function renderMiniTrack() {
+            const track = document.getElementById('ticker-mini-track');
+            const buildItems = () => {
+                return tickerItems.map((item, i) => {
+                    const sep = i < tickerItems.length - 1 ? '<span class="ticker-mini-sep"></span>' : '';
+                    return `<span class="ticker-mini-item" title="${item.title}">
+                        <span class="ticker-mini-icon">${item.icon}</span>
+                        ${item.title.length > 20 ? item.title.substring(0, 20) + '…' : item.title}
+                        <span class="ticker-mini-metric">${item.metric}</span>
+                    </span>${sep}`;
+                }).join('');
+            };
+            const content = buildItems();
+            track.innerHTML = content + '<span class="ticker-mini-sep"></span>' + content;
+            const duration = Math.max(25, tickerItems.length * 3);
+            track.style.animationDuration = `${duration}s`;
+        }
+
+        // ===== 控制逻辑 =====
+        function showNext() {
+            currentIndex = (currentIndex + 1) % tickerItems.length;
+            renderCurrent();
+            resetTimer();
+        }
+        function showPrev() {
+            currentIndex = (currentIndex - 1 + tickerItems.length) % tickerItems.length;
+            renderCurrent();
+            resetTimer();
+        }
+        function startRotation() {
+            stopRotation();
+            rotateTimer = setInterval(() => {
+                if (!isPaused && tickerItems.length > 1) {
+                    currentIndex = (currentIndex + 1) % tickerItems.length;
+                    renderCurrent();
+                }
+            }, 5000);
+        }
+        function stopRotation() {
+            if (rotateTimer) { clearInterval(rotateTimer); rotateTimer = null; }
+        }
+        function resetTimer() { startRotation(); }
+
+        // ===== 事件绑定 =====
+        const mainEl = document.getElementById('ticker-main');
+        mainEl.addEventListener('click', (e) => {
+            if (e.target.closest('.ticker-controls')) return;
+            const item = tickerItems[currentIndex];
+            if (item?.url) window.open(item.url, '_blank');
+        });
+        mainEl.addEventListener('mouseenter', () => { isPaused = true; });
+        mainEl.addEventListener('mouseleave', () => { isPaused = false; });
+
+        document.getElementById('ticker-prev-btn').addEventListener('click', (e) => { e.stopPropagation(); showPrev(); });
+        document.getElementById('ticker-next-btn').addEventListener('click', (e) => { e.stopPropagation(); showNext(); });
+        document.getElementById('ticker-refresh-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const btn = e.currentTarget;
+            btn.classList.add('refreshing');
+            setTimeout(() => btn.classList.remove('refreshing'), 1000);
+        });
+        document.getElementById('ticker-toggle-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.getElementById('tech-ticker').classList.toggle('mini-collapsed');
+        });
+
+        // ===== 时钟 =====
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock').textContent = now.toTimeString().split(' ')[0];
+            const options = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' };
+            document.getElementById('date-display').textContent = now.toLocaleDateString('zh-CN', options);
+        }
+
+        // ===== 初始化 =====
+        renderCurrent();
+        renderMiniTrack();
+        startRotation();
+        updateClock();
+        setInterval(updateClock, 1000);
+    </script>
+</body>
+</html>

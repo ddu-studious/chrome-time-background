@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>中国热搜 Demo 2 - 多频道切换</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80') center/cover no-repeat;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 40px;
+        }
+        body::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,0.3); }
+        h2 { position: relative; z-index: 1; margin-bottom: 8px; font-size: 14px; opacity: 0.7; font-weight: 400; }
+        .demo-subtitle { position: relative; z-index: 1; margin-bottom: 20px; font-size: 12px; opacity: 0.4; }
+
+        /* ===== 频道 Ticker ===== */
+        .channel-ticker {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 720px;
+        }
+
+        /* 频道选择器 */
+        .channel-tabs {
+            display: flex;
+            gap: 2px;
+            margin-bottom: 0;
+            padding: 0 4px;
+        }
+        .channel-tab {
+            flex: 1;
+            padding: 8px 12px;
+            background: rgba(255,255,255,0.04);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-bottom: none;
+            border-radius: 10px 10px 0 0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        .channel-tab:hover {
+            background: rgba(255,255,255,0.06);
+            color: rgba(255,255,255,0.7);
+        }
+        .channel-tab.active {
+            background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+            color: rgba(255,255,255,0.95);
+            border-color: rgba(255,255,255,0.1);
+        }
+        .channel-tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--tab-color, rgba(255,255,255,0.3));
+            border-radius: 1px;
+        }
+        .channel-tab .tab-icon { font-size: 14px; }
+        .channel-tab .tab-count {
+            font-size: 10px;
+            padding: 1px 6px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 10px;
+            color: rgba(255,255,255,0.4);
+        }
+        .channel-tab.active .tab-count {
+            background: rgba(255,255,255,0.12);
+            color: rgba(255,255,255,0.7);
+        }
+
+        /* 频道色彩 */
+        .channel-tab[data-channel="weibo"] { --tab-color: #ff4500; }
+        .channel-tab[data-channel="bilibili"] { --tab-color: #00aeec; }
+        .channel-tab[data-channel="zhihu"] { --tab-color: #0066ff; }
+        .channel-tab[data-channel="all"] { --tab-color: rgba(255,200,100,0.8); }
+
+        /* 卡片内容区 */
+        .channel-content {
+            background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 0 0 0 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        /* 热搜列表 */
+        .hot-list {
+            max-height: 240px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255,255,255,0.15) transparent;
+        }
+        .hot-list::-webkit-scrollbar { width: 4px; }
+        .hot-list::-webkit-scrollbar-track { background: transparent; }
+        .hot-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+
+        .hot-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 18px;
+            cursor: pointer;
+            transition: background 0.2s;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+        .hot-item:last-child { border-bottom: none; }
+        .hot-item:hover { background: rgba(255,255,255,0.06); }
+
+        .hot-rank {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            border-radius: 6px;
+            flex-shrink: 0;
+        }
+        .hot-rank.top-1 { background: rgba(255,69,0,0.2); color: #ff6633; }
+        .hot-rank.top-2 { background: rgba(255,140,0,0.2); color: #ff9933; }
+        .hot-rank.top-3 { background: rgba(255,200,0,0.2); color: #ffcc33; }
+        .hot-rank.normal { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.4); }
+
+        .hot-info { flex: 1; min-width: 0; }
+        .hot-title {
+            font-size: 13px;
+            font-weight: 500;
+            color: rgba(255,255,255,0.9);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .hot-meta {
+            font-size: 11px;
+            color: rgba(255,255,255,0.4);
+            margin-top: 2px;
+        }
+        .hot-heat {
+            font-size: 11px;
+            font-weight: 600;
+            flex-shrink: 0;
+            padding: 2px 8px;
+            border-radius: 12px;
+        }
+        .hot-heat.weibo { color: #ff4500; background: rgba(255,69,0,0.1); }
+        .hot-heat.bilibili { color: #00aeec; background: rgba(0,174,236,0.1); }
+        .hot-heat.zhihu { color: #0066ff; background: rgba(0,102,255,0.1); }
+
+        /* 热搜标签 */
+        .hot-tag {
+            font-size: 10px;
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-weight: 600;
+            margin-left: 6px;
+        }
+        .hot-tag.boil { background: rgba(255,0,0,0.2); color: #ff4444; }
+        .hot-tag.hot { background: rgba(255,69,0,0.15); color: #ff6633; }
+        .hot-tag.new { background: rgba(255,200,0,0.15); color: #ffcc33; }
+        .hot-tag.recommend { background: rgba(0,170,255,0.15); color: #00aaff; }
+
+        /* 来源图标 */
+        .hot-source-icon { font-size: 16px; flex-shrink: 0; }
+
+        /* 下层滚动栏 */
+        .ticker-mini {
+            background: rgba(0,0,0,0.25);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-top: none;
+            border-radius: 0 0 12px 12px;
+            overflow: hidden;
+            height: 30px;
+        }
+        .ticker-mini-mask {
+            -webkit-mask-image: linear-gradient(90deg, transparent 0%, black 5%, black 95%, transparent 100%);
+            mask-image: linear-gradient(90deg, transparent 0%, black 5%, black 95%, transparent 100%);
+            height: 100%;
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+        }
+        .ticker-mini-track {
+            display: flex;
+            align-items: center;
+            animation: tickerMarquee 55s linear infinite;
+            white-space: nowrap;
+            will-change: transform;
+        }
+        .ticker-mini-track:hover { animation-play-state: paused; }
+        @keyframes tickerMarquee {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+        .ticker-mini-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 0 16px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+            flex-shrink: 0;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .ticker-mini-item:hover { color: rgba(255,255,255,0.9); }
+        .ticker-mini-sep { width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.12); flex-shrink: 0; }
+
+        /* 时间展示 */
+        .time-display {
+            position: relative; z-index: 1; margin-top: 30px; text-align: center;
+        }
+        .time-display .time { font-size: 80px; font-weight: 200; letter-spacing: -2px; text-shadow: 0 2px 20px rgba(0,0,0,0.3); }
+        .time-display .date { font-size: 16px; opacity: 0.6; margin-top: 8px; }
+
+        .demo-label {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            font-size: 11px; opacity: 0.4; z-index: 10;
+        }
+
+        @media (prefers-reduced-motion: reduce) { .ticker-mini-track { animation: none; } }
+    </style>
+</head>
+<body>
+    <h2>Demo 2 · 中国热搜 · 多频道切换</h2>
+    <div class="demo-subtitle">频道 Tab 切换不同平台，展示排名列表 + 下层混合滚动</div>
+
+    <div class="channel-ticker">
+        <!-- 频道选择器 -->
+        <div class="channel-tabs" id="channel-tabs">
+            <div class="channel-tab active" data-channel="all">
+                <span class="tab-icon">✨</span>
+                <span>全部</span>
+            </div>
+            <div class="channel-tab" data-channel="weibo">
+                <span class="tab-icon">🔥</span>
+                <span>微博</span>
+                <span class="tab-count" id="count-weibo">5</span>
+            </div>
+            <div class="channel-tab" data-channel="bilibili">
+                <span class="tab-icon">📺</span>
+                <span>B站</span>
+                <span class="tab-count" id="count-bilibili">4</span>
+            </div>
+            <div class="channel-tab" data-channel="zhihu">
+                <span class="tab-icon">💭</span>
+                <span>知乎</span>
+                <span class="tab-count" id="count-zhihu">4</span>
+            </div>
+        </div>
+
+        <!-- 热搜列表 -->
+        <div class="channel-content">
+            <div class="hot-list" id="hot-list"></div>
+        </div>
+
+        <!-- 下层滚动栏 -->
+        <div class="ticker-mini">
+            <div class="ticker-mini-mask">
+                <div class="ticker-mini-track" id="ticker-mini-track"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="time-display">
+        <div class="time" id="clock">--:--:--</div>
+        <div class="date" id="date-display"></div>
+    </div>
+
+    <div class="demo-label">点击频道切换 · 悬停列表项查看详情 · 下层滚动混合所有平台热搜</div>
+
+    <script>
+        // ===== 模拟数据 =====
+        const ALL_DATA = {
+            weibo: [
+                { title: '央视春晚节目单官宣', heat: '532万', tag: 'boil', desc: '2026年春晚节目单正式公布' },
+                { title: '科技巨头AI新战略发布', heat: '328万', tag: 'hot', desc: '多家科技公司发布AI战略规划' },
+                { title: '国产大模型突破新里程碑', heat: '215万', tag: 'new', desc: '性能超越GPT-4的国产大模型发布' },
+                { title: '新能源汽车2月销量创新高', heat: '189万', desc: '比亚迪特斯拉销量数据出炉' },
+                { title: '北京初雪如约而至', heat: '146万', desc: '北京迎来今冬首场降雪' },
+            ],
+            bilibili: [
+                { title: '【4K】极致画质！中国最美风景合集', heat: '320万播放', desc: 'UP主走遍全国拍摄绝美风景' },
+                { title: '用AI一键生成3D游戏场景', heat: '186万播放', desc: '手把手教你使用AI工具' },
+                { title: '程序员年后面试攻略大全', heat: '95万播放', tag: 'recommend', desc: '大厂面试官亲授面试技巧' },
+                { title: '元宵节手工灯笼教程', heat: '72万播放', desc: '教你做一个超精致的花灯' },
+            ],
+            zhihu: [
+                { title: '如何看待 AI 编程助手取代初级程序员的说法？', heat: '2.8万回答', desc: '1.2万人关注' },
+                { title: '2026年哪些行业最有前景？', heat: '1.5万回答', tag: 'hot', desc: '3.6万人关注' },
+                { title: '为什么越来越多年轻人开始学传统手艺？', heat: '8600回答', desc: '9800人关注' },
+                { title: '有哪些「看似简单实则很难」的技术？', heat: '5200回答', desc: '7200人关注' },
+            ]
+        };
+
+        const SOURCE_CONFIG = {
+            weibo: { icon: '🔥', color: '#ff4500', heatClass: 'weibo' },
+            bilibili: { icon: '📺', color: '#00aeec', heatClass: 'bilibili' },
+            zhihu: { icon: '💭', color: '#0066ff', heatClass: 'zhihu' }
+        };
+
+        let currentChannel = 'all';
+
+        // ===== 渲染列表 =====
+        function renderList(channel) {
+            const listEl = document.getElementById('hot-list');
+            let items = [];
+
+            if (channel === 'all') {
+                // 交替合并所有平台
+                const keys = Object.keys(ALL_DATA);
+                const maxLen = Math.max(...keys.map(k => ALL_DATA[k].length));
+                for (let i = 0; i < maxLen; i++) {
+                    for (const key of keys) {
+                        if (i < ALL_DATA[key].length) {
+                            items.push({ ...ALL_DATA[key][i], source: key });
+                        }
+                    }
+                }
+            } else {
+                items = (ALL_DATA[channel] || []).map(item => ({ ...item, source: channel }));
+            }
+
+            listEl.innerHTML = items.map((item, i) => {
+                const cfg = SOURCE_CONFIG[item.source];
+                const rankClass = i < 1 ? 'top-1' : i < 2 ? 'top-2' : i < 3 ? 'top-3' : 'normal';
+                const tagHtml = item.tag ? `<span class="hot-tag ${item.tag}">${item.tag === 'boil' ? '沸' : item.tag === 'hot' ? '热' : item.tag === 'new' ? '新' : '荐'}</span>` : '';
+                return `
+                    <div class="hot-item">
+                        <div class="hot-rank ${rankClass}">${i + 1}</div>
+                        ${channel === 'all' ? `<span class="hot-source-icon">${cfg.icon}</span>` : ''}
+                        <div class="hot-info">
+                            <div class="hot-title">${item.title}${tagHtml}</div>
+                            <div class="hot-meta">${item.desc || ''}</div>
+                        </div>
+                        <span class="hot-heat ${cfg.heatClass}">${item.heat}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // ===== 渲染下层滚动 =====
+        function renderMiniTrack() {
+            const track = document.getElementById('ticker-mini-track');
+            const allItems = [];
+            for (const [source, items] of Object.entries(ALL_DATA)) {
+                const cfg = SOURCE_CONFIG[source];
+                items.forEach(item => allItems.push({ ...item, icon: cfg.icon }));
+            }
+            const buildItems = () => allItems.map((item, i) => {
+                const sep = i < allItems.length - 1 ? '<span class="ticker-mini-sep"></span>' : '';
+                return `<span class="ticker-mini-item" title="${item.title}">
+                    <span>${item.icon}</span>
+                    ${item.title.length > 18 ? item.title.substring(0, 18) + '…' : item.title}
+                </span>${sep}`;
+            }).join('');
+            const content = buildItems();
+            track.innerHTML = content + '<span class="ticker-mini-sep"></span>' + content;
+        }
+
+        // ===== Tab 切换 =====
+        document.getElementById('channel-tabs').addEventListener('click', (e) => {
+            const tab = e.target.closest('.channel-tab');
+            if (!tab) return;
+            document.querySelectorAll('.channel-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            currentChannel = tab.dataset.channel;
+            renderList(currentChannel);
+        });
+
+        // ===== 时钟 =====
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock').textContent = now.toTimeString().split(' ')[0];
+            document.getElementById('date-display').textContent = now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+        }
+
+        // ===== 初始化 =====
+        renderList('all');
+        renderMiniTrack();
+        updateClock();
+        setInterval(updateClock, 1000);
+    </script>
+</body>
+</html>

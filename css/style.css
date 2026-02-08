@@ -4264,6 +4264,30 @@
     justify-content: center;
 }
 
+/* ===== 亮色背景自适应增强 ===== */
+/* 当背景图较亮时，JS 会为 body 添加 .bright-bg class */
+body.bright-bg .time,
+body.bright-bg .date,
+body.bright-bg .lunar,
+body.bright-bg .holiday {
+    text-shadow:
+        0 0 6px rgba(0, 0, 0, 0.8),
+        0 2px 12px rgba(0, 0, 0, 0.6),
+        0 0 40px rgba(0, 0, 0, 0.3);
+}
+
+body.bright-bg .ticker-title {
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+body.bright-bg .ticker-desc {
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+body.bright-bg .task-ticker-item {
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -4301,8 +4325,9 @@ body::before {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.3);
+    background: rgba(0, 0, 0, var(--overlay-opacity, 0.3));
     z-index: 1;
+    transition: background 0.6s ease;
 }
 
 .container {
@@ -4315,10 +4340,10 @@ body::before {
     justify-content: center;
     padding: 2rem;
     box-sizing: border-box;
-    background: rgba(0, 0, 0, 0.2);
+    background: rgba(0, 0, 0, var(--container-opacity, 0.2));
     backdrop-filter: blur(10px);
     box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
-    transition: all 0.3s ease;
+    transition: all 0.3s ease, background 0.6s ease;
 }
 
 .weather-wrapper {
@@ -5152,7 +5177,7 @@ body:hover .keyboard-hint {
 /* ===== 混合双层 Ticker ===== */
 .tech-ticker {
     width: 100%;
-    max-width: 720px;
+    max-width: 960px;
     margin-bottom: 10px;
     margin-top: -1rem;  /* 上移，靠近顶部 */
     opacity: 0;
@@ -5171,8 +5196,8 @@ body:hover .keyboard-hint {
 .ticker-main {
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 12px 18px;
+    gap: 16px;
+    padding: 16px 22px;
     /* 提升磨砂参数，统一视觉风格 */
     background: linear-gradient(135deg, var(--panel-bg-start), var(--panel-bg-end));
     backdrop-filter: var(--glass-blur);
@@ -5182,7 +5207,7 @@ body:hover .keyboard-hint {
     cursor: pointer;
     text-decoration: none;
     transition: all 0.25s ease;
-    min-height: 52px;
+    min-height: 64px;
 }
 
 .ticker-main:hover {
@@ -5199,7 +5224,7 @@ body:hover .keyboard-hint {
     border-top: none;
     border-radius: 0 0 12px 12px;
     overflow: hidden;
-    height: 30px;
+    height: 36px;
     transition: height 0.3s ease, opacity 0.3s ease;
 }
 
@@ -5232,9 +5257,9 @@ body:hover .keyboard-hint {
 .ticker-mini-item {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 0 16px;
-    font-size: 12px;
+    gap: 7px;
+    padding: 0 18px;
+    font-size: 13px;
     color: rgba(255, 255, 255, 0.5);
     flex-shrink: 0;
     cursor: pointer;
@@ -5247,13 +5272,13 @@ body:hover .keyboard-hint {
 }
 
 .ticker-mini-icon {
-    font-size: 10px;
+    font-size: 12px;
 }
 
 .ticker-mini-metric {
     opacity: 0.6;
     font-weight: 600;
-    font-size: 10px;
+    font-size: 11px;
 }
 
 .ticker-mini-sep {
@@ -5304,9 +5329,9 @@ body:hover .keyboard-hint {
 
 /* 数据源图标 */
 .ticker-source-icon {
-    font-size: 20px;
+    font-size: 24px;
     flex-shrink: 0;
-    width: 28px;
+    width: 32px;
     text-align: center;
     transition: transform 0.3s ease;
 }
@@ -5323,24 +5348,24 @@ body:hover .keyboard-hint {
 }
 
 .ticker-title {
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 600;
     color: rgba(255, 255, 255, 0.9);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: 1.3;
+    line-height: 1.35;
     transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
 .ticker-desc {
-    font-size: 12px;
+    font-size: 13px;
     color: rgba(255, 255, 255, 0.5);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     line-height: 1.3;
-    margin-top: 1px;
+    margin-top: 2px;
     transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
@@ -5359,10 +5384,10 @@ body:hover .keyboard-hint {
 
 /* 指标 */
 .ticker-metric {
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
     flex-shrink: 0;
-    padding: 3px 8px;
+    padding: 4px 10px;
     border-radius: 6px;
     transition: opacity 0.3s ease;
 }
@@ -5387,33 +5412,50 @@ body:hover .keyboard-hint {
     background: rgba(59, 73, 223, 0.12);
 }
 
+/* 中国热搜平台配色 */
+.ticker-metric.weibo-hot {
+    color: #ff3d00;
+    background: rgba(255, 61, 0, 0.12);
+}
+
+.ticker-metric.bilibili-hot {
+    color: #00a1d6;
+    background: rgba(0, 161, 214, 0.12);
+}
+
+.ticker-metric.zhihu-hot {
+    color: #0066ff;
+    background: rgba(0, 102, 255, 0.12);
+}
+
 /* 控制按钮 — 未悬停时宽度为 0，内容区平滑填充 */
 .ticker-controls {
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 1px;
     flex-shrink: 0;
     opacity: 0;
     max-width: 0;
     overflow: hidden;
-    transition: opacity 0.25s ease, max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: opacity 0.25s ease, max-width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .ticker-main:hover .ticker-controls {
     opacity: 1;
-    max-width: 160px;  /* 足够容纳所有按钮 */
+    max-width: 260px;  /* 容纳计数器 + 5 个按钮 */
 }
 
 .ticker-counter {
     font-size: 10px;
-    color: rgba(255, 255, 255, 0.35);
-    margin-right: 4px;
+    color: rgba(255, 255, 255, 0.32);
+    margin-right: 3px;
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
 }
 
 .ticker-btn {
-    width: 22px;
-    height: 22px;
+    width: 26px;
+    height: 26px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -5421,14 +5463,32 @@ body:hover .keyboard-hint {
     border: none;
     color: rgba(255, 255, 255, 0.4);
     cursor: pointer;
-    border-radius: 4px;
-    transition: all 0.2s;
+    border-radius: 6px;
+    transition: all 0.15s ease;
     font-size: 10px;
+    flex-shrink: 0;
 }
 
 .ticker-btn:hover {
-    color: rgba(255, 255, 255, 0.8);
+    color: rgba(255, 255, 255, 0.85);
     background: rgba(255, 255, 255, 0.1);
+}
+
+/* 关键字按钮 - 特殊颜色提示 */
+.ticker-keyword-btn:hover {
+    color: #ffa502;
+    background: rgba(255, 165, 2, 0.12);
+}
+
+/* 按钮间竖分隔线（在 keyword 按钮前） */
+.ticker-keyword-btn::before {
+    content: '';
+    position: absolute;
+    left: -2px;
+    top: 5px;
+    bottom: 5px;
+    width: 1px;
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .ticker-refresh-btn.refreshing i {
@@ -5462,8 +5522,8 @@ body:hover .keyboard-hint {
 /* ===== 未完成任务滚动提醒条（分段进度 + 滚动混合） ===== */
 .task-ticker {
     width: 100%;
-    max-width: 720px;
-    height: 34px;
+    max-width: 960px;
+    height: 40px;
     display: flex;
     align-items: center;
     background: rgba(0, 0, 0, 0.25);
@@ -5778,6 +5838,507 @@ body:hover .keyboard-hint {
 .ttp-btn-edit:hover {
     background: rgba(100, 180, 255, 0.22);
     transform: translateY(-1px);
+}
+
+/* ===== 关键字监控面板 ===== */
+
+/* 关键字监控按钮 - 需 relative 以定位指示点 */
+.ticker-keyword-btn {
+    position: relative;
+}
+
+/* 激活态脉冲指示点 */
+.ticker-keyword-btn.active::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 7px;
+    height: 7px;
+    background: #ff6b6b;
+    border-radius: 50%;
+    box-shadow: 0 0 4px rgba(255, 107, 107, 0.6);
+    animation: kapPulse 2s ease-in-out infinite;
+}
+
+@keyframes kapPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.7); }
+}
+
+/* ---- 面板容器 ---- */
+.keyword-alert-panel {
+    width: 100%;
+    max-width: 960px;
+    margin: 6px auto 0;
+    /* 复用项目 Design Tokens */
+    background: linear-gradient(135deg, var(--panel-bg-start), var(--panel-bg-end));
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: var(--border-light);
+    border-radius: var(--radius-element);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    z-index: 100;
+    /* 展开/收起过渡 */
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    transform: translateY(-6px);
+    transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.3s ease,
+                transform 0.3s ease,
+                margin 0.3s ease;
+    margin-top: 0;
+    pointer-events: none;
+}
+
+.keyword-alert-panel.open {
+    max-height: 600px; /* 足够大即可，实际靠内容撑开 */
+    opacity: 1;
+    transform: translateY(0);
+    margin-top: 6px;
+    pointer-events: auto;
+}
+
+/* ---- 面板头部 ---- */
+.kap-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.kap-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    letter-spacing: 0.2px;
+}
+
+.kap-title i {
+    color: #ffa502;
+    font-size: 14px;
+}
+
+.kap-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* ---- 开关 ---- */
+.kap-switch {
+    position: relative;
+    width: 36px;
+    height: 18px;
+    display: inline-block;
+    cursor: pointer;
+}
+
+.kap-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.kap-slider {
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 9px;
+    transition: background 0.3s;
+}
+
+.kap-slider::before {
+    content: '';
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    left: 2px;
+    bottom: 2px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.kap-switch input:checked + .kap-slider {
+    background: #5cd85c;
+}
+
+.kap-switch input:checked + .kap-slider::before {
+    transform: translateX(18px);
+}
+
+.kap-close-btn {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    border-radius: var(--radius-button);
+    transition: all 0.2s;
+    font-size: 12px;
+}
+
+.kap-close-btn:hover {
+    color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* ---- 面板主体 ---- */
+.kap-body {
+    padding: 12px 18px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* ---- 输入行 ---- */
+.kap-input-row {
+    display: flex;
+    gap: 8px;
+}
+
+.kap-input {
+    flex: 1;
+    padding: 7px 12px;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-button);
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.kap-input::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.kap-input:focus {
+    border-color: rgba(255, 165, 2, 0.5);
+    box-shadow: 0 0 0 2px rgba(255, 165, 2, 0.1);
+}
+
+.kap-add-btn {
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 165, 2, 0.15);
+    border: 1px solid rgba(255, 165, 2, 0.25);
+    border-radius: var(--radius-button);
+    color: #ffa502;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.kap-add-btn:hover {
+    background: rgba(255, 165, 2, 0.3);
+    transform: scale(1.06);
+}
+
+/* ---- 关键字标签列表 ---- */
+.kap-keyword-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 28px;
+    align-items: center;
+}
+
+.kap-empty {
+    color: rgba(255, 255, 255, 0.3);
+    font-size: 12px;
+    text-align: center;
+    padding: 4px 0;
+    width: 100%;
+    font-style: italic;
+}
+
+.kap-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px 3px 12px;
+    background: rgba(255, 165, 2, 0.12);
+    border: 1px solid rgba(255, 165, 2, 0.22);
+    border-radius: 14px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.85);
+    transition: all 0.2s;
+    animation: kapTagIn 0.2s ease-out;
+}
+
+@keyframes kapTagIn {
+    from { opacity: 0; transform: scale(0.85); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.kap-tag.disabled {
+    opacity: 0.4;
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.06);
+    text-decoration: line-through;
+    text-decoration-color: rgba(255, 255, 255, 0.25);
+}
+
+.kap-tag-text {
+    cursor: pointer;
+    user-select: none;
+}
+
+.kap-tag-text:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-thickness: 1px;
+}
+
+.kap-tag-remove {
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.35);
+    cursor: pointer;
+    border-radius: 50%;
+    font-size: 9px;
+    transition: all 0.15s;
+    padding: 0;
+    margin-left: 2px;
+}
+
+.kap-tag-remove:hover {
+    color: #ff6b6b;
+    background: rgba(255, 107, 107, 0.15);
+}
+
+/* ---- 高级设置（可折叠） ---- */
+.kap-settings-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0;
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 11px;
+    cursor: pointer;
+    transition: color 0.2s;
+    align-self: flex-start;
+}
+
+.kap-settings-toggle:hover {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.kap-settings-toggle i {
+    font-size: 10px;
+    transition: transform 0.3s;
+}
+
+.kap-settings-toggle.expanded i {
+    transform: rotate(180deg);
+}
+
+.kap-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-height 0.3s ease, opacity 0.25s ease, padding 0.3s ease;
+    padding: 0;
+}
+
+.kap-settings.expanded {
+    max-height: 200px;
+    opacity: 1;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.kap-setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.kap-setting-row > label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.55);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.kap-setting-row > label > i {
+    font-size: 11px;
+    width: 14px;
+    text-align: center;
+    opacity: 0.6;
+}
+
+.kap-setting-row select,
+.kap-setting-row input[type="time"] {
+    padding: 3px 6px;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 5px;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 11px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.kap-setting-row select:focus,
+.kap-setting-row input[type="time"]:focus {
+    border-color: rgba(255, 165, 2, 0.4);
+}
+
+.kap-quiet-hours {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.kap-sources {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.kap-source-item {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.65);
+    cursor: pointer;
+    user-select: none;
+}
+
+.kap-source-item input[type="checkbox"] {
+    width: 13px;
+    height: 13px;
+    accent-color: #ffa502;
+    cursor: pointer;
+}
+
+/* ---- 底部操作栏 ---- */
+.kap-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.kap-scan-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    background: rgba(255, 165, 2, 0.12);
+    border: 1px solid rgba(255, 165, 2, 0.2);
+    border-radius: var(--radius-button);
+    color: #ffa502;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.kap-scan-btn:hover:not(:disabled) {
+    background: rgba(255, 165, 2, 0.25);
+}
+
+.kap-scan-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.kap-status {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+    transition: opacity 0.3s;
+}
+
+/* ===== 关键字匹配高亮 ===== */
+
+.ticker-title.keyword-matched {
+    color: #ffa502 !important;
+    text-shadow: 0 0 10px rgba(255, 165, 2, 0.35);
+}
+
+.ticker-title.keyword-matched::before {
+    content: '🔔 ';
+}
+
+.ticker-mini-item.keyword-matched {
+    color: #ffa502 !important;
+    text-shadow: 0 0 6px rgba(255, 165, 2, 0.25);
+    font-weight: 600;
+}
+
+/* ---- 亮色背景适配 ---- */
+body.bright-bg .keyword-alert-panel {
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+}
+
+body.bright-bg .kap-title {
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+body.bright-bg .kap-tag {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+body.bright-bg .ticker-title.keyword-matched {
+    text-shadow: 0 0 10px rgba(255, 165, 2, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+/* ---- 响应式 - Ticker 和关键字面板 ---- */
+@media (max-width: 700px) {
+    .keyword-alert-panel {
+        max-width: calc(100vw - 24px);
+        margin-left: 12px;
+        margin-right: 12px;
+    }
+    
+    .kap-setting-row {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    
+    .kap-sources {
+        flex-wrap: wrap;
+    }
+    
+    .kap-quiet-hours {
+        flex-wrap: nowrap;
+    }
 }
 
 /* ===== 现代磨砂玻璃悬浮面板 ===== */

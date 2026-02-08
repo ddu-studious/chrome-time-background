@@ -20,7 +20,8 @@
     "https://api.github.com/*",
     "https://hacker-news.firebaseio.com/*",
     "https://www.reddit.com/*",
-    "https://dev.to/*"
+    "https://dev.to/*",
+    "https://dailyhotapi-production-cad3.up.railway.app/*"
   ],
   "chrome_url_overrides": {
     "newtab": "index.html"
