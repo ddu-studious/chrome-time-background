@@ -509,17 +509,29 @@
                     message += '，建议定期备份以防数据丢失';
                 }
                 
-                await chrome.notifications.create('backup-reminder', {
-                    type: 'basic',
-                    iconUrl: 'icons/icon128.png',
-                    title: '💾 数据备份提醒',
-                    message: message,
-                    priority: 1,
-                    buttons: [
-                        { title: '📤 立即备份' },
-                        { title: '⏰ 稍后提醒' }
-                    ]
-                });
+                // macOS 原生通知不完全支持 buttons，先尝试带按钮，失败则降级
+                try {
+                    await chrome.notifications.create('backup-reminder', {
+                        type: 'basic',
+                        iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+                        title: '💾 数据备份提醒',
+                        message: message,
+                        priority: 1,
+                        buttons: [
+                            { title: '📤 立即备份' },
+                            { title: '⏰ 稍后提醒' }
+                        ]
+                    });
+                } catch (btnErr) {
+                    // 降级：不带按钮的基础通知
+                    await chrome.notifications.create('backup-reminder', {
+                        type: 'basic',
+                        iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+                        title: '💾 数据备份提醒',
+                        message: message,
+                        priority: 1
+                    });
+                }
                 
                 // 记录提醒时间
                 await chrome.storage.local.set({ [lastReminderKey]: now });
@@ -604,7 +616,7 @@
         try {
             await chrome.notifications.create('daily-summary', {
                 type: 'basic',
-                iconUrl: 'icons/icon128.png',
+                iconUrl: chrome.runtime.getURL('icons/icon128.png'),
                 title: '📋 每日任务摘要',
                 message: message,
                 priority: overdueTasks.length > 0 ? 2 : 1,
@@ -643,7 +655,7 @@
         try {
             await chrome.notifications.create('overdue-tasks', {
                 type: 'basic',
-                iconUrl: 'icons/icon128.png',
+                iconUrl: chrome.runtime.getURL('icons/icon128.png'),
                 title: '⚠️ 任务过期提醒',
                 message: `您有 ${overdueTasks.length} 个任务已过期，请及时处理`,
                 priority: 2,
@@ -687,18 +699,31 @@
         }
         
         try {
-            await chrome.notifications.create(`task-${taskId}`, {
-                type: 'basic',
-                iconUrl: 'icons/icon128.png',
-                title: '⏰ 任务提醒',
-                message: `${priorityIcon}${task.title}\n截止: ${task.dueDate} ${task.dueTime || ''}`,
-                priority: task.priority === 'high' ? 2 : 1,
-                requireInteraction: true,
-                buttons: [
-                    { title: '✅ 完成' },
-                    { title: '⏰ 推迟' }
-                ]
-            });
+            // macOS 原生通知不完全支持 buttons，先尝试带按钮，失败则降级
+            try {
+                await chrome.notifications.create(`task-${taskId}`, {
+                    type: 'basic',
+                    iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+                    title: '⏰ 任务提醒',
+                    message: `${priorityIcon}${task.title}\n截止: ${task.dueDate} ${task.dueTime || ''}`,
+                    priority: task.priority === 'high' ? 2 : 1,
+                    requireInteraction: true,
+                    buttons: [
+                        { title: '✅ 完成' },
+                        { title: '⏰ 推迟' }
+                    ]
+                });
+            } catch (btnErr) {
+                // 降级：不带按钮的基础通知
+                await chrome.notifications.create(`task-${taskId}`, {
+                    type: 'basic',
+                    iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+                    title: '⏰ 任务提醒',
+                    message: `${priorityIcon}${task.title}\n截止: ${task.dueDate} ${task.dueTime || ''}`,
+                    priority: task.priority === 'high' ? 2 : 1,
+                    requireInteraction: true
+                });
+            }
             console.log('任务提醒通知已发送');
         } catch (error) {
             console.error('发送通知失败:', error);

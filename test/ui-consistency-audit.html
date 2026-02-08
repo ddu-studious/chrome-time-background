@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UI 组件一致性审计 — 中国风景时钟</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            /* 使用风景背景模拟扩展真实环境 */
+            background: url('https://images.unsplash.com/photo-1520252729650-ddced2015543?auto=format&fit=crop&w=1920&q=80') center/cover no-repeat fixed;
+            min-height: 100vh;
+            color: #fff;
+        }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.3);
+            z-index: 0;
+        }
+
+        .page-container {
+            position: relative;
+            z-index: 1;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px 80px;
+        }
+
+        /* 页面标题 */
+        .page-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .page-header h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+        }
+        .page-header h1 i { color: #64b4ff; }
+        .page-header p { color: rgba(255,255,255,0.6); font-size: 14px; }
+
+        /* 分区标题 */
+        .section-title {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: rgba(255,255,255,0.4);
+            margin: 48px 0 20px;
+            display: flex; align-items: center; gap: 12px;
+        }
+        .section-title::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: rgba(255,255,255,0.1);
+        }
+
+        /* 对比网格 */
+        .compare-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 24px;
+        }
+
+        /* 每个组件的 Demo 卡片外壳 */
+        .demo-wrapper {
+            position: relative;
+        }
+        .demo-label {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .demo-label .name { color: rgba(255,255,255,0.9); }
+        .demo-status {
+            padding: 2px 10px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        .demo-status.ok {
+            background: rgba(92,216,92,0.2);
+            color: #5cd85c;
+        }
+        .demo-status.warn {
+            background: rgba(255,200,87,0.2);
+            color: #ffc857;
+        }
+        .demo-status.bad {
+            background: rgba(255,107,107,0.2);
+            color: #ff6b6b;
+        }
+
+        /* ========================================
+           以下为各组件的**实际样式还原**
+           ======================================== */
+
+        /* === 通用面板模拟框架 === */
+        .panel-demo {
+            min-height: 220px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .panel-header-demo {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        .panel-header-demo h3 {
+            font-size: 16px;
+            font-weight: 600;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .panel-body-demo {
+            padding: 16px 20px;
+            flex: 1;
+        }
+        .panel-body-demo p {
+            font-size: 13px;
+            color: rgba(255,255,255,0.6);
+            line-height: 1.6;
+            margin-bottom: 8px;
+        }
+        .close-demo {
+            width: 32px; height: 32px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.08);
+            color: rgba(255,255,255,0.6);
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s;
+        }
+        .close-demo:hover {
+            background: rgba(255,100,100,0.2);
+            color: #ff6b6b;
+        }
+
+        /* 属性标签 */
+        .props-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 12px;
+        }
+        .prop-tag {
+            padding: 3px 10px;
+            border-radius: 8px;
+            font-size: 11px;
+            background: rgba(255,255,255,0.06);
+            color: rgba(255,255,255,0.5);
+            font-family: 'SF Mono', 'Fira Code', monospace;
+        }
+        .prop-tag.highlight {
+            background: rgba(255,107,107,0.15);
+            color: rgba(255,150,150,0.9);
+        }
+
+        /* —— 1. 备份面板（标准磨砂）—— */
+        .panel-backup {
+            background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%);
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+        }
+        .panel-backup .panel-header-demo {
+            background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, transparent 100%);
+        }
+        .panel-backup h3 { color: #fff; }
+        .panel-backup h3 i { color: rgba(100,180,255,0.9); }
+
+        /* —— 2. 日历面板（标准磨砂） —— */
+        .panel-calendar {
+            background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%);
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08);
+        }
+        .panel-calendar .panel-header-demo {
+            background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, transparent 100%);
+        }
+        .panel-calendar h3 { color: #fff; }
+        .panel-calendar h3 i { color: #ffc857; }
+
+        /* —— 3. 浮动面板（标准磨砂+高光边框）—— */
+        .panel-floating {
+            background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%);
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-top-color: rgba(255,255,255,0.25);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.25), 0 2px 8px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.1);
+        }
+        .panel-floating .panel-header-demo {
+            background: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%);
+        }
+        .panel-floating h3 { color: rgba(255,255,255,0.95); }
+        .panel-floating h3 i { color: #64b4ff; }
+        .panel-floating .close-demo {
+            width: 26px; height: 26px;
+        }
+
+        /* —— 4. 番茄钟面板（深色实底，缺磨砂）—— */
+        .panel-pomodoro {
+            background: linear-gradient(135deg, rgba(40,40,50,0.98), rgba(30,30,40,0.98));
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        .panel-pomodoro h3 { color: #fff; }
+        .panel-pomodoro h3 i { color: #ff6b6b; }
+
+        /* —— 5. 统计面板（深色实底，缺磨砂）—— */
+        .panel-stats {
+            background: linear-gradient(135deg, rgba(40,40,50,0.98), rgba(30,30,40,0.98));
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        .panel-stats h3 { color: #fff; }
+        .panel-stats h3 i { color: #5cd85c; }
+
+        /* —— 6. 关于面板（深色实底+磨砂）—— */
+        .panel-about {
+            background: linear-gradient(135deg, rgba(30,35,50,0.95) 0%, rgba(20,25,40,0.98) 100%);
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 20px;
+            box-shadow: 0 24px 80px rgba(0,0,0,0.5);
+        }
+        .panel-about .panel-header-demo {
+            background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, transparent 100%);
+            border-radius: 20px 20px 0 0;
+        }
+        .panel-about h3 { color: #fff; }
+        .panel-about h3 i { color: rgba(100,180,255,0.9); }
+
+        /* —— 7. 设置面板（黑色实底）—— */
+        .panel-settings {
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(20px);
+            border: none;
+            border-radius: 0;
+            box-shadow: none;
+        }
+        .panel-settings h3 { color: white; }
+        .panel-settings h3 i { color: #64b4ff; }
+        .panel-settings .close-demo {
+            background: none;
+            font-size: 20px;
+        }
+
+        /* —— 8. 任务表单弹窗（深灰色）—— */
+        .panel-task-form {
+            background: linear-gradient(135deg, rgba(50,50,55,0.95) 0%, rgba(40,40,45,0.95) 100%);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            box-shadow: 0 24px 48px rgba(0,0,0,0.4), 0 8px 16px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.08);
+        }
+        .panel-task-form .panel-header-demo {
+            background: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%);
+        }
+        .panel-task-form h3 { color: rgba(255,255,255,0.95); }
+        .panel-task-form .close-demo {
+            width: 28px; height: 28px;
+        }
+
+        /* —— 9. Tech Ticker（低透明黑）—— */
+        .panel-ticker {
+            background: rgba(0,0,0,0.35);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            min-height: 80px;
+        }
+        .panel-ticker .panel-header-demo {
+            padding: 10px 16px;
+        }
+        .panel-ticker h3 { font-size: 13px; color: rgba(255,255,255,0.8); }
+        .panel-ticker h3 i { color: #ff9800; }
+
+        /* ===== 推荐统一方案展示 ===== */
+        .panel-unified {
+            background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%);
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06);
+        }
+        .panel-unified .panel-header-demo {
+            background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, transparent 100%);
+            border-radius: 20px 20px 0 0;
+        }
+        .panel-unified h3 { color: #fff; }
+
+        /* ===== 按钮样式对比 ===== */
+        .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+        
+        .btn-primary {
+            padding: 8px 16px;
+            border-radius: 10px;
+            border: 1px solid rgba(100,180,255,0.3);
+            background: linear-gradient(135deg, rgba(100,180,255,0.25), rgba(80,140,220,0.2));
+            color: rgba(100,180,255,0.95);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, rgba(100,180,255,0.35), rgba(80,140,220,0.3));
+            border-color: rgba(100,180,255,0.5);
+        }
+        
+        .btn-default {
+            padding: 8px 16px;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.05);
+            color: rgba(255,255,255,0.8);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-default:hover {
+            background: rgba(255,255,255,0.1);
+            border-color: rgba(255,255,255,0.2);
+        }
+        
+        .btn-danger {
+            padding: 8px 16px;
+            border-radius: 10px;
+            border: 1px solid rgba(255,100,100,0.2);
+            background: transparent;
+            color: rgba(255,150,150,0.9);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-danger:hover {
+            background: rgba(255,100,100,0.15);
+            border-color: rgba(255,100,100,0.4);
+        }
+
+        /* ===== Design Tokens 展示 ===== */
+        .tokens-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 16px;
+        }
+        .token-card {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 16px;
+        }
+        .token-card h4 {
+            font-size: 13px;
+            color: rgba(255,255,255,0.7);
+            margin-bottom: 12px;
+        }
+        .token-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        .token-swatch {
+            width: 32px; height: 32px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.1);
+            flex-shrink: 0;
+        }
+        .token-info {
+            font-size: 12px;
+        }
+        .token-info .name {
+            color: rgba(255,255,255,0.8);
+            font-weight: 500;
+        }
+        .token-info .value {
+            color: rgba(255,255,255,0.4);
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 11px;
+        }
+
+        /* 返回链接 */
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 40px;
+            color: rgba(255,255,255,0.5);
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.3s ease;
+        }
+        .back-link:hover { color: #64b4ff; }
+
+        /* 底部说明 */
+        .demo-footer {
+            text-align: center;
+            margin-top: 48px;
+            padding: 20px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.4);
+            border-top: 1px solid rgba(255,255,255,0.08);
+        }
+    </style>
+</head>
+<body>
+    <div class="page-container">
+        <div class="page-header">
+            <h1><i class="fas fa-palette"></i> UI 组件一致性审计</h1>
+            <p>可视化对比项目中所有面板/弹窗的实际样式，发现不一致并提出统一方案</p>
+        </div>
+
+        <!-- ==================== 标准磨砂组 ==================== -->
+        <div class="section-title">✅ A 方案 — 标准磨砂玻璃（推荐基准）</div>
+        <div class="compare-grid">
+            <!-- 备份面板 -->
+            <div class="demo-wrapper">
+                <div class="demo-label">
+                    <span class="name"><i class="fas fa-database"></i> 备份面板</span>
+                    <span class="demo-status ok">✅ 标准</span>
+                </div>
+                <div class="panel-demo panel-backup">
+                    <div class="panel-header-demo">
+                        <h3><i class="fas fa-database"></i> 数据备份</h3>
+                        <button class="close-demo"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div class="panel-body-demo">
+                        <p>半透明白色渐变 + 完整磨砂效果。背景风景隐约可见，层次感好。这是推荐的标准方案。</p>
+                        <div class="props-row">
+                            <span class="prop-tag">rgba(255,255,255,0.08)</span>
+                            <span class="prop-tag">blur(24px)</span>
+                            <span class="prop-tag">saturate(180%)</span>
+                            <span class="prop-tag">r16px</span>
+                        </div>
+                        <div class="btn-row">
+                            <button class="btn-primary"><i class="fas fa-upload"></i> 导出</button>
+                            <button class="btn-default"><i class="fas fa-download"></i> 导入</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 日历面板 -->
+            <div class="demo-wrapper">
+                <div class="demo-label">
+                    <span class="name"><i class="fas fa-calendar"></i> 日历面板</span>
+                    <span class="demo-status ok">✅ 标准</span>
+                </div>
+                <div class="panel-demo panel-calendar">
+                    <div class="panel-header-demo">
+                        <h3><i class="fas fa-calendar-alt"></i> 日历</h3>
+                        <button class="close-demo"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div class="panel-body-demo">
+                        <p>同样的半透明磨砂方案。圆角 20px 略大，含 inset 高光。与备份面板一致度高。</p>
+                        <div class="props-row">
+                            <span class="prop-tag">rgba(255,255,255,0.08)</span>
+                            <span class="prop-tag">blur(24px)</span>
+                            <span class="prop-tag">saturate(180%)</span>
+                            <span class="prop-tag">r20px</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 浮动面板 -->
+            <div class="demo-wrapper">
+                <div class="demo-label">
+                    <span class="name"><i class="fas fa-window-restore"></i> 浮动备忘录面板</span>
+                    <span class="demo-status ok">✅ 标准</span>
+                </div>
+                <div class="panel-demo panel-floating">
+                    <div class="panel-header-demo">
+                        <h3><i class="fas fa-sticky-note"></i> 备忘录</h3>
+                        <button class="close-demo" style="width:26px;height:26px;"><i class="fas fa-times" style="font-size:12px;"></i></button>
+                    </div>
+                    <div class="panel-body-demo">
+                        <p>标准磨砂 + 顶部高光边框(0.25)。关闭按钮 26px（比标准小）。</p>
+                        <div class="props-row">
+                            <span class="prop-tag">rgba(255,255,255,0.08)</span>
+                            <span class="prop-tag">blur(24px)</span>
+                            <span class="prop-tag">border-top 0.25</span>
+                            <span class="prop-tag highlight">close 26px</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== 深色实底组 ==================== -->
+        <div class="section-title">⚠️ B 方案 — 深色实底（背景不可见）</div>
+        <div class="compare-grid">
+            <!-- 番茄钟 -->
+            <div class="demo-wrapper">
+                <div class="demo-label">
+                    <span class="name"><i class="fas fa-clock"></i> 番茄钟面板</span>
+                    <span class="demo-status bad">❌ 无磨砂</span>
+                </div>
+                <div class="panel-demo panel-pomodoro">
+                    <div class="panel-header-demo">
+                        <h3><i class="fas fa-clock"></i> 番茄钟</h3>
+                        <button class="close-demo"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div class="panel-body-demo">
+                        <p>深色实底 0.98 透明度，几乎不透明。完全无磨砂效果，看不到背景风景。</p>
+                        <div class="props-row">
+                            <span class="prop-tag highlight">rgba(40,40,50,0.98)</span>
+                            <span class="prop-tag highlight">无 backdrop-filter</span>
+                            <span class="prop-tag">r20px</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 统计面板 -->
+            <div class="demo-wrapper">
+                <div class="demo-label">
+                    <span class="name"><i class="fas fa-chart-bar"></i> 统计面板</span>
+                    <span class="demo-status bad">❌ 无磨砂</span>
+                </div>
+                <div class="panel-demo panel-stats">
+                    <div class="panel-header-demo">
+                        <h3><i class="fas fa-chart-line"></i> 任务统计</h3>
+                        <button class="close-demo"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div class="panel-body-demo">
+                        <p>与番茄钟完全相同的深色实底。缺少磨砂效果，与标准方案差异明显。</p>
+                        <div class="props-row">
+                            <span class="prop-tag highlight">rgba(40,40,50,0.98)</span>
+                            <span class="prop-tag highlight">无 backdrop-filter</span>
+                            <span class="prop-tag">r20px</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 关于面板 -->
+            <div class="demo-wrapper">
+                <div class="demo-label">
+                    <span class="name"><i class="fas fa-info-circle"></i> 关于面板</span>
+                    <span class="demo-status warn">⚠️ 有磨砂但色偏</span>
+                </div>
+                <div class="panel-demo panel-about">
+                    <div class="panel-header-demo">
+                        <h3><i class="fas fa-info-circle"></i> 关于</h3>
+                        <button class="close-demo"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div class="panel-body-demo">
+                        <p>有磨砂效果但背景色偏深蓝(30,35,50)，不是标准的半透明白色渐变。</p>
+                        <div class="props-row">
+                            <span class="prop-tag highlight">rgba(30,35,50,0.95)</span>
+                            <span class="prop-tag">blur(24px)</span>
+                            <span class="prop-tag">saturate(180%)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== 特殊问题组 ==================== -->
+        <div class="section-title">🔴 C 方案 — 特殊/遗留样式</div>
+        <div class="compare-grid">
+            <!-- 设置面板 -->
+            <div class="demo-wrapper">
+                <div class="demo-label">
+                    <span class="name"><i class="fas fa-cog"></i> 设置面板</span>
+                    <span class="demo-status bad">❌ 完全不同</span>
+                </div>
+                <div class="panel-demo panel-settings" style="border-radius:12px;">
+                    <div class="panel-header-demo" style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                        <h3><i class="fas fa-cog"></i> 设置</h3>
+                        <button class="close-demo" style="background:none;font-size:20px;">×</button>
+                    </div>
+                    <div class="panel-body-demo">
+                        <p>纯黑底 0.8、无边框、低 blur(20px)、无 saturate。明显是早期代码，与其他面板风格完全不同。</p>
+                        <div class="props-row">
+                            <span class="prop-tag highlight">rgba(0,0,0,0.8)</span>
+                            <span class="prop-tag highlight">blur(20px) 无saturate</span>
+                            <span class="prop-tag highlight">无边框</span>
+                            <span class="prop-tag highlight">无圆角</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 任务表单弹窗 -->
+            <div class="demo-wrapper">
+                <div class="demo-label">
+                    <span class="name"><i class="fas fa-edit"></i> 任务表单弹窗</span>
+                    <span class="demo-status warn">⚠️ 磨砂偏低</span>
+                </div>
+                <div class="panel-demo panel-task-form">
+                    <div class="panel-header-demo">
+                        <h3>新建任务</h3>
+                        <button class="close-demo" style="width:28px;height:28px;"><i class="fas fa-times" style="font-size:14px;"></i></button>
+                    </div>
+                    <div class="panel-body-demo">
+                        <p>深灰色背景(50,50,55)，blur(20px) 无 saturate。关闭按钮 28px。</p>
+                        <div class="props-row">
+                            <span class="prop-tag highlight">rgba(50,50,55,0.95)</span>
+                            <span class="prop-tag highlight">blur(20px) 无saturate</span>
+                            <span class="prop-tag highlight">close 28px</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tech Ticker -->
+            <div class="demo-wrapper">
+                <div class="demo-label">
+                    <span class="name"><i class="fas fa-rss"></i> Tech Ticker 信息栏</span>
+                    <span class="demo-status warn">⚠️ 参数偏低</span>
+                </div>
+                <div class="panel-demo panel-ticker">
+                    <div class="panel-header-demo">
+                        <h3><i class="fas fa-rss"></i> 科技信息 · Hacker News</h3>
+                    </div>
+                    <div class="panel-body-demo" style="padding:8px 16px;">
+                        <p style="font-size:12px;">低透明黑 0.35，blur 仅 14px，边框 0.08。整体偏暗偏低。</p>
+                        <div class="props-row">
+                            <span class="prop-tag highlight">rgba(0,0,0,0.35)</span>
+                            <span class="prop-tag highlight">blur(14px)</span>
+                            <span class="prop-tag">r12px</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== 推荐统一方案 ==================== -->
+        <div class="section-title">🎯 推荐统一方案 — Design Tokens</div>
+        
+        <div class="tokens-grid">
+            <div class="token-card">
+                <h4><i class="fas fa-fill-drip"></i> 背景色</h4>
+                <div class="token-item">
+                    <div class="token-swatch" style="background:linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03));"></div>
+                    <div class="token-info">
+                        <div class="name">--panel-bg（主方案）</div>
+                        <div class="value">rgba(255,255,255,0.08→0.03)</div>
+                    </div>
+                </div>
+                <div class="token-item">
+                    <div class="token-swatch" style="background:linear-gradient(135deg,rgba(40,40,50,0.95),rgba(30,30,40,0.95));"></div>
+                    <div class="token-info">
+                        <div class="name">--panel-bg-solid（备选）</div>
+                        <div class="value">rgba(40,40,50,0.95→0.95)</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="token-card">
+                <h4><i class="fas fa-tint"></i> 磨砂效果</h4>
+                <div class="token-item">
+                    <div class="token-swatch" style="background:rgba(255,255,255,0.1);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);"></div>
+                    <div class="token-info">
+                        <div class="name">--glass-blur</div>
+                        <div class="value">blur(24px) saturate(180%)</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="token-card">
+                <h4><i class="fas fa-border-all"></i> 圆角体系</h4>
+                <div class="token-item">
+                    <div class="token-swatch" style="background:rgba(255,255,255,0.08);border-radius:20px;"></div>
+                    <div class="token-info">
+                        <div class="name">--radius-panel</div>
+                        <div class="value">20px（大面板）</div>
+                    </div>
+                </div>
+                <div class="token-item">
+                    <div class="token-swatch" style="background:rgba(255,255,255,0.08);border-radius:16px;"></div>
+                    <div class="token-info">
+                        <div class="name">--radius-card</div>
+                        <div class="value">16px（卡片/弹窗）</div>
+                    </div>
+                </div>
+                <div class="token-item">
+                    <div class="token-swatch" style="background:rgba(255,255,255,0.08);border-radius:12px;"></div>
+                    <div class="token-info">
+                        <div class="name">--radius-element</div>
+                        <div class="value">12px（内部元素）</div>
+                    </div>
+                </div>
+                <div class="token-item">
+                    <div class="token-swatch" style="background:rgba(255,255,255,0.08);border-radius:8px;"></div>
+                    <div class="token-info">
+                        <div class="name">--radius-button</div>
+                        <div class="value">8px（按钮）</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="token-card">
+                <h4><i class="fas fa-palette"></i> 强调色</h4>
+                <div class="token-item">
+                    <div class="token-swatch" style="background:rgba(100,180,255,0.85);"></div>
+                    <div class="token-info">
+                        <div class="name">--accent-blue</div>
+                        <div class="value">rgba(100,180,255,0.85)</div>
+                    </div>
+                </div>
+                <div class="token-item">
+                    <div class="token-swatch" style="background:#ff6b6b;"></div>
+                    <div class="token-info">
+                        <div class="name">--accent-red</div>
+                        <div class="value">#ff6b6b</div>
+                    </div>
+                </div>
+                <div class="token-item">
+                    <div class="token-swatch" style="background:#5cd85c;"></div>
+                    <div class="token-info">
+                        <div class="name">--accent-green</div>
+                        <div class="value">#5cd85c</div>
+                    </div>
+                </div>
+                <div class="token-item">
+                    <div class="token-swatch" style="background:#ff9800;"></div>
+                    <div class="token-info">
+                        <div class="name">--accent-orange</div>
+                        <div class="value">#ff9800</div>
+                    </div>
+                </div>
+                <div class="token-item">
+                    <div class="token-swatch" style="background:#ab47bc;"></div>
+                    <div class="token-info">
+                        <div class="name">--accent-purple</div>
+                        <div class="value">#ab47bc</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 统一方案效果展示 -->
+        <div class="section-title">✨ 统一后效果预览</div>
+        <div class="compare-grid">
+            <div class="demo-wrapper">
+                <div class="demo-label">
+                    <span class="name"><i class="fas fa-clock"></i> 番茄钟（统一后）</span>
+                    <span class="demo-status ok">✅ 统一</span>
+                </div>
+                <div class="panel-demo panel-unified">
+                    <div class="panel-header-demo">
+                        <h3><i class="fas fa-clock" style="color:#ff6b6b"></i> 番茄钟</h3>
+                        <button class="close-demo"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div class="panel-body-demo">
+                        <p>统一为标准磨砂方案后，背景风景可见，与其他面板保持一致的视觉语言。</p>
+                        <div class="btn-row">
+                            <button class="btn-primary"><i class="fas fa-play"></i> 开始专注</button>
+                            <button class="btn-default"><i class="fas fa-redo"></i> 重置</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="demo-wrapper">
+                <div class="demo-label">
+                    <span class="name"><i class="fas fa-cog"></i> 设置面板（统一后）</span>
+                    <span class="demo-status ok">✅ 统一</span>
+                </div>
+                <div class="panel-demo panel-unified">
+                    <div class="panel-header-demo">
+                        <h3><i class="fas fa-cog" style="color:#64b4ff"></i> 设置</h3>
+                        <button class="close-demo"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div class="panel-body-demo">
+                        <p>从纯黑底统一为标准磨砂方案。添加边框和标准关闭按钮样式。</p>
+                        <div class="btn-row">
+                            <button class="btn-primary"><i class="fas fa-save"></i> 保存</button>
+                            <button class="btn-danger"><i class="fas fa-undo"></i> 重置</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="demo-wrapper">
+                <div class="demo-label">
+                    <span class="name"><i class="fas fa-chart-bar"></i> 统计面板（统一后）</span>
+                    <span class="demo-status ok">✅ 统一</span>
+                </div>
+                <div class="panel-demo panel-unified">
+                    <div class="panel-header-demo">
+                        <h3><i class="fas fa-chart-line" style="color:#5cd85c"></i> 任务统计</h3>
+                        <button class="close-demo"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div class="panel-body-demo">
+                        <p>统一后所有模态面板视觉一致：相同的磨砂效果、圆角、边框和阴影。</p>
+                        <div class="btn-row">
+                            <button class="btn-primary"><i class="fas fa-download"></i> 导出报告</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="demo-footer">
+            <p>🎨 设计理念："毛玻璃山水画" — 所有组件都是悬浮在中国风景背景之上的毛玻璃层</p>
+            <p style="margin-top:4px;">统一的半透明白色渐变 + blur(24px) saturate(180%) 磨砂效果，让背景隐约可见，营造层次感和一致感</p>
+            <p style="margin-top:8px; color:rgba(255,255,255,0.3);">详见调研报告：docs/research/ui-consistency-audit.md</p>
+        </div>
+
+        <a href="index.html" class="back-link">
+            <i class="fas fa-arrow-left"></i> 返回工具箱
+        </a>
+    </div>
+</body>
+</html>

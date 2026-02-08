@@ -1,3 +1,62 @@
+/* ===== Design Tokens — 全局视觉一致性变量 ===== */
+:root {
+    /* 遮罩层 */
+    --overlay-bg: rgba(0, 0, 0, 0.6);
+    --overlay-blur: blur(4px);
+
+    /* 面板背景 */
+    --panel-bg-start: rgba(255, 255, 255, 0.08);
+    --panel-bg-end: rgba(255, 255, 255, 0.03);
+    --panel-bg: linear-gradient(135deg, var(--panel-bg-start) 0%, var(--panel-bg-end) 100%);
+
+    /* 内嵌弹窗背景（侧边栏内的弹窗使用更深的底色以区分层级） */
+    --panel-bg-solid-start: rgba(50, 50, 55, 0.95);
+    --panel-bg-solid-end: rgba(40, 40, 45, 0.95);
+    --panel-bg-solid: linear-gradient(135deg, var(--panel-bg-solid-start), var(--panel-bg-solid-end));
+
+    /* 磨砂玻璃 */
+    --glass-blur: blur(24px) saturate(180%);
+    --glass-blur-light: blur(20px) saturate(160%);
+
+    /* 圆角体系 */
+    --radius-panel: 20px;
+    --radius-card: 16px;
+    --radius-element: 12px;
+    --radius-button: 8px;
+
+    /* 边框 */
+    --border-panel: 1px solid rgba(255, 255, 255, 0.1);
+    --border-light: 1px solid rgba(255, 255, 255, 0.08);
+
+    /* 阴影 */
+    --shadow-panel: 0 20px 60px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    --shadow-float: 0 8px 32px rgba(0, 0, 0, 0.25), 0 2px 8px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+
+    /* 头部 */
+    --header-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, transparent 100%);
+    --header-border: 1px solid rgba(255, 255, 255, 0.08);
+
+    /* 关闭按钮 */
+    --btn-close-size: 32px;
+    --btn-close-radius: 8px;
+    --btn-close-bg: rgba(255, 255, 255, 0.08);
+    --btn-close-color: rgba(255, 255, 255, 0.6);
+    --btn-close-hover-bg: rgba(255, 100, 100, 0.2);
+    --btn-close-hover-color: #ff6b6b;
+
+    /* 强调色 */
+    --accent-blue: rgba(100, 180, 255, 0.85);
+    --accent-red: #ff6b6b;
+    --accent-green: #5cd85c;
+    --accent-orange: #ff9800;
+    --accent-purple: #ab47bc;
+
+    /* 文字 */
+    --text-primary: rgba(255, 255, 255, 0.95);
+    --text-secondary: rgba(255, 255, 255, 0.7);
+    --text-muted: rgba(255, 255, 255, 0.5);
+}
+
 /* ===== 双栏主布局 ===== */
 .main-layout {
     position: relative;
@@ -1438,10 +1497,13 @@
     left: 50%;
     transform: translate(-50%, -50%) scale(0.9);
     width: 340px;
-    background: linear-gradient(135deg, rgba(40, 40, 50, 0.98), rgba(30, 30, 40, 0.98));
-    border-radius: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    /* 统一为标准磨砂玻璃方案 */
+    background: var(--panel-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border-radius: var(--radius-panel);
+    border: var(--border-panel);
+    box-shadow: var(--shadow-panel);
     transition: transform 0.3s ease;
 }
 
@@ -1633,10 +1695,13 @@
     min-width: 520px;
     max-height: 85vh;
     overflow-y: auto;
-    background: linear-gradient(135deg, rgba(40, 40, 50, 0.98), rgba(30, 30, 40, 0.98));
-    border-radius: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    /* 统一为标准磨砂玻璃方案 */
+    background: var(--panel-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border-radius: var(--radius-panel);
+    border: var(--border-panel);
+    box-shadow: var(--shadow-panel);
     transition: transform 0.3s ease;
 }
 
@@ -2130,16 +2195,13 @@
     width: min(520px, 90vw);
     max-height: 85vh;
     overflow-y: auto;
-    background: linear-gradient(
-        135deg,
-        rgba(255, 255, 255, 0.08) 0%,
-        rgba(255, 255, 255, 0.03) 100%
-    );
-    backdrop-filter: blur(24px) saturate(180%);
-    -webkit-backdrop-filter: blur(24px) saturate(180%);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 16px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+    /* 使用统一 Design Tokens */
+    background: var(--panel-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: var(--border-panel);
+    border-radius: var(--radius-panel);
+    box-shadow: var(--shadow-panel);
     transition: transform 0.3s ease;
 }
 
@@ -2373,16 +2435,13 @@
     width: min(640px, 92vw);
     max-height: 88vh;
     overflow-y: auto;
-    background: linear-gradient(
-        135deg,
-        rgba(30, 35, 50, 0.95) 0%,
-        rgba(20, 25, 40, 0.98) 100%
-    );
-    backdrop-filter: blur(24px) saturate(180%);
-    -webkit-backdrop-filter: blur(24px) saturate(180%);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 20px;
-    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+    /* 统一为标准磨砂玻璃方案 */
+    background: var(--panel-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: var(--border-panel);
+    border-radius: var(--radius-panel);
+    box-shadow: var(--shadow-panel);
     transition: transform 0.3s ease;
 }
 
@@ -3014,19 +3073,13 @@
     min-width: 560px;
     max-height: 85vh;
     overflow: hidden;
-    /* 磨砂玻璃效果 - 与 task-sidebar 保持一致 */
-    background: linear-gradient(
-        135deg,
-        rgba(255, 255, 255, 0.08) 0%,
-        rgba(255, 255, 255, 0.03) 100%
-    );
-    backdrop-filter: blur(24px) saturate(180%);
-    -webkit-backdrop-filter: blur(24px) saturate(180%);
-    border-radius: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow: 
-        0 20px 60px rgba(0, 0, 0, 0.4),
-        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    /* 使用统一 Design Tokens */
+    background: var(--panel-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border-radius: var(--radius-panel);
+    border: var(--border-panel);
+    box-shadow: var(--shadow-panel);
     transition: transform 0.3s ease;
     display: flex;
     flex-direction: column;
@@ -3769,12 +3822,13 @@
     width: 92%;
     max-width: 480px;
     min-width: 360px;
-    background: linear-gradient(135deg, rgba(50, 50, 55, 0.95), rgba(40, 40, 45, 0.95));
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4);
+    /* 内嵌弹窗用 solid 方案（在已磨砂的侧边栏内，需要更深底色区分层级） */
+    background: var(--panel-bg-solid);
+    backdrop-filter: var(--glass-blur-light);
+    -webkit-backdrop-filter: var(--glass-blur-light);
+    border-radius: var(--radius-card);
+    border: var(--border-panel);
+    box-shadow: var(--shadow-panel);
     overflow: hidden;
     animation: slideIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -3812,11 +3866,11 @@
 }
 
 .sidebar-form-close {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--btn-close-bg);
     border: none;
-    color: rgba(255, 255, 255, 0.6);
-    width: 28px;
-    height: 28px;
+    color: var(--btn-close-color);
+    width: var(--btn-close-size);
+    height: var(--btn-close-size);
     border-radius: 8px;
     cursor: pointer;
     font-size: 18px;
@@ -3827,8 +3881,8 @@
 }
 
 .sidebar-form-close:hover {
-    background: rgba(255, 100, 100, 0.2);
-    color: #ff6b6b;
+    background: var(--btn-close-hover-bg);
+    color: var(--btn-close-hover-color);
 }
 
 .sidebar-form-body {
@@ -4953,9 +5007,12 @@ body:hover .keyboard-hint {
     right: -400px;
     width: 400px;
     height: 100vh;
-    background: rgba(0, 0, 0, 0.8);
-    backdrop-filter: blur(20px);
-    color: white;
+    /* 统一为标准磨砂玻璃方案 */
+    background: var(--panel-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border-left: var(--border-panel);
+    color: var(--text-primary);
     padding: 2rem;
     box-sizing: border-box;
     transition: right 0.3s ease;
@@ -4980,17 +5037,23 @@ body:hover .keyboard-hint {
 }
 
 .close-button {
-    background: none;
+    width: var(--btn-close-size);
+    height: var(--btn-close-size);
+    background: var(--btn-close-bg);
     border: none;
-    color: white;
-    font-size: 1.5rem;
+    border-radius: var(--btn-close-radius);
+    color: var(--btn-close-color);
+    font-size: 1rem;
     cursor: pointer;
-    padding: 0.5rem;
-    transition: transform 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
 }
 
 .close-button:hover {
-    transform: rotate(90deg);
+    background: var(--btn-close-hover-bg);
+    color: var(--btn-close-hover-color);
 }
 
 .settings-group {
@@ -5110,11 +5173,12 @@ body:hover .keyboard-hint {
     align-items: center;
     gap: 14px;
     padding: 12px 18px;
-    background: rgba(0, 0, 0, 0.35);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px 12px 0 0;
+    /* 提升磨砂参数，统一视觉风格 */
+    background: linear-gradient(135deg, var(--panel-bg-start), var(--panel-bg-end));
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: var(--border-light);
+    border-radius: var(--radius-element) var(--radius-element) 0 0;
     cursor: pointer;
     text-decoration: none;
     transition: all 0.25s ease;
@@ -5122,7 +5186,7 @@ body:hover .keyboard-hint {
 }
 
 .ticker-main:hover {
-    background: rgba(0, 0, 0, 0.45);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
     border-color: rgba(255, 255, 255, 0.15);
 }
 
@@ -5721,19 +5785,15 @@ body:hover .keyboard-hint {
     position: fixed;
     width: 340px;
     min-height: 200px;
-    /* 核心：高级磨砂玻璃效果 */
-    background: linear-gradient(
-        135deg,
-        rgba(255, 255, 255, 0.08) 0%,
-        rgba(255, 255, 255, 0.03) 100%
-    );
-    backdrop-filter: blur(24px) saturate(180%);
-    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    /* 使用统一 Design Tokens */
+    background: var(--panel-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     /* 精致边框 - 顶部高光 */
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    border: var(--border-panel);
     border-top-color: rgba(255, 255, 255, 0.25);
     /* 柔和圆角 */
-    border-radius: 16px;
+    border-radius: var(--radius-card);
     /* 多层阴影营造悬浮感 */
     box-shadow: 
         0 8px 32px rgba(0, 0, 0, 0.25),
@@ -6356,20 +6416,13 @@ body:hover .keyboard-hint {
 .task-form-content {
     width: 92%;
     max-width: 340px;
-    /* 磨砂玻璃效果 */
-    background: linear-gradient(
-        135deg,
-        rgba(50, 50, 55, 0.95) 0%,
-        rgba(40, 40, 45, 0.95) 100%
-    );
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 
-        0 24px 48px rgba(0, 0, 0, 0.4),
-        0 8px 16px rgba(0, 0, 0, 0.2),
-        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    /* 内嵌弹窗用 solid 方案（在已磨砂的侧边栏内，需要更深底色区分层级） */
+    background: var(--panel-bg-solid);
+    backdrop-filter: var(--glass-blur-light);
+    -webkit-backdrop-filter: var(--glass-blur-light);
+    border-radius: var(--radius-card);
+    border: var(--border-panel);
+    box-shadow: var(--shadow-panel);
     overflow: hidden;
     animation: modalSlideIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
