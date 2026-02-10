@@ -1941,8 +1941,10 @@ class MemoManager {
             else if (percentage >= 60) progressClass = 'high';
             else if (percentage >= 30) progressClass = 'medium';
             
+            // 有子任务时进度只读（由子任务驱动），无子任务时允许拖拽调整
+            const draggable = !hasSubtasks && !task.completed;
             progressHtml = `
-                <div class="task-progress">
+                <div class="task-progress${draggable ? ' draggable' : ''}" data-task-id="${task.id}">
                     <div class="task-progress-bar">
                         <div class="task-progress-fill ${progressClass}" style="width: ${percentage}%"></div>
                     </div>
@@ -2072,6 +2074,12 @@ class MemoManager {
                     this.toggleSubtaskComplete(task.id, stId);
                 });
             });
+        }
+        
+        // 进度条拖拽交互（仅无子任务且未完成时）
+        const progressEl = item.querySelector('.task-progress.draggable');
+        if (progressEl) {
+            this._bindProgressDrag(progressEl, task);
         }
         
         // 点击任务项编辑
@@ -4888,6 +4896,115 @@ class MemoManager {
                 this.renderSidebarTaskList();
             }
         }
+    }
+    
+    /**
+     * 给任务卡片上的进度条绑定拖拽交互
+     * 允许用户直接在列表中拖拽进度条调整进度，无需打开编辑表单
+     */
+    _bindProgressDrag(progressEl, task) {
+        const bar = progressEl.querySelector('.task-progress-bar');
+        if (!bar) return;
+        
+        let dragging = false;
+        let saveTimer = null;
+        
+        // 计算百分比
+        const calcPercent = (e) => {
+            const rect = bar.getBoundingClientRect();
+            const x = (e.clientX || e.touches?.[0]?.clientX || 0) - rect.left;
+            return Math.max(0, Math.min(100, Math.round((x / rect.width) * 100)));
+        };
+        
+        // 更新 DOM
+        const updateUI = (pct) => {
+            const fill = bar.querySelector('.task-progress-fill');
+            const text = progressEl.querySelector('.task-progress-percentage');
+            if (fill) {
+                fill.style.width = `${pct}%`;
+                fill.className = 'task-progress-fill';
+                if (pct === 100) fill.classList.add('complete');
+                else if (pct >= 60) fill.classList.add('high');
+                else if (pct >= 30) fill.classList.add('medium');
+                else fill.classList.add('low');
+            }
+            if (text) text.textContent = `${pct}%`;
+        };
+        
+        // 保存到存储（防抖 500ms）
+        const debounceSave = (pct) => {
+            clearTimeout(saveTimer);
+            saveTimer = setTimeout(async () => {
+                task.progress = pct;
+                task.updatedAt = Date.now();
+                // 进度到 100% 自动完成
+                if (pct === 100 && !task.completed) {
+                    const isHabit = task.recurrence?.enabled;
+                    if (!isHabit) {
+                        task.completed = true;
+                        task.completedAt = Date.now();
+                    }
+                }
+                // 如果从 100% 拉下来，取消完成
+                if (pct < 100 && task.completed && task.completedAt) {
+                    task.completed = false;
+                    task.completedAt = null;
+                }
+                await this.saveMemos();
+                // 完成状态变化时刷新列表
+                const item = progressEl.closest('.sidebar-task-item');
+                if (item) {
+                    const wasCompleted = item.classList.contains('completed');
+                    if (task.completed !== wasCompleted) {
+                        this.renderSidebarTaskList();
+                    }
+                }
+            }, 500);
+        };
+        
+        const onStart = (e) => {
+            // 如果来自 touch 事件，只取第一个触点
+            if (e.touches && e.touches.length > 1) return;
+            e.stopPropagation();
+            e.preventDefault();
+            dragging = true;
+            bar.classList.add('dragging');
+            const pct = calcPercent(e);
+            updateUI(pct);
+            debounceSave(pct);
+        };
+        
+        const onMove = (e) => {
+            if (!dragging) return;
+            e.preventDefault();
+            const pct = calcPercent(e);
+            updateUI(pct);
+            debounceSave(pct);
+        };
+        
+        const onEnd = () => {
+            if (!dragging) return;
+            dragging = false;
+            bar.classList.remove('dragging');
+        };
+        
+        // 鼠标事件
+        bar.addEventListener('mousedown', onStart);
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onEnd);
+        
+        // 触摸事件
+        bar.addEventListener('touchstart', onStart, { passive: false });
+        document.addEventListener('touchmove', onMove, { passive: false });
+        document.addEventListener('touchend', onEnd);
+        
+        // 单击直接跳转到对应位置
+        bar.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const pct = calcPercent(e);
+            updateUI(pct);
+            debounceSave(pct);
+        });
     }
     
     /**

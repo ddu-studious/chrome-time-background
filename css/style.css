@@ -337,6 +337,28 @@
     justify-content: center;
     padding: 2rem;
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow-y: auto; /* 内容超出时允许纵向滚动 */
+    overflow-x: hidden;
+    /* 自定义滚动条 - 低调 */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+.main-content::-webkit-scrollbar {
+    width: 4px;
+}
+
+.main-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.main-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 2px;
+}
+
+.main-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.25);
 }
 
 /* ===== 侧边栏内部组件样式 ===== */
@@ -4540,7 +4562,7 @@ body::before {
 .hourly-chart-body {
     position: relative;
     padding: 0 12px 12px;
-    max-height: 340px;
+    max-height: 400px; /* 放宽高度，确保 canvas + 底部标签完整显示 */
     opacity: 1;
     transition: max-height 0.35s ease, opacity 0.25s ease, padding 0.35s ease;
 }
@@ -8316,6 +8338,47 @@ body.bright-bg .ticker-title.keyword-matched {
 
 .sidebar-task-item.completed .task-progress-percentage {
     opacity: 0.6;
+}
+
+/* 可拖拽进度条样式 */
+.task-progress.draggable .task-progress-bar {
+    cursor: pointer;
+    position: relative;
+    transition: height 0.15s ease, box-shadow 0.15s ease;
+}
+
+.task-progress.draggable .task-progress-bar:hover {
+    height: 10px;
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.06);
+}
+
+.task-progress.draggable .task-progress-bar.dragging {
+    height: 12px;
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
+}
+
+/* 拖拽时进度条填充去掉过渡，实时跟手 */
+.task-progress.draggable .task-progress-bar.dragging .task-progress-fill {
+    transition: none;
+}
+
+/* 拖拽提示：悬浮时进度条旁显示拖拽手柄图标 */
+.task-progress.draggable .task-progress-bar::after {
+    content: '';
+    position: absolute;
+    right: -2px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 14px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0);
+    transition: background 0.2s;
+    pointer-events: none;
+}
+
+.task-progress.draggable .task-progress-bar:hover::after {
+    background: rgba(255, 255, 255, 0.25);
 }
 
 /* ==================== 习惯区域（方案五：卡片+详情） ==================== */

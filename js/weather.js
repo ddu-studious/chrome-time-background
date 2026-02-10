@@ -582,7 +582,7 @@ class HourlyTemperatureChart {
         this.data = hourlyData;
         this.ws = weatherService; // 用于 formatTemp
         this.hoveredIndex = -1;
-        this.padding = { top: 30, right: 20, bottom: 36, left: 42 };
+        this.padding = { top: 30, right: 20, bottom: 44, left: 42 };
         this.dpr = window.devicePixelRatio || 1;
         
         this.initCanvas();
@@ -613,7 +613,9 @@ class HourlyTemperatureChart {
     resize() {
         const rect = this.container.getBoundingClientRect();
         const w = rect.width || 500;
-        const h = 280;
+        // 自适应高度：保持合理比例，但给底部标签充足空间
+        // 基准高度 220，加上下内边距
+        const h = Math.max(240, this.padding.top + 180 + this.padding.bottom);
         this.width = w;
         this.height = h;
         this.canvas.width = w * this.dpr;
