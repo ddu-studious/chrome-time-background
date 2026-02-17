@@ -21,7 +21,8 @@
     "https://hacker-news.firebaseio.com/*",
     "https://www.reddit.com/*",
     "https://dev.to/*",
-    "https://dailyhotapi-production-cad3.up.railway.app/*"
+    "https://dailyhotapi-production-cad3.up.railway.app/*",
+    "https://www.meczyc6.info/*"
   ],
   "chrome_url_overrides": {
     "newtab": "index.html"

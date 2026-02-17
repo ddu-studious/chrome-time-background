@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片上传功能测试</title>
+    <!-- 模拟 Chrome 扩展的 CSP 策略 -->
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self'; object-src 'self';">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 24px;
+        }
+        h1 { margin-bottom: 8px; color: #64b5f6; }
+        .subtitle { color: rgba(255,255,255,0.5); margin-bottom: 24px; font-size: 14px; }
+        .test-card {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+        .test-card h3 { color: #81c784; margin-bottom: 12px; font-size: 15px; }
+        .test-card p { font-size: 13px; color: rgba(255,255,255,0.6); margin-bottom: 12px; }
+        .result { margin-top: 10px; font-size: 13px; padding: 8px 12px; border-radius: 6px; }
+        .result.pass { background: rgba(76,175,80,0.15); color: #81c784; border: 1px solid rgba(76,175,80,0.3); }
+        .result.fail { background: rgba(244,67,54,0.15); color: #ef5350; border: 1px solid rgba(244,67,54,0.3); }
+        .result.info { background: rgba(33,150,243,0.15); color: #64b5f6; border: 1px solid rgba(33,150,243,0.3); }
+        .upload-area {
+            border: 2px dashed rgba(255,255,255,0.15);
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .upload-area:hover { border-color: #64b5f6; background: rgba(100,181,246,0.05); }
+        .upload-area i { font-size: 32px; color: rgba(255,255,255,0.3); margin-bottom: 8px; display: block; }
+        .preview-grid {
+            display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px;
+        }
+        .preview-item {
+            width: 80px; height: 80px; border-radius: 8px; overflow: hidden;
+            background: rgba(0,0,0,0.3); position: relative;
+        }
+        .preview-item img { width: 100%; height: 100%; object-fit: cover; }
+        .preview-item.uploading { display: flex; align-items: center; justify-content: center; }
+        .preview-item .spinner { color: #64b5f6; animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .log-area {
+            background: rgba(0,0,0,0.3); border-radius: 8px; padding: 12px;
+            font-family: monospace; font-size: 12px; max-height: 200px; overflow-y: auto;
+            margin-top: 12px; line-height: 1.6;
+        }
+        .log-entry { border-bottom: 1px solid rgba(255,255,255,0.05); padding: 2px 0; }
+        .log-entry.error { color: #ef5350; }
+        .log-entry.success { color: #81c784; }
+        .log-entry.warn { color: #ffb74d; }
+        input[type="file"] { display: none; }
+        .btn {
+            padding: 8px 16px; border: none; border-radius: 6px;
+            background: rgba(100,181,246,0.2); color: #64b5f6;
+            cursor: pointer; font-size: 13px; transition: all 0.2s;
+        }
+        .btn:hover { background: rgba(100,181,246,0.3); }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <h1>图片上传功能测试</h1>
+    <p class="subtitle">测试 Chrome 扩展 CSP 环境下的图片上传能力（本页面已设置严格 CSP: script-src 'self'）</p>
+
+    <!-- 测试 1: input[type=file] 基础能力 -->
+    <div class="test-card">
+        <h3>测试 1: input[type=file] 选择文件</h3>
+        <p>验证文件选择器在 CSP 环境下是否可用</p>
+        <input type="file" id="test-file-input" accept="image/*" multiple>
+        <button class="btn" id="test-file-btn">选择图片文件</button>
+        <div id="test1-result"></div>
+    </div>
+
+    <!-- 测试 2: FileReader + Canvas 压缩 -->
+    <div class="test-card">
+        <h3>测试 2: FileReader + Canvas 缩略图生成</h3>
+        <p>验证 FileReader 读取 + Canvas 压缩在 CSP 环境下是否可用</p>
+        <input type="file" id="test-compress-input" accept="image/*">
+        <button class="btn" id="test-compress-btn">选择图片并压缩</button>
+        <div class="preview-grid" id="compress-preview"></div>
+        <div id="test2-result"></div>
+    </div>
+
+    <!-- 测试 3: fetch 上传到 ImgVault -->
+    <div class="test-card">
+        <h3>测试 3: fetch API 上传到 ImgVault</h3>
+        <p>验证 fetch 上传到远程 API 是否可用（需要 host_permissions）</p>
+        <input type="file" id="test-upload-input" accept="image/*">
+        <button class="btn" id="test-upload-btn">选择图片并上传到 ImgVault</button>
+        <div class="preview-grid" id="upload-preview"></div>
+        <div id="test3-result"></div>
+    </div>
+
+    <!-- 测试 4: 完整流程模拟 -->
+    <div class="test-card">
+        <h3>测试 4: 完整上传流程（模拟 memo.js 逻辑）</h3>
+        <p>模拟扩展中的完整图片上传：选择 → 上传 ImgVault → 获取缩略图 URL → 预览显示</p>
+        <div class="upload-area" id="full-upload-area">
+            <i class="fas fa-image"></i>
+            <span>点击或拖拽图片到此处</span>
+        </div>
+        <input type="file" id="full-upload-input" accept="image/*" multiple>
+        <div class="preview-grid" id="full-preview"></div>
+        <div id="test4-result"></div>
+    </div>
+
+    <!-- 日志区域 -->
+    <div class="test-card">
+        <h3>执行日志</h3>
+        <div class="log-area" id="log-area"></div>
+    </div>
+
+    <script src="image-upload-test.js"></script>
+</body>
+</html>

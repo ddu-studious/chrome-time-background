@@ -17,6 +17,9 @@ class MemoManager {
         this.CATEGORIES_KEY = 'memosCategories';
         this.TAGS_KEY = 'memosTags';
         
+        // ImgVault API 配置
+        this.IMGVAULT_API = 'https://www.meczyc6.info/imgvault';
+        
         // 数据
         this.memos = [];
         // 优先级定义
@@ -177,6 +180,9 @@ class MemoManager {
             console.log('备忘录管理器初始化完成');
             this.initialized = true;
             
+            // 通知其他模块（如 TaskTicker）数据已就绪
+            window.dispatchEvent(new CustomEvent('memoManagerReady'));
+            
             // 检查备份提醒
             this.checkBackupReminder();
             
@@ -276,8 +282,8 @@ class MemoManager {
             // 检查图片数据是否损坏
             if (memo.images && Array.isArray(memo.images)) {
                 memo.images = memo.images.filter(img => {
-                    // 过滤掉损坏的图片数据
-                    if (!img || (!img.thumbnail && !img.fullImage)) {
+                    // 过滤掉损坏的图片数据（兼容 ImgVault 新格式和 base64 旧格式）
+                    if (!img || (!img.thumbnail && !img.fullImage && !img.imageId)) {
                         console.warn('发现损坏的图片数据，已过滤');
                         needsSave = true;
                         return false;
@@ -349,9 +355,13 @@ class MemoManager {
                 <div class="sidebar-error">
                     <i class="fas fa-exclamation-triangle"></i>
                     <p>任务列表加载出现问题</p>
-                    <button onclick="window.memoManager.init()">重新加载</button>
+                    <button class="fallback-reload-btn">重新加载</button>
                 </div>
             `;
+            const reloadBtn = sidebarContent.querySelector('.fallback-reload-btn');
+            if (reloadBtn) {
+                reloadBtn.addEventListener('click', () => window.memoManager.init());
+            }
         }
     }
     
@@ -413,6 +423,9 @@ class MemoManager {
                 <option value="all">全部分类</option>
                 ${this.categories.map(cat => `<option value="${cat.id}">${this.escapeHtml(cat.name)}</option>`).join('')}
             </select>
+            <button class="sidebar-expand-all-btn" id="sidebar-expand-all-btn" title="展开全部分组">
+                <i class="fas fa-angles-down"></i>
+            </button>
         `;
         
         // 创建任务列表容器
@@ -606,6 +619,12 @@ class MemoManager {
             categorySelect.addEventListener('change', () => this.renderSidebarTaskList());
         }
         
+        // 展开全部/折叠全部按钮
+        const expandAllBtn = document.getElementById('sidebar-expand-all-btn');
+        if (expandAllBtn) {
+            expandAllBtn.addEventListener('click', () => this.toggleExpandAllGroups());
+        }
+        
         // 新增按钮
         const addBtn = document.getElementById('sidebar-add-btn');
         if (addBtn) {
@@ -778,7 +797,7 @@ class MemoManager {
     }
     
     /**
-     * 处理图片上传
+     * 处理图片上传 - 使用 ImgVault API 上传，仅存储 imageId/UUID
      */
     async handleImageUpload(event) {
         const files = event.target.files;
@@ -794,45 +813,86 @@ class MemoManager {
             // 验证文件类型
             if (!file.type.startsWith('image/')) continue;
             
-            // 验证文件大小（最大 5MB）
-            if (file.size > 5 * 1024 * 1024) {
+            // 验证文件大小（最大 50MB，ImgVault 支持）
+            if (file.size > 50 * 1024 * 1024) {
                 console.warn('图片文件过大，已跳过:', file.name);
                 continue;
             }
             
+            const imageId = this.generateId();
+            
+            // 先创建占位预览（显示加载状态）
+            const previewItem = document.createElement('div');
+            previewItem.className = 'image-preview-item uploading';
+            previewItem.dataset.imageId = imageId;
+            previewItem.innerHTML = `
+                <div class="image-upload-progress">
+                    <i class="fas fa-spinner fa-spin"></i>
+                </div>
+                <button type="button" class="remove-image" title="移除">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+            previewItem.querySelector('.remove-image').addEventListener('click', () => {
+                this.removePreviewImage(imageId);
+            });
+            previewList.appendChild(previewItem);
+            
             try {
-                // 生成缩略图（用于列表显示）和大图（用于灯箱查看）
-                const thumbnail = await this.compressImage(file, 80, 0.6);  // 小缩略图
-                const fullImage = await this.compressImage(file, 800, 0.85);  // 大图用于查看
-                const imageId = this.generateId();
+                // 上传到 ImgVault API
+                const uploadResult = await this.uploadToImgVault(file);
                 
-                // 存储到临时数组
-                this.tempImages.push({
-                    id: imageId,
-                    file: file,
-                    thumbnail: thumbnail,
-                    fullImage: fullImage
-                });
-                
-                // 创建预览元素
-                const previewItem = document.createElement('div');
-                previewItem.className = 'image-preview-item';
-                previewItem.dataset.imageId = imageId;
-                previewItem.innerHTML = `
-                    <img src="${thumbnail}" alt="预览">
-                    <button type="button" class="remove-image" title="移除">
-                        <i class="fas fa-times"></i>
-                    </button>
-                `;
-                
-                // 绑定移除事件
-                previewItem.querySelector('.remove-image').addEventListener('click', () => {
-                    this.removePreviewImage(imageId);
-                });
-                
-                previewList.appendChild(previewItem);
+                if (uploadResult) {
+                    // 生成缩略图 URL
+                    const thumbnailUrl = this.getImgVaultProcessUrl(uploadResult.id, { width: 80, height: 80, format: 'webp', quality: 60 });
+                    
+                    // 存储到临时数组（只存储 ID 和 UUID，不存 base64）
+                    this.tempImages.push({
+                        id: imageId,
+                        imageId: uploadResult.id,
+                        imageUuid: uploadResult.imageUuid,
+                        originalName: uploadResult.originalName || file.name,
+                        thumbnailUrl: thumbnailUrl
+                    });
+                    
+                    // 更新预览为实际图片
+                    previewItem.classList.remove('uploading');
+                    previewItem.innerHTML = `
+                        <img src="${thumbnailUrl}" alt="预览">
+                        <button type="button" class="remove-image" title="移除">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    `;
+                    this.bindImageErrorFallback(previewItem.querySelector('img'));
+                    previewItem.querySelector('.remove-image').addEventListener('click', () => {
+                        this.removePreviewImage(imageId);
+                    });
+                } else {
+                    // 上传失败，回退到本地 base64 压缩方案
+                    console.warn('ImgVault 上传失败，使用本地压缩方案');
+                    const thumbnail = await this.compressImage(file, 80, 0.6);
+                    const fullImage = await this.compressImage(file, 800, 0.85);
+                    
+                    this.tempImages.push({
+                        id: imageId,
+                        thumbnail: thumbnail,
+                        fullImage: fullImage
+                    });
+                    
+                    previewItem.classList.remove('uploading');
+                    previewItem.innerHTML = `
+                        <img src="${thumbnail}" alt="预览">
+                        <button type="button" class="remove-image" title="移除">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    `;
+                    previewItem.querySelector('.remove-image').addEventListener('click', () => {
+                        this.removePreviewImage(imageId);
+                    });
+                }
             } catch (err) {
                 console.error('图片处理失败:', err);
+                previewItem.remove();
             }
         }
         
@@ -840,6 +900,103 @@ class MemoManager {
         event.target.value = '';
     }
     
+    /**
+     * 上传图片到 ImgVault API
+     * @param {File} file 图片文件
+     * @returns {Object|null} 上传结果 {id, imageUuid, originalName, downloadUrl} 或 null
+     */
+    async uploadToImgVault(file) {
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const resp = await fetch(`${this.IMGVAULT_API}/api/v1/images/upload`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!resp.ok) {
+                console.error('ImgVault upload failed:', resp.status, resp.statusText);
+                return null;
+            }
+            
+            const result = await resp.json();
+            if (result.code === 200 && result.data) {
+                console.log('ImgVault 上传成功:', result.data.imageUuid);
+                return result.data;
+            }
+            console.error('ImgVault upload response error:', result);
+            return null;
+        } catch (err) {
+            console.error('ImgVault upload error:', err);
+            return null;
+        }
+    }
+    
+    /**
+     * 获取 ImgVault 图片处理 URL（缩略图/格式转换）
+     * @param {number} imgId ImgVault 图片 ID
+     * @param {Object} opts {width, height, format, quality, smartCrop}
+     * @returns {string} 处理后的图片 URL
+     */
+    getImgVaultProcessUrl(imgId, opts = {}) {
+        const params = new URLSearchParams();
+        if (opts.width) params.set('width', opts.width);
+        if (opts.height) params.set('height', opts.height);
+        if (opts.format) params.set('format', opts.format);
+        if (opts.quality) params.set('quality', opts.quality);
+        if (opts.smartCrop) params.set('smartCrop', 'true');
+        return `${this.IMGVAULT_API}/api/v1/images/${imgId}/process?${params}`;
+    }
+    
+    /**
+     * 获取 ImgVault 图片下载 URL（原图查看）
+     * @param {number} imgId ImgVault 图片 ID
+     * @returns {string} 下载重定向 URL
+     */
+    getImgVaultDownloadUrl(imgId) {
+        return `${this.IMGVAULT_API}/api/v1/images/${imgId}/download`;
+    }
+    
+    /**
+     * 获取图片的缩略图 URL（兼容新旧格式）
+     * @param {Object} img 图片对象
+     * @returns {string} 缩略图 URL
+     */
+    getImageThumbnail(img) {
+        // 新格式：ImgVault API
+        if (img.imageId) {
+            return img.thumbnailUrl || this.getImgVaultProcessUrl(img.imageId, { width: 80, height: 80, format: 'webp', quality: 60 });
+        }
+        // 旧格式：base64
+        return img.thumbnail || '';
+    }
+    
+    /**
+     * 获取图片的原图 URL（兼容新旧格式）
+     * @param {Object} img 图片对象
+     * @returns {string} 原图 URL
+     */
+    getImageFullUrl(img) {
+        // 新格式：ImgVault API
+        if (img.imageId) {
+            return this.getImgVaultDownloadUrl(img.imageId);
+        }
+        // 旧格式：base64
+        return img.fullImage || img.thumbnail || '';
+    }
+    
+    /**
+     * 为 img 元素绑定 error 回退（避免内联 onerror 违反 CSP）
+     * @param {HTMLImageElement} imgEl img DOM 元素
+     */
+    bindImageErrorFallback(imgEl) {
+        if (!imgEl) return;
+        imgEl.addEventListener('error', () => {
+            imgEl.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Crect fill='%23333' width='80' height='80'/%3E%3Ctext x='40' y='44' text-anchor='middle' fill='%23999' font-size='12'%3E图片%3C/text%3E%3C/svg%3E";
+        }, { once: true });
+    }
+
     /**
      * 压缩图片
      */
@@ -989,6 +1146,10 @@ class MemoManager {
         
         // 渲染
         if (filteredMemos.length === 0) {
+            // 空状态下隐藏展开按钮
+            const expandBtn = document.getElementById('sidebar-expand-all-btn');
+            if (expandBtn) expandBtn.style.display = 'none';
+            
             // 搜索无结果时，显示快速添加按钮
             if (searchText) {
                 container.innerHTML = `
@@ -1066,6 +1227,7 @@ class MemoManager {
             const group = document.createElement('div');
             group.className = `date-group ${shouldCollapse ? 'collapsed' : ''}`;
             group.dataset.groupKey = dateKey;
+            group.dataset.taskCount = tasks.length;
             
             // 创建分组标题（可点击折叠）
             const groupHeader = this.createDateGroupHeader(dateKey, tasks, shouldCollapse);
@@ -1091,6 +1253,10 @@ class MemoManager {
                     group.dataset.rendered = 'true';
                     this.renderTasksIncrementally(tasksContainer, tasks, startIndex, filteredCount, renderToken);
                 }
+                
+                // 更新展开/折叠全部按钮状态和提示
+                this._updateExpandAllBtnState();
+                this._updateCollapsedHint();
             });
 
             if (shouldCollapse) {
@@ -1099,6 +1265,10 @@ class MemoManager {
                 eagerGroups.push({ tasks, tasksContainer, startIndex });
             }
         });
+        
+        // 更新展开/折叠按钮状态和折叠提示
+        this._updateExpandAllBtnState();
+        this._updateCollapsedHint();
         
         // 仅渲染近 3 天的任务（其余分组展开时再渲染）
         const eagerTaskCount = eagerGroups.reduce((sum, g) => sum + g.tasks.length, 0);
@@ -1187,6 +1357,201 @@ class MemoManager {
         };
 
         requestAnimationFrame(renderChunk);
+    }
+    
+    // ==================== 展开/折叠全部 ====================
+    
+    /**
+     * 切换展开/折叠所有日期分组
+     * 智能行为：
+     * - 如果存在折叠的分组 → 展开全部
+     * - 如果全部已展开 → 折叠非近期分组（恢复默认）
+     */
+    toggleExpandAllGroups() {
+        const container = document.getElementById('sidebar-task-list');
+        if (!container) return;
+        
+        const groups = container.querySelectorAll('.date-group');
+        if (groups.length === 0) return;
+        
+        const collapsedGroups = container.querySelectorAll('.date-group.collapsed');
+        const isExpanding = collapsedGroups.length > 0;
+        
+        const btn = document.getElementById('sidebar-expand-all-btn');
+        
+        if (isExpanding) {
+            // 展开所有折叠的分组
+            collapsedGroups.forEach(group => {
+                group.classList.remove('collapsed');
+                
+                const tasksContainer = group.querySelector('.date-group-tasks');
+                const chevron = group.querySelector('.group-chevron');
+                
+                if (tasksContainer) {
+                    tasksContainer.style.display = 'block';
+                }
+                if (chevron) {
+                    chevron.style.transform = 'rotate(0)';
+                }
+                
+                // 触发懒加载渲染（如果尚未渲染过）
+                if (group.dataset.rendered !== 'true' && tasksContainer) {
+                    group.dataset.rendered = 'true';
+                    const groupKey = group.dataset.groupKey;
+                    this._lazyRenderGroup(group, groupKey);
+                }
+            });
+            
+            // 更新按钮状态
+            if (btn) {
+                btn.title = '折叠全部分组';
+                btn.innerHTML = '<i class="fas fa-angles-up"></i>';
+                btn.classList.add('expanded');
+            }
+        } else {
+            // 折叠非近期分组（恢复默认：只保留近3天展开）
+            const recentGroups = ['today', 'yesterday', 'two-days-ago'];
+            groups.forEach(group => {
+                const groupKey = group.dataset.groupKey;
+                if (!recentGroups.includes(groupKey)) {
+                    group.classList.add('collapsed');
+                    
+                    const tasksContainer = group.querySelector('.date-group-tasks');
+                    const chevron = group.querySelector('.group-chevron');
+                    
+                    if (tasksContainer) tasksContainer.style.display = 'none';
+                    if (chevron) chevron.style.transform = 'rotate(-90deg)';
+                }
+            });
+            
+            // 更新按钮状态
+            if (btn) {
+                btn.title = '展开全部分组';
+                btn.innerHTML = '<i class="fas fa-angles-down"></i>';
+                btn.classList.remove('expanded');
+            }
+        }
+        
+        // 更新折叠任务数提示
+        this._updateCollapsedHint();
+    }
+    
+    /**
+     * 懒加载渲染指定分组中的任务
+     */
+    _lazyRenderGroup(groupEl, groupKey) {
+        if (!groupEl || !groupKey) return;
+        
+        const tasksContainer = groupEl.querySelector('.date-group-tasks');
+        if (!tasksContainer || tasksContainer.children.length > 0) return;
+        
+        // 从当前筛选数据中获取该分组的任务
+        const filterSelect = document.getElementById('sidebar-filter-select');
+        const categorySelect = document.getElementById('sidebar-category-select');
+        const searchInput = document.getElementById('sidebar-search');
+        
+        const searchText = searchInput ? searchInput.value.toLowerCase().trim() : '';
+        const filterValue = filterSelect ? filterSelect.value : 'all';
+        const categoryValue = categorySelect ? categorySelect.value : 'all';
+        
+        let filteredMemos = [...this.memos];
+        
+        if (searchText) {
+            filteredMemos = filteredMemos.filter(memo => 
+                (memo.title || '').toLowerCase().includes(searchText) ||
+                (memo.text || '').toLowerCase().includes(searchText)
+            );
+        }
+        if (categoryValue !== 'all') {
+            filteredMemos = filteredMemos.filter(m => m.categoryId === categoryValue);
+        }
+        
+        const today = this.getTodayDate();
+        switch (filterValue) {
+            case 'completed': filteredMemos = filteredMemos.filter(m => m.completed); break;
+            case 'uncompleted': filteredMemos = filteredMemos.filter(m => !m.completed); break;
+            case 'today': filteredMemos = filteredMemos.filter(m => m.dueDate === today); break;
+            case 'overdue': filteredMemos = filteredMemos.filter(m => m.dueDate && m.dueDate < today && !m.completed); break;
+            case 'habits': filteredMemos = filteredMemos.filter(m => m.recurrence?.enabled && m.recurrence?.type === 'daily'); break;
+        }
+        
+        // 过滤掉习惯任务
+        const regularTasks = filteredMemos.filter(m => !(m.recurrence?.enabled && m.recurrence?.type === 'daily'));
+        const groupedTasks = this.groupTasksByDate(regularTasks);
+        const tasks = groupedTasks[groupKey];
+        
+        if (!tasks || tasks.length === 0) return;
+        
+        const totalCount = filteredMemos.length;
+        const frag = document.createDocumentFragment();
+        for (let i = 0; i < tasks.length; i++) {
+            frag.appendChild(this.createSidebarTaskItem(tasks[i], i + 1, totalCount));
+        }
+        tasksContainer.appendChild(frag);
+    }
+    
+    /**
+     * 更新展开/折叠全部按钮的图标状态
+     */
+    _updateExpandAllBtnState() {
+        const container = document.getElementById('sidebar-task-list');
+        const btn = document.getElementById('sidebar-expand-all-btn');
+        if (!container || !btn) return;
+        
+        const groups = container.querySelectorAll('.date-group');
+        const collapsedGroups = container.querySelectorAll('.date-group.collapsed');
+        
+        if (groups.length === 0) {
+            btn.style.display = 'none';
+            return;
+        }
+        
+        btn.style.display = '';
+        
+        if (collapsedGroups.length === 0) {
+            btn.title = '折叠全部分组';
+            btn.innerHTML = '<i class="fas fa-angles-up"></i>';
+            btn.classList.add('expanded');
+        } else {
+            btn.title = '展开全部分组';
+            btn.innerHTML = '<i class="fas fa-angles-down"></i>';
+            btn.classList.remove('expanded');
+        }
+    }
+    
+    /**
+     * 更新"折叠分组中隐藏的任务数"提示
+     */
+    _updateCollapsedHint() {
+        const container = document.getElementById('sidebar-task-list');
+        if (!container) return;
+        
+        // 移除旧提示
+        const oldHint = container.querySelector('.collapsed-tasks-hint');
+        if (oldHint) oldHint.remove();
+        
+        // 计算折叠分组中的任务数
+        const collapsedGroups = container.querySelectorAll('.date-group.collapsed');
+        let hiddenCount = 0;
+        collapsedGroups.forEach(group => {
+            const count = parseInt(group.dataset.taskCount) || 0;
+            hiddenCount += count;
+        });
+        
+        if (hiddenCount > 0) {
+            const hint = document.createElement('div');
+            hint.className = 'collapsed-tasks-hint';
+            hint.innerHTML = `
+                <i class="fas fa-eye-slash"></i>
+                <span>还有 <strong>${hiddenCount}</strong> 个任务在折叠分组中</span>
+                <button class="hint-expand-btn" title="展开查看">展开查看</button>
+            `;
+            container.appendChild(hint);
+            
+            hint.querySelector('.hint-expand-btn')?.addEventListener('click', () => {
+                this.toggleExpandAllGroups();
+            });
+        }
     }
     
     // ==================== 习惯任务渲染 ====================
@@ -2123,16 +2488,19 @@ class MemoManager {
                         const img = entry.target;
                         const imageId = img.dataset.src;
                         const imageData = task.images.find(i => i.id === imageId);
-                        if (imageData && imageData.thumbnail) {
-                            // 使用 requestIdleCallback 在空闲时加载，避免阻塞
-                            const loadImage = () => {
-                                img.src = imageData.thumbnail;
-                                img.classList.remove('task-image-lazy');
-                            };
-                            if ('requestIdleCallback' in window) {
-                                requestIdleCallback(loadImage, { timeout: 500 });
-                            } else {
-                                setTimeout(loadImage, 50);
+                        if (imageData) {
+                            const thumbUrl = this.getImageThumbnail(imageData);
+                            if (thumbUrl) {
+                                // 使用 requestIdleCallback 在空闲时加载，避免阻塞
+                                const loadImage = () => {
+                                    img.src = thumbUrl;
+                                    img.classList.remove('task-image-lazy');
+                                };
+                                if ('requestIdleCallback' in window) {
+                                    requestIdleCallback(loadImage, { timeout: 500 });
+                                } else {
+                                    setTimeout(loadImage, 50);
+                                }
                             }
                         }
                         obs.unobserve(img);
@@ -2146,11 +2514,14 @@ class MemoManager {
             lazyImages.forEach(img => {
                 const imageId = img.dataset.src;
                 const imageData = task.images.find(i => i.id === imageId);
-                if (imageData && imageData.thumbnail) {
-                    setTimeout(() => {
-                        img.src = imageData.thumbnail;
-                        img.classList.remove('task-image-lazy');
-                    }, 100);
+                if (imageData) {
+                    const thumbUrl = this.getImageThumbnail(imageData);
+                    if (thumbUrl) {
+                        setTimeout(() => {
+                            img.src = thumbUrl;
+                            img.classList.remove('task-image-lazy');
+                        }, 100);
+                    }
                 }
             });
         }
@@ -2168,8 +2539,8 @@ class MemoManager {
         
         let currentIndex = startIndex;
         
-        // 获取当前图片的大图（兼容旧数据）
-        const getFullImage = (img) => img.fullImage || img.thumbnail;
+        // 获取当前图片的大图（兼容 ImgVault 新格式和 base64 旧格式）
+        const getFullImage = (img) => this.getImageFullUrl(img);
         
         // 创建灯箱
         const lightbox = document.createElement('div');
@@ -3095,7 +3466,10 @@ class MemoManager {
             // 超过一周未备份
             if (this.memos.length > 0) {
                 setTimeout(() => {
-                    this.showToast('💾 您已超过一周未备份数据，建议点击备份按钮导出数据', 6000);
+                    this.showToast('您已超过一周未备份数据，点击此处立即备份', 8000, {
+                        icon: 'fas fa-database',
+                        onClick: () => this.showBackupPanel()
+                    });
                 }, 3000);
             }
         }
@@ -4405,15 +4779,31 @@ class MemoManager {
      * 显示轻量提示消息
      * @param {string} message 消息内容
      * @param {number} duration 显示时长（毫秒）
+     * @param {Object} [options] 可选配置
+     * @param {Function} [options.onClick] 点击回调（设置后 toast 可点击）
+     * @param {string} [options.icon] 自定义图标 class（默认 fa-check-circle）
      */
-    showToast(message, duration = 2000) {
+    showToast(message, duration = 2000, options = {}) {
         // 移除已有的 toast
         const existingToast = document.querySelector('.memo-toast');
         if (existingToast) existingToast.remove();
         
+        const iconClass = options.icon || 'fas fa-check-circle';
         const toast = document.createElement('div');
         toast.className = 'memo-toast';
-        toast.innerHTML = `<i class="fas fa-check-circle"></i> ${this.escapeHtml(message)}`;
+        
+        if (options.onClick) {
+            toast.classList.add('clickable');
+            toast.innerHTML = `<i class="${iconClass}"></i> ${this.escapeHtml(message)} <span class="toast-action-hint">点击操作</span>`;
+            toast.addEventListener('click', () => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+                options.onClick();
+            });
+        } else {
+            toast.innerHTML = `<i class="${iconClass}"></i> ${this.escapeHtml(message)}`;
+        }
+        
         document.body.appendChild(toast);
         
         // 显示动画
@@ -4578,25 +4968,37 @@ class MemoManager {
                 this.updateProgressPreview(0);
             }
             
-            // 加载已有图片
+            // 加载已有图片（兼容 ImgVault 新格式和 base64 旧格式）
             if (task.images && task.images.length > 0 && previewList) {
                 task.images.forEach(img => {
-                    this.tempImages.push({
+                    // 保留原始数据格式（新旧兼容）
+                    const tempImg = {
                         id: img.id,
-                        thumbnail: img.thumbnail,
-                        fullImage: img.fullImage || img.thumbnail,  // 兼容旧数据
                         existing: true  // 标记为已有图片
-                    });
+                    };
+                    if (img.imageId) {
+                        // ImgVault 新格式
+                        tempImg.imageId = img.imageId;
+                        tempImg.imageUuid = img.imageUuid;
+                        tempImg.originalName = img.originalName;
+                    } else {
+                        // base64 旧格式
+                        tempImg.thumbnail = img.thumbnail;
+                        tempImg.fullImage = img.fullImage || img.thumbnail;
+                    }
+                    this.tempImages.push(tempImg);
                     
+                    const thumbUrl = this.getImageThumbnail(img);
                     const previewItem = document.createElement('div');
                     previewItem.className = 'image-preview-item';
                     previewItem.dataset.imageId = img.id;
                     previewItem.innerHTML = `
-                        <img src="${img.thumbnail}" alt="预览">
+                        <img src="${thumbUrl}" alt="预览">
                         <button type="button" class="remove-image" title="移除">
                             <i class="fas fa-times"></i>
                         </button>
                     `;
+                    this.bindImageErrorFallback(previewItem.querySelector('img'));
                     
                     previewItem.querySelector('.remove-image').addEventListener('click', () => {
                         this.removePreviewImage(img.id);
@@ -5064,12 +5466,24 @@ class MemoManager {
             return;
         }
         
-        // 处理图片数据（保存缩略图和大图）
-        const images = this.tempImages ? this.tempImages.map(img => ({
-            id: img.id,
-            thumbnail: img.thumbnail,
-            fullImage: img.fullImage || img.thumbnail  // 兼容旧数据
-        })) : [];
+        // 处理图片数据（ImgVault API 模式：仅存 ID/UUID；兼容旧 base64 数据）
+        const images = this.tempImages ? this.tempImages.map(img => {
+            if (img.imageId) {
+                // 新格式：ImgVault API 上传的图片，仅存少量字符
+                return {
+                    id: img.id,
+                    imageId: img.imageId,
+                    imageUuid: img.imageUuid,
+                    originalName: img.originalName || ''
+                };
+            }
+            // 旧格式回退：base64（ImgVault 不可用时）
+            return {
+                id: img.id,
+                thumbnail: img.thumbnail,
+                fullImage: img.fullImage || img.thumbnail
+            };
+        }) : [];
         
         // 处理进度数据（纯百分比：0-100 的整数，或 null）
         let progress = null;
@@ -5211,6 +5625,11 @@ class MemoManager {
         task.completed = !task.completed;
         task.completedAt = task.completed ? Date.now() : null;
         task.updatedAt = Date.now();
+        
+        // 完成时如果有进度条，自动拉到 100%
+        if (task.completed && task.progress !== null && task.progress !== undefined) {
+            task.progress = 100;
+        }
         
         await this.saveMemos();
         this.renderSidebarTaskList();
@@ -5563,6 +5982,8 @@ class MemoManager {
         for (const memo of this.memos) {
             if (memo.images && memo.images.length > 0) {
                 for (const img of memo.images) {
+                    // ImgVault 格式无需压缩（已经只存 ID）
+                    if (img.imageId) continue;
                     // 如果 fullImage 比 thumbnail 大很多，删除 fullImage
                     if (img.fullImage && img.thumbnail) {
                         const fullSize = img.fullImage.length;
@@ -5997,6 +6418,11 @@ class MemoManager {
         memo.completed = !memo.completed;
         memo.completedAt = memo.completed ? Date.now() : null;
         memo.updatedAt = Date.now();
+        
+        // 完成时如果有进度条，自动拉到 100%
+        if (memo.completed && memo.progress !== null && memo.progress !== undefined) {
+            memo.progress = 100;
+        }
         
         // 找到对应的任务项元素
         const taskItem = document.querySelector(`.floating-task-item[data-id="${id}"]`);

@@ -755,6 +755,26 @@ body {
     transform: scale(1.05);
 }
 
+/* 详情面板链接样式（替代内联 hover 事件） */
+.detail-link-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(100, 181, 246, 0.08);
+    border: 1px solid rgba(100, 181, 246, 0.15);
+    border-radius: 8px;
+    color: #64b5f6;
+    text-decoration: none;
+    font-size: 0.8rem;
+    transition: all 0.2s;
+}
+
+.detail-link-item:hover {
+    background: rgba(100, 181, 246, 0.15);
+    border-color: rgba(100, 181, 246, 0.3);
+}
+
 /* ===== 空状态 ===== */
 .empty-state {
     text-align: center;

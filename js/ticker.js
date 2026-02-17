@@ -32,11 +32,95 @@ class TechTicker {
      * 初始化
      */
     async init() {
+        // 从设置中读取刷新间隔
+        await this.loadRefreshIntervalFromSettings();
         this.bindEvents();
         // 延迟加载，优先保证时钟等核心功能
         setTimeout(() => this.loadData(), 1500);
         // 初始化关键字监控面板
         this.initKeywordAlert();
+        // 启动定时自动刷新（缓存过期后自动重新获取）
+        this.startAutoRefresh();
+        // 监听设置变更（刷新间隔更新时自动应用）
+        this.listenSettingsChange();
+    }
+    
+    /**
+     * 从全局设置读取刷新间隔
+     */
+    async loadRefreshIntervalFromSettings() {
+        try {
+            const storage = chrome?.storage?.sync || chrome?.storage?.local;
+            if (storage) {
+                const { settings } = await storage.get('settings');
+                if (settings && typeof settings.tickerRefreshInterval === 'number') {
+                    const minutes = Math.max(5, Math.min(120, settings.tickerRefreshInterval));
+                    this.CACHE_TTL = minutes * 60 * 1000;
+                    console.log(`[Ticker] 从设置读取刷新间隔: ${minutes} 分钟`);
+                }
+            }
+        } catch (err) {
+            console.warn('[Ticker] 读取刷新间隔设置失败:', err);
+        }
+    }
+    
+    /**
+     * 监听设置变更，实时更新刷新间隔
+     */
+    listenSettingsChange() {
+        if (!chrome?.storage?.onChanged) return;
+        
+        chrome.storage.onChanged.addListener((changes, area) => {
+            if (area === 'sync' && changes.settings) {
+                const newSettings = changes.settings.newValue;
+                if (newSettings && typeof newSettings.tickerRefreshInterval === 'number') {
+                    const minutes = Math.max(5, Math.min(120, newSettings.tickerRefreshInterval));
+                    const newTTL = minutes * 60 * 1000;
+                    if (newTTL !== this.CACHE_TTL) {
+                        this.CACHE_TTL = newTTL;
+                        console.log(`[Ticker] 刷新间隔已更新: ${minutes} 分钟`);
+                        this.startAutoRefresh();
+                    }
+                }
+            }
+        });
+    }
+    
+    /**
+     * 定时自动刷新热榜数据
+     * 每隔 CACHE_TTL 时间自动检查并重新获取数据
+     */
+    startAutoRefresh() {
+        // 清除已有定时器
+        if (this._autoRefreshTimer) {
+            clearInterval(this._autoRefreshTimer);
+        }
+        
+        // 每 CACHE_TTL（20分钟）检查一次，缓存过期则自动刷新
+        this._autoRefreshTimer = setInterval(async () => {
+            try {
+                const cached = await this.getCache();
+                if (!cached) {
+                    // 缓存已过期，静默刷新数据
+                    console.log('[Ticker] 缓存已过期，自动刷新热榜数据...');
+                    await this.fetchAllData();
+                }
+            } catch (err) {
+                console.warn('[Ticker] 自动刷新失败:', err);
+            }
+        }, this.CACHE_TTL);
+        
+        console.log(`[Ticker] 自动刷新已启动，间隔 ${this.CACHE_TTL / 60000} 分钟`);
+    }
+    
+    /**
+     * 停止自动刷新
+     */
+    stopAutoRefresh() {
+        if (this._autoRefreshTimer) {
+            clearInterval(this._autoRefreshTimer);
+            this._autoRefreshTimer = null;
+        }
     }
     
     /**
@@ -1040,16 +1124,24 @@ class TaskTicker {
         this.tasks = [];
         this.completedCount = 0;
         this.totalCount = 0;
+        this._initRetries = 0;
+        this._maxRetries = 5;
     }
     
     /**
      * 初始化
      */
     async init() {
-        // 延迟加载，等 memo 模块先加载完
+        // 策略一：延迟首次加载，等 memo 模块完成初始化
         setTimeout(() => this.loadAndRender(), 2000);
         
-        // 监听存储变化，实时更新
+        // 策略二：监听 memoManager 就绪事件（memo.js 触发）
+        window.addEventListener('memoManagerReady', () => {
+            console.log('[TaskTicker] memoManager 就绪，刷新数据');
+            this.loadAndRender();
+        });
+        
+        // 策略三：监听存储变化，实时更新
         if (chrome?.storage?.onChanged) {
             chrome.storage.onChanged.addListener((changes, area) => {
                 if (area === 'local' && changes.memos) {
@@ -1060,12 +1152,20 @@ class TaskTicker {
     }
     
     /**
-     * 加载数据并渲染
+     * 加载数据并渲染（带重试）
      */
     async loadAndRender() {
         try {
             await this.loadTasks();
             this.render();
+            
+            // 如果首次加载没拿到数据，启动重试探测
+            if (this.totalCount === 0 && this._initRetries < this._maxRetries) {
+                this._initRetries++;
+                const delay = 1000 * Math.pow(1.5, this._initRetries); // 指数退避：1.5s, 2.25s, 3.4s...
+                console.log(`[TaskTicker] 暂无数据，第 ${this._initRetries} 次重试（${(delay / 1000).toFixed(1)}s 后）`);
+                setTimeout(() => this.loadAndRender(), delay);
+            }
         } catch (err) {
             console.warn('[TaskTicker] 加载失败:', err);
         }
@@ -1073,21 +1173,29 @@ class TaskTicker {
     
     /**
      * 从存储中加载任务数据
+     * 优先从 memoManager 内存读取（更快、更可靠），降级到 chrome.storage
      */
     async loadTasks() {
         let memos = [];
-        try {
-            if (chrome?.storage?.local) {
-                const result = await chrome.storage.local.get('memos');
-                memos = Array.isArray(result.memos) ? result.memos : [];
+        
+        // 优先从 memoManager 内存中读取（避免 storage 时序问题）
+        if (window.memoManager && Array.isArray(window.memoManager.memos) && window.memoManager.memos.length > 0) {
+            memos = window.memoManager.memos;
+        } else {
+            // 降级：直接从 storage 读取
+            try {
+                if (chrome?.storage?.local) {
+                    const result = await chrome.storage.local.get('memos');
+                    memos = Array.isArray(result.memos) ? result.memos : [];
+                }
+            } catch {
+                memos = [];
             }
-        } catch {
-            memos = [];
         }
         
         const today = new Date().toISOString().split('T')[0];
         
-        // 筛选未完成任务（排除每日重复的已完成任务）
+        // 筛选未完成任务
         const pending = memos.filter(m => !m.completed);
         const completed = memos.filter(m => m.completed);
         
@@ -1127,11 +1235,12 @@ class TaskTicker {
         const container = document.getElementById('task-ticker');
         if (!container) return;
         
-        // 没有任务时隐藏整个提醒条
-        if (this.totalCount === 0 || this.tasks.length === 0) {
+        // 完全无任务时隐藏
+        if (this.totalCount === 0) {
             container.classList.add('hidden');
             return;
         }
+        
         container.classList.remove('hidden');
         
         // 1. 更新统计
@@ -1148,6 +1257,16 @@ class TaskTicker {
         // 2. 渲染滚动任务列表
         const track = document.getElementById('task-ticker-track');
         if (!track) return;
+        
+        // 全部完成：显示祝贺状态
+        if (this.tasks.length === 0 && this.totalCount > 0) {
+            track.innerHTML = `<span class="task-ticker-item task-ticker-done">
+                <i class="fas fa-check-circle" style="color:#5cd85c;margin-right:6px"></i>
+                全部完成！已完成 ${this.completedCount} 个任务
+            </span>`;
+            track.style.animation = 'none';
+            return;
+        }
         
         const buildItems = () => {
             return this.tasks.map((task, i) => {
@@ -1167,6 +1286,7 @@ class TaskTicker {
         // 动态调整滚动速度（每个任务约 3 秒）
         const duration = Math.max(15, this.tasks.length * 3);
         track.style.animationDuration = `${duration}s`;
+        track.style.animation = '';
         
         // 3. 绑定任务项交互事件
         this.bindTaskItemEvents(track);

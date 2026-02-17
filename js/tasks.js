@@ -49,10 +49,11 @@ class TaskManager {
 
     async loadData() {
         try {
+            // 注意：memos 存储在 local，而 categories/tags 存储在 sync（与 memo.js 保持一致）
             const [memosResult, categoriesResult, tagsResult] = await Promise.all([
                 new Promise(resolve => chrome.storage.local.get('memos', resolve)),
-                new Promise(resolve => chrome.storage.local.get('memosCategories', resolve)),
-                new Promise(resolve => chrome.storage.local.get('memosTags', resolve))
+                new Promise(resolve => chrome.storage.sync.get('memosCategories', resolve)),
+                new Promise(resolve => chrome.storage.sync.get('memosTags', resolve))
             ]);
 
             const memosData = Array.isArray(memosResult.memos) ? memosResult.memos : [];
@@ -357,6 +358,15 @@ class TaskManager {
                 this.openDetail(taskId);
             });
 
+            // 查看详情按钮
+            const detailBtn = row.querySelector('.btn-detail');
+            if (detailBtn) {
+                detailBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.openDetail(taskId);
+                });
+            }
+
             // 删除按钮
             const deleteBtn = row.querySelector('.btn-delete');
             if (deleteBtn) {
@@ -406,7 +416,7 @@ class TaskManager {
                 </td>
                 <td class="col-actions">
                     <div class="action-btns">
-                        <button class="action-btn-sm" title="查看详情" onclick="event.stopPropagation(); taskManager.openDetail('${task.id}')">
+                        <button class="action-btn-sm btn-detail" title="查看详情">
                             <i class="fas fa-eye"></i>
                         </button>
                         <button class="action-btn-sm danger btn-delete" title="删除">
@@ -426,6 +436,11 @@ class TaskManager {
         grid.querySelectorAll('.task-card').forEach(card => {
             const taskId = card.dataset.taskId;
             card.addEventListener('click', () => this.openDetail(taskId));
+            
+            // 绑定图片 error 回退（避免 CSP 限制内联 onerror）
+            card.querySelectorAll('.card-image-thumb').forEach(img => {
+                img.addEventListener('error', () => { img.style.display = 'none'; }, { once: true });
+            });
         });
     }
 
@@ -440,7 +455,7 @@ class TaskManager {
                 ${task.progress !== null ? `<div class="card-progress">${this.renderProgressBar(task.progress)}</div>` : ''}
                 ${task.images && task.images.length > 0 ? `
                     <div class="card-images">
-                        ${task.images.slice(0, 4).map(img => `<img class="card-image-thumb" src="${img.thumbnail}" alt="图片">`).join('')}
+                        ${task.images.slice(0, 4).map(img => `<img class="card-image-thumb" src="${this.getImageThumbnail(img)}" alt="图片">`).join('')}
                         ${task.images.length > 4 ? `<span class="category-tag">+${task.images.length - 4}</span>` : ''}
                     </div>
                 ` : ''}
@@ -520,6 +535,17 @@ class TaskManager {
         const body = document.getElementById('detail-body');
 
         body.innerHTML = this.createDetailContent(task);
+        
+        // 绑定详情面板内的事件（避免内联事件违反 CSP）
+        body.querySelectorAll('.detail-image').forEach(img => {
+            const fullUrl = img.dataset.fullUrl;
+            if (fullUrl) {
+                img.style.cursor = 'pointer';
+                img.addEventListener('click', () => window.open(fullUrl, '_blank'));
+            }
+            img.addEventListener('error', () => { img.style.display = 'none'; }, { once: true });
+        });
+        
         panel.classList.remove('hidden');
         overlay.classList.remove('hidden');
     }
@@ -615,10 +641,7 @@ class TaskManager {
                 <div class="detail-section-title">相关链接 (${task.links.length})</div>
                 <div style="display: flex; flex-direction: column; gap: 6px;">
                     ${task.links.map(link => `
-                        <a href="${this.escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer"
-                           style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: rgba(100,181,246,0.08); border: 1px solid rgba(100,181,246,0.15); border-radius: 8px; color: #64b5f6; text-decoration: none; font-size: 0.8rem; transition: all 0.2s;"
-                           onmouseover="this.style.background='rgba(100,181,246,0.15)';this.style.borderColor='rgba(100,181,246,0.3)'"
-                           onmouseout="this.style.background='rgba(100,181,246,0.08)';this.style.borderColor='rgba(100,181,246,0.15)'">
+                        <a href="${this.escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer" class="detail-link-item">
                             <i class="fas fa-external-link-alt" style="font-size: 0.7rem; opacity: 0.7;"></i>
                             <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(link.title || link.url)}</span>
                         </a>
@@ -633,8 +656,8 @@ class TaskManager {
                 <div class="detail-section-title">图片附件 (${task.images.length})</div>
                 <div class="detail-images">
                     ${task.images.map(img => `
-                        <img class="detail-image" src="${img.thumbnail || img.fullImage}" alt="附件图片" 
-                             onclick="window.open('${img.fullImage || img.thumbnail}', '_blank')">
+                        <img class="detail-image" src="${this.getImageThumbnail(img)}" alt="附件图片" 
+                             data-full-url="${this.getImageFullUrl(img)}">
                     `).join('')}
                 </div>
             </div>
@@ -740,6 +763,11 @@ class TaskManager {
         task.completed = !task.completed;
         task.completedAt = task.completed ? Date.now() : null;
         task.updatedAt = Date.now();
+        
+        // 完成时如果有进度条，自动拉到 100%
+        if (task.completed && task.progress !== null && task.progress !== undefined) {
+            task.progress = 100;
+        }
 
         await this.saveData();
         this.applyFilters();
@@ -763,6 +791,10 @@ class TaskManager {
                 t.completed = true;
                 t.completedAt = Date.now();
                 t.updatedAt = Date.now();
+                // 完成时如果有进度条，自动拉到 100%
+                if (t.progress !== null && t.progress !== undefined) {
+                    t.progress = 100;
+                }
             }
         });
         await this.saveData();
@@ -820,6 +852,27 @@ class TaskManager {
     getCategoryName(categoryId) {
         const cat = this.categories.find(c => c.id === categoryId);
         return cat ? cat.name : '未分类';
+    }
+
+    /**
+     * 获取图片缩略图 URL（兼容 ImgVault 新格式和 base64 旧格式）
+     */
+    getImageThumbnail(img) {
+        if (img.imageId) {
+            const params = new URLSearchParams({ width: '80', height: '80', format: 'webp', quality: '60' });
+            return `https://www.meczyc6.info/imgvault/api/v1/images/${img.imageId}/process?${params}`;
+        }
+        return img.thumbnail || '';
+    }
+
+    /**
+     * 获取图片原图 URL（兼容 ImgVault 新格式和 base64 旧格式）
+     */
+    getImageFullUrl(img) {
+        if (img.imageId) {
+            return `https://www.meczyc6.info/imgvault/api/v1/images/${img.imageId}/download`;
+        }
+        return img.fullImage || img.thumbnail || '';
     }
 
     formatDate(timestamp) {

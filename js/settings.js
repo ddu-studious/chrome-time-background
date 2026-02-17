@@ -13,6 +13,7 @@ class SettingsManager {
             weatherCity: '', // 手动设置的城市名称（为空则自动定位）
             memos: [], // 备忘录数据
             memoCategories: ['工作', '生活', '学习', '其他'], // 备忘录分类
+            tickerRefreshInterval: 20, // 热榜刷新间隔（分钟）
             // 每日任务设置
             dailyTaskSettings: {
                 enableNotifications: true,      // 启用通知
@@ -108,6 +109,30 @@ class SettingsManager {
                 }
             });
         });
+
+        // 数字输入框保存（转为 number 类型）
+        settingsPanel.querySelectorAll('input[type="number"]').forEach(input => {
+            input.addEventListener('blur', async (e) => {
+                const target = e.target;
+                if (target.name && target.name in this.settings) {
+                    const min = parseFloat(target.min) || 0;
+                    const max = parseFloat(target.max) || Infinity;
+                    let val = parseFloat(target.value);
+                    if (isNaN(val)) val = parseFloat(target.placeholder) || min;
+                    val = Math.max(min, Math.min(max, val));
+                    target.value = val;
+                    if (this.settings[target.name] !== val) {
+                        this.settings[target.name] = val;
+                        await this.saveSettings();
+                    }
+                }
+            });
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.target.blur();
+                }
+            });
+        });
     }
 
     generateSettingsHTML() {
@@ -180,6 +205,21 @@ class SettingsManager {
                                 <option value="60" ${this.settings.backgroundInterval === 60 ? 'selected' : ''}>1小时</option>
                             </select>
                         </label>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <h3>热榜设置</h3>
+                    <div class="setting-item">
+                        <label>
+                            刷新间隔（分钟）
+                            <input type="number" name="tickerRefreshInterval" 
+                                   value="${this.settings.tickerRefreshInterval || 20}" 
+                                   min="5" max="120" step="1" 
+                                   class="settings-input settings-number-input"
+                                   placeholder="20">
+                        </label>
+                        <p class="setting-hint">热榜数据自动刷新间隔，最小 5 分钟，最大 120 分钟</p>
                     </div>
                 </div>
 

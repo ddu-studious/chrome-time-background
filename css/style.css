@@ -63,7 +63,9 @@
     z-index: 3;
     display: flex;
     min-height: 100vh;
+    height: 100vh; /* 固定高度：滚动交给右侧 main-content */
     width: 100%;
+    overflow: hidden; /* body 禁止滚动时，内部滚动容器仍可滚动 */
 }
 
 /* 左侧任务侧边栏 */
@@ -73,6 +75,7 @@
     width: 720px;
     min-width: 720px;
     height: 100vh;
+    max-height: 100vh;
     display: flex;
     flex-direction: column;
     /* 磨砂玻璃效果 */
@@ -241,8 +244,12 @@
 
 /* 侧边栏内容 */
 .sidebar-content {
-    flex: 1;
-    overflow-y: auto;
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* 自身不滚动，滚动交给内部 task-list */
+    min-height: 0; /* 关键：允许内部滚动容器正常工作 */
+    max-height: calc(100vh - 70px); /* 减去 header 高度，确保不会超出视口 */
     padding: 0;
     transition: opacity 0.3s;
 }
@@ -334,14 +341,18 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    /* 使用 margin: auto 实现安全居中：内容短时垂直居中，内容超出时可完整滚动 */
+    justify-content: flex-start;
     padding: 2rem;
+    padding-bottom: 7rem; /* 底部安全区：避免温度图被悬浮按钮/角标遮挡 */
+    min-height: 0; /* 关键：让 flex 子项里的 overflow-y: auto 生效 */
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     overflow-y: auto; /* 内容超出时允许纵向滚动 */
     overflow-x: hidden;
     /* 自定义滚动条 - 低调 */
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+    scrollbar-gutter: stable; /* 预留滚动条空间，防止出现/消失时布局抖动 */
 }
 
 .main-content::-webkit-scrollbar {
@@ -463,6 +474,77 @@
 .sidebar-category-select option {
     background: rgba(40, 40, 45, 0.98);
     color: #fff;
+}
+
+/* 展开全部/折叠全部按钮 */
+.sidebar-expand-all-btn {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.sidebar-expand-all-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.sidebar-expand-all-btn.expanded {
+    color: rgba(100, 180, 255, 0.8);
+}
+
+.sidebar-expand-all-btn.expanded:hover {
+    color: rgba(100, 180, 255, 1);
+}
+
+/* 折叠任务数提示 */
+.collapsed-tasks-hint {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    margin-top: 4px;
+    border-radius: 10px;
+    background: rgba(255, 200, 87, 0.06);
+    border: 1px dashed rgba(255, 200, 87, 0.15);
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 12px;
+}
+
+.collapsed-tasks-hint i {
+    color: rgba(255, 200, 87, 0.6);
+    font-size: 11px;
+}
+
+.collapsed-tasks-hint strong {
+    color: rgba(255, 200, 87, 0.85);
+}
+
+.hint-expand-btn {
+    margin-left: auto;
+    padding: 4px 10px;
+    border: 1px solid rgba(100, 180, 255, 0.25);
+    border-radius: 6px;
+    background: rgba(100, 180, 255, 0.08);
+    color: rgba(100, 180, 255, 0.85);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.hint-expand-btn:hover {
+    background: rgba(100, 180, 255, 0.15);
+    border-color: rgba(100, 180, 255, 0.4);
 }
 
 /* 任务统计 */
@@ -602,12 +684,39 @@
 
 /* 任务列表 */
 .sidebar-task-list {
-    flex: 1;
+    flex: 1 1 0;
     padding: 12px;
     overflow-y: auto;
+    min-height: 0; /* 关键：在 flex 容器中启用滚动 */
+    max-height: 100%; /* 不超过父容器剩余空间 */
     display: flex;
     flex-direction: column;
     gap: 8px;
+}
+
+/* 任务列表滚动条（始终可见，使用稳定的 auto 策略） */
+.sidebar-task-list {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
+    scrollbar-gutter: stable;
+}
+
+.sidebar-task-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sidebar-task-list::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 3px;
+}
+
+.sidebar-task-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 3px;
+}
+
+.sidebar-task-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
 }
 
 /* 空状态 */
@@ -750,6 +859,25 @@
 
 .memo-toast i {
     font-size: 16px;
+}
+
+.memo-toast.clickable {
+    cursor: pointer;
+    background: linear-gradient(135deg, rgba(100, 160, 255, 0.95), rgba(80, 140, 220, 0.95));
+}
+
+.memo-toast.clickable:hover {
+    transform: translateX(-50%) translateY(-2px);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+}
+
+.toast-action-hint {
+    font-size: 11px;
+    opacity: 0.7;
+    margin-left: 8px;
+    padding: 2px 8px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
 }
 
 /* 任务项 */
@@ -4130,6 +4258,23 @@
     background: rgba(255, 80, 80, 0.9);
 }
 
+/* 图片上传中状态 */
+.image-preview-item.uploading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.image-upload-progress {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 1.2rem;
+}
+
 .image-upload-btn {
     display: inline-flex;
     align-items: center;
@@ -5168,6 +5313,17 @@ body:hover .keyboard-hint {
     background: rgba(255, 255, 255, 0.15);
 }
 
+.settings-number-input {
+    width: 80px;
+    text-align: center;
+    -moz-appearance: textfield;
+}
+
+.settings-number-input::-webkit-inner-spin-button,
+.settings-number-input::-webkit-outer-spin-button {
+    opacity: 1;
+}
+
 .settings-input::placeholder {
     color: rgba(255, 255, 255, 0.35);
     font-size: 0.85rem;
@@ -5193,6 +5349,17 @@ body:hover .keyboard-hint {
     justify-content: center;
     align-items: center;
     margin-bottom: 2rem;
+}
+
+/* ===== Ticker 吸顶容器：滚动时固定在顶部 ===== */
+.ticker-sticky-wrapper {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 /* ===== 滚动信息栏（Tech Ticker - 单条轮播） ===== */
@@ -5692,6 +5859,16 @@ body:hover .keyboard-hint {
     background: rgba(255, 255, 255, 0.15);
     flex-shrink: 0;
     margin: 0 4px;
+}
+
+/* 全部完成状态 */
+.task-ticker-item.task-ticker-done {
+    color: rgba(255, 255, 255, 0.7);
+    cursor: default;
+    padding: 0 16px;
+}
+.task-ticker-item.task-ticker-done:hover {
+    background: transparent;
 }
 
 /* ===== 任务滚动条悬停弹窗 ===== */
