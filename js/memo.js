@@ -1753,7 +1753,7 @@ class MemoManager {
                 ${habit.text ? `<div class="habit-desc">${this.escapeHtml(habit.text.substring(0, 40))}${habit.text.length > 40 ? '...' : ''}</div>` : ''}
                 ${habit.links && habit.links.length > 0 ? `
                     <div class="habit-links">
-                        ${habit.links.slice(0, 2).map(link => `<a href="${this.escapeHtml(link.url)}" class="habit-link-tag" target="_blank" rel="noopener noreferrer" title="${this.escapeHtml(link.url)}"><i class="fas fa-external-link-alt"></i> ${this.escapeHtml(link.title || this.extractDomain(link.url))}</a>`).join('')}
+                        ${habit.links.slice(0, 2).map(link => `<a href="${this.escapeHtml(link.shortUrl || link.url)}" class="habit-link-tag" target="_blank" rel="noopener noreferrer" title="${this.escapeHtml(link.url)}${link.shortUrl ? '\n短链: ' + this.escapeHtml(link.shortUrl) : ''}"><i class="fas fa-external-link-alt"></i> ${this.escapeHtml(link.title || this.extractDomain(link.url))}</a>`).join('')}
                         ${habit.links.length > 2 ? `<span class="habit-links-more">+${habit.links.length - 2}</span>` : ''}
                     </div>` : ''}
             </div>
@@ -2327,7 +2327,7 @@ class MemoManager {
             const moreCount = task.links.length - 3;
             linksHtml = `
                 <div class="task-links">
-                    ${displayLinks.map(link => `<a href="${this.escapeHtml(link.url)}" class="task-link-item" target="_blank" rel="noopener noreferrer" title="${this.escapeHtml(link.url)}"><i class="fas fa-external-link-alt"></i> ${this.escapeHtml(link.title || this.extractDomain(link.url))}</a>`).join('')}
+                    ${displayLinks.map(link => `<a href="${this.escapeHtml(link.shortUrl || link.url)}" class="task-link-item" target="_blank" rel="noopener noreferrer" title="${this.escapeHtml(link.url)}${link.shortUrl ? '\n短链: ' + this.escapeHtml(link.shortUrl) : ''}"><i class="fas fa-external-link-alt"></i> ${this.escapeHtml(link.title || this.extractDomain(link.url))}</a>`).join('')}
                     ${moreCount > 0 ? `<span class="task-links-more">+${moreCount}</span>` : ''}
                 </div>
             `;
@@ -5054,7 +5054,7 @@ class MemoManager {
     }
     
     /**
-     * 渲染链接预览列表
+     * 渲染链接预览列表（含短链状态）
      */
     renderLinksPreview() {
         const linksList = document.getElementById('sidebar-task-links-list');
@@ -5067,11 +5067,26 @@ class MemoManager {
         this.tempLinks.forEach((link, index) => {
             const linkItem = document.createElement('div');
             linkItem.className = 'link-preview-item';
+            
+            // 跳转使用短链（如果有）
+            const href = link.shortUrl || link.url;
+            const isLoading = link._loading;
+            const hasShortUrl = !!link.shortUrl;
+            
+            // 状态图标
+            let statusHtml = '';
+            if (isLoading) {
+                statusHtml = '<i class="fas fa-spinner fa-spin link-status-icon loading" title="正在生成短链..."></i>';
+            } else if (hasShortUrl) {
+                statusHtml = `<i class="fas fa-compress-alt link-status-icon success" title="短链: ${this.escapeHtml(link.shortCode)}"></i>`;
+            }
+            
             linkItem.innerHTML = `
                 <i class="fas fa-link link-item-icon"></i>
-                <a href="${this.escapeHtml(link.url)}" class="link-item-text" target="_blank" rel="noopener noreferrer" title="${this.escapeHtml(link.url)}">
+                <a href="${this.escapeHtml(href)}" class="link-item-text" target="_blank" rel="noopener noreferrer" title="${this.escapeHtml(link.url)}${hasShortUrl ? '\n短链: ' + this.escapeHtml(link.shortUrl) : ''}">
                     ${this.escapeHtml(link.title || link.url)}
                 </a>
+                ${statusHtml}
                 <button type="button" class="link-remove-btn" data-index="${index}" title="移除">
                     <i class="fas fa-times"></i>
                 </button>
@@ -5092,11 +5107,12 @@ class MemoManager {
     }
     
     /**
-     * 添加临时链接
+     * 添加临时链接（集成 TinyURL 短链）
      */
-    addTempLink() {
+    async addTempLink() {
         const titleInput = document.getElementById('sidebar-link-title-input');
         const urlInput = document.getElementById('sidebar-link-url-input');
+        const addBtn = document.getElementById('sidebar-link-add-btn');
         
         if (!urlInput) return;
         
@@ -5124,10 +5140,11 @@ class MemoManager {
         
         if (!this.tempLinks) this.tempLinks = [];
         
-        this.tempLinks.push({
-            title: titleInput ? titleInput.value.trim() : '',
-            url: url
-        });
+        const title = titleInput ? titleInput.value.trim() : '';
+        
+        // 先添加链接（带 loading 状态），立即响应用户操作
+        const linkData = { title, url, shortUrl: null, shortCode: null, _loading: true };
+        this.tempLinks.push(linkData);
         
         // 清空输入框
         if (titleInput) titleInput.value = '';
@@ -5135,6 +5152,29 @@ class MemoManager {
         urlInput.focus();
         
         this.renderLinksPreview();
+        
+        // 异步创建短链
+        if (typeof tinyUrlService !== 'undefined') {
+            try {
+                // 禁用按钮防止重复操作
+                if (addBtn) addBtn.disabled = true;
+                
+                const shortInfo = await tinyUrlService.createShortUrl(url);
+                if (shortInfo) {
+                    linkData.shortUrl = shortInfo.shortUrl;
+                    linkData.shortCode = shortInfo.shortCode;
+                }
+            } catch (err) {
+                console.warn('[Memo] 短链创建失败，使用原始链接:', err);
+            } finally {
+                linkData._loading = false;
+                if (addBtn) addBtn.disabled = false;
+                this.renderLinksPreview();
+            }
+        } else {
+            linkData._loading = false;
+            this.renderLinksPreview();
+        }
     }
     
     /**
@@ -5518,11 +5558,13 @@ class MemoManager {
             };
         }
         
-        // 处理链接数据
-        const links = this.tempLinks ? this.tempLinks.map(link => ({
-            title: link.title,
-            url: link.url
-        })) : [];
+        // 处理链接数据（保存短链信息）
+        const links = this.tempLinks ? this.tempLinks.map(link => {
+            const linkData = { title: link.title, url: link.url };
+            if (link.shortUrl) linkData.shortUrl = link.shortUrl;
+            if (link.shortCode) linkData.shortCode = link.shortCode;
+            return linkData;
+        }) : [];
         
         // 处理子任务数据
         const subtasks = this.tempSubtasks ? this.tempSubtasks.map(st => ({

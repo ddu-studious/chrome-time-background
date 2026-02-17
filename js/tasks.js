@@ -641,9 +641,10 @@ class TaskManager {
                 <div class="detail-section-title">相关链接 (${task.links.length})</div>
                 <div style="display: flex; flex-direction: column; gap: 6px;">
                     ${task.links.map(link => `
-                        <a href="${this.escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer" class="detail-link-item">
+                        <a href="${this.escapeHtml(link.shortUrl || link.url)}" target="_blank" rel="noopener noreferrer" class="detail-link-item" title="${this.escapeHtml(link.url)}${link.shortUrl ? '\n短链: ' + this.escapeHtml(link.shortUrl) : ''}">
                             <i class="fas fa-external-link-alt" style="font-size: 0.7rem; opacity: 0.7;"></i>
                             <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(link.title || link.url)}</span>
+                            ${link.shortCode ? `<span style="font-size: 0.65rem; color: #4caf50; opacity: 0.8; margin-left: 4px;" title="TinyURL 短链"><i class="fas fa-compress-alt"></i></span>` : ''}
                         </a>
                     `).join('')}
                 </div>
