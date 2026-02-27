@@ -419,10 +419,14 @@ class MemoManager {
                 <option value="overdue">已过期</option>
                 <option value="habits">每日习惯</option>
             </select>
-            <select class="sidebar-category-select" id="sidebar-category-select">
-                <option value="all">全部分类</option>
-                ${this.categories.map(cat => `<option value="${cat.id}">${this.escapeHtml(cat.name)}</option>`).join('')}
-            </select>
+            <div class="sidebar-category-combobox-wrap" id="sidebar-category-combobox-wrap"></div>
+            <div class="sidebar-priority-filter" id="sidebar-priority-filter" title="按优先级筛选">
+                <button type="button" class="sidebar-priority-btn active" data-priority="all" title="全部">全部</button>
+                <button type="button" class="sidebar-priority-btn priority-high" data-priority="high" title="高优先级"></button>
+                <button type="button" class="sidebar-priority-btn priority-medium" data-priority="medium" title="中优先级"></button>
+                <button type="button" class="sidebar-priority-btn priority-low" data-priority="low" title="低优先级"></button>
+                <button type="button" class="sidebar-priority-btn priority-none" data-priority="none" title="无优先级"></button>
+            </div>
             <button class="sidebar-expand-all-btn" id="sidebar-expand-all-btn" title="展开全部分组">
                 <i class="fas fa-angles-down"></i>
             </button>
@@ -459,11 +463,8 @@ class MemoManager {
                             <textarea id="sidebar-task-text" placeholder="输入任务详情..." rows="3"></textarea>
                         </div>
                         <div class="form-group">
-                            <label for="sidebar-task-category">分类</label>
-                            <select id="sidebar-task-category">
-                                <option value="">无分类</option>
-                                ${this.categories.map(cat => `<option value="${cat.id}">${this.escapeHtml(cat.name)}</option>`).join('')}
-                            </select>
+                            <label for="sidebar-task-category-wrap">分类</label>
+                            <div id="sidebar-task-category-wrap" class="sidebar-task-category-wrap"></div>
                         </div>
                     </div>
 
@@ -540,10 +541,15 @@ class MemoManager {
                             <label>图片附件</label>
                             <div class="image-upload-area" id="image-upload-area">
                                 <input type="file" id="sidebar-task-images" accept="image/*" multiple hidden>
+                                <div class="image-upload-batch-progress hidden" id="image-upload-batch-progress">
+                                    <div class="image-upload-batch-bar"><div class="image-upload-batch-fill" id="image-upload-batch-fill"></div></div>
+                                    <span class="image-upload-batch-text" id="image-upload-batch-text">0 / 0</span>
+                                </div>
                                 <div class="image-preview-list" id="image-preview-list"></div>
                                 <button type="button" class="image-upload-btn" id="image-upload-btn">
                                     <i class="fas fa-image"></i>
                                     <span>添加图片</span>
+                                    <span class="image-upload-hint">支持拖拽、粘贴，可多选</span>
                                 </button>
                             </div>
                         </div>
@@ -590,6 +596,26 @@ class MemoManager {
         sidebarContent.appendChild(taskList);
         sidebarContent.appendChild(formModal);
         
+        // 创建分类 Combobox（侧边栏筛选 + 表单）
+        const sidebarCatWrap = document.getElementById('sidebar-category-combobox-wrap');
+        if (sidebarCatWrap) {
+            this._sidebarCategoryCombobox = this.createCategoryCombobox(sidebarCatWrap, {
+                value: 'all',
+                placeholder: '全部分类',
+                allowAll: true,
+                onChange: () => this.renderSidebarTaskList()
+            });
+        }
+        const formCatWrap = document.getElementById('sidebar-task-category-wrap');
+        if (formCatWrap) {
+            this._formCategoryCombobox = this.createCategoryCombobox(formCatWrap, {
+                value: '',
+                placeholder: '无分类',
+                allowAll: false,
+                onChange: () => {}
+            });
+        }
+        
         // 绑定事件
         this.bindSidebarEvents();
         
@@ -613,10 +639,18 @@ class MemoManager {
             filterSelect.addEventListener('change', () => this.renderSidebarTaskList());
         }
         
-        // 分类筛选
-        const categorySelect = document.getElementById('sidebar-category-select');
-        if (categorySelect) {
-            categorySelect.addEventListener('change', () => this.renderSidebarTaskList());
+        // 分类筛选（使用 Combobox，onChange 已在创建时绑定）
+        
+        // 优先级筛选
+        const priorityFilter = document.getElementById('sidebar-priority-filter');
+        if (priorityFilter) {
+            priorityFilter.querySelectorAll('.sidebar-priority-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    priorityFilter.querySelectorAll('.sidebar-priority-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    this.renderSidebarTaskList();
+                });
+            });
         }
         
         // 展开全部/折叠全部按钮
@@ -743,12 +777,46 @@ class MemoManager {
             collapseBtn.addEventListener('click', () => this.toggleSidebar());
         }
         
-        // 图片上传按钮
+        // 图片上传：点击、拖拽、粘贴
         const imageUploadBtn = document.getElementById('image-upload-btn');
         const imageInput = document.getElementById('sidebar-task-images');
+        const imageUploadArea = document.getElementById('image-upload-area');
         if (imageUploadBtn && imageInput) {
             imageUploadBtn.addEventListener('click', () => imageInput.click());
             imageInput.addEventListener('change', (e) => this.handleImageUpload(e));
+        }
+        if (imageUploadArea) {
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(ev => {
+                imageUploadArea.addEventListener(ev, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                });
+            });
+            imageUploadArea.addEventListener('dragenter', () => imageUploadArea.classList.add('image-upload-dragover'));
+            imageUploadArea.addEventListener('dragover', () => imageUploadArea.classList.add('image-upload-dragover'));
+            imageUploadArea.addEventListener('dragleave', (e) => {
+                if (!imageUploadArea.contains(e.relatedTarget)) imageUploadArea.classList.remove('image-upload-dragover');
+            });
+            imageUploadArea.addEventListener('drop', (e) => {
+                imageUploadArea.classList.remove('image-upload-dragover');
+                const files = e.dataTransfer && e.dataTransfer.files;
+                if (files && files.length) this.handleImageFiles(Array.from(files));
+            });
+        }
+        const formModal = document.getElementById('sidebar-form-modal');
+        if (formModal) {
+            formModal.addEventListener('paste', (e) => {
+                const items = e.clipboardData && e.clipboardData.items;
+                if (!items) return;
+                const files = [];
+                for (let i = 0; i < items.length; i++) {
+                    if (items[i].type.indexOf('image') !== -1) files.push(items[i].getAsFile());
+                }
+                if (files.length) {
+                    e.preventDefault();
+                    this.handleImageFiles(files.filter(Boolean));
+                }
+            });
         }
         
         // 链接添加按钮
@@ -797,31 +865,54 @@ class MemoManager {
     }
     
     /**
-     * 处理图片上传 - 使用 ImgVault API 上传，仅存储 imageId/UUID
+     * 处理图片上传 - 使用 ImgVault API 上传，仅存储 imageId/UUID；支持批量进度与失败重试
      */
-    async handleImageUpload(event) {
+    handleImageUpload(event) {
         const files = event.target.files;
         if (!files || files.length === 0) return;
+        this.handleImageFiles(Array.from(files));
+        event.target.value = '';
+    }
+    
+    /**
+     * 处理多张图片（来自选择/拖拽/粘贴），带批量进度
+     */
+    async handleImageFiles(files) {
+        const imageFiles = Array.from(files).filter(f => f.type && f.type.startsWith('image/'));
+        if (imageFiles.length === 0) return;
         
         const previewList = document.getElementById('image-preview-list');
+        const batchProgress = document.getElementById('image-upload-batch-progress');
+        const batchFill = document.getElementById('image-upload-batch-fill');
+        const batchText = document.getElementById('image-upload-batch-text');
         if (!previewList) return;
         
-        // 初始化临时图片数组
         if (!this.tempImages) this.tempImages = [];
+        const total = imageFiles.length;
+        let done = 0;
+        if (total > 1 && batchProgress && batchFill && batchText) {
+            batchProgress.classList.remove('hidden');
+            batchFill.style.width = '0%';
+            batchText.textContent = `0 / ${total}`;
+        }
         
-        for (const file of files) {
-            // 验证文件类型
-            if (!file.type.startsWith('image/')) continue;
-            
-            // 验证文件大小（最大 50MB，ImgVault 支持）
+        const updateProgress = () => {
+            done++;
+            if (batchFill) batchFill.style.width = `${(done / total) * 100}%`;
+            if (batchText) batchText.textContent = `${done} / ${total}`;
+            if (done === total && batchProgress) {
+                batchProgress.classList.add('hidden');
+                if (batchFill) batchFill.style.width = '0%';
+            }
+        };
+        
+        for (const file of imageFiles) {
             if (file.size > 50 * 1024 * 1024) {
                 console.warn('图片文件过大，已跳过:', file.name);
+                updateProgress();
                 continue;
             }
-            
             const imageId = this.generateId();
-            
-            // 先创建占位预览（显示加载状态）
             const previewItem = document.createElement('div');
             previewItem.className = 'image-preview-item uploading';
             previewItem.dataset.imageId = imageId;
@@ -839,14 +930,9 @@ class MemoManager {
             previewList.appendChild(previewItem);
             
             try {
-                // 上传到 ImgVault API
                 const uploadResult = await this.uploadToImgVault(file);
-                
                 if (uploadResult) {
-                    // 生成缩略图 URL
                     const thumbnailUrl = this.getImgVaultProcessUrl(uploadResult.id, { width: 80, height: 80, format: 'webp', quality: 60 });
-                    
-                    // 存储到临时数组（只存储 ID 和 UUID，不存 base64）
                     this.tempImages.push({
                         id: imageId,
                         imageId: uploadResult.id,
@@ -854,8 +940,6 @@ class MemoManager {
                         originalName: uploadResult.originalName || file.name,
                         thumbnailUrl: thumbnailUrl
                     });
-                    
-                    // 更新预览为实际图片
                     previewItem.classList.remove('uploading');
                     previewItem.innerHTML = `
                         <img src="${thumbnailUrl}" alt="预览">
@@ -864,21 +948,11 @@ class MemoManager {
                         </button>
                     `;
                     this.bindImageErrorFallback(previewItem.querySelector('img'));
-                    previewItem.querySelector('.remove-image').addEventListener('click', () => {
-                        this.removePreviewImage(imageId);
-                    });
+                    previewItem.querySelector('.remove-image').addEventListener('click', () => this.removePreviewImage(imageId));
                 } else {
-                    // 上传失败，回退到本地 base64 压缩方案
-                    console.warn('ImgVault 上传失败，使用本地压缩方案');
                     const thumbnail = await this.compressImage(file, 80, 0.6);
                     const fullImage = await this.compressImage(file, 800, 0.85);
-                    
-                    this.tempImages.push({
-                        id: imageId,
-                        thumbnail: thumbnail,
-                        fullImage: fullImage
-                    });
-                    
+                    this.tempImages.push({ id: imageId, thumbnail, fullImage: fullImage });
                     previewItem.classList.remove('uploading');
                     previewItem.innerHTML = `
                         <img src="${thumbnail}" alt="预览">
@@ -886,18 +960,32 @@ class MemoManager {
                             <i class="fas fa-times"></i>
                         </button>
                     `;
-                    previewItem.querySelector('.remove-image').addEventListener('click', () => {
-                        this.removePreviewImage(imageId);
-                    });
+                    previewItem.querySelector('.remove-image').addEventListener('click', () => this.removePreviewImage(imageId));
                 }
             } catch (err) {
                 console.error('图片处理失败:', err);
-                previewItem.remove();
+                previewItem.classList.remove('uploading');
+                previewItem.classList.add('upload-failed');
+                previewItem.innerHTML = `
+                    <span class="upload-failed-label">上传失败</span>
+                    <button type="button" class="upload-retry-btn" title="重新选择该图片">
+                        <i class="fas fa-redo"></i> 重试
+                    </button>
+                    <button type="button" class="remove-image" title="移除">
+                        <i class="fas fa-times"></i>
+                    </button>
+                `;
+                previewItem.querySelector('.remove-image').addEventListener('click', () => this.removePreviewImage(imageId));
+                previewItem.querySelector('.upload-retry-btn').addEventListener('click', () => {
+                    const input = document.getElementById('sidebar-task-images');
+                    if (input) {
+                        input.click();
+                        previewItem.remove();
+                    }
+                });
             }
+            updateProgress();
         }
-        
-        // 清空 input 以便再次选择同一文件
-        event.target.value = '';
     }
     
     /**
@@ -1077,11 +1165,12 @@ class MemoManager {
         const searchInput = document.getElementById('sidebar-search');
         const filterSelect = document.getElementById('sidebar-filter-select');
         
-        const categorySelect = document.getElementById('sidebar-category-select');
+        const priorityActive = document.querySelector('#sidebar-priority-filter .sidebar-priority-btn.active');
+        const priorityValue = priorityActive ? priorityActive.dataset.priority : 'all';
+        const categoryValue = this._sidebarCategoryCombobox ? this._sidebarCategoryCombobox.getValue() : 'all';
         
         const searchText = searchInput ? searchInput.value.toLowerCase().trim() : '';
         const filterValue = filterSelect ? filterSelect.value : 'all';
-        const categoryValue = categorySelect ? categorySelect.value : 'all';
         
         // 筛选任务
         let filteredMemos = [...this.memos];
@@ -1097,6 +1186,11 @@ class MemoManager {
         // 分类筛选
         if (categoryValue !== 'all') {
             filteredMemos = filteredMemos.filter(m => m.categoryId === categoryValue);
+        }
+        
+        // 优先级筛选
+        if (priorityValue !== 'all') {
+            filteredMemos = filteredMemos.filter(m => (m.priority || 'none') === priorityValue);
         }
         
         // 状态筛选
@@ -1447,12 +1541,11 @@ class MemoManager {
         
         // 从当前筛选数据中获取该分组的任务
         const filterSelect = document.getElementById('sidebar-filter-select');
-        const categorySelect = document.getElementById('sidebar-category-select');
         const searchInput = document.getElementById('sidebar-search');
+        const categoryValue = this._sidebarCategoryCombobox ? this._sidebarCategoryCombobox.getValue() : 'all';
         
         const searchText = searchInput ? searchInput.value.toLowerCase().trim() : '';
         const filterValue = filterSelect ? filterSelect.value : 'all';
-        const categoryValue = categorySelect ? categorySelect.value : 'all';
         
         let filteredMemos = [...this.memos];
         
@@ -2352,12 +2445,21 @@ class MemoManager {
                     <div class="subtask-expand-body open">
                         <ul class="subtask-compact-list">
                             ${task.subtasks.map(st => `
-                                <li class="subtask-compact-item${st.completed ? ' done' : ''}" data-subtask-id="${st.id}">
+                                <li class="subtask-compact-item${st.completed ? ' done' : ''}" data-subtask-id="${st.id}" draggable="true">
+                                    <span class="subtask-drag-handle" title="拖拽排序"><i class="fas fa-grip-vertical"></i></span>
                                     <div class="subtask-compact-dot"><i class="fas fa-check"></i></div>
                                     <span class="subtask-compact-text">${this.escapeHtml(st.title)}</span>
+                                    <div class="subtask-compact-actions">
+                                        <button type="button" class="subtask-action-btn subtask-copy-btn" title="复制内容" data-subtask-id="${st.id}"><i class="fas fa-copy"></i></button>
+                                        <button type="button" class="subtask-action-btn subtask-delete-btn" title="删除" data-subtask-id="${st.id}"><i class="fas fa-times"></i></button>
+                                    </div>
                                 </li>
                             `).join('')}
                         </ul>
+                        <div class="subtask-add-inline" data-task-id="${task.id}">
+                            <input type="text" class="subtask-add-inline-input" placeholder="添加子任务..." maxlength="200">
+                            <button type="button" class="subtask-add-inline-btn" title="添加"><i class="fas fa-plus"></i></button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -2375,6 +2477,7 @@ class MemoManager {
                 ${task.text ? `<div class="task-desc">${this.escapeHtml(task.text.substring(0, 60))}${task.text.length > 60 ? '...' : ''}</div>` : ''}
                 ${progressHtml}
                 ${subtasksHtml}
+                ${''}<!-- 无子任务时不展示快速添加区域，通过编辑表单或右键菜单添加 -->
                 ${linksHtml}
                 ${imagesHtml}
                 <div class="task-meta">
@@ -2431,15 +2534,65 @@ class MemoManager {
                 });
             }
             
-            // 子任务勾选
+            // 子任务：单击圆点切换完成，双击文字内联编辑，复制、删除、拖拽排序
             subtasksEl.querySelectorAll('.subtask-compact-item').forEach(stItem => {
-                stItem.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const stId = stItem.dataset.subtaskId;
-                    this.toggleSubtaskComplete(task.id, stId);
-                });
+                const dot = stItem.querySelector('.subtask-compact-dot');
+                const textEl = stItem.querySelector('.subtask-compact-text');
+                if (dot) {
+                    dot.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this.toggleSubtaskComplete(task.id, stItem.dataset.subtaskId);
+                    });
+                }
+                if (textEl) {
+                    textEl.addEventListener('dblclick', (e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        this._startSubtaskInlineEdit(task.id, stItem.dataset.subtaskId, textEl, stItem);
+                    });
+                }
+                const copyBtn = stItem.querySelector('.subtask-copy-btn');
+                if (copyBtn) {
+                    copyBtn.addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        const st = (task.subtasks || []).find(s => s.id === stItem.dataset.subtaskId);
+                        if (st) {
+                            const ok = await this.copyToClipboard(st.title || '');
+                            this.showToast(ok ? '已复制子任务内容' : '复制失败');
+                        }
+                    });
+                }
+                const deleteBtn = stItem.querySelector('.subtask-delete-btn');
+                if (deleteBtn) {
+                    deleteBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this.deleteSubtaskInline(task.id, stItem.dataset.subtaskId);
+                    });
+                }
             });
+            
+            this._bindSubtaskDragEvents(subtasksEl, task.id);
+            // 列表内添加子任务输入
+            const addInline = subtasksEl.querySelector('.subtask-add-inline');
+            if (addInline) {
+                const input = addInline.querySelector('.subtask-add-inline-input');
+                const btn = addInline.querySelector('.subtask-add-inline-btn');
+                const submit = () => {
+                    if (input && input.value.trim()) {
+                        this.addSubtaskInline(task.id, input.value);
+                        input.value = '';
+                    }
+                };
+                if (btn) btn.addEventListener('click', (e) => { e.stopPropagation(); submit(); });
+                if (input) {
+                    input.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); submit(); }
+                    });
+                }
+            }
         }
+        
+        // 无子任务时不显示快速添加区域（通过编辑表单或右键菜单添加子任务）
         
         // 进度条拖拽交互（仅无子任务且未完成时）
         const progressEl = item.querySelector('.task-progress.draggable');
@@ -2449,6 +2602,16 @@ class MemoManager {
         
         // 点击任务项编辑
         item.addEventListener('click', () => this.showSidebarForm(task));
+        
+        // 右键菜单（复制标题/描述/子任务、编辑、删除）
+        const taskBody = item.querySelector('.task-body');
+        if (taskBody) {
+            taskBody.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.showTaskContextMenu(task, e.clientX, e.clientY);
+            });
+        }
         
         // 图片点击放大事件
         const taskImages = item.querySelector('.task-images');
@@ -4472,11 +4635,9 @@ class MemoManager {
      * 显示分类管理面板
      */
     showCategoryManager() {
-        // 移除已有的面板
         const existingPanel = document.getElementById('category-manager');
         if (existingPanel) existingPanel.remove();
         
-        // 创建分类管理面板
         const panel = document.createElement('div');
         panel.id = 'category-manager';
         panel.className = 'category-manager';
@@ -4484,48 +4645,135 @@ class MemoManager {
             <div class="category-manager-overlay"></div>
             <div class="category-manager-content">
                 <div class="category-manager-header">
-                    <h3>分类管理</h3>
+                    <h3><i class="fas fa-layer-group"></i> 分类管理</h3>
+                    <span class="category-manager-badge" id="cm-badge">${this.categories.length} 个</span>
                     <button class="category-manager-close" id="category-manager-close">&times;</button>
                 </div>
+                <div class="category-manager-search">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="category-manager-search" placeholder="搜索或创建分类..." autocomplete="off">
+                </div>
                 <div class="category-manager-body">
-                    <div class="category-add-form">
-                        <input type="text" id="new-category-name" placeholder="输入分类名称..." maxlength="20">
-                        <input type="color" id="new-category-color" value="#64b4ff" title="选择颜色">
-                        <button id="add-category-btn" title="添加分类">
-                            <i class="fas fa-plus"></i>
-                        </button>
-                    </div>
                     <div class="category-list" id="category-list">
                         ${this.renderCategoryManagerList()}
                     </div>
+                </div>
+                <div class="category-manager-footer">
+                    <button class="category-create-btn" id="category-create-btn">
+                        <i class="fas fa-plus"></i> 新建分类
+                    </button>
                 </div>
             </div>
         `;
         
         document.body.appendChild(panel);
         
-        // 绑定事件
         const closeBtn = panel.querySelector('#category-manager-close');
         const overlay = panel.querySelector('.category-manager-overlay');
-        const addBtn = panel.querySelector('#add-category-btn');
-        const nameInput = panel.querySelector('#new-category-name');
-        
         const closePanel = () => panel.remove();
         closeBtn.addEventListener('click', closePanel);
         overlay.addEventListener('click', closePanel);
         
-        // 添加分类
-        addBtn.addEventListener('click', () => this.addNewCategory(panel));
-        nameInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') this.addNewCategory(panel);
+        const searchInput = panel.querySelector('#category-manager-search');
+        if (searchInput) {
+            searchInput.addEventListener('input', () => {
+                this.filterCategoryManagerList(panel);
+            });
+            searchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    const q = searchInput.value.trim();
+                    if (q && !this.categories.some(c => c.name === q)) {
+                        this._quickCreateCategory(q, panel);
+                        searchInput.value = '';
+                    }
+                }
+            });
+        }
+        
+        const createBtn = panel.querySelector('#category-create-btn');
+        createBtn.addEventListener('click', () => this._showInlineCreate(panel));
+        
+        this.bindCategoryItemEvents(panel);
+        requestAnimationFrame(() => panel.classList.add('active'));
+        searchInput.focus();
+    }
+    
+    async _quickCreateCategory(name, panel) {
+        const presetColors = ['#64b4ff', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#a3a3a3'];
+        const usedColors = this.categories.map(c => c.color);
+        const color = presetColors.find(c => !usedColors.includes(c)) || presetColors[Math.floor(Math.random() * presetColors.length)];
+        const newCategory = { id: this.generateId(), name, color };
+        this.categories.push(newCategory);
+        await this.saveCategories();
+        this._refreshCategoryList(panel);
+        this.updateCategorySelects();
+    }
+    
+    _showInlineCreate(panel) {
+        const listEl = panel.querySelector('#category-list');
+        if (!listEl || listEl.querySelector('.category-inline-create')) return;
+        
+        const presetColors = ['#64b4ff', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#a3a3a3'];
+        const row = document.createElement('div');
+        row.className = 'category-inline-create';
+        row.innerHTML = `
+            <input type="text" class="category-inline-name" placeholder="分类名称..." maxlength="20" autofocus>
+            <div class="category-color-palette">
+                ${presetColors.map(c => `<span class="category-palette-dot${c === '#64b4ff' ? ' selected' : ''}" data-color="${c}" style="background:${c}"></span>`).join('')}
+            </div>
+            <div class="category-inline-actions">
+                <button class="category-inline-save"><i class="fas fa-check"></i> 添加</button>
+                <button class="category-inline-cancel"><i class="fas fa-times"></i></button>
+            </div>
+        `;
+        listEl.appendChild(row);
+        
+        const nameInput = row.querySelector('.category-inline-name');
+        let selectedColor = '#64b4ff';
+        nameInput.focus();
+        
+        row.querySelectorAll('.category-palette-dot').forEach(dot => {
+            dot.addEventListener('click', () => {
+                row.querySelectorAll('.category-palette-dot').forEach(d => d.classList.remove('selected'));
+                dot.classList.add('selected');
+                selectedColor = dot.dataset.color;
+            });
         });
         
-        // 绑定已有分类项的事件
-        this.bindCategoryItemEvents(panel);
+        const doSave = async () => {
+            const name = nameInput.value.trim();
+            if (!name) { nameInput.classList.add('input-error'); setTimeout(() => nameInput.classList.remove('input-error'), 800); return; }
+            if (this.categories.some(c => c.name === name)) { nameInput.classList.add('input-error'); nameInput.placeholder = '已存在'; nameInput.value = ''; setTimeout(() => { nameInput.classList.remove('input-error'); nameInput.placeholder = '分类名称...'; }, 1200); return; }
+            this.categories.push({ id: this.generateId(), name, color: selectedColor });
+            await this.saveCategories();
+            this._refreshCategoryList(panel);
+            this.updateCategorySelects();
+        };
         
-        // 显示动画
-        requestAnimationFrame(() => panel.classList.add('active'));
-        nameInput.focus();
+        row.querySelector('.category-inline-save').addEventListener('click', doSave);
+        nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSave(); if (e.key === 'Escape') row.remove(); });
+        row.querySelector('.category-inline-cancel').addEventListener('click', () => row.remove());
+    }
+    
+    _refreshCategoryList(panel) {
+        const listEl = panel.querySelector('#category-list');
+        if (listEl) { listEl.innerHTML = this.renderCategoryManagerList(); this.bindCategoryItemEvents(panel); }
+        const badge = panel.querySelector('#cm-badge');
+        if (badge) badge.textContent = this.categories.length + ' 个';
+    }
+    
+    /**
+     * 根据搜索关键词过滤分类管理列表显示
+     */
+    filterCategoryManagerList(panel) {
+        const searchInput = panel.querySelector('#category-manager-search');
+        const listEl = panel.querySelector('#category-list');
+        if (!searchInput || !listEl) return;
+        const q = (searchInput.value || '').toLowerCase().trim();
+        listEl.querySelectorAll('.category-item').forEach(item => {
+            const name = (item.querySelector('.category-name') || item).textContent || '';
+            item.style.display = q && !name.toLowerCase().includes(q) ? 'none' : '';
+        });
     }
     
     /**
@@ -4533,70 +4781,40 @@ class MemoManager {
      */
     renderCategoryManagerList() {
         if (this.categories.length === 0) {
-            return '<div class="category-empty">暂无分类，请添加</div>';
+            return '<div class="category-empty"><i class="fas fa-folder-open"></i><p>暂无分类</p><p class="category-empty-hint">点击下方"新建分类"或在搜索框输入名称后回车</p></div>';
         }
-        
-        return this.categories.map(cat => `
-            <div class="category-item" data-id="${cat.id}">
-                <span class="category-color" style="background: ${cat.color || '#64b4ff'}"></span>
-                <span class="category-name">${this.escapeHtml(cat.name)}</span>
+        return this.categories.map(cat => {
+            const count = this.memos.filter(m => m.categoryId === cat.id).length;
+            const rgb = this._hexToRgb(cat.color || '#64b4ff');
+            const chipBg = rgb ? `rgba(${rgb.r},${rgb.g},${rgb.b},0.15)` : 'rgba(100,180,255,0.15)';
+            const chipColor = cat.color || '#64b4ff';
+            return `
+            <div class="category-item" data-id="${cat.id}" draggable="true">
+                <span class="category-drag-handle" title="拖拽排序"><i class="fas fa-grip-vertical"></i></span>
+                <span class="category-chip" style="background:${chipBg};color:${chipColor}">
+                    <i class="fas fa-circle" style="font-size:6px"></i>
+                    ${this.escapeHtml(cat.name)}
+                </span>
+                <span class="category-count" title="任务数">${count}</span>
                 <div class="category-actions">
-                    <button class="category-edit-btn" data-id="${cat.id}" title="编辑">
-                        <i class="fas fa-pen"></i>
-                    </button>
-                    <button class="category-delete-btn" data-id="${cat.id}" title="删除">
-                        <i class="fas fa-trash"></i>
-                    </button>
+                    <button class="category-edit-btn" data-id="${cat.id}" title="编辑"><i class="fas fa-pen"></i></button>
+                    <button class="category-delete-btn" data-id="${cat.id}" title="删除"><i class="fas fa-trash"></i></button>
                 </div>
             </div>
-        `).join('');
+        `;
+        }).join('');
+    }
+    
+    _hexToRgb(hex) {
+        const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return m ? { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) } : null;
     }
     
     /**
      * 添加新分类
      */
     async addNewCategory(panel) {
-        const nameInput = panel.querySelector('#new-category-name');
-        const colorInput = panel.querySelector('#new-category-color');
-        const name = nameInput.value.trim();
-        
-        if (!name) {
-            nameInput.classList.add('input-error');
-            setTimeout(() => nameInput.classList.remove('input-error'), 800);
-            return;
-        }
-        
-        // 检查重复
-        if (this.categories.some(c => c.name === name)) {
-            nameInput.classList.add('input-error');
-            nameInput.placeholder = '分类已存在';
-            setTimeout(() => {
-                nameInput.classList.remove('input-error');
-                nameInput.placeholder = '输入分类名称...';
-            }, 1500);
-            return;
-        }
-        
-        // 添加分类
-        const newCategory = {
-            id: this.generateId(),
-            name: name,
-            color: colorInput.value
-        };
-        this.categories.push(newCategory);
-        await this.saveCategories();
-        
-        // 更新界面
-        const listEl = panel.querySelector('#category-list');
-        listEl.innerHTML = this.renderCategoryManagerList();
-        this.bindCategoryItemEvents(panel);
-        
-        // 更新分类筛选下拉框
-        this.updateCategorySelects();
-        
-        // 清空输入
-        nameInput.value = '';
-        nameInput.focus();
+        this._showInlineCreate(panel);
     }
     
     /**
@@ -4604,6 +4822,15 @@ class MemoManager {
      */
     bindCategoryItemEvents(panel) {
         const listEl = panel.querySelector('#category-list');
+        if (!listEl) return;
+        
+        // 双击名称进入编辑
+        listEl.querySelectorAll('.category-name').forEach(el => {
+            el.addEventListener('dblclick', (e) => {
+                const item = e.target.closest('.category-item');
+                if (item && item.dataset.id) this.editCategory(item.dataset.id, panel);
+            });
+        });
         
         // 编辑按钮
         listEl.querySelectorAll('.category-edit-btn').forEach(btn => {
@@ -4626,6 +4853,50 @@ class MemoManager {
                 }
             });
         });
+        
+        // 拖拽排序
+        listEl.querySelectorAll('.category-item').forEach(item => {
+            const handle = item.querySelector('.category-drag-handle');
+            const dragEl = handle || item;
+            dragEl.addEventListener('dragstart', (e) => {
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', item.dataset.id);
+                item.classList.add('category-dragging');
+            });
+            dragEl.addEventListener('dragend', () => item.classList.remove('category-dragging'));
+            item.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                const fromId = e.dataTransfer.getData('text/plain');
+                if (!fromId || fromId === item.dataset.id) return;
+                const rect = item.getBoundingClientRect();
+                const mid = rect.top + rect.height / 2;
+                item.classList.toggle('category-drag-over-bottom', e.clientY > mid);
+                item.classList.toggle('category-drag-over-top', e.clientY <= mid);
+            });
+            item.addEventListener('dragleave', () => {
+                item.classList.remove('category-drag-over-bottom');
+                item.classList.remove('category-drag-over-top');
+            });
+            item.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                item.classList.remove('category-drag-over-bottom');
+                item.classList.remove('category-drag-over-top');
+                const fromId = e.dataTransfer.getData('text/plain');
+                if (!fromId || fromId === item.dataset.id) return;
+                const fromIndex = this.categories.findIndex(c => c.id === fromId);
+                const toIndex = this.categories.findIndex(c => c.id === item.dataset.id);
+                if (fromIndex === -1 || toIndex === -1) return;
+                const [moved] = this.categories.splice(fromIndex, 1);
+                const dropOnBottom = item.classList.contains('category-drag-over-bottom');
+                let insertIndex = dropOnBottom ? (fromIndex < toIndex ? toIndex : toIndex + 1) : (fromIndex < toIndex ? toIndex - 1 : toIndex);
+                this.categories.splice(insertIndex, 0, moved);
+                await this.saveCategories();
+                listEl.innerHTML = this.renderCategoryManagerList();
+                this.bindCategoryItemEvents(panel);
+                this.updateCategorySelects();
+            });
+        });
     }
     
     /**
@@ -4638,40 +4909,45 @@ class MemoManager {
         const itemEl = panel.querySelector(`.category-item[data-id="${categoryId}"]`);
         if (!itemEl) return;
         
-        // 替换为编辑表单
+        const presetColors = ['#64b4ff', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#a3a3a3'];
+        let selectedColor = category.color || '#64b4ff';
+        
+        itemEl.classList.add('category-item-editing');
         itemEl.innerHTML = `
-            <input type="color" class="edit-category-color" value="${category.color || '#64b4ff'}">
             <input type="text" class="edit-category-name" value="${this.escapeHtml(category.name)}" maxlength="20">
-            <div class="category-actions">
-                <button class="category-save-btn" title="保存">
-                    <i class="fas fa-check"></i>
-                </button>
-                <button class="category-cancel-btn" title="取消">
-                    <i class="fas fa-times"></i>
-                </button>
+            <div class="category-color-palette">
+                ${presetColors.map(c => `<span class="category-palette-dot${c === selectedColor ? ' selected' : ''}" data-color="${c}" style="background:${c}"></span>`).join('')}
+            </div>
+            <div class="category-edit-footer">
+                <button class="category-save-btn"><i class="fas fa-check"></i> 保存</button>
+                <button class="category-cancel-btn"><i class="fas fa-times"></i> 取消</button>
+                <button class="category-delete-inline-btn" title="删除分类"><i class="fas fa-trash"></i></button>
             </div>
         `;
         
         const nameInput = itemEl.querySelector('.edit-category-name');
-        const colorInput = itemEl.querySelector('.edit-category-color');
         const saveBtn = itemEl.querySelector('.category-save-btn');
         const cancelBtn = itemEl.querySelector('.category-cancel-btn');
+        const deleteBtn = itemEl.querySelector('.category-delete-inline-btn');
         
         nameInput.focus();
         nameInput.select();
         
-        // 保存
+        itemEl.querySelectorAll('.category-palette-dot').forEach(dot => {
+            dot.addEventListener('click', () => {
+                itemEl.querySelectorAll('.category-palette-dot').forEach(d => d.classList.remove('selected'));
+                dot.classList.add('selected');
+                selectedColor = dot.dataset.color;
+            });
+        });
+        
         const saveEdit = async () => {
             const newName = nameInput.value.trim();
             if (!newName) return;
-            
             category.name = newName;
-            category.color = colorInput.value;
+            category.color = selectedColor;
             await this.saveCategories();
-            
-            const listEl = panel.querySelector('#category-list');
-            listEl.innerHTML = this.renderCategoryManagerList();
-            this.bindCategoryItemEvents(panel);
+            this._refreshCategoryList(panel);
             this.updateCategorySelects();
             this.renderSidebarTaskList();
         };
@@ -4682,13 +4958,17 @@ class MemoManager {
             if (e.key === 'Escape') cancelEdit();
         });
         
-        // 取消
-        const cancelEdit = () => {
-            const listEl = panel.querySelector('#category-list');
-            listEl.innerHTML = this.renderCategoryManagerList();
-            this.bindCategoryItemEvents(panel);
-        };
+        const cancelEdit = () => this._refreshCategoryList(panel);
         cancelBtn.addEventListener('click', cancelEdit);
+        
+        deleteBtn.addEventListener('click', async () => {
+            if (confirm('确定要删除这个分类吗？相关任务将变为无分类。')) {
+                await this.deleteCategoryById(categoryId);
+                this._refreshCategoryList(panel);
+                this.updateCategorySelects();
+                this.renderSidebarTaskList();
+            }
+        });
     }
     
     /**
@@ -4715,26 +4995,11 @@ class MemoManager {
      * 更新分类选择下拉框
      */
     updateCategorySelects() {
-        // 更新筛选下拉框
-        const filterSelect = document.getElementById('sidebar-category-select');
-        if (filterSelect) {
-            const currentValue = filterSelect.value;
-            filterSelect.innerHTML = `
-                <option value="all">全部分类</option>
-                ${this.categories.map(cat => `<option value="${cat.id}">${this.escapeHtml(cat.name)}</option>`).join('')}
-            `;
-            filterSelect.value = currentValue;
+        if (this._sidebarCategoryCombobox && typeof this._sidebarCategoryCombobox.setOptions === 'function') {
+            this._sidebarCategoryCombobox.setOptions();
         }
-        
-        // 更新任务表单分类下拉框
-        const taskCategorySelect = document.getElementById('sidebar-task-category');
-        if (taskCategorySelect) {
-            const currentValue = taskCategorySelect.value;
-            taskCategorySelect.innerHTML = `
-                <option value="">无分类</option>
-                ${this.categories.map(cat => `<option value="${cat.id}">${this.escapeHtml(cat.name)}</option>`).join('')}
-            `;
-            taskCategorySelect.value = currentValue;
+        if (this._formCategoryCombobox && typeof this._formCategoryCombobox.setOptions === 'function') {
+            this._formCategoryCombobox.setOptions();
         }
     }
     
@@ -4902,7 +5167,6 @@ class MemoManager {
         const textInput = document.getElementById('sidebar-task-text');
         const prioritySelect = document.getElementById('sidebar-task-priority');
         const dueInput = document.getElementById('sidebar-task-due');
-        const categorySelect = document.getElementById('sidebar-task-category');
         const previewList = document.getElementById('image-preview-list');
         
         // 进度相关元素（纯百分比模式）
@@ -4921,13 +5185,7 @@ class MemoManager {
         const subtasksList = document.getElementById('subtasks-edit-list');
         if (subtasksList) subtasksList.innerHTML = '';
         
-        // 更新分类选项
-        if (categorySelect) {
-            categorySelect.innerHTML = `
-                <option value="">无分类</option>
-                ${this.categories.map(cat => `<option value="${cat.id}">${this.escapeHtml(cat.name)}</option>`).join('')}
-            `;
-        }
+        // 更新分类选项（Combobox 在创建时已用 this.categories，此处仅需 setValue）
         
         // 重复任务相关元素
         const recurrenceSelect = document.getElementById('sidebar-task-recurrence');
@@ -4940,7 +5198,7 @@ class MemoManager {
             textInput.value = task.text || '';
             prioritySelect.value = task.priority || 'none';
             dueInput.value = task.dueDate || '';
-            if (categorySelect) categorySelect.value = task.categoryId || '';
+            if (this._formCategoryCombobox) this._formCategoryCombobox.setValue(task.categoryId || '');
             
             // 加载重复任务配置
             if (recurrenceSelect) {
@@ -5026,7 +5284,7 @@ class MemoManager {
             textInput.value = '';
             prioritySelect.value = 'none';
             dueInput.value = this.getTodayDate();
-            if (categorySelect) categorySelect.value = '';
+            if (this._formCategoryCombobox) this._formCategoryCombobox.setValue('');
             
             // 设置重复类型（支持从习惯区域添加）
             if (recurrenceSelect) {
@@ -5242,6 +5500,151 @@ class MemoManager {
             completed: false
         });
         this.renderSubtasksEdit();
+    }
+    
+    /**
+     * 列表中子任务文字双击进入内联编辑
+     */
+    _startSubtaskInlineEdit(taskId, subtaskId, textEl, stItem) {
+        const original = textEl.textContent || '';
+        textEl.contentEditable = 'true';
+        textEl.classList.add('subtask-inline-editing');
+        textEl.focus();
+        const range = document.createRange();
+        range.selectNodeContents(textEl);
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        const finish = (save) => {
+            textEl.contentEditable = 'false';
+            textEl.classList.remove('subtask-inline-editing');
+            const newTitle = (textEl.textContent || '').trim();
+            if (save && newTitle) {
+                this.updateSubtaskTitle(taskId, subtaskId, newTitle);
+            } else {
+                textEl.textContent = original;
+            }
+        };
+        const onBlur = () => {
+            finish(true);
+            textEl.removeEventListener('blur', onBlur);
+            textEl.removeEventListener('keydown', onKey);
+        };
+        const onKey = (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                textEl.blur();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                textEl.textContent = original;
+                textEl.blur();
+            }
+        };
+        textEl.addEventListener('blur', onBlur);
+        textEl.addEventListener('keydown', onKey);
+    }
+    
+    /**
+     * 更新子任务标题（列表内联编辑保存）
+     */
+    async updateSubtaskTitle(taskId, subtaskId, newTitle) {
+        const task = this.memos.find(m => m.id === taskId);
+        if (!task || !task.subtasks) return;
+        const st = task.subtasks.find(s => s.id === subtaskId);
+        if (!st) return;
+        st.title = newTitle;
+        task.updatedAt = Date.now();
+        await this.saveMemos();
+    }
+    
+    /**
+     * 在列表中添加子任务（不打开编辑弹窗）
+     */
+    async addSubtaskInline(taskId, title) {
+        if (!(title || '').trim()) return;
+        const task = this.memos.find(m => m.id === taskId);
+        if (!task) return;
+        if (!Array.isArray(task.subtasks)) task.subtasks = [];
+        const newSt = {
+            id: 'st_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+            title: (title || '').trim(),
+            completed: false
+        };
+        task.subtasks.push(newSt);
+        task.updatedAt = Date.now();
+        const doneCount = task.subtasks.filter(st => st.completed).length;
+        task.progress = Math.round((doneCount / task.subtasks.length) * 100);
+        await this.saveMemos();
+        this.renderSidebarTaskList();
+    }
+    
+    async deleteSubtaskInline(taskId, subtaskId) {
+        const task = this.memos.find(m => m.id === taskId);
+        if (!task || !Array.isArray(task.subtasks)) return;
+        const idx = task.subtasks.findIndex(s => s.id === subtaskId);
+        if (idx === -1) return;
+        task.subtasks.splice(idx, 1);
+        task.updatedAt = Date.now();
+        if (task.subtasks.length > 0) {
+            const doneCount = task.subtasks.filter(st => st.completed).length;
+            task.progress = Math.round((doneCount / task.subtasks.length) * 100);
+        } else {
+            task.progress = null;
+        }
+        await this.saveMemos();
+        this.renderSidebarTaskList();
+    }
+    
+    async reorderSubtasks(taskId, fromIdx, toIdx) {
+        const task = this.memos.find(m => m.id === taskId);
+        if (!task || !Array.isArray(task.subtasks)) return;
+        if (fromIdx === toIdx || fromIdx < 0 || toIdx < 0) return;
+        const [moved] = task.subtasks.splice(fromIdx, 1);
+        task.subtasks.splice(toIdx, 0, moved);
+        task.updatedAt = Date.now();
+        await this.saveMemos();
+        this.renderSidebarTaskList();
+    }
+    
+    _bindSubtaskDragEvents(subtasksEl, taskId) {
+        const list = subtasksEl.querySelector('.subtask-compact-list');
+        if (!list) return;
+        let dragItem = null;
+        
+        list.querySelectorAll('.subtask-compact-item').forEach(item => {
+            item.addEventListener('dragstart', (e) => {
+                dragItem = item;
+                item.classList.add('subtask-dragging');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', item.dataset.subtaskId);
+            });
+            item.addEventListener('dragend', () => {
+                item.classList.remove('subtask-dragging');
+                list.querySelectorAll('.subtask-compact-item').forEach(el => {
+                    el.classList.remove('subtask-drag-over');
+                });
+                dragItem = null;
+            });
+            item.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                if (dragItem && item !== dragItem) {
+                    list.querySelectorAll('.subtask-compact-item').forEach(el => el.classList.remove('subtask-drag-over'));
+                    item.classList.add('subtask-drag-over');
+                }
+            });
+            item.addEventListener('dragleave', () => {
+                item.classList.remove('subtask-drag-over');
+            });
+            item.addEventListener('drop', (e) => {
+                e.preventDefault();
+                item.classList.remove('subtask-drag-over');
+                if (!dragItem || item === dragItem) return;
+                const items = [...list.querySelectorAll('.subtask-compact-item')];
+                const fromIdx = items.indexOf(dragItem);
+                const toIdx = items.indexOf(item);
+                this.reorderSubtasks(taskId, fromIdx, toIdx);
+            });
+        });
     }
     
     /**
@@ -5491,7 +5894,6 @@ class MemoManager {
         const textInput = document.getElementById('sidebar-task-text');
         const prioritySelect = document.getElementById('sidebar-task-priority');
         const dueInput = document.getElementById('sidebar-task-due');
-        const categorySelect = document.getElementById('sidebar-task-category');
         
         // 进度相关（纯百分比模式）
         const progressEnable = document.getElementById('sidebar-task-progress-enable');
@@ -5587,7 +5989,7 @@ class MemoManager {
             images: images,
             links: links,
             subtasks: subtasks,
-            categoryId: categorySelect ? categorySelect.value || null : null,
+            categoryId: this._formCategoryCombobox ? (this._formCategoryCombobox.getValue() || null) : null,
             progress: progress,
             recurrence: recurrence,
             habitCard: habitCard
@@ -6426,6 +6828,167 @@ class MemoManager {
         if (!categoryId) return 'transparent';
         const category = this.categories.find(c => c.id === categoryId);
         return category ? category.color : 'transparent';
+    }
+    
+    /**
+     * 创建可搜索的分类 Combobox 组件
+     * @param {HTMLElement} container 挂载容器
+     * @param {Object} opts 配置 { value: string, placeholder: string, allowAll: boolean, onChange: function(string) }
+     * @returns {{ getValue: function, setValue: function, setOptions: function, destroy: function }}
+     */
+    createCategoryCombobox(container, opts = {}) {
+        const allowAll = opts.allowAll !== false;
+        let value = opts.value || (allowAll ? 'all' : '');
+        const placeholder = opts.placeholder || (allowAll ? '全部分类' : '无分类');
+        const onChange = typeof opts.onChange === 'function' ? opts.onChange : () => {};
+        
+        const getOptionsList = () => {
+            const list = allowAll
+                ? [{ id: 'all', name: '全部分类', color: null }]
+                : [{ id: '', name: '无分类', color: null }];
+            (this.categories || []).forEach(c => list.push({ id: c.id, name: c.name, color: c.color || '#64b4ff' }));
+            return list;
+        };
+        
+        container.classList.add('category-combobox');
+        container.innerHTML = `
+            <div class="category-combobox-input-wrap">
+                <span class="category-combobox-color" id="combobox-color-dot"></span>
+                <input type="text" class="category-combobox-input" autocomplete="off" placeholder="${this.escapeHtml(placeholder)}" role="combobox" aria-expanded="false" aria-haspopup="listbox">
+                <i class="fas fa-chevron-down category-combobox-arrow"></i>
+            </div>
+        `;
+        
+        const listbox = document.createElement('ul');
+        listbox.className = 'category-combobox-list category-combobox-portal hidden';
+        listbox.setAttribute('role', 'listbox');
+        document.body.appendChild(listbox);
+        
+        const input = container.querySelector('.category-combobox-input');
+        const colorDot = container.querySelector('.category-combobox-color');
+        const inputWrap = container.querySelector('.category-combobox-input-wrap');
+        
+        let options = getOptionsList();
+        let highlightedIndex = -1;
+        
+        const getDisplayName = (id) => {
+            if (allowAll && id === 'all') return '全部分类';
+            if (!allowAll && id === '') return '无分类';
+            const c = options.find(o => o.id === id);
+            return c ? c.name : placeholder;
+        };
+        const getDisplayColor = (id) => {
+            if ((allowAll && id === 'all') || (!allowAll && id === '')) return 'transparent';
+            const c = options.find(o => o.id === id);
+            return c && c.color ? c.color : 'transparent';
+        };
+        
+        const positionListbox = () => {
+            const rect = inputWrap.getBoundingClientRect();
+            listbox.style.position = 'fixed';
+            listbox.style.left = rect.left + 'px';
+            listbox.style.top = (rect.bottom + 4) + 'px';
+            listbox.style.minWidth = rect.width + 'px';
+        };
+        
+        const renderList = (filterText = '') => {
+            const q = (filterText || '').toLowerCase().trim();
+            const filtered = q ? options.filter(o => (o.name || '').toLowerCase().includes(q)) : options;
+            listbox.innerHTML = filtered.map((opt, i) => `
+                <li class="category-combobox-option" role="option" data-value="${this.escapeHtml(opt.id)}" data-index="${i}" aria-selected="false">
+                    <span class="category-combobox-option-color" style="background:${opt.color || 'transparent'}"></span>
+                    <span class="category-combobox-option-name">${this.escapeHtml(opt.name)}</span>
+                </li>
+            `).join('');
+            highlightedIndex = filtered.length > 0 ? 0 : -1;
+            listbox.querySelectorAll('.category-combobox-option').forEach((el, i) => {
+                el.setAttribute('aria-selected', i === 0 ? 'true' : 'false');
+                el.addEventListener('click', (e) => { e.stopPropagation(); selectValue(el.dataset.value); });
+            });
+        };
+        
+        const selectValue = (id) => {
+            value = id;
+            input.value = getDisplayName(id);
+            colorDot.style.background = getDisplayColor(id);
+            listbox.classList.add('hidden');
+            input.setAttribute('aria-expanded', 'false');
+            onChange(value);
+        };
+        
+        const openList = () => {
+            input.setAttribute('aria-expanded', 'true');
+            positionListbox();
+            listbox.classList.remove('hidden');
+            renderList(input.value);
+        };
+        
+        const closeList = () => {
+            listbox.classList.add('hidden');
+            input.setAttribute('aria-expanded', 'false');
+            input.value = getDisplayName(value);
+            colorDot.style.background = getDisplayColor(value);
+        };
+        
+        input.addEventListener('focus', () => openList());
+        input.addEventListener('input', () => { openList(); renderList(input.value); });
+        input.addEventListener('keydown', (e) => {
+            const optsEl = listbox.querySelectorAll('.category-combobox-option');
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                highlightedIndex = Math.min(highlightedIndex + 1, optsEl.length - 1);
+                optsEl.forEach((o, i) => o.setAttribute('aria-selected', i === highlightedIndex ? 'true' : 'false'));
+                if (optsEl[highlightedIndex]) optsEl[highlightedIndex].scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                highlightedIndex = Math.max(highlightedIndex - 1, 0);
+                optsEl.forEach((o, i) => o.setAttribute('aria-selected', i === highlightedIndex ? 'true' : 'false'));
+                if (optsEl[highlightedIndex]) optsEl[highlightedIndex].scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'Enter' && optsEl[highlightedIndex]) {
+                e.preventDefault();
+                selectValue(optsEl[highlightedIndex].dataset.value);
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                closeList();
+            }
+        });
+        
+        inputWrap.addEventListener('click', (e) => {
+            if (e.target === input || e.target.closest('.category-combobox-arrow')) {
+                if (listbox.classList.contains('hidden')) openList();
+                else closeList();
+            }
+        });
+        
+        const outsideClickHandler = (e) => {
+            if (!container.contains(e.target) && !listbox.contains(e.target)) closeList();
+        };
+        document.addEventListener('click', outsideClickHandler);
+        
+        const setOptions = () => {
+            options = getOptionsList();
+            input.value = getDisplayName(value);
+            colorDot.style.background = getDisplayColor(value);
+        };
+        
+        const setValue = (id) => {
+            value = id || (allowAll ? 'all' : '');
+            input.value = getDisplayName(value);
+            colorDot.style.background = getDisplayColor(value);
+        };
+        
+        setValue(value);
+        
+        return {
+            getValue: () => value,
+            setValue,
+            setOptions,
+            destroy: () => {
+                document.removeEventListener('click', outsideClickHandler);
+                if (listbox.parentNode) listbox.parentNode.removeChild(listbox);
+                container.innerHTML = '';
+            }
+        };
     }
     
     /**
@@ -7955,7 +8518,118 @@ class MemoManager {
         div.textContent = str;
         return div.innerHTML;
     }
-    
+
+    /**
+     * 复制文本到剪贴板
+     * @param {string} text 要复制的文本
+     * @returns {Promise<boolean>}
+     */
+    async copyToClipboard(text) {
+        if (!text) return false;
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(text);
+                return true;
+            }
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.cssText = 'position:fixed;opacity:0;left:-9999px;';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            const ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            return !!ok;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    /**
+     * 显示短暂提示
+     * @param {string} message 提示文案
+     */
+    showToast(message) {
+        let el = document.getElementById('memo-toast');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'memo-toast';
+            el.className = 'memo-toast';
+            document.body.appendChild(el);
+        }
+        el.textContent = message;
+        el.classList.add('memo-toast-visible');
+        clearTimeout(this._toastTimer);
+        this._toastTimer = setTimeout(() => {
+            el.classList.remove('memo-toast-visible');
+        }, 1800);
+    }
+
+    /**
+     * 显示任务项右键菜单（复制标题/描述/子任务、编辑、删除）
+     * @param {Object} task 任务对象
+     * @param {number} x 客户端 X
+     * @param {number} y 客户端 Y
+     */
+    showTaskContextMenu(task, x, y) {
+        const existing = document.getElementById('task-context-menu');
+        if (existing) existing.remove();
+        const menu = document.createElement('div');
+        menu.id = 'task-context-menu';
+        menu.className = 'task-context-menu';
+        const subtasksText = (task.subtasks && task.subtasks.length > 0)
+            ? task.subtasks.map(st => (st.completed ? '[x] ' : '[ ] ') + (st.title || '')).join('\n')
+            : '';
+        menu.innerHTML = `
+            <button type="button" data-action="copy-title"><i class="fas fa-heading"></i> 复制标题</button>
+            <button type="button" data-action="copy-desc"><i class="fas fa-align-left"></i> 复制描述</button>
+            ${subtasksText ? '<button type="button" data-action="copy-subtasks"><i class="fas fa-list-check"></i> 复制子任务列表</button>' : ''}
+            <hr>
+            <button type="button" data-action="edit"><i class="fas fa-pen"></i> 编辑</button>
+            <button type="button" data-action="delete"><i class="fas fa-trash"></i> 删除</button>
+        `;
+        document.body.appendChild(menu);
+        const rect = menu.getBoundingClientRect();
+        const maxX = window.innerWidth - rect.width;
+        const maxY = window.innerHeight - rect.height;
+        menu.style.left = Math.min(x, maxX) + 'px';
+        menu.style.top = Math.min(y, maxY) + 'px';
+        const close = () => menu.remove();
+        menu.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const action = btn.dataset.action;
+                if (action === 'copy-title') {
+                    const ok = await this.copyToClipboard(task.title || '');
+                    this.showToast(ok ? '已复制标题' : '复制失败');
+                } else if (action === 'copy-desc') {
+                    const ok = await this.copyToClipboard(task.text || '');
+                    this.showToast(ok ? '已复制描述' : '复制失败');
+                } else if (action === 'copy-subtasks') {
+                    const text = (task.subtasks || []).map(st => (st.completed ? '[x] ' : '[ ] ') + (st.title || '')).join('\n');
+                    const ok = await this.copyToClipboard(text);
+                    this.showToast(ok ? '已复制子任务列表' : '复制失败');
+                } else if (action === 'edit') {
+                    this.showSidebarForm(task);
+                } else if (action === 'delete') {
+                    if (confirm('确定要删除这个任务吗？')) this.deleteSidebarTask(task.id);
+                }
+                close();
+            });
+        });
+        const onOutside = (e) => {
+            if (!menu.contains(e.target)) {
+                close();
+                document.removeEventListener('click', onOutside);
+                document.removeEventListener('contextmenu', onOutside);
+            }
+        };
+        requestAnimationFrame(() => {
+            document.addEventListener('click', onOutside);
+            document.addEventListener('contextmenu', onOutside);
+        });
+    }
+
     /**
      * 从 URL 中提取域名作为显示名
      * @param {string} url URL 字符串

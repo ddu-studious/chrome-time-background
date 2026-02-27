@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>分类管理面板 - 设计方案对比</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #162032 50%, #1e293b 100%);
+            min-height: 100vh;
+            color: rgba(255, 255, 255, 0.9);
+            padding: 40px 20px;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 40px;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .demo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+            gap: 40px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        .demo-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .demo-label {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: rgba(255,255,255,0.85);
+            text-align: center;
+        }
+        .demo-label small {
+            display: block;
+            font-weight: 400;
+            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+            margin-top: 4px;
+        }
+
+        /* ===== Shared utility ===== */
+        @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
+
+        /* ===================================
+           Demo A: 经典居中弹窗（当前设计优化版）
+           =================================== */
+        .demo-a {
+            width: 380px;
+            background: linear-gradient(160deg, rgba(45, 45, 55, 0.98), rgba(35, 35, 45, 0.98));
+            border-radius: 16px;
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .demo-a .cm-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 18px 20px; border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        .demo-a .cm-header h3 { font-size: 16px; font-weight: 600; }
+        .demo-a .cm-close {
+            background: none; border: none; color: rgba(255,255,255,0.5);
+            font-size: 20px; cursor: pointer; width: 28px; height: 28px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 6px; transition: all 0.2s;
+        }
+        .demo-a .cm-close:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.9); }
+        .demo-a .cm-body { padding: 16px 20px; max-height: 480px; overflow-y: auto; }
+        .demo-a .cm-add-row {
+            display: flex; gap: 8px; margin-bottom: 16px;
+        }
+        .demo-a .cm-add-row input[type="text"] {
+            flex: 1; padding: 10px 14px; border: none; border-radius: 10px;
+            background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.95);
+            font-size: 13px; outline: none; transition: all 0.2s;
+        }
+        .demo-a .cm-add-row input[type="text"]:focus {
+            background: rgba(255,255,255,0.12); box-shadow: 0 0 0 2px rgba(100,180,255,0.25);
+        }
+        .demo-a .cm-add-row input[type="color"] {
+            width: 40px; height: 40px; padding: 2px; border: none;
+            border-radius: 10px; background: rgba(255,255,255,0.08); cursor: pointer;
+        }
+        .demo-a .cm-add-row .cm-add-btn {
+            width: 40px; height: 40px; border: none; border-radius: 10px;
+            background: linear-gradient(135deg, rgba(100,180,255,0.85), rgba(80,140,220,0.85));
+            color: #fff; font-size: 14px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+        }
+        .demo-a .cm-add-row .cm-add-btn:hover { transform: scale(1.05); }
+        .demo-a .cm-search {
+            display: flex; align-items: center; gap: 8px;
+            padding: 8px 12px; margin-bottom: 12px;
+            background: rgba(255,255,255,0.06); border-radius: 10px;
+        }
+        .demo-a .cm-search i { font-size: 12px; opacity: 0.5; }
+        .demo-a .cm-search input {
+            flex: 1; border: none; background: transparent;
+            color: rgba(255,255,255,0.9); font-size: 13px; outline: none;
+        }
+        .demo-a .cm-list { display: flex; flex-direction: column; gap: 6px; }
+        .demo-a .cm-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 12px; background: rgba(255,255,255,0.04);
+            border-radius: 10px; transition: all 0.2s;
+        }
+        .demo-a .cm-item:hover { background: rgba(255,255,255,0.08); }
+        .demo-a .cm-drag { cursor: grab; color: rgba(255,255,255,0.25); font-size: 11px; }
+        .demo-a .cm-color { width: 16px; height: 16px; border-radius: 5px; flex-shrink: 0; }
+        .demo-a .cm-name { flex: 1; font-size: 13px; }
+        .demo-a .cm-count { font-size: 11px; color: rgba(255,255,255,0.4); min-width: 24px; text-align: right; }
+        .demo-a .cm-actions {
+            display: flex; gap: 4px; opacity: 0; transition: opacity 0.2s;
+        }
+        .demo-a .cm-item:hover .cm-actions { opacity: 1; }
+        .demo-a .cm-actions button {
+            width: 26px; height: 26px; border: none; border-radius: 6px;
+            background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.5);
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            font-size: 10px; transition: all 0.2s;
+        }
+        .demo-a .cm-actions button:hover { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.9); }
+        .demo-a .cm-actions .cm-del:hover { background: rgba(255,100,100,0.2); color: #ff6b6b; }
+
+        /* ===================================
+           Demo B: 侧边抽屉面板
+           =================================== */
+        .demo-b {
+            width: 340px;
+            height: 560px;
+            background: linear-gradient(180deg, rgba(28, 32, 50, 0.99), rgba(22, 26, 42, 0.99));
+            border-radius: 12px 0 0 12px;
+            box-shadow: -8px 0 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255,255,255,0.06);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .demo-b .cb-header {
+            padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.06);
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .demo-b .cb-header h3 { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .demo-b .cb-header h3 i { color: rgba(100,180,255,0.8); font-size: 14px; }
+        .demo-b .cb-close {
+            background: none; border: none; color: rgba(255,255,255,0.4);
+            cursor: pointer; font-size: 18px; padding: 4px;
+        }
+        .demo-b .cb-body { flex: 1; overflow-y: auto; padding: 16px; }
+        .demo-b .cb-add-inline {
+            display: flex; gap: 8px; margin-bottom: 20px; position: relative;
+        }
+        .demo-b .cb-add-inline input {
+            flex: 1; padding: 10px 12px; border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px; background: rgba(255,255,255,0.05);
+            color: rgba(255,255,255,0.9); font-size: 13px; outline: none;
+            transition: all 0.2s;
+        }
+        .demo-b .cb-add-inline input:focus {
+            border-color: rgba(100,180,255,0.4);
+            box-shadow: 0 0 0 3px rgba(100,180,255,0.1);
+        }
+        .demo-b .cb-add-inline .cb-color-dot {
+            width: 36px; height: 36px; border-radius: 8px;
+            background: rgba(255,255,255,0.08);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; position: relative;
+        }
+        .demo-b .cb-add-inline .cb-color-dot .dot {
+            width: 18px; height: 18px; border-radius: 50%; background: #64b4ff;
+        }
+        .demo-b .cb-section-label {
+            font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+            color: rgba(255,255,255,0.3); margin-bottom: 8px; padding-left: 4px;
+        }
+        .demo-b .cb-list { display: flex; flex-direction: column; gap: 2px; }
+        .demo-b .cb-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 9px 10px; border-radius: 8px; transition: all 0.15s;
+            cursor: default;
+        }
+        .demo-b .cb-item:hover { background: rgba(255,255,255,0.06); }
+        .demo-b .cb-item .cb-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+        .demo-b .cb-item .cb-name { flex: 1; font-size: 13px; color: rgba(255,255,255,0.85); }
+        .demo-b .cb-item .cb-cnt {
+            font-size: 11px; color: rgba(255,255,255,0.35);
+            background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 10px;
+        }
+        .demo-b .cb-item .cb-btns {
+            display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s;
+        }
+        .demo-b .cb-item:hover .cb-btns { opacity: 1; }
+        .demo-b .cb-item .cb-btns button {
+            width: 24px; height: 24px; border: none; border-radius: 5px;
+            background: transparent; color: rgba(255,255,255,0.4);
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            font-size: 10px; transition: all 0.15s;
+        }
+        .demo-b .cb-item .cb-btns button:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); }
+        .demo-b .cb-item .cb-btns .del:hover { color: #ff6b6b; }
+        .demo-b .cb-footer {
+            padding: 12px 16px; border-top: 1px solid rgba(255,255,255,0.06);
+            text-align: center; font-size: 11px; color: rgba(255,255,255,0.3);
+        }
+
+        /* ===================================
+           Demo C: Notion 风格标签面板
+           =================================== */
+        .demo-c {
+            width: 320px;
+            background: rgba(37, 37, 44, 0.99);
+            border-radius: 12px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255,255,255,0.06);
+            overflow: hidden;
+        }
+        .demo-c .cc-search-wrap {
+            padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .demo-c .cc-search {
+            display: flex; align-items: center; gap: 8px;
+            padding: 8px 10px; background: rgba(255,255,255,0.06);
+            border-radius: 8px;
+        }
+        .demo-c .cc-search i { color: rgba(255,255,255,0.3); font-size: 12px; }
+        .demo-c .cc-search input {
+            flex: 1; border: none; background: transparent;
+            color: rgba(255,255,255,0.9); font-size: 13px; outline: none;
+        }
+        .demo-c .cc-search input::placeholder { color: rgba(255,255,255,0.35); }
+        .demo-c .cc-list { padding: 6px; max-height: 360px; overflow-y: auto; }
+        .demo-c .cc-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 7px 8px; border-radius: 6px; transition: background 0.12s;
+            cursor: pointer;
+        }
+        .demo-c .cc-item:hover { background: rgba(255,255,255,0.06); }
+        .demo-c .cc-item .cc-chip {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 3px 10px; border-radius: 4px; font-size: 12px;
+            font-weight: 500;
+        }
+        .demo-c .cc-item .cc-cnt { margin-left: auto; font-size: 11px; color: rgba(255,255,255,0.3); }
+        .demo-c .cc-item .cc-edit {
+            opacity: 0; transition: opacity 0.15s;
+            background: none; border: none; color: rgba(255,255,255,0.35);
+            cursor: pointer; font-size: 11px; padding: 3px;
+        }
+        .demo-c .cc-item:hover .cc-edit { opacity: 1; }
+        .demo-c .cc-item .cc-edit:hover { color: rgba(255,255,255,0.8); }
+        .demo-c .cc-footer {
+            padding: 8px 12px; border-top: 1px solid rgba(255,255,255,0.06);
+        }
+        .demo-c .cc-create-btn {
+            display: flex; align-items: center; gap: 8px;
+            width: 100%; padding: 8px 10px; border: none; border-radius: 6px;
+            background: transparent; color: rgba(255,255,255,0.5);
+            cursor: pointer; font-size: 13px; transition: all 0.15s;
+        }
+        .demo-c .cc-create-btn:hover {
+            background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.8);
+        }
+        .demo-c .cc-create-btn i { font-size: 12px; }
+
+        /* ===================================
+           Demo D: 可折叠双栏面板
+           =================================== */
+        .demo-d {
+            width: 440px;
+            background: linear-gradient(160deg, rgba(40, 42, 56, 0.99), rgba(30, 32, 46, 0.99));
+            border-radius: 14px;
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255,255,255,0.06);
+            overflow: hidden;
+        }
+        .demo-d .cd-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .demo-d .cd-header h3 {
+            font-size: 15px; font-weight: 600;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .demo-d .cd-header h3 .cd-badge {
+            font-size: 11px; font-weight: 500;
+            background: rgba(100,180,255,0.15); color: rgba(100,180,255,0.9);
+            padding: 2px 8px; border-radius: 10px;
+        }
+        .demo-d .cd-close {
+            background: none; border: none; color: rgba(255,255,255,0.4);
+            cursor: pointer; font-size: 18px;
+        }
+        .demo-d .cd-body {
+            display: flex; min-height: 400px;
+        }
+        .demo-d .cd-left {
+            flex: 1; padding: 16px; border-right: 1px solid rgba(255,255,255,0.06);
+            overflow-y: auto;
+        }
+        .demo-d .cd-right {
+            width: 180px; padding: 16px;
+            background: rgba(0,0,0,0.15);
+            display: flex; flex-direction: column;
+        }
+        .demo-d .cd-add-row {
+            display: flex; gap: 6px; margin-bottom: 14px;
+        }
+        .demo-d .cd-add-row input {
+            flex: 1; padding: 8px 10px; border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px; background: rgba(255,255,255,0.06);
+            color: rgba(255,255,255,0.9); font-size: 12px; outline: none;
+        }
+        .demo-d .cd-add-row input:focus {
+            border-color: rgba(100,180,255,0.4);
+        }
+        .demo-d .cd-add-row button {
+            padding: 8px 12px; border: none; border-radius: 8px;
+            background: rgba(100,180,255,0.8); color: #fff;
+            font-size: 12px; cursor: pointer; white-space: nowrap;
+        }
+        .demo-d .cd-list { display: flex; flex-direction: column; gap: 3px; }
+        .demo-d .cd-item {
+            display: flex; align-items: center; gap: 8px;
+            padding: 8px 10px; border-radius: 8px; transition: all 0.15s;
+            cursor: pointer;
+        }
+        .demo-d .cd-item:hover { background: rgba(255,255,255,0.06); }
+        .demo-d .cd-item.active { background: rgba(100,180,255,0.12); }
+        .demo-d .cd-item .cd-dot { width: 12px; height: 12px; border-radius: 4px; flex-shrink: 0; }
+        .demo-d .cd-item .cd-name { flex: 1; font-size: 13px; }
+        .demo-d .cd-item .cd-cnt { font-size: 11px; color: rgba(255,255,255,0.35); }
+        .demo-d .cd-right .cd-edit-title {
+            font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px;
+            color: rgba(255,255,255,0.35); margin-bottom: 12px;
+        }
+        .demo-d .cd-right .cd-edit-group {
+            margin-bottom: 14px;
+        }
+        .demo-d .cd-right .cd-edit-label {
+            font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 6px;
+        }
+        .demo-d .cd-right .cd-edit-input {
+            width: 100%; padding: 8px 10px; border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 6px; background: rgba(255,255,255,0.06);
+            color: rgba(255,255,255,0.9); font-size: 12px; outline: none;
+        }
+        .demo-d .cd-right .cd-color-grid {
+            display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px;
+        }
+        .demo-d .cd-right .cd-color-opt {
+            width: 24px; height: 24px; border-radius: 6px; cursor: pointer;
+            border: 2px solid transparent; transition: all 0.15s;
+        }
+        .demo-d .cd-right .cd-color-opt:hover { transform: scale(1.15); }
+        .demo-d .cd-right .cd-color-opt.selected { border-color: rgba(255,255,255,0.6); }
+        .demo-d .cd-right .cd-edit-actions {
+            margin-top: auto; display: flex; gap: 8px;
+        }
+        .demo-d .cd-right .cd-edit-actions button {
+            flex: 1; padding: 8px; border: none; border-radius: 8px;
+            font-size: 12px; cursor: pointer; transition: all 0.15s;
+        }
+        .demo-d .cd-right .cd-save-btn {
+            background: rgba(100,180,255,0.8); color: #fff;
+        }
+        .demo-d .cd-right .cd-del-btn {
+            background: rgba(255,100,100,0.15); color: #ff6b6b;
+        }
+    </style>
+</head>
+<body>
+    <h1>分类管理面板 - 4种设计方案</h1>
+    
+    <div class="demo-grid">
+        <!-- ===== Demo A: 经典居中弹窗（优化版） ===== -->
+        <div class="demo-wrapper">
+            <div class="demo-label">
+                方案 A：经典居中弹窗（优化版）
+                <small>在当前设计基础上优化圆角、间距和视觉层次</small>
+            </div>
+            <div class="demo-a">
+                <div class="cm-header">
+                    <h3><i class="fas fa-layer-group" style="color:rgba(100,180,255,0.8);margin-right:6px;font-size:14px"></i>分类管理</h3>
+                    <button class="cm-close">&times;</button>
+                </div>
+                <div class="cm-body">
+                    <div class="cm-add-row">
+                        <input type="text" placeholder="输入分类名称...">
+                        <input type="color" value="#64b4ff">
+                        <button class="cm-add-btn"><i class="fas fa-plus"></i></button>
+                    </div>
+                    <div class="cm-search">
+                        <i class="fas fa-search"></i>
+                        <input type="text" placeholder="搜索分类...">
+                    </div>
+                    <div class="cm-list">
+                        <div class="cm-item">
+                            <span class="cm-drag"><i class="fas fa-grip-vertical"></i></span>
+                            <span class="cm-color" style="background:#64b4ff"></span>
+                            <span class="cm-name">会员资产</span>
+                            <span class="cm-count">1</span>
+                            <div class="cm-actions">
+                                <button><i class="fas fa-pen"></i></button>
+                                <button class="cm-del"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                        <div class="cm-item">
+                            <span class="cm-drag"><i class="fas fa-grip-vertical"></i></span>
+                            <span class="cm-color" style="background:#64b4ff"></span>
+                            <span class="cm-name">任务扩展</span>
+                            <span class="cm-count">5</span>
+                            <div class="cm-actions">
+                                <button><i class="fas fa-pen"></i></button>
+                                <button class="cm-del"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                        <div class="cm-item">
+                            <span class="cm-drag"><i class="fas fa-grip-vertical"></i></span>
+                            <span class="cm-color" style="background:#22c55e"></span>
+                            <span class="cm-name">想法</span>
+                            <span class="cm-count">7</span>
+                            <div class="cm-actions">
+                                <button><i class="fas fa-pen"></i></button>
+                                <button class="cm-del"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                        <div class="cm-item">
+                            <span class="cm-drag"><i class="fas fa-grip-vertical"></i></span>
+                            <span class="cm-color" style="background:#f59e0b"></span>
+                            <span class="cm-name">小红花系统</span>
+                            <span class="cm-count">2</span>
+                            <div class="cm-actions">
+                                <button><i class="fas fa-pen"></i></button>
+                                <button class="cm-del"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                        <div class="cm-item">
+                            <span class="cm-drag"><i class="fas fa-grip-vertical"></i></span>
+                            <span class="cm-color" style="background:#8b5cf6"></span>
+                            <span class="cm-name">青眸 (QingMou)</span>
+                            <span class="cm-count">5</span>
+                            <div class="cm-actions">
+                                <button><i class="fas fa-pen"></i></button>
+                                <button class="cm-del"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                        <div class="cm-item">
+                            <span class="cm-drag"><i class="fas fa-grip-vertical"></i></span>
+                            <span class="cm-color" style="background:#ef4444"></span>
+                            <span class="cm-name">测试</span>
+                            <span class="cm-count">2</span>
+                            <div class="cm-actions">
+                                <button><i class="fas fa-pen"></i></button>
+                                <button class="cm-del"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== Demo B: 右侧抽屉面板 ===== -->
+        <div class="demo-wrapper">
+            <div class="demo-label">
+                方案 B：右侧抽屉面板
+                <small>从右侧滑入，类似 Todoist 项目管理风格</small>
+            </div>
+            <div class="demo-b">
+                <div class="cb-header">
+                    <h3><i class="fas fa-folder-open"></i> 分类管理</h3>
+                    <button class="cb-close"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="cb-body">
+                    <div class="cb-add-inline">
+                        <input type="text" placeholder="新建分类...">
+                        <div class="cb-color-dot"><div class="dot" style="background:#64b4ff"></div></div>
+                    </div>
+                    <div class="cb-section-label">所有分类 · 10</div>
+                    <div class="cb-list">
+                        <div class="cb-item">
+                            <span class="cb-dot" style="background:#64b4ff"></span>
+                            <span class="cb-name">会员资产</span>
+                            <span class="cb-cnt">1</span>
+                            <div class="cb-btns">
+                                <button><i class="fas fa-pen"></i></button>
+                                <button class="del"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                        <div class="cb-item">
+                            <span class="cb-dot" style="background:#64b4ff"></span>
+                            <span class="cb-name">会员中心</span>
+                            <span class="cb-cnt">1</span>
+                            <div class="cb-btns">
+                                <button><i class="fas fa-pen"></i></button>
+                                <button class="del"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                        <div class="cb-item">
+                            <span class="cb-dot" style="background:#64b4ff"></span>
+                            <span class="cb-name">任务扩展</span>
+                            <span class="cb-cnt">5</span>
+                            <div class="cb-btns">
+                                <button><i class="fas fa-pen"></i></button>
+                                <button class="del"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                        <div class="cb-item">
+                            <span class="cb-dot" style="background:#22c55e"></span>
+                            <span class="cb-name">想法</span>
+                            <span class="cb-cnt">7</span>
+                            <div class="cb-btns">
+                                <button><i class="fas fa-pen"></i></button>
+                                <button class="del"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                        <div class="cb-item">
+                            <span class="cb-dot" style="background:#f59e0b"></span>
+                            <span class="cb-name">小红花系统</span>
+                            <span class="cb-cnt">2</span>
+                            <div class="cb-btns">
+                                <button><i class="fas fa-pen"></i></button>
+                                <button class="del"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                        <div class="cb-item">
+                            <span class="cb-dot" style="background:#8b5cf6"></span>
+                            <span class="cb-name">青眸 (QingMou)</span>
+                            <span class="cb-cnt">5</span>
+                            <div class="cb-btns">
+                                <button><i class="fas fa-pen"></i></button>
+                                <button class="del"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                        <div class="cb-item">
+                            <span class="cb-dot" style="background:#ef4444"></span>
+                            <span class="cb-name">测试</span>
+                            <span class="cb-cnt">2</span>
+                            <div class="cb-btns">
+                                <button><i class="fas fa-pen"></i></button>
+                                <button class="del"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="cb-footer">拖拽分类可调整顺序</div>
+            </div>
+        </div>
+
+        <!-- ===== Demo C: Notion 风格标签面板 ===== -->
+        <div class="demo-wrapper">
+            <div class="demo-label">
+                方案 C：Notion 风格标签面板
+                <small>紧凑的下拉面板，彩色标签芯片，搜索优先</small>
+            </div>
+            <div class="demo-c">
+                <div class="cc-search-wrap">
+                    <div class="cc-search">
+                        <i class="fas fa-search"></i>
+                        <input type="text" placeholder="搜索或创建分类...">
+                    </div>
+                </div>
+                <div class="cc-list">
+                    <div class="cc-item">
+                        <span class="cc-chip" style="background:rgba(100,180,255,0.15);color:rgba(100,180,255,0.9)">
+                            <i class="fas fa-circle" style="font-size:6px"></i> 会员资产
+                        </span>
+                        <span class="cc-cnt">1</span>
+                        <button class="cc-edit"><i class="fas fa-ellipsis-h"></i></button>
+                    </div>
+                    <div class="cc-item">
+                        <span class="cc-chip" style="background:rgba(100,180,255,0.15);color:rgba(100,180,255,0.9)">
+                            <i class="fas fa-circle" style="font-size:6px"></i> 任务扩展
+                        </span>
+                        <span class="cc-cnt">5</span>
+                        <button class="cc-edit"><i class="fas fa-ellipsis-h"></i></button>
+                    </div>
+                    <div class="cc-item">
+                        <span class="cc-chip" style="background:rgba(100,180,255,0.15);color:rgba(100,180,255,0.9)">
+                            <i class="fas fa-circle" style="font-size:6px"></i> 书签扩展
+                        </span>
+                        <span class="cc-cnt">1</span>
+                        <button class="cc-edit"><i class="fas fa-ellipsis-h"></i></button>
+                    </div>
+                    <div class="cc-item">
+                        <span class="cc-chip" style="background:rgba(46,213,115,0.15);color:rgba(46,213,115,0.9)">
+                            <i class="fas fa-circle" style="font-size:6px"></i> 想法
+                        </span>
+                        <span class="cc-cnt">7</span>
+                        <button class="cc-edit"><i class="fas fa-ellipsis-h"></i></button>
+                    </div>
+                    <div class="cc-item">
+                        <span class="cc-chip" style="background:rgba(245,158,11,0.15);color:rgba(245,158,11,0.9)">
+                            <i class="fas fa-circle" style="font-size:6px"></i> 小红花系统
+                        </span>
+                        <span class="cc-cnt">2</span>
+                        <button class="cc-edit"><i class="fas fa-ellipsis-h"></i></button>
+                    </div>
+                    <div class="cc-item">
+                        <span class="cc-chip" style="background:rgba(139,92,246,0.15);color:rgba(139,92,246,0.9)">
+                            <i class="fas fa-circle" style="font-size:6px"></i> 青眸 (QingMou)
+                        </span>
+                        <span class="cc-cnt">5</span>
+                        <button class="cc-edit"><i class="fas fa-ellipsis-h"></i></button>
+                    </div>
+                    <div class="cc-item">
+                        <span class="cc-chip" style="background:rgba(239,68,68,0.15);color:rgba(239,68,68,0.9)">
+                            <i class="fas fa-circle" style="font-size:6px"></i> 测试
+                        </span>
+                        <span class="cc-cnt">2</span>
+                        <button class="cc-edit"><i class="fas fa-ellipsis-h"></i></button>
+                    </div>
+                </div>
+                <div class="cc-footer">
+                    <button class="cc-create-btn">
+                        <i class="fas fa-plus"></i> 新建分类
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== Demo D: 双栏编辑面板 ===== -->
+        <div class="demo-wrapper">
+            <div class="demo-label">
+                方案 D：双栏主从面板
+                <small>左侧列表 + 右侧编辑区，适合频繁编辑场景</small>
+            </div>
+            <div class="demo-d">
+                <div class="cd-header">
+                    <h3>分类管理 <span class="cd-badge">10 个</span></h3>
+                    <button class="cd-close">&times;</button>
+                </div>
+                <div class="cd-body">
+                    <div class="cd-left">
+                        <div class="cd-add-row">
+                            <input type="text" placeholder="快速新建...">
+                            <button>添加</button>
+                        </div>
+                        <div class="cd-list">
+                            <div class="cd-item">
+                                <span class="cd-dot" style="background:#64b4ff"></span>
+                                <span class="cd-name">会员资产</span>
+                                <span class="cd-cnt">1</span>
+                            </div>
+                            <div class="cd-item">
+                                <span class="cd-dot" style="background:#64b4ff"></span>
+                                <span class="cd-name">会员中心</span>
+                                <span class="cd-cnt">1</span>
+                            </div>
+                            <div class="cd-item active">
+                                <span class="cd-dot" style="background:#64b4ff"></span>
+                                <span class="cd-name">任务扩展</span>
+                                <span class="cd-cnt">5</span>
+                            </div>
+                            <div class="cd-item">
+                                <span class="cd-dot" style="background:#22c55e"></span>
+                                <span class="cd-name">想法</span>
+                                <span class="cd-cnt">7</span>
+                            </div>
+                            <div class="cd-item">
+                                <span class="cd-dot" style="background:#f59e0b"></span>
+                                <span class="cd-name">小红花系统</span>
+                                <span class="cd-cnt">2</span>
+                            </div>
+                            <div class="cd-item">
+                                <span class="cd-dot" style="background:#8b5cf6"></span>
+                                <span class="cd-name">青眸 (QingMou)</span>
+                                <span class="cd-cnt">5</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="cd-right">
+                        <div class="cd-edit-title">编辑分类</div>
+                        <div class="cd-edit-group">
+                            <div class="cd-edit-label">名称</div>
+                            <input class="cd-edit-input" type="text" value="任务扩展">
+                        </div>
+                        <div class="cd-edit-group">
+                            <div class="cd-edit-label">颜色</div>
+                            <div class="cd-color-grid">
+                                <div class="cd-color-opt selected" style="background:#64b4ff"></div>
+                                <div class="cd-color-opt" style="background:#22c55e"></div>
+                                <div class="cd-color-opt" style="background:#f59e0b"></div>
+                                <div class="cd-color-opt" style="background:#ef4444"></div>
+                                <div class="cd-color-opt" style="background:#8b5cf6"></div>
+                                <div class="cd-color-opt" style="background:#ec4899"></div>
+                                <div class="cd-color-opt" style="background:#14b8a6"></div>
+                                <div class="cd-color-opt" style="background:#f97316"></div>
+                                <div class="cd-color-opt" style="background:#6366f1"></div>
+                                <div class="cd-color-opt" style="background:#a3a3a3"></div>
+                            </div>
+                        </div>
+                        <div class="cd-edit-group">
+                            <div class="cd-edit-label">任务数</div>
+                            <div style="font-size:20px;font-weight:700;color:rgba(255,255,255,0.9)">5</div>
+                        </div>
+                        <div class="cd-edit-actions">
+                            <button class="cd-save-btn">保存</button>
+                            <button class="cd-del-btn"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

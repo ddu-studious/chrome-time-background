@@ -134,12 +134,7 @@ class TaskManager {
             this.applyFilters();
             this.render();
         });
-        document.getElementById('filter-category').addEventListener('change', (e) => {
-            this.filters.category = e.target.value;
-            this.currentPage = 1;
-            this.applyFilters();
-            this.render();
-        });
+        // 分类筛选由 Combobox onChange 处理，无需单独监听
         document.getElementById('sort-select').addEventListener('change', (e) => {
             this.filters.sort = e.target.value;
             this.applyFilters();
@@ -546,6 +541,8 @@ class TaskManager {
             img.addEventListener('error', () => { img.style.display = 'none'; }, { once: true });
         });
         
+        this.bindDetailSubtaskEvents(body, task);
+        
         panel.classList.remove('hidden');
         overlay.classList.remove('hidden');
     }
@@ -553,6 +550,106 @@ class TaskManager {
     closeDetail() {
         document.getElementById('detail-panel').classList.add('hidden');
         document.getElementById('detail-overlay').classList.add('hidden');
+    }
+
+    bindDetailSubtaskEvents(body, task) {
+        const subtasksEl = body.querySelector('.detail-subtasks');
+        if (!subtasksEl) return;
+        const taskId = task.id;
+
+        subtasksEl.querySelectorAll('.detail-subtask-dot').forEach(dot => {
+            dot.addEventListener('click', async () => {
+                const sid = dot.dataset.sid;
+                const st = (task.subtasks || []).find(s => s.id === sid);
+                if (!st) return;
+                st.completed = !st.completed;
+                task.updatedAt = Date.now();
+                if (task.subtasks.length > 0) {
+                    task.progress = Math.round(task.subtasks.filter(s => s.completed).length / task.subtasks.length * 100);
+                }
+                await this.saveData();
+                this.openDetail(taskId);
+                this.render();
+            });
+        });
+
+        subtasksEl.querySelectorAll('.detail-subtask-text').forEach(textEl => {
+            textEl.addEventListener('dblclick', (e) => {
+                e.preventDefault();
+                const sid = textEl.dataset.sid;
+                const st = (task.subtasks || []).find(s => s.id === sid);
+                if (!st) return;
+                const original = textEl.textContent;
+                textEl.contentEditable = 'true';
+                textEl.classList.add('editing');
+                textEl.focus();
+                const range = document.createRange();
+                range.selectNodeContents(textEl);
+                window.getSelection().removeAllRanges();
+                window.getSelection().addRange(range);
+                const finish = async (save) => {
+                    textEl.contentEditable = 'false';
+                    textEl.classList.remove('editing');
+                    const newTitle = (textEl.textContent || '').trim();
+                    if (save && newTitle && newTitle !== original) {
+                        st.title = newTitle;
+                        task.updatedAt = Date.now();
+                        await this.saveData();
+                        this.render();
+                    } else {
+                        textEl.textContent = original;
+                    }
+                };
+                textEl.addEventListener('blur', () => finish(true), { once: true });
+                textEl.addEventListener('keydown', (ke) => {
+                    if (ke.key === 'Enter') { ke.preventDefault(); textEl.blur(); }
+                    else if (ke.key === 'Escape') { ke.preventDefault(); textEl.textContent = original; textEl.blur(); }
+                });
+            });
+        });
+
+        subtasksEl.querySelectorAll('.detail-subtask-copy').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const sid = btn.dataset.sid;
+                const st = (task.subtasks || []).find(s => s.id === sid);
+                if (st) {
+                    try { await navigator.clipboard.writeText(st.title || ''); } catch {}
+                }
+            });
+        });
+
+        subtasksEl.querySelectorAll('.detail-subtask-del').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const sid = btn.dataset.sid;
+                task.subtasks = (task.subtasks || []).filter(s => s.id !== sid);
+                task.updatedAt = Date.now();
+                task.progress = task.subtasks.length > 0
+                    ? Math.round(task.subtasks.filter(s => s.completed).length / task.subtasks.length * 100)
+                    : null;
+                await this.saveData();
+                this.openDetail(taskId);
+                this.render();
+            });
+        });
+
+        const addInput = subtasksEl.querySelector('.detail-subtask-add-input');
+        const addBtn = subtasksEl.querySelector('.detail-subtask-add-btn');
+        const doAdd = async () => {
+            const title = (addInput?.value || '').trim();
+            if (!title) return;
+            if (!Array.isArray(task.subtasks)) task.subtasks = [];
+            task.subtasks.push({
+                id: 'st_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+                title, completed: false
+            });
+            task.updatedAt = Date.now();
+            task.progress = Math.round(task.subtasks.filter(s => s.completed).length / task.subtasks.length * 100);
+            await this.saveData();
+            this.openDetail(taskId);
+            this.render();
+        };
+        if (addBtn) addBtn.addEventListener('click', doAdd);
+        if (addInput) addInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doAdd(); } });
     }
 
     createDetailContent(task) {
@@ -592,6 +689,31 @@ class TaskManager {
                         <div class="progress-fill ${this.getProgressClass(task.progress)}" style="width: ${task.progress}%"></div>
                     </div>
                     <div class="progress-label">${task.progress}% 完成</div>
+                </div>
+            </div>
+            ` : ''}
+
+            <!-- 子任务 -->
+            ${task.subtasks && task.subtasks.length > 0 ? `
+            <div class="detail-section">
+                <div class="detail-section-title">子任务 (${task.subtasks.filter(s => s.completed).length}/${task.subtasks.length})</div>
+                <div class="detail-subtasks" data-task-id="${task.id}">
+                    <ul class="detail-subtask-list">
+                        ${task.subtasks.map(st => `
+                            <li class="detail-subtask-item${st.completed ? ' done' : ''}" data-subtask-id="${st.id}">
+                                <div class="detail-subtask-dot" data-sid="${st.id}"><i class="fas fa-check"></i></div>
+                                <span class="detail-subtask-text" data-sid="${st.id}">${this.escapeHtml(st.title)}</span>
+                                <div class="detail-subtask-actions">
+                                    <button type="button" class="detail-subtask-copy" data-sid="${st.id}" title="复制"><i class="fas fa-copy"></i></button>
+                                    <button type="button" class="detail-subtask-del" data-sid="${st.id}" title="删除"><i class="fas fa-times"></i></button>
+                                </div>
+                            </li>
+                        `).join('')}
+                    </ul>
+                    <div class="detail-subtask-add">
+                        <input type="text" class="detail-subtask-add-input" placeholder="添加子任务..." maxlength="200">
+                        <button type="button" class="detail-subtask-add-btn"><i class="fas fa-plus"></i></button>
+                    </div>
                 </div>
             </div>
             ` : ''}
@@ -841,13 +963,177 @@ class TaskManager {
     // ===================== 工具方法 =====================
 
     populateCategoryFilter() {
-        const select = document.getElementById('filter-category');
-        this.categories.forEach(cat => {
-            const opt = document.createElement('option');
-            opt.value = cat.id;
-            opt.textContent = cat.name;
-            select.appendChild(opt);
+        const wrap = document.getElementById('filter-category-wrap');
+        if (!wrap) return;
+        this._categoryCombobox = this.createCategoryCombobox(wrap, {
+            value: 'all',
+            placeholder: '全部分类',
+            allowAll: true,
+            onChange: (value) => {
+                this.filters.category = value;
+                this.currentPage = 1;
+                this.applyFilters();
+                this.render();
+            }
         });
+    }
+
+    /**
+     * 创建可搜索的分类 Combobox（与 memo.js 侧边栏一致）
+     */
+    createCategoryCombobox(container, opts = {}) {
+        const allowAll = opts.allowAll !== false;
+        let value = opts.value || (allowAll ? 'all' : '');
+        const placeholder = opts.placeholder || (allowAll ? '全部分类' : '无分类');
+        const onChange = typeof opts.onChange === 'function' ? opts.onChange : () => {};
+
+        const getOptionsList = () => {
+            const list = allowAll
+                ? [{ id: 'all', name: '全部分类', color: null }]
+                : [{ id: '', name: '无分类', color: null }];
+            (this.categories || []).forEach(c => list.push({ id: c.id, name: c.name, color: c.color || '#64b4ff' }));
+            return list;
+        };
+
+        container.classList.add('category-combobox');
+        container.innerHTML = `
+            <div class="category-combobox-input-wrap">
+                <span class="category-combobox-color" id="combobox-color-dot"></span>
+                <input type="text" class="category-combobox-input" autocomplete="off" placeholder="${this.escapeHtml(placeholder)}" role="combobox" aria-expanded="false" aria-haspopup="listbox">
+                <i class="fas fa-chevron-down category-combobox-arrow"></i>
+            </div>
+        `;
+
+        const listbox = document.createElement('ul');
+        listbox.className = 'category-combobox-list category-combobox-portal hidden';
+        listbox.setAttribute('role', 'listbox');
+        document.body.appendChild(listbox);
+
+        const input = container.querySelector('.category-combobox-input');
+        const colorDot = container.querySelector('.category-combobox-color');
+        const inputWrap = container.querySelector('.category-combobox-input-wrap');
+
+        let options = getOptionsList();
+        let highlightedIndex = -1;
+
+        const getDisplayName = (id) => {
+            if (allowAll && id === 'all') return '全部分类';
+            if (!allowAll && id === '') return '无分类';
+            const c = options.find(o => o.id === id);
+            return c ? c.name : placeholder;
+        };
+        const getDisplayColor = (id) => {
+            if ((allowAll && id === 'all') || (!allowAll && id === '')) return 'transparent';
+            const c = options.find(o => o.id === id);
+            return c && c.color ? c.color : 'transparent';
+        };
+
+        const positionListbox = () => {
+            const rect = inputWrap.getBoundingClientRect();
+            listbox.style.position = 'fixed';
+            listbox.style.left = rect.left + 'px';
+            listbox.style.top = (rect.bottom + 4) + 'px';
+            listbox.style.minWidth = rect.width + 'px';
+        };
+
+        const renderList = (filterText = '') => {
+            const q = (filterText || '').toLowerCase().trim();
+            const filtered = q ? options.filter(o => (o.name || '').toLowerCase().includes(q)) : options;
+            listbox.innerHTML = filtered.map((opt, i) => `
+                <li class="category-combobox-option" role="option" data-value="${this.escapeHtml(opt.id)}" data-index="${i}" aria-selected="false">
+                    <span class="category-combobox-option-color" style="background:${opt.color || 'transparent'}"></span>
+                    <span class="category-combobox-option-name">${this.escapeHtml(opt.name)}</span>
+                </li>
+            `).join('');
+            highlightedIndex = filtered.length > 0 ? 0 : -1;
+            listbox.querySelectorAll('.category-combobox-option').forEach((el, i) => {
+                el.setAttribute('aria-selected', i === 0 ? 'true' : 'false');
+                el.addEventListener('click', (e) => { e.stopPropagation(); selectValue(el.dataset.value); });
+            });
+        };
+
+        const selectValue = (id) => {
+            value = id;
+            input.value = getDisplayName(id);
+            colorDot.style.background = getDisplayColor(id);
+            listbox.classList.add('hidden');
+            input.setAttribute('aria-expanded', 'false');
+            onChange(value);
+        };
+
+        const openList = () => {
+            input.setAttribute('aria-expanded', 'true');
+            positionListbox();
+            listbox.classList.remove('hidden');
+            renderList(input.value);
+        };
+
+        const closeList = () => {
+            listbox.classList.add('hidden');
+            input.setAttribute('aria-expanded', 'false');
+            input.value = getDisplayName(value);
+            colorDot.style.background = getDisplayColor(value);
+        };
+
+        input.addEventListener('focus', () => openList());
+        input.addEventListener('input', () => { openList(); renderList(input.value); });
+        input.addEventListener('keydown', (e) => {
+            const optsEl = listbox.querySelectorAll('.category-combobox-option');
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                highlightedIndex = Math.min(highlightedIndex + 1, optsEl.length - 1);
+                optsEl.forEach((o, i) => o.setAttribute('aria-selected', i === highlightedIndex ? 'true' : 'false'));
+                if (optsEl[highlightedIndex]) optsEl[highlightedIndex].scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                highlightedIndex = Math.max(highlightedIndex - 1, 0);
+                optsEl.forEach((o, i) => o.setAttribute('aria-selected', i === highlightedIndex ? 'true' : 'false'));
+                if (optsEl[highlightedIndex]) optsEl[highlightedIndex].scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'Enter' && optsEl[highlightedIndex]) {
+                e.preventDefault();
+                selectValue(optsEl[highlightedIndex].dataset.value);
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                closeList();
+            }
+        });
+
+        inputWrap.addEventListener('click', (e) => {
+            if (e.target === input || e.target.closest('.category-combobox-arrow')) {
+                if (listbox.classList.contains('hidden')) openList();
+                else closeList();
+            }
+        });
+
+        const outsideClickHandler = (e) => {
+            if (!container.contains(e.target) && !listbox.contains(e.target)) closeList();
+        };
+        document.addEventListener('click', outsideClickHandler);
+
+        const setOptions = () => {
+            options = getOptionsList();
+            input.value = getDisplayName(value);
+            colorDot.style.background = getDisplayColor(value);
+        };
+
+        const setValue = (id) => {
+            value = id || (allowAll ? 'all' : '');
+            input.value = getDisplayName(value);
+            colorDot.style.background = getDisplayColor(value);
+        };
+
+        setValue(value);
+
+        return {
+            getValue: () => value,
+            setValue,
+            setOptions,
+            destroy: () => {
+                document.removeEventListener('click', outsideClickHandler);
+                if (listbox.parentNode) listbox.parentNode.removeChild(listbox);
+                container.innerHTML = '';
+            }
+        };
     }
 
     getCategoryName(categoryId) {
