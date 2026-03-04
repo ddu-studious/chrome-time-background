@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>二级分类管理 - 4套设计方案对比</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #162032 50%, #1e293b 100%);
+            min-height: 100vh;
+            color: rgba(255, 255, 255, 0.9);
+            padding: 40px 20px;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 12px;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .page-desc {
+            text-align: center;
+            color: rgba(255,255,255,0.5);
+            font-size: 13px;
+            margin-bottom: 40px;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+            line-height: 1.6;
+        }
+        .demo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 40px;
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+        .demo-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .demo-label {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: rgba(255,255,255,0.85);
+            text-align: center;
+        }
+        .demo-label small {
+            display: block;
+            font-weight: 400;
+            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+            margin-top: 4px;
+            line-height: 1.5;
+        }
+        .demo-pros {
+            font-size: 11px;
+            color: rgba(255,255,255,0.4);
+            margin-bottom: 16px;
+            text-align: center;
+            max-width: 380px;
+        }
+        .demo-pros span { color: #22c55e; }
+        .demo-pros .con { color: #f59e0b; }
+
+        /* ===== Shared panel base ===== */
+        .panel {
+            width: 380px;
+            max-height: 600px;
+            background: rgba(20, 27, 45, 0.95);
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.08);
+            backdrop-filter: blur(20px);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .panel-header {
+            display: flex;
+            align-items: center;
+            padding: 16px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            gap: 10px;
+        }
+        .panel-header h3 {
+            font-size: 15px;
+            font-weight: 600;
+            flex: 1;
+        }
+        .panel-header h3 i { margin-right: 6px; opacity: 0.6; }
+        .panel-badge {
+            font-size: 11px;
+            background: rgba(100,180,255,0.15);
+            color: #64b4ff;
+            padding: 2px 10px;
+            border-radius: 10px;
+        }
+        .panel-close {
+            background: none;
+            border: none;
+            color: rgba(255,255,255,0.4);
+            font-size: 20px;
+            cursor: pointer;
+            line-height: 1;
+        }
+        .panel-close:hover { color: rgba(255,255,255,0.8); }
+        .panel-search {
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            position: relative;
+        }
+        .panel-search i {
+            position: absolute;
+            left: 28px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 12px;
+            color: rgba(255,255,255,0.3);
+        }
+        .panel-search input {
+            width: 100%;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px;
+            padding: 8px 12px 8px 32px;
+            color: rgba(255,255,255,0.8);
+            font-size: 13px;
+            outline: none;
+        }
+        .panel-search input:focus { border-color: rgba(100,180,255,0.4); }
+        .panel-search input::placeholder { color: rgba(255,255,255,0.3); }
+        .panel-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px 0;
+        }
+        .panel-body::-webkit-scrollbar { width: 4px; }
+        .panel-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+        .panel-footer {
+            padding: 12px 16px;
+            border-top: 1px solid rgba(255,255,255,0.06);
+        }
+        .btn-create {
+            width: 100%;
+            background: rgba(100,180,255,0.1);
+            border: 1px dashed rgba(100,180,255,0.3);
+            color: #64b4ff;
+            padding: 8px;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-create:hover { background: rgba(100,180,255,0.2); }
+
+        /* ===== Color dots ===== */
+        .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+        /* ===================================================================
+           方案 A: 缩进树形 (Tree View with Indentation)
+           =================================================================== */
+        .tree-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 16px;
+            gap: 8px;
+            cursor: pointer;
+            transition: background 0.15s;
+            position: relative;
+        }
+        .tree-item:hover { background: rgba(255,255,255,0.04); }
+        .tree-item.parent { font-weight: 500; }
+        .tree-item.child { padding-left: 40px; }
+        .tree-item.child::before {
+            content: '';
+            position: absolute;
+            left: 24px;
+            top: 0;
+            bottom: 0;
+            width: 1px;
+            background: rgba(255,255,255,0.06);
+        }
+        .tree-item.child::after {
+            content: '';
+            position: absolute;
+            left: 24px;
+            top: 50%;
+            width: 8px;
+            height: 1px;
+            background: rgba(255,255,255,0.06);
+        }
+        .tree-expand {
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: rgba(255,255,255,0.4);
+            transition: transform 0.2s;
+            flex-shrink: 0;
+        }
+        .tree-expand.open { transform: rotate(90deg); }
+        .tree-expand.empty { visibility: hidden; }
+        .tree-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            flex: 1;
+            min-width: 0;
+        }
+        .tree-chip-name {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .tree-count {
+            font-size: 11px;
+            color: rgba(255,255,255,0.3);
+            flex-shrink: 0;
+        }
+        .tree-actions {
+            display: flex;
+            gap: 4px;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+        .tree-item:hover .tree-actions { opacity: 1; }
+        .tree-actions button {
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            border: none;
+            background: none;
+            color: rgba(255,255,255,0.35);
+            font-size: 11px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .tree-actions button:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.7); }
+        .tree-add-child {
+            display: flex;
+            align-items: center;
+            padding: 6px 16px 6px 48px;
+            gap: 6px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.25);
+            cursor: pointer;
+            transition: color 0.15s;
+        }
+        .tree-add-child:hover { color: rgba(100,180,255,0.7); }
+
+        /* ===================================================================
+           方案 B: 折叠分组卡片 (Accordion Group Cards)
+           =================================================================== */
+        .accordion-group {
+            margin: 4px 12px;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.04);
+            overflow: hidden;
+            transition: all 0.2s;
+        }
+        .accordion-group.expanded { border-color: rgba(255,255,255,0.08); }
+        .accordion-header {
+            display: flex;
+            align-items: center;
+            padding: 10px 12px;
+            gap: 8px;
+            cursor: pointer;
+            transition: background 0.15s;
+            overflow: hidden;
+        }
+        .accordion-header:hover { background: rgba(255,255,255,0.03); }
+        .accordion-chevron {
+            font-size: 10px;
+            color: rgba(255,255,255,0.3);
+            transition: transform 0.25s;
+            width: 14px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .accordion-group.expanded .accordion-chevron { transform: rotate(90deg); }
+        .accordion-color {
+            width: 4px;
+            height: 24px;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+        .accordion-name {
+            flex: 1;
+            font-size: 13px;
+            font-weight: 500;
+            min-width: 0;
+        }
+        .accordion-right {
+            display: flex;
+            align-items: center;
+            gap: 0;
+            flex-shrink: 0;
+            margin-left: auto;
+        }
+        .accordion-stats {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            color: rgba(255,255,255,0.3);
+            transition: transform 0.25s ease, opacity 0.25s ease;
+            white-space: nowrap;
+        }
+        .accordion-stats .sub-count {
+            background: rgba(255,255,255,0.06);
+            padding: 1px 6px;
+            border-radius: 4px;
+        }
+        .accordion-header-actions {
+            display: flex;
+            gap: 2px;
+            opacity: 0;
+            width: 0;
+            overflow: hidden;
+            transition: width 0.25s ease, opacity 0.2s ease;
+            flex-shrink: 0;
+        }
+        .accordion-header:hover .accordion-header-actions {
+            opacity: 1;
+            width: 78px;
+        }
+        .accordion-header:hover .accordion-stats {
+            transform: translateX(-4px);
+        }
+        .accordion-header-actions button {
+            width: 24px; height: 24px; border-radius: 4px; border: none;
+            background: none; color: rgba(255,255,255,0.3); font-size: 11px;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+        .accordion-header-actions button:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.6); }
+        .accordion-children {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        .accordion-group.expanded .accordion-children { max-height: 500px; }
+        .accordion-child {
+            display: flex;
+            align-items: center;
+            padding: 7px 12px 7px 36px;
+            gap: 8px;
+            cursor: pointer;
+            transition: background 0.15s;
+            border-top: 1px solid rgba(255,255,255,0.03);
+            overflow: hidden;
+        }
+        .accordion-child:hover { background: rgba(255,255,255,0.04); }
+        .accordion-child-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; opacity: 0.7; }
+        .accordion-child-name { flex: 1; font-size: 12px; color: rgba(255,255,255,0.7); min-width: 0; }
+        .accordion-child-right {
+            display: flex;
+            align-items: center;
+            gap: 0;
+            flex-shrink: 0;
+            margin-left: auto;
+        }
+        .accordion-child-count {
+            font-size: 11px; color: rgba(255,255,255,0.25);
+            transition: transform 0.25s ease;
+            white-space: nowrap;
+        }
+        .accordion-child-actions {
+            display: flex;
+            gap: 2px;
+            opacity: 0;
+            width: 0;
+            overflow: hidden;
+            transition: width 0.25s ease, opacity 0.2s ease;
+            flex-shrink: 0;
+        }
+        .accordion-child:hover .accordion-child-actions {
+            opacity: 1;
+            width: 52px;
+        }
+        .accordion-child:hover .accordion-child-count {
+            transform: translateX(-4px);
+        }
+        .accordion-child-actions button {
+            width: 22px; height: 22px; border-radius: 4px; border: none;
+            background: none; color: rgba(255,255,255,0.3); font-size: 10px;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+        .accordion-child-actions button:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.6); }
+        .accordion-add-sub {
+            display: flex;
+            align-items: center;
+            padding: 6px 12px 8px 36px;
+            gap: 6px;
+            font-size: 11px;
+            color: rgba(255,255,255,0.2);
+            cursor: pointer;
+            border-top: 1px solid rgba(255,255,255,0.03);
+        }
+        .accordion-add-sub:hover { color: rgba(100,180,255,0.6); }
+
+        /* ===================================================================
+           方案 C: 标签页 + 平铺 (Tab Navigation + Flat Grid)
+           =================================================================== */
+        .tab-nav {
+            display: flex;
+            gap: 2px;
+            padding: 8px 12px;
+            overflow-x: auto;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .tab-nav::-webkit-scrollbar { height: 0; }
+        .tab-pill {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: rgba(255,255,255,0.04);
+            color: rgba(255,255,255,0.5);
+            border: 1px solid transparent;
+        }
+        .tab-pill:hover { background: rgba(255,255,255,0.08); }
+        .tab-pill.active {
+            background: rgba(100,180,255,0.12);
+            color: #64b4ff;
+            border-color: rgba(100,180,255,0.2);
+        }
+        .tab-pill .tab-dot { width: 6px; height: 6px; border-radius: 50%; }
+        .tab-pill .tab-count {
+            font-size: 10px;
+            background: rgba(255,255,255,0.08);
+            padding: 1px 5px;
+            border-radius: 8px;
+        }
+        .tab-pill.active .tab-count { background: rgba(100,180,255,0.2); }
+        .tab-content-label {
+            padding: 10px 16px 4px;
+            font-size: 11px;
+            color: rgba(255,255,255,0.3);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .tab-sub-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            padding: 8px 16px;
+        }
+        .tab-sub-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .tab-sub-chip:hover { border-color: rgba(255,255,255,0.15); }
+        .tab-sub-chip.active { border-color: currentColor; }
+        .tab-sub-chip .sub-dot { width: 5px; height: 5px; border-radius: 50%; }
+        .tab-sub-count { font-size: 10px; opacity: 0.5; }
+        .tab-manage-link {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 8px 16px;
+            font-size: 11px;
+            color: rgba(100,180,255,0.5);
+            cursor: pointer;
+            transition: color 0.15s;
+        }
+        .tab-manage-link:hover { color: #64b4ff; }
+
+        /* ===================================================================
+           方案 D: 路径面包屑 + 列表 (Breadcrumb + Drill-Down)
+           =================================================================== */
+        .breadcrumb-bar {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 10px 16px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            font-size: 12px;
+            color: rgba(255,255,255,0.4);
+        }
+        .breadcrumb-item {
+            cursor: pointer;
+            transition: color 0.15s;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        .breadcrumb-item:hover { color: rgba(255,255,255,0.8); background: rgba(255,255,255,0.05); }
+        .breadcrumb-item.current { color: rgba(255,255,255,0.8); font-weight: 500; }
+        .breadcrumb-sep { color: rgba(255,255,255,0.15); font-size: 10px; }
+        .drill-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 16px;
+            gap: 10px;
+            cursor: pointer;
+            transition: background 0.15s;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+        }
+        .drill-item:hover { background: rgba(255,255,255,0.04); }
+        .drill-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        .drill-info { flex: 1; min-width: 0; }
+        .drill-name { font-size: 13px; font-weight: 500; }
+        .drill-meta {
+            font-size: 11px;
+            color: rgba(255,255,255,0.3);
+            margin-top: 2px;
+        }
+        .drill-arrow {
+            color: rgba(255,255,255,0.2);
+            font-size: 12px;
+        }
+        .drill-count-badge {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.06);
+            color: rgba(255,255,255,0.4);
+        }
+        .drill-sub-item {
+            display: flex;
+            align-items: center;
+            padding: 9px 16px;
+            gap: 8px;
+            cursor: pointer;
+            transition: background 0.15s;
+            border-bottom: 1px solid rgba(255,255,255,0.02);
+        }
+        .drill-sub-item:hover { background: rgba(255,255,255,0.04); }
+        .drill-sub-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+        .drill-sub-name { flex: 1; font-size: 13px; }
+        .drill-sub-count { font-size: 11px; color: rgba(255,255,255,0.3); }
+        .drill-sub-actions {
+            display: flex; gap: 2px;
+            opacity: 0; transition: opacity 0.15s;
+        }
+        .drill-sub-item:hover .drill-sub-actions { opacity: 1; }
+        .drill-sub-actions button {
+            width: 24px; height: 24px; border-radius: 4px; border: none;
+            background: none; color: rgba(255,255,255,0.3); font-size: 11px;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+        }
+        .drill-sub-actions button:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.6); }
+        .drill-back {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 16px;
+            font-size: 12px;
+            color: rgba(100,180,255,0.6);
+            cursor: pointer;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            transition: color 0.15s;
+        }
+        .drill-back:hover { color: #64b4ff; }
+
+        /* ===================================================================
+           交互动画
+           =================================================================== */
+        .accordion-group, .tree-item, .drill-item, .drill-sub-item, .tab-sub-chip {
+            animation: fadeSlideIn 0.2s ease both;
+        }
+        @keyframes fadeSlideIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <h1><i class="fas fa-layer-group"></i> 二级分类管理 - 4套设计方案</h1>
+    <p class="page-desc">
+        当前分类是扁平列表，分类增多后不易管理。以下4套方案均支持一、二级分类层级。<br>
+        点击面板中的元素可体验交互效果，选定方案后集成到正式代码中。
+    </p>
+
+    <div class="demo-grid">
+
+        <!-- ==================== 方案 A: 缩进树形 ==================== -->
+        <div class="demo-wrapper">
+            <div class="demo-label">
+                方案 A：缩进树形
+                <small>经典文件夹树形结构，缩进表示层级关系</small>
+            </div>
+            <div class="demo-pros">
+                <span>✓ 层级关系一目了然</span> · <span>✓ 空间利用率高</span> · <span class="con">△ 子分类多时列表较长</span>
+            </div>
+            <div class="panel" id="panel-a">
+                <div class="panel-header">
+                    <h3><i class="fas fa-layer-group"></i> 分类管理</h3>
+                    <span class="panel-badge">15 个</span>
+                    <button class="panel-close">&times;</button>
+                </div>
+                <div class="panel-search">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="搜索或创建分类...">
+                </div>
+                <div class="panel-body" id="tree-body">
+                    <!-- JS 渲染 -->
+                </div>
+                <div class="panel-footer">
+                    <button class="btn-create"><i class="fas fa-plus"></i> 新建分类</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== 方案 B: 折叠分组卡片 ==================== -->
+        <div class="demo-wrapper">
+            <div class="demo-label">
+                方案 B：折叠分组卡片
+                <small>每个一级分类是一个可展开的卡片，子分类折叠其中</small>
+            </div>
+            <div class="demo-pros">
+                <span>✓ 视觉分隔清晰</span> · <span>✓ 折叠后紧凑</span> · <span class="con">△ 一级分类多时纵向空间消耗大</span>
+            </div>
+            <div class="panel" id="panel-b">
+                <div class="panel-header">
+                    <h3><i class="fas fa-layer-group"></i> 分类管理</h3>
+                    <span class="panel-badge">15 个</span>
+                    <button class="panel-close">&times;</button>
+                </div>
+                <div class="panel-search">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="搜索或创建分类...">
+                </div>
+                <div class="panel-body" id="accordion-body">
+                    <!-- JS 渲染 -->
+                </div>
+                <div class="panel-footer">
+                    <button class="btn-create"><i class="fas fa-plus"></i> 新建一级分类</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== 方案 C: 标签页导航 ==================== -->
+        <div class="demo-wrapper">
+            <div class="demo-label">
+                方案 C：标签页 + 平铺芯片
+                <small>一级分类做顶部标签切换，二级分类以芯片平铺展示</small>
+            </div>
+            <div class="demo-pros">
+                <span>✓ 操作路径短</span> · <span>✓ 一级分类一目了然</span> · <span class="con">△ 一级分类超过8个时标签需滚动</span>
+            </div>
+            <div class="panel" id="panel-c">
+                <div class="panel-header">
+                    <h3><i class="fas fa-layer-group"></i> 分类管理</h3>
+                    <span class="panel-badge">15 个</span>
+                    <button class="panel-close">&times;</button>
+                </div>
+                <div class="tab-nav" id="tab-nav">
+                    <!-- JS 渲染 -->
+                </div>
+                <div class="panel-body" id="tab-body">
+                    <!-- JS 渲染 -->
+                </div>
+                <div class="panel-footer">
+                    <button class="btn-create"><i class="fas fa-plus"></i> 新建子分类</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== 方案 D: 面包屑 + 下钻 ==================== -->
+        <div class="demo-wrapper">
+            <div class="demo-label">
+                方案 D：面包屑导航 + 下钻列表
+                <small>点击一级分类进入子列表，面包屑导航返回上级</small>
+            </div>
+            <div class="demo-pros">
+                <span>✓ 每层视图简洁</span> · <span>✓ 扩展性好(可支持3级+)</span> · <span class="con">△ 需要点击进入/返回，路径较深</span>
+            </div>
+            <div class="panel" id="panel-d">
+                <div class="panel-header">
+                    <h3><i class="fas fa-layer-group"></i> 分类管理</h3>
+                    <span class="panel-badge">15 个</span>
+                    <button class="panel-close">&times;</button>
+                </div>
+                <div class="breadcrumb-bar" id="breadcrumb">
+                    <span class="breadcrumb-item current">全部分类</span>
+                </div>
+                <div class="panel-search">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="搜索分类...">
+                </div>
+                <div class="panel-body" id="drill-body">
+                    <!-- JS 渲染 -->
+                </div>
+                <div class="panel-footer">
+                    <button class="btn-create" id="drill-create-btn"><i class="fas fa-plus"></i> 新建分类</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== 模拟数据 ====================
+        const categories = [
+            {
+                id: 'work', name: '工作', color: '#64b4ff', icon: 'fas fa-briefcase',
+                children: [
+                    { id: 'work-dev', name: '开发任务', color: '#64b4ff', count: 5 },
+                    { id: 'work-review', name: '代码审查', color: '#64b4ff', count: 2 },
+                    { id: 'work-meeting', name: '会议记录', color: '#64b4ff', count: 1 },
+                ],
+                count: 8
+            },
+            {
+                id: 'study', name: '学习', color: '#22c55e', icon: 'fas fa-book',
+                children: [
+                    { id: 'study-ai', name: 'AI & ML', color: '#22c55e', count: 3 },
+                    { id: 'study-lang', name: '语言学习', color: '#22c55e', count: 1 },
+                ],
+                count: 4
+            },
+            {
+                id: 'life', name: '生活', color: '#f59e0b', icon: 'fas fa-home',
+                children: [
+                    { id: 'life-health', name: '健身运动', color: '#f59e0b', count: 2 },
+                    { id: 'life-finance', name: '财务管理', color: '#f59e0b', count: 1 },
+                    { id: 'life-travel', name: '旅行规划', color: '#f59e0b', count: 0 },
+                ],
+                count: 3
+            },
+            {
+                id: 'project', name: '项目', color: '#8b5cf6', icon: 'fas fa-rocket',
+                children: [
+                    { id: 'proj-chrome', name: 'Chrome 扩展', color: '#8b5cf6', count: 5 },
+                    { id: 'proj-app', name: '小红花系统', color: '#8b5cf6', count: 2 },
+                ],
+                count: 7
+            },
+            {
+                id: 'idea', name: '想法', color: '#ec4899', icon: 'fas fa-lightbulb',
+                children: [],
+                count: 3
+            }
+        ];
+
+        // ==================== 方案 A: 缩进树形 ====================
+        function renderTreeView() {
+            const body = document.getElementById('tree-body');
+            let html = '';
+            categories.forEach(cat => {
+                const hasChildren = cat.children.length > 0;
+                html += `
+                    <div class="tree-item parent" data-id="${cat.id}">
+                        <span class="tree-expand ${hasChildren ? 'open' : 'empty'}" data-id="${cat.id}">
+                            <i class="fas fa-chevron-right"></i>
+                        </span>
+                        <div class="tree-chip" style="background:rgba(${hexToRgb(cat.color)},0.1);color:${cat.color}">
+                            <span class="dot" style="background:${cat.color}"></span>
+                            <span class="tree-chip-name">${cat.name}</span>
+                        </div>
+                        <span class="tree-count">${cat.count}</span>
+                        <div class="tree-actions">
+                            <button title="添加子分类"><i class="fas fa-plus"></i></button>
+                            <button title="编辑"><i class="fas fa-pen"></i></button>
+                            <button title="删除"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </div>
+                    <div class="tree-children" data-parent="${cat.id}" ${hasChildren ? '' : 'style="display:none"'}>
+                        ${cat.children.map(ch => `
+                            <div class="tree-item child" data-id="${ch.id}">
+                                <div class="tree-chip" style="color:${ch.color}">
+                                    <span class="dot" style="background:${ch.color};opacity:0.6"></span>
+                                    <span class="tree-chip-name">${ch.name}</span>
+                                </div>
+                                <span class="tree-count">${ch.count}</span>
+                                <div class="tree-actions">
+                                    <button title="编辑"><i class="fas fa-pen"></i></button>
+                                    <button title="删除"><i class="fas fa-trash"></i></button>
+                                </div>
+                            </div>
+                        `).join('')}
+                        <div class="tree-add-child" data-parent="${cat.id}">
+                            <i class="fas fa-plus"></i> 添加子分类
+                        </div>
+                    </div>
+                `;
+            });
+            body.innerHTML = html;
+
+            body.querySelectorAll('.tree-expand:not(.empty)').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const id = btn.dataset.id;
+                    btn.classList.toggle('open');
+                    const children = body.querySelector(`.tree-children[data-parent="${id}"]`);
+                    if (children) {
+                        children.style.display = btn.classList.contains('open') ? '' : 'none';
+                    }
+                });
+            });
+        }
+
+        // ==================== 方案 B: 折叠分组卡片 ====================
+        function renderAccordionView() {
+            const body = document.getElementById('accordion-body');
+            let html = '';
+            categories.forEach((cat, idx) => {
+                const hasChildren = cat.children.length > 0;
+                html += `
+                    <div class="accordion-group ${idx === 0 ? 'expanded' : ''}" data-id="${cat.id}">
+                        <div class="accordion-header">
+                            <span class="accordion-chevron"><i class="fas fa-chevron-right"></i></span>
+                            <div class="accordion-color" style="background:${cat.color}"></div>
+                            <span class="accordion-name">${cat.name}</span>
+                            <div class="accordion-right">
+                                <div class="accordion-stats">
+                                    <span>${cat.count} 任务</span>
+                                    ${hasChildren ? `<span class="sub-count">${cat.children.length} 子分类</span>` : ''}
+                                </div>
+                                <div class="accordion-header-actions">
+                                    <button title="添加子分类"><i class="fas fa-plus"></i></button>
+                                    <button title="编辑"><i class="fas fa-pen"></i></button>
+                                    <button title="删除"><i class="fas fa-trash"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="accordion-children">
+                            ${cat.children.map(ch => `
+                                <div class="accordion-child" data-id="${ch.id}">
+                                    <span class="accordion-child-dot" style="background:${ch.color}"></span>
+                                    <span class="accordion-child-name">${ch.name}</span>
+                                    <div class="accordion-child-right">
+                                        <span class="accordion-child-count">${ch.count}</span>
+                                        <div class="accordion-child-actions">
+                                            <button title="编辑"><i class="fas fa-pen"></i></button>
+                                            <button title="删除"><i class="fas fa-trash"></i></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                            <div class="accordion-add-sub" data-parent="${cat.id}">
+                                <i class="fas fa-plus"></i> 添加子分类
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            body.innerHTML = html;
+
+            body.querySelectorAll('.accordion-header').forEach(header => {
+                header.addEventListener('click', (e) => {
+                    if (e.target.closest('.accordion-header-actions')) return;
+                    const group = header.closest('.accordion-group');
+                    group.classList.toggle('expanded');
+                });
+            });
+        }
+
+        // ==================== 方案 C: 标签页导航 ====================
+        function renderTabView() {
+            const nav = document.getElementById('tab-nav');
+            const body = document.getElementById('tab-body');
+
+            let tabHtml = `<div class="tab-pill active" data-id="all"><span>全部</span><span class="tab-count">${categories.reduce((s,c) => s + c.count, 0)}</span></div>`;
+            categories.forEach(cat => {
+                tabHtml += `
+                    <div class="tab-pill" data-id="${cat.id}">
+                        <span class="tab-dot" style="background:${cat.color}"></span>
+                        <span>${cat.name}</span>
+                        <span class="tab-count">${cat.count}</span>
+                    </div>
+                `;
+            });
+            nav.innerHTML = tabHtml;
+
+            function renderTabContent(catId) {
+                if (catId === 'all') {
+                    let html = '';
+                    categories.forEach(cat => {
+                        html += `<div class="tab-content-label">${cat.name}</div><div class="tab-sub-grid">`;
+                        if (cat.children.length === 0) {
+                            html += `<div class="tab-sub-chip" style="color:${cat.color};background:rgba(${hexToRgb(cat.color)},0.08)"><span class="sub-dot" style="background:${cat.color}"></span> 未分组 <span class="tab-sub-count">${cat.count}</span></div>`;
+                        }
+                        cat.children.forEach(ch => {
+                            html += `<div class="tab-sub-chip" style="color:${ch.color};background:rgba(${hexToRgb(ch.color)},0.06)"><span class="sub-dot" style="background:${ch.color}"></span> ${ch.name} <span class="tab-sub-count">${ch.count}</span></div>`;
+                        });
+                        html += `</div>`;
+                    });
+                    html += `<div class="tab-manage-link"><i class="fas fa-cog"></i> 管理分类层级</div>`;
+                    body.innerHTML = html;
+                } else {
+                    const cat = categories.find(c => c.id === catId);
+                    if (!cat) return;
+                    let html = `<div class="tab-content-label">${cat.name} 的子分类</div><div class="tab-sub-grid">`;
+                    if (cat.children.length === 0) {
+                        html += `<div style="padding:20px 16px;text-align:center;color:rgba(255,255,255,0.3);font-size:12px;width:100%">暂无子分类，点击下方按钮添加</div>`;
+                    }
+                    cat.children.forEach(ch => {
+                        html += `<div class="tab-sub-chip" style="color:${ch.color};background:rgba(${hexToRgb(ch.color)},0.08)"><span class="sub-dot" style="background:${ch.color}"></span> ${ch.name} <span class="tab-sub-count">${ch.count}</span></div>`;
+                    });
+                    html += `</div>`;
+                    html += `<div class="tab-manage-link"><i class="fas fa-cog"></i> 管理"${cat.name}"子分类</div>`;
+                    body.innerHTML = html;
+                }
+            }
+
+            nav.querySelectorAll('.tab-pill').forEach(pill => {
+                pill.addEventListener('click', () => {
+                    nav.querySelectorAll('.tab-pill').forEach(p => p.classList.remove('active'));
+                    pill.classList.add('active');
+                    renderTabContent(pill.dataset.id);
+                });
+            });
+
+            renderTabContent('all');
+        }
+
+        // ==================== 方案 D: 面包屑 + 下钻 ====================
+        let drillState = { level: 'root', parentId: null };
+
+        function renderDrillView() {
+            const body = document.getElementById('drill-body');
+            const breadcrumb = document.getElementById('breadcrumb');
+            const createBtn = document.getElementById('drill-create-btn');
+
+            if (drillState.level === 'root') {
+                breadcrumb.innerHTML = `<span class="breadcrumb-item current">全部分类</span>`;
+                createBtn.innerHTML = `<i class="fas fa-plus"></i> 新建一级分类`;
+                let html = '';
+                categories.forEach(cat => {
+                    const hasChildren = cat.children.length > 0;
+                    html += `
+                        <div class="drill-item" data-id="${cat.id}">
+                            <div class="drill-icon" style="background:rgba(${hexToRgb(cat.color)},0.15);color:${cat.color}">
+                                <i class="${cat.icon}"></i>
+                            </div>
+                            <div class="drill-info">
+                                <div class="drill-name">${cat.name}</div>
+                                <div class="drill-meta">${cat.count} 个任务${hasChildren ? ` · ${cat.children.length} 个子分类` : ''}</div>
+                            </div>
+                            <span class="drill-count-badge">${cat.count}</span>
+                            ${hasChildren ? '<span class="drill-arrow"><i class="fas fa-chevron-right"></i></span>' : ''}
+                        </div>
+                    `;
+                });
+                body.innerHTML = html;
+
+                body.querySelectorAll('.drill-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        const cat = categories.find(c => c.id === item.dataset.id);
+                        if (cat && cat.children.length > 0) {
+                            drillState = { level: 'children', parentId: cat.id };
+                            renderDrillView();
+                        }
+                    });
+                });
+            } else {
+                const parent = categories.find(c => c.id === drillState.parentId);
+                if (!parent) return;
+
+                breadcrumb.innerHTML = `
+                    <span class="breadcrumb-item" id="drill-back-root">全部分类</span>
+                    <span class="breadcrumb-sep"><i class="fas fa-chevron-right"></i></span>
+                    <span class="breadcrumb-item current">${parent.name}</span>
+                `;
+                createBtn.innerHTML = `<i class="fas fa-plus"></i> 在"${parent.name}"下新建子分类`;
+
+                let html = `
+                    <div class="drill-back" id="drill-back">
+                        <i class="fas fa-arrow-left"></i> 返回全部分类
+                    </div>
+                `;
+                if (parent.children.length === 0) {
+                    html += `<div style="padding:40px 16px;text-align:center;color:rgba(255,255,255,0.3);font-size:13px"><i class="fas fa-folder-open" style="font-size:24px;display:block;margin-bottom:8px;opacity:0.3"></i>暂无子分类</div>`;
+                }
+                parent.children.forEach(ch => {
+                    html += `
+                        <div class="drill-sub-item" data-id="${ch.id}">
+                            <span class="drill-sub-dot" style="background:${ch.color}"></span>
+                            <span class="drill-sub-name">${ch.name}</span>
+                            <span class="drill-sub-count">${ch.count} 任务</span>
+                            <div class="drill-sub-actions">
+                                <button title="编辑"><i class="fas fa-pen"></i></button>
+                                <button title="删除"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                    `;
+                });
+                body.innerHTML = html;
+
+                const backBtn = body.querySelector('#drill-back');
+                const backRoot = breadcrumb.querySelector('#drill-back-root');
+                const goBack = () => { drillState = { level: 'root', parentId: null }; renderDrillView(); };
+                if (backBtn) backBtn.addEventListener('click', goBack);
+                if (backRoot) backRoot.addEventListener('click', goBack);
+            }
+        }
+
+        // ==================== 工具函数 ====================
+        function hexToRgb(hex) {
+            const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return m ? `${parseInt(m[1],16)},${parseInt(m[2],16)},${parseInt(m[3],16)}` : '100,180,255';
+        }
+
+        // ==================== 初始化 ====================
+        renderTreeView();
+        renderAccordionView();
+        renderTabView();
+        renderDrillView();
+    </script>
+</body>
+</html>

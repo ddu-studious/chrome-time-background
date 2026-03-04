@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>周回顾视图 — 4 方案选型</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f0f13;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        .page-header {
+            text-align: center;
+            padding: 40px 20px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .page-header h1 { font-size: 1.6rem; font-weight: 600; margin-bottom: 8px; }
+        .page-header p { color: rgba(255,255,255,0.5); font-size: 0.9rem; }
+
+        .controls-bar {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            padding: 16px 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .range-toggle {
+            display: flex;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .range-btn {
+            padding: 8px 18px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.04);
+            color: rgba(255,255,255,0.6);
+            font-size: 0.82rem;
+            border: none;
+            transition: all 0.2s;
+        }
+        .range-btn:hover { background: rgba(100,180,255,0.1); }
+        .range-btn.active { background: rgba(100,180,255,0.15); color: #64b4ff; font-weight: 600; }
+
+        .demo-tabs {
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+            padding: 0 20px 20px;
+            flex-wrap: wrap;
+        }
+        .demo-tab {
+            padding: 10px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            border: 1px solid rgba(255,255,255,0.08);
+            background: rgba(255,255,255,0.04);
+            color: rgba(255,255,255,0.6);
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        .demo-tab:hover { background: rgba(100,180,255,0.1); color: #fff; }
+        .demo-tab.active {
+            background: rgba(100,180,255,0.15);
+            border-color: rgba(100,180,255,0.4);
+            color: #64b4ff;
+            font-weight: 600;
+        }
+
+        .demo-container { max-width: 960px; margin: 0 auto; padding: 20px; }
+        .demo-panel {
+            display: none;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 16px;
+            padding: 24px;
+        }
+        .demo-panel.active { display: block; }
+        .demo-panel h2 { font-size: 1.1rem; margin-bottom: 6px; color: #64b4ff; }
+        .demo-desc {
+            color: rgba(255,255,255,0.5);
+            font-size: 0.82rem;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+        .pros-cons {
+            display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap;
+        }
+        .pros-cons .item {
+            flex: 1; min-width: 200px; padding: 12px; border-radius: 10px; font-size: 0.8rem; line-height: 1.6;
+        }
+        .pros-cons .pros { background: rgba(46,213,115,0.08); border: 1px solid rgba(46,213,115,0.15); }
+        .pros-cons .cons { background: rgba(255,71,87,0.08); border: 1px solid rgba(255,71,87,0.15); }
+        .pros-cons .item h4 { font-size: 0.85rem; margin-bottom: 6px; }
+        .pros-cons .pros h4 { color: #2ed573; }
+        .pros-cons .cons h4 { color: #ff4757; }
+
+        /* ===== 方案1: 甘特图 ===== */
+        .gantt-container { overflow-x: auto; }
+        .gantt-header {
+            display: flex;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+        .gantt-header-label {
+            min-width: 180px;
+            padding: 8px 12px;
+            font-size: 0.75rem;
+            color: rgba(255,255,255,0.4);
+            font-weight: 600;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .gantt-date-headers {
+            display: flex;
+            flex: 1;
+        }
+        .gantt-date-col {
+            flex: 1;
+            min-width: 60px;
+            text-align: center;
+            padding: 6px 4px;
+            font-size: 0.7rem;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            border-left: 1px solid rgba(255,255,255,0.03);
+        }
+        .gantt-date-col .day-name { color: rgba(255,255,255,0.35); }
+        .gantt-date-col .day-num { color: rgba(255,255,255,0.7); font-weight: 600; font-size: 0.85rem; }
+        .gantt-date-col.today { background: rgba(100,180,255,0.06); }
+        .gantt-date-col.weekend { color: rgba(255,255,255,0.25); }
+
+        .gantt-row {
+            display: flex;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            min-height: 36px;
+            align-items: center;
+        }
+        .gantt-row:hover { background: rgba(255,255,255,0.02); }
+        .gantt-row-label {
+            min-width: 180px;
+            max-width: 180px;
+            padding: 6px 12px;
+            font-size: 0.78rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .gantt-row-label .cat-dot {
+            width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+        }
+        .gantt-row-cells {
+            display: flex;
+            flex: 1;
+            position: relative;
+        }
+        .gantt-cell {
+            flex: 1;
+            min-width: 60px;
+            height: 24px;
+            border-left: 1px solid rgba(255,255,255,0.02);
+            position: relative;
+        }
+        .gantt-cell.today { background: rgba(100,180,255,0.03); }
+        .gantt-bar {
+            position: absolute;
+            top: 4px;
+            bottom: 4px;
+            border-radius: 4px;
+            opacity: 0.7;
+            z-index: 1;
+            transition: opacity 0.15s;
+        }
+        .gantt-bar:hover { opacity: 1; }
+        .gantt-bar.completed { opacity: 0.35; }
+
+        /* ===== 方案2: 时间线 ===== */
+        .timeline-container { max-height: 500px; overflow-y: auto; }
+        .timeline-day {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 4px;
+        }
+        .timeline-date-col {
+            width: 80px;
+            min-width: 80px;
+            text-align: right;
+            padding-top: 12px;
+        }
+        .timeline-date-main { font-size: 1.4rem; font-weight: 700; color: rgba(255,255,255,0.8); }
+        .timeline-date-sub { font-size: 0.72rem; color: rgba(255,255,255,0.35); }
+        .timeline-date-col.today .timeline-date-main { color: #64b4ff; }
+
+        .timeline-line-col {
+            width: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+        .timeline-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: rgba(100,180,255,0.5);
+            margin-top: 16px;
+            z-index: 1;
+            flex-shrink: 0;
+        }
+        .timeline-line-col.today .timeline-dot { background: #64b4ff; box-shadow: 0 0 8px rgba(100,180,255,0.5); }
+        .timeline-vline {
+            flex: 1;
+            width: 2px;
+            background: rgba(255,255,255,0.06);
+        }
+
+        .timeline-content {
+            flex: 1;
+            padding: 8px 0 16px;
+        }
+        .timeline-card {
+            padding: 10px 14px;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.06);
+            margin-bottom: 6px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .timeline-card:hover { background: rgba(255,255,255,0.06); }
+        .timeline-card.completed { opacity: 0.4; }
+        .timeline-card-title {
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin-bottom: 3px;
+        }
+        .timeline-card-meta {
+            font-size: 0.72rem;
+            color: rgba(255,255,255,0.4);
+            display: flex;
+            gap: 10px;
+        }
+        .timeline-empty {
+            padding: 10px 0;
+            font-size: 0.78rem;
+            color: rgba(255,255,255,0.2);
+            font-style: italic;
+        }
+
+        /* ===== 方案3: 看板列 ===== */
+        .kanban-container {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 8px;
+        }
+        .kanban-col {
+            flex: 1;
+            min-width: 110px;
+            max-width: 160px;
+            background: rgba(255,255,255,0.02);
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.04);
+            padding: 10px 8px;
+        }
+        .kanban-col.today { border-color: rgba(100,180,255,0.2); }
+        .kanban-col-header {
+            text-align: center;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .kanban-col-day { font-size: 0.7rem; color: rgba(255,255,255,0.35); }
+        .kanban-col-date { font-size: 1.1rem; font-weight: 700; color: rgba(255,255,255,0.7); }
+        .kanban-col.today .kanban-col-date { color: #64b4ff; }
+        .kanban-col-count { font-size: 0.65rem; color: rgba(255,255,255,0.3); margin-top: 2px; }
+
+        .kanban-card {
+            padding: 8px 10px;
+            border-radius: 8px;
+            margin-bottom: 6px;
+            border-left: 3px solid;
+            background: rgba(255,255,255,0.03);
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .kanban-card:hover { background: rgba(255,255,255,0.06); }
+        .kanban-card.completed { opacity: 0.35; }
+        .kanban-card-title {
+            font-size: 0.75rem;
+            font-weight: 500;
+            margin-bottom: 2px;
+            line-height: 1.3;
+        }
+        .kanban-card-cat {
+            font-size: 0.65rem;
+            color: rgba(255,255,255,0.3);
+        }
+        .kanban-empty {
+            text-align: center;
+            font-size: 0.7rem;
+            color: rgba(255,255,255,0.15);
+            padding: 16px 0;
+        }
+
+        /* ===== 方案4: 热力条形图 ===== */
+        .heatbar-container {}
+        .heatbar-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+        .heatbar-date {
+            width: 70px;
+            min-width: 70px;
+            text-align: right;
+            font-size: 0.78rem;
+            color: rgba(255,255,255,0.5);
+        }
+        .heatbar-date.today { color: #64b4ff; font-weight: 600; }
+        .heatbar-bar-wrap {
+            flex: 1;
+            display: flex;
+            gap: 3px;
+            align-items: center;
+        }
+        .heatbar-seg {
+            height: 24px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            padding: 0 8px;
+            font-size: 0.68rem;
+            color: rgba(255,255,255,0.8);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            cursor: pointer;
+            transition: opacity 0.15s;
+            min-width: 20px;
+        }
+        .heatbar-seg:hover { opacity: 0.9 !important; }
+        .heatbar-seg.completed { opacity: 0.3; }
+        .heatbar-count {
+            font-size: 0.72rem;
+            color: rgba(255,255,255,0.35);
+            min-width: 30px;
+        }
+        .heatbar-empty {
+            font-size: 0.72rem;
+            color: rgba(255,255,255,0.15);
+            font-style: italic;
+        }
+        .heatbar-legend {
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255,255,255,0.06);
+            flex-wrap: wrap;
+        }
+        .heatbar-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.72rem;
+            color: rgba(255,255,255,0.4);
+        }
+        .heatbar-legend-dot {
+            width: 10px; height: 10px; border-radius: 3px;
+        }
+
+        @media (max-width: 700px) {
+            .demo-container { padding: 10px; }
+            .gantt-row-label { min-width: 120px; max-width: 120px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-header">
+        <h1><i class="fas fa-calendar-week"></i> 周回顾视图 — 4 方案选型</h1>
+        <p>「最近 1 周 / 2 周我都做了什么？」— 基于甘特图 vs 日历条 vs 标记点的展示策略</p>
+    </div>
+
+    <div class="controls-bar">
+        <div class="range-toggle" id="range-toggle">
+            <button class="range-btn active" data-days="7">最近 1 周</button>
+            <button class="range-btn" data-days="14">最近 2 周</button>
+        </div>
+    </div>
+
+    <div class="demo-tabs" id="tabs">
+        <div class="demo-tab active" data-panel="w1">方案1: 甘特图式</div>
+        <div class="demo-tab" data-panel="w2">方案2: 时间线</div>
+        <div class="demo-tab" data-panel="w3">方案3: 看板列</div>
+        <div class="demo-tab" data-panel="w4">方案4: 热力条形图</div>
+    </div>
+
+    <div class="demo-container">
+        <!-- 方案1 -->
+        <div class="demo-panel active" id="w1">
+            <h2>方案1: 甘特图式周视图</h2>
+            <div class="demo-desc">
+                横轴为日期（7/14天），纵轴为任务列表，每个任务用<b>横条</b>标明起止范围。
+                适合「项目排期回顾」，清晰展示每个任务占据了哪些天。
+            </div>
+            <div class="pros-cons">
+                <div class="item pros">
+                    <h4><i class="fas fa-check"></i> 优势</h4>
+                    时间跨度最为清晰<br>
+                    可同时展示多个任务的并行关系<br>
+                    适合项目管理视角
+                </div>
+                <div class="item cons">
+                    <h4><i class="fas fa-times"></i> 劣势</h4>
+                    横向空间需求大<br>
+                    任务多时纵向膨胀<br>
+                    在小面板中不易嵌入
+                </div>
+            </div>
+            <div id="gantt-view"></div>
+        </div>
+
+        <!-- 方案2 -->
+        <div class="demo-panel" id="w2">
+            <h2>方案2: 日程时间线</h2>
+            <div class="demo-desc">
+                纵轴为日期（从今天往前），每天下方列出涉及的任务卡片。
+                类似手机日程视图，适合「日维度的任务回看」。
+            </div>
+            <div class="pros-cons">
+                <div class="item pros">
+                    <h4><i class="fas fa-check"></i> 优势</h4>
+                    每天做了什么一目了然<br>
+                    信息密度可控<br>
+                    与现有日历回看风格一致
+                </div>
+                <div class="item cons">
+                    <h4><i class="fas fa-times"></i> 劣势</h4>
+                    多日任务重复出现在每天<br>
+                    纵向空间需求大<br>
+                    不直观表达跨度
+                </div>
+            </div>
+            <div id="timeline-view"></div>
+        </div>
+
+        <!-- 方案3 -->
+        <div class="demo-panel" id="w3">
+            <h2>方案3: 看板列视图</h2>
+            <div class="demo-desc">
+                每天一列，任务卡片排列在对应天列中。多日任务在跨越的每列中都显示。
+                类似 Trello 风格，适合「对比各天的任务量」。
+            </div>
+            <div class="pros-cons">
+                <div class="item pros">
+                    <h4><i class="fas fa-check"></i> 优势</h4>
+                    各天任务量对比直观<br>
+                    卡片可展示更多信息<br>
+                    横向扫视自然
+                </div>
+                <div class="item cons">
+                    <h4><i class="fas fa-times"></i> 劣势</h4>
+                    14天时列太多，需要滚动<br>
+                    多日任务重复卡片，冗余<br>
+                    横向空间消耗大
+                </div>
+            </div>
+            <div id="kanban-view"></div>
+        </div>
+
+        <!-- 方案4 -->
+        <div class="demo-panel" id="w4">
+            <h2>方案4: 热力条形图</h2>
+            <div class="demo-desc">
+                每天一行，用<b>堆叠色条</b>表示该日涉及的任务，色条宽度等分、颜色按分类着色。
+                整体密度极高，一屏可展示两周全貌。
+            </div>
+            <div class="pros-cons">
+                <div class="item pros">
+                    <h4><i class="fas fa-check"></i> 优势</h4>
+                    极紧凑，一屏展示 14 天<br>
+                    颜色对应分类，一目了然<br>
+                    忙碌程度可视化
+                </div>
+                <div class="item cons">
+                    <h4><i class="fas fa-times"></i> 劣势</h4>
+                    无法展示具体任务标题（色条窄时）<br>
+                    颜色多时分辨困难<br>
+                    需搭配图例
+                </div>
+            </div>
+            <div id="heatbar-view"></div>
+        </div>
+    </div>
+
+    <script>
+    // ===== 模拟数据 =====
+    const NOW = new Date();
+    let RANGE_DAYS = 7;
+
+    function d(offset) {
+        const date = new Date(NOW);
+        date.setDate(date.getDate() + offset);
+        return date;
+    }
+    function fmt(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const dd = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${dd}`;
+    }
+    function dayName(date) {
+        return ['日', '一', '二', '三', '四', '五', '六'][date.getDay()];
+    }
+    function shortDate(date) {
+        return `${date.getMonth() + 1}/${date.getDate()}`;
+    }
+
+    const TASKS = [
+        { id: 't1', title: '完成 PRD 文档', start: d(-13), end: d(-11), color: '#64b4ff', completed: true, category: '产品' },
+        { id: 't2', title: '前端开发 Sprint', start: d(-12), end: d(-5), color: '#8b5cf6', completed: false, category: '开发' },
+        { id: 't3', title: '用户调研问卷', start: d(-10), end: d(-10), color: '#f59e0b', completed: true, category: '产品' },
+        { id: 't4', title: '团队周会', start: d(-7), end: d(-7), color: '#22c55e', completed: true, category: '会议' },
+        { id: 't5', title: '后端 API 联调', start: d(-8), end: d(-3), color: '#ef4444', completed: false, category: '开发' },
+        { id: 't6', title: '设计评审', start: d(-6), end: d(-5), color: '#ec4899', completed: true, category: '设计' },
+        { id: 't7', title: '数据库迁移', start: d(-4), end: d(-1), color: '#14b8a6', completed: false, category: '运维' },
+        { id: 't8', title: '撰写测试用例', start: d(-3), end: d(-3), color: '#f97316', completed: false, category: '测试' },
+        { id: 't9', title: '版本发布准备', start: d(-2), end: d(0), color: '#6366f1', completed: false, category: '发布' },
+        { id: 't10', title: '代码 Review', start: d(-1), end: d(-1), color: '#a3a3a3', completed: false, category: '开发' },
+        { id: 't11', title: '客户需求对接', start: d(-5), end: d(-3), color: '#64b4ff', completed: true, category: '产品' },
+        { id: 't12', title: '周报撰写', start: d(0), end: d(0), color: '#22c55e', completed: false, category: '工作' },
+    ];
+
+    function getDates() {
+        const dates = [];
+        for (let i = RANGE_DAYS - 1; i >= 0; i--) {
+            dates.push(d(-i));
+        }
+        return dates;
+    }
+
+    function getTasksForDate(dateKey) {
+        return TASKS.filter(t => dateKey >= fmt(t.start) && dateKey <= fmt(t.end));
+    }
+
+    function getTasksInRange() {
+        const start = fmt(d(-(RANGE_DAYS - 1)));
+        const end = fmt(d(0));
+        return TASKS.filter(t => fmt(t.end) >= start && fmt(t.start) <= end);
+    }
+
+    const todayKey = fmt(NOW);
+
+    // ===== 方案1: 甘特图 =====
+    function renderGantt() {
+        const dates = getDates();
+        const tasks = getTasksInRange();
+        const el = document.getElementById('gantt-view');
+
+        let html = '<div class="gantt-container">';
+        html += '<div class="gantt-header"><div class="gantt-header-label">任务</div><div class="gantt-date-headers">';
+        dates.forEach(date => {
+            const key = fmt(date);
+            const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+            html += `<div class="gantt-date-col ${key === todayKey ? 'today' : ''} ${isWeekend ? 'weekend' : ''}">
+                <div class="day-name">周${dayName(date)}</div>
+                <div class="day-num">${date.getDate()}</div>
+            </div>`;
+        });
+        html += '</div></div>';
+
+        tasks.forEach(task => {
+            html += `<div class="gantt-row">
+                <div class="gantt-row-label">
+                    <span class="cat-dot" style="background:${task.color}"></span>
+                    <span>${task.title}</span>
+                </div>
+                <div class="gantt-row-cells">`;
+            dates.forEach((date, idx) => {
+                const key = fmt(date);
+                html += `<div class="gantt-cell ${key === todayKey ? 'today' : ''}"></div>`;
+            });
+
+            const rangeStart = fmt(d(-(RANGE_DAYS - 1)));
+            const rangeEnd = fmt(d(0));
+            const taskStart = fmt(task.start) < rangeStart ? rangeStart : fmt(task.start);
+            const taskEnd = fmt(task.end) > rangeEnd ? rangeEnd : fmt(task.end);
+
+            const startIdx = dates.findIndex(dd => fmt(dd) === taskStart);
+            const endIdx = dates.findIndex(dd => fmt(dd) === taskEnd);
+            if (startIdx !== -1 && endIdx !== -1) {
+                const left = `calc(${startIdx} * (100% / ${dates.length}) + 2px)`;
+                const width = `calc(${endIdx - startIdx + 1} * (100% / ${dates.length}) - 4px)`;
+                html += `<div class="gantt-bar ${task.completed ? 'completed' : ''}" style="left:${left};width:${width};background:${task.color}" title="${task.title}"></div>`;
+            }
+
+            html += '</div></div>';
+        });
+
+        html += '</div>';
+        el.innerHTML = html;
+    }
+
+    // ===== 方案2: 时间线 =====
+    function renderTimeline() {
+        const dates = getDates().reverse();
+        const el = document.getElementById('timeline-view');
+
+        let html = '<div class="timeline-container">';
+        dates.forEach((date, i) => {
+            const key = fmt(date);
+            const tasks = getTasksForDate(key);
+            const isToday = key === todayKey;
+
+            html += `<div class="timeline-day">
+                <div class="timeline-date-col ${isToday ? 'today' : ''}">
+                    <div class="timeline-date-main">${date.getDate()}</div>
+                    <div class="timeline-date-sub">周${dayName(date)}</div>
+                </div>
+                <div class="timeline-line-col ${isToday ? 'today' : ''}">
+                    <div class="timeline-dot"></div>
+                    ${i < dates.length - 1 ? '<div class="timeline-vline"></div>' : ''}
+                </div>
+                <div class="timeline-content">`;
+
+            if (tasks.length === 0) {
+                html += '<div class="timeline-empty">无任务</div>';
+            } else {
+                tasks.forEach(t => {
+                    const isMulti = fmt(t.start) !== fmt(t.end);
+                    html += `<div class="timeline-card ${t.completed ? 'completed' : ''}">
+                        <div class="timeline-card-title" style="color:${t.color}">${t.completed ? '<i class="fas fa-check-circle" style="opacity:0.5"></i> ' : ''}${t.title}</div>
+                        <div class="timeline-card-meta">
+                            <span><i class="fas fa-folder"></i> ${t.category}</span>
+                            ${isMulti ? `<span><i class="fas fa-arrow-right-arrow-left"></i> ${shortDate(t.start)} — ${shortDate(t.end)}</span>` : '<span>单日</span>'}
+                        </div>
+                    </div>`;
+                });
+            }
+            html += '</div></div>';
+        });
+        html += '</div>';
+        el.innerHTML = html;
+    }
+
+    // ===== 方案3: 看板列 =====
+    function renderKanban() {
+        const dates = getDates();
+        const el = document.getElementById('kanban-view');
+
+        let html = '<div class="kanban-container">';
+        dates.forEach(date => {
+            const key = fmt(date);
+            const tasks = getTasksForDate(key);
+            const isToday = key === todayKey;
+
+            html += `<div class="kanban-col ${isToday ? 'today' : ''}">
+                <div class="kanban-col-header">
+                    <div class="kanban-col-day">周${dayName(date)}</div>
+                    <div class="kanban-col-date">${date.getDate()}</div>
+                    <div class="kanban-col-count">${tasks.length} 项</div>
+                </div>`;
+
+            if (tasks.length === 0) {
+                html += '<div class="kanban-empty">—</div>';
+            } else {
+                tasks.forEach(t => {
+                    html += `<div class="kanban-card ${t.completed ? 'completed' : ''}" style="border-left-color:${t.color}">
+                        <div class="kanban-card-title">${t.title}</div>
+                        <div class="kanban-card-cat">${t.category}</div>
+                    </div>`;
+                });
+            }
+            html += '</div>';
+        });
+        html += '</div>';
+        el.innerHTML = html;
+    }
+
+    // ===== 方案4: 热力条形图 =====
+    function renderHeatbar() {
+        const dates = getDates();
+        const el = document.getElementById('heatbar-view');
+        const categories = [...new Set(TASKS.map(t => t.category))];
+        const catColorMap = {};
+        TASKS.forEach(t => { catColorMap[t.category] = t.color; });
+
+        let html = '<div class="heatbar-container">';
+        dates.forEach(date => {
+            const key = fmt(date);
+            const tasks = getTasksForDate(key);
+            const isToday = key === todayKey;
+
+            html += `<div class="heatbar-row">
+                <div class="heatbar-date ${isToday ? 'today' : ''}">
+                    ${shortDate(date)} 周${dayName(date)}
+                </div>
+                <div class="heatbar-bar-wrap">`;
+
+            if (tasks.length === 0) {
+                html += '<div class="heatbar-empty">— 无任务 —</div>';
+            } else {
+                tasks.forEach(t => {
+                    const widthPct = Math.max(8, 100 / tasks.length);
+                    html += `<div class="heatbar-seg ${t.completed ? 'completed' : ''}" style="background:${t.color};width:${widthPct}%;opacity:0.65" title="${t.title} (${t.category})">${t.title}</div>`;
+                });
+            }
+
+            html += `</div>
+                <div class="heatbar-count">${tasks.length}</div>
+            </div>`;
+        });
+
+        html += '<div class="heatbar-legend">';
+        categories.forEach(cat => {
+            html += `<div class="heatbar-legend-item">
+                <div class="heatbar-legend-dot" style="background:${catColorMap[cat]}"></div>
+                ${cat}
+            </div>`;
+        });
+        html += '</div></div>';
+        el.innerHTML = html;
+    }
+
+    // ===== 选项卡 & 范围切换 =====
+    const tabs = document.querySelectorAll('.demo-tab');
+    const panels = document.querySelectorAll('.demo-panel');
+    const renderers = { w1: renderGantt, w2: renderTimeline, w3: renderKanban, w4: renderHeatbar };
+    let currentPanel = 'w1';
+
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            tabs.forEach(t => t.classList.remove('active'));
+            panels.forEach(p => p.classList.remove('active'));
+            tab.classList.add('active');
+            currentPanel = tab.dataset.panel;
+            document.getElementById(currentPanel).classList.add('active');
+            renderers[currentPanel]();
+        });
+    });
+
+    document.querySelectorAll('.range-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            RANGE_DAYS = parseInt(btn.dataset.days);
+            renderers[currentPanel]();
+        });
+    });
+
+    renderGantt();
+    </script>
+</body>
+</html>

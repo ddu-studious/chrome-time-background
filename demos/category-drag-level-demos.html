@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>分类跨层级拖拽 — Demo & 数据安全验证</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f0f13;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        .page-header {
+            text-align: center;
+            padding: 40px 20px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .page-header h1 { font-size: 1.6rem; font-weight: 600; margin-bottom: 8px; }
+        .page-header p { color: rgba(255,255,255,0.5); font-size: 0.9rem; max-width: 700px; margin: 0 auto; line-height: 1.6; }
+
+        .main-layout {
+            display: flex;
+            gap: 24px;
+            max-width: 1100px;
+            margin: 24px auto;
+            padding: 0 20px;
+        }
+
+        /* ===== 左侧: 分类树 ===== */
+        .category-panel {
+            flex: 1;
+            min-width: 0;
+        }
+        .panel-box {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+        .panel-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .panel-title i { color: #64b4ff; }
+
+        .cat-tree {}
+        .cat-group {
+            margin-bottom: 6px;
+            border-radius: 10px;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+        }
+        .cat-group.drag-source { opacity: 0.4; }
+        .cat-group.drag-over-into {
+            border-color: rgba(100,180,255,0.5);
+            background: rgba(100,180,255,0.06);
+        }
+        .cat-group.drag-over-top { border-top: 2px solid #64b4ff; }
+        .cat-group.drag-over-bottom { border-bottom: 2px solid #64b4ff; }
+
+        .cat-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 12px;
+            cursor: grab;
+            border-radius: 10px;
+            transition: background 0.15s;
+            user-select: none;
+        }
+        .cat-header:hover { background: rgba(255,255,255,0.04); }
+        .cat-header:active { cursor: grabbing; }
+        .cat-header .chevron {
+            width: 16px;
+            text-align: center;
+            font-size: 0.7rem;
+            color: rgba(255,255,255,0.3);
+            transition: transform 0.2s;
+            cursor: pointer;
+        }
+        .cat-group.expanded .chevron { transform: rotate(90deg); }
+        .cat-header .color-dot {
+            width: 12px; height: 12px; border-radius: 4px; flex-shrink: 0;
+        }
+        .cat-header .cat-name {
+            flex: 1;
+            font-size: 0.88rem;
+            font-weight: 500;
+        }
+        .cat-header .cat-badge {
+            font-size: 0.7rem;
+            color: rgba(255,255,255,0.35);
+            background: rgba(255,255,255,0.05);
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+        .cat-header .drag-hint {
+            font-size: 0.65rem;
+            color: rgba(255,255,255,0.2);
+        }
+
+        .cat-children {
+            padding-left: 32px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        .cat-group.expanded .cat-children { max-height: 500px; }
+
+        .cat-child {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 12px;
+            border-radius: 8px;
+            cursor: grab;
+            transition: all 0.15s;
+            user-select: none;
+            border: 1px solid transparent;
+        }
+        .cat-child:hover { background: rgba(255,255,255,0.04); }
+        .cat-child:active { cursor: grabbing; }
+        .cat-child.drag-source { opacity: 0.4; }
+        .cat-child.drag-over-top { border-top: 2px solid #64b4ff; }
+        .cat-child.drag-over-bottom { border-bottom: 2px solid #64b4ff; }
+        .cat-child .child-dot {
+            width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+        }
+        .cat-child .child-name {
+            flex: 1;
+            font-size: 0.82rem;
+        }
+        .cat-child .child-badge {
+            font-size: 0.68rem;
+            color: rgba(255,255,255,0.3);
+        }
+
+        .drop-zone-root {
+            padding: 12px;
+            text-align: center;
+            border: 2px dashed rgba(255,255,255,0.08);
+            border-radius: 10px;
+            margin-top: 8px;
+            font-size: 0.78rem;
+            color: rgba(255,255,255,0.25);
+            transition: all 0.2s;
+        }
+        .drop-zone-root.drag-over {
+            border-color: rgba(100,180,255,0.5);
+            background: rgba(100,180,255,0.06);
+            color: #64b4ff;
+        }
+
+        /* ===== 右侧: 数据面板 ===== */
+        .data-panel {
+            width: 380px;
+            min-width: 380px;
+        }
+        .data-section {
+            margin-bottom: 16px;
+        }
+        .data-section-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: rgba(255,255,255,0.6);
+        }
+
+        .task-list-compact {}
+        .task-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            margin-bottom: 3px;
+            background: rgba(255,255,255,0.02);
+        }
+        .task-item .task-cat-dot {
+            width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+        }
+        .task-item .task-title { flex: 1; }
+        .task-item .task-cat-name {
+            font-size: 0.7rem;
+            color: rgba(255,255,255,0.35);
+            text-align: right;
+        }
+
+        /* 操作日志 */
+        .log-container {
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 0.72rem;
+            line-height: 1.8;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 10px 12px;
+        }
+        .log-item { border-bottom: 1px solid rgba(255,255,255,0.03); padding: 2px 0; }
+        .log-item .log-action { color: #64b4ff; }
+        .log-item .log-ok { color: #2ed573; }
+        .log-item .log-warn { color: #f59e0b; }
+
+        /* 验证结果 */
+        .verify-result {
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 0.82rem;
+            margin-top: 8px;
+            line-height: 1.6;
+        }
+        .verify-result.ok {
+            background: rgba(46,213,115,0.08);
+            border: 1px solid rgba(46,213,115,0.15);
+            color: #2ed573;
+        }
+        .verify-result.warn {
+            background: rgba(245,158,11,0.08);
+            border: 1px solid rgba(245,158,11,0.15);
+            color: #f59e0b;
+        }
+
+        .btn-reset {
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.04);
+            color: rgba(255,255,255,0.6);
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.15s;
+            margin-top: 10px;
+        }
+        .btn-reset:hover { background: rgba(255,71,87,0.1); color: #ff4757; border-color: rgba(255,71,87,0.3); }
+
+        .instruction-box {
+            background: rgba(100,180,255,0.05);
+            border: 1px solid rgba(100,180,255,0.12);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            font-size: 0.82rem;
+            line-height: 1.7;
+            color: rgba(255,255,255,0.6);
+        }
+        .instruction-box b { color: #64b4ff; }
+        .instruction-box code {
+            background: rgba(255,255,255,0.08);
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-size: 0.78rem;
+        }
+
+        @media (max-width: 800px) {
+            .main-layout { flex-direction: column; }
+            .data-panel { width: 100%; min-width: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-header">
+        <h1><i class="fas fa-arrows-up-down-left-right"></i> 分类跨层级拖拽 — Demo & 数据安全验证</h1>
+        <p>
+            验证：修改分类层级（一级 ↔ 二级）时，任务的 <code>categoryId</code> 是否受影响。
+            拖拽操作只修改分类对象的 <code>parentId</code>，不触碰任务数据。
+        </p>
+    </div>
+
+    <div class="main-layout">
+        <div class="category-panel">
+            <div class="instruction-box">
+                <b>操作说明：</b><br>
+                <i class="fas fa-arrow-right" style="color:#64b4ff;margin-right:4px;"></i> 拖拽<b>一级分类</b>到另一个一级分类上方 → 变为其<b>子分类</b>（设 parentId）<br>
+                <i class="fas fa-arrow-right" style="color:#64b4ff;margin-right:4px;"></i> 拖拽<b>子分类</b>到底部「提升为一级」区域 → 变为<b>一级分类</b>（清除 parentId）<br>
+                <i class="fas fa-arrow-right" style="color:#64b4ff;margin-right:4px;"></i> 拖拽<b>子分类</b>到另一个一级分类上 → <b>切换父分类</b><br>
+                <i class="fas fa-arrow-right" style="color:#64b4ff;margin-right:4px;"></i> 右侧面板实时验证任务的 <code>categoryId</code> 不变
+            </div>
+
+            <div class="panel-box">
+                <div class="panel-title"><i class="fas fa-folder-tree"></i> 分类层级管理</div>
+                <div class="cat-tree" id="cat-tree"></div>
+                <div class="drop-zone-root" id="drop-root">
+                    <i class="fas fa-arrow-up"></i> 拖拽到此处 — 提升为一级分类
+                </div>
+            </div>
+        </div>
+
+        <div class="data-panel">
+            <div class="panel-box">
+                <div class="panel-title"><i class="fas fa-list-check"></i> 任务数据（只读验证）</div>
+                <div class="data-section">
+                    <div class="data-section-title">当前任务及其分类归属</div>
+                    <div class="task-list-compact" id="task-list"></div>
+                </div>
+                <div id="verify-area"></div>
+            </div>
+
+            <div class="panel-box">
+                <div class="panel-title"><i class="fas fa-terminal"></i> 操作日志</div>
+                <div class="log-container" id="log"></div>
+                <button class="btn-reset" id="btn-reset"><i class="fas fa-rotate-left"></i> 重置数据</button>
+            </div>
+
+            <div class="panel-box">
+                <div class="panel-title"><i class="fas fa-database"></i> 分类原始数据</div>
+                <pre id="raw-categories" style="font-size:0.72rem;color:rgba(255,255,255,0.5);white-space:pre-wrap;max-height:200px;overflow-y:auto;"></pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ===== 模拟数据 =====
+    function initData() {
+        return {
+            categories: [
+                { id: 'cat-work', name: '工作', color: '#64b4ff' },
+                { id: 'cat-work-fe', name: '前端开发', color: '#8b5cf6', parentId: 'cat-work' },
+                { id: 'cat-work-be', name: '后端开发', color: '#14b8a6', parentId: 'cat-work' },
+                { id: 'cat-life', name: '生活', color: '#22c55e' },
+                { id: 'cat-life-health', name: '健身', color: '#f59e0b', parentId: 'cat-life' },
+                { id: 'cat-study', name: '学习', color: '#ec4899' },
+                { id: 'cat-project', name: '项目管理', color: '#6366f1' },
+            ],
+            tasks: [
+                { id: 't1', title: '完成登录页面', categoryId: 'cat-work-fe' },
+                { id: 't2', title: '数据库 Schema 设计', categoryId: 'cat-work-be' },
+                { id: 't3', title: '每周跑步 3 次', categoryId: 'cat-life-health' },
+                { id: 't4', title: '整理团队周报', categoryId: 'cat-work' },
+                { id: 't5', title: '阅读《深入理解 TypeScript》', categoryId: 'cat-study' },
+                { id: 't6', title: '制定 Q2 计划', categoryId: 'cat-project' },
+                { id: 't7', title: '买菜做饭', categoryId: 'cat-life' },
+                { id: 't8', title: '修复 CSS 兼容性问题', categoryId: 'cat-work-fe' },
+            ]
+        };
+    }
+
+    let DATA = initData();
+    const ORIGINAL_TASK_SNAPSHOT = JSON.parse(JSON.stringify(initData().tasks));
+    let logs = [];
+
+    function addLog(msg, type = 'action') {
+        logs.unshift({ msg, type, time: new Date().toLocaleTimeString() });
+        if (logs.length > 50) logs.pop();
+        renderLog();
+    }
+
+    function getTopLevel() {
+        return DATA.categories.filter(c => !c.parentId);
+    }
+    function getChildren(parentId) {
+        return DATA.categories.filter(c => c.parentId === parentId);
+    }
+    function getCatById(id) {
+        return DATA.categories.find(c => c.id === id);
+    }
+    function getCatNamePath(catId) {
+        const cat = getCatById(catId);
+        if (!cat) return '未分类';
+        if (cat.parentId) {
+            const parent = getCatById(cat.parentId);
+            return parent ? `${parent.name} / ${cat.name}` : cat.name;
+        }
+        return cat.name;
+    }
+
+    // ===== 渲染分类树 =====
+    function renderTree() {
+        const tree = document.getElementById('cat-tree');
+        const topLevel = getTopLevel();
+        let html = '';
+
+        topLevel.forEach(parent => {
+            const children = getChildren(parent.id);
+            const taskCount = DATA.tasks.filter(t => t.categoryId === parent.id).length;
+            const childTaskCount = children.reduce((sum, ch) => sum + DATA.tasks.filter(t => t.categoryId === ch.id).length, 0);
+
+            html += `
+            <div class="cat-group expanded" data-id="${parent.id}" draggable="true">
+                <div class="cat-header" data-id="${parent.id}">
+                    <span class="chevron"><i class="fas fa-chevron-right"></i></span>
+                    <div class="color-dot" style="background:${parent.color}"></div>
+                    <span class="cat-name">${parent.name}</span>
+                    <span class="cat-badge">${taskCount + childTaskCount} 任务</span>
+                    <span class="drag-hint"><i class="fas fa-grip-vertical"></i></span>
+                </div>
+                <div class="cat-children">
+                    ${children.map(ch => {
+                        const chCount = DATA.tasks.filter(t => t.categoryId === ch.id).length;
+                        return `
+                        <div class="cat-child" data-id="${ch.id}" data-parent="${parent.id}" draggable="true">
+                            <div class="child-dot" style="background:${ch.color}"></div>
+                            <span class="child-name">${ch.name}</span>
+                            <span class="child-badge">${chCount} 任务</span>
+                            <span class="drag-hint"><i class="fas fa-grip-vertical"></i></span>
+                        </div>`;
+                    }).join('')}
+                </div>
+            </div>`;
+        });
+
+        tree.innerHTML = html;
+        bindDragEvents();
+    }
+
+    // ===== 渲染任务列表 =====
+    function renderTasks() {
+        const el = document.getElementById('task-list');
+        el.innerHTML = DATA.tasks.map(t => {
+            const cat = getCatById(t.categoryId);
+            return `<div class="task-item">
+                <div class="task-cat-dot" style="background:${cat ? cat.color : '#666'}"></div>
+                <span class="task-title">${t.title}</span>
+                <span class="task-cat-name">${getCatNamePath(t.categoryId)}</span>
+            </div>`;
+        }).join('');
+    }
+
+    // ===== 数据安全验证 =====
+    function verifyData() {
+        const el = document.getElementById('verify-area');
+        let allOk = true;
+        let details = [];
+
+        DATA.tasks.forEach((task, i) => {
+            const original = ORIGINAL_TASK_SNAPSHOT[i];
+            if (task.categoryId !== original.categoryId) {
+                allOk = false;
+                details.push(`任务「${task.title}」的 categoryId 发生了变化！${original.categoryId} → ${task.categoryId}`);
+            }
+        });
+
+        if (allOk) {
+            el.innerHTML = `<div class="verify-result ok">
+                <i class="fas fa-check-circle"></i> <b>验证通过</b>：所有 ${DATA.tasks.length} 个任务的 <code>categoryId</code> 均未变化。<br>
+                分类层级调整<b>不影响</b>任务数据安全。
+            </div>`;
+        } else {
+            el.innerHTML = `<div class="verify-result warn">
+                <i class="fas fa-exclamation-triangle"></i> <b>异常</b>：发现任务数据被修改！<br>
+                ${details.join('<br>')}
+            </div>`;
+        }
+    }
+
+    // ===== 渲染日志 =====
+    function renderLog() {
+        const el = document.getElementById('log');
+        el.innerHTML = logs.map(l => {
+            const cls = l.type === 'ok' ? 'log-ok' : l.type === 'warn' ? 'log-warn' : 'log-action';
+            return `<div class="log-item"><span style="color:rgba(255,255,255,0.2)">${l.time}</span> <span class="${cls}">${l.msg}</span></div>`;
+        }).join('');
+    }
+
+    // ===== 渲染原始数据 =====
+    function renderRawData() {
+        const el = document.getElementById('raw-categories');
+        el.textContent = JSON.stringify(DATA.categories.map(c => ({
+            id: c.id, name: c.name, color: c.color, parentId: c.parentId || undefined
+        })), null, 2);
+    }
+
+    // ===== 拖拽逻辑 =====
+    let dragType = null; // 'group' | 'child'
+    let dragId = null;
+
+    function bindDragEvents() {
+        // 折叠/展开
+        document.querySelectorAll('.cat-header .chevron').forEach(el => {
+            el.addEventListener('click', (e) => {
+                e.stopPropagation();
+                el.closest('.cat-group').classList.toggle('expanded');
+            });
+        });
+
+        // 一级分类拖拽
+        document.querySelectorAll('.cat-group').forEach(group => {
+            group.addEventListener('dragstart', (e) => {
+                e.stopPropagation();
+                dragType = 'group';
+                dragId = group.dataset.id;
+                group.classList.add('drag-source');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', dragId);
+            });
+            group.addEventListener('dragend', () => {
+                group.classList.remove('drag-source');
+                clearAllDragStyles();
+                dragType = null;
+                dragId = null;
+            });
+            group.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!dragId || dragId === group.dataset.id) return;
+                clearDragStyles(group);
+
+                if (dragType === 'child') {
+                    group.classList.add('drag-over-into');
+                } else {
+                    const rect = group.getBoundingClientRect();
+                    const midY = rect.top + rect.height / 2;
+                    if (e.clientY < midY) {
+                        group.classList.add('drag-over-top');
+                    } else {
+                        group.classList.add('drag-over-bottom');
+                    }
+                }
+            });
+            group.addEventListener('dragleave', () => {
+                clearDragStyles(group);
+            });
+            group.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                clearAllDragStyles();
+                const fromId = dragId;
+                const toId = group.dataset.id;
+                if (!fromId || fromId === toId) return;
+
+                if (dragType === 'child') {
+                    moveChildToParent(fromId, toId);
+                } else if (dragType === 'group') {
+                    const rect = group.getBoundingClientRect();
+                    const midY = rect.top + rect.height / 2;
+                    if (e.clientY < midY || e.clientY > midY) {
+                        makeGroupChild(fromId, toId);
+                    }
+                }
+            });
+        });
+
+        // 子分类拖拽
+        document.querySelectorAll('.cat-child').forEach(child => {
+            child.addEventListener('dragstart', (e) => {
+                e.stopPropagation();
+                dragType = 'child';
+                dragId = child.dataset.id;
+                child.classList.add('drag-source');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', dragId);
+            });
+            child.addEventListener('dragend', () => {
+                child.classList.remove('drag-source');
+                clearAllDragStyles();
+                dragType = null;
+                dragId = null;
+            });
+        });
+
+        // 拖到「提升为一级」区域
+        const dropRoot = document.getElementById('drop-root');
+        dropRoot.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropRoot.classList.add('drag-over');
+        });
+        dropRoot.addEventListener('dragleave', () => {
+            dropRoot.classList.remove('drag-over');
+        });
+        dropRoot.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropRoot.classList.remove('drag-over');
+            if (dragType === 'child' && dragId) {
+                promoteToTopLevel(dragId);
+            }
+        });
+    }
+
+    function clearDragStyles(el) {
+        el.classList.remove('drag-over-into', 'drag-over-top', 'drag-over-bottom');
+    }
+    function clearAllDragStyles() {
+        document.querySelectorAll('.cat-group, .cat-child, .drop-zone-root').forEach(el => {
+            el.classList.remove('drag-over-into', 'drag-over-top', 'drag-over-bottom', 'drag-over', 'drag-source');
+        });
+    }
+
+    // ===== 层级变更操作 =====
+
+    function makeGroupChild(fromId, toParentId) {
+        const from = getCatById(fromId);
+        const toParent = getCatById(toParentId);
+        if (!from || !toParent) return;
+        if (from.parentId) return;
+        if (toParent.parentId) {
+            addLog(`不允许拖入子分类（只支持两级）`, 'warn');
+            return;
+        }
+
+        const children = getChildren(fromId);
+
+        from.parentId = toParentId;
+        addLog(`[层级变更] 「${from.name}」从一级 → 「${toParent.name}」的子分类 (parentId = ${toParentId})`, 'action');
+
+        if (children.length > 0) {
+            children.forEach(ch => {
+                ch.parentId = toParentId;
+                addLog(`  ↳ 子分类「${ch.name}」一并迁移到「${toParent.name}」下`, 'action');
+            });
+        }
+
+        addLog(`✓ 验证：任务 categoryId 未做任何修改`, 'ok');
+        refreshAll();
+    }
+
+    function moveChildToParent(childId, newParentId) {
+        const child = getCatById(childId);
+        const newParent = getCatById(newParentId);
+        if (!child || !newParent) return;
+        if (newParent.parentId) {
+            addLog(`不允许拖入子分类下（只支持两级）`, 'warn');
+            return;
+        }
+        if (child.parentId === newParentId) {
+            addLog(`「${child.name}」已在「${newParent.name}」下，无需移动`, 'warn');
+            return;
+        }
+
+        const oldParentName = child.parentId ? (getCatById(child.parentId)?.name || '?') : '一级';
+        child.parentId = newParentId;
+        addLog(`[切换父级] 「${child.name}」从「${oldParentName}」→「${newParent.name}」`, 'action');
+        addLog(`✓ 验证：任务 categoryId 未做任何修改`, 'ok');
+        refreshAll();
+    }
+
+    function promoteToTopLevel(childId) {
+        const child = getCatById(childId);
+        if (!child) return;
+        if (!child.parentId) {
+            addLog(`「${child.name}」已是一级分类`, 'warn');
+            return;
+        }
+        const oldParentName = getCatById(child.parentId)?.name || '?';
+        delete child.parentId;
+        addLog(`[提升层级] 「${child.name}」从「${oldParentName}」的子分类 → 一级分类 (移除 parentId)`, 'action');
+        addLog(`✓ 验证：任务 categoryId 未做任何修改`, 'ok');
+        refreshAll();
+    }
+
+    function refreshAll() {
+        renderTree();
+        renderTasks();
+        verifyData();
+        renderRawData();
+    }
+
+    // ===== 重置 =====
+    document.getElementById('btn-reset').addEventListener('click', () => {
+        DATA = initData();
+        logs = [];
+        addLog('[重置] 数据已恢复到初始状态', 'action');
+        refreshAll();
+    });
+
+    // ===== 初始化 =====
+    refreshAll();
+    addLog('[初始化] 模拟数据已加载，7 个分类 + 8 个任务', 'action');
+    </script>
+</body>
+</html>

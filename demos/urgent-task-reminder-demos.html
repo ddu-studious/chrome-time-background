@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>紧急任务提醒 - 3套设计方案对比</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #162032 50%, #1e293b 100%);
+            min-height: 100vh;
+            color: rgba(255, 255, 255, 0.9);
+            padding: 40px 20px;
+        }
+        h1 { text-align: center; margin-bottom: 12px; font-size: 24px; font-weight: 600; }
+        .page-desc {
+            text-align: center; color: rgba(255,255,255,0.5); font-size: 13px;
+            margin-bottom: 40px; max-width: 800px; margin-left: auto; margin-right: auto; line-height: 1.6;
+        }
+        .demo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+            gap: 40px;
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+        .demo-wrapper { display: flex; flex-direction: column; align-items: center; }
+        .demo-label {
+            font-size: 16px; font-weight: 600; margin-bottom: 8px;
+            color: rgba(255,255,255,0.85); text-align: center;
+        }
+        .demo-label small {
+            display: block; font-weight: 400; font-size: 12px;
+            color: rgba(255,255,255,0.5); margin-top: 4px; line-height: 1.5;
+        }
+        .demo-pros {
+            font-size: 11px; color: rgba(255,255,255,0.4); margin-bottom: 16px;
+            text-align: center; max-width: 380px;
+        }
+        .demo-pros span { color: #22c55e; }
+        .demo-pros .con { color: #f59e0b; }
+
+        /* ===== Shared sidebar simulation ===== */
+        .sidebar-sim {
+            width: 380px;
+            max-height: 650px;
+            background: rgba(20, 27, 45, 0.95);
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.08);
+            backdrop-filter: blur(20px);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .sidebar-sim-header {
+            padding: 14px 16px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .sidebar-sim-header i { opacity: 0.5; }
+        .sidebar-sim-body { flex: 1; overflow-y: auto; }
+        .sidebar-sim-body::-webkit-scrollbar { width: 4px; }
+        .sidebar-sim-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+
+        /* ===== Shared task item ===== */
+        .task-item {
+            display: flex;
+            align-items: flex-start;
+            padding: 10px 16px;
+            gap: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            transition: background 0.15s;
+            cursor: pointer;
+        }
+        .task-item:hover { background: rgba(255,255,255,0.03); }
+        .task-check {
+            width: 18px; height: 18px; border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.2); margin-top: 2px; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 9px; color: transparent; cursor: pointer; transition: all 0.2s;
+        }
+        .task-check:hover { border-color: #22c55e; color: #22c55e; }
+        .task-info { flex: 1; min-width: 0; }
+        .task-title-row { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+        .task-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .task-meta-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .task-tag {
+            font-size: 10px; padding: 1px 6px; border-radius: 4px;
+            display: inline-flex; align-items: center; gap: 3px;
+        }
+        .task-due-text { font-size: 11px; color: rgba(255,255,255,0.4); }
+
+        /* ===================================================================
+           方案 A: 紧急横幅 + 倒计时徽章 (Banner + Badge)
+           =================================================================== */
+        .urgent-banner {
+            padding: 12px 16px;
+            background: linear-gradient(135deg, rgba(255,71,87,0.08) 0%, rgba(255,165,2,0.06) 100%);
+            border-bottom: 1px solid rgba(255,71,87,0.15);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .urgent-banner:hover { background: linear-gradient(135deg, rgba(255,71,87,0.12) 0%, rgba(255,165,2,0.1) 100%); }
+        .urgent-banner-header {
+            display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+        }
+        .urgent-banner-icon {
+            font-size: 16px; animation: pulse-glow 2s ease-in-out infinite;
+        }
+        @keyframes pulse-glow {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        .urgent-banner-title { font-size: 13px; font-weight: 600; flex: 1; }
+        .urgent-banner-count {
+            font-size: 11px; background: rgba(255,71,87,0.2);
+            color: #ff6b6b; padding: 2px 8px; border-radius: 10px;
+        }
+        .urgent-banner-toggle {
+            font-size: 10px; color: rgba(255,255,255,0.3); cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .urgent-banner-toggle.collapsed { transform: rotate(-90deg); }
+        .urgent-banner-groups {
+            display: flex; gap: 6px; overflow: hidden;
+            transition: max-height 0.3s ease, opacity 0.3s;
+        }
+        .urgent-banner-groups.collapsed { max-height: 0; opacity: 0; margin: 0; }
+        .urgent-group {
+            flex: 1; padding: 8px 10px; border-radius: 8px;
+            text-align: center; cursor: pointer; transition: all 0.2s;
+        }
+        .urgent-group:hover { transform: translateY(-1px); }
+        .urgent-group.overdue { background: rgba(255,71,87,0.12); border: 1px solid rgba(255,71,87,0.2); }
+        .urgent-group.today { background: rgba(255,165,2,0.1); border: 1px solid rgba(255,165,2,0.15); }
+        .urgent-group.tomorrow { background: rgba(240,192,64,0.08); border: 1px solid rgba(240,192,64,0.12); }
+        .urgent-group.soon { background: rgba(100,180,255,0.08); border: 1px solid rgba(100,180,255,0.1); }
+        .urgent-group-icon { font-size: 16px; margin-bottom: 2px; }
+        .urgent-group-count { font-size: 18px; font-weight: 700; margin-bottom: 1px; }
+        .urgent-group-label { font-size: 10px; opacity: 0.6; }
+        .urgent-group.overdue .urgent-group-count { color: #ff6b6b; }
+        .urgent-group.today .urgent-group-count { color: #ffa502; }
+        .urgent-group.tomorrow .urgent-group-count { color: #f0c040; }
+        .urgent-group.soon .urgent-group-count { color: #64b4ff; }
+
+        .badge-overdue {
+            background: rgba(255,71,87,0.15); color: #ff6b6b;
+            animation: badge-pulse 2s ease-in-out infinite;
+        }
+        @keyframes badge-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(255,71,87,0.3); }
+            50% { box-shadow: 0 0 0 3px rgba(255,71,87,0); }
+        }
+        .badge-today { background: rgba(255,165,2,0.15); color: #ffa502; }
+        .badge-tomorrow { background: rgba(240,192,64,0.12); color: #f0c040; }
+        .badge-soon { background: rgba(100,180,255,0.1); color: #64b4ff; }
+
+        /* ===================================================================
+           方案 B: 时间分组泳道 (Timeline Swimlane)
+           =================================================================== */
+        .swimlane-group {
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+        .swimlane-header {
+            display: flex; align-items: center; gap: 8px;
+            padding: 8px 16px; cursor: pointer;
+            transition: background 0.15s;
+        }
+        .swimlane-header:hover { background: rgba(255,255,255,0.02); }
+        .swimlane-indicator {
+            width: 3px; height: 20px; border-radius: 2px; flex-shrink: 0;
+        }
+        .swimlane-icon { font-size: 12px; }
+        .swimlane-label { flex: 1; font-size: 12px; font-weight: 600; }
+        .swimlane-badge {
+            font-size: 10px; padding: 2px 8px; border-radius: 10px;
+        }
+        .swimlane-chevron {
+            font-size: 10px; color: rgba(255,255,255,0.3);
+            transition: transform 0.2s;
+        }
+        .swimlane-group.expanded .swimlane-chevron { transform: rotate(90deg); }
+        .swimlane-body {
+            max-height: 0; overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        .swimlane-group.expanded .swimlane-body { max-height: 500px; }
+        .swimlane-empty {
+            padding: 12px 16px 12px 32px; font-size: 11px;
+            color: rgba(255,255,255,0.2); font-style: italic;
+        }
+
+        .sl-overdue .swimlane-indicator { background: #ff4757; }
+        .sl-overdue .swimlane-icon { color: #ff6b6b; }
+        .sl-overdue .swimlane-label { color: #ff6b6b; }
+        .sl-overdue .swimlane-badge { background: rgba(255,71,87,0.15); color: #ff6b6b; }
+        .sl-today .swimlane-indicator { background: #ffa502; }
+        .sl-today .swimlane-icon { color: #ffa502; }
+        .sl-today .swimlane-label { color: #ffa502; }
+        .sl-today .swimlane-badge { background: rgba(255,165,2,0.12); color: #ffa502; }
+        .sl-tomorrow .swimlane-indicator { background: #f0c040; }
+        .sl-tomorrow .swimlane-icon { color: #f0c040; }
+        .sl-tomorrow .swimlane-label { color: #f0c040; }
+        .sl-tomorrow .swimlane-badge { background: rgba(240,192,64,0.1); color: #f0c040; }
+        .sl-week .swimlane-indicator { background: #64b4ff; }
+        .sl-week .swimlane-icon { color: #64b4ff; }
+        .sl-week .swimlane-label { color: #64b4ff; }
+        .sl-week .swimlane-badge { background: rgba(100,180,255,0.1); color: #64b4ff; }
+        .sl-normal .swimlane-indicator { background: rgba(255,255,255,0.15); }
+        .sl-normal .swimlane-icon { color: rgba(255,255,255,0.4); }
+        .sl-normal .swimlane-label { color: rgba(255,255,255,0.5); }
+        .sl-normal .swimlane-badge { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.4); }
+
+        .swimlane-task-item {
+            display: flex; align-items: center; padding: 8px 16px 8px 28px;
+            gap: 8px; cursor: pointer; transition: background 0.15s;
+            border-top: 1px solid rgba(255,255,255,0.02);
+        }
+        .swimlane-task-item:hover { background: rgba(255,255,255,0.03); }
+        .swimlane-task-check {
+            width: 16px; height: 16px; border-radius: 50%;
+            border: 1.5px solid rgba(255,255,255,0.2); flex-shrink: 0;
+        }
+        .swimlane-task-name { flex: 1; font-size: 12px; }
+        .swimlane-task-due { font-size: 10px; opacity: 0.5; }
+        .swimlane-task-priority {
+            width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+        }
+
+        /* ===================================================================
+           方案 C: 浮动气泡 + 进度环 (Floating Bubble + Ring)
+           =================================================================== */
+        .float-demo-area {
+            width: 380px; height: 560px; position: relative;
+            background: rgba(20, 27, 45, 0.95);
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.08);
+            overflow: hidden;
+        }
+        .float-bg-hint {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+            text-align: center; color: rgba(255,255,255,0.1); font-size: 40px;
+        }
+        .float-bg-hint small { display: block; font-size: 13px; margin-top: 8px; }
+        .float-bubble {
+            position: absolute; bottom: 20px; right: 20px;
+            cursor: pointer; z-index: 10;
+            transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+        }
+        .float-bubble.collapsed {
+            width: 48px; height: 48px;
+        }
+        .float-bubble.expanded {
+            width: 320px; bottom: 20px; right: 20px;
+        }
+        .float-bubble-dot {
+            width: 48px; height: 48px; border-radius: 50%;
+            background: linear-gradient(135deg, #ff4757, #ffa502);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px; font-weight: 700; color: #fff;
+            box-shadow: 0 4px 20px rgba(255,71,87,0.3);
+            animation: float-bounce 3s ease-in-out infinite;
+            position: relative;
+        }
+        @keyframes float-bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-4px); }
+        }
+        .float-bubble-ring {
+            position: absolute; inset: -3px;
+            border-radius: 50%;
+            border: 3px solid transparent;
+            border-top-color: #ff4757;
+            border-right-color: #ffa502;
+            animation: ring-spin 4s linear infinite;
+        }
+        @keyframes ring-spin {
+            to { transform: rotate(360deg); }
+        }
+        .float-panel {
+            background: rgba(20, 27, 45, 0.98);
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+            overflow: hidden;
+            display: none;
+        }
+        .float-bubble.expanded .float-panel { display: block; }
+        .float-bubble.expanded .float-bubble-dot { display: none; }
+        .float-panel-header {
+            display: flex; align-items: center; gap: 8px;
+            padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .float-panel-header-icon { color: #ff6b6b; font-size: 14px; }
+        .float-panel-header-title { flex: 1; font-size: 13px; font-weight: 600; }
+        .float-panel-close {
+            background: none; border: none; color: rgba(255,255,255,0.3);
+            font-size: 16px; cursor: pointer; line-height: 1;
+        }
+        .float-panel-close:hover { color: rgba(255,255,255,0.7); }
+        .float-panel-body { max-height: 280px; overflow-y: auto; }
+        .float-panel-body::-webkit-scrollbar { width: 3px; }
+        .float-panel-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+        .float-task-item {
+            display: flex; align-items: center; padding: 9px 14px;
+            gap: 8px; border-bottom: 1px solid rgba(255,255,255,0.03);
+            cursor: pointer; transition: background 0.15s;
+        }
+        .float-task-item:hover { background: rgba(255,255,255,0.04); }
+        .float-task-urgency {
+            width: 4px; height: 28px; border-radius: 2px; flex-shrink: 0;
+        }
+        .float-task-info { flex: 1; min-width: 0; }
+        .float-task-name { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .float-task-meta { font-size: 10px; color: rgba(255,255,255,0.35); margin-top: 1px; }
+        .float-task-countdown {
+            font-size: 11px; font-weight: 600; padding: 2px 8px;
+            border-radius: 6px; white-space: nowrap;
+        }
+        .float-panel-footer {
+            padding: 8px 14px; border-top: 1px solid rgba(255,255,255,0.06);
+            text-align: center;
+        }
+        .float-view-all {
+            font-size: 11px; color: #64b4ff; cursor: pointer;
+            padding: 4px 8px; border-radius: 6px;
+            transition: background 0.15s;
+        }
+        .float-view-all:hover { background: rgba(100,180,255,0.1); }
+
+        /* ===== 分隔 ===== */
+        .section-divider {
+            text-align: center; padding: 40px 0 20px;
+            font-size: 11px; color: rgba(255,255,255,0.2);
+            text-transform: uppercase; letter-spacing: 2px;
+            grid-column: 1 / -1;
+        }
+    </style>
+</head>
+<body>
+    <h1><i class="fas fa-bell"></i> 紧急任务提醒 - 3套设计方案</h1>
+    <p class="page-desc">
+        解决"长周期任务被折叠遗忘"的问题。通过颜色分级、倒计时、浮动提示传递紧迫感。<br>
+        已过期(红) → 今天到期(橙) → 明天(黄) → 3天内(蓝) 四级颜色体系。
+    </p>
+
+    <div class="demo-grid">
+
+        <!-- ==================== 方案 A: 紧急横幅 + 徽章 ==================== -->
+        <div class="demo-wrapper">
+            <div class="demo-label">
+                方案 A：顶部紧急横幅 + 倒计时徽章
+                <small>在任务列表顶部固定显示紧急任务汇总，任务项内附带倒计时标签</small>
+            </div>
+            <div class="demo-pros">
+                <span>✓ 信息密度高</span> · <span>✓ 一眼看全局</span> · <span class="con">△ 占用列表顶部空间</span>
+            </div>
+            <div class="sidebar-sim">
+                <div class="sidebar-sim-header"><i class="fas fa-tasks"></i> 我的任务</div>
+                <!-- 紧急横幅 -->
+                <div class="urgent-banner" id="banner-a">
+                    <div class="urgent-banner-header">
+                        <span class="urgent-banner-icon">🔥</span>
+                        <span class="urgent-banner-title">5个任务需要关注</span>
+                        <span class="urgent-banner-count">紧急</span>
+                        <span class="urgent-banner-toggle" id="banner-toggle"><i class="fas fa-chevron-down"></i></span>
+                    </div>
+                    <div class="urgent-banner-groups" id="banner-groups">
+                        <div class="urgent-group overdue">
+                            <div class="urgent-group-icon">⚠️</div>
+                            <div class="urgent-group-count">2</div>
+                            <div class="urgent-group-label">已逾期</div>
+                        </div>
+                        <div class="urgent-group today">
+                            <div class="urgent-group-icon">🔥</div>
+                            <div class="urgent-group-count">1</div>
+                            <div class="urgent-group-label">今天</div>
+                        </div>
+                        <div class="urgent-group tomorrow">
+                            <div class="urgent-group-icon">⏰</div>
+                            <div class="urgent-group-count">1</div>
+                            <div class="urgent-group-label">明天</div>
+                        </div>
+                        <div class="urgent-group soon">
+                            <div class="urgent-group-icon">📅</div>
+                            <div class="urgent-group-count">1</div>
+                            <div class="urgent-group-label">3天内</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="sidebar-sim-body" id="tasks-a"></div>
+            </div>
+        </div>
+
+        <!-- ==================== 方案 B: 时间分组泳道 ==================== -->
+        <div class="demo-wrapper">
+            <div class="demo-label">
+                方案 B：时间分组泳道
+                <small>按紧急度将任务分组：逾期 → 今天 → 明天 → 本周 → 更远</small>
+            </div>
+            <div class="demo-pros">
+                <span>✓ 结构清晰</span> · <span>✓ 天然排序</span> · <span class="con">△ 改变了原有列表排序逻辑</span>
+            </div>
+            <div class="sidebar-sim">
+                <div class="sidebar-sim-header"><i class="fas fa-tasks"></i> 我的任务（按到期分组）</div>
+                <div class="sidebar-sim-body" id="tasks-b"></div>
+            </div>
+        </div>
+
+        <!-- ==================== 方案 C: 浮动气泡 ==================== -->
+        <div class="demo-wrapper">
+            <div class="demo-label">
+                方案 C：浮动提醒气泡
+                <small>非侵入式角落气泡，点击展开查看紧急任务详情</small>
+            </div>
+            <div class="demo-pros">
+                <span>✓ 不占列表空间</span> · <span>✓ 非侵入性强</span> · <span class="con">△ 容易被忽略</span>
+            </div>
+            <div class="float-demo-area">
+                <div class="float-bg-hint">
+                    <i class="fas fa-clock"></i>
+                    <small>新标签页时钟区域</small>
+                </div>
+                <div class="float-bubble collapsed" id="float-bubble">
+                    <div class="float-bubble-dot">
+                        <span class="float-bubble-ring"></span>
+                        5
+                    </div>
+                    <div class="float-panel">
+                        <div class="float-panel-header">
+                            <span class="float-panel-header-icon"><i class="fas fa-fire"></i></span>
+                            <span class="float-panel-header-title">5个任务需要关注</span>
+                            <button class="float-panel-close" id="float-close">&times;</button>
+                        </div>
+                        <div class="float-panel-body" id="float-body"></div>
+                        <div class="float-panel-footer">
+                            <span class="float-view-all">查看全部任务 →</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const mockTasks = [
+            { id: 1, name: 'Chrome扩展V2发布', dueDate: '2026-03-01', priority: 'high', category: '项目', urgency: 'overdue', daysText: '逾期2天' },
+            { id: 2, name: '修复用户反馈的登录Bug', dueDate: '2026-03-02', priority: 'high', category: '工作', urgency: 'overdue', daysText: '逾期1天' },
+            { id: 3, name: '提交周报', dueDate: '2026-03-03', priority: 'medium', category: '工作', urgency: 'today', daysText: '今天到期' },
+            { id: 4, name: '设计评审会议准备', dueDate: '2026-03-04', priority: 'medium', category: '工作', urgency: 'tomorrow', daysText: '明天到期' },
+            { id: 5, name: '数据库迁移方案', dueDate: '2026-03-06', priority: 'low', category: '项目', urgency: 'soon', daysText: '还剩3天' },
+            { id: 6, name: '完成AI调研报告', dueDate: '2026-03-15', priority: 'medium', category: '学习', urgency: null, daysText: '' },
+            { id: 7, name: '健身计划调整', dueDate: null, priority: 'low', category: '生活', urgency: null, daysText: '' },
+        ];
+
+        const urgencyColors = {
+            overdue: '#ff4757', today: '#ffa502', tomorrow: '#f0c040', soon: '#64b4ff'
+        };
+
+        // ==================== 方案 A ====================
+        function renderBannerDemo() {
+            const body = document.getElementById('tasks-a');
+            let html = '';
+            mockTasks.forEach(t => {
+                let badgeHtml = '';
+                if (t.urgency) {
+                    const cls = `badge-${t.urgency}`;
+                    badgeHtml = `<span class="task-tag ${cls}">${t.urgency === 'overdue' ? '⚠' : t.urgency === 'today' ? '🔥' : t.urgency === 'tomorrow' ? '⏰' : '📅'} ${t.daysText}</span>`;
+                }
+                html += `
+                    <div class="task-item">
+                        <div class="task-check"><i class="fas fa-check"></i></div>
+                        <div class="task-info">
+                            <div class="task-title-row">
+                                <span class="task-name">${t.name}</span>
+                            </div>
+                            <div class="task-meta-row">
+                                ${badgeHtml}
+                                <span class="task-tag" style="background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.4)"><i class="fas fa-folder"></i> ${t.category}</span>
+                                ${t.dueDate ? `<span class="task-due-text">${t.dueDate}</span>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            body.innerHTML = html;
+
+            const toggle = document.getElementById('banner-toggle');
+            const groups = document.getElementById('banner-groups');
+            toggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggle.classList.toggle('collapsed');
+                groups.classList.toggle('collapsed');
+            });
+        }
+
+        // ==================== 方案 B ====================
+        function renderSwimLaneDemo() {
+            const body = document.getElementById('tasks-b');
+            const groups = [
+                { key: 'overdue', label: '已逾期', icon: '⚠️', cls: 'sl-overdue', tasks: mockTasks.filter(t => t.urgency === 'overdue') },
+                { key: 'today', label: '今天到期', icon: '🔥', cls: 'sl-today', tasks: mockTasks.filter(t => t.urgency === 'today') },
+                { key: 'tomorrow', label: '明天到期', icon: '⏰', cls: 'sl-tomorrow', tasks: mockTasks.filter(t => t.urgency === 'tomorrow') },
+                { key: 'week', label: '本周内', icon: '📅', cls: 'sl-week', tasks: mockTasks.filter(t => t.urgency === 'soon') },
+                { key: 'normal', label: '更远 / 无截止日期', icon: '📋', cls: 'sl-normal', tasks: mockTasks.filter(t => !t.urgency) },
+            ];
+
+            let html = '';
+            groups.forEach((g, idx) => {
+                const expanded = g.tasks.length > 0 && idx < 3;
+                html += `
+                    <div class="swimlane-group ${g.cls} ${expanded ? 'expanded' : ''}" data-key="${g.key}">
+                        <div class="swimlane-header">
+                            <div class="swimlane-indicator"></div>
+                            <span class="swimlane-icon">${g.icon}</span>
+                            <span class="swimlane-label">${g.label}</span>
+                            <span class="swimlane-badge">${g.tasks.length}</span>
+                            <span class="swimlane-chevron"><i class="fas fa-chevron-right"></i></span>
+                        </div>
+                        <div class="swimlane-body">
+                            ${g.tasks.length === 0 ? `<div class="swimlane-empty">暂无任务</div>` : g.tasks.map(t => `
+                                <div class="swimlane-task-item">
+                                    <div class="swimlane-task-check"></div>
+                                    <span class="swimlane-task-name">${t.name}</span>
+                                    <span class="swimlane-task-due">${t.daysText || t.dueDate || '无截止'}</span>
+                                    <span class="swimlane-task-priority" style="background:${t.priority === 'high' ? '#ff4757' : t.priority === 'medium' ? '#ffa502' : '#999'}"></span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+            body.innerHTML = html;
+
+            body.querySelectorAll('.swimlane-header').forEach(header => {
+                header.addEventListener('click', () => {
+                    header.closest('.swimlane-group').classList.toggle('expanded');
+                });
+            });
+        }
+
+        // ==================== 方案 C ====================
+        function renderFloatDemo() {
+            const bubble = document.getElementById('float-bubble');
+            const closeBtn = document.getElementById('float-close');
+            const body = document.getElementById('float-body');
+
+            const urgentTasks = mockTasks.filter(t => t.urgency);
+            let html = '';
+            urgentTasks.forEach(t => {
+                const color = urgencyColors[t.urgency];
+                html += `
+                    <div class="float-task-item">
+                        <div class="float-task-urgency" style="background:${color}"></div>
+                        <div class="float-task-info">
+                            <div class="float-task-name">${t.name}</div>
+                            <div class="float-task-meta">${t.category} · ${t.dueDate}</div>
+                        </div>
+                        <span class="float-task-countdown" style="background:rgba(${hexToRgb(color)},0.12);color:${color}">${t.daysText}</span>
+                    </div>
+                `;
+            });
+            body.innerHTML = html;
+
+            bubble.querySelector('.float-bubble-dot').addEventListener('click', () => {
+                bubble.classList.remove('collapsed');
+                bubble.classList.add('expanded');
+            });
+            closeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                bubble.classList.remove('expanded');
+                bubble.classList.add('collapsed');
+            });
+        }
+
+        function hexToRgb(hex) {
+            const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return m ? `${parseInt(m[1],16)},${parseInt(m[2],16)},${parseInt(m[3],16)}` : '100,180,255';
+        }
+
+        renderBannerDemo();
+        renderSwimLaneDemo();
+        renderFloatDemo();
+    </script>
+</body>
+</html>
