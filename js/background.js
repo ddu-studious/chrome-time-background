@@ -1290,6 +1290,79 @@
         await chrome.notifications.clear(notificationId);
     });
 
+    // ==================== 网页内容提取 (v2.2.0) ====================
+
+    async function extractWebContentInTab(url) {
+        let tabId = null;
+        try {
+            const tab = await chrome.tabs.create({ url, active: false });
+            tabId = tab.id;
+
+            await new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    chrome.tabs.onUpdated.removeListener(listener);
+                    reject(new Error('页面加载超时'));
+                }, 20000);
+
+                const listener = (updatedTabId, changeInfo) => {
+                    if (updatedTabId === tabId && changeInfo.status === 'complete') {
+                        chrome.tabs.onUpdated.removeListener(listener);
+                        clearTimeout(timeout);
+                        resolve();
+                    }
+                };
+                chrome.tabs.onUpdated.addListener(listener);
+            });
+
+            await new Promise(r => setTimeout(r, 1000));
+
+            const [result] = await chrome.scripting.executeScript({
+                target: { tabId },
+                func: () => {
+                    const title = document.title || '';
+                    const metaDesc = document.querySelector('meta[name="description"]')?.content || '';
+                    const ogDesc = document.querySelector('meta[property="og:description"]')?.content || '';
+
+                    const headings = Array.from(document.querySelectorAll('h1, h2, h3'))
+                        .slice(0, 10)
+                        .map(h => h.innerText.trim())
+                        .filter(Boolean);
+
+                    const article = document.querySelector('article')
+                        || document.querySelector('main')
+                        || document.querySelector('[role="main"]')
+                        || document.body;
+
+                    const clone = article.cloneNode(true);
+                    clone.querySelectorAll(
+                        'script, style, nav, header, footer, aside, iframe, ' +
+                        '[role="navigation"], [role="banner"], ' +
+                        '.sidebar, .nav, .menu, .ad, .advertisement, .social-share, .comment, .comments'
+                    ).forEach(el => el.remove());
+
+                    const bodyText = clone.innerText
+                        .replace(/\s+/g, ' ')
+                        .trim()
+                        .substring(0, 3000);
+
+                    return {
+                        title,
+                        description: metaDesc || ogDesc,
+                        headings,
+                        bodyText,
+                        url: location.href
+                    };
+                }
+            });
+
+            return result.result;
+        } finally {
+            if (tabId) {
+                try { await chrome.tabs.remove(tabId); } catch { /* tab may already be closed */ }
+            }
+        }
+    }
+
     // 监听消息事件
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.action === 'getBackgrounds') {
@@ -1310,6 +1383,18 @@
             return true; // 异步响应
         }
         
+        if (message.action === 'extractWebContent') {
+            (async () => {
+                try {
+                    const data = await extractWebContentInTab(message.url);
+                    sendResponse({ data });
+                } catch (e) {
+                    sendResponse({ error: e.message });
+                }
+            })();
+            return true;
+        }
+
         if (message.action === 'setupTaskReminder') {
             // 设置单个任务的提醒
             setupTaskReminders().then(() => {

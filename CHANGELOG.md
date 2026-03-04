@@ -1,5 +1,86 @@
 # 更新日志
 
+## [2.2.0] - 2026-03-04
+
+### 新增
+- **LLM 重排序**
+  - Spotlight 搜索结果底部新增"AI 精排"按钮
+  - 基于 Listwise 方式调用 LLM 对 Top-K 结果智能重排序
+  - 重排后展示 LLM 评分和相关理由
+  - 显示精排耗时（"AI 已重排 N 条结果（X秒）"）
+  - 支持所有已配置的 AI Provider
+- **网页摘要抓取**
+  - 书签面板每条书签新增"抓取摘要"按钮
+  - 面板操作栏新增"批量抓取"按钮
+  - 通过隐藏标签页 + scripting 注入提取网页正文
+  - LLM 生成 50-100 字摘要和 5-10 个关键词标签
+  - 抓取后自动重新生成 Embedding，增强搜索语义密度
+  - Spotlight 搜索结果中展示摘要片段
+- **搜索增强**
+  - Embedding 文本增强：title + domain + summary + contentTags + aiTags
+  - 书签面板统计新增"已抓取"指标
+
+### 技术
+- 新增 `_callChatAPI()` — 通用 LLM Chat API 调用方法
+- 新增 `rerank()` — Listwise LLM 重排序
+- 新增 `extractAndSummarize()` — 单条书签网页摘要抓取
+- 新增 `batchExtractSummaries()` — 批量摘要抓取
+- `background.js` 新增 `extractWebContent` 消息处理器
+- `manifest.json` 新增 `scripting` 权限和 `optional_host_permissions`
+
+## [2.1.0] - 2026-03-04
+
+### 新增
+- **书签间隔复习系统**
+  - SM-2 改良算法，适配书签场景
+  - 4 种频率模板：频繁阅读/定期关注/偶尔翻阅/长期存档
+  - 新标签页"今日推荐阅读"卡片
+  - 复习反馈 4 档操作（归档/不熟/稍后/已读）
+  - 复习卡片消失动画
+- **一键转任务**
+  - Spotlight 搜索结果支持"转为任务"按钮
+  - 书签面板列表支持"转为任务"按钮
+  - 今日推荐阅读卡片支持"转为任务"按钮
+- **书签面板增强**
+  - 新增"启用复习"按钮
+  - 统计区新增"待复习"指标
+
+### 技术
+- 新增 `js/bookmark-srs.js` — SM-2 算法、频率模板、复习队列
+- 更新 `js/bookmark-rag.js` — 集成 SRS 复习方法
+- 更新 `js/memo.js` — 今日推荐阅读 UI、复习反馈、一键转任务
+
+## [2.0.0] - 2026-03-04
+
+### 新增
+- **书签 RAG 语义搜索**
+  - Embedding 生成（DeepSeek/OpenAI/Gemini）
+  - 向量搜索（cosine similarity）
+  - 混合搜索（BM25 + 向量 + RRF 融合排序）
+  - IndexedDB 持久化，浏览器重启后恢复索引
+  - Query 向量缓存（24 小时有效期）
+  - 增量 Embedding（新书签自动处理）
+- **Spotlight 快捷搜索**
+  - `Ctrl+K` 全局唤出搜索框
+  - 搜索结果分"关键词匹配"和"语义推荐"两区
+  - 上下键导航、回车打开、ESC 关闭
+  - 搜索延迟 < 500ms
+
+## [1.7.0] - 2026-03-03
+
+### 新增
+- **书签智能检索 Phase 1**
+  - 侧边栏工具栏"书签"按钮
+  - AI 配置向导（DeepSeek/OpenAI/Gemini/自定义）
+  - 书签文件夹树形选择器
+  - 书签列表面板（搜索、分类浏览）
+  - BM25 关键词搜索
+  - 书签变化监听（onCreated/onRemoved/onMoved/onChanged）
+  - 手动处理按钮 + 进度条
+
+### 新增权限
+- `bookmarks` — 可选权限，按需申请
+
 ## [1.5.0] - 2026-01-30
 
 ### 新增

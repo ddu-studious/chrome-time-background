@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotlight 搜索 Demo (v2.2.0 - AI 精排 + 摘要)</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+    <style>
+        body {
+            margin: 0;
+            background: #0d0f14;
+            color: rgba(255, 255, 255, 0.8);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .demo-trigger { text-align: center; }
+        .demo-trigger h2 { margin-bottom: 8px; font-weight: 400; color: rgba(255,255,255,0.5); }
+        .demo-trigger .version { font-size: 12px; color: rgba(178,102,255,0.6); margin-bottom: 20px; }
+        .demo-trigger button {
+            background: rgba(100, 180, 255, 0.15); color: #64b4ff; border: 1px solid rgba(100,180,255,0.2);
+            padding: 12px 28px; border-radius: 10px; font-size: 15px; cursor: pointer; font-family: inherit;
+            transition: all 0.2s; margin: 4px;
+        }
+        .demo-trigger button:hover { background: rgba(100, 180, 255, 0.25); }
+        .demo-trigger button.rerank-demo {
+            background: rgba(178,102,255,0.12); color: #b266ff; border-color: rgba(178,102,255,0.2);
+        }
+        .demo-trigger button.rerank-demo:hover { background: rgba(178,102,255,0.2); }
+        .demo-trigger kbd { display: inline-block; padding: 2px 8px; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; font-size: 12px; color: rgba(255,255,255,0.6); background: rgba(255,255,255,0.05); margin: 0 2px; }
+        .demo-trigger p { margin-top: 12px; font-size: 13px; color: rgba(255,255,255,0.3); }
+    </style>
+</head>
+<body>
+    <div class="demo-trigger">
+        <h2>Spotlight 书签搜索 Demo</h2>
+        <div class="version">v2.2.0 — AI 精排 + 网页摘要</div>
+        <button id="open-btn"><i class="fas fa-search"></i> 普通搜索</button>
+        <button id="open-rerank-btn" class="rerank-demo"><i class="fas fa-magic"></i> AI 精排演示</button>
+        <p>或按 <kbd>Ctrl</kbd>+<kbd>K</kbd></p>
+    </div>
+
+    <script>
+        const mockBookmarks = [
+            { id: '1', title: 'LangChain Documentation', url: 'https://docs.langchain.com', domain: 'docs.langchain.com', _matchType: 'semantic', _vectorScore: 0.95, embeddingDone: true, summary: 'LLM 应用开发框架，提供链式调用、Agent、RAG 等核心功能的完整文档' },
+            { id: '2', title: 'OpenAI API Reference', url: 'https://platform.openai.com/docs', domain: 'platform.openai.com', _matchType: 'keyword', embeddingDone: true, summary: 'OpenAI 官方 API 文档，涵盖 GPT-4、Embedding、DALL-E 等模型接口' },
+            { id: '3', title: 'Hugging Face Transformers', url: 'https://huggingface.co/docs/transformers', domain: 'huggingface.co', _matchType: 'semantic', _vectorScore: 0.88, embeddingDone: true, summary: '开源 NLP 模型库，支持 BERT、GPT 等数万个预训练模型的加载和微调' },
+            { id: '4', title: 'Vector Database Comparison', url: 'https://towardsdatascience.com/vector-databases', domain: 'towardsdatascience.com', _matchType: 'semantic', _vectorScore: 0.82, embeddingDone: false },
+            { id: '5', title: 'AI Prompt Engineering Guide', url: 'https://promptguide.dev', domain: 'promptguide.dev', _matchType: 'keyword', embeddingDone: true, summary: '系统化的提示工程指南，从基础到高级技巧，含大量实战案例' },
+            { id: '6', title: 'MCP Protocol Specification', url: 'https://spec.modelcontextprotocol.io', domain: 'spec.modelcontextprotocol.io', _matchType: 'hybrid', _vectorScore: 0.78, embeddingDone: true, summary: 'Model Context Protocol 标准规范，定义了 AI 工具与外部系统的交互协议' },
+            { id: '7', title: 'Chrome Extension Manifest V3', url: 'https://developer.chrome.com/docs/extensions/mv3', domain: 'developer.chrome.com', _matchType: 'keyword', embeddingDone: true },
+            { id: '8', title: 'RAG Best Practices', url: 'https://blog.langchain.dev/rag-best-practices', domain: 'blog.langchain.dev', _matchType: 'semantic', _vectorScore: 0.91, embeddingDone: true, summary: '检索增强生成的最佳实践，包括分块策略、向量搜索调优和重排序技巧' },
+        ];
+
+        const mockRerankedResults = [
+            { ...mockBookmarks[0], _matchType: 'reranked', _rerankScore: 98, _rerankReason: 'LLM 应用框架权威文档，直接匹配 AI 开发主题', _rerankElapsed: '1.3' },
+            { ...mockBookmarks[7], _matchType: 'reranked', _rerankScore: 95, _rerankReason: 'RAG 实践指南，AI 搜索系统核心技术', _rerankElapsed: '1.3' },
+            { ...mockBookmarks[4], _matchType: 'reranked', _rerankScore: 92, _rerankReason: 'Prompt 工程是 AI 应用的基础技能', _rerankElapsed: '1.3' },
+            { ...mockBookmarks[1], _matchType: 'reranked', _rerankScore: 90, _rerankReason: '主流 AI API 提供商的官方文档', _rerankElapsed: '1.3' },
+            { ...mockBookmarks[2], _matchType: 'reranked', _rerankScore: 85, _rerankReason: '预训练模型库，AI 研究和应用基础设施', _rerankElapsed: '1.3' },
+            { ...mockBookmarks[5], _matchType: 'reranked', _rerankScore: 78, _rerankReason: 'AI 工具协议标准，与 AI 生态间接相关', _rerankElapsed: '1.3' },
+        ];
+
+        function escHtml(str) {
+            if (!str) return '';
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function renderItem(bm, idx, isSelected) {
+            let badge = '';
+            if (bm._matchType === 'reranked') {
+                const score = bm._rerankScore ? `${bm._rerankScore}分` : '✨';
+                badge = `<span class="bm-spotlight-badge reranked">${score}</span>`;
+            } else if (bm._matchType === 'semantic' || bm._matchType === 'hybrid') {
+                const pct = bm._vectorScore ? Math.round(bm._vectorScore * 100) + '%' : '';
+                badge = `<span class="bm-spotlight-badge semantic">${pct || 'AI'}</span>`;
+            }
+
+            const summaryLine = bm.summary
+                ? `<div class="bm-spotlight-item-summary">${escHtml(bm.summary.substring(0, 60))}${bm.summary.length > 60 ? '…' : ''}</div>`
+                : '';
+            const reasonLine = bm._rerankReason
+                ? `<div class="bm-spotlight-item-reason"><i class="fas fa-lightbulb"></i> ${escHtml(bm._rerankReason)}</div>`
+                : '';
+
+            return `
+            <div class="bm-spotlight-item ${isSelected ? 'selected' : ''}" data-idx="${idx}" data-url="${escHtml(bm.url)}">
+                <img class="bm-spotlight-favicon" src="https://www.google.com/s2/favicons?domain=${escHtml(bm.domain)}&sz=32" alt="">
+                <div class="bm-spotlight-item-info">
+                    <div class="bm-spotlight-item-title">${escHtml(bm.title)}</div>
+                    <div class="bm-spotlight-item-url">${escHtml(bm.domain)}</div>
+                    ${summaryLine}
+                    ${reasonLine}
+                </div>
+                ${badge}
+                <button class="bm-spotlight-task-btn" data-bm-title="${escHtml(bm.title)}" data-bm-url="${escHtml(bm.url)}" title="转为任务">
+                    <i class="fas fa-plus-circle"></i>
+                </button>
+            </div>`;
+        }
+
+        function renderResults(container, results, selectedIdx, isReranked = false) {
+            let html = '';
+            let gi = 0;
+
+            if (isReranked) {
+                const elapsed = results[0]?._rerankElapsed || '';
+                html += `<div class="bm-spotlight-section"><span class="bm-spotlight-section-label"><i class="fas fa-magic"></i> AI 精排结果</span>
+                    <span class="bm-spotlight-rerank-info">✅ 已重排 ${results.length} 条${elapsed ? `（${elapsed}s）` : ''}</span></div>`;
+                for (const bm of results) { html += renderItem(bm, gi, gi === selectedIdx); gi++; }
+            } else {
+                const kw = results.filter(r => r._matchType === 'keyword');
+                const sm = results.filter(r => r._matchType === 'semantic' || r._matchType === 'hybrid');
+                if (kw.length > 0) {
+                    html += `<div class="bm-spotlight-section"><span class="bm-spotlight-section-label"><i class="fas fa-font"></i> 关键词匹配 (${kw.length})</span></div>`;
+                    for (const bm of kw) { html += renderItem(bm, gi, gi === selectedIdx); gi++; }
+                }
+                if (sm.length > 0) {
+                    html += `<div class="bm-spotlight-section"><span class="bm-spotlight-section-label"><i class="fas fa-brain"></i> 语义推荐 (${sm.length})</span></div>`;
+                    for (const bm of sm) { html += renderItem(bm, gi, gi === selectedIdx); gi++; }
+                }
+                if (results.length >= 3) {
+                    html += `<div class="bm-spotlight-rerank-bar">
+                        <button class="bm-spotlight-rerank-btn" id="demo-rerank-btn"><i class="fas fa-magic"></i> AI 精排</button>
+                        <span class="bm-spotlight-rerank-desc">使用 LLM 智能重排序结果</span>
+                    </div>`;
+                }
+            }
+
+            container.innerHTML = html;
+
+            container.querySelectorAll('.bm-spotlight-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    if (e.target.closest('.bm-spotlight-task-btn')) return;
+                    console.log('打开:', item.dataset.url);
+                });
+            });
+
+            const rerankBtn = document.getElementById('demo-rerank-btn');
+            if (rerankBtn) {
+                rerankBtn.addEventListener('click', () => {
+                    rerankBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> AI 正在分析...';
+                    rerankBtn.disabled = true;
+                    setTimeout(() => {
+                        renderResults(container, mockRerankedResults, 0, true);
+                    }, 1500);
+                });
+            }
+        }
+
+        function openSpotlight(autoRerank = false) {
+            if (document.getElementById('bm-spotlight')) return;
+            const overlay = document.createElement('div');
+            overlay.className = 'bm-spotlight-overlay';
+            overlay.id = 'bm-spotlight';
+            overlay.innerHTML = `
+                <div class="bm-spotlight-box">
+                    <div class="bm-spotlight-header">
+                        <i class="fas fa-search bm-spotlight-icon"></i>
+                        <input type="text" class="bm-spotlight-input" id="bm-spotlight-input" placeholder="搜索书签...（语义搜索已就绪）" autofocus>
+                        <span class="bm-spotlight-hint">ESC 关闭</span>
+                    </div>
+                    <div class="bm-spotlight-results" id="bm-spotlight-results">
+                        <div class="bm-spotlight-tip">输入关键词搜索书签，支持语义匹配</div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+
+            const input = document.getElementById('bm-spotlight-input');
+            const results = document.getElementById('bm-spotlight-results');
+            let selectedIdx = 0;
+            let filteredResults = [];
+            input.focus();
+
+            input.addEventListener('input', () => {
+                const q = input.value.trim().toLowerCase();
+                if (!q) {
+                    results.innerHTML = '<div class="bm-spotlight-tip">输入关键词搜索书签，支持语义匹配</div>';
+                    filteredResults = [];
+                    return;
+                }
+                filteredResults = mockBookmarks.filter(b =>
+                    b.title.toLowerCase().includes(q) || b.domain.includes(q) || b._matchType === 'semantic'
+                );
+                selectedIdx = filteredResults.length > 0 ? 0 : -1;
+                renderResults(results, filteredResults, selectedIdx);
+            });
+
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') { closeSpotlight(); return; }
+                if (e.key === 'ArrowDown' && filteredResults.length > 0) { e.preventDefault(); selectedIdx = (selectedIdx + 1) % filteredResults.length; renderResults(results, filteredResults, selectedIdx); }
+                if (e.key === 'ArrowUp' && filteredResults.length > 0) { e.preventDefault(); selectedIdx = selectedIdx <= 0 ? filteredResults.length - 1 : selectedIdx - 1; renderResults(results, filteredResults, selectedIdx); }
+            });
+
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) closeSpotlight(); });
+
+            if (autoRerank) {
+                input.value = 'ai';
+                filteredResults = mockBookmarks;
+                selectedIdx = 0;
+                renderResults(results, filteredResults, selectedIdx);
+                setTimeout(() => {
+                    const btn = document.getElementById('demo-rerank-btn');
+                    if (btn) btn.click();
+                }, 800);
+            }
+        }
+
+        function closeSpotlight() {
+            const el = document.getElementById('bm-spotlight');
+            if (el) el.remove();
+        }
+
+        document.getElementById('open-btn').addEventListener('click', () => openSpotlight(false));
+        document.getElementById('open-rerank-btn').addEventListener('click', () => openSpotlight(true));
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'k' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); openSpotlight(); }
+            if (e.key === 'Escape') closeSpotlight();
+        });
+    </script>
+</body>
+</html>

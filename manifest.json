@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "中国风景时钟",
-  "version": "1.6.0",
-  "description": "一个展示中国风景的新标签页时钟，支持天气显示、多语言、备忘录和每日任务提醒功能",
+  "version": "2.2.0",
+  "description": "一个展示中国风景的新标签页时钟，支持天气显示、多语言、备忘录、每日任务提醒和书签智能检索功能",
   "permissions": [
     "storage",
     "unlimitedStorage",
@@ -10,7 +10,14 @@
     "tabs",
     "alarms",
     "notifications",
-    "downloads"
+    "downloads",
+    "scripting"
+  ],
+  "optional_permissions": [
+    "bookmarks"
+  ],
+  "optional_host_permissions": [
+    "<all_urls>"
   ],
   "host_permissions": [
     "https://*.unsplash.com/*",
@@ -22,7 +29,10 @@
     "https://www.reddit.com/*",
     "https://dev.to/*",
     "https://dailyhotapi-production-cad3.up.railway.app/*",
-    "https://www.meczyc6.info/*"
+    "https://www.meczyc6.info/*",
+    "https://api.deepseek.com/*",
+    "https://api.openai.com/*",
+    "https://generativelanguage.googleapis.com/*"
   ],
   "chrome_url_overrides": {
     "newtab": "index.html"

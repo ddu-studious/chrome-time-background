@@ -185,6 +185,13 @@ class MemoManager {
             
             // 检查备份提醒
             this.checkBackupReminder();
+
+            // 初始化今日推荐阅读
+            try {
+                this.initReadingRecommendation();
+            } catch (e) {
+                console.warn('今日推荐阅读初始化失败:', e);
+            }
             
             return true;
         } catch (error) {
@@ -399,6 +406,9 @@ class MemoManager {
             <button class="sidebar-tool-btn" id="sidebar-weekly-btn" title="周回顾">
                 <i class="fas fa-calendar-week"></i>
             </button>
+            <button class="sidebar-tool-btn" id="sidebar-bookmark-btn" title="书签检索">
+                <i class="fas fa-bookmark"></i>
+            </button>
             <button class="sidebar-tool-btn" id="sidebar-backup-btn" title="备份与恢复">
                 <i class="fas fa-cloud-download-alt"></i>
             </button>
@@ -440,7 +450,7 @@ class MemoManager {
         taskList.className = 'sidebar-task-list';
         taskList.id = 'sidebar-task-list';
         
-        // 创建任务表单弹窗
+        // 创建任务表单弹窗（标签页式布局）
         const formModal = document.createElement('div');
         formModal.className = 'sidebar-form-modal hidden';
         formModal.id = 'sidebar-form-modal';
@@ -450,34 +460,27 @@ class MemoManager {
                     <h3 id="sidebar-form-title">新增任务</h3>
                     <button class="sidebar-form-close" id="sidebar-form-close">&times;</button>
                 </div>
+                <div class="sidebar-form-tabs" role="tablist">
+                    <button class="sidebar-form-tab active" data-form-tab="basic" role="tab" aria-selected="true" aria-controls="form-tab-basic"><i class="fas fa-edit"></i> 基本信息</button>
+                    <button class="sidebar-form-tab" data-form-tab="schedule" role="tab" aria-selected="false" aria-controls="form-tab-schedule"><i class="fas fa-clock"></i> 时间与进度</button>
+                    <button class="sidebar-form-tab" data-form-tab="extra" role="tab" aria-selected="false" aria-controls="form-tab-extra"><i class="fas fa-paperclip"></i> 附件与子任务</button>
+                </div>
                 <div class="sidebar-form-body">
-                    <!-- 卡片1: 基本信息 -->
-                    <div class="form-card">
-                        <div class="form-card-header">
-                            <div class="form-card-icon primary"><i class="fas fa-edit"></i></div>
-                            <div class="form-card-title">基本信息</div>
-                        </div>
+                    <!-- Tab 1: 基本信息 -->
+                    <div class="sidebar-form-tab-panel active" id="form-tab-basic" role="tabpanel">
                         <div class="form-group">
                             <label for="sidebar-task-title">标题 <span class="required">*</span></label>
                             <input type="text" id="sidebar-task-title" placeholder="输入任务标题..." required>
                         </div>
                         <div class="form-group">
                             <label for="sidebar-task-text">详情</label>
-                            <textarea id="sidebar-task-text" placeholder="输入任务详情..." rows="3"></textarea>
-                        </div>
-                        <div class="form-group">
-                            <label for="sidebar-task-category-wrap">分类</label>
-                            <div id="sidebar-task-category-wrap" class="sidebar-task-category-wrap"></div>
-                        </div>
-                    </div>
-
-                    <!-- 卡片2: 优先级与时间 -->
-                    <div class="form-card">
-                        <div class="form-card-header">
-                            <div class="form-card-icon danger"><i class="fas fa-flag"></i></div>
-                            <div class="form-card-title">优先级与时间</div>
+                            <textarea id="sidebar-task-text" placeholder="输入任务详情..." rows="4"></textarea>
                         </div>
                         <div class="form-row">
+                            <div class="form-group">
+                                <label for="sidebar-task-category-wrap">分类</label>
+                                <div id="sidebar-task-category-wrap" class="sidebar-task-category-wrap"></div>
+                            </div>
                             <div class="form-group">
                                 <label for="sidebar-task-priority">优先级</label>
                                 <select id="sidebar-task-priority">
@@ -487,15 +490,19 @@ class MemoManager {
                                     <option value="high">高</option>
                                 </select>
                             </div>
-                            <div class="form-group">
-                                <label for="sidebar-task-due">截止日期</label>
-                                <input type="date" id="sidebar-task-due">
-                            </div>
                         </div>
+                    </div>
+
+                    <!-- Tab 2: 时间与进度 -->
+                    <div class="sidebar-form-tab-panel" id="form-tab-schedule" role="tabpanel">
                         <div class="form-row">
                             <div class="form-group">
                                 <label for="sidebar-task-start">开始日期 <span style="opacity:0.5;font-size:0.75em;">可选</span></label>
                                 <input type="date" id="sidebar-task-start" placeholder="默认使用创建日期">
+                            </div>
+                            <div class="form-group">
+                                <label for="sidebar-task-due">截止日期</label>
+                                <input type="date" id="sidebar-task-due">
                             </div>
                         </div>
                         <div class="form-group task-duration-hint" id="task-duration-hint" style="display:none;">
@@ -510,14 +517,6 @@ class MemoManager {
                                 </select>
                                 <input type="text" id="sidebar-task-habit-icon" class="habit-icon-input" placeholder="📋" maxlength="2" title="习惯图标（emoji）">
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- 卡片3: 进度追踪 -->
-                    <div class="form-card">
-                        <div class="form-card-header">
-                            <div class="form-card-icon success"><i class="fas fa-chart-line"></i></div>
-                            <div class="form-card-title">进度追踪</div>
                         </div>
                         <div class="form-group progress-group">
                             <label>
@@ -543,12 +542,8 @@ class MemoManager {
                         </div>
                     </div>
 
-                    <!-- 卡片4: 附件与链接 -->
-                    <div class="form-card">
-                        <div class="form-card-header">
-                            <div class="form-card-icon info"><i class="fas fa-paperclip"></i></div>
-                            <div class="form-card-title">附件与链接</div>
-                        </div>
+                    <!-- Tab 3: 附件与子任务 -->
+                    <div class="sidebar-form-tab-panel" id="form-tab-extra" role="tabpanel">
                         <div class="form-group">
                             <label>图片附件</label>
                             <div class="image-upload-area" id="image-upload-area">
@@ -576,15 +571,8 @@ class MemoManager {
                                 </button>
                             </div>
                         </div>
-                    </div>
-
-                    <!-- 卡片5: 子任务 -->
-                    <div class="form-card">
-                        <div class="form-card-header">
-                            <div class="form-card-icon warning"><i class="fas fa-list-check"></i></div>
-                            <div class="form-card-title">子任务</div>
-                        </div>
                         <div class="form-group subtasks-group">
+                            <label>子任务 <span class="subtask-count-label" id="subtask-count-label"></span></label>
                             <div class="subtasks-edit-list" id="subtasks-edit-list"></div>
                             <div class="subtask-add-row">
                                 <input type="text" id="subtask-add-input" placeholder="添加子任务..." class="subtask-add-input">
@@ -596,8 +584,11 @@ class MemoManager {
                     </div>
                 </div>
                 <div class="sidebar-form-footer">
-                    <button class="btn-cancel" id="sidebar-form-cancel">取消</button>
-                    <button class="btn-save" id="sidebar-form-save">保存</button>
+                    <div class="sidebar-form-status" id="sidebar-form-status"></div>
+                    <div class="sidebar-form-actions">
+                        <button class="btn-cancel" id="sidebar-form-cancel">取消</button>
+                        <button class="btn-save" id="sidebar-form-save">保存</button>
+                    </div>
                 </div>
             </div>
         `;
@@ -701,6 +692,12 @@ class MemoManager {
             weeklyBtn.addEventListener('click', () => this.showWeeklyReviewPanel());
         }
         
+        // 书签检索按钮
+        const bookmarkBtn = document.getElementById('sidebar-bookmark-btn');
+        if (bookmarkBtn) {
+            bookmarkBtn.addEventListener('click', () => this.showBookmarkPanel());
+        }
+        
         // 备份与恢复按钮
         const backupBtn = document.getElementById('sidebar-backup-btn');
         if (backupBtn) {
@@ -718,6 +715,22 @@ class MemoManager {
         if (settingsBtn) {
             settingsBtn.addEventListener('click', () => this.showCategoryManager());
         }
+        
+        // 表单标签页切换
+        document.querySelectorAll('.sidebar-form-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.sidebar-form-tab').forEach(t => {
+                    t.classList.remove('active');
+                    t.setAttribute('aria-selected', 'false');
+                });
+                document.querySelectorAll('.sidebar-form-tab-panel').forEach(p => p.classList.remove('active'));
+                tab.classList.add('active');
+                tab.setAttribute('aria-selected', 'true');
+                const panelId = 'form-tab-' + tab.dataset.formTab;
+                const panel = document.getElementById(panelId);
+                if (panel) panel.classList.add('active');
+            });
+        });
         
         // 表单关闭
         const closeBtn = document.getElementById('sidebar-form-close');
@@ -3429,7 +3442,7 @@ class MemoManager {
             
             if (type === 'completed') {
                 dataToExport = {
-                    version: '1.6.0 ',
+                    version: '1.7.0 ',
                     exportDate: new Date().toISOString(),
                     type: 'completed_tasks',
                     memos: this.memos.filter(m => m.completed),
@@ -3439,7 +3452,7 @@ class MemoManager {
                 filename = `tasks-completed-${this.formatLocalDateYMD(new Date())}.json`;
             } else {
                 dataToExport = {
-                    version: '1.6.0',
+                    version: '1.7.0',
                     exportDate: new Date().toISOString(),
                     type: 'full_backup',
                     memos: this.memos,
@@ -3699,6 +3712,936 @@ class MemoManager {
         }
     }
 
+    // ==================== 书签智能检索面板 ====================
+
+    /**
+     * 显示书签检索面板
+     */
+    async showBookmarkPanel() {
+        const existing = document.getElementById('bookmark-panel');
+        if (existing) existing.remove();
+
+        if (!this._bookmarkRAG) {
+            this._bookmarkRAG = new BookmarkRAG();
+            await this._bookmarkRAG.init();
+        }
+
+        const rag = this._bookmarkRAG;
+
+        if (!rag.isConfigured()) {
+            this.showBookmarkWizard();
+            return;
+        }
+
+        await rag.syncBookmarks();
+        const stats = rag.getStats();
+
+        const panel = document.createElement('div');
+        panel.className = 'about-panel active';
+        panel.id = 'bookmark-panel';
+        panel.innerHTML = `
+            <div class="about-overlay"></div>
+            <div class="about-content" style="max-width: 560px;">
+                <div class="about-header">
+                    <h3><i class="fas fa-bookmark" style="margin-right: 8px; opacity: 0.6;"></i>书签检索</h3>
+                    <button class="about-close" id="bookmark-panel-close"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="about-body" style="padding: 16px;">
+                    <!-- 搜索栏 -->
+                    <div class="bm-search-bar">
+                        <i class="fas fa-search bm-search-icon"></i>
+                        <input type="text" id="bm-search-input" class="bm-search-input" placeholder="搜索书签（标题、域名、标签）..." autofocus>
+                        <span class="bm-search-hint" id="bm-search-hint">${stats.total} 条书签</span>
+                    </div>
+
+                    <!-- 统计概览 -->
+                    <div class="bm-stats-row">
+                        <div class="bm-stat-item">
+                            <span class="bm-stat-value">${stats.total}</span>
+                            <span class="bm-stat-label">总书签</span>
+                        </div>
+                        <div class="bm-stat-item">
+                            <span class="bm-stat-value">${stats.embedded}</span>
+                            <span class="bm-stat-label">已处理</span>
+                        </div>
+                        <div class="bm-stat-item">
+                            <span class="bm-stat-value">${stats.extracted || 0}</span>
+                            <span class="bm-stat-label">已抓取</span>
+                        </div>
+                        <div class="bm-stat-item">
+                            <span class="bm-stat-value">${stats.dueToday || 0}</span>
+                            <span class="bm-stat-label">待复习</span>
+                        </div>
+                    </div>
+
+                    <!-- 操作栏 -->
+                    <div class="bm-action-bar">
+                        <button class="bm-action-btn" id="bm-process-btn" title="处理书签（生成 Embedding）">
+                            <i class="fas fa-magic"></i> 开始处理
+                        </button>
+                        <button class="bm-action-btn" id="bm-extract-btn" title="批量抓取网页摘要（增强搜索语义）">
+                            <i class="fas fa-file-alt"></i> 批量抓取
+                        </button>
+                        <button class="bm-action-btn" id="bm-review-btn" title="启用间隔复习（SM-2 算法）">
+                            <i class="fas fa-book-reader"></i> 启用复习
+                        </button>
+                        <button class="bm-action-btn" id="bm-sync-btn" title="重新同步书签目录">
+                            <i class="fas fa-sync-alt"></i> 同步
+                        </button>
+                        <button class="bm-action-btn" id="bm-settings-btn" title="设置">
+                            <i class="fas fa-cog"></i> 设置
+                        </button>
+                    </div>
+
+                    <!-- 进度条（处理时显示） -->
+                    <div class="bm-progress-bar hidden" id="bm-progress-bar">
+                        <div class="bm-progress-track">
+                            <div class="bm-progress-fill" id="bm-progress-fill"></div>
+                        </div>
+                        <span class="bm-progress-text" id="bm-progress-text">0%</span>
+                    </div>
+
+                    <!-- 书签列表 -->
+                    <div class="bm-list" id="bm-list">
+                        ${this._renderBookmarkList(rag.bookmarks)}
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(panel);
+
+        // 事件绑定
+        document.getElementById('bookmark-panel-close').addEventListener('click', () => panel.remove());
+        panel.querySelector('.about-overlay').addEventListener('click', () => panel.remove());
+        panel.addEventListener('click', (e) => {
+            if (e.target === panel) panel.remove();
+        });
+
+        const searchInput = document.getElementById('bm-search-input');
+        let searchTimeout = null;
+        searchInput.addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(async () => {
+                const query = searchInput.value;
+                const hint = document.getElementById('bm-search-hint');
+                const list = document.getElementById('bm-list');
+
+                if (!query.trim()) {
+                    list.innerHTML = this._renderBookmarkList(rag.bookmarks);
+                    hint.textContent = `${rag.bookmarks.length} 条书签`;
+                } else {
+                    hint.textContent = '搜索中...';
+                    const results = await rag.hybridSearch(query);
+                    list.innerHTML = this._renderBookmarkList(results);
+                    const semantic = results.filter(r => r._matchType === 'semantic' || r._matchType === 'hybrid').length;
+                    hint.textContent = semantic > 0
+                        ? `${results.length} 条结果（含 ${semantic} 条语义匹配）`
+                        : `${results.length} 条结果`;
+                }
+                this._bindBookmarkListEvents(rag);
+            }, 300);
+        });
+
+        document.getElementById('bm-sync-btn').addEventListener('click', async () => {
+            await rag.syncBookmarks();
+            const newStats = rag.getStats();
+            document.getElementById('bm-list').innerHTML = this._renderBookmarkList(rag.bookmarks);
+            document.getElementById('bm-search-hint').textContent = `${newStats.total} 条书签`;
+            this._bindBookmarkListEvents(rag);
+        });
+
+        document.getElementById('bm-settings-btn').addEventListener('click', () => {
+            panel.remove();
+            this.showBookmarkWizard();
+        });
+
+        document.getElementById('bm-review-btn').addEventListener('click', async () => {
+            const reviewBtn = document.getElementById('bm-review-btn');
+            const template = rag.settings?.reviewTemplate || 'regular';
+            const count = await rag.enableReview(template);
+            if (count > 0) {
+                this.showToast(`已为 ${count} 条书签启用间隔复习（${BookmarkSRS.TEMPLATES[template]?.name || '默认'}）`);
+                reviewBtn.innerHTML = '<i class="fas fa-check-circle"></i> 已启用';
+                setTimeout(() => {
+                    reviewBtn.innerHTML = '<i class="fas fa-book-reader"></i> 启用复习';
+                }, 2000);
+                this.initReadingRecommendation();
+            } else {
+                this.showToast('所有书签已在复习计划中');
+            }
+        });
+
+        document.getElementById('bm-process-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('bm-process-btn');
+            const progressBar = document.getElementById('bm-progress-bar');
+            const progressFill = document.getElementById('bm-progress-fill');
+            const progressText = document.getElementById('bm-progress-text');
+
+            if (rag.isProcessing) {
+                rag.cancelProcessing();
+                btn.innerHTML = '<i class="fas fa-magic"></i> 开始处理';
+                progressBar.classList.add('hidden');
+                return;
+            }
+
+            if (!rag.settings?.aiApiKey) {
+                this.showToast('请先配置 AI 服务');
+                return;
+            }
+
+            btn.innerHTML = '<i class="fas fa-stop-circle"></i> 停止';
+            progressBar.classList.remove('hidden');
+
+            const result = await rag.processBookmarks(({ processed, failed, total, percent }) => {
+                progressFill.style.width = percent + '%';
+                progressText.textContent = `${processed}/${total}（${percent}%）`;
+            });
+
+            btn.innerHTML = '<i class="fas fa-check-circle"></i> 已处理';
+            setTimeout(() => {
+                btn.innerHTML = '<i class="fas fa-magic"></i> 开始处理';
+                progressBar.classList.add('hidden');
+            }, 3000);
+
+            const newStats = rag.getStats();
+            document.getElementById('bm-list').innerHTML = this._renderBookmarkList(rag.bookmarks);
+            this._bindBookmarkListEvents(rag);
+
+            if (result.failed > 0) {
+                this.showToast(`处理完成：${result.processed} 成功，${result.failed} 失败`, 4000);
+            } else {
+                this.showToast(`已完成 ${result.processed} 条书签的 Embedding 处理`);
+            }
+        });
+
+        document.getElementById('bm-extract-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('bm-extract-btn');
+            const progressBar = document.getElementById('bm-progress-bar');
+            const progressFill = document.getElementById('bm-progress-fill');
+            const progressText = document.getElementById('bm-progress-text');
+
+            if (rag._batchExtractCancelled === false) {
+                rag.cancelBatchExtract();
+                btn.innerHTML = '<i class="fas fa-file-alt"></i> 批量抓取';
+                progressBar.classList.add('hidden');
+                return;
+            }
+
+            if (!rag.settings?.aiApiKey) {
+                this.showToast('请先配置 AI 服务');
+                return;
+            }
+
+            const summaryStats = rag.getSummaryStats();
+            if (summaryStats.remaining === 0) {
+                this.showToast('所有书签摘要已抓取完成');
+                return;
+            }
+
+            const hasPermission = await this._requestHostPermission();
+            if (!hasPermission) {
+                this.showToast('需要网页访问权限才能抓取摘要');
+                return;
+            }
+
+            btn.innerHTML = '<i class="fas fa-stop-circle"></i> 停止抓取';
+            progressBar.classList.remove('hidden');
+
+            const result = await rag.batchExtractSummaries(({ processed, failed, total, percent }) => {
+                progressFill.style.width = percent + '%';
+                progressText.textContent = `抓取 ${processed + failed}/${total}（${percent}%）`;
+            });
+
+            btn.innerHTML = '<i class="fas fa-check-circle"></i> 抓取完成';
+            setTimeout(() => {
+                btn.innerHTML = '<i class="fas fa-file-alt"></i> 批量抓取';
+                progressBar.classList.add('hidden');
+            }, 3000);
+
+            document.getElementById('bm-list').innerHTML = this._renderBookmarkList(rag.bookmarks);
+            this._bindBookmarkListEvents(rag);
+
+            if (result.failed > 0) {
+                this.showToast(`抓取完成：${result.processed} 成功，${result.failed} 失败`, 4000);
+            } else {
+                this.showToast(`已完成 ${result.processed} 条书签的摘要抓取`);
+            }
+        });
+
+        this._bindBookmarkListEvents(rag);
+    }
+
+    async _requestHostPermission() {
+        return new Promise(resolve => {
+            if (chrome.permissions) {
+                chrome.permissions.request(
+                    { origins: ['<all_urls>'] },
+                    (granted) => resolve(granted)
+                );
+            } else {
+                resolve(false);
+            }
+        });
+    }
+
+    _renderBookmarkList(bookmarks) {
+        if (!bookmarks || bookmarks.length === 0) {
+            return '<div class="bm-empty"><i class="fas fa-bookmark" style="font-size:24px; opacity:0.3; margin-bottom:8px;"></i><span>暂无书签</span></div>';
+        }
+
+        return bookmarks.slice(0, 100).map(bm => {
+            let badge = '';
+            if (bm._matchType === 'keyword') badge = '<span class="bm-match-badge keyword">关键词</span>';
+            else if (bm._matchType === 'semantic') {
+                const pct = bm._vectorScore ? Math.round(bm._vectorScore * 100) : '';
+                badge = `<span class="bm-match-badge semantic">AI ${pct ? pct + '%' : ''}</span>`;
+            } else if (bm._matchType === 'hybrid') {
+                badge = '<span class="bm-match-badge hybrid">混合</span>';
+            }
+
+            const embeddedIcon = bm.embeddingDone ? '<i class="fas fa-brain bm-embedded-icon" title="已 Embedding"></i>' : '';
+
+            const summaryHtml = bm.summary
+                ? `<div class="bm-item-summary" title="${this._escHtml(bm.summary)}"><i class="fas fa-file-alt"></i> ${this._escHtml(bm.summary.substring(0, 50))}${bm.summary.length > 50 ? '…' : ''}</div>`
+                : '';
+
+            const extractBtn = bm.contentExtractedAt
+                ? ''
+                : `<button class="bm-item-extract-btn" data-bm-id="${bm.id}" title="抓取摘要"><i class="fas fa-download"></i></button>`;
+
+            return `
+            <div class="bm-item" data-url="${this._escHtml(bm.url)}" data-id="${bm.id}">
+                <img class="bm-item-favicon" src="https://www.google.com/s2/favicons?domain=${this._escHtml(bm.domain)}&sz=32" alt="" loading="lazy">
+                <div class="bm-item-info">
+                    <div class="bm-item-title">${this._escHtml(bm.title)} ${embeddedIcon}</div>
+                    <div class="bm-item-url">${this._escHtml(bm.domain)}</div>
+                    ${summaryHtml}
+                </div>
+                ${badge}
+                ${extractBtn}
+                <button class="bm-item-task-btn" data-bm-title="${this._escHtml(bm.title)}" data-bm-url="${this._escHtml(bm.url)}" title="转为任务">
+                    <i class="fas fa-plus-circle"></i>
+                </button>
+            </div>`;
+        }).join('');
+    }
+
+    _bindBookmarkListEvents(rag) {
+        document.querySelectorAll('#bm-list .bm-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                if (e.target.closest('.bm-item-task-btn') || e.target.closest('.bm-item-extract-btn')) return;
+                const url = item.dataset.url;
+                if (url) window.open(url, '_blank');
+            });
+        });
+
+        document.querySelectorAll('#bm-list .bm-item-task-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const title = btn.dataset.bmTitle;
+                const url = btn.dataset.bmUrl;
+                const panel = document.getElementById('bookmark-panel');
+                if (panel) panel.remove();
+                this._createTaskFromBookmark(title, url);
+            });
+        });
+
+        document.querySelectorAll('#bm-list .bm-item-extract-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const bmId = btn.dataset.bmId;
+                const ragInstance = rag || this._bookmarkRAG;
+                if (!ragInstance) return;
+
+                const bm = ragInstance.bookmarks.find(b => b.id === bmId);
+                if (!bm) return;
+
+                const hasPermission = await this._requestHostPermission();
+                if (!hasPermission) {
+                    this.showToast('需要网页访问权限才能抓取摘要');
+                    return;
+                }
+
+                const originalHtml = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                btn.disabled = true;
+
+                try {
+                    await ragInstance.extractAndSummarize(bm, (status) => {
+                        if (status === 'extracting') btn.title = '正在抓取页面...';
+                        else if (status === 'summarizing') btn.title = '正在生成摘要...';
+                        else if (status === 're-embedding') btn.title = '正在更新向量...';
+                    });
+
+                    const itemEl = btn.closest('.bm-item');
+                    const infoEl = itemEl?.querySelector('.bm-item-info');
+                    if (infoEl && bm.summary) {
+                        const existingSummary = infoEl.querySelector('.bm-item-summary');
+                        if (existingSummary) existingSummary.remove();
+                        const summaryDiv = document.createElement('div');
+                        summaryDiv.className = 'bm-item-summary';
+                        summaryDiv.title = bm.summary;
+                        summaryDiv.innerHTML = `<i class="fas fa-file-alt"></i> ${this._escHtml(bm.summary.substring(0, 50))}${bm.summary.length > 50 ? '…' : ''}`;
+                        infoEl.appendChild(summaryDiv);
+                    }
+                    btn.remove();
+                    this.showToast('摘要抓取成功');
+                } catch (err) {
+                    btn.innerHTML = originalHtml;
+                    btn.disabled = false;
+                    this.showToast(`抓取失败: ${err.message}`, 3000);
+                }
+            });
+        });
+    }
+
+    _escHtml(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    // ========== Spotlight 搜索 (Ctrl+K) ==========
+
+    toggleSpotlightSearch() {
+        const existing = document.getElementById('bm-spotlight');
+        if (existing) {
+            this._closeSpotlight();
+        } else {
+            this._openSpotlight();
+        }
+    }
+
+    async _openSpotlight() {
+        if (document.getElementById('bm-spotlight')) return;
+
+        if (!this._bookmarkRAG) {
+            this._bookmarkRAG = new BookmarkRAG();
+            await this._bookmarkRAG.init();
+        }
+        const rag = this._bookmarkRAG;
+
+        if (!rag.isConfigured()) {
+            this.showToast('请先配置书签检索（侧边栏 → 书签检索按钮）');
+            return;
+        }
+
+        const overlay = document.createElement('div');
+        overlay.className = 'bm-spotlight-overlay';
+        overlay.id = 'bm-spotlight';
+        overlay.innerHTML = `
+            <div class="bm-spotlight-box">
+                <div class="bm-spotlight-header">
+                    <i class="fas fa-search bm-spotlight-icon"></i>
+                    <input type="text" class="bm-spotlight-input" id="bm-spotlight-input"
+                        placeholder="搜索书签...（语义搜索已${rag._vectorMap.size > 0 ? '就绪' : '关闭'}）" autofocus>
+                    <span class="bm-spotlight-hint">ESC 关闭</span>
+                </div>
+                <div class="bm-spotlight-results" id="bm-spotlight-results">
+                    <div class="bm-spotlight-tip">输入关键词搜索书签，支持语义匹配</div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        const input = document.getElementById('bm-spotlight-input');
+        const results = document.getElementById('bm-spotlight-results');
+        let selectedIdx = -1;
+        let currentResults = [];
+        let currentQuery = '';
+        let searchTimeout = null;
+        let isReranking = false;
+
+        input.focus();
+
+        input.addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            const query = input.value.trim();
+            currentQuery = query;
+            if (!query) {
+                results.innerHTML = '<div class="bm-spotlight-tip">输入关键词搜索书签，支持语义匹配</div>';
+                currentResults = [];
+                selectedIdx = -1;
+                return;
+            }
+            results.innerHTML = '<div class="bm-spotlight-tip"><i class="fas fa-spinner fa-spin"></i> 搜索中...</div>';
+            searchTimeout = setTimeout(async () => {
+                currentResults = await rag.hybridSearch(query, 15);
+                selectedIdx = currentResults.length > 0 ? 0 : -1;
+                this._renderSpotlightResults(results, currentResults, selectedIdx, currentQuery);
+            }, 250);
+        });
+
+        const handleKeydown = (e) => {
+            if (e.key === 'Escape') {
+                this._closeSpotlight();
+                return;
+            }
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (currentResults.length > 0) {
+                    selectedIdx = (selectedIdx + 1) % currentResults.length;
+                    this._renderSpotlightResults(results, currentResults, selectedIdx, currentQuery);
+                }
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (currentResults.length > 0) {
+                    selectedIdx = selectedIdx <= 0 ? currentResults.length - 1 : selectedIdx - 1;
+                    this._renderSpotlightResults(results, currentResults, selectedIdx, currentQuery);
+                }
+            }
+            if (e.key === 'Enter' && currentResults.length > 0 && selectedIdx >= 0) {
+                e.preventDefault();
+                const bm = currentResults[selectedIdx];
+                if (bm?.url) window.open(bm.url, '_blank');
+                this._closeSpotlight();
+            }
+        };
+        input.addEventListener('keydown', handleKeydown);
+
+        overlay.addEventListener('click', async (e) => {
+            if (e.target === overlay) { this._closeSpotlight(); return; }
+            const rerankBtn = e.target.closest('.bm-spotlight-rerank-btn');
+            if (rerankBtn && !isReranking && currentResults.length >= 3 && currentQuery) {
+                isReranking = true;
+                rerankBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> AI 正在分析...';
+                rerankBtn.disabled = true;
+
+                try {
+                    const expandedResults = await rag.hybridSearch(currentQuery, 30);
+                    const reranked = await rag.rerank(currentQuery, expandedResults);
+                    currentResults = reranked;
+                    selectedIdx = currentResults.length > 0 ? 0 : -1;
+                    this._renderSpotlightResults(results, currentResults, selectedIdx, currentQuery, true);
+                } catch (err) {
+                    rerankBtn.innerHTML = `<i class="fas fa-exclamation-triangle"></i> 精排失败: ${err.message.slice(0, 30)}`;
+                    setTimeout(() => {
+                        rerankBtn.innerHTML = '<i class="fas fa-magic"></i> AI 精排';
+                        rerankBtn.disabled = false;
+                    }, 3000);
+                } finally {
+                    isReranking = false;
+                }
+            }
+        });
+    }
+
+    _renderSpotlightResults(container, results, selectedIdx, query, isReranked = false) {
+        if (results.length === 0) {
+            container.innerHTML = '<div class="bm-spotlight-tip">未找到匹配的书签</div>';
+            return;
+        }
+
+        let html = '';
+        let globalIdx = 0;
+
+        if (isReranked) {
+            const elapsed = results[0]?._rerankElapsed || '';
+            html += `<div class="bm-spotlight-section"><span class="bm-spotlight-section-label"><i class="fas fa-magic"></i> AI 精排结果</span>
+                <span class="bm-spotlight-rerank-info">✅ 已重排 ${results.length} 条${elapsed ? `（${elapsed}s）` : ''}</span></div>`;
+            for (const bm of results) {
+                const isSelected = globalIdx === selectedIdx;
+                html += this._renderSpotlightItem(bm, globalIdx, isSelected);
+                globalIdx++;
+            }
+        } else {
+            const keywordItems = results.filter(r => r._matchType === 'keyword');
+            const semanticItems = results.filter(r => r._matchType === 'semantic' || r._matchType === 'hybrid');
+
+            if (keywordItems.length > 0) {
+                html += `<div class="bm-spotlight-section"><span class="bm-spotlight-section-label"><i class="fas fa-font"></i> 关键词匹配 (${keywordItems.length})</span></div>`;
+                for (const bm of keywordItems) {
+                    html += this._renderSpotlightItem(bm, globalIdx, globalIdx === selectedIdx);
+                    globalIdx++;
+                }
+            }
+
+            if (semanticItems.length > 0) {
+                html += `<div class="bm-spotlight-section"><span class="bm-spotlight-section-label"><i class="fas fa-brain"></i> 语义推荐 (${semanticItems.length})</span></div>`;
+                for (const bm of semanticItems) {
+                    html += this._renderSpotlightItem(bm, globalIdx, globalIdx === selectedIdx);
+                    globalIdx++;
+                }
+            }
+
+            if (!keywordItems.length && !semanticItems.length) {
+                for (const bm of results) {
+                    html += this._renderSpotlightItem(bm, globalIdx, globalIdx === selectedIdx);
+                    globalIdx++;
+                }
+            }
+
+            if (results.length >= 3 && query) {
+                html += `<div class="bm-spotlight-rerank-bar">
+                    <button class="bm-spotlight-rerank-btn"><i class="fas fa-magic"></i> AI 精排</button>
+                    <span class="bm-spotlight-rerank-desc">使用 LLM 智能重排序结果</span>
+                </div>`;
+            }
+        }
+
+        container.innerHTML = html;
+
+        container.querySelectorAll('.bm-spotlight-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                if (e.target.closest('.bm-spotlight-task-btn')) return;
+                const url = item.dataset.url;
+                if (url) window.open(url, '_blank');
+                this._closeSpotlight();
+            });
+        });
+
+        container.querySelectorAll('.bm-spotlight-task-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const title = btn.dataset.bmTitle;
+                const url = btn.dataset.bmUrl;
+                this._closeSpotlight();
+                this._createTaskFromBookmark(title, url);
+            });
+        });
+
+        const sel = container.querySelector('.bm-spotlight-item.selected');
+        if (sel) sel.scrollIntoView({ block: 'nearest' });
+    }
+
+    _renderSpotlightItem(bm, idx, isSelected) {
+        let badge = '';
+        if (bm._matchType === 'reranked') {
+            const score = bm._rerankScore ? `${bm._rerankScore}` : '';
+            badge = `<span class="bm-spotlight-badge reranked">${score ? score + '分' : '✨'}</span>`;
+        } else if (bm._matchType === 'semantic' || bm._matchType === 'hybrid') {
+            const pct = bm._vectorScore ? Math.round(bm._vectorScore * 100) + '%' : '';
+            badge = `<span class="bm-spotlight-badge semantic">${pct || 'AI'}</span>`;
+        }
+
+        const summaryLine = bm.summary
+            ? `<div class="bm-spotlight-item-summary">${this._escHtml(bm.summary.substring(0, 60))}${bm.summary.length > 60 ? '…' : ''}</div>`
+            : '';
+        const reasonLine = bm._rerankReason
+            ? `<div class="bm-spotlight-item-reason"><i class="fas fa-lightbulb"></i> ${this._escHtml(bm._rerankReason)}</div>`
+            : '';
+
+        return `
+        <div class="bm-spotlight-item ${isSelected ? 'selected' : ''}" data-idx="${idx}" data-url="${this._escHtml(bm.url)}">
+            <img class="bm-spotlight-favicon" src="https://www.google.com/s2/favicons?domain=${this._escHtml(bm.domain)}&sz=32" alt="">
+            <div class="bm-spotlight-item-info">
+                <div class="bm-spotlight-item-title">${this._escHtml(bm.title)}</div>
+                <div class="bm-spotlight-item-url">${this._escHtml(bm.domain)}</div>
+                ${summaryLine}
+                ${reasonLine}
+            </div>
+            ${badge}
+            <button class="bm-spotlight-task-btn" data-bm-title="${this._escHtml(bm.title)}" data-bm-url="${this._escHtml(bm.url)}" title="转为任务">
+                <i class="fas fa-plus-circle"></i>
+            </button>
+        </div>`;
+    }
+
+    _closeSpotlight() {
+        const el = document.getElementById('bm-spotlight');
+        if (el) el.remove();
+    }
+
+    /**
+     * 书签配置向导
+     */
+    async showBookmarkWizard() {
+        const existing = document.getElementById('bookmark-wizard-panel');
+        if (existing) existing.remove();
+
+        if (!this._bookmarkRAG) {
+            this._bookmarkRAG = new BookmarkRAG();
+            await this._bookmarkRAG.init();
+        }
+
+        const rag = this._bookmarkRAG;
+        let wizardStep = 1;
+
+        const panel = document.createElement('div');
+        panel.className = 'about-panel active';
+        panel.id = 'bookmark-wizard-panel';
+        panel.innerHTML = `
+            <div class="about-overlay"></div>
+            <div class="about-content" style="max-width: 480px;">
+                <div class="about-header">
+                    <h3><i class="fas fa-magic" style="margin-right: 8px; opacity: 0.6;"></i>书签检索配置</h3>
+                    <button class="about-close" id="bm-wizard-close"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="about-body" style="padding: 20px;">
+                    <!-- 步骤指示器 -->
+                    <div class="bm-wizard-steps">
+                        <div class="bm-wizard-step active" data-step="1">
+                            <div class="bm-wizard-step-dot">1</div>
+                            <span class="bm-wizard-step-label">AI 服务</span>
+                        </div>
+                        <div class="bm-wizard-step-line"></div>
+                        <div class="bm-wizard-step" data-step="2">
+                            <div class="bm-wizard-step-dot">2</div>
+                            <span class="bm-wizard-step-label">API 密钥</span>
+                        </div>
+                        <div class="bm-wizard-step-line"></div>
+                        <div class="bm-wizard-step" data-step="3">
+                            <div class="bm-wizard-step-dot">3</div>
+                            <span class="bm-wizard-step-label">书签目录</span>
+                        </div>
+                    </div>
+
+                    <!-- Step 1: 选择 AI 服务 -->
+                    <div class="bm-wizard-panel active" id="bm-wiz-step1">
+                        <div class="bm-wizard-title">选择 AI 服务商</div>
+                        <div class="bm-provider-grid" id="bm-provider-grid">
+                            ${Object.entries(rag.AI_PROVIDERS).map(([key, p]) => `
+                                <div class="bm-provider-card ${rag.settings.aiProvider === key ? 'selected' : ''}" data-provider="${key}">
+                                    <div class="bm-provider-name">${p.name}</div>
+                                    <div class="bm-provider-desc">${p.desc}</div>
+                                    <div class="bm-provider-price">${p.pricing}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <!-- Step 2: 输入 API Key -->
+                    <div class="bm-wizard-panel" id="bm-wiz-step2">
+                        <div class="bm-wizard-title">配置 API 密钥</div>
+                        <div class="form-group" style="margin-bottom:12px;">
+                            <label style="display:block; font-size:12px; color:rgba(255,255,255,0.5); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;">API Key</label>
+                            <input type="password" id="bm-api-key-input" class="bm-wizard-input" placeholder="sk-..." value="${rag.settings.aiApiKey || ''}">
+                        </div>
+                        <div class="form-group" id="bm-custom-url-group" style="display:none; margin-bottom:12px;">
+                            <label style="display:block; font-size:12px; color:rgba(255,255,255,0.5); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;">API 地址</label>
+                            <input type="url" id="bm-api-url-input" class="bm-wizard-input" placeholder="https://api.example.com/v1" value="${rag.settings.aiBaseUrl || ''}">
+                        </div>
+                        <div class="form-group" id="bm-custom-model-group" style="display:none; margin-bottom:12px;">
+                            <label style="display:block; font-size:12px; color:rgba(255,255,255,0.5); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;">模型名称</label>
+                            <input type="text" id="bm-model-input" class="bm-wizard-input" placeholder="模型名称">
+                        </div>
+                        <div class="bm-key-actions">
+                            <a href="#" id="bm-get-key-link" target="_blank" class="bm-key-link"><i class="fas fa-external-link-alt"></i> 获取 API Key</a>
+                            <button class="bm-verify-btn" id="bm-verify-btn"><i class="fas fa-check-circle"></i> 验证连通性</button>
+                        </div>
+                        <div class="bm-verify-result hidden" id="bm-verify-result"></div>
+                    </div>
+
+                    <!-- Step 3: 选择书签目录 -->
+                    <div class="bm-wizard-panel" id="bm-wiz-step3">
+                        <div class="bm-wizard-title">选择书签目录</div>
+                        <div class="bm-folder-list" id="bm-folder-list">
+                            <div style="text-align:center; padding:20px; color:rgba(255,255,255,0.4);">
+                                <i class="fas fa-spinner fa-spin"></i> 加载书签目录...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 底部按钮 -->
+                <div class="bm-wizard-footer">
+                    <button class="btn-cancel" id="bm-wiz-prev" style="visibility:hidden;">
+                        <i class="fas fa-arrow-left" style="margin-right:4px;"></i> 上一步
+                    </button>
+                    <button class="btn-save" id="bm-wiz-next">
+                        下一步 <i class="fas fa-arrow-right" style="margin-left:4px;"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(panel);
+
+        let selectedProvider = rag.settings.aiProvider || '';
+        let selectedFolders = new Set(rag.settings.folderIds || []);
+
+        const updateSteps = () => {
+            panel.querySelectorAll('.bm-wizard-step').forEach(s => {
+                const step = parseInt(s.dataset.step);
+                s.classList.toggle('active', step === wizardStep);
+                s.classList.toggle('done', step < wizardStep);
+                if (step < wizardStep) {
+                    s.querySelector('.bm-wizard-step-dot').innerHTML = '<i class="fas fa-check"></i>';
+                } else {
+                    s.querySelector('.bm-wizard-step-dot').textContent = step;
+                }
+            });
+            panel.querySelectorAll('.bm-wizard-panel').forEach(p => p.classList.remove('active'));
+            const activePanel = document.getElementById(`bm-wiz-step${wizardStep}`);
+            if (activePanel) activePanel.classList.add('active');
+
+            const prevBtn = document.getElementById('bm-wiz-prev');
+            const nextBtn = document.getElementById('bm-wiz-next');
+            prevBtn.style.visibility = wizardStep > 1 ? 'visible' : 'hidden';
+            if (wizardStep === 3) {
+                nextBtn.innerHTML = '<i class="fas fa-check" style="margin-right:4px;"></i> 完成';
+            } else {
+                nextBtn.innerHTML = '下一步 <i class="fas fa-arrow-right" style="margin-left:4px;"></i>';
+            }
+        };
+
+        // Provider 选择
+        panel.querySelectorAll('.bm-provider-card').forEach(card => {
+            card.addEventListener('click', () => {
+                panel.querySelectorAll('.bm-provider-card').forEach(c => c.classList.remove('selected'));
+                card.classList.add('selected');
+                selectedProvider = card.dataset.provider;
+
+                const isCustom = selectedProvider === 'custom';
+                const urlGroup = document.getElementById('bm-custom-url-group');
+                const modelGroup = document.getElementById('bm-custom-model-group');
+                if (urlGroup) urlGroup.style.display = isCustom ? 'block' : 'none';
+                if (modelGroup) modelGroup.style.display = isCustom ? 'block' : 'none';
+
+                const keyLink = document.getElementById('bm-get-key-link');
+                const provider = rag.AI_PROVIDERS[selectedProvider];
+                if (keyLink && provider?.keyUrl) {
+                    keyLink.href = provider.keyUrl;
+                    keyLink.style.display = '';
+                } else if (keyLink) {
+                    keyLink.style.display = 'none';
+                }
+            });
+        });
+
+        // 验证按钮
+        document.getElementById('bm-verify-btn').addEventListener('click', async () => {
+            const apiKey = document.getElementById('bm-api-key-input').value.trim();
+            const baseUrl = document.getElementById('bm-api-url-input')?.value.trim() || '';
+            const resultEl = document.getElementById('bm-verify-result');
+
+            resultEl.classList.remove('hidden');
+            resultEl.className = 'bm-verify-result verifying';
+            resultEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 验证中...';
+
+            const result = await rag.verifyApiKey(selectedProvider, apiKey, baseUrl);
+            if (result.ok) {
+                resultEl.className = 'bm-verify-result success';
+                resultEl.innerHTML = '<i class="fas fa-check-circle"></i> 连接成功！';
+            } else {
+                resultEl.className = 'bm-verify-result error';
+                resultEl.innerHTML = `<i class="fas fa-times-circle"></i> ${result.error}`;
+            }
+        });
+
+        // 导航
+        document.getElementById('bm-wiz-prev').addEventListener('click', () => {
+            if (wizardStep > 1) { wizardStep--; updateSteps(); }
+        });
+
+        document.getElementById('bm-wiz-next').addEventListener('click', async () => {
+            if (wizardStep === 1) {
+                if (!selectedProvider) {
+                    this.showToast('请选择一个 AI 服务商');
+                    return;
+                }
+                wizardStep = 2;
+                updateSteps();
+
+                const isCustom = selectedProvider === 'custom';
+                const urlGroup = document.getElementById('bm-custom-url-group');
+                const modelGroup = document.getElementById('bm-custom-model-group');
+                if (urlGroup) urlGroup.style.display = isCustom ? 'block' : 'none';
+                if (modelGroup) modelGroup.style.display = isCustom ? 'block' : 'none';
+
+                const keyLink = document.getElementById('bm-get-key-link');
+                const provider = rag.AI_PROVIDERS[selectedProvider];
+                if (keyLink && provider?.keyUrl) {
+                    keyLink.href = provider.keyUrl;
+                    keyLink.style.display = '';
+                } else if (keyLink) {
+                    keyLink.style.display = 'none';
+                }
+            } else if (wizardStep === 2) {
+                const apiKey = document.getElementById('bm-api-key-input').value.trim();
+                if (!apiKey) {
+                    this.showToast('请输入 API Key');
+                    return;
+                }
+                wizardStep = 3;
+                updateSteps();
+
+                // 请求书签权限并加载目录
+                const hasPermission = await rag.hasBookmarkPermission();
+                if (!hasPermission) {
+                    const granted = await rag.requestBookmarkPermission();
+                    if (!granted) {
+                        this.showToast('需要书签权限才能使用此功能');
+                        wizardStep = 2;
+                        updateSteps();
+                        return;
+                    }
+                }
+
+                const folders = await rag.getBookmarkFolders();
+                const folderList = document.getElementById('bm-folder-list');
+                if (folders.length === 0) {
+                    folderList.innerHTML = '<div style="text-align:center; padding:20px; color:rgba(255,255,255,0.4);">未找到书签文件夹</div>';
+                } else {
+                    folderList.innerHTML = folders.map(f => `
+                        <div class="bm-folder-item ${selectedFolders.has(f.id) ? 'selected' : ''}" data-folder-id="${f.id}" style="padding-left: ${12 + f.depth * 16}px;">
+                            <div class="bm-folder-check"><i class="fas ${selectedFolders.has(f.id) ? 'fa-check-square' : 'fa-square'}"></i></div>
+                            <i class="fas fa-folder bm-folder-icon"></i>
+                            <div class="bm-folder-info">
+                                <span class="bm-folder-name">${this._escHtml(f.title)}</span>
+                                <span class="bm-folder-count">${f.totalBookmarks} 个书签</span>
+                            </div>
+                        </div>
+                    `).join('');
+
+                    folderList.querySelectorAll('.bm-folder-item').forEach(item => {
+                        item.addEventListener('click', () => {
+                            const fid = item.dataset.folderId;
+                            if (selectedFolders.has(fid)) {
+                                selectedFolders.delete(fid);
+                                item.classList.remove('selected');
+                                item.querySelector('.bm-folder-check i').className = 'fas fa-square';
+                            } else {
+                                selectedFolders.add(fid);
+                                item.classList.add('selected');
+                                item.querySelector('.bm-folder-check i').className = 'fas fa-check-square';
+                            }
+                        });
+                    });
+                }
+            } else if (wizardStep === 3) {
+                if (selectedFolders.size === 0) {
+                    this.showToast('请至少选择一个书签文件夹');
+                    return;
+                }
+
+                const apiKey = document.getElementById('bm-api-key-input').value.trim();
+                const baseUrl = document.getElementById('bm-api-url-input')?.value.trim() || '';
+                const model = document.getElementById('bm-model-input')?.value.trim() || '';
+                const provider = rag.AI_PROVIDERS[selectedProvider];
+
+                const folders = await rag.getBookmarkFolders();
+                const selectedNames = folders.filter(f => selectedFolders.has(f.id)).map(f => f.title);
+
+                await rag.saveSettings({
+                    enabled: true,
+                    aiProvider: selectedProvider,
+                    aiApiKey: apiKey,
+                    aiBaseUrl: baseUrl || provider.baseUrl,
+                    aiModel: model || provider.defaultModel,
+                    embeddingModel: provider.embeddingModel,
+                    folderIds: Array.from(selectedFolders),
+                    folderNames: selectedNames
+                });
+
+                await rag.syncBookmarks();
+                rag.startWatching();
+
+                panel.remove();
+                this.showToast(`已配置 ${selectedNames.join('、')}，共 ${rag.bookmarks.length} 条书签`, 3000);
+                this.showBookmarkPanel();
+            }
+        });
+
+        // 关闭
+        document.getElementById('bm-wizard-close').addEventListener('click', () => panel.remove());
+        panel.querySelector('.about-overlay').addEventListener('click', () => panel.remove());
+    }
+
     // ==================== 关于与帮助面板 ====================
 
     /**
@@ -3908,6 +4851,10 @@ class MemoManager {
                             <div class="shortcut-item">
                                 <kbd>Enter</kbd>
                                 <span>编辑选中的任务</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>Ctrl</kbd> + <kbd>K</kbd>
+                                <span>书签智能搜索（Spotlight）</span>
                             </div>
                             <div class="shortcut-item">
                                 <kbd>Esc</kbd>
@@ -4650,7 +5597,8 @@ class MemoManager {
         const tEnd = task.dueDate || tStart;
         const pCfg = this.priorityConfig?.[task.priority] || { label: '', icon: '' };
         const priorityLabel = { high: '高', medium: '中', low: '低', none: '无' }[task.priority] || '';
-        const statusText = task.completed ? '✅ 已完成' : '○ 进行中';
+        const statusInfo = this.getTaskStatus(task);
+        const statusText = `<i class="${statusInfo.icon}" style="color:${statusInfo.color}"></i> ${statusInfo.label}`;
         const durationInfo = tStart !== tEnd ? ` (${this.calcWorkdays(tStart, tEnd)} 工作日)` : '';
         tip.innerHTML = `
             <div class="wk-tip-title">${this.escapeHtml(task.title || '')}</div>
@@ -6394,8 +7342,58 @@ class MemoManager {
             this.tempSubtasks = [];
         }
         
+        // 重置到第一个标签页
+        document.querySelectorAll('.sidebar-form-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.sidebar-form-tab-panel').forEach(p => p.classList.remove('active'));
+        const firstTab = document.querySelector('.sidebar-form-tab[data-form-tab="basic"]');
+        const firstPanel = document.getElementById('form-tab-basic');
+        if (firstTab) firstTab.classList.add('active');
+        if (firstPanel) firstPanel.classList.add('active');
+        
+        // 更新底部状态区
+        this._updateFormStatusBar(task);
+        
         modal.classList.remove('hidden');
         titleInput.focus();
+    }
+    
+    /**
+     * 更新表单底部状态区（显示当前状态徽章和优先级标签）
+     */
+    _updateFormStatusBar(task) {
+        const statusArea = document.getElementById('sidebar-form-status');
+        if (!statusArea) return;
+        
+        if (!task) {
+            statusArea.innerHTML = '';
+            return;
+        }
+        
+        let statusClass = 'not-started';
+        let statusText = '未开始';
+        let statusIcon = 'far fa-clock';
+        
+        if (task.completed) {
+            statusClass = 'completed';
+            statusText = '已完成';
+            statusIcon = 'fas fa-check-circle';
+        } else if (task.dueDate && new Date(task.dueDate) < new Date()) {
+            statusClass = 'overdue';
+            statusText = '已逾期';
+            statusIcon = 'fas fa-exclamation-circle';
+        } else if (task.progress > 0) {
+            statusClass = 'in-progress';
+            statusText = '进行中';
+            statusIcon = 'fas fa-spinner';
+        }
+        
+        const priorityMap = { high: '高', medium: '中', low: '低' };
+        const priorityLabel = priorityMap[task.priority];
+        
+        statusArea.innerHTML = `
+            <span class="form-status-badge ${statusClass}"><i class="${statusIcon}"></i> ${statusText}</span>
+            ${priorityLabel ? `<span class="form-priority-chip"><span class="priority-dot ${task.priority}"></span> ${priorityLabel}优先级</span>` : ''}
+        `;
     }
     
     /**
@@ -6950,6 +7948,28 @@ class MemoManager {
     }
     
     /**
+     * 获取任务的精确状态（基于完成态、开始/截止日期与当前日期的关系）
+     * @param {Object} task
+     * @returns {{ key: string, label: string, icon: string, color: string }}
+     */
+    getTaskStatus(task) {
+        if (task.completed) {
+            return { key: 'completed', label: '已完成', icon: 'fas fa-check-circle', color: '#2ed573' };
+        }
+        const today = this.getTodayDate();
+        const start = task.startDate || this.formatDateFromTimestamp(task.createdAt);
+        const end = task.dueDate;
+
+        if (end && end < today) {
+            return { key: 'overdue', label: '已逾期', icon: 'fas fa-exclamation-circle', color: '#ff4757' };
+        }
+        if (start > today) {
+            return { key: 'not_started', label: '未开始', icon: 'far fa-clock', color: '#a0a0a0' };
+        }
+        return { key: 'in_progress', label: '进行中', icon: 'fas fa-spinner', color: '#ffa502' };
+    }
+
+    /**
      * 获取任务的有效开始日期 key（优先 startDate，否则用 createdAt）
      */
     getTaskStartKey(task) {
@@ -7016,6 +8036,16 @@ class MemoManager {
             modal.classList.add('hidden');
             delete modal.dataset.taskId;
         }
+        // 重置标签页到第一页
+        document.querySelectorAll('.sidebar-form-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.sidebar-form-tab-panel').forEach(p => p.classList.remove('active'));
+        const firstTab = document.querySelector('.sidebar-form-tab[data-form-tab="basic"]');
+        const firstPanel = document.getElementById('form-tab-basic');
+        if (firstTab) firstTab.classList.add('active');
+        if (firstPanel) firstPanel.classList.add('active');
+        // 清空底部状态
+        const statusArea = document.getElementById('sidebar-form-status');
+        if (statusArea) statusArea.innerHTML = '';
         // 清空临时图片
         this.tempImages = [];
         const previewList = document.getElementById('image-preview-list');
@@ -9909,6 +10939,7 @@ class MemoManager {
             this.shortcuts = [
                 { key: 'n', ctrlKey: true, action: this.showTaskFormModal.bind(this), description: 'shortcutAdd' },
                 { key: 'h', ctrlKey: true, action: this.toggleMinimize.bind(this), description: 'shortcutTogglePanel' },
+                { key: 'k', ctrlKey: true, action: this.toggleSpotlightSearch.bind(this), description: 'shortcutBookmarkSearch' },
                 { key: '?', ctrlKey: true, action: this.showShortcutsHelp.bind(this), description: 'shortcutHelp' }
             ];
             
@@ -9927,9 +10958,14 @@ class MemoManager {
      */
     handleKeyDown(event) {
         try {
-            // 如果是在输入框中，不处理快捷键
+            // Ctrl+K 全局书签搜索，即使在输入框中也能触发
+            if (event.key === 'k' && (event.ctrlKey || event.metaKey)) {
+                event.preventDefault();
+                this.toggleSpotlightSearch();
+                return;
+            }
+
             if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
-                // 表单中的特殊快捷键处理
                 if (this.isFormVisible) {
                     if (event.key === 'Escape') {
                         console.log('表单中按下ESC键，关闭表单');
@@ -10956,6 +11992,216 @@ class MemoManager {
         setTimeout(() => {
             if (miniBar) miniBar.classList.remove('urgent-mini-rotating');
         }, 400);
+    }
+
+    // ==================== 今日推荐阅读 ====================
+
+    async initReadingRecommendation() {
+        const wrapper = document.getElementById('reading-reco-wrapper');
+        if (!wrapper) return;
+
+        if (!this._bookmarkRAG) {
+            this._bookmarkRAG = new BookmarkRAG();
+            await this._bookmarkRAG.init();
+        }
+
+        const rag = this._bookmarkRAG;
+        if (!rag.isConfigured()) return;
+
+        const reviewQueue = rag.getTodayReview();
+        const unreviewed = rag.getUnreviewed(5);
+
+        const hasReviewItems = reviewQueue.length > 0 || unreviewed.length > 0;
+        if (!hasReviewItems) return;
+
+        wrapper.style.display = '';
+        this._renderReadingRecommendation(reviewQueue, unreviewed);
+        this._bindReadingRecoEvents();
+    }
+
+    _renderReadingRecommendation(reviewQueue, unreviewed) {
+        const body = document.getElementById('reading-reco-body');
+        const countEl = document.getElementById('reading-reco-count');
+        if (!body) return;
+
+        const totalDue = reviewQueue.length;
+        if (countEl) {
+            countEl.textContent = totalDue > 0 ? `${totalDue} 条待复习` : `${unreviewed.length} 条新书签`;
+        }
+
+        if (reviewQueue.length === 0 && unreviewed.length === 0) {
+            body.innerHTML = `<div class="reco-empty"><i class="fas fa-check-circle"></i><span>今日复习已完成</span></div>`;
+            return;
+        }
+
+        let html = '';
+
+        if (reviewQueue.length > 0) {
+            for (const bm of reviewQueue) {
+                html += this._renderRecoCard(bm, true);
+            }
+        }
+
+        if (unreviewed.length > 0 && reviewQueue.length === 0) {
+            html += `<div style="padding: 6px 12px; font-size: 11px; color: rgba(255,255,255,0.35);">
+                <i class="fas fa-lightbulb" style="margin-right: 4px;"></i>以下书签尚未加入复习计划
+            </div>`;
+            for (const bm of unreviewed) {
+                html += this._renderRecoCard(bm, false);
+            }
+            html += `<div style="text-align: center; padding: 8px;">
+                <button class="reco-enable-btn" id="reco-enable-review-btn">
+                    <i class="fas fa-play-circle" style="margin-right: 4px;"></i>启用间隔复习
+                </button>
+            </div>`;
+        }
+
+        body.innerHTML = html;
+    }
+
+    _renderRecoCard(bm, isReview) {
+        const templateName = bm.srs?.template
+            ? (BookmarkSRS.TEMPLATES[bm.srs.template]?.name || '默认')
+            : '';
+        const nextReview = bm.srs ? BookmarkSRS.formatNextReview(bm.srs.nextReview) : '';
+        const lastReview = bm.srs ? BookmarkSRS.formatLastReview(bm.srs.lastReview) : '';
+
+        const feedbackBtns = isReview ? `
+            <div class="reco-card-actions">
+                <button class="reco-feedback-btn fb-archive" data-quality="0" data-bm-id="${bm.id}" title="归档"><i class="fas fa-box-archive"></i></button>
+                <button class="reco-feedback-btn fb-again" data-quality="1" data-bm-id="${bm.id}" title="不熟"><i class="fas fa-rotate-left"></i></button>
+                <button class="reco-feedback-btn fb-later" data-quality="2" data-bm-id="${bm.id}" title="稍后"><i class="fas fa-clock"></i></button>
+                <button class="reco-feedback-btn fb-good" data-quality="3" data-bm-id="${bm.id}" title="已读"><i class="fas fa-check"></i></button>
+                <button class="reco-card-task-btn" data-bm-title="${this._escHtml(bm.title)}" data-bm-url="${this._escHtml(bm.url)}" title="转为任务"><i class="fas fa-plus-circle"></i></button>
+            </div>
+        ` : `
+            <div class="reco-card-actions">
+                <button class="reco-card-task-btn" data-bm-title="${this._escHtml(bm.title)}" data-bm-url="${this._escHtml(bm.url)}" title="转为任务"><i class="fas fa-plus-circle"></i></button>
+            </div>
+        `;
+
+        const metaInfo = isReview
+            ? `<span>${lastReview !== '从未' ? '上次: ' + lastReview : '首次复习'}</span>`
+            : `<span>${this._escHtml(bm.domain)}</span>`;
+
+        return `
+        <div class="reco-card" data-bm-id="${bm.id}" data-url="${this._escHtml(bm.url)}">
+            <img class="reco-card-favicon" src="https://www.google.com/s2/favicons?domain=${this._escHtml(bm.domain)}&sz=32" alt="" loading="lazy">
+            <div class="reco-card-info">
+                <div class="reco-card-title">${this._escHtml(bm.title)}</div>
+                <div class="reco-card-meta">
+                    ${metaInfo}
+                    ${templateName ? `<span class="reco-card-template">${templateName}</span>` : ''}
+                </div>
+            </div>
+            ${feedbackBtns}
+        </div>`;
+    }
+
+    _bindReadingRecoEvents() {
+        const toggle = document.getElementById('reading-reco-toggle');
+        const body = document.getElementById('reading-reco-body');
+        if (toggle && body) {
+            toggle.addEventListener('click', () => {
+                body.classList.toggle('collapsed');
+                const icon = toggle.querySelector('i');
+                if (icon) {
+                    icon.className = body.classList.contains('collapsed')
+                        ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+                }
+            });
+        }
+
+        this._bindRecoCardEvents();
+
+        const enableBtn = document.getElementById('reco-enable-review-btn');
+        if (enableBtn) {
+            enableBtn.addEventListener('click', async () => {
+                const rag = this._bookmarkRAG;
+                if (!rag) return;
+                const count = await rag.enableReview('regular');
+                this.showToast(`已为 ${count} 条书签启用间隔复习`);
+                const queue = rag.getTodayReview();
+                const unreviewed = rag.getUnreviewed(5);
+                this._renderReadingRecommendation(queue, unreviewed);
+                this._bindRecoCardEvents();
+            });
+        }
+    }
+
+    _bindRecoCardEvents() {
+        const body = document.getElementById('reading-reco-body');
+        if (!body) return;
+
+        body.querySelectorAll('.reco-card').forEach(card => {
+            card.addEventListener('click', (e) => {
+                if (e.target.closest('.reco-feedback-btn') || e.target.closest('.reco-card-task-btn')) return;
+                const url = card.dataset.url;
+                if (url) window.open(url, '_blank');
+            });
+        });
+
+        body.querySelectorAll('.reco-feedback-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const bmId = btn.dataset.bmId;
+                const quality = parseInt(btn.dataset.quality, 10);
+                await this._handleReviewFeedback(bmId, quality, btn.closest('.reco-card'));
+            });
+        });
+
+        body.querySelectorAll('.reco-card-task-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this._createTaskFromBookmark(btn.dataset.bmTitle, btn.dataset.bmUrl);
+            });
+        });
+    }
+
+    async _handleReviewFeedback(bookmarkId, quality, cardEl) {
+        const rag = this._bookmarkRAG;
+        if (!rag) return;
+
+        const result = await rag.reviewBookmark(bookmarkId, quality);
+        if (!result) return;
+
+        const meta = BookmarkSRS.QUALITY_META[quality];
+        if (meta) {
+            this.showToast(`${meta.label}：${BookmarkSRS.formatNextReview(result.srs?.nextReview)}`);
+        }
+
+        if (cardEl) {
+            cardEl.classList.add('dismissing');
+            cardEl.addEventListener('animationend', () => {
+                cardEl.remove();
+                this._updateRecoCount();
+            }, { once: true });
+        }
+    }
+
+    _updateRecoCount() {
+        const body = document.getElementById('reading-reco-body');
+        const countEl = document.getElementById('reading-reco-count');
+        if (!body || !countEl) return;
+
+        const remaining = body.querySelectorAll('.reco-card:not(.dismissing)').length;
+        if (remaining === 0) {
+            body.innerHTML = `<div class="reco-empty"><i class="fas fa-check-circle"></i><span>今日复习已完成</span></div>`;
+            countEl.textContent = '已完成';
+        } else {
+            countEl.textContent = `${remaining} 条待复习`;
+        }
+    }
+
+    _createTaskFromBookmark(title, url) {
+        this.showSidebarForm(null, {});
+        setTimeout(() => {
+            const titleInput = document.getElementById('sidebar-task-title');
+            if (titleInput) titleInput.value = `阅读: ${title || ''}`;
+            const textInput = document.getElementById('sidebar-task-text');
+            if (textInput) textInput.value = url || '';
+        }, 100);
+        this.showToast('已填入书签信息，请确认保存');
     }
 }
 

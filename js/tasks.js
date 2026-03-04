@@ -459,10 +459,7 @@ class TaskManager {
                 <div class="card-meta">
                     <div class="card-tags">
                         ${task.categoryId ? `<span class="category-tag"><i class="fas fa-folder"></i> ${this.escapeHtml(this.getCategoryName(task.categoryId))}</span>` : ''}
-                        <span class="category-tag">
-                            <i class="${task.completed ? 'fas fa-check-circle' : 'far fa-clock'}"></i>
-                            ${task.completed ? '已完成' : '进行中'}
-                        </span>
+                        ${(() => { const s = this.getTaskStatus(task); return `<span class="category-tag" style="color:${s.color}"><i class="${s.icon}"></i> ${s.label}</span>`; })()}
                     </div>
                     <span class="card-date">
                         ${task.startDate && task.dueDate ? `${task.startDate.substring(5)} → ${task.dueDate.substring(5)}` : task.dueDate ? `截止: ${task.dueDate}` : this.formatDate(task.createdAt)}
@@ -692,7 +689,7 @@ class TaskManager {
                 </div>
                 <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                     ${this.renderPriorityBadge(task.priority)}
-                    <span class="category-tag">${task.completed ? '<i class="fas fa-check"></i> 已完成' : '<i class="far fa-clock"></i> 进行中'}</span>
+                    ${(() => { const s = this.getTaskStatus(task); return `<span class="category-tag" style="color:${s.color}"><i class="${s.icon}"></i> ${s.label}</span>`; })()}
                     <span class="category-tag"><i class="fas fa-calendar-alt"></i> ${ageText}</span>
                 </div>
             </div>
@@ -1395,6 +1392,23 @@ class TaskManager {
             return `https://www.meczyc6.info/imgvault/api/v1/images/${img.imageId}/download`;
         }
         return img.fullImage || img.thumbnail || '';
+    }
+
+    getTaskStatus(task) {
+        if (task.completed) {
+            return { key: 'completed', label: '已完成', icon: 'fas fa-check-circle', color: '#2ed573' };
+        }
+        const today = new Date().toISOString().split('T')[0];
+        const start = task.startDate || new Date(task.createdAt).toISOString().split('T')[0];
+        const end = task.dueDate;
+
+        if (end && end < today) {
+            return { key: 'overdue', label: '已逾期', icon: 'fas fa-exclamation-circle', color: '#ff4757' };
+        }
+        if (start > today) {
+            return { key: 'not_started', label: '未开始', icon: 'far fa-clock', color: '#a0a0a0' };
+        }
+        return { key: 'in_progress', label: '进行中', icon: 'fas fa-spinner', color: '#ffa502' };
     }
 
     calcDuration(startStr, endStr) {
