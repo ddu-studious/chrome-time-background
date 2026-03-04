@@ -273,7 +273,10 @@ class BookmarkRAG {
         for (const bm of this.bookmarks) {
             if (bm.status !== 'active') continue;
 
-            const searchText = `${bm.title} ${bm.domain} ${(bm.aiTags || []).join(' ')}`.toLowerCase();
+            const summaryText = (bm.summary || '').toLowerCase();
+            const contentTagsText = (bm.contentTags || []).join(' ').toLowerCase();
+            const descText = (bm.pageDescription || '').toLowerCase();
+            const searchText = `${bm.title} ${bm.domain} ${(bm.aiTags || []).join(' ')} ${summaryText} ${contentTagsText} ${descText}`.toLowerCase();
             let score = 0;
             let matched = false;
 
@@ -281,8 +284,11 @@ class BookmarkRAG {
                 if (searchText.includes(term)) {
                     matched = true;
                     if (bm.title.toLowerCase().includes(term)) score += 10;
+                    if (summaryText.includes(term)) score += 6;
                     if (bm.domain.toLowerCase().includes(term)) score += 5;
+                    if ((bm.contentTags || []).some(t => t.toLowerCase().includes(term))) score += 4;
                     if ((bm.aiTags || []).some(t => t.toLowerCase().includes(term))) score += 3;
+                    if (descText.includes(term)) score += 2;
                 } else {
                     score -= 5;
                 }
