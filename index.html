@@ -126,6 +126,30 @@
         </main>
     </div>
     
+    <!-- 紧急任务浮动提醒气泡 -->
+    <div class="urgent-bubble" id="urgent-bubble" style="display:none;">
+        <!-- 悬浮简易摘要条（收缩状态时显示） -->
+        <div class="urgent-mini-bar" id="urgent-mini-bar">
+            <span class="urgent-mini-dot"></span>
+            <span class="urgent-mini-text" id="urgent-mini-text"></span>
+        </div>
+        <div class="urgent-bubble-dot" id="urgent-bubble-dot">
+            <span class="urgent-bubble-ring"></span>
+            <span class="urgent-bubble-num" id="urgent-bubble-num">0</span>
+        </div>
+        <div class="urgent-bubble-panel" id="urgent-bubble-panel">
+            <div class="urgent-panel-header">
+                <i class="fas fa-fire urgent-panel-icon"></i>
+                <span class="urgent-panel-title" id="urgent-panel-title">任务需要关注</span>
+                <button class="urgent-panel-close" id="urgent-panel-close">&times;</button>
+            </div>
+            <div class="urgent-panel-body" id="urgent-panel-body"></div>
+            <div class="urgent-panel-footer">
+                <a href="tasks.html" class="urgent-panel-link">查看全部任务 <i class="fas fa-arrow-right"></i></a>
+            </div>
+        </div>
+    </div>
+
     <!-- 底部信息 -->
     <div class="background-credit" id="background-credit">
         长城 - 慕田峪长城

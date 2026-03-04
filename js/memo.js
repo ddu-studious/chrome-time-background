@@ -396,6 +396,9 @@ class MemoManager {
             <button class="sidebar-tool-btn" id="sidebar-calendar-btn" title="日历 / 回看完成">
                 <i class="fas fa-calendar-days"></i>
             </button>
+            <button class="sidebar-tool-btn" id="sidebar-weekly-btn" title="周回顾">
+                <i class="fas fa-calendar-week"></i>
+            </button>
             <button class="sidebar-tool-btn" id="sidebar-backup-btn" title="备份与恢复">
                 <i class="fas fa-cloud-download-alt"></i>
             </button>
@@ -488,6 +491,15 @@ class MemoManager {
                                 <label for="sidebar-task-due">截止日期</label>
                                 <input type="date" id="sidebar-task-due">
                             </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="sidebar-task-start">开始日期 <span style="opacity:0.5;font-size:0.75em;">可选</span></label>
+                                <input type="date" id="sidebar-task-start" placeholder="默认使用创建日期">
+                            </div>
+                        </div>
+                        <div class="form-group task-duration-hint" id="task-duration-hint" style="display:none;">
+                            <span class="duration-text"></span>
                         </div>
                         <div class="form-group recurrence-group">
                             <label for="sidebar-task-recurrence">重复类型</label>
@@ -683,6 +695,12 @@ class MemoManager {
             calendarBtn.addEventListener('click', () => this.showCalendarPanel());
         }
         
+        // 周回顾按钮
+        const weeklyBtn = document.getElementById('sidebar-weekly-btn');
+        if (weeklyBtn) {
+            weeklyBtn.addEventListener('click', () => this.showWeeklyReviewPanel());
+        }
+        
         // 备份与恢复按钮
         const backupBtn = document.getElementById('sidebar-backup-btn');
         if (backupBtn) {
@@ -723,6 +741,12 @@ class MemoManager {
                 }
             });
         }
+        
+        // 开始/截止日期 → 自动更新工期提示
+        const startDateInput = document.getElementById('sidebar-task-start');
+        const dueDateInput = document.getElementById('sidebar-task-due');
+        if (startDateInput) startDateInput.addEventListener('change', () => this._updateDurationHint());
+        if (dueDateInput) dueDateInput.addEventListener('change', () => this._updateDurationHint());
         
         // 重复类型选择器
         const recurrenceSelect = document.getElementById('sidebar-task-recurrence');
@@ -1152,7 +1176,8 @@ class MemoManager {
         
         this._renderDebounceTimer = setTimeout(() => {
             this._doRenderSidebarTaskList();
-        }, 16); // 约等于一帧的时间
+            this._updateUrgentBubble();
+        }, 16);
     }
     
     /**
@@ -1183,9 +1208,10 @@ class MemoManager {
             );
         }
         
-        // 分类筛选
+        // 分类筛选（选择一级分类时包含其所有子分类）
         if (categoryValue !== 'all') {
-            filteredMemos = filteredMemos.filter(m => m.categoryId === categoryValue);
+            const matchIds = this._getCategoryAndChildIds(categoryValue);
+            filteredMemos = filteredMemos.filter(m => matchIds.includes(m.categoryId));
         }
         
         // 优先级筛选
@@ -2477,12 +2503,12 @@ class MemoManager {
                 ${task.text ? `<div class="task-desc">${this.escapeHtml(task.text.substring(0, 60))}${task.text.length > 60 ? '...' : ''}</div>` : ''}
                 ${progressHtml}
                 ${subtasksHtml}
-                ${''}<!-- 无子任务时不展示快速添加区域，通过编辑表单或右键菜单添加 -->
+                ${!hasSubtasks ? `<div class="subtask-add-quick" data-task-id="${task.id}"><i class="fas fa-plus"></i> 添加子任务</div>` : ''}
                 ${linksHtml}
                 ${imagesHtml}
                 <div class="task-meta">
                     ${categoryName ? `<span class="task-category-tag"><i class="fas fa-folder"></i> ${this.escapeHtml(categoryName)}</span>` : ''}
-                    ${task.dueDate ? `<span class="task-due ${isOverdue ? 'overdue' : ''}"><i class="far fa-calendar"></i> ${task.dueDate}</span>` : ''}
+                    ${task.startDate && task.dueDate ? `<span class="task-due ${isOverdue ? 'overdue' : ''}"><i class="far fa-calendar"></i> ${task.startDate.substring(5)}→${task.dueDate.substring(5)}</span>` : task.dueDate ? `<span class="task-due ${isOverdue ? 'overdue' : ''}"><i class="far fa-calendar"></i> ${task.dueDate}</span>` : ''}
                     ${task.priority && task.priority !== 'none' ? `<span class="task-priority-tag" style="background:${priorityColor}">${priorityLabels[task.priority]}</span>` : ''}
                 </div>
             </div>
@@ -2545,7 +2571,7 @@ class MemoManager {
                     });
                 }
                 if (textEl) {
-                    textEl.addEventListener('dblclick', (e) => {
+                    textEl.addEventListener('click', (e) => {
                         e.stopPropagation();
                         e.preventDefault();
                         this._startSubtaskInlineEdit(task.id, stItem.dataset.subtaskId, textEl, stItem);
@@ -2575,6 +2601,7 @@ class MemoManager {
             // 列表内添加子任务输入
             const addInline = subtasksEl.querySelector('.subtask-add-inline');
             if (addInline) {
+                addInline.addEventListener('click', (e) => e.stopPropagation());
                 const input = addInline.querySelector('.subtask-add-inline-input');
                 const btn = addInline.querySelector('.subtask-add-inline-btn');
                 const submit = () => {
@@ -2585,6 +2612,7 @@ class MemoManager {
                 };
                 if (btn) btn.addEventListener('click', (e) => { e.stopPropagation(); submit(); });
                 if (input) {
+                    input.addEventListener('click', (e) => e.stopPropagation());
                     input.addEventListener('keydown', (e) => {
                         if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); submit(); }
                     });
@@ -2592,7 +2620,39 @@ class MemoManager {
             }
         }
         
-        // 无子任务时不显示快速添加区域（通过编辑表单或右键菜单添加子任务）
+        // 无子任务时的快速添加按钮
+        const quickAddBtn = item.querySelector('.subtask-add-quick');
+        if (quickAddBtn) {
+            quickAddBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const taskId = quickAddBtn.dataset.taskId;
+                quickAddBtn.style.display = 'none';
+                const inputWrap = document.createElement('div');
+                inputWrap.className = 'subtask-add-inline';
+                inputWrap.dataset.taskId = taskId;
+                inputWrap.innerHTML = `
+                    <input type="text" class="subtask-add-inline-input" placeholder="添加子任务..." maxlength="200" autofocus>
+                    <button type="button" class="subtask-add-inline-btn" title="添加"><i class="fas fa-plus"></i></button>
+                `;
+                quickAddBtn.parentNode.insertBefore(inputWrap, quickAddBtn.nextSibling);
+                const inp = inputWrap.querySelector('.subtask-add-inline-input');
+                const addBtn = inputWrap.querySelector('.subtask-add-inline-btn');
+                inp.focus();
+                const doSubmit = () => {
+                    if (inp.value.trim()) {
+                        this.addSubtaskInline(taskId, inp.value);
+                        inp.value = '';
+                    }
+                };
+                addBtn.addEventListener('click', (ev) => { ev.stopPropagation(); doSubmit(); });
+                inp.addEventListener('keydown', (ev) => {
+                    if (ev.key === 'Enter') { ev.preventDefault(); ev.stopPropagation(); doSubmit(); }
+                    if (ev.key === 'Escape') { inputWrap.remove(); quickAddBtn.style.display = ''; }
+                });
+                inp.addEventListener('click', (ev) => ev.stopPropagation());
+                inputWrap.addEventListener('click', (ev) => ev.stopPropagation());
+            });
+        }
         
         // 进度条拖拽交互（仅无子任务且未完成时）
         const progressEl = item.querySelector('.task-progress.draggable');
@@ -3562,6 +3622,7 @@ class MemoManager {
             categoryId: memo.categoryId || null,
             tagIds: Array.isArray(memo.tagIds) ? memo.tagIds : [],
             priority: memo.priority || 'none',
+            startDate: memo.startDate || null,
             dueDate: memo.dueDate || null,
             images: Array.isArray(memo.images) ? memo.images : [],
             links: Array.isArray(memo.links) ? memo.links : [],
@@ -4055,13 +4116,15 @@ class MemoManager {
      */
     renderCalendarPanelContent(panel) {
         const viewYear = this.calendarViewDate.getFullYear();
-        const viewMonth = this.calendarViewDate.getMonth(); // 0-11
+        const viewMonth = this.calendarViewDate.getMonth();
 
-        const taskMap = this.buildTaskMapByCreatedDate();
+        const taskMapByCreated = this.buildTaskMapByCreatedDate();
+        const taskMapBySpan = this.buildTaskMapByDateSpan();
         const selectedKey = this.calendarSelectedDate;
-        const selectedTasks = taskMap.get(selectedKey) || [];
+        const selectedTasks = taskMapBySpan.get(selectedKey) || taskMapByCreated.get(selectedKey) || [];
 
         const monthLabel = `${viewYear}年${viewMonth + 1}月`;
+        const multiDayTasks = this.getMultiDayTasksForMonth(viewYear, viewMonth);
 
         panel.innerHTML = `
             <div class="calendar-overlay"></div>
@@ -4082,12 +4145,13 @@ class MemoManager {
                             </button>
                             <button class="calendar-today-btn" id="calendar-today-btn" title="回到今天">今天</button>
                         </div>
-                        ${this.renderCalendarMonthGrid(viewYear, viewMonth, taskMap)}
+                        ${this.renderCalendarMonthGrid(viewYear, viewMonth, taskMapBySpan)}
+                        ${this.renderCalendarTrackArea(viewYear, viewMonth, multiDayTasks)}
                     </div>
                     <div class="calendar-details">
                         <div class="calendar-details-header">
                             <div class="calendar-details-date">${selectedKey}</div>
-                            <div class="calendar-details-subtitle">共 ${selectedTasks.length} 项任务</div>
+                            <div class="calendar-details-subtitle">共 ${selectedTasks.length} 项涉及任务</div>
                         </div>
                         <div class="calendar-task-list">
                             ${this.renderCalendarTaskList(selectedTasks)}
@@ -4146,12 +4210,29 @@ class MemoManager {
             // 获取农历信息
             const lunarInfo = this.getLunarInfoForDate(cellDate);
 
+            // Scheme 4: 混合紧凑 — badge + 圆点(单日)/短线(多日)指示器
+            let indicatorsHtml = '';
+            if (count > 0 && !isOutside) {
+                const dayTasks = taskMap.get(key) || [];
+                const dots = dayTasks.slice(0, 4).map(t => {
+                    const startKey = this.getTaskStartKey(t);
+                    const isMulti = t.dueDate && t.dueDate !== startKey;
+                    const color = this.getCategoryColor(t.categoryId) || '#64b4ff';
+                    const actualColor = color === 'transparent' ? '#64b4ff' : color;
+                    return isMulti
+                        ? `<span class="cal-indicator-line" style="background:${actualColor}"></span>`
+                        : `<span class="cal-indicator-dot" style="background:${actualColor}"></span>`;
+                }).join('');
+                indicatorsHtml = `<div class="cal-indicators">${dots}</div>`;
+            }
+
             cells.push(`
                 <div class="calendar-day ${isOutside ? 'outside' : ''} ${selected ? 'selected' : ''} ${isToday ? 'today' : ''}"
                      data-date="${key}">
                     <div class="calendar-day-number">${dayNumber}</div>
                     <div class="calendar-day-lunar ${lunarInfo.type}">${lunarInfo.text}</div>
                     ${count > 0 ? `<div class="calendar-day-badge">${count}</div>` : ''}
+                    ${indicatorsHtml}
                 </div>
             `);
         }
@@ -4164,6 +4245,75 @@ class MemoManager {
                 <div class="calendar-days">
                     ${cells.join('')}
                 </div>
+            </div>
+        `;
+    }
+    
+    /**
+     * 渲染多日任务轨道区域（Scheme 5: 轨道模式）
+     */
+    renderCalendarTrackArea(year, month, multiDayTasks) {
+        if (!multiDayTasks || multiDayTasks.length === 0) return '';
+        
+        const firstDay = new Date(year, month, 1);
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const lastMonthDays = new Date(year, month, 0).getDate();
+        const firstWeekday = (firstDay.getDay() + 6) % 7;
+        const totalCells = Math.ceil((firstWeekday + daysInMonth) / 7) * 7;
+        const weekCount = totalCells / 7;
+        
+        const cells = [];
+        for (let i = 0; i < totalCells; i++) {
+            const dayOffset = i - firstWeekday + 1;
+            let cellDate;
+            if (dayOffset < 1) cellDate = new Date(year, month - 1, lastMonthDays + dayOffset);
+            else if (dayOffset > daysInMonth) cellDate = new Date(year, month + 1, dayOffset - daysInMonth);
+            else cellDate = new Date(year, month, dayOffset);
+            cells.push({ key: this.formatLocalDateYMD(cellDate), isOutside: dayOffset < 1 || dayOffset > daysInMonth });
+        }
+        
+        let trackHtml = '';
+        multiDayTasks.slice(0, 8).forEach(task => {
+            const startKey = this.getTaskStartKey(task);
+            const endKey = task.dueDate || startKey;
+            const color = this.getCategoryColor(task.categoryId) || '#64b4ff';
+            const actualColor = color === 'transparent' ? '#64b4ff' : color;
+            const title = this.escapeHtml((task.title || '').substring(0, 16));
+            
+            let hasRow = false;
+            for (let w = 0; w < weekCount; w++) {
+                const weekCells = cells.slice(w * 7, (w + 1) * 7);
+                const inWeek = weekCells.some(c => c.key >= startKey && c.key <= endKey && !c.isOutside);
+                if (!inWeek) continue;
+                
+                if (!hasRow) {
+                    trackHtml += `<div class="cal-track-label">${title}</div>`;
+                    hasRow = true;
+                }
+                trackHtml += '<div class="cal-track-row">';
+                weekCells.forEach(c => {
+                    const inRange = c.key >= startKey && c.key <= endKey && !c.isOutside;
+                    if (inRange) {
+                        let seg = 'single';
+                        if (c.key === startKey && c.key !== endKey) seg = 'start';
+                        else if (c.key === endKey && c.key !== startKey) seg = 'end';
+                        else if (c.key !== startKey && c.key !== endKey) seg = 'middle';
+                        trackHtml += `<div class="cal-track-cell filled ${seg}" style="background:${actualColor}"></div>`;
+                    } else {
+                        trackHtml += '<div class="cal-track-cell"></div>';
+                    }
+                });
+                trackHtml += '</div>';
+            }
+        });
+        
+        return `
+            <div class="cal-track-container">
+                <div class="cal-track-title">
+                    <i class="fas fa-bars-staggered"></i> 多日任务轨道
+                    <span class="cal-track-count">${multiDayTasks.length} 项</span>
+                </div>
+                ${trackHtml}
             </div>
         `;
     }
@@ -4246,11 +4396,14 @@ class MemoManager {
         }
 
         return tasks.map(task => {
-            const createdTime = task.createdAt ? this.formatLocalTimeHM(task.createdAt) : '';
             const title = this.escapeHtml(task.title || '无标题');
             const text = task.text ? this.escapeHtml(task.text.substring(0, 80)) : '';
             const categoryName = task.categoryId ? this.escapeHtml(this.getCategoryName(task.categoryId) || '') : '';
             const isCompleted = task.completed;
+            const tStart = this.getTaskStartKey(task);
+            const tEnd = task.dueDate || tStart;
+            const isMulti = tStart !== tEnd;
+            const durationTag = isMulti ? `<span class="calendar-task-duration"><i class="fas fa-arrows-alt-h"></i> ${tStart.substring(5)} → ${tEnd.substring(5)} · ${this.calcWorkdays(tStart, tEnd)}工作日</span>` : '';
             
             return `
                 <div class="calendar-task-item ${isCompleted ? 'completed' : ''}" data-task-id="${task.id}">
@@ -4261,7 +4414,7 @@ class MemoManager {
                         <div class="calendar-task-title">${title}</div>
                         ${text ? `<div class="calendar-task-desc">${text}${task.text && task.text.length > 80 ? '...' : ''}</div>` : ''}
                         <div class="calendar-task-meta">
-                            ${createdTime ? `<span class="calendar-task-time"><i class="far fa-clock"></i> ${createdTime}</span>` : ''}
+                            ${durationTag}
                             ${categoryName ? `<span class="calendar-task-category"><i class="fas fa-folder"></i> ${categoryName}</span>` : ''}
                         </div>
                     </div>
@@ -4373,6 +4526,50 @@ class MemoManager {
         }
         return map;
     }
+    
+    /**
+     * 将任务按日期跨度映射：每个任务覆盖从 startDate（或 createdAt）到 dueDate 的所有日期
+     * 无 dueDate 的任务只出现在起始日当天
+     * @returns {Map<string, Object[]>}
+     */
+    buildTaskMapByDateSpan() {
+        const map = new Map();
+        for (const memo of this.memos) {
+            if (!memo || !memo.createdAt) continue;
+            const startKey = this.getTaskStartKey(memo);
+            const endKey = memo.dueDate || startKey;
+            if (!startKey) continue;
+            
+            let cur = new Date(startKey + 'T00:00:00');
+            const end = new Date(endKey + 'T00:00:00');
+            const maxDays = 90;
+            let count = 0;
+            while (cur <= end && count < maxDays) {
+                const key = this.formatLocalDateYMD(cur);
+                if (!map.has(key)) map.set(key, []);
+                map.get(key).push(memo);
+                cur.setDate(cur.getDate() + 1);
+                count++;
+            }
+        }
+        return map;
+    }
+    
+    /**
+     * 获取月份中的多日任务列表（用于轨道渲染）
+     */
+    getMultiDayTasksForMonth(year, month) {
+        return this.memos.filter(memo => {
+            if (!memo || !memo.createdAt) return false;
+            const startKey = this.getTaskStartKey(memo);
+            const endKey = memo.dueDate || startKey;
+            if (startKey === endKey) return false;
+            
+            const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+            const monthEnd = `${year}-${String(month + 1).padStart(2, '0')}-${new Date(year, month + 1, 0).getDate()}`;
+            return endKey >= monthStart && startKey <= monthEnd;
+        });
+    }
 
     /**
      * 格式化本地日期为 YYYY-MM-DD（避免 UTC 跨日）
@@ -4406,6 +4603,598 @@ class MemoManager {
         if (!panel) return;
         this.renderCalendarPanelContent(panel);
         this.bindCalendarPanelEvents(panel);
+    }
+    
+    // ===================== 周回顾面板 =====================
+    
+    /**
+     * 显示周回顾面板
+     */
+    showWeeklyReviewPanel() {
+        const existing = document.getElementById('weekly-review-panel');
+        if (existing) existing.remove();
+        
+        this._weeklyRangeDays = 14;
+        this._weeklyCurrentView = 'gantt';
+        this._weeklyFilterCategories = new Set();
+        this._weeklyFilterMode = 'include'; // 'include' | 'exclude'
+        
+        const panel = document.createElement('div');
+        panel.id = 'weekly-review-panel';
+        panel.className = 'weekly-review-panel';
+        
+        this._renderWeeklyPanelContent(panel);
+        document.body.appendChild(panel);
+        this._bindWeeklyPanelEvents(panel);
+        this._createWeeklyTooltip();
+        
+        requestAnimationFrame(() => panel.classList.add('active'));
+    }
+    
+    _createWeeklyTooltip() {
+        let tip = document.getElementById('wk-tooltip');
+        if (!tip) {
+            tip = document.createElement('div');
+            tip.id = 'wk-tooltip';
+            tip.className = 'wk-tooltip';
+            document.body.appendChild(tip);
+        }
+        return tip;
+    }
+    
+    _showWeeklyTooltip(e, task) {
+        const tip = document.getElementById('wk-tooltip');
+        if (!tip) return;
+        const catName = this.getCategoryName(task.categoryId);
+        const tStart = this.getTaskStartKey(task);
+        const tEnd = task.dueDate || tStart;
+        const pCfg = this.priorityConfig?.[task.priority] || { label: '', icon: '' };
+        const priorityLabel = { high: '高', medium: '中', low: '低', none: '无' }[task.priority] || '';
+        const statusText = task.completed ? '✅ 已完成' : '○ 进行中';
+        const durationInfo = tStart !== tEnd ? ` (${this.calcWorkdays(tStart, tEnd)} 工作日)` : '';
+        tip.innerHTML = `
+            <div class="wk-tip-title">${this.escapeHtml(task.title || '')}</div>
+            <div class="wk-tip-row"><i class="fas fa-folder"></i> ${this.escapeHtml(catName)}</div>
+            <div class="wk-tip-row"><i class="fas fa-calendar"></i> ${tStart} → ${tEnd}${durationInfo}</div>
+            ${priorityLabel ? `<div class="wk-tip-row"><i class="fas fa-flag"></i> ${priorityLabel}优先级</div>` : ''}
+            <div class="wk-tip-row">${statusText}</div>
+        `;
+        tip.style.display = 'block';
+        const rect = tip.getBoundingClientRect();
+        let x = e.clientX + 12;
+        let y = e.clientY + 12;
+        if (x + rect.width > window.innerWidth - 8) x = e.clientX - rect.width - 12;
+        if (y + rect.height > window.innerHeight - 8) y = e.clientY - rect.height - 12;
+        tip.style.left = x + 'px';
+        tip.style.top = y + 'px';
+    }
+    
+    _hideWeeklyTooltip() {
+        const tip = document.getElementById('wk-tooltip');
+        if (tip) tip.style.display = 'none';
+    }
+    
+    _getWeeklyDates() {
+        const dates = [];
+        const now = new Date();
+        for (let i = this._weeklyRangeDays; i >= 0; i--) {
+            const d = new Date(now);
+            d.setDate(d.getDate() - i);
+            dates.push(d);
+        }
+        for (let i = 1; i <= this._weeklyRangeDays; i++) {
+            const d = new Date(now);
+            d.setDate(d.getDate() + i);
+            dates.push(d);
+        }
+        return dates;
+    }
+    
+    _isMonthMode() {
+        return this._weeklyRangeDays >= 30;
+    }
+    
+    _getReviewTitle() {
+        return this._isMonthMode() ? '月回顾' : '周回顾';
+    }
+    
+    _passWeeklyCategoryFilter(task) {
+        if (!this._weeklyFilterCategories || this._weeklyFilterCategories.size === 0) return true;
+        let allIds = new Set();
+        this._weeklyFilterCategories.forEach(cid => {
+            this._getCategoryAndChildIds(cid).forEach(id => allIds.add(id));
+        });
+        const match = allIds.has(task.categoryId);
+        return this._weeklyFilterMode === 'exclude' ? !match : match;
+    }
+    
+    _getWeeklyTasksForDate(dateKey) {
+        return this.memos.filter(t => {
+            const start = this.getTaskStartKey(t);
+            const end = t.dueDate || start;
+            return dateKey >= start && dateKey <= end && this._passWeeklyCategoryFilter(t);
+        });
+    }
+    
+    _getWeeklyTasksInRange() {
+        const dates = this._getWeeklyDates();
+        const startKey = this.formatLocalDateYMD(dates[0]);
+        const endKey = this.formatLocalDateYMD(dates[dates.length - 1]);
+        return this.memos.filter(t => {
+            const tStart = this.getTaskStartKey(t);
+            const tEnd = t.dueDate || tStart;
+            return tEnd >= startKey && tStart <= endKey && this._passWeeklyCategoryFilter(t);
+        });
+    }
+    
+    _renderWeeklyPanelContent(panel) {
+        const title = this._getReviewTitle();
+        const icon = this._isMonthMode() ? 'fa-calendar-alt' : 'fa-calendar-week';
+        const filterPills = this._renderWeeklyCategoryPills();
+        
+        panel.innerHTML = `
+            <div class="weekly-overlay"></div>
+            <div class="weekly-content">
+                <div class="weekly-header">
+                    <h3><i class="fas ${icon}"></i> ${title}</h3>
+                    <div class="weekly-range-toggle">
+                        <button class="weekly-range-btn ${this._weeklyRangeDays === 7 ? 'active' : ''}" data-days="7">±1 周</button>
+                        <button class="weekly-range-btn ${this._weeklyRangeDays === 14 ? 'active' : ''}" data-days="14">±2 周</button>
+                        <button class="weekly-range-btn ${this._weeklyRangeDays === 30 ? 'active' : ''}" data-days="30">±1 月</button>
+                        <button class="weekly-range-btn ${this._weeklyRangeDays === 60 ? 'active' : ''}" data-days="60">±2 月</button>
+                    </div>
+                    <button class="weekly-close" id="weekly-close"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="weekly-tabs">
+                    <button class="weekly-tab ${this._weeklyCurrentView === 'gantt' ? 'active' : ''}" data-view="gantt"><i class="fas fa-bars-staggered"></i> 甘特图</button>
+                    <button class="weekly-tab ${this._weeklyCurrentView === 'timeline' ? 'active' : ''}" data-view="timeline"><i class="fas fa-timeline"></i> 时间线</button>
+                    <button class="weekly-tab ${this._weeklyCurrentView === 'kanban' ? 'active' : ''}" data-view="kanban"><i class="fas fa-columns"></i> 看板</button>
+                    <button class="weekly-tab ${this._weeklyCurrentView === 'heatbar' ? 'active' : ''}" data-view="heatbar"><i class="fas fa-chart-bar"></i> 热力图</button>
+                </div>
+                <div class="weekly-filter-bar">
+                    <div class="wk-filter-left">
+                        <button class="wk-filter-toggle" id="wk-filter-toggle">
+                            <i class="fas fa-filter"></i> 分类筛选
+                            ${this._weeklyFilterCategories.size > 0 ? `<span class="wk-filter-badge">${this._weeklyFilterCategories.size}</span>` : ''}
+                        </button>
+                        <div class="wk-filter-mode-switch">
+                            <button class="wk-mode-btn ${this._weeklyFilterMode === 'include' ? 'active' : ''}" data-mode="include">包含</button>
+                            <button class="wk-mode-btn ${this._weeklyFilterMode === 'exclude' ? 'active' : ''}" data-mode="exclude">排除</button>
+                        </div>
+                        ${filterPills}
+                    </div>
+                    <div class="wk-filter-dropdown" id="wk-filter-dropdown">
+                        <input type="text" class="wk-filter-search" id="wk-filter-search" placeholder="搜索分类...">
+                        <div class="wk-filter-list" id="wk-filter-list">
+                            ${this._renderWeeklyCategoryList()}
+                        </div>
+                        <div class="wk-filter-actions">
+                            <button class="wk-filter-clear" id="wk-filter-clear">清除全部</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="weekly-body" id="weekly-body">
+                    ${this._renderWeeklyView()}
+                </div>
+            </div>
+        `;
+    }
+    
+    _renderWeeklyCategoryList(filter = '') {
+        const topLevel = this._getTopLevelCategories();
+        const q = filter.toLowerCase();
+        let html = '';
+        topLevel.forEach(parent => {
+            const children = this._getChildCategories(parent.id);
+            const parentMatch = !q || parent.name.toLowerCase().includes(q);
+            const matchChildren = children.filter(ch => !q || ch.name.toLowerCase().includes(q));
+            if (!parentMatch && matchChildren.length === 0) return;
+            
+            const color = parent.color || '#64b4ff';
+            const checked = this._weeklyFilterCategories.has(parent.id);
+            html += `<div class="wk-filter-item wk-filter-parent" data-id="${parent.id}">
+                <label><input type="checkbox" ${checked ? 'checked' : ''} data-cat-id="${parent.id}">
+                <span class="wk-filter-dot" style="background:${color}"></span>${this.escapeHtml(parent.name)}</label>
+            </div>`;
+            
+            const showChildren = parentMatch ? children : matchChildren;
+            showChildren.forEach(ch => {
+                const chColor = ch.color || color;
+                const chChecked = this._weeklyFilterCategories.has(ch.id);
+                html += `<div class="wk-filter-item wk-filter-child" data-id="${ch.id}">
+                    <label><input type="checkbox" ${chChecked ? 'checked' : ''} data-cat-id="${ch.id}">
+                    <span class="wk-filter-dot" style="background:${chColor}"></span>— ${this.escapeHtml(ch.name)}</label>
+                </div>`;
+            });
+        });
+        return html || '<div class="wk-filter-empty">无匹配分类</div>';
+    }
+    
+    _renderWeeklyCategoryPills() {
+        if (this._weeklyFilterCategories.size === 0) return '';
+        let html = '<div class="wk-filter-pills">';
+        this._weeklyFilterCategories.forEach(catId => {
+            const cat = this.categories.find(c => c.id === catId);
+            if (!cat) return;
+            const color = cat.color || '#64b4ff';
+            html += `<span class="wk-filter-pill" data-cat-id="${catId}" style="border-color:${color}40;background:${color}15;color:${color}">
+                ${this.escapeHtml(cat.name)} <i class="fas fa-times wk-pill-remove" data-cat-id="${catId}"></i>
+            </span>`;
+        });
+        html += '</div>';
+        return html;
+    }
+    
+    _renderWeeklyView() {
+        switch (this._weeklyCurrentView) {
+            case 'gantt': return this._renderWeeklyGantt();
+            case 'timeline': return this._renderWeeklyTimeline();
+            case 'kanban': return this._renderWeeklyKanban();
+            case 'heatbar': return this._renderWeeklyHeatbar();
+            default: return this._renderWeeklyGantt();
+        }
+    }
+    
+    _renderWeeklyGantt() {
+        const dates = this._getWeeklyDates();
+        const tasks = this._getWeeklyTasksInRange();
+        const todayKey = this.formatLocalDateYMD(new Date());
+        const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
+        const isMonth = this._isMonthMode();
+        const cellMinW = isMonth ? 14 : 28;
+        
+        let html = `<div class="wk-gantt ${isMonth ? 'wk-gantt-month' : ''}">`;
+        html += `<div class="wk-gantt-header"><div class="wk-gantt-label-h">任务</div><div class="wk-gantt-dates" style="min-width:${dates.length * cellMinW}px">`;
+        
+        let prevMonth = -1;
+        dates.forEach(d => {
+            const key = this.formatLocalDateYMD(d);
+            const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+            const mon = d.getMonth();
+            const showMonthLabel = mon !== prevMonth;
+            prevMonth = mon;
+            if (isMonth) {
+                html += `<div class="wk-gantt-date wk-gantt-date-compact ${key === todayKey ? 'today' : ''} ${isWeekend ? 'weekend' : ''}" style="min-width:${cellMinW}px">
+                    ${showMonthLabel ? `<span class="wk-gantt-mon">${mon + 1}月</span>` : ''}
+                    <span class="wk-gantt-dd">${d.getDate()}</span>
+                </div>`;
+            } else {
+                html += `<div class="wk-gantt-date ${key === todayKey ? 'today' : ''} ${isWeekend ? 'weekend' : ''}">
+                    <span class="wk-gantt-dn">周${dayNames[d.getDay()]}</span>
+                    <span class="wk-gantt-dd">${d.getDate()}</span>
+                </div>`;
+            }
+        });
+        html += '</div></div>';
+        
+        tasks.forEach(task => {
+            const color = this.getCategoryColor(task.categoryId) || '#64b4ff';
+            const c = color === 'transparent' ? '#64b4ff' : color;
+            const titleMaxLen = isMonth ? 15 : 20;
+            html += `<div class="wk-gantt-row" data-task-id="${task.id}">
+                <div class="wk-gantt-label" data-task-id="${task.id}"><span class="wk-gantt-dot" style="background:${c}"></span>${this.escapeHtml((task.title || '').substring(0, titleMaxLen))}</div>
+                <div class="wk-gantt-cells" style="min-width:${dates.length * cellMinW}px">`;
+            
+            const tStart = this.getTaskStartKey(task);
+            const tEnd = task.dueDate || tStart;
+            const rangeStart = this.formatLocalDateYMD(dates[0]);
+            const rangeEnd = this.formatLocalDateYMD(dates[dates.length - 1]);
+            const barStart = tStart < rangeStart ? rangeStart : tStart;
+            const barEnd = tEnd > rangeEnd ? rangeEnd : tEnd;
+            
+            dates.forEach(d => {
+                const key = this.formatLocalDateYMD(d);
+                html += `<div class="wk-gantt-cell ${key === todayKey ? 'today' : ''}" style="min-width:${cellMinW}px"></div>`;
+            });
+            
+            const startIdx = dates.findIndex(d => this.formatLocalDateYMD(d) === barStart);
+            const endIdx = dates.findIndex(d => this.formatLocalDateYMD(d) === barEnd);
+            if (startIdx !== -1 && endIdx !== -1) {
+                const left = `calc(${startIdx} * (100% / ${dates.length}) + 2px)`;
+                const width = `calc(${endIdx - startIdx + 1} * (100% / ${dates.length}) - 4px)`;
+                html += `<div class="wk-gantt-bar ${task.completed ? 'completed' : ''}" data-task-id="${task.id}" style="left:${left};width:${width};background:${c}"></div>`;
+            }
+            
+            html += '</div></div>';
+        });
+        
+        html += '</div>';
+        return html;
+    }
+    
+    _renderWeeklyTimeline() {
+        const dates = this._getWeeklyDates().reverse();
+        const todayKey = this.formatLocalDateYMD(new Date());
+        const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
+        
+        let html = '<div class="wk-timeline">';
+        dates.forEach((d, i) => {
+            const key = this.formatLocalDateYMD(d);
+            const tasks = this._getWeeklyTasksForDate(key);
+            const isToday = key === todayKey;
+            
+            html += `<div class="wk-tl-day">
+                <div class="wk-tl-date ${isToday ? 'today' : ''}">
+                    <span class="wk-tl-num">${d.getDate()}</span>
+                    <span class="wk-tl-wk">周${dayNames[d.getDay()]}</span>
+                </div>
+                <div class="wk-tl-line ${isToday ? 'today' : ''}">
+                    <span class="wk-tl-dot"></span>
+                    ${i < dates.length - 1 ? '<span class="wk-tl-vline"></span>' : ''}
+                </div>
+                <div class="wk-tl-cards">`;
+            
+            if (tasks.length === 0) {
+                html += '<div class="wk-tl-empty">无任务</div>';
+            } else {
+                tasks.forEach(t => {
+                    const color = this.getCategoryColor(t.categoryId) || '#64b4ff';
+                    const c = color === 'transparent' ? '#64b4ff' : color;
+                    const tStart = this.getTaskStartKey(t);
+                    const isMulti = t.dueDate && t.dueDate !== tStart;
+                    const catName = this.getCategoryName(t.categoryId);
+                    const workDayInfo = isMulti ? ` · ${this.calcWorkdays(tStart, t.dueDate)}工作日` : '';
+                    html += `<div class="wk-tl-card ${t.completed ? 'completed' : ''}">
+                        <div class="wk-tl-card-title" style="color:${c}">${t.completed ? '<i class="fas fa-check-circle" style="opacity:0.5"></i> ' : ''}${this.escapeHtml(t.title || '')}</div>
+                        <div class="wk-tl-card-meta">
+                            <span><i class="fas fa-folder"></i> ${this.escapeHtml(catName)}</span>
+                            ${isMulti ? `<span><i class="fas fa-arrow-right-arrow-left"></i> ${tStart.substring(5)} — ${t.dueDate.substring(5)}${workDayInfo}</span>` : '<span>单日</span>'}
+                        </div>
+                    </div>`;
+                });
+            }
+            html += '</div></div>';
+        });
+        html += '</div>';
+        return html;
+    }
+    
+    _renderWeeklyKanban() {
+        const dates = this._getWeeklyDates();
+        const todayKey = this.formatLocalDateYMD(new Date());
+        const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
+        
+        let html = '<div class="wk-kanban">';
+        dates.forEach(d => {
+            const key = this.formatLocalDateYMD(d);
+            const tasks = this._getWeeklyTasksForDate(key);
+            const isToday = key === todayKey;
+            
+            html += `<div class="wk-kb-col ${isToday ? 'today' : ''}">
+                <div class="wk-kb-header">
+                    <div class="wk-kb-day">周${dayNames[d.getDay()]}</div>
+                    <div class="wk-kb-date">${d.getDate()}</div>
+                    <div class="wk-kb-count">${tasks.length} 项</div>
+                </div>`;
+            
+            if (tasks.length === 0) {
+                html += '<div class="wk-kb-empty">—</div>';
+            } else {
+                tasks.forEach(t => {
+                    const color = this.getCategoryColor(t.categoryId) || '#64b4ff';
+                    const c = color === 'transparent' ? '#64b4ff' : color;
+                    html += `<div class="wk-kb-card ${t.completed ? 'completed' : ''}" style="border-left-color:${c}">
+                        <div class="wk-kb-card-title">${this.escapeHtml((t.title || '').substring(0, 16))}</div>
+                        <div class="wk-kb-card-cat">${this.escapeHtml(this.getCategoryName(t.categoryId))}</div>
+                    </div>`;
+                });
+            }
+            html += '</div>';
+        });
+        html += '</div>';
+        return html;
+    }
+    
+    _renderWeeklyHeatbar() {
+        const dates = this._getWeeklyDates();
+        const todayKey = this.formatLocalDateYMD(new Date());
+        const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
+        const catColorMap = {};
+        this.memos.forEach(t => {
+            if (t.categoryId) {
+                const color = this.getCategoryColor(t.categoryId);
+                const catName = this.getCategoryName(t.categoryId);
+                if (color && color !== 'transparent') catColorMap[catName] = color;
+            }
+        });
+        
+        let html = '<div class="wk-heatbar">';
+        dates.forEach(d => {
+            const key = this.formatLocalDateYMD(d);
+            const tasks = this._getWeeklyTasksForDate(key);
+            const isToday = key === todayKey;
+            
+            html += `<div class="wk-hb-row">
+                <div class="wk-hb-date ${isToday ? 'today' : ''}">${d.getMonth() + 1}/${d.getDate()} 周${dayNames[d.getDay()]}</div>
+                <div class="wk-hb-bars">`;
+            
+            if (tasks.length === 0) {
+                html += '<span class="wk-hb-empty">— 无任务 —</span>';
+            } else {
+                tasks.forEach(t => {
+                    const color = this.getCategoryColor(t.categoryId) || '#64b4ff';
+                    const c = color === 'transparent' ? '#64b4ff' : color;
+                    const widthPct = Math.max(8, 100 / tasks.length);
+                    html += `<div class="wk-hb-seg ${t.completed ? 'completed' : ''}" style="background:${c};width:${widthPct}%" title="${this.escapeHtml(t.title || '')}">${this.escapeHtml((t.title || '').substring(0, 8))}</div>`;
+                });
+            }
+            
+            html += `</div><div class="wk-hb-count">${tasks.length}</div></div>`;
+        });
+        
+        // 图例
+        if (Object.keys(catColorMap).length > 0) {
+            html += '<div class="wk-hb-legend">';
+            Object.entries(catColorMap).forEach(([name, color]) => {
+                html += `<span class="wk-hb-legend-item"><span class="wk-hb-legend-dot" style="background:${color}"></span>${this.escapeHtml(name)}</span>`;
+            });
+            html += '</div>';
+        }
+        
+        html += '</div>';
+        return html;
+    }
+    
+    _bindWeeklyPanelEvents(panel) {
+        const closePanel = () => {
+            this._hideWeeklyTooltip();
+            const tip = document.getElementById('wk-tooltip');
+            if (tip) tip.remove();
+            panel.classList.remove('active');
+            setTimeout(() => panel.remove(), 300);
+        };
+        
+        const closeBtn = panel.querySelector('#weekly-close');
+        if (closeBtn) closeBtn.addEventListener('click', closePanel);
+        
+        const overlay = panel.querySelector('.weekly-overlay');
+        if (overlay) overlay.addEventListener('click', closePanel);
+        
+        // 范围切换
+        panel.querySelectorAll('.weekly-range-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this._weeklyRangeDays = parseInt(btn.dataset.days);
+                this._renderWeeklyPanelContent(panel);
+                this._bindWeeklyPanelEvents(panel);
+            });
+        });
+        
+        // 视图切换
+        panel.querySelectorAll('.weekly-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                this._weeklyCurrentView = tab.dataset.view;
+                this._renderWeeklyPanelContent(panel);
+                this._bindWeeklyPanelEvents(panel);
+            });
+        });
+        
+        // 分类过滤器切换
+        const filterToggle = panel.querySelector('#wk-filter-toggle');
+        const filterDropdown = panel.querySelector('#wk-filter-dropdown');
+        if (filterToggle && filterDropdown) {
+            filterToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                filterDropdown.classList.toggle('show');
+            });
+            document.addEventListener('click', (e) => {
+                if (!filterDropdown.contains(e.target) && e.target !== filterToggle) {
+                    filterDropdown.classList.remove('show');
+                }
+            }, { once: false });
+        }
+        
+        // 分类过滤搜索
+        const filterSearch = panel.querySelector('#wk-filter-search');
+        if (filterSearch) {
+            filterSearch.addEventListener('input', () => {
+                const list = panel.querySelector('#wk-filter-list');
+                if (list) list.innerHTML = this._renderWeeklyCategoryList(filterSearch.value);
+                this._bindWeeklyFilterCheckboxes(panel);
+            });
+        }
+        
+        // 分类过滤checkbox
+        this._bindWeeklyFilterCheckboxes(panel);
+        
+        // 过滤模式切换
+        panel.querySelectorAll('.wk-mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this._weeklyFilterMode = btn.dataset.mode;
+                this._renderWeeklyPanelContent(panel);
+                this._bindWeeklyPanelEvents(panel);
+            });
+        });
+        
+        // 清除全部过滤
+        const clearBtn = panel.querySelector('#wk-filter-clear');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                this._weeklyFilterCategories.clear();
+                this._renderWeeklyPanelContent(panel);
+                this._bindWeeklyPanelEvents(panel);
+            });
+        }
+        
+        // Pill移除
+        panel.querySelectorAll('.wk-pill-remove').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this._weeklyFilterCategories.delete(btn.dataset.catId);
+                this._renderWeeklyPanelContent(panel);
+                this._bindWeeklyPanelEvents(panel);
+            });
+        });
+        
+        // Tooltip: 甘特图行和bar
+        const body = panel.querySelector('#weekly-body');
+        if (body) {
+            body.addEventListener('mouseover', (e) => {
+                const row = e.target.closest('[data-task-id]');
+                if (row) {
+                    const tid = row.dataset.taskId;
+                    const task = this.memos.find(t => t.id === tid);
+                    if (task) this._showWeeklyTooltip(e, task);
+                }
+            });
+            body.addEventListener('mousemove', (e) => {
+                const tip = document.getElementById('wk-tooltip');
+                if (tip && tip.style.display === 'block') {
+                    const rect = tip.getBoundingClientRect();
+                    let x = e.clientX + 12;
+                    let y = e.clientY + 12;
+                    if (x + rect.width > window.innerWidth - 8) x = e.clientX - rect.width - 12;
+                    if (y + rect.height > window.innerHeight - 8) y = e.clientY - rect.height - 12;
+                    tip.style.left = x + 'px';
+                    tip.style.top = y + 'px';
+                }
+            });
+            body.addEventListener('mouseout', (e) => {
+                const row = e.target.closest('[data-task-id]');
+                if (row) this._hideWeeklyTooltip();
+            });
+        }
+    }
+    
+    _bindWeeklyFilterCheckboxes(panel) {
+        panel.querySelectorAll('#wk-filter-list input[type="checkbox"]').forEach(cb => {
+            cb.addEventListener('change', () => {
+                const catId = cb.dataset.catId;
+                if (cb.checked) {
+                    this._weeklyFilterCategories.add(catId);
+                } else {
+                    this._weeklyFilterCategories.delete(catId);
+                }
+                this._refreshWeeklyBody(panel);
+                const pills = panel.querySelector('.wk-filter-pills');
+                if (pills) pills.outerHTML = this._renderWeeklyCategoryPills();
+                else {
+                    const left = panel.querySelector('.wk-filter-left');
+                    if (left) left.insertAdjacentHTML('beforeend', this._renderWeeklyCategoryPills());
+                }
+                const badge = panel.querySelector('#wk-filter-toggle .wk-filter-badge');
+                const count = this._weeklyFilterCategories.size;
+                if (badge) {
+                    if (count > 0) badge.textContent = count;
+                    else badge.remove();
+                } else if (count > 0) {
+                    panel.querySelector('#wk-filter-toggle').insertAdjacentHTML('beforeend', `<span class="wk-filter-badge">${count}</span>`);
+                }
+                // rebind pill remove events
+                panel.querySelectorAll('.wk-pill-remove').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this._weeklyFilterCategories.delete(btn.dataset.catId);
+                        this._renderWeeklyPanelContent(panel);
+                        this._bindWeeklyPanelEvents(panel);
+                    });
+                });
+            });
+        });
+    }
+    
+    _refreshWeeklyBody(panel) {
+        const body = panel.querySelector('#weekly-body');
+        if (body) body.innerHTML = this._renderWeeklyView();
     }
     
     /**
@@ -4657,10 +5446,13 @@ class MemoManager {
                     <div class="category-list" id="category-list">
                         ${this.renderCategoryManagerList()}
                     </div>
+                    <div class="cat-drag-promote-zone">
+                        <i class="fas fa-arrow-up"></i> 拖拽到此处 — 提升为一级分类
+                    </div>
                 </div>
                 <div class="category-manager-footer">
                     <button class="category-create-btn" id="category-create-btn">
-                        <i class="fas fa-plus"></i> 新建分类
+                        <i class="fas fa-plus"></i> 新建一级分类
                     </button>
                 </div>
             </div>
@@ -4709,27 +5501,49 @@ class MemoManager {
         this.updateCategorySelects();
     }
     
-    _showInlineCreate(panel) {
+    /**
+     * 显示内联创建分类表单
+     * @param {HTMLElement} panel 分类管理面板
+     * @param {string|null} [parentId] 父分类 ID，不传则创建一级分类
+     */
+    _showInlineCreate(panel, parentId = null) {
         const listEl = panel.querySelector('#category-list');
         if (!listEl || listEl.querySelector('.category-inline-create')) return;
         
         const presetColors = ['#64b4ff', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#a3a3a3'];
+        const parent = parentId ? this.categories.find(c => c.id === parentId) : null;
+        const defaultColor = parent ? (parent.color || '#64b4ff') : '#64b4ff';
+        const placeholder = parentId ? '子分类名称...' : '分类名称...';
+        
         const row = document.createElement('div');
         row.className = 'category-inline-create';
         row.innerHTML = `
-            <input type="text" class="category-inline-name" placeholder="分类名称..." maxlength="20" autofocus>
+            <input type="text" class="category-inline-name" placeholder="${placeholder}" maxlength="20" autofocus>
             <div class="category-color-palette">
-                ${presetColors.map(c => `<span class="category-palette-dot${c === '#64b4ff' ? ' selected' : ''}" data-color="${c}" style="background:${c}"></span>`).join('')}
+                ${presetColors.map(c => `<span class="category-palette-dot${c === defaultColor ? ' selected' : ''}" data-color="${c}" style="background:${c}"></span>`).join('')}
             </div>
             <div class="category-inline-actions">
                 <button class="category-inline-save"><i class="fas fa-check"></i> 添加</button>
                 <button class="category-inline-cancel"><i class="fas fa-times"></i></button>
             </div>
         `;
-        listEl.appendChild(row);
+        
+        if (parentId) {
+            const group = listEl.querySelector(`.cat-accordion-group[data-id="${parentId}"]`);
+            const childrenEl = group ? group.querySelector('.cat-accordion-children') : null;
+            const addSubEl = group ? group.querySelector('.cat-accordion-add-sub') : null;
+            if (childrenEl && addSubEl) {
+                childrenEl.insertBefore(row, addSubEl);
+                group.classList.add('expanded');
+            } else {
+                listEl.appendChild(row);
+            }
+        } else {
+            listEl.appendChild(row);
+        }
         
         const nameInput = row.querySelector('.category-inline-name');
-        let selectedColor = '#64b4ff';
+        let selectedColor = defaultColor;
         nameInput.focus();
         
         row.querySelectorAll('.category-palette-dot').forEach(dot => {
@@ -4743,8 +5557,10 @@ class MemoManager {
         const doSave = async () => {
             const name = nameInput.value.trim();
             if (!name) { nameInput.classList.add('input-error'); setTimeout(() => nameInput.classList.remove('input-error'), 800); return; }
-            if (this.categories.some(c => c.name === name)) { nameInput.classList.add('input-error'); nameInput.placeholder = '已存在'; nameInput.value = ''; setTimeout(() => { nameInput.classList.remove('input-error'); nameInput.placeholder = '分类名称...'; }, 1200); return; }
-            this.categories.push({ id: this.generateId(), name, color: selectedColor });
+            if (this.categories.some(c => c.name === name)) { nameInput.classList.add('input-error'); nameInput.placeholder = '已存在'; nameInput.value = ''; setTimeout(() => { nameInput.classList.remove('input-error'); nameInput.placeholder = placeholder; }, 1200); return; }
+            const newCat = { id: this.generateId(), name, color: selectedColor };
+            if (parentId) newCat.parentId = parentId;
+            this.categories.push(newCat);
             await this.saveCategories();
             this._refreshCategoryList(panel);
             this.updateCategorySelects();
@@ -4763,46 +5579,113 @@ class MemoManager {
     }
     
     /**
-     * 根据搜索关键词过滤分类管理列表显示
+     * 根据搜索关键词过滤分类管理列表显示（适配折叠分组卡片结构）
      */
     filterCategoryManagerList(panel) {
         const searchInput = panel.querySelector('#category-manager-search');
         const listEl = panel.querySelector('#category-list');
         if (!searchInput || !listEl) return;
         const q = (searchInput.value || '').toLowerCase().trim();
-        listEl.querySelectorAll('.category-item').forEach(item => {
-            const name = (item.querySelector('.category-name') || item).textContent || '';
-            item.style.display = q && !name.toLowerCase().includes(q) ? 'none' : '';
+        listEl.querySelectorAll('.cat-accordion-group').forEach(group => {
+            const header = group.querySelector('.cat-accordion-header');
+            const nameEl = header ? header.querySelector('.cat-accordion-name') : null;
+            const parentName = nameEl ? nameEl.textContent : '';
+            const childEls = group.querySelectorAll('.cat-accordion-child');
+            let childMatch = false;
+            childEls.forEach(ch => {
+                const chName = (ch.querySelector('.cat-accordion-child-name') || ch).textContent || '';
+                if (q && chName.toLowerCase().includes(q)) childMatch = true;
+            });
+            const parentMatch = !q || parentName.toLowerCase().includes(q);
+            const match = parentMatch || childMatch;
+            group.style.display = match ? '' : 'none';
+            if (match && childMatch) group.classList.add('expanded');
         });
     }
     
     /**
-     * 渲染分类管理列表（返回 HTML 字符串）
+     * 获取一级分类（无 parentId 或 parentId 为空视为一级，向后兼容）
+     */
+    _getTopLevelCategories() {
+        return (this.categories || []).filter(c => !c.parentId);
+    }
+    
+    /**
+     * 获取某分类的子分类
+     */
+    _getChildCategories(parentId) {
+        return (this.categories || []).filter(c => c.parentId === parentId);
+    }
+    
+    /**
+     * 获取分类 ID 及其所有子分类 ID 的数组（用于层级过滤）
+     */
+    _getCategoryAndChildIds(categoryId) {
+        const ids = [categoryId];
+        const children = this._getChildCategories(categoryId);
+        children.forEach(ch => ids.push(ch.id));
+        return ids;
+    }
+    
+    /**
+     * 渲染分类管理列表（折叠分组卡片结构）
      */
     renderCategoryManagerList() {
-        if (this.categories.length === 0) {
-            return '<div class="category-empty"><i class="fas fa-folder-open"></i><p>暂无分类</p><p class="category-empty-hint">点击下方"新建分类"或在搜索框输入名称后回车</p></div>';
+        const topLevel = this._getTopLevelCategories();
+        if (topLevel.length === 0) {
+            return '<div class="category-empty"><i class="fas fa-folder-open"></i><p>暂无分类</p><p class="category-empty-hint">点击下方"新建一级分类"或在搜索框输入名称后回车</p></div>';
         }
-        return this.categories.map(cat => {
-            const count = this.memos.filter(m => m.categoryId === cat.id).length;
-            const rgb = this._hexToRgb(cat.color || '#64b4ff');
-            const chipBg = rgb ? `rgba(${rgb.r},${rgb.g},${rgb.b},0.15)` : 'rgba(100,180,255,0.15)';
-            const chipColor = cat.color || '#64b4ff';
-            return `
-            <div class="category-item" data-id="${cat.id}" draggable="true">
-                <span class="category-drag-handle" title="拖拽排序"><i class="fas fa-grip-vertical"></i></span>
-                <span class="category-chip" style="background:${chipBg};color:${chipColor}">
-                    <i class="fas fa-circle" style="font-size:6px"></i>
-                    ${this.escapeHtml(cat.name)}
-                </span>
-                <span class="category-count" title="任务数">${count}</span>
-                <div class="category-actions">
-                    <button class="category-edit-btn" data-id="${cat.id}" title="编辑"><i class="fas fa-pen"></i></button>
-                    <button class="category-delete-btn" data-id="${cat.id}" title="删除"><i class="fas fa-trash"></i></button>
+        let html = '';
+        topLevel.forEach((parent, idx) => {
+            const children = this._getChildCategories(parent.id);
+            const parentCount = this.memos.filter(m => m.categoryId === parent.id).length;
+            const childrenCount = children.reduce((sum, ch) => sum + this.memos.filter(m => m.categoryId === ch.id).length, 0);
+            const totalCount = parentCount + childrenCount;
+            const color = parent.color || '#64b4ff';
+            html += `
+            <div class="cat-accordion-group${idx === 0 ? ' expanded' : ''}" data-id="${parent.id}" draggable="true">
+                <div class="cat-accordion-header">
+                    <span class="cat-accordion-chevron"><i class="fas fa-chevron-right"></i></span>
+                    <div class="cat-accordion-color" style="background:${color}"></div>
+                    <span class="cat-accordion-name">${this.escapeHtml(parent.name)}</span>
+                    <div class="cat-accordion-right">
+                        <div class="cat-accordion-stats">
+                            <span>${totalCount} 任务</span>
+                            ${children.length > 0 ? `<span class="cat-accordion-sub-count">${children.length} 子分类</span>` : ''}
+                        </div>
+                        <div class="cat-accordion-actions">
+                            <button title="添加子分类"><i class="fas fa-plus"></i></button>
+                            <button title="编辑"><i class="fas fa-pen"></i></button>
+                            <button title="删除"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </div>
+                </div>
+                <div class="cat-accordion-children">
+                    ${children.map(ch => {
+                        const chCount = this.memos.filter(m => m.categoryId === ch.id).length;
+                        const chColor = ch.color || parent.color || '#64b4ff';
+                        return `
+                        <div class="cat-accordion-child" data-id="${ch.id}" draggable="true">
+                            <span class="cat-accordion-child-dot" style="background:${chColor}"></span>
+                            <span class="cat-accordion-child-name">${this.escapeHtml(ch.name)}</span>
+                            <div class="cat-accordion-child-right">
+                                <span class="cat-accordion-child-count">${chCount}</span>
+                                <div class="cat-accordion-child-actions">
+                                    <button title="编辑"><i class="fas fa-pen"></i></button>
+                                    <button title="删除"><i class="fas fa-trash"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                        `;
+                    }).join('')}
+                    <div class="cat-accordion-add-sub" data-parent="${parent.id}">
+                        <i class="fas fa-plus"></i> 添加子分类
+                    </div>
                 </div>
             </div>
-        `;
-        }).join('');
+            `;
+        });
+        return html;
     }
     
     _hexToRgb(hex) {
@@ -4818,95 +5701,294 @@ class MemoManager {
     }
     
     /**
-     * 绑定分类项事件
+     * 绑定分类项事件（折叠分组卡片）
      */
     bindCategoryItemEvents(panel) {
         const listEl = panel.querySelector('#category-list');
         if (!listEl) return;
         
-        // 双击名称进入编辑
-        listEl.querySelectorAll('.category-name').forEach(el => {
-            el.addEventListener('dblclick', (e) => {
-                const item = e.target.closest('.category-item');
-                if (item && item.dataset.id) this.editCategory(item.dataset.id, panel);
+        // 一级分类折叠/展开
+        listEl.querySelectorAll('.cat-accordion-header').forEach(header => {
+            header.addEventListener('click', (e) => {
+                if (e.target.closest('.cat-accordion-actions')) return;
+                const group = header.closest('.cat-accordion-group');
+                if (group) group.classList.toggle('expanded');
             });
         });
         
-        // 编辑按钮
-        listEl.querySelectorAll('.category-edit-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const id = e.currentTarget.dataset.id;
-                this.editCategory(id, panel);
+        // 添加子分类
+        listEl.querySelectorAll('.cat-accordion-add-sub').forEach(el => {
+            el.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const parentId = el.dataset.parent;
+                if (parentId) this._showInlineCreate(panel, parentId);
             });
         });
         
-        // 删除按钮
-        listEl.querySelectorAll('.category-delete-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                const id = e.currentTarget.dataset.id;
-                if (confirm('确定要删除这个分类吗？相关任务将变为无分类。')) {
-                    await this.deleteCategoryById(id);
-                    listEl.innerHTML = this.renderCategoryManagerList();
-                    this.bindCategoryItemEvents(panel);
-                    this.updateCategorySelects();
-                    this.renderSidebarTaskList();
+        // 一级分类头部的添加子分类按钮
+        listEl.querySelectorAll('.cat-accordion-group').forEach(group => {
+            const addBtn = group.querySelector('.cat-accordion-actions button[title="添加子分类"]');
+            if (addBtn) {
+                addBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this._showInlineCreate(panel, group.dataset.id);
+                });
+            }
+            const editBtn = group.querySelector('.cat-accordion-actions button[title="编辑"]');
+            if (editBtn) {
+                editBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.editCategory(group.dataset.id, panel);
+                });
+            }
+            const deleteBtn = group.querySelector('.cat-accordion-actions button[title="删除"]');
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    this._confirmDeleteCategory(group.dataset.id, panel);
+                });
+            }
+        });
+        
+        // 子分类的编辑、删除
+        listEl.querySelectorAll('.cat-accordion-child').forEach(child => {
+            child.addEventListener('dblclick', (e) => {
+                if (e.target.closest('.cat-accordion-child-actions')) return;
+                this.editCategory(child.dataset.id, panel);
+            });
+            child.querySelectorAll('.cat-accordion-child-actions button[title="编辑"]').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.editCategory(child.dataset.id, panel);
+                });
+            });
+            child.querySelectorAll('.cat-accordion-child-actions button[title="删除"]').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    this._confirmDeleteCategory(child.dataset.id, panel);
+                });
+            });
+        });
+        
+        // 跨层级拖拽：记录拖拽来源类型和 ID
+        let dragType = null;  // 'group' | 'child'
+        let dragId = null;
+
+        const clearAllDragStyles = () => {
+            listEl.querySelectorAll('.cat-accordion-group, .cat-accordion-child').forEach(el => {
+                el.classList.remove('cat-accordion-drag-over-top', 'cat-accordion-drag-over-bottom', 'cat-accordion-drag-over-into', 'cat-accordion-dragging');
+            });
+            const dropRoot = panel.querySelector('.cat-drag-promote-zone');
+            if (dropRoot) dropRoot.classList.remove('cat-drag-promote-active');
+        };
+
+        // 一级分类拖拽
+        listEl.querySelectorAll('.cat-accordion-group').forEach(group => {
+            group.addEventListener('dragstart', (e) => {
+                e.stopPropagation();
+                dragType = 'group';
+                dragId = group.dataset.id;
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', dragId);
+                group.classList.add('cat-accordion-dragging');
+            });
+            group.addEventListener('dragend', () => {
+                clearAllDragStyles();
+                dragType = null;
+                dragId = null;
+            });
+            group.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!dragId || dragId === group.dataset.id) return;
+                e.dataTransfer.dropEffect = 'move';
+                group.classList.remove('cat-accordion-drag-over-top', 'cat-accordion-drag-over-bottom', 'cat-accordion-drag-over-into');
+                if (dragType === 'child') {
+                    group.classList.add('cat-accordion-drag-over-into');
+                } else {
+                    const rect = group.getBoundingClientRect();
+                    const mid = rect.top + rect.height / 2;
+                    group.classList.toggle('cat-accordion-drag-over-bottom', e.clientY > mid);
+                    group.classList.toggle('cat-accordion-drag-over-top', e.clientY <= mid);
+                }
+            });
+            group.addEventListener('dragleave', (e) => {
+                if (!group.contains(e.relatedTarget)) {
+                    group.classList.remove('cat-accordion-drag-over-bottom', 'cat-accordion-drag-over-top', 'cat-accordion-drag-over-into');
+                }
+            });
+            group.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                clearAllDragStyles();
+                const fromId = dragId;
+                const toId = group.dataset.id;
+                if (!fromId || fromId === toId) return;
+
+                if (dragType === 'child') {
+                    // 子分类 → 拖到一级分类上 = 切换父分类
+                    await this._dragMoveChildToParent(fromId, toId, panel);
+                } else if (dragType === 'group') {
+                    const fromCat = this.categories.find(c => c.id === fromId);
+                    const toCat = this.categories.find(c => c.id === toId);
+                    if (!fromCat || !toCat) return;
+                    if (toCat.parentId) return;  // 目标不是一级，不处理
+
+                    const rect = group.getBoundingClientRect();
+                    const third = rect.height / 3;
+                    const relY = e.clientY - rect.top;
+
+                    if (relY > third && relY < third * 2) {
+                        // 中间区域 → 变为子分类
+                        await this._dragMakeGroupChild(fromId, toId, panel);
+                    } else {
+                        // 上/下区域 → 排序
+                        const topLevel = this._getTopLevelCategories();
+                        const fromIdx = topLevel.findIndex(c => c.id === fromId);
+                        const toIdx = topLevel.findIndex(c => c.id === toId);
+                        if (fromIdx === -1 || toIdx === -1) return;
+                        const [moved] = topLevel.splice(fromIdx, 1);
+                        const insertIdx = relY >= third * 2
+                            ? (fromIdx < toIdx ? toIdx : toIdx + 1)
+                            : (fromIdx < toIdx ? toIdx - 1 : toIdx);
+                        topLevel.splice(insertIdx, 0, moved);
+                        this._reorderCategoriesByTopLevel(topLevel);
+                        await this.saveCategories();
+                        this._refreshCategoryList(panel);
+                        this.updateCategorySelects();
+                    }
                 }
             });
         });
-        
-        // 拖拽排序
-        listEl.querySelectorAll('.category-item').forEach(item => {
-            const handle = item.querySelector('.category-drag-handle');
-            const dragEl = handle || item;
-            dragEl.addEventListener('dragstart', (e) => {
+
+        // 子分类拖拽
+        listEl.querySelectorAll('.cat-accordion-child').forEach(child => {
+            child.addEventListener('dragstart', (e) => {
+                e.stopPropagation();
+                dragType = 'child';
+                dragId = child.dataset.id;
                 e.dataTransfer.effectAllowed = 'move';
-                e.dataTransfer.setData('text/plain', item.dataset.id);
-                item.classList.add('category-dragging');
+                e.dataTransfer.setData('text/plain', dragId);
+                child.classList.add('cat-accordion-dragging');
             });
-            dragEl.addEventListener('dragend', () => item.classList.remove('category-dragging'));
-            item.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-                const fromId = e.dataTransfer.getData('text/plain');
-                if (!fromId || fromId === item.dataset.id) return;
-                const rect = item.getBoundingClientRect();
-                const mid = rect.top + rect.height / 2;
-                item.classList.toggle('category-drag-over-bottom', e.clientY > mid);
-                item.classList.toggle('category-drag-over-top', e.clientY <= mid);
-            });
-            item.addEventListener('dragleave', () => {
-                item.classList.remove('category-drag-over-bottom');
-                item.classList.remove('category-drag-over-top');
-            });
-            item.addEventListener('drop', async (e) => {
-                e.preventDefault();
-                item.classList.remove('category-drag-over-bottom');
-                item.classList.remove('category-drag-over-top');
-                const fromId = e.dataTransfer.getData('text/plain');
-                if (!fromId || fromId === item.dataset.id) return;
-                const fromIndex = this.categories.findIndex(c => c.id === fromId);
-                const toIndex = this.categories.findIndex(c => c.id === item.dataset.id);
-                if (fromIndex === -1 || toIndex === -1) return;
-                const [moved] = this.categories.splice(fromIndex, 1);
-                const dropOnBottom = item.classList.contains('category-drag-over-bottom');
-                let insertIndex = dropOnBottom ? (fromIndex < toIndex ? toIndex : toIndex + 1) : (fromIndex < toIndex ? toIndex - 1 : toIndex);
-                this.categories.splice(insertIndex, 0, moved);
-                await this.saveCategories();
-                listEl.innerHTML = this.renderCategoryManagerList();
-                this.bindCategoryItemEvents(panel);
-                this.updateCategorySelects();
+            child.addEventListener('dragend', () => {
+                clearAllDragStyles();
+                dragType = null;
+                dragId = null;
             });
         });
+
+        // 「提升为一级分类」拖拽区域
+        const promoteZone = panel.querySelector('.cat-drag-promote-zone');
+        if (promoteZone) {
+            promoteZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                if (dragType === 'child' && dragId) {
+                    promoteZone.classList.add('cat-drag-promote-active');
+                }
+            });
+            promoteZone.addEventListener('dragleave', () => {
+                promoteZone.classList.remove('cat-drag-promote-active');
+            });
+            promoteZone.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                promoteZone.classList.remove('cat-drag-promote-active');
+                if (dragType === 'child' && dragId) {
+                    await this._dragPromoteToTopLevel(dragId, panel);
+                }
+            });
+        }
     }
     
     /**
-     * 编辑分类
+     * 拖拽：将一级分类变为另一个一级分类的子分类
+     */
+    async _dragMakeGroupChild(fromId, toParentId, panel) {
+        const from = this.categories.find(c => c.id === fromId);
+        const toParent = this.categories.find(c => c.id === toParentId);
+        if (!from || !toParent || toParent.parentId) return;
+
+        // 将其子分类一并迁移
+        const children = this._getChildCategories(fromId);
+        from.parentId = toParentId;
+        children.forEach(ch => { ch.parentId = toParentId; });
+
+        await this.saveCategories();
+        this._refreshCategoryList(panel);
+        this.updateCategorySelects();
+        this.renderSidebarTaskList();
+    }
+    
+    /**
+     * 拖拽：将子分类移动到新的父分类下
+     */
+    async _dragMoveChildToParent(childId, newParentId, panel) {
+        const child = this.categories.find(c => c.id === childId);
+        const newParent = this.categories.find(c => c.id === newParentId);
+        if (!child || !newParent || newParent.parentId) return;
+        if (child.parentId === newParentId) return;
+
+        child.parentId = newParentId;
+        await this.saveCategories();
+        this._refreshCategoryList(panel);
+        this.updateCategorySelects();
+        this.renderSidebarTaskList();
+    }
+    
+    /**
+     * 拖拽：将子分类提升为一级分类
+     */
+    async _dragPromoteToTopLevel(childId, panel) {
+        const child = this.categories.find(c => c.id === childId);
+        if (!child || !child.parentId) return;
+
+        delete child.parentId;
+        await this.saveCategories();
+        this._refreshCategoryList(panel);
+        this.updateCategorySelects();
+        this.renderSidebarTaskList();
+    }
+    
+    /**
+     * 按一级分类顺序重新排列 categories 数组
+     */
+    _reorderCategoriesByTopLevel(topLevelOrder) {
+        const result = [];
+        topLevelOrder.forEach(parent => {
+            result.push(parent);
+            this._getChildCategories(parent.id).forEach(ch => result.push(ch));
+        });
+        this.categories = result;
+    }
+    
+    /**
+     * 确认删除分类
+     */
+    async _confirmDeleteCategory(categoryId, panel) {
+        const category = this.categories.find(c => c.id === categoryId);
+        if (!category) return;
+        const children = this._getChildCategories(categoryId);
+        const msg = children.length > 0
+            ? `确定要删除 "${category.name}" 及其 ${children.length} 个子分类吗？相关任务将变为无分类。`
+            : '确定要删除这个分类吗？相关任务将变为无分类。';
+        if (confirm(msg)) {
+            await this.deleteCategoryById(categoryId);
+            this._refreshCategoryList(panel);
+            this.updateCategorySelects();
+            this.renderSidebarTaskList();
+        }
+    }
+    
+    /**
+     * 编辑分类（适配折叠分组卡片：一级分类编辑 header，子分类编辑 child 行）
      */
     editCategory(categoryId, panel) {
         const category = this.categories.find(c => c.id === categoryId);
         if (!category) return;
         
-        const itemEl = panel.querySelector(`.category-item[data-id="${categoryId}"]`);
+        const groupEl = panel.querySelector(`.cat-accordion-group[data-id="${categoryId}"]`);
+        const childEl = panel.querySelector(`.cat-accordion-child[data-id="${categoryId}"]`);
+        const itemEl = groupEl ? groupEl.querySelector('.cat-accordion-header') : childEl;
         if (!itemEl) return;
         
         const presetColors = ['#64b4ff', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#a3a3a3'];
@@ -4972,23 +6054,23 @@ class MemoManager {
     }
     
     /**
-     * 删除分类
+     * 删除分类（含子分类级联删除，相关任务变为无分类）
      */
     async deleteCategoryById(categoryId) {
-        this.categories = this.categories.filter(c => c.id !== categoryId);
+        const toDelete = [categoryId];
+        const children = this._getChildCategories(categoryId);
+        children.forEach(ch => toDelete.push(ch.id));
+        this.categories = this.categories.filter(c => !toDelete.includes(c.id));
         await this.saveCategories();
         
-        // 清除使用该分类的任务的分类ID
         let needSave = false;
         this.memos.forEach(memo => {
-            if (memo.categoryId === categoryId) {
+            if (toDelete.includes(memo.categoryId)) {
                 memo.categoryId = null;
                 needSave = true;
             }
         });
-        if (needSave) {
-            await this.saveMemos();
-        }
+        if (needSave) await this.saveMemos();
     }
     
     /**
@@ -5166,6 +6248,7 @@ class MemoManager {
         const titleInput = document.getElementById('sidebar-task-title');
         const textInput = document.getElementById('sidebar-task-text');
         const prioritySelect = document.getElementById('sidebar-task-priority');
+        const startInput = document.getElementById('sidebar-task-start');
         const dueInput = document.getElementById('sidebar-task-due');
         const previewList = document.getElementById('image-preview-list');
         
@@ -5197,8 +6280,10 @@ class MemoManager {
             titleInput.value = task.title || '';
             textInput.value = task.text || '';
             prioritySelect.value = task.priority || 'none';
+            if (startInput) startInput.value = task.startDate || '';
             dueInput.value = task.dueDate || '';
             if (this._formCategoryCombobox) this._formCategoryCombobox.setValue(task.categoryId || '');
+            this._updateDurationHint();
             
             // 加载重复任务配置
             if (recurrenceSelect) {
@@ -5283,8 +6368,10 @@ class MemoManager {
             titleInput.value = '';
             textInput.value = '';
             prioritySelect.value = 'none';
+            if (startInput) startInput.value = '';
             dueInput.value = this.getTodayDate();
             if (this._formCategoryCombobox) this._formCategoryCombobox.setValue('');
+            this._updateDurationHint();
             
             // 设置重复类型（支持从习惯区域添加）
             if (recurrenceSelect) {
@@ -5863,6 +6950,64 @@ class MemoManager {
     }
     
     /**
+     * 获取任务的有效开始日期 key（优先 startDate，否则用 createdAt）
+     */
+    getTaskStartKey(task) {
+        return task.startDate || this.formatDateFromTimestamp(task.createdAt);
+    }
+    
+    /**
+     * 计算两个日期间的工作日数（排除周末）
+     * @param {string} startStr 'YYYY-MM-DD'
+     * @param {string} endStr 'YYYY-MM-DD'
+     * @returns {number} 工作日天数（含首尾）
+     */
+    calcWorkdays(startStr, endStr) {
+        if (!startStr || !endStr || startStr > endStr) return 0;
+        let count = 0;
+        const cur = new Date(startStr + 'T00:00:00');
+        const end = new Date(endStr + 'T00:00:00');
+        while (cur <= end) {
+            const dow = cur.getDay();
+            if (dow !== 0 && dow !== 6) count++;
+            cur.setDate(cur.getDate() + 1);
+        }
+        return count;
+    }
+    
+    /**
+     * 计算两个日期间的自然日数（含首尾）
+     */
+    calcCalendarDays(startStr, endStr) {
+        if (!startStr || !endStr || startStr > endStr) return 0;
+        const s = new Date(startStr + 'T00:00:00');
+        const e = new Date(endStr + 'T00:00:00');
+        return Math.round((e - s) / (1000 * 60 * 60 * 24)) + 1;
+    }
+    
+    /**
+     * 更新表单中的工期提示
+     */
+    _updateDurationHint() {
+        const hint = document.getElementById('task-duration-hint');
+        if (!hint) return;
+        const startInput = document.getElementById('sidebar-task-start');
+        const dueInput = document.getElementById('sidebar-task-due');
+        const start = startInput?.value;
+        const end = dueInput?.value;
+        
+        if (start && end && start <= end) {
+            const calDays = this.calcCalendarDays(start, end);
+            const workDays = this.calcWorkdays(start, end);
+            hint.style.display = '';
+            hint.querySelector('.duration-text').innerHTML = 
+                `<i class="fas fa-clock"></i> 周期 ${calDays} 天（工作日 ${workDays} 天 / ${(workDays / 5).toFixed(1)} 周）`;
+        } else {
+            hint.style.display = 'none';
+        }
+    }
+    
+    /**
      * 隐藏侧边栏任务表单
      */
     hideSidebarForm() {
@@ -5981,10 +7126,12 @@ class MemoManager {
             progress = Math.round((doneCount / subtasks.length) * 100);
         }
         
+        const startInput = document.getElementById('sidebar-task-start');
         const taskData = {
             title: title,
             text: textInput.value.trim(),
             priority: prioritySelect.value,
+            startDate: startInput ? (startInput.value || null) : null,
             dueDate: dueInput.value || null,
             images: images,
             links: links,
@@ -6846,7 +7993,13 @@ class MemoManager {
             const list = allowAll
                 ? [{ id: 'all', name: '全部分类', color: null }]
                 : [{ id: '', name: '无分类', color: null }];
-            (this.categories || []).forEach(c => list.push({ id: c.id, name: c.name, color: c.color || '#64b4ff' }));
+            const topLevel = (this.categories || []).filter(c => !c.parentId);
+            topLevel.forEach(parent => {
+                list.push({ id: parent.id, name: parent.name, color: parent.color || '#64b4ff' });
+                (this.categories || []).filter(c => c.parentId === parent.id).forEach(child => {
+                    list.push({ id: child.id, name: '— ' + child.name, color: child.color || parent.color || '#64b4ff' });
+                });
+            });
             return list;
         };
         
@@ -6900,11 +8053,22 @@ class MemoManager {
                     <span class="category-combobox-option-name">${this.escapeHtml(opt.name)}</span>
                 </li>
             `).join('');
+            if (opts.showManageEntry !== false) {
+                listbox.innerHTML += `<li class="category-combobox-manage" role="option" data-action="manage"><i class="fas fa-cog"></i> 管理分类</li>`;
+            }
             highlightedIndex = filtered.length > 0 ? 0 : -1;
             listbox.querySelectorAll('.category-combobox-option').forEach((el, i) => {
                 el.setAttribute('aria-selected', i === 0 ? 'true' : 'false');
                 el.addEventListener('click', (e) => { e.stopPropagation(); selectValue(el.dataset.value); });
             });
+            const manageBtn = listbox.querySelector('.category-combobox-manage');
+            if (manageBtn) {
+                manageBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    closeList();
+                    this.showCategoryManager();
+                });
+            }
         };
         
         const selectValue = (id) => {
@@ -9634,6 +10798,164 @@ class MemoManager {
         } catch (error) {
             console.error('初始化调整大小功能时发生错误:', error);
         }
+    }
+
+    // ===================== 紧急任务浮动气泡 =====================
+
+    _getUrgencyLevel(task) {
+        if (!task.dueDate || task.completed) return null;
+        const today = this.getTodayDate();
+        const d = new Date();
+        const tomorrow = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).toISOString().split('T')[0];
+        const in3 = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 3).toISOString().split('T')[0];
+
+        if (task.dueDate < today) return 'overdue';
+        if (task.dueDate === today) return 'today';
+        if (task.dueDate === tomorrow) return 'tomorrow';
+        if (task.dueDate <= in3) return 'soon';
+        return null;
+    }
+
+    _urgencyLabel(level, dueDate) {
+        const today = this.getTodayDate();
+        if (level === 'overdue') {
+            const diff = Math.floor((new Date(today) - new Date(dueDate)) / 86400000);
+            return `逾期${diff}天`;
+        }
+        if (level === 'today') return '今天到期';
+        if (level === 'tomorrow') return '明天到期';
+        if (level === 'soon') {
+            const diff = Math.floor((new Date(dueDate) - new Date(today)) / 86400000);
+            return `还剩${diff}天`;
+        }
+        return '';
+    }
+
+    _updateUrgentBubble() {
+        const bubble = document.getElementById('urgent-bubble');
+        if (!bubble) return;
+
+        const urgentTasks = this.memos
+            .map(t => ({ ...t, _urgency: this._getUrgencyLevel(t) }))
+            .filter(t => t._urgency)
+            .sort((a, b) => {
+                const order = { overdue: 0, today: 1, tomorrow: 2, soon: 3 };
+                return (order[a._urgency] ?? 9) - (order[b._urgency] ?? 9);
+            });
+
+        if (urgentTasks.length === 0) {
+            bubble.style.display = 'none';
+            this._clearUrgentMiniBarTimer();
+            return;
+        }
+
+        bubble.style.display = '';
+        const numEl = document.getElementById('urgent-bubble-num');
+        const titleEl = document.getElementById('urgent-panel-title');
+        const bodyEl = document.getElementById('urgent-panel-body');
+        const dotEl = document.getElementById('urgent-bubble-dot');
+        const miniBar = document.getElementById('urgent-mini-bar');
+
+        if (numEl) numEl.textContent = urgentTasks.length;
+        if (titleEl) titleEl.textContent = `${urgentTasks.length}个任务需要关注`;
+
+        // 根据是否有 overdue 设置气泡颜色
+        const hasOverdue = urgentTasks.some(t => t._urgency === 'overdue');
+        if (dotEl) {
+            dotEl.classList.toggle('has-overdue', hasOverdue);
+        }
+
+        if (bodyEl) {
+            bodyEl.innerHTML = urgentTasks.map(t => {
+                const cat = t.categoryId ? this.getCategoryName(t.categoryId) : '';
+                const label = this._urgencyLabel(t._urgency, t.dueDate);
+                return `
+                    <div class="urgent-task-item urgent-level-${t._urgency}" data-id="${t.id}">
+                        <div class="urgent-task-bar"></div>
+                        <div class="urgent-task-info">
+                            <div class="urgent-task-name">${this.escapeHtml(t.title || '无标题')}</div>
+                            <div class="urgent-task-meta">${cat ? cat + ' · ' : ''}${t.dueDate}</div>
+                        </div>
+                        <span class="urgent-task-badge">${label}</span>
+                    </div>
+                `;
+            }).join('');
+
+            bodyEl.querySelectorAll('.urgent-task-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const task = this.memos.find(m => m.id === item.dataset.id);
+                    if (task) this.showSidebarForm(task);
+                    bubble.classList.remove('expanded');
+                });
+            });
+        }
+
+        // 更新简易摘要条
+        this._clearUrgentMiniBarTimer();
+        bubble._urgentTasks = urgentTasks;
+        this._updateUrgentMiniBar(bubble);
+
+        // 多条任务时启动轮播
+        if (urgentTasks.length > 1) {
+            bubble._miniBarTimer = setInterval(() => {
+                if (bubble._miniBarPaused) return;
+                this._rotateUrgentMiniBar(bubble);
+            }, 5000);
+        }
+
+        if (!bubble._eventsBound) {
+            bubble._eventsBound = true;
+            const dot = document.getElementById('urgent-bubble-dot');
+            const closeBtn = document.getElementById('urgent-panel-close');
+            if (dot) dot.addEventListener('click', () => bubble.classList.add('expanded'));
+            if (closeBtn) closeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                bubble.classList.remove('expanded');
+            });
+            // 摘要条点击展开面板；悬停暂停轮播
+            if (miniBar) {
+                miniBar.addEventListener('click', () => bubble.classList.add('expanded'));
+                miniBar.addEventListener('mouseenter', () => { bubble._miniBarPaused = true; });
+                miniBar.addEventListener('mouseleave', () => { bubble._miniBarPaused = false; });
+            }
+        }
+    }
+
+    _clearUrgentMiniBarTimer() {
+        const bubble = document.getElementById('urgent-bubble');
+        if (bubble && bubble._miniBarTimer) {
+            clearInterval(bubble._miniBarTimer);
+            bubble._miniBarTimer = null;
+        }
+    }
+
+    _updateUrgentMiniBar(bubble) {
+        const tasks = bubble._urgentTasks;
+        if (!tasks || tasks.length === 0) return;
+        const miniBar = document.getElementById('urgent-mini-bar');
+        const miniText = document.getElementById('urgent-mini-text');
+        if (!miniBar || !miniText) return;
+
+        const idx = (bubble._miniBarIndex ?? 0) % tasks.length;
+        const t = tasks[idx];
+        const label = this._urgencyLabel(t._urgency, t.dueDate);
+        const title = (t.title || '无标题').replace(/\s+/g, ' ').trim();
+        const shortTitle = title.length > 16 ? title.slice(0, 16) + '…' : title;
+
+        miniText.textContent = `⚠ ${label} ${shortTitle}`;
+        miniBar.className = 'urgent-mini-bar urgent-level-' + t._urgency;
+    }
+
+    _rotateUrgentMiniBar(bubble) {
+        const tasks = bubble._urgentTasks;
+        if (!tasks || tasks.length <= 1) return;
+        const miniBar = document.getElementById('urgent-mini-bar');
+        if (miniBar) miniBar.classList.add('urgent-mini-rotating');
+        bubble._miniBarIndex = (bubble._miniBarIndex ?? 0) + 1;
+        this._updateUrgentMiniBar(bubble);
+        setTimeout(() => {
+            if (miniBar) miniBar.classList.remove('urgent-mini-rotating');
+        }, 400);
     }
 }
 

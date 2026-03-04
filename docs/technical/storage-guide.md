@@ -28,6 +28,7 @@ Chrome 扩展提供三种存储区域，本扩展根据数据特性选择合适�
     categoryId: string,      // 分类ID 或 null
     tagIds: string[],        // 标签ID数组
     priority: string,        // 优先级: 'high' | 'medium' | 'low' | 'none'
+    startDate: string,       // 开始日期: 'YYYY-MM-DD' 或 null (v1.7.0+)
     dueDate: string,         // 截止日期: 'YYYY-MM-DD' 或 null
     images: Array<{          // 图片数组 (v1.5.0+)
         id: string,
@@ -45,11 +46,20 @@ Chrome 扩展提供三种存储区域，本扩展根据数据特性选择合适�
 
 ```javascript
 {
-    id: string,      // 唯一标识符
-    name: string,    // 分类名称
-    color: string    // 颜色代码 (如 '#6366f1')
+    id: string,          // 唯一标识符
+    name: string,        // 分类名称
+    color: string,       // 颜色代码 (如 '#6366f1')
+    parentId: string     // 父分类ID 或 undefined/null (v1.6.0+)
+                         // 有 parentId 为二级分类，无 parentId 为一级分类
 }
 ```
+
+**层级说明：**
+- 支持两级分类结构（一级 / 二级）
+- 一级分类：`parentId` 为空或不存在
+- 二级分类：`parentId` 指向一级分类的 `id`
+- 拖拽操作可改变分类层级，不影响任务的 `categoryId`
+- 选择一级分类筛选时，自动包含其所有子分类下的任务
 
 ### 2.3 标签对象 (Tag)
 
@@ -232,7 +242,49 @@ async saveMemos() {
 
 建议用户定期清理已完成的旧任务，保持存储健康。
 
+## 八、日历与周回顾的数据使用
+
+### 8.1 任务日期跨度 (v1.7.0+ 更新)
+
+任务的时间跨度由 **有效开始日期** 和 `dueDate`（截止日期）决定：
+
+**有效开始日期规则：**
+- 优先使用 `startDate`（用户手动设置的计划开始日期）
+- 若未设置 `startDate`，则回退到 `createdAt`（创建日期）
+- 代码实现：`getTaskStartKey(task)` → `task.startDate || formatDateFromTimestamp(task.createdAt)`
+
+**任务分类：**
+- **单日任务**: 无 `dueDate` 或 `dueDate` 等于有效开始日期
+- **多日任务**: `dueDate` 晚于有效开始日期，任务覆盖其间所有日期
+
+### 8.2 工期计算能力 (v1.7.0+)
+
+支持两种工期计算方式：
+
+| 计算方式 | 方法 | 说明 |
+|---------|------|------|
+| 自然日 | `calcCalendarDays(start, end)` | 含首尾的日历天数 |
+| 工作日 | `calcWorkdays(start, end)` | 排除周末（周六、周日） |
+
+**工期展示位置：**
+- 任务编辑表单：自动显示周期提示（自然日 + 工作日 + 换算周数）
+- 日历面板：多日任务显示日期范围和工作日天数
+- 周回顾：甘特图 tooltip、时间线卡片显示工作日信息
+- 任务管理页详情面板：显示工期统计
+
+### 8.3 日历面板数据聚合
+
+- `buildTaskMapByDateSpan()`: 按日期跨度映射，基于有效开始日期
+- `getMultiDayTasksForMonth()`: 获取当月涉及的多日任务，用于轨道渲染
+
+### 8.4 周回顾面板
+
+- 时间范围：当前日期的前后 ±1 周 / ±2 周 / ±1 月 / ±2 月
+- 数据来源：复用 `getTaskStartKey()` 和 `dueDate` 计算跨度
+- 4 种视图模式：甘特图、时间线、看板列、热力条形图
+- 分类筛选：支持包含/排除模式
+
 ---
 
-*文档版本: 1.0.0*  
-*最后更新: 2026-02-05*
+*文档版本: 1.2.0*  
+*最后更新: 2026-03-03*
