@@ -4136,11 +4136,11 @@ class MemoManager {
                 <div class="bm-spotlight-header">
                     <i class="fas fa-search bm-spotlight-icon"></i>
                     <input type="text" class="bm-spotlight-input" id="bm-spotlight-input"
-                        placeholder="搜索书签...（语义搜索已${rag._vectorMap.size > 0 ? '就绪' : '关闭'}）" autofocus>
+                        placeholder="搜索书签...（支持自然语言，语义搜索已${rag._vectorMap.size > 0 ? '就绪' : '关闭'}）" autofocus>
                     <span class="bm-spotlight-hint">ESC 关闭</span>
                 </div>
                 <div class="bm-spotlight-results" id="bm-spotlight-results">
-                    <div class="bm-spotlight-tip">输入关键词搜索书签，支持语义匹配</div>
+                    <div class="bm-spotlight-tip">输入关键词或描述需求搜索书签，支持中英文混合与语义匹配</div>
                 </div>
             </div>
         `;
@@ -4162,7 +4162,7 @@ class MemoManager {
             const query = input.value.trim();
             currentQuery = query;
             if (!query) {
-                results.innerHTML = '<div class="bm-spotlight-tip">输入关键词搜索书签，支持语义匹配</div>';
+                results.innerHTML = '<div class="bm-spotlight-tip">输入关键词或描述需求搜索书签，支持中英文混合与语义匹配</div>';
                 currentResults = [];
                 selectedIdx = -1;
                 return;

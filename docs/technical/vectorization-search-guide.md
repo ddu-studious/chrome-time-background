@@ -1,6 +1,6 @@
 # 书签向量化与搜索机制说明
 
-> 最后更新: 2026-03-04
+> 最后更新: 2026-03-05
 > 适用版本: v2.2.0+
 > 核心文件: `js/bookmark-rag.js`
 
@@ -143,17 +143,27 @@ processBookmarks(onProgress)
 | `aiTags` | +3 | AI 标签 |
 | `pageDescription` | +2 | 页面 meta 描述（v2.2.0 新增） |
 
-**分词策略**：按空格分词（`query.split(/\s+/)`），每个 term 独立匹配。中文输入不含空格时作为整体子串匹配。
+**分词策略**（v2.3.0 智能分词）：多层管道分词 `_tokenize(query)`，支持中英文混合、停用词过滤、N-gram 扩展。
 
 ```
-查询 "react hooks"  → terms: ["react", "hooks"]
-查询 "前端框架"     → terms: ["前端框架"]（整体匹配）
-查询 "react 入门"   → terms: ["react", "入门"]（混合匹配）
+查询 "react hooks"      → primary: ["react", "hooks"]
+查询 "前端框架"         → primary: ["前端", "框架"]（Intl.Segmenter 分词）
+查询 "我要学习Agent"    → primary: ["学习", "agent"]（中英文交界分词 + 停用词过滤）
+查询 "react 入门"       → primary: ["react", "入门"]
+查询 "帮我找个好用的AI工具" → primary: ["好用", "ai", "工具"]
 ```
+
+分词管道：
+1. 中英文/数字交界自动插入空格
+2. 标点归一化
+3. `Intl.Segmenter`（Chrome 87+ 内置）精细分词
+4. 停用词过滤（中英文常见虚词 ~100 个）
+5. N-gram 扩展（3 字以上中文词提取 2 字子词，权重减半）
 
 **评分规则**：
-- 命中任一字段: `matched = true`，累加对应权重
-- 未命中: `score -= 5`（惩罚不相关）
+- 主要 term 命中: `matched = true`，累加对应权重
+- 主要 term 未命中: `score -= 3`（惩罚）
+- N-gram 扩展词命中: `matched = true`，权重减半（title +5, summary +3...）
 - 最终过滤: `matched && score > 0`
 
 ### 3.2 向量搜索 (`vectorSearch`)
@@ -165,10 +175,20 @@ cosineSimilarity(a, b) = dot(a, b) / (||a|| × ||b||)
 ```
 
 **流程**：
-1. 将查询文本转为向量（调用 Embedding API 或使用缓存）
-2. 遍历所有书签向量，计算余弦相似度
-3. 过滤阈值 > 0.3 的结果
-4. 按相似度降序排列
+1. 查询预处理：`_buildSemanticQuery()` 去停用词，提取核心语义词
+2. 将预处理后的文本转为向量（调用 Embedding API 或使用缓存）
+3. 遍历所有书签向量，计算余弦相似度
+4. 动态阈值过滤（v2.3.0）：根据查询长度自适应
+5. 按相似度降序排列
+
+**动态阈值**（v2.3.0 新增）：
+
+| 查询长度 | 阈值 | 适用场景 |
+|---------|------|---------|
+| ≤5 字符 | 0.35 | 短关键词（"React"） |
+| 6-15 字符 | 0.25 | 中等查询（"前端框架"） |
+| 16-30 字符 | 0.20 | 长查询（"学习Agent最佳实践"） |
+| >30 字符 | 0.15 | 自然语言需求描述 |
 
 **向量搜索的优势**：
 - "前端框架" 可以匹配 "Getting Started with React"（语义相关）
@@ -259,7 +279,7 @@ C 的 RRF 分 = 1/(60+2+1) + 0 = 0.0159
 | Embedding 维度 | 384 | 平衡精度与存储 |
 | 批处理大小 | 25 | 单次 API 调用的文本数 |
 | 批处理间隔 | 300ms | 避免 API 限流 |
-| 向量搜索阈值 | 0.3 | 低于此相似度不返回 |
+| 向量搜索阈值 | 0.15-0.35（动态） | 根据查询长度自适应（v2.3.0） |
 | RRF 常数 k | 60 | 标准推荐值 |
 | Spotlight 防抖 | 250ms | 输入延迟 |
 | 书签面板防抖 | 300ms | 输入延迟 |
@@ -317,4 +337,420 @@ Embedding 文本构建
 
 ---
 
-*文档版本: 1.0.0*
+## 8. 数据流程深度解析
+
+> 本节对第 7 节数据流向图中的三个核心环节展开详细说明，包含实际代码调用链、
+> 数据格式和存储细节。
+
+### 8.1 网页摘要抓取（Content Extraction + LLM Summary）
+
+#### 8.1.1 整体流程
+
+```
+用户点击"抓取摘要"按钮
+    │
+    ▼ extractAndSummarize(bookmark)
+前端 bookmark-rag.js
+    │
+    ▼ _extractWebContent(url)
+    │  chrome.runtime.sendMessage({ action: 'extractWebContent', url })
+    │
+    ▼ Service Worker (background.js)
+    │  extractWebContentInTab(url)
+    │
+    ├─ 1. 创建隐藏标签页
+    │     chrome.tabs.create({ url, active: false })
+    │
+    ├─ 2. 等待页面加载完成
+    │     监听 chrome.tabs.onUpdated → status === 'complete'
+    │     超时限制: 20 秒
+    │
+    ├─ 3. 额外等待 1 秒（等待 JS 渲染）
+    │
+    ├─ 4. 注入提取脚本
+    │     chrome.scripting.executeScript({ target: { tabId }, func: ... })
+    │
+    ├─ 5. 脚本在目标页面 DOM 中提取:
+    │     ├─ title        ← document.title
+    │     ├─ description  ← meta[name="description"] 或 meta[property="og:description"]
+    │     ├─ headings     ← h1/h2/h3 前 10 个
+    │     └─ bodyText     ← 正文内容（去除导航/广告/侧边栏，截取前 3000 字符）
+    │
+    └─ 6. 关闭隐藏标签页
+          chrome.tabs.remove(tabId)
+```
+
+#### 8.1.2 隐藏标签页 + 脚本注入机制
+
+**为什么用隐藏标签页？**
+
+Chrome 扩展无法直接用 `fetch` 获取并解析另一个网页的 DOM（跨域限制 + 需要浏览器渲染环境）。解决方案是：
+
+1. **创建一个 `active: false` 的标签页**：在后台悄悄打开目标网页，用户看不到
+2. **等待页面完全加载**：通过 `chrome.tabs.onUpdated` 事件监听 `status === 'complete'`
+3. **注入脚本提取内容**：用 `chrome.scripting.executeScript` 在目标页面的上下文中执行 JavaScript，直接操作该页面的 DOM
+
+**权限要求**：
+- `tabs` — 创建和管理标签页
+- `scripting` — 注入脚本到标签页
+- `<all_urls>`（可选权限）— 允许脚本注入到任意网站
+
+#### 8.1.3 正文提取策略
+
+注入脚本的内容提取逻辑按优先级查找主体内容区域：
+
+```
+article 标签 > main 标签 > [role="main"] > document.body (兜底)
+```
+
+找到主体后，**克隆节点**并移除噪声元素：
+```
+移除的元素: script, style, nav, header, footer, aside, iframe,
+           [role="navigation"], [role="banner"],
+           .sidebar, .nav, .menu, .ad, .advertisement,
+           .social-share, .comment, .comments
+```
+
+最终取 `innerText`，合并空白字符，截取前 **3000 个字符** 作为正文内容。
+
+#### 8.1.4 LLM 生成摘要与标签
+
+提取到原始内容后，调用 LLM（Chat API）生成结构化的摘要：
+
+```
+输入:
+  ├─ 网页标题 (title)
+  ├─ 页面描述 (description)
+  └─ 正文节选 (bodyText 前 2000 字符)
+
+Prompt 要求:
+  ├─ 生成 50-100 字中文摘要
+  └─ 提取 5-10 个关键词标签
+
+输出 (JSON):
+  {
+    "summary": "React 官方文档，涵盖组件、Hooks、状态管理...",
+    "tags": ["react", "hooks", "前端框架", "组件化", "javascript"]
+  }
+```
+
+**调用参数**：
+- 模型：用户配置的 Chat 模型（如 deepseek-chat、gpt-4o-mini、gemini-2.0-flash）
+- temperature: 0.3（低随机性，输出稳定）
+- max_tokens: 500
+- 超时: 15 秒
+- 开启 `json_mode`（响应格式为 JSON）
+
+**容错处理**：LLM 返回的可能不是合法 JSON，代码会用正则 `/"summary"\s*:\s*"([^"]+)"/` 兜底提取。
+
+#### 8.1.5 抓取结果存入书签
+
+抓取完成后，以下字段会更新到书签对象并持久化到 `chrome.storage.local`：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `summary` | string | LLM 生成的中文摘要 |
+| `contentTags` | string[] | LLM 提取的关键词标签 |
+| `contentExtractedAt` | number | 抓取时间戳 |
+| `contentLength` | number | 原始正文长度 |
+| `pageDescription` | string | 页面 meta description |
+
+如果该书签已有向量（`embeddingDone === true`），会自动触发 **re-embedding**，用新的摘要信息重新生成向量。
+
+---
+
+### 8.2 Embedding 向量化（调用外部 API）
+
+#### 8.2.1 文本构建
+
+每个书签在向量化前，会先构建一段组合文本作为 Embedding 的输入：
+
+```
+构建规则 (_buildEmbeddingText):
+    title + domain + summary + contentTags + aiTags
+    各部分用空格拼接
+
+示例:
+    输入书签: { title: "React 官方文档", domain: "react.dev",
+               summary: "React 是 Facebook 开发的前端框架...",
+               contentTags: ["react", "hooks"], aiTags: ["frontend"] }
+
+    生成文本: "React 官方文档 react.dev React 是 Facebook 开发的前端框架... react hooks frontend"
+```
+
+**设计意图**：将书签的多维信息（标题、域名、摘要、标签）融合为一段密集文本，让 Embedding 模型能捕捉到完整的语义信息。
+
+#### 8.2.2 API 调用细节
+
+使用 **OpenAI 兼容协议** 调用 Embedding API，这意味着 DeepSeek、OpenAI、Gemini 和自定义端点使用统一的请求格式：
+
+```
+请求:
+    POST {baseUrl}/embeddings
+    Headers:
+      Content-Type: application/json
+      Authorization: Bearer {apiKey}
+    Body:
+      {
+        "model": "deepseek-embedding",     // 因 provider 而异
+        "input": ["文本1", "文本2", ...],   // 批量输入（最多 25 条）
+        "dimensions": 384                   // DeepSeek 不发此参数
+      }
+
+响应:
+    {
+      "data": [
+        { "embedding": [0.12, -0.34, 0.56, ..., 0.78], "index": 0 },
+        { "embedding": [0.15, -0.31, 0.52, ..., 0.75], "index": 1 },
+        ...
+      ]
+    }
+```
+
+**后处理**：
+- 如果返回的向量维度超过 384，截取前 384 维
+- 将 JavaScript 普通数组转为 `Float32Array`（节省内存，加速计算）
+
+**各 Provider 差异**：
+
+| Provider | 模型 | 特殊处理 |
+|----------|------|---------|
+| DeepSeek | deepseek-embedding | 不发 `dimensions` 参数（API 不支持） |
+| OpenAI | text-embedding-3-small | 发 `dimensions: 384` |
+| Gemini | text-embedding-004 | 发 `dimensions: 384` |
+| 自定义 | 用户配置 | 发 `dimensions`（如支持） |
+
+#### 8.2.3 批量处理流程
+
+处理大量书签时（如首次启用），采用分批策略避免 API 限流：
+
+```
+processBookmarks(onProgress)
+    │
+    ├─ 筛选: status === 'active' && embeddingDone === false
+    │
+    └─ 循环 (每批 25 条):
+        │
+        ├─ 为每条书签构建 embedding text
+        │
+        ├─ 一次 API 调用传入 25 条文本
+        │     POST /embeddings { input: [text1, text2, ..., text25] }
+        │
+        ├─ 收到 25 个 384 维向量
+        │
+        ├─ 写入 IndexedDB (持久化)
+        ├─ 写入 _vectorMap (内存)
+        ├─ 标记 embeddingDone = true
+        │
+        ├─ 回调 onProgress({ processed, failed, total, percent })
+        │
+        └─ 等待 300ms → 处理下一批
+```
+
+**关键参数**：
+- `BATCH_SIZE = 25`：单次 API 调用的文本数
+- `BATCH_DELAY_MS = 300`：批次间等待时间（防止触发 API 速率限制）
+- 支持中途取消：`cancelProcessing()` 设置 `isProcessing = false`
+
+#### 8.2.4 增量处理
+
+当用户新增书签或书签标题/URL 发生变化时，不需要重新处理所有书签，而是单独处理变化的那一条：
+
+```
+processNewBookmark(bookmark)
+    │
+    ├─ 构建 embedding text
+    ├─ 调用 API 获取 1 个向量
+    ├─ 保存到 IndexedDB + _vectorMap
+    └─ 标记 embeddingDone = true
+```
+
+**变化监听**：通过 `chrome.bookmarks.onCreated / onChanged / onRemoved / onMoved` 事件实时响应。
+
+---
+
+### 8.3 数据存储机制（IndexedDB + 内存双层架构）
+
+#### 8.3.1 存储架构总览
+
+```
+┌─────────────────────────────────────────────────────┐
+│                     内存层 (运行时)                    │
+│                                                      │
+│  _vectorMap: Map<bookmarkId, Float32Array(384)>      │
+│  ├─ 用于实时向量搜索                                  │
+│  └─ 页面加载时从 IndexedDB 恢复                       │
+│                                                      │
+├──────────────────────────────────────────────────────┤
+│                   持久化层 (IndexedDB)                 │
+│                                                      │
+│  数据库: BookmarkRAGIndex (version: 1)                │
+│                                                      │
+│  ├─ Object Store: vectors                            │
+│  │   keyPath: 'id'                                   │
+│  │   结构: { id, embedding[], text, ts }             │
+│  │                                                   │
+│  └─ Object Store: queryCache                         │
+│      keyPath: 'query'                                │
+│      结构: { query, embedding[], ts }                │
+│                                                      │
+├──────────────────────────────────────────────────────┤
+│                   元数据层 (chrome.storage.local)      │
+│                                                      │
+│  bookmarkCache: {                                    │
+│    version: 1,                                       │
+│    lastSyncTime: timestamp,                          │
+│    items: [{                                         │
+│      id, title, url, domain, dateAdded, parentId,    │
+│      aiTags, embeddingDone, srs, status,             │
+│      summary, contentTags, contentExtractedAt,       │
+│      contentLength, pageDescription                  │
+│    }, ...]                                           │
+│  }                                                   │
+└──────────────────────────────────────────────────────┘
+```
+
+#### 8.3.2 为什么用 IndexedDB 而不是 chrome.storage？
+
+| 维度 | chrome.storage.local | IndexedDB |
+|------|---------------------|-----------|
+| 容量 | 10MB（QUOTA_BYTES） | 理论无上限（浏览器管理） |
+| 数据类型 | JSON 序列化 | 支持 ArrayBuffer、Blob 等二进制 |
+| 查询能力 | 仅 key-value get/set | 支持 index、range、cursor |
+| 适合场景 | 小量配置、书签元数据 | 大量向量数据（每条 384×4=1.5KB） |
+| 并发访问 | 无事务控制 | 完整事务支持 |
+
+**结论**：书签元数据（标题、URL、标签等）存 `chrome.storage.local`；大量向量数据存 `IndexedDB`。1000 条书签的向量约占 1.5MB，chrome.storage 可能吃紧，IndexedDB 则毫无压力。
+
+#### 8.3.3 IndexedDB 数据库操作详解
+
+**打开/创建数据库** (`_openDB`)：
+
+```
+indexedDB.open('BookmarkRAGIndex', 1)
+    │
+    ├─ onupgradeneeded (首次或版本升级):
+    │   ├─ 创建 'vectors' store (keyPath: 'id')
+    │   └─ 创建 'queryCache' store (keyPath: 'query')
+    │
+    └─ onsuccess: 缓存 db 实例到 this._db
+```
+
+**保存向量** (`_saveVectorsToDB`)：
+
+```
+输入: [{ id: "123", embedding: Float32Array(384), text: "原始文本" }]
+
+步骤:
+1. 开启读写事务: db.transaction('vectors', 'readwrite')
+2. 遍历每条向量:
+   ├─ Float32Array → 普通数组 (Array.from) 以便 IndexedDB 序列化
+   ├─ store.put({ id, embedding: [...], text, ts: Date.now() })
+   └─ 同步写入内存 _vectorMap.set(id, Float32Array)
+3. 等待事务完成: tx.oncomplete
+```
+
+**加载向量到内存** (`_loadVectorsFromDB`)：
+
+```
+页面加载时调用:
+1. 开启只读事务
+2. store.getAll() 获取所有向量记录
+3. 遍历结果:
+   普通数组 → new Float32Array(embedding) → _vectorMap.set(id, ...)
+4. 日志: "Loaded N vectors from IndexedDB"
+```
+
+**查询向量缓存** (`_getCachedQueryVector / _cacheQueryVector`)：
+
+```
+搜索时:
+1. 标准化查询: query.trim().toLowerCase()
+2. 查找缓存: store.get(normalizedQuery)
+3. 检查过期: Date.now() - result.ts < 24h?
+   ├─ 未过期: 返回缓存的 Float32Array（省一次 API 调用）
+   └─ 已过期或不存在: 调用 Embedding API → 缓存结果
+```
+
+#### 8.3.4 数据生命周期
+
+```
+书签收藏
+    │
+    ▼ Chrome Bookmarks API 事件
+syncBookmarks() → bookmarkCache (chrome.storage.local)
+    │
+    ▼ [用户触发]
+extractAndSummarize() → 更新 summary/contentTags → bookmarkCache
+    │
+    ▼ [用户触发 / 自动]
+processBookmarks() → _callEmbeddingAPI()
+    │
+    ├─ vectors → IndexedDB (BookmarkRAGIndex.vectors)
+    └─ Float32Array → _vectorMap (内存)
+
+搜索时:
+    query → _callEmbeddingAPI() / 查缓存
+                                    │
+                                    ├─ 缓存命中 → 直接用
+                                    └─ 缓存未命中 → API → 存入 queryCache
+
+书签删除:
+    │
+    ├─ bookmarkCache 移除条目
+    ├─ IndexedDB 删除向量 (_deleteVectorFromDB)
+    └─ _vectorMap 删除条目
+```
+
+#### 8.3.5 数据量估算
+
+| 1000 条书签 | 大小估算 |
+|------------|---------|
+| bookmarkCache (chrome.storage.local) | ~500KB（含摘要和标签） |
+| vectors (IndexedDB) | ~1.5MB（384 维 × 4 bytes × 1000） |
+| _vectorMap (内存) | ~1.5MB（Float32Array） |
+| queryCache (IndexedDB) | 极小（几十条缓存查询） |
+
+---
+
+## 9. 操作示例：一条书签的完整处理链路
+
+以收藏 `https://react.dev` 为例，展示从收藏到可被语义搜索命中的全过程：
+
+```
+Step 1: 用户收藏网页
+    → chrome.bookmarks.onCreated 触发
+    → syncBookmarks() 生成初始记录:
+      { id: "789", title: "React", url: "https://react.dev",
+        domain: "react.dev", aiTags: [], embeddingDone: false,
+        summary: "", contentTags: [] }
+
+Step 2: 用户点击"抓取摘要"
+    → extractAndSummarize(bookmark)
+    → background.js 创建隐藏标签页打开 react.dev
+    → 注入脚本提取: title/description/headings/bodyText
+    → LLM 生成: summary="React 是 Facebook 开源的前端 UI 框架..."
+                tags=["react", "hooks", "前端框架", "facebook", "javascript"]
+    → 更新 bookmarkCache
+
+Step 3: 用户点击"向量化处理"
+    → processBookmarks()
+    → 构建文本: "React react.dev React 是 Facebook 开源的前端 UI 框架... react hooks 前端框架 facebook javascript"
+    → POST https://api.deepseek.com/v1/embeddings
+      { model: "deepseek-embedding", input: ["React react.dev..."] }
+    → 获得 384 维向量: [0.12, -0.34, 0.56, ...]
+    → IndexedDB.put({ id: "789", embedding: [...], text: "...", ts: ... })
+    → _vectorMap.set("789", Float32Array([0.12, -0.34, ...]))
+
+Step 4: 用户搜索"前端框架教程"
+    → hybridSearch("前端框架教程")
+    → 关键词路径: "前端框架" 命中 contentTags → score +4
+    → 向量路径: query → Embedding API → 384 维查询向量
+      → cosine("前端框架教程"向量, React 书签向量) = 0.82 (高相关!)
+    → RRF 融合: 两路都命中 → _matchType: "hybrid"
+    → React 书签排名靠前，展示给用户
+```
+
+---
+
+*文档版本: 1.2.0*

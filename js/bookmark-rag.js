@@ -2,6 +2,7 @@
  * 书签智能检索系统 (Bookmark RAG)
  * Phase 1: 书签目录管理、本地 BM25 搜索、AI 配置
  * Phase 2: Embedding 生成、向量搜索、混合搜索、IndexedDB 持久化、Spotlight
+ * Phase 3: 智能分词（中英文混合 + Intl.Segmenter + 停用词 + N-gram）、动态语义阈值、查询预处理
  */
 
 class BookmarkRAG {
@@ -262,12 +263,99 @@ class BookmarkRAG {
         });
     }
 
+    // ========== 智能分词 ==========
+
+    static STOP_WORDS = new Set([
+        '我', '你', '他', '她', '它', '们', '的', '了', '着', '过',
+        '是', '在', '有', '个', '要', '想', '去', '到', '把', '被',
+        '让', '和', '与', '或', '但', '而', '就', '都', '也', '还',
+        '又', '这', '那', '能', '可', '会', '不', '很', '太', '最',
+        '更', '一', '所', '吗', '呢', '吧', '啊', '哦', '么', '好',
+        '帮', '找', '搜', '看', '给', '用', '做', '来', '上', '下',
+        '请', '想要', '帮我', '可以', '什么', '怎么', '如何', '有没有',
+        '关于', '因为', '所以', '如果', '非常', '一个', '一些',
+        '我要', '我想', '看看', '找个', '上有', '好的', '好用', '相关',
+        '没有', '还有', '然后', '以及', '或者', '之后', '之前', '知道',
+        'i', 'me', 'my', 'the', 'a', 'an', 'is', 'are', 'was', 'were',
+        'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from',
+        'and', 'or', 'not', 'no', 'it', 'this', 'that', 'do', 'does',
+        'how', 'what', 'where', 'when', 'which', 'who', 'can', 'will',
+        'about', 'some', 'any', 'all', 'just', 'like', 'get', 'find'
+    ]);
+
+    _tokenize(query) {
+        if (!query?.trim()) return { primary: [], expanded: [] };
+
+        let text = query.trim();
+
+        // 中英文/数字交界插入空格
+        text = text
+            .replace(/([a-zA-Z0-9])(?=[\u4e00-\u9fff])/g, '$1 ')
+            .replace(/([\u4e00-\u9fff])(?=[a-zA-Z0-9])/g, '$1 ');
+
+        // 标点归一化
+        text = text.replace(/[，。！？、；：""''（）【】《》]/g, ' ');
+
+        // 空格分词 + 小写化
+        let rawTerms = text.toLowerCase().split(/\s+/).filter(Boolean);
+
+        // 尝试 Intl.Segmenter 精细分词（Chrome 87+）
+        if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+            try {
+                const segmenter = new Intl.Segmenter('zh-CN', { granularity: 'word' });
+                const segmented = [];
+                for (const term of rawTerms) {
+                    if (/[\u4e00-\u9fff]{2,}/.test(term)) {
+                        const words = [...segmenter.segment(term)]
+                            .filter(s => s.isWordLike)
+                            .map(s => s.segment.toLowerCase());
+                        segmented.push(...words);
+                    } else {
+                        segmented.push(term);
+                    }
+                }
+                rawTerms = segmented;
+            } catch { /* Intl.Segmenter 不可用，回退空格分词 */ }
+        }
+
+        // 过滤停用词
+        const primary = rawTerms.filter(t => t.length > 0 && !BookmarkRAG.STOP_WORDS.has(t));
+
+        // 中文 N-gram 扩展（对 3 字以上中文词提取 2 字子词）
+        const expanded = new Set();
+        for (const term of primary) {
+            if (/[\u4e00-\u9fff]{3,}/.test(term)) {
+                for (let i = 0; i < term.length - 1; i++) {
+                    const bigram = term.substring(i, i + 2);
+                    if (!BookmarkRAG.STOP_WORDS.has(bigram)) {
+                        expanded.add(bigram);
+                    }
+                }
+            }
+        }
+
+        // expanded 去除已在 primary 中的
+        const primarySet = new Set(primary);
+        const uniqueExpanded = [...expanded].filter(t => !primarySet.has(t));
+
+        return { primary, expanded: uniqueExpanded };
+    }
+
+    _buildSemanticQuery(query) {
+        const { primary } = this._tokenize(query);
+        return primary.length > 0 ? primary.join(' ') : query.trim();
+    }
+
     // ========== 本地搜索 (BM25 关键词) ==========
 
     search(query) {
         if (!query || !query.trim()) return this.bookmarks.filter(b => b.status === 'active');
 
-        const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+        const { primary, expanded } = this._tokenize(query);
+        if (primary.length === 0 && expanded.length === 0) {
+            return this.bookmarks.filter(b => b.status === 'active');
+        }
+
         const results = [];
 
         for (const bm of this.bookmarks) {
@@ -280,7 +368,7 @@ class BookmarkRAG {
             let score = 0;
             let matched = false;
 
-            for (const term of terms) {
+            for (const term of primary) {
                 if (searchText.includes(term)) {
                     matched = true;
                     if (bm.title.toLowerCase().includes(term)) score += 10;
@@ -290,7 +378,19 @@ class BookmarkRAG {
                     if ((bm.aiTags || []).some(t => t.toLowerCase().includes(term))) score += 3;
                     if (descText.includes(term)) score += 2;
                 } else {
-                    score -= 5;
+                    score -= 3;
+                }
+            }
+
+            // N-gram 扩展词匹配（权重减半）
+            for (const term of expanded) {
+                if (searchText.includes(term)) {
+                    matched = true;
+                    if (bm.title.toLowerCase().includes(term)) score += 5;
+                    if (summaryText.includes(term)) score += 3;
+                    if (bm.domain.toLowerCase().includes(term)) score += 2;
+                    if ((bm.contentTags || []).some(t => t.toLowerCase().includes(term))) score += 2;
+                    if ((bm.aiTags || []).some(t => t.toLowerCase().includes(term))) score += 1;
                 }
             }
 
@@ -637,14 +737,23 @@ class BookmarkRAG {
         return denom === 0 ? 0 : dot / denom;
     }
 
-    vectorSearch(queryEmbedding, topK = 20) {
+    _getSemanticThreshold(query) {
+        const len = (query || '').trim().length;
+        if (len <= 5) return 0.35;
+        if (len <= 15) return 0.25;
+        if (len <= 30) return 0.20;
+        return 0.15;
+    }
+
+    vectorSearch(queryEmbedding, topK = 20, query = '') {
+        const threshold = this._getSemanticThreshold(query);
         const results = [];
         for (const bm of this.bookmarks) {
             if (bm.status !== 'active') continue;
             const vec = this._vectorMap.get(bm.id);
             if (!vec) continue;
             const score = this._cosineSimilarity(queryEmbedding, vec);
-            if (score > 0.3) {
+            if (score > threshold) {
                 results.push({ ...bm, _vectorScore: score, _matchType: 'semantic' });
             }
         }
@@ -663,13 +772,15 @@ class BookmarkRAG {
 
         if (hasEmbeddings && this.settings?.aiApiKey) {
             try {
-                let queryVec = await this._getCachedQueryVector(query);
+                const semanticQuery = this._buildSemanticQuery(query);
+                const cacheKey = semanticQuery || query.trim();
+                let queryVec = await this._getCachedQueryVector(cacheKey);
                 if (!queryVec) {
-                    const [vec] = await this._callEmbeddingAPI([query.trim()]);
+                    const [vec] = await this._callEmbeddingAPI([cacheKey]);
                     queryVec = vec;
-                    await this._cacheQueryVector(query, vec);
+                    await this._cacheQueryVector(cacheKey, vec);
                 }
-                semanticResults = this.vectorSearch(queryVec, topK * 2);
+                semanticResults = this.vectorSearch(queryVec, topK * 2, query);
             } catch (e) {
                 console.warn('[BookmarkRAG] Semantic search failed, falling back to keyword-only:', e);
             }

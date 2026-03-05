@@ -1,5 +1,42 @@
 # 更新日志
 
+## [2.3.0] - 2026-03-05
+
+### 新增
+- **智能查询理解**
+  - 多层分词管道 `_tokenize()`：中英文/数字交界自动分词、标点归一化
+  - `Intl.Segmenter` 精细中文分词（Chrome 87+ 内置，零体积）
+  - 中文停用词过滤（~100 个常见虚词："我"、"要"、"的"、"帮我"…）
+  - 中文 N-gram 子词扩展（3 字以上中文词提取 2 字子词，权重减半）
+- **动态语义阈值**
+  - 根据查询长度自适应：短查询（≤5字符）0.35 → 长查询（>30字符）0.15
+  - 自然语言描述式搜索不再因阈值过高被过滤
+- **查询向量预处理**
+  - `_buildSemanticQuery()` 去停用词后再生成 Embedding，向量更聚焦
+  - 例："我要学习Agent" → Embedding 输入变为 "学习 agent"
+
+### 修复
+- 修复中英文混合无空格输入（如 "我要学习Agent"）搜索不到结果的 Bug
+- 修复关键词搜索 N-gram 扩展词未命中时的不合理惩罚
+
+### 改进
+- 关键词未命中惩罚从 -5 调整为 -3，减少假阴性
+- Spotlight 搜索框提示文案更新，明确支持自然语言和中英文混合
+
+### 技术
+- 新增 `BookmarkRAG.STOP_WORDS` — 中英文停用词表
+- 新增 `_tokenize()` — 多层分词管道（中英文交界 + Intl.Segmenter + 停用词 + N-gram）
+- 新增 `_buildSemanticQuery()` — 查询向量预处理
+- 新增 `_getSemanticThreshold()` — 动态语义阈值
+- 更新 `search()` — 使用新分词器 + N-gram 扩展匹配
+- 更新 `vectorSearch()` — 支持动态阈值
+- 更新 `hybridSearch()` — 查询预处理后再生成 Embedding
+
+### 文档
+- 新增 `docs/requirements/v2.3.0-intelligent-query-search-enhancement.md` — PRD
+- 新增 `docs/research/search-enhancement-research.md` — 技术调研报告
+- 更新 `docs/technical/vectorization-search-guide.md` — 分词策略、动态阈值说明
+
 ## [2.2.0] - 2026-03-04
 
 ### 新增
