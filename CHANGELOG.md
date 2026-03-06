@@ -1,5 +1,25 @@
 # 更新日志
 
+## [2.3.1] - 2026-03-05
+
+### 修复 & 优化
+- **新增通义千问（阿里云百炼）作为默认 AI 服务商**
+  - 模型：`text-embedding-v4`（Qwen3-Embedding 系列），支持 100+ 语种，中文优化
+  - 向量维度：1024，API 完全兼容 OpenAI 格式
+  - 免费额度：100 万 Token（90 天），价格约 ¥0.0005/千 Token
+  - 配置地址：`https://dashscope.aliyuncs.com/compatible-mode/v1`
+- **修复 DeepSeek Embedding 不可用问题**
+  - DeepSeek 官方已不提供 `deepseek-embedding` 模型
+  - 将 DeepSeek 标记为"仅 Chat 精排"，配置向导中增加提示徽章
+  - 选择 DeepSeek 时给出引导提示，避免 Embedding 报错
+- **调整各 Provider 向量维度**
+  - 通义千问：1024 维（text-embedding-v4 默认）
+  - OpenAI：1536 维（text-embedding-3-small）
+  - Gemini：768 维（text-embedding-004）
+  - 自定义：默认 1024 维
+- **优化 `_callEmbeddingAPI`**：基于 `supportsDimensions` 标志决定是否传 `dimensions` 参数（Gemini 不支持该参数）
+- **UI 优化**：Provider 卡片增加"仅 Chat 精排"徽章，区分不支持 Embedding 的服务商
+
 ## [2.3.0] - 2026-03-05
 
 ### 新增

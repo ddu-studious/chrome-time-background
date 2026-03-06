@@ -4395,10 +4395,11 @@ class MemoManager {
                         <div class="bm-wizard-title">选择 AI 服务商</div>
                         <div class="bm-provider-grid" id="bm-provider-grid">
                             ${Object.entries(rag.AI_PROVIDERS).map(([key, p]) => `
-                                <div class="bm-provider-card ${rag.settings.aiProvider === key ? 'selected' : ''}" data-provider="${key}">
+                                <div class="bm-provider-card ${rag.settings.aiProvider === key ? 'selected' : ''}${p.embeddingUnsupported ? ' bm-provider-card--chat-only' : ''}" data-provider="${key}">
                                     <div class="bm-provider-name">${p.name}</div>
                                     <div class="bm-provider-desc">${p.desc}</div>
                                     <div class="bm-provider-price">${p.pricing}</div>
+                                    ${p.embeddingUnsupported ? '<div class="bm-provider-badge">仅 Chat 精排</div>' : ''}
                                 </div>
                             `).join('')}
                         </div>
@@ -4413,7 +4414,7 @@ class MemoManager {
                         </div>
                         <div class="form-group" id="bm-custom-url-group" style="display:none; margin-bottom:12px;">
                             <label style="display:block; font-size:12px; color:rgba(255,255,255,0.5); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;">API 地址</label>
-                            <input type="url" id="bm-api-url-input" class="bm-wizard-input" placeholder="https://api.example.com/v1" value="${rag.settings.aiBaseUrl || ''}">
+                            <input type="url" id="bm-api-url-input" class="bm-wizard-input" placeholder="https://api.example.com/v1" value="${rag.settings.aiProvider === 'custom' ? (rag.settings.aiBaseUrl || '') : ''}">
                         </div>
                         <div class="form-group" id="bm-custom-model-group" style="display:none; margin-bottom:12px;">
                             <label style="display:block; font-size:12px; color:rgba(255,255,255,0.5); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;">模型名称</label>
@@ -4492,6 +4493,13 @@ class MemoManager {
                 if (urlGroup) urlGroup.style.display = isCustom ? 'block' : 'none';
                 if (modelGroup) modelGroup.style.display = isCustom ? 'block' : 'none';
 
+                const urlInput = document.getElementById('bm-api-url-input');
+                const modelInput = document.getElementById('bm-model-input');
+                if (!isCustom) {
+                    if (urlInput) urlInput.value = '';
+                    if (modelInput) modelInput.value = '';
+                }
+
                 const keyLink = document.getElementById('bm-get-key-link');
                 const provider = rag.AI_PROVIDERS[selectedProvider];
                 if (keyLink && provider?.keyUrl) {
@@ -4506,7 +4514,8 @@ class MemoManager {
         // 验证按钮
         document.getElementById('bm-verify-btn').addEventListener('click', async () => {
             const apiKey = document.getElementById('bm-api-key-input').value.trim();
-            const baseUrl = document.getElementById('bm-api-url-input')?.value.trim() || '';
+            const isCustom = selectedProvider === 'custom';
+            const baseUrl = isCustom ? (document.getElementById('bm-api-url-input')?.value.trim() || '') : '';
             const resultEl = document.getElementById('bm-verify-result');
 
             resultEl.classList.remove('hidden');
@@ -4534,6 +4543,10 @@ class MemoManager {
                     this.showToast('请选择一个 AI 服务商');
                     return;
                 }
+                const selProvider = rag.AI_PROVIDERS[selectedProvider];
+                if (selProvider?.embeddingUnsupported) {
+                    this.showToast('DeepSeek 不支持 Embedding，将仅用于 AI 精排。建议选择通义千问或 OpenAI 以启用向量搜索。');
+                }
                 wizardStep = 2;
                 updateSteps();
 
@@ -4542,6 +4555,13 @@ class MemoManager {
                 const modelGroup = document.getElementById('bm-custom-model-group');
                 if (urlGroup) urlGroup.style.display = isCustom ? 'block' : 'none';
                 if (modelGroup) modelGroup.style.display = isCustom ? 'block' : 'none';
+
+                const urlInput = document.getElementById('bm-api-url-input');
+                const modelInput = document.getElementById('bm-model-input');
+                if (!isCustom) {
+                    if (urlInput) urlInput.value = '';
+                    if (modelInput) modelInput.value = '';
+                }
 
                 const keyLink = document.getElementById('bm-get-key-link');
                 const provider = rag.AI_PROVIDERS[selectedProvider];
@@ -4610,8 +4630,9 @@ class MemoManager {
                 }
 
                 const apiKey = document.getElementById('bm-api-key-input').value.trim();
-                const baseUrl = document.getElementById('bm-api-url-input')?.value.trim() || '';
-                const model = document.getElementById('bm-model-input')?.value.trim() || '';
+                const isCustom = selectedProvider === 'custom';
+                const customBaseUrl = isCustom ? (document.getElementById('bm-api-url-input')?.value.trim() || '') : '';
+                const customModel = isCustom ? (document.getElementById('bm-model-input')?.value.trim() || '') : '';
                 const provider = rag.AI_PROVIDERS[selectedProvider];
 
                 const folders = await rag.getBookmarkFolders();
@@ -4621,8 +4642,8 @@ class MemoManager {
                     enabled: true,
                     aiProvider: selectedProvider,
                     aiApiKey: apiKey,
-                    aiBaseUrl: baseUrl || provider.baseUrl,
-                    aiModel: model || provider.defaultModel,
+                    aiBaseUrl: isCustom ? (customBaseUrl || provider.baseUrl) : provider.baseUrl,
+                    aiModel: isCustom ? (customModel || provider.defaultModel) : provider.defaultModel,
                     embeddingModel: provider.embeddingModel,
                     folderIds: Array.from(selectedFolders),
                     folderNames: selectedNames

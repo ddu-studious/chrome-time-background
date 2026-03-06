@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "中国风景时钟",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "一个展示中国风景的新标签页时钟，支持天气显示、多语言、备忘录、每日任务提醒和书签智能检索功能",
   "permissions": [
     "storage",
@@ -30,6 +30,7 @@
     "https://dev.to/*",
     "https://dailyhotapi-production-cad3.up.railway.app/*",
     "https://www.meczyc6.info/*",
+    "https://dashscope.aliyuncs.com/*",
     "https://api.deepseek.com/*",
     "https://api.openai.com/*",
     "https://generativelanguage.googleapis.com/*"

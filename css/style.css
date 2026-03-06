@@ -763,7 +763,7 @@
     border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-/* Toast 提示 */
+/* Toast 提示 — z-index 必须高于所有面板(10000)和右键菜单(100000) */
 .memo-toast {
     position: fixed;
     left: 50%;
@@ -777,7 +777,7 @@
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
     opacity: 0;
     transition: opacity 0.2s ease, transform 0.2s ease;
-    z-index: 9999;
+    z-index: 100001;
     pointer-events: none;
 }
 
@@ -1202,7 +1202,7 @@
     flex-shrink: 0;
 }
 
-/* Toast 提示 */
+/* Toast 提示 — z-index 必须高于所有面板和右键菜单 */
 .memo-toast {
     position: fixed;
     bottom: 24px;
@@ -1217,7 +1217,7 @@
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     opacity: 0;
     transition: all 0.3s ease;
-    z-index: 10001;
+    z-index: 100001;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -4116,6 +4116,28 @@
 .bm-provider-price {
     font-size: 11px;
     color: rgba(100, 180, 255, 0.8);
+}
+
+.bm-provider-card--chat-only {
+    opacity: 0.7;
+    border-style: dashed;
+}
+
+.bm-provider-card--chat-only:hover {
+    opacity: 0.85;
+}
+
+.bm-provider-badge {
+    display: inline-block;
+    margin-top: 6px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    background: rgba(255, 180, 50, 0.15);
+    color: rgba(255, 180, 50, 0.9);
+    border: 1px solid rgba(255, 180, 50, 0.3);
+    letter-spacing: 0.3px;
 }
 
 /* API Key 操作区 */

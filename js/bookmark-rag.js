@@ -22,14 +22,25 @@ class BookmarkRAG {
         this._vectorMap = new Map();
 
         this.AI_PROVIDERS = {
+            qwen: {
+                name: '通义千问（推荐）',
+                baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+                defaultModel: 'qwen-plus',
+                embeddingModel: 'text-embedding-v4',
+                dimension: 1024,
+                pricing: '约 ¥0.0005/千Token，100万免费额度',
+                desc: '国内最佳，中文优化，100+语种，免费额度大',
+                keyUrl: 'https://bailian.console.aliyun.com/?apiKey=1#/api-key'
+            },
             deepseek: {
-                name: 'DeepSeek',
+                name: 'DeepSeek（仅 Chat）',
                 baseUrl: 'https://api.deepseek.com/v1',
                 defaultModel: 'deepseek-chat',
-                embeddingModel: 'deepseek-embedding',
-                dimension: 384,
-                pricing: '约 ¥0.007/万次',
-                desc: '国内友好、成本最低',
+                embeddingModel: '',
+                embeddingUnsupported: true,
+                dimension: 0,
+                pricing: '约 ¥0.001/千Token',
+                desc: '推理能力强，不支持 Embedding（仅用于 AI 精排）',
                 keyUrl: 'https://platform.deepseek.com/api_keys'
             },
             openai: {
@@ -37,8 +48,8 @@ class BookmarkRAG {
                 baseUrl: 'https://api.openai.com/v1',
                 defaultModel: 'gpt-4o-mini',
                 embeddingModel: 'text-embedding-3-small',
-                dimension: 384,
-                pricing: '约 ¥0.015/万次',
+                dimension: 1536,
+                pricing: '约 ¥0.015/千Token',
                 desc: '最稳定、全球可用',
                 keyUrl: 'https://platform.openai.com/api-keys'
             },
@@ -47,7 +58,7 @@ class BookmarkRAG {
                 baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
                 defaultModel: 'gemini-2.0-flash',
                 embeddingModel: 'text-embedding-004',
-                dimension: 384,
+                dimension: 768,
                 pricing: '免费额度充足',
                 desc: '免费额度大、Google 生态',
                 keyUrl: 'https://aistudio.google.com/apikey'
@@ -57,7 +68,7 @@ class BookmarkRAG {
                 baseUrl: '',
                 defaultModel: '',
                 embeddingModel: '',
-                dimension: 384,
+                dimension: 1024,
                 pricing: '-',
                 desc: '支持 Ollama 等本地模型',
                 keyUrl: ''
@@ -85,7 +96,7 @@ class BookmarkRAG {
                     folderIds: [],
                     folderNames: [],
                     dailyReviewLimit: 5,
-                    aiProvider: '',
+                    aiProvider: 'qwen',
                     aiApiKey: '',
                     aiBaseUrl: '',
                     aiModel: '',
@@ -411,13 +422,35 @@ class BookmarkRAG {
         const url = baseUrl || config.baseUrl;
         if (!url || !apiKey) return { ok: false, error: '请填写 API 地址和密钥' };
 
+        const headers = { 'Authorization': `Bearer ${apiKey}` };
+
         try {
-            const response = await fetch(`${url}/models`, {
-                headers: { 'Authorization': `Bearer ${apiKey}` }
+            const modelsResp = await fetch(`${url}/models`, { headers });
+            if (modelsResp.ok) return { ok: true };
+            if (modelsResp.status === 401 || modelsResp.status === 403) {
+                return { ok: false, error: 'API Key 无效或无权限' };
+            }
+        } catch { /* /models 不可用，降级到 chat 探测 */ }
+
+        try {
+            const chatResp = await fetch(`${url}/chat/completions`, {
+                method: 'POST',
+                headers: { ...headers, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: config.defaultModel || 'gpt-4o-mini',
+                    messages: [{ role: 'user', content: 'hi' }],
+                    max_tokens: 1
+                })
             });
-            if (response.ok) return { ok: true };
-            if (response.status === 401) return { ok: false, error: 'API Key 无效' };
-            return { ok: false, error: `服务返回 ${response.status}` };
+            if (chatResp.ok) return { ok: true };
+            if (chatResp.status === 401 || chatResp.status === 403) {
+                return { ok: false, error: 'API Key 无效或无权限' };
+            }
+            const errBody = await chatResp.text().catch(() => '');
+            if (chatResp.status === 400 && errBody.includes('model')) {
+                return { ok: true };
+            }
+            return { ok: false, error: `服务返回 ${chatResp.status}` };
         } catch (e) {
             return { ok: false, error: `连接失败: ${e.message}` };
         }
@@ -617,12 +650,23 @@ class BookmarkRAG {
         const provider = this.AI_PROVIDERS[this.settings.aiProvider];
         if (!provider) throw new Error('未知的 AI 服务商');
 
-        const baseUrl = this.settings.aiBaseUrl || provider.baseUrl;
-        const model = this.settings.embeddingModel || provider.embeddingModel;
-        const dimension = provider.dimension || 384;
+        if (provider.embeddingUnsupported) {
+            throw new Error(`${provider.name} 不支持 Embedding，请切换到通义千问或 OpenAI 等支持 Embedding 的服务商`);
+        }
+
+        const baseUrl = this._resolveBaseUrl();
+        const model = this.settings.aiProvider === 'custom'
+            ? (this.settings.embeddingModel || provider.embeddingModel)
+            : (provider.embeddingModel || this.settings.embeddingModel);
+        if (!model) throw new Error(`${provider.name} 未配置 Embedding 模型`);
+
+        const dimension = provider.dimension || 1024;
 
         const body = { model, input: texts };
-        if (this.settings.aiProvider !== 'deepseek') {
+        // 支持 dimensions 参数的模型：qwen text-embedding-v3/v4、OpenAI text-embedding-3-*
+        // Gemini text-embedding-004 不支持 dimensions 参数
+        const supportsDimensions = ['qwen', 'openai', 'custom'].includes(this.settings.aiProvider);
+        if (supportsDimensions && dimension) {
             body.dimensions = dimension;
         }
 
@@ -866,14 +910,25 @@ class BookmarkRAG {
 
     // ========== LLM 重排序 (v2.2.0) ==========
 
+    _resolveBaseUrl() {
+        const provider = this.AI_PROVIDERS[this.settings.aiProvider];
+        if (!provider) return this.settings.aiBaseUrl || '';
+        if (this.settings.aiProvider === 'custom') {
+            return this.settings.aiBaseUrl || provider.baseUrl;
+        }
+        return provider.baseUrl;
+    }
+
     async _callChatAPI(prompt, options = {}) {
         if (!this.settings?.aiApiKey) throw new Error('未配置 API Key');
 
         const provider = this.AI_PROVIDERS[this.settings.aiProvider];
         if (!provider) throw new Error('未知的 AI 服务商');
 
-        const baseUrl = this.settings.aiBaseUrl || provider.baseUrl;
-        const model = this.settings.aiModel || provider.defaultModel;
+        const baseUrl = this._resolveBaseUrl();
+        const model = this.settings.aiProvider === 'custom'
+            ? (this.settings.aiModel || provider.defaultModel)
+            : (provider.defaultModel || this.settings.aiModel);
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), options.timeout || 15000);
