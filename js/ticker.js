@@ -3,45 +3,101 @@
  * 
  * 上层：主信息卡片（淡入淡出切换，6 秒轮播）
  * 下层：迷你连续滚动栏（CSS marquee，展示所有条目）
- * 数据源：GitHub + Hacker News + Reddit + DEV.to + 微博 + B站 + 知乎
+ * 数据源：可配置，支持国际技术源 + 中国热搜（DailyHotApi 40+ 平台）
  */
+
+const TICKER_SOURCE_REGISTRY = {
+    // ===== 国际技术 =====
+    github: { name: 'GitHub Trending', icon: '🔥', category: 'international', defaultEnabled: true },
+    hackernews: { name: 'Hacker News', icon: '📰', category: 'international', defaultEnabled: true },
+    reddit: { name: 'Reddit', icon: '💬', category: 'international', defaultEnabled: true },
+    devto: { name: 'DEV.to', icon: '📝', category: 'international', defaultEnabled: true },
+    // ===== 中国 · 综合热搜 =====
+    weibo: { name: '微博热搜', icon: '🔥', category: 'china-hot', defaultEnabled: true, dailyhot: 'weibo' },
+    baidu: { name: '百度热搜', icon: '🔍', category: 'china-hot', defaultEnabled: false, dailyhot: 'baidu' },
+    toutiao: { name: '今日头条', icon: '📰', category: 'china-hot', defaultEnabled: false, dailyhot: 'toutiao' },
+    douyin: { name: '抖音热点', icon: '🎵', category: 'china-hot', defaultEnabled: false, dailyhot: 'douyin' },
+    kuaishou: { name: '快手热点', icon: '📱', category: 'china-hot', defaultEnabled: false, dailyhot: 'kuaishou' },
+    // ===== 中国 · 社区问答 =====
+    zhihu: { name: '知乎热榜', icon: '💭', category: 'china-community', defaultEnabled: true, dailyhot: 'zhihu' },
+    'zhihu-daily': { name: '知乎日报', icon: '📖', category: 'china-community', defaultEnabled: false, dailyhot: 'zhihu-daily' },
+    tieba: { name: '百度贴吧', icon: '💬', category: 'china-community', defaultEnabled: false, dailyhot: 'tieba' },
+    hupu: { name: '虎扑热帖', icon: '🏀', category: 'china-community', defaultEnabled: false, dailyhot: 'hupu' },
+    douban: { name: '豆瓣讨论', icon: '📗', category: 'china-community', defaultEnabled: false, dailyhot: 'douban-group' },
+    v2ex: { name: 'V2EX', icon: '💻', category: 'china-community', defaultEnabled: false, dailyhot: 'v2ex' },
+    // ===== 中国 · 视频娱乐 =====
+    bilibili: { name: 'B站热榜', icon: '📺', category: 'china-video', defaultEnabled: true, dailyhot: 'bilibili' },
+    acfun: { name: 'AcFun', icon: '🎬', category: 'china-video', defaultEnabled: false, dailyhot: 'acfun' },
+    'douban-movie': { name: '豆瓣电影', icon: '🎬', category: 'china-video', defaultEnabled: false, dailyhot: 'douban-movie' },
+    weread: { name: '微信读书', icon: '📚', category: 'china-video', defaultEnabled: false, dailyhot: 'weread' },
+    // ===== 中国 · 科技资讯 =====
+    '36kr': { name: '36氪', icon: '💡', category: 'china-tech', defaultEnabled: false, dailyhot: '36kr' },
+    ithome: { name: 'IT之家', icon: '🖥️', category: 'china-tech', defaultEnabled: false, dailyhot: 'ithome' },
+    sspai: { name: '少数派', icon: '✨', category: 'china-tech', defaultEnabled: false, dailyhot: 'sspai' },
+    juejin: { name: '稀土掘金', icon: '⛏️', category: 'china-tech', defaultEnabled: false, dailyhot: 'juejin' },
+    csdn: { name: 'CSDN', icon: '📊', category: 'china-tech', defaultEnabled: false, dailyhot: 'csdn' },
+    '51cto': { name: '51CTO', icon: '🔧', category: 'china-tech', defaultEnabled: false, dailyhot: '51cto' },
+    hellogithub: { name: 'HelloGitHub', icon: '🐙', category: 'china-tech', defaultEnabled: false, dailyhot: 'hellogithub' },
+    nodeseek: { name: 'NodeSeek', icon: '🌐', category: 'china-tech', defaultEnabled: false, dailyhot: 'nodeseek' },
+    coolapk: { name: '酷安', icon: '📱', category: 'china-tech', defaultEnabled: false, dailyhot: 'coolapk' },
+    // ===== 中国 · 新闻媒体 =====
+    thepaper: { name: '澎湃新闻', icon: '📰', category: 'china-news', defaultEnabled: false, dailyhot: 'thepaper' },
+    'qq-news': { name: '腾讯新闻', icon: '📰', category: 'china-news', defaultEnabled: false, dailyhot: 'qq-news' },
+    sina: { name: '新浪网', icon: '📰', category: 'china-news', defaultEnabled: false, dailyhot: 'sina' },
+    'sina-news': { name: '新浪新闻', icon: '📰', category: 'china-news', defaultEnabled: false, dailyhot: 'sina-news' },
+    'netease-news': { name: '网易新闻', icon: '📰', category: 'china-news', defaultEnabled: false, dailyhot: 'netease-news' },
+    ifanr: { name: '爱范儿', icon: '💎', category: 'china-news', defaultEnabled: false, dailyhot: 'ifanr' },
+    huxiu: { name: '虎嗅', icon: '🐯', category: 'china-news', defaultEnabled: false, dailyhot: 'huxiu' },
+    jianshu: { name: '简书', icon: '📝', category: 'china-news', defaultEnabled: false, dailyhot: 'jianshu' },
+    guokr: { name: '果壳', icon: '🥚', category: 'china-news', defaultEnabled: false, dailyhot: 'guokr' },
+    // ===== 特殊 =====
+    history: { name: '历史上的今天', icon: '📅', category: 'special', defaultEnabled: false, dailyhot: 'history' },
+    earthquake: { name: '中国地震台', icon: '🌍', category: 'special', defaultEnabled: false, dailyhot: 'earthquake' },
+    weatheralarm: { name: '中央气象台预警', icon: '⛈️', category: 'special', defaultEnabled: false, dailyhot: 'weatheralarm' },
+};
+
+const TICKER_SOURCE_CATEGORIES = {
+    'international': '国际技术',
+    'china-hot': '中国 · 综合热搜',
+    'china-community': '中国 · 社区问答',
+    'china-video': '中国 · 视频娱乐',
+    'china-tech': '中国 · 科技资讯',
+    'china-news': '中国 · 新闻媒体',
+    'special': '特殊信息源',
+};
+
 class TechTicker {
     constructor() {
-        // 缓存配置
-        this.CACHE_TTL = 20 * 60 * 1000; // 20 分钟统一缓存
-        this.CACHE_KEY = 'ticker_cache_v3'; // v3: 新增中国热搜数据源
+        this.CACHE_TTL = 20 * 60 * 1000;
+        this.CACHE_KEY = 'ticker_cache_v4';
         
-        // DailyHotApi 基地址
         this.DAILYHOT_API = 'https://dailyhotapi-production-cad3.up.railway.app';
         
-        // 轮播配置
-        this.ROTATE_INTERVAL = 6000; // 6 秒切换
+        this.ROTATE_INTERVAL = 6000;
         this.currentIndex = 0;
         this.rotateTimer = null;
         this.tickerItems = [];
         this.isRefreshing = false;
         this.isPaused = false;
         
-        // 关键字监控
-        this.keywordMatches = new Set(); // 当前匹配的热搜标题集合
+        this.keywordMatches = new Set();
         this.keywordAlertSettings = null;
         this._keywordPanelVisible = false;
+        
+        this.enabledSources = null;
+        this._sourcesPanelVisible = false;
     }
     
     /**
      * 初始化
      */
     async init() {
-        // 从设置中读取刷新间隔
         await this.loadRefreshIntervalFromSettings();
+        await this.loadEnabledSources();
         this.bindEvents();
-        // 延迟加载，优先保证时钟等核心功能
         setTimeout(() => this.loadData(), 1500);
-        // 初始化关键字监控面板
         this.initKeywordAlert();
-        // 启动定时自动刷新（缓存过期后自动重新获取）
         this.startAutoRefresh();
-        // 监听设置变更（刷新间隔更新时自动应用）
         this.listenSettingsChange();
     }
     
@@ -163,6 +219,12 @@ class TechTicker {
             this.showNext();
         });
         
+        // 保存为任务
+        document.getElementById('ticker-save-btn')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.saveCurrentAsTask();
+        });
+        
         // 刷新
         document.getElementById('ticker-refresh-btn')?.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -179,6 +241,12 @@ class TechTicker {
         document.getElementById('ticker-keyword-btn')?.addEventListener('click', (e) => {
             e.stopPropagation();
             this.toggleKeywordPanel();
+        });
+        
+        // 数据源管理按钮
+        document.getElementById('ticker-sources-btn')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggleSourcesPanel();
         });
         
         // 监听来自 Service Worker 的关键字匹配更新
@@ -285,22 +353,87 @@ class TechTicker {
         }
     }
     
-    async fetchAllData() {
-        const results = await Promise.allSettled([
-            this.fetchGitHub(),
-            this.fetchHackerNews(),
-            this.fetchReddit(),
-            this.fetchDevTo(),
-            this.fetchWeibo(),
-            this.fetchBilibili(),
-            this.fetchZhihu()
-        ]);
+    // ========= 数据源配置管理 =========
+    
+    async loadEnabledSources() {
+        try {
+            const storage = chrome?.storage?.sync || chrome?.storage?.local;
+            if (storage) {
+                const { tickerEnabledSources } = await storage.get('tickerEnabledSources');
+                if (tickerEnabledSources) {
+                    this.enabledSources = tickerEnabledSources;
+                    return;
+                }
+            }
+        } catch {}
+        this.enabledSources = Object.entries(TICKER_SOURCE_REGISTRY)
+            .filter(([, cfg]) => cfg.defaultEnabled)
+            .map(([key]) => key);
+    }
+    
+    async saveEnabledSources() {
+        try {
+            const storage = chrome?.storage?.sync || chrome?.storage?.local;
+            if (storage) {
+                await storage.set({ tickerEnabledSources: this.enabledSources });
+            }
+        } catch {}
+    }
+    
+    isSourceEnabled(sourceKey) {
+        return this.enabledSources && this.enabledSources.includes(sourceKey);
+    }
+    
+    _getFetcherForSource(sourceKey) {
+        const internationalFetchers = {
+            github: () => this.fetchGitHub(),
+            hackernews: () => this.fetchHackerNews(),
+            reddit: () => this.fetchReddit(),
+            devto: () => this.fetchDevTo(),
+        };
+        if (internationalFetchers[sourceKey]) return internationalFetchers[sourceKey];
+        const cfg = TICKER_SOURCE_REGISTRY[sourceKey];
+        if (cfg?.dailyhot) return () => this.fetchDailyHotSource(sourceKey, cfg);
+        return null;
+    }
+    
+    async fetchDailyHotSource(sourceKey, cfg) {
+        const resp = await fetch(`${this.DAILYHOT_API}/${cfg.dailyhot}`);
+        if (!resp.ok) throw new Error(`${sourceKey} ${resp.status}`);
+        const data = await resp.json();
+        if (data.code !== 200) throw new Error(`${sourceKey} code ${data.code}`);
         
+        const metricType = `${sourceKey}-hot`;
+        return (data.data || []).slice(0, 8).map(item => ({
+            type: sourceKey,
+            title: item.title,
+            desc: item.desc ? item.desc.substring(0, 60) : (cfg.name || ''),
+            url: item.url || item.mobileUrl || '',
+            icon: cfg.icon,
+            metric: this.formatHot(item.hot),
+            metricType
+        }));
+    }
+    
+    async fetchAllData() {
+        const sources = (this.enabledSources || []).filter(k => TICKER_SOURCE_REGISTRY[k]);
+        if (sources.length === 0) {
+            this.tickerItems = [];
+            this.renderCurrent();
+            this.renderMiniTrack();
+            return;
+        }
+        
+        const fetchers = sources.map(key => {
+            const fn = this._getFetcherForSource(key);
+            return fn ? fn().catch(err => { console.warn(`[Ticker] ${key} 失败:`, err); return []; }) : Promise.resolve([]);
+        });
+        
+        const results = await Promise.allSettled(fetchers);
         const allItems = results
             .filter(r => r.status === 'fulfilled')
             .flatMap(r => r.value);
         
-        // 交替排列不同数据源
         this.tickerItems = this.interleave(allItems);
         
         if (this.tickerItems.length > 0) {
@@ -527,6 +660,92 @@ class TechTicker {
         const itemCount = this.tickerItems.length;
         const duration = Math.max(20, itemCount * 3);
         track.style.animationDuration = `${duration}s`;
+    }
+    
+    // ========= 一键转任务 =========
+    
+    async saveCurrentAsTask() {
+        const item = this.tickerItems[this.currentIndex];
+        if (!item) return;
+        
+        const btn = document.getElementById('ticker-save-btn');
+        if (!btn || btn.classList.contains('saving')) return;
+        
+        if (!window.memoManager) {
+            this._showSaveToast('备忘录模块未加载', 'error');
+            return;
+        }
+        
+        btn.classList.add('saving');
+        
+        try {
+            const sourceCfg = TICKER_SOURCE_REGISTRY[item.type];
+            const sourceName = sourceCfg?.name || item.type;
+            
+            const taskData = {
+                title: item.title,
+                text: `${item.desc || ''}\n\n来源：${sourceName} ${item.icon || ''}\n${item.metric ? '热度：' + item.metric : ''}`.trim(),
+                priority: 'none',
+                links: item.url ? [{ title: item.title, url: item.url }] : [],
+                tagIds: [],
+                categoryId: null,
+            };
+            
+            const newMemo = {
+                id: window.memoManager.generateId(),
+                ...taskData,
+                completed: false,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                completedAt: null,
+                startDate: null,
+                dueDate: null,
+                images: [],
+                progress: null,
+                recurrence: null,
+                habit: null,
+                habitCard: null,
+                subtasks: [],
+            };
+            
+            window.memoManager.memos.push(newMemo);
+            await window.memoManager.saveMemos();
+            
+            if (window.memoManager.renderSidebarTaskList) {
+                window.memoManager.renderSidebarTaskList();
+            }
+            if (window.taskTicker?.loadAndRender) {
+                window.taskTicker.loadAndRender();
+            }
+            
+            this._showSaveToast('已保存为任务');
+            
+            btn.classList.add('saved');
+            setTimeout(() => btn.classList.remove('saved'), 2000);
+        } catch (err) {
+            console.error('[Ticker] 保存任务失败:', err);
+            this._showSaveToast('保存失败', 'error');
+        } finally {
+            btn.classList.remove('saving');
+        }
+    }
+    
+    _showSaveToast(text, type = 'success') {
+        let toast = document.getElementById('ticker-save-toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'ticker-save-toast';
+            toast.className = 'ticker-save-toast';
+            document.body.appendChild(toast);
+        }
+        
+        toast.textContent = type === 'success' ? `✓ ${text}` : `✗ ${text}`;
+        toast.className = `ticker-save-toast ${type} show`;
+        
+        clearTimeout(this._toastTimer);
+        this._toastTimer = setTimeout(() => {
+            toast.classList.remove('show');
+        }, 2000);
     }
     
     /**
@@ -1048,9 +1267,201 @@ class TechTicker {
         }
     }
     
-    /**
-     * 更新关键字按钮状态（有激活关键字时显示指示点）
-     */
+    // ========= 数据源管理面板 =========
+    
+    createSourcesPanel() {
+        if (document.getElementById('ticker-sources-panel')) return;
+        
+        const panel = document.createElement('div');
+        panel.id = 'ticker-sources-panel';
+        panel.className = 'ticker-sources-panel';
+        
+        const categoriesHtml = Object.entries(TICKER_SOURCE_CATEGORIES).map(([catKey, catName]) => {
+            const sources = Object.entries(TICKER_SOURCE_REGISTRY)
+                .filter(([, cfg]) => cfg.category === catKey);
+            if (sources.length === 0) return '';
+            
+            const sourcesHtml = sources.map(([key, cfg]) => {
+                const checked = this.isSourceEnabled(key) ? 'checked' : '';
+                return `<label class="tsp-source-item" data-key="${key}">
+                    <input type="checkbox" value="${key}" ${checked}>
+                    <span class="tsp-source-icon">${cfg.icon}</span>
+                    <span class="tsp-source-name">${cfg.name}</span>
+                </label>`;
+            }).join('');
+            
+            const allEnabled = sources.every(([key]) => this.isSourceEnabled(key));
+            const someEnabled = sources.some(([key]) => this.isSourceEnabled(key));
+            
+            return `<div class="tsp-category" data-category="${catKey}">
+                <div class="tsp-category-header">
+                    <span class="tsp-category-name">${catName}</span>
+                    <label class="tsp-category-toggle" title="全选/全不选">
+                        <input type="checkbox" class="tsp-cat-check" data-category="${catKey}" 
+                            ${allEnabled ? 'checked' : ''} 
+                            ${!allEnabled && someEnabled ? 'data-indeterminate' : ''}>
+                        <span class="tsp-cat-label">全选</span>
+                    </label>
+                </div>
+                <div class="tsp-source-list">${sourcesHtml}</div>
+            </div>`;
+        }).join('');
+        
+        const enabledCount = (this.enabledSources || []).length;
+        const totalCount = Object.keys(TICKER_SOURCE_REGISTRY).length;
+        
+        panel.innerHTML = `
+            <div class="tsp-header">
+                <div class="tsp-title">
+                    <i class="fas fa-sliders-h"></i>
+                    <span>数据源管理</span>
+                    <span class="tsp-count" id="tsp-count">${enabledCount}/${totalCount}</span>
+                </div>
+                <div class="tsp-header-actions">
+                    <button class="tsp-reset-btn" id="tsp-reset-btn" title="恢复默认">
+                        <i class="fas fa-undo"></i>
+                    </button>
+                    <button class="tsp-close-btn" id="tsp-close-btn" title="关闭">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="tsp-body">
+                ${categoriesHtml}
+            </div>
+            <div class="tsp-footer">
+                <button class="tsp-apply-btn" id="tsp-apply-btn">
+                    <i class="fas fa-check"></i> 应用并刷新
+                </button>
+            </div>
+        `;
+        
+        const ticker = document.getElementById('tech-ticker');
+        if (ticker) {
+            ticker.parentNode.insertBefore(panel, ticker.nextSibling);
+        } else {
+            document.body.appendChild(panel);
+        }
+        
+        this._bindSourcesPanelEvents(panel);
+        
+        panel.querySelectorAll('.tsp-cat-check[data-indeterminate]').forEach(cb => {
+            cb.indeterminate = true;
+            cb.removeAttribute('data-indeterminate');
+        });
+    }
+    
+    _bindSourcesPanelEvents(panel) {
+        panel.querySelector('#tsp-close-btn')?.addEventListener('click', () => {
+            this.toggleSourcesPanel(false);
+        });
+        
+        panel.querySelector('#tsp-reset-btn')?.addEventListener('click', () => {
+            this.enabledSources = Object.entries(TICKER_SOURCE_REGISTRY)
+                .filter(([, cfg]) => cfg.defaultEnabled)
+                .map(([key]) => key);
+            this._syncSourcesPanelCheckboxes();
+            this._updateSourcesCount();
+        });
+        
+        panel.querySelectorAll('.tsp-source-item input[type=checkbox]').forEach(cb => {
+            cb.addEventListener('change', () => {
+                const key = cb.value;
+                if (cb.checked) {
+                    if (!this.enabledSources.includes(key)) this.enabledSources.push(key);
+                } else {
+                    this.enabledSources = this.enabledSources.filter(k => k !== key);
+                }
+                this._updateCategoryCheckbox(cb.closest('.tsp-category'));
+                this._updateSourcesCount();
+            });
+        });
+        
+        panel.querySelectorAll('.tsp-cat-check').forEach(cb => {
+            cb.addEventListener('change', () => {
+                const cat = cb.dataset.category;
+                const items = panel.querySelectorAll(`.tsp-category[data-category="${cat}"] .tsp-source-item input`);
+                items.forEach(item => {
+                    item.checked = cb.checked;
+                    const key = item.value;
+                    if (cb.checked) {
+                        if (!this.enabledSources.includes(key)) this.enabledSources.push(key);
+                    } else {
+                        this.enabledSources = this.enabledSources.filter(k => k !== key);
+                    }
+                });
+                cb.indeterminate = false;
+                this._updateSourcesCount();
+            });
+        });
+        
+        panel.querySelector('#tsp-apply-btn')?.addEventListener('click', async () => {
+            await this.saveEnabledSources();
+            await this.clearCache();
+            this.toggleSourcesPanel(false);
+            this.refreshData();
+        });
+        
+        document.addEventListener('click', (e) => {
+            if (this._sourcesPanelVisible && !panel.contains(e.target) && !e.target.closest('#ticker-sources-btn')) {
+                this.toggleSourcesPanel(false);
+            }
+        });
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this._sourcesPanelVisible) {
+                this.toggleSourcesPanel(false);
+            }
+        });
+    }
+    
+    _updateCategoryCheckbox(categoryEl) {
+        if (!categoryEl) return;
+        const items = categoryEl.querySelectorAll('.tsp-source-item input');
+        const catCheck = categoryEl.querySelector('.tsp-cat-check');
+        if (!catCheck) return;
+        const checkedCount = [...items].filter(i => i.checked).length;
+        catCheck.checked = checkedCount === items.length;
+        catCheck.indeterminate = checkedCount > 0 && checkedCount < items.length;
+    }
+    
+    _updateSourcesCount() {
+        const countEl = document.getElementById('tsp-count');
+        if (countEl) {
+            countEl.textContent = `${this.enabledSources.length}/${Object.keys(TICKER_SOURCE_REGISTRY).length}`;
+        }
+    }
+    
+    _syncSourcesPanelCheckboxes() {
+        const panel = document.getElementById('ticker-sources-panel');
+        if (!panel) return;
+        panel.querySelectorAll('.tsp-source-item input[type=checkbox]').forEach(cb => {
+            cb.checked = this.enabledSources.includes(cb.value);
+        });
+        panel.querySelectorAll('.tsp-category').forEach(cat => {
+            this._updateCategoryCheckbox(cat);
+        });
+    }
+    
+    toggleSourcesPanel(force) {
+        if (!document.getElementById('ticker-sources-panel')) {
+            this.createSourcesPanel();
+        }
+        const panel = document.getElementById('ticker-sources-panel');
+        if (!panel) return;
+        
+        const show = force !== undefined ? force : !this._sourcesPanelVisible;
+        
+        if (show) {
+            if (this._keywordPanelVisible) this.toggleKeywordPanel(false);
+            this._syncSourcesPanelCheckboxes();
+            panel.classList.add('open');
+        } else {
+            panel.classList.remove('open');
+        }
+        this._sourcesPanelVisible = show;
+    }
+    
     updateKeywordBtnState() {
         const btn = document.getElementById('ticker-keyword-btn');
         if (!btn) return;

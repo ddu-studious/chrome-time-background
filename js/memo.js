@@ -1381,10 +1381,9 @@ class MemoManager {
                 const chevron = groupHeader.querySelector('.group-chevron');
                 if (chevron) chevron.style.transform = isCollapsed ? 'rotate(-90deg)' : 'rotate(0)';
 
-                // 懒加载：首次展开时才渲染任务，避免首屏卡顿
                 if (!isCollapsed && group.dataset.rendered !== 'true') {
-                    group.dataset.rendered = 'true';
                     this.renderTasksIncrementally(tasksContainer, tasks, startIndex, filteredCount, renderToken);
+                    group.dataset.rendered = 'true';
                 }
                 
                 // 更新展开/折叠全部按钮状态和提示
@@ -1527,11 +1526,12 @@ class MemoManager {
                     chevron.style.transform = 'rotate(0)';
                 }
                 
-                // 触发懒加载渲染（如果尚未渲染过）
                 if (group.dataset.rendered !== 'true' && tasksContainer) {
-                    group.dataset.rendered = 'true';
                     const groupKey = group.dataset.groupKey;
                     this._lazyRenderGroup(group, groupKey);
+                    if (tasksContainer.children.length > 0) {
+                        group.dataset.rendered = 'true';
+                    }
                 }
             });
             
@@ -1578,10 +1578,11 @@ class MemoManager {
         const tasksContainer = groupEl.querySelector('.date-group-tasks');
         if (!tasksContainer || tasksContainer.children.length > 0) return;
         
-        // 从当前筛选数据中获取该分组的任务
         const filterSelect = document.getElementById('sidebar-filter-select');
         const searchInput = document.getElementById('sidebar-search');
         const categoryValue = this._sidebarCategoryCombobox ? this._sidebarCategoryCombobox.getValue() : 'all';
+        const priorityActive = document.querySelector('#sidebar-priority-filter .sidebar-priority-btn.active');
+        const priorityValue = priorityActive ? priorityActive.dataset.priority : 'all';
         
         const searchText = searchInput ? searchInput.value.toLowerCase().trim() : '';
         const filterValue = filterSelect ? filterSelect.value : 'all';
@@ -1595,7 +1596,11 @@ class MemoManager {
             );
         }
         if (categoryValue !== 'all') {
-            filteredMemos = filteredMemos.filter(m => m.categoryId === categoryValue);
+            const matchIds = this._getCategoryAndChildIds(categoryValue);
+            filteredMemos = filteredMemos.filter(m => matchIds.includes(m.categoryId));
+        }
+        if (priorityValue !== 'all') {
+            filteredMemos = filteredMemos.filter(m => (m.priority || 'none') === priorityValue);
         }
         
         const today = this.getTodayDate();
@@ -1607,12 +1612,14 @@ class MemoManager {
             case 'habits': filteredMemos = filteredMemos.filter(m => m.recurrence?.enabled && m.recurrence?.type === 'daily'); break;
         }
         
-        // 过滤掉习惯任务
         const regularTasks = filteredMemos.filter(m => !(m.recurrence?.enabled && m.recurrence?.type === 'daily'));
         const groupedTasks = this.groupTasksByDate(regularTasks);
         const tasks = groupedTasks[groupKey];
         
-        if (!tasks || tasks.length === 0) return;
+        if (!tasks || tasks.length === 0) {
+            groupEl.dataset.rendered = '';
+            return;
+        }
         
         const totalCount = filteredMemos.length;
         const frag = document.createDocumentFragment();
