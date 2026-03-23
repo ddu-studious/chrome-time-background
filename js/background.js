@@ -1140,7 +1140,7 @@
         maxNotifications: 5,   // 单次最大通知数
         quietHoursStart: '',   // 免打扰开始（空=不启用）
         quietHoursEnd: '',     // 免打扰结束
-        sources: ['weibo', 'bilibili', 'zhihu', 'douyin', 'kuaishou', 'history', 'ithome']
+        sources: ['weibo', 'bilibili', 'zhihu']
     });
 
     const KEYWORD_HISTORY_KEY = 'keywordAlertHistory';
