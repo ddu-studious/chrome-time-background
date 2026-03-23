@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音乐播放器 Demo 5 - 极简呼吸灯</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            min-height: 100vh;
+            background: url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920') center/cover no-repeat fixed;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            color: #fff;
+        }
+        body::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 0; }
+        .scene { position: relative; z-index: 1; text-align: center; }
+        .time { font-size: 72px; font-weight: 200; letter-spacing: 4px; text-shadow: 0 2px 20px rgba(0,0,0,0.3); }
+        .date { font-size: 16px; opacity: 0.7; margin-top: 4px; }
+        .demo-label {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.5); padding: 8px 20px; border-radius: 20px;
+            font-size: 13px; z-index: 10; backdrop-filter: blur(10px);
+        }
+
+        /* === 极简呼吸灯 === */
+        .music-minimal {
+            display: flex; justify-content: center;
+            margin-top: 28px;
+        }
+        .minimal-player {
+            display: flex; align-items: center;
+            gap: 0;
+            position: relative;
+            animation: minimal-fadein 0.8s ease;
+        }
+        @keyframes minimal-fadein {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .minimal-core {
+            display: flex; align-items: center; gap: 10px;
+            padding: 6px 6px;
+            border-radius: 40px;
+            background: rgba(255,255,255,0.03);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.04);
+            transition: all 0.4s ease;
+        }
+        .minimal-core:hover {
+            background: rgba(255,255,255,0.06);
+            padding-right: 14px;
+        }
+        .minimal-core:hover .minimal-text { max-width: 200px; opacity: 1; margin-left: 2px; }
+        .minimal-core:hover .minimal-extra-btns { max-width: 80px; opacity: 1; }
+
+        .minimal-glow {
+            width: 36px; height: 36px;
+            border-radius: 50%; flex-shrink: 0;
+            position: relative;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .minimal-glow::before {
+            content: '';
+            position: absolute; inset: -4px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(100,200,255,0.25) 0%, transparent 70%);
+            animation: glow-pulse 2s ease-in-out infinite;
+        }
+        .minimal-glow.paused::before { animation-play-state: paused; opacity: 0.3; }
+        @keyframes glow-pulse {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.3); opacity: 0.9; }
+        }
+        .minimal-glow img {
+            width: 36px; height: 36px;
+            border-radius: 50%; object-fit: cover;
+            position: relative; z-index: 1;
+        }
+        .minimal-play-overlay {
+            position: absolute; inset: 0;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.3);
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; transition: opacity 0.2s;
+            cursor: pointer; z-index: 2;
+        }
+        .minimal-glow:hover .minimal-play-overlay { opacity: 1; }
+        .minimal-play-overlay i { color: #fff; font-size: 12px; }
+
+        .minimal-text {
+            max-width: 0; opacity: 0;
+            overflow: hidden; white-space: nowrap;
+            transition: all 0.4s ease;
+        }
+        .minimal-title {
+            font-size: 12px; font-weight: 500;
+            color: rgba(255,255,255,0.75);
+        }
+        .minimal-sep {
+            display: inline-block; width: 3px; height: 3px;
+            border-radius: 50%; background: rgba(255,255,255,0.2);
+            margin: 0 6px; vertical-align: middle;
+        }
+        .minimal-artist {
+            font-size: 11px; color: rgba(255,255,255,0.35);
+        }
+
+        .minimal-extra-btns {
+            display: flex; align-items: center; gap: 2px;
+            max-width: 0; opacity: 0;
+            overflow: hidden;
+            transition: all 0.4s ease;
+        }
+        .m-btn {
+            width: 26px; height: 26px; border: none; border-radius: 50%;
+            background: transparent; color: rgba(255,255,255,0.4);
+            cursor: pointer; font-size: 10px;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.15s;
+        }
+        .m-btn:hover { color: rgba(255,255,255,0.85); }
+
+        .minimal-note {
+            position: absolute;
+            font-size: 16px;
+            color: rgba(100,200,255,0.5);
+            animation: float-note 3s ease-in-out infinite;
+            pointer-events: none;
+        }
+        .minimal-note:nth-child(1) { left: -20px; top: -10px; animation-delay: 0s; }
+        .minimal-note:nth-child(2) { right: -15px; top: -5px; animation-delay: 1s; font-size: 12px; }
+        .minimal-note:nth-child(3) { left: -10px; bottom: -8px; animation-delay: 2s; font-size: 14px; }
+        .minimal-note.paused { animation-play-state: paused; opacity: 0.15; }
+        @keyframes float-note {
+            0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.3; }
+            50% { transform: translateY(-8px) rotate(10deg); opacity: 0.7; }
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-label">Demo 5：极简呼吸灯 (Minimal Glow)</div>
+    <div class="scene">
+        <div class="time" id="time">00:00:00</div>
+        <div class="date" id="date"></div>
+        <div class="music-minimal">
+            <div class="minimal-player">
+                <span class="minimal-note" id="note1">♪</span>
+                <span class="minimal-note" id="note2">♫</span>
+                <span class="minimal-note" id="note3">♩</span>
+                <div class="minimal-core">
+                    <div class="minimal-glow" id="glow">
+                        <img src="https://picsum.photos/80" alt="" crossorigin="anonymous">
+                        <div class="minimal-play-overlay" id="play-btn">
+                            <i class="fas fa-pause" id="play-icon"></i>
+                        </div>
+                    </div>
+                    <div class="minimal-text">
+                        <span class="minimal-title">夜曲</span>
+                        <span class="minimal-sep"></span>
+                        <span class="minimal-artist">周杰伦</span>
+                    </div>
+                    <div class="minimal-extra-btns">
+                        <button class="m-btn"><i class="fas fa-step-backward"></i></button>
+                        <button class="m-btn"><i class="fas fa-step-forward"></i></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('time').textContent = now.toLocaleTimeString('zh-CN', { hour12: false });
+            document.getElementById('date').textContent = now.toLocaleDateString('zh-CN', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
+        }
+        setInterval(updateTime, 1000); updateTime();
+        let playing = true;
+        document.getElementById('play-btn').addEventListener('click', () => {
+            playing = !playing;
+            document.getElementById('play-icon').className = playing ? 'fas fa-pause' : 'fas fa-play';
+            document.getElementById('glow').classList.toggle('paused', !playing);
+            document.querySelectorAll('.minimal-note').forEach(n => n.classList.toggle('paused', !playing));
+        });
+    </script>
+</body>
+</html>

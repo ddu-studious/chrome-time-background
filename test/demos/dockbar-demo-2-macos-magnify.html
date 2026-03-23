@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dock Bar Demo 2 · 类 macOS 悬停放大</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            overflow: hidden;
+            color: rgba(255,255,255,0.92);
+        }
+        .hint {
+            position: fixed;
+            top: 16px;
+            left: 16px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.10);
+            backdrop-filter: blur(18px);
+            border-radius: 14px;
+            padding: 10px 12px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.65);
+            max-width: 380px;
+            line-height: 1.5;
+        }
+
+        .dock-shell {
+            position: fixed;
+            right: 18px;
+            bottom: 18px;
+            padding: 10px 12px;
+            border-radius: 999px;
+            background: rgba(10, 12, 20, 0.55);
+            backdrop-filter: blur(22px) saturate(170%);
+            border: 1px solid rgba(255,255,255,0.10);
+            box-shadow: 0 18px 60px rgba(0,0,0,0.38);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .dock-btn {
+            width: 42px;
+            height: 42px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border: 1px solid rgba(255,255,255,0.14);
+            background: rgba(255,255,255,0.06);
+            color: rgba(255,255,255,0.55);
+            transform-origin: center;
+            transition:
+                background 160ms ease,
+                border-color 160ms ease,
+                color 160ms ease;
+            will-change: transform;
+            outline: none;
+        }
+
+        .dock-btn:hover {
+            border-color: rgba(167, 139, 250, 0.28);
+        }
+
+        .dock-btn i { font-size: 16px; }
+
+        .dock-btn.active {
+            background: rgba(167, 139, 250, 0.14);
+            border-color: rgba(167, 139, 250, 0.34);
+            color: rgba(167, 139, 250, 1);
+        }
+
+        /* macos magnify：当鼠标离开底座，慢慢回弹 */
+        .dock-shell.idle .dock-btn {
+            transition: transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+    </style>
+</head>
+<body>
+    <div class="hint">
+        Demo 2：类 macOS 的悬停放大手感（水平）。通过 JS 根据鼠标位置动态计算按钮缩放，让 Dock 不是“静态两颗点”。<br>
+        点击按钮切换 active。
+    </div>
+
+    <div class="dock-shell idle" id="dockShell" aria-label="Dock Bar">
+        <button class="dock-btn" data-key="sys" title="扩展监控" aria-label="扩展监控">
+            <i class="fas fa-heartbeat"></i>
+        </button>
+        <button class="dock-btn" data-key="memo" title="任务面板" aria-label="任务面板">
+            <i class="fas fa-tasks"></i>
+        </button>
+    </div>
+
+    <script>
+        const shell = document.getElementById('dockShell');
+        const buttons = Array.from(shell.querySelectorAll('.dock-btn'));
+
+        function setActive(key) {
+            buttons.forEach(btn => btn.classList.toggle('active', btn.dataset.key === key));
+        }
+
+        buttons.forEach(btn => btn.addEventListener('click', () => setActive(btn.dataset.key)));
+        setActive('memo'); // 方便你观察对比
+
+        let raf = 0;
+        function updateByPointer(clientX) {
+            const rect = shell.getBoundingClientRect();
+            // 只在底座区域附近计算，避免误触
+            if (clientX < rect.left - 120 || clientX > rect.right + 120) return;
+
+            buttons.forEach(btn => {
+                const b = btn.getBoundingClientRect();
+                const centerX = b.left + b.width / 2;
+                const dist = Math.abs(clientX - centerX);
+
+                // dist 越小 scale 越大，限定范围避免太夸张
+                const scale = Math.max(0.92, Math.min(1.62, 1.55 - dist / 140));
+                const lift = (scale - 1) * 10; // 放大越多抬起越多
+                btn.style.transform = `translateY(${-lift}px) scale(${scale})`;
+            });
+        }
+
+        function onMove(e) {
+            shell.classList.remove('idle');
+            if (raf) cancelAnimationFrame(raf);
+            const x = e.clientX;
+            raf = requestAnimationFrame(() => updateByPointer(x));
+        }
+
+        shell.addEventListener('mousemove', onMove);
+        shell.addEventListener('mouseleave', () => {
+            shell.classList.add('idle');
+            buttons.forEach(btn => btn.style.transform = 'translateY(0px) scale(1)');
+        });
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dock Bar Demo 1 · 胶囊底座</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            overflow: hidden;
+            color: rgba(255,255,255,0.92);
+        }
+
+        .hint {
+            position: fixed;
+            top: 16px;
+            left: 16px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.10);
+            backdrop-filter: blur(18px);
+            border-radius: 14px;
+            padding: 10px 12px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.65);
+            max-width: 360px;
+            line-height: 1.5;
+        }
+
+        /* ===== Dock Shell（胶囊底座） ===== */
+        .dock-shell {
+            position: fixed;
+            right: 18px;
+            bottom: 18px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 10px;
+            border-radius: 999px;
+            background: rgba(10, 12, 20, 0.58);
+            backdrop-filter: blur(22px) saturate(170%);
+            border: 1px solid rgba(255,255,255,0.10);
+            box-shadow:
+                0 18px 60px rgba(0,0,0,0.38),
+                inset 0 0 0 1px rgba(255,255,255,0.05);
+        }
+
+        .dock-divider {
+            width: 1px;
+            height: 26px;
+            background: rgba(255,255,255,0.10);
+            border-radius: 999px;
+        }
+
+        /* ===== Dock Buttons ===== */
+        .dock-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 14px; /* 比 circle 更“统一” */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(255,255,255,0.06);
+            color: rgba(255,255,255,0.55);
+            transition:
+                transform 220ms cubic-bezier(0.4, 0, 0.2, 1),
+                background 220ms ease,
+                border-color 220ms ease,
+                color 220ms ease;
+            outline: none;
+        }
+
+        .dock-btn:hover {
+            transform: translateY(-2px) scale(1.08);
+            background: rgba(255,255,255,0.10);
+            border-color: rgba(167, 139, 250, 0.26);
+            color: rgba(167, 139, 250, 0.95);
+        }
+
+        .dock-btn.active {
+            background: rgba(167, 139, 250, 0.14);
+            border-color: rgba(167, 139, 250, 0.34);
+            color: rgba(167, 139, 250, 1);
+            box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.10);
+        }
+
+        .dock-btn i {
+            font-size: 16px;
+        }
+
+        /* 小屏适配 */
+        @media (max-width: 420px) {
+            .dock-shell { right: 12px; bottom: 12px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="hint">
+        Demo 1：胶囊底座 + 统一圆角按钮。目标是让 Dock Bar “看起来像一个整体”，避免散落两个圆点的廉价感。<br>
+        点击按钮切换 active 状态。
+    </div>
+
+    <div class="dock-shell" id="dockShell" aria-label="Dock Bar">
+        <button class="dock-btn" data-key="sys" title="扩展监控" aria-label="扩展监控">
+            <i class="fas fa-heartbeat"></i>
+        </button>
+        <div class="dock-divider" aria-hidden="true"></div>
+        <button class="dock-btn" data-key="memo" title="任务面板" aria-label="任务面板">
+            <i class="fas fa-tasks"></i>
+        </button>
+    </div>
+
+    <script>
+        const shell = document.getElementById('dockShell');
+        const buttons = Array.from(shell.querySelectorAll('.dock-btn'));
+
+        function setActive(key) {
+            buttons.forEach(btn => btn.classList.toggle('active', btn.dataset.key === key));
+        }
+
+        buttons.forEach(btn => {
+            btn.addEventListener('click', () => setActive(btn.dataset.key));
+        });
+
+        // 默认激活 sys（便于观察氛围）
+        setActive('sys');
+    </script>
+</body>
+</html>
+

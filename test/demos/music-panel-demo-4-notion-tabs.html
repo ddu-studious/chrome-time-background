@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo 4 - Notion Tabs（竖直侧栏 + 宽面板）</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a0a;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','PingFang SC',system-ui,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;overflow:hidden}
+body::before{content:'';position:fixed;inset:0;background:url('https://images.unsplash.com/photo-1548919973-5cef591cdbc9?w=1920') center/cover;filter:blur(50px) brightness(0.3);z-index:-1}
+
+.demo-label{position:fixed;top:16px;left:16px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.1);backdrop-filter:blur(20px);padding:8px 16px;border-radius:20px;font-size:12px;color:rgba(255,255,255,0.6);z-index:999}
+.demo-label b{color:rgba(120,200,120,0.9)}
+.demo-desc{position:fixed;top:16px;right:16px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);backdrop-filter:blur(20px);padding:12px 16px;border-radius:12px;font-size:11px;color:rgba(255,255,255,0.5);max-width:260px;line-height:1.6;z-index:999}
+
+/* ===== 主面板 ===== */
+.panel{width:460px;height:500px;background:rgba(14,14,18,0.94);backdrop-filter:blur(60px) saturate(180%);border-radius:20px;box-shadow:0 12px 60px rgba(0,0,0,0.65),inset 0 0.5px 0 rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.05);display:flex;overflow:hidden;animation:panelIn .4s cubic-bezier(.4,0,.2,1)}
+@keyframes panelIn{from{opacity:0;transform:translateY(12px) scale(.96)}to{opacity:1;transform:none}}
+
+/* ===== 左侧竖直 Tab 栏 ===== */
+.sidebar{width:48px;background:rgba(0,0,0,0.25);border-right:1px solid rgba(255,255,255,0.04);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:4px;flex-shrink:0}
+.side-tab{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:13px;color:rgba(255,255,255,0.3);cursor:pointer;transition:all .2s;border:none;background:none;position:relative}
+.side-tab:hover{color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.04)}
+.side-tab.active{color:rgba(120,200,120,0.9);background:rgba(120,200,120,0.08)}
+.side-tab.active::before{content:'';position:absolute;left:-1px;top:8px;bottom:8px;width:2px;border-radius:1px;background:rgba(120,200,120,0.9)}
+.side-tab .tt{position:absolute;left:44px;background:rgba(0,0,0,0.85);color:rgba(255,255,255,0.8);font-size:10px;padding:4px 8px;border-radius:6px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s;z-index:10}
+.side-tab:hover .tt{opacity:1}
+.side-sep{width:24px;height:1px;background:rgba(255,255,255,0.06);margin:4px 0}
+
+/* ===== 右侧主内容区 ===== */
+.main-area{flex:1;display:flex;flex-direction:column;overflow:hidden}
+
+/* ===== 顶部 Now Playing ===== */
+.top-bar{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.04);flex-shrink:0}
+.tb-cover{width:40px;height:40px;border-radius:8px;overflow:hidden;flex-shrink:0}
+.tb-cover img{width:100%;height:100%;object-fit:cover}
+.tb-info{flex:1;min-width:0}
+.tb-title{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tb-sub{font-size:11px;color:rgba(255,255,255,0.4)}
+.tb-controls{display:flex;gap:4px}
+.tb-controls button{background:none;border:none;color:rgba(255,255,255,0.4);cursor:pointer;width:28px;height:28px;border-radius:50%;font-size:12px;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.tb-controls button:hover{color:#fff;background:rgba(255,255,255,0.06)}
+.tb-controls .tb-play{background:rgba(120,200,120,0.9);color:#000;font-size:13px}
+.tb-controls .tb-play:hover{background:rgba(120,200,120,1);transform:scale(1.05)}
+
+/* ===== 内容面板 ===== */
+.panels{flex:1;overflow:hidden;position:relative}
+.pane{position:absolute;inset:0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.08) transparent;opacity:0;pointer-events:none;transition:opacity .2s}
+.pane::-webkit-scrollbar{width:3px}
+.pane::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:2px}
+.pane.active{opacity:1;pointer-events:auto}
+
+/* ===== 歌曲行 ===== */
+.track{display:flex;align-items:center;gap:8px;padding:7px 16px;cursor:pointer;transition:background .12s}
+.track:hover{background:rgba(255,255,255,0.03)}
+.track.playing{background:rgba(120,200,120,0.05)}
+.t-num{width:20px;text-align:right;font-size:10px;color:rgba(255,255,255,0.2);flex-shrink:0;font-variant-numeric:tabular-nums}
+.track.playing .t-num{color:rgba(120,200,120,0.8)}
+.t-cover{width:32px;height:32px;border-radius:6px;overflow:hidden;flex-shrink:0;background:rgba(255,255,255,0.03)}
+.t-cover img{width:100%;height:100%;object-fit:cover}
+.t-info{flex:1;min-width:0}
+.t-title{font-size:12px;color:rgba(255,255,255,0.75);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.track.playing .t-title{color:rgba(120,200,120,0.95);font-weight:500}
+.t-artist{font-size:10px;color:rgba(255,255,255,0.25);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t-dur{font-size:10px;color:rgba(255,255,255,0.18);flex-shrink:0}
+.t-actions{display:flex;gap:2px;opacity:0;transition:opacity .12s}
+.track:hover .t-actions{opacity:1}
+.t-actions button{background:none;border:none;color:rgba(255,255,255,0.35);cursor:pointer;font-size:10px;width:20px;height:20px;display:flex;align-items:center;justify-content:center;border-radius:4px}
+.t-actions button:hover{color:rgba(120,200,120,0.8);background:rgba(120,200,120,0.08)}
+
+/* ===== 歌单卡片 ===== */
+.pl-grid{padding:12px 16px;display:flex;flex-direction:column;gap:4px}
+.pl-card{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;cursor:pointer;transition:all .15s;border:1px solid rgba(255,255,255,0.03)}
+.pl-card:hover{background:rgba(255,255,255,0.04);border-color:rgba(255,255,255,0.06)}
+.pl-icon{width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.pl-text{flex:1;min-width:0}
+.pl-name{font-size:12px;font-weight:500;color:rgba(255,255,255,0.8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl-cnt{font-size:10px;color:rgba(255,255,255,0.3)}
+.pl-go{font-size:10px;color:rgba(255,255,255,0.12)}
+.pl-card:hover .pl-go{color:rgba(255,255,255,0.35)}
+
+/* ===== 歌词面板 ===== */
+.lyrics-pane{padding:16px 20px}
+.ly-line{font-size:13px;line-height:2.2;color:rgba(255,255,255,0.15);transition:all .35s;cursor:pointer;padding:2px 4px;border-radius:4px}
+.ly-line:hover{color:rgba(255,255,255,0.35)}
+.ly-line.active{font-size:17px;font-weight:700;color:rgba(255,255,255,0.95)}
+.ly-line.near{color:rgba(255,255,255,0.4)}
+.ly-tran{font-size:10px;color:rgba(120,200,120,0.35);margin-top:-4px;padding-left:4px}
+
+/* ===== 搜索 ===== */
+.search-pane-bar{padding:12px 16px 8px}
+.sp-input{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.05);border-radius:10px;padding:0 10px;border:1px solid transparent;transition:border-color .2s}
+.sp-input:focus-within{border-color:rgba(120,200,120,0.3)}
+.sp-input i{font-size:12px;color:rgba(255,255,255,0.25)}
+.sp-input input{flex:1;background:none;border:none;color:#fff;font-size:12px;padding:8px 0;outline:none}
+.sp-input input::placeholder{color:rgba(255,255,255,0.2)}
+
+/* ===== 推荐 ===== */
+.discover-scroll{padding:12px 16px}
+.dsc-label{font-size:10px;color:rgba(255,255,255,0.3);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px}
+.dsc-wrap{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:4px}
+.dsc-wrap::-webkit-scrollbar{display:none}
+.dsc-card{min-width:110px;cursor:pointer;transition:transform .2s}
+.dsc-card:hover{transform:translateY(-2px)}
+.dsc-img{width:110px;height:110px;border-radius:10px;overflow:hidden;background:linear-gradient(135deg,rgba(120,200,120,0.15),rgba(100,150,255,0.15))}
+.dsc-title{font-size:11px;color:rgba(255,255,255,0.7);margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dsc-sub{font-size:10px;color:rgba(255,255,255,0.3)}
+
+/* ===== 底部模式栏 ===== */
+.bottom-bar{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;border-top:1px solid rgba(255,255,255,0.04);flex-shrink:0}
+.bb-left,.bb-right{display:flex;gap:6px}
+.bb-btn{background:none;border:none;color:rgba(255,255,255,0.25);cursor:pointer;font-size:11px;padding:4px;border-radius:4px;transition:all .2s;position:relative}
+.bb-btn:hover{color:rgba(255,255,255,0.6)}
+.bb-btn.active{color:rgba(120,200,120,0.9)}
+.bb-btn.active::after{content:'';position:absolute;bottom:-1px;left:50%;transform:translateX(-50%);width:3px;height:3px;border-radius:50%;background:rgba(120,200,120,0.9)}
+.bb-mode-label{font-size:9px;color:rgba(255,255,255,0.2)}
+</style>
+</head>
+<body>
+<div class="demo-label"><b>Demo 4</b> — Notion Tabs（竖直侧栏图标 + 宽面板）</div>
+<div class="demo-desc">
+    <b>设计理念：</b>参考 Notion/Discord 左侧竖直图标导航，右侧内容面板。面板更宽，每个图标 tab 对应独立视图。<br><br>
+    <b>特色：</b>竖直侧栏图标 + 悬浮 tooltip、宽面板信息密度高、歌曲行带缩略图封面、绿色主题（接近 Spotify）、歌词页独立。
+</div>
+
+<div class="panel">
+    <div class="sidebar">
+        <button class="side-tab active" data-pane="queue"><i class="fas fa-play-circle"></i><span class="tt">播放队列</span></button>
+        <button class="side-tab" data-pane="playlists"><i class="fas fa-folder-open"></i><span class="tt">歌单</span></button>
+        <button class="side-tab" data-pane="lyrics"><i class="fas fa-align-left"></i><span class="tt">歌词</span></button>
+        <div class="side-sep"></div>
+        <button class="side-tab" data-pane="discover"><i class="fas fa-compass"></i><span class="tt">发现</span></button>
+        <button class="side-tab" data-pane="search"><i class="fas fa-search"></i><span class="tt">搜索</span></button>
+    </div>
+
+    <div class="main-area">
+        <div class="top-bar">
+            <div class="tb-cover"><img src="https://p2.music.126.net/6y-UleORITEDbvrOLV0Q8A==/5639395138885805.jpg?param=100y100"></div>
+            <div class="tb-info"><div class="tb-title">晴天</div><div class="tb-sub">周杰伦 · 2:28 / 4:29</div></div>
+            <div class="tb-controls">
+                <button><i class="fas fa-step-backward"></i></button>
+                <button class="tb-play"><i class="fas fa-pause"></i></button>
+                <button><i class="fas fa-step-forward"></i></button>
+            </div>
+        </div>
+
+        <div class="panels">
+            <div class="pane active" data-pane="queue">
+                <div class="track"><span class="t-num">1</span><div class="t-cover"><img src="https://p2.music.126.net/6y-UleORITEDbvrOLV0Q8A==/5639395138885805.jpg?param=100y100"></div><div class="t-info"><div class="t-title">东风破</div><div class="t-artist">周杰伦</div></div><span class="t-dur">4:35</span><div class="t-actions"><button><i class="fas fa-heart"></i></button><button><i class="fas fa-plus"></i></button></div></div>
+                <div class="track playing"><span class="t-num"><i class="fas fa-volume-up" style="font-size:10px"></i></span><div class="t-cover"><img src="https://p2.music.126.net/6y-UleORITEDbvrOLV0Q8A==/5639395138885805.jpg?param=100y100"></div><div class="t-info"><div class="t-title">晴天</div><div class="t-artist">周杰伦</div></div><span class="t-dur">4:29</span><div class="t-actions"><button><i class="fas fa-heart" style="color:#ff6b8a"></i></button><button><i class="fas fa-plus"></i></button></div></div>
+                <div class="track"><span class="t-num">3</span><div class="t-cover"><img src="https://p2.music.126.net/6y-UleORITEDbvrOLV0Q8A==/5639395138885805.jpg?param=100y100"></div><div class="t-info"><div class="t-title">七里香</div><div class="t-artist">周杰伦</div></div><span class="t-dur">3:59</span><div class="t-actions"><button><i class="fas fa-heart"></i></button><button><i class="fas fa-plus"></i></button></div></div>
+                <div class="track"><span class="t-num">4</span><div class="t-cover"><img src="https://p2.music.126.net/6y-UleORITEDbvrOLV0Q8A==/5639395138885805.jpg?param=100y100"></div><div class="t-info"><div class="t-title">稻香</div><div class="t-artist">周杰伦</div></div><span class="t-dur">3:42</span><div class="t-actions"><button><i class="fas fa-heart"></i></button><button><i class="fas fa-plus"></i></button></div></div>
+                <div class="track"><span class="t-num">5</span><div class="t-cover"><img src="https://p2.music.126.net/6y-UleORITEDbvrOLV0Q8A==/5639395138885805.jpg?param=100y100"></div><div class="t-info"><div class="t-title">简单爱</div><div class="t-artist">周杰伦</div></div><span class="t-dur">4:30</span><div class="t-actions"><button><i class="fas fa-heart"></i></button><button><i class="fas fa-plus"></i></button></div></div>
+                <div class="track"><span class="t-num">6</span><div class="t-cover"><img src="https://p2.music.126.net/6y-UleORITEDbvrOLV0Q8A==/5639395138885805.jpg?param=100y100"></div><div class="t-info"><div class="t-title">夜曲</div><div class="t-artist">周杰伦</div></div><span class="t-dur">3:47</span><div class="t-actions"><button><i class="fas fa-heart"></i></button><button><i class="fas fa-plus"></i></button></div></div>
+            </div>
+
+            <div class="pane" data-pane="playlists">
+                <div class="pl-grid">
+                    <div class="pl-card"><div class="pl-icon" style="background:rgba(255,100,130,0.1)"><i class="fas fa-heart" style="color:#ff6b8a"></i></div><div class="pl-text"><div class="pl-name">我喜欢的音乐</div><div class="pl-cnt">196 首</div></div><i class="fas fa-chevron-right pl-go"></i></div>
+                    <div class="pl-card"><div class="pl-icon" style="background:rgba(255,160,64,0.1)"><i class="fas fa-fire" style="color:#ffa040"></i></div><div class="pl-text"><div class="pl-name">高</div><div class="pl-cnt">184 首</div></div><i class="fas fa-chevron-right pl-go"></i></div>
+                    <div class="pl-card"><div class="pl-icon" style="background:rgba(100,180,255,0.1)"><i class="fas fa-music" style="color:#64b4ff"></i></div><div class="pl-text"><div class="pl-name">李宗盛 罗大佑 五佰 许巍 朴树 老狼</div><div class="pl-cnt">94 首</div></div><i class="fas fa-chevron-right pl-go"></i></div>
+                    <div class="pl-card"><div class="pl-icon" style="background:rgba(92,216,92,0.1)"><i class="fas fa-globe-asia" style="color:#5cd85c"></i></div><div class="pl-text"><div class="pl-name">【华语】～QQ音乐三巨头</div><div class="pl-cnt">149 首</div></div><i class="fas fa-chevron-right pl-go"></i></div>
+                    <div class="pl-card"><div class="pl-icon" style="background:rgba(196,120,255,0.1)"><i class="fas fa-book" style="color:#c478ff"></i></div><div class="pl-text"><div class="pl-name">适合努力学习英语时听的歌曲</div><div class="pl-cnt">80 首</div></div><i class="fas fa-chevron-right pl-go"></i></div>
+                </div>
+            </div>
+
+            <div class="pane" data-pane="lyrics">
+                <div class="lyrics-pane">
+                    <div class="ly-line">故事的小黄花</div>
+                    <div class="ly-line">从出生那年就飘着</div>
+                    <div class="ly-line near">童年的荡秋千</div>
+                    <div class="ly-line active">随记忆一直晃到现在</div>
+                    <div class="ly-tran">Swinging with memories until now</div>
+                    <div class="ly-line near">Re So So Si Do Si La</div>
+                    <div class="ly-line">So La Si Si Si Si La Si La So</div>
+                    <div class="ly-line">吹着前奏望着天空</div>
+                    <div class="ly-line">我想起花瓣试着掉落</div>
+                    <div class="ly-line">为你翘课的那一天</div>
+                </div>
+            </div>
+
+            <div class="pane" data-pane="discover">
+                <div class="discover-scroll">
+                    <div class="dsc-label"><i class="fas fa-calendar-star"></i> 每日推荐</div>
+                    <div class="dsc-wrap">
+                        <div class="dsc-card"><div class="dsc-img"></div><div class="dsc-title">孤勇者</div><div class="dsc-sub">陈奕迅</div></div>
+                        <div class="dsc-card"><div class="dsc-img" style="background:linear-gradient(135deg,rgba(255,150,100,0.15),rgba(255,100,150,0.15))"></div><div class="dsc-title">起风了</div><div class="dsc-sub">买辣椒也用券</div></div>
+                        <div class="dsc-card"><div class="dsc-img" style="background:linear-gradient(135deg,rgba(100,100,255,0.15),rgba(200,100,255,0.15))"></div><div class="dsc-title">错位时空</div><div class="dsc-sub">艾辰</div></div>
+                    </div>
+                </div>
+                <div class="discover-scroll">
+                    <div class="dsc-label"><i class="fas fa-fire-alt"></i> 热门歌曲</div>
+                    <div class="dsc-wrap">
+                        <div class="dsc-card"><div class="dsc-img" style="background:linear-gradient(135deg,rgba(255,200,100,0.15),rgba(255,150,50,0.15))"></div><div class="dsc-title">漠河舞厅</div><div class="dsc-sub">柳爽</div></div>
+                        <div class="dsc-card"><div class="dsc-img" style="background:linear-gradient(135deg,rgba(100,255,200,0.15),rgba(50,200,150,0.15))"></div><div class="dsc-title">富士山下</div><div class="dsc-sub">陈奕迅</div></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pane" data-pane="search">
+                <div class="search-pane-bar">
+                    <div class="sp-input"><i class="fas fa-search"></i><input type="text" placeholder="搜索歌曲、歌手..."></div>
+                </div>
+                <div class="discover-scroll" style="padding-top:4px">
+                    <div class="dsc-label"><i class="fas fa-history"></i> 最近搜索</div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap">
+                        <span style="font-size:11px;padding:4px 10px;border-radius:12px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.5);cursor:pointer">周杰伦</span>
+                        <span style="font-size:11px;padding:4px 10px;border-radius:12px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.5);cursor:pointer">陈奕迅</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bottom-bar">
+            <div class="bb-left">
+                <button class="bb-btn active" title="循环"><i class="fas fa-redo"></i></button>
+                <button class="bb-btn" title="随机"><i class="fas fa-random"></i></button>
+                <span class="bb-mode-label">列表循环</span>
+            </div>
+            <div class="bb-right">
+                <button class="bb-btn" title="音量"><i class="fas fa-volume-up"></i></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.querySelectorAll('.side-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.side-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.querySelector(`.pane[data-pane="${tab.dataset.pane}"]`).classList.add('active');
+    });
+});
+document.querySelectorAll('.bb-left .bb-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.bb-left .bb-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const labels = {'fa-redo':'列表循环','fa-random':'随机播放'};
+        const icon = btn.querySelector('i').className.split(' ').pop();
+        document.querySelector('.bb-mode-label').textContent = labels[icon] || '';
+    });
+});
+</script>
+</body>
+</html>

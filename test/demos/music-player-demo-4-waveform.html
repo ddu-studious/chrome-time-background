@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音乐播放器 Demo 4 - 波形频谱条</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            min-height: 100vh;
+            background: url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920') center/cover no-repeat fixed;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            color: #fff;
+        }
+        body::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 0; }
+        .scene { position: relative; z-index: 1; text-align: center; }
+        .time { font-size: 72px; font-weight: 200; letter-spacing: 4px; text-shadow: 0 2px 20px rgba(0,0,0,0.3); }
+        .date { font-size: 16px; opacity: 0.7; margin-top: 4px; }
+        .demo-label {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.5); padding: 8px 20px; border-radius: 20px;
+            font-size: 13px; z-index: 10; backdrop-filter: blur(10px);
+        }
+
+        /* === 波形频谱条 === */
+        .music-wave {
+            display: flex; justify-content: center;
+            margin-top: 24px;
+        }
+        .wave-player {
+            display: flex; flex-direction: column; align-items: center;
+            background: rgba(0, 0, 0, 0.45);
+            backdrop-filter: blur(30px) saturate(160%);
+            -webkit-backdrop-filter: blur(30px) saturate(160%);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 20px;
+            padding: 14px 24px;
+            min-width: 340px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+            animation: wave-fadein 0.6s ease;
+        }
+        @keyframes wave-fadein {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .wave-top { display: flex; align-items: center; gap: 14px; width: 100%; }
+        .wave-cover {
+            width: 44px; height: 44px;
+            border-radius: 10px; overflow: hidden;
+            flex-shrink: 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+        .wave-cover img { width: 100%; height: 100%; object-fit: cover; }
+        .wave-info { flex: 1; min-width: 0; text-align: left; }
+        .wave-title {
+            font-size: 13px; font-weight: 600;
+            color: rgba(255,255,255,0.9);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .wave-artist { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 2px; }
+        .wave-controls { display: flex; align-items: center; gap: 6px; }
+        .w-btn {
+            width: 28px; height: 28px; border: none; border-radius: 50%;
+            background: transparent; color: rgba(255,255,255,0.5);
+            cursor: pointer; font-size: 11px;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.15s;
+        }
+        .w-btn:hover { color: #fff; }
+        .w-btn-play {
+            width: 34px; height: 34px;
+            background: linear-gradient(135deg, rgba(80,180,255,0.3), rgba(100,220,160,0.3));
+            color: #fff; font-size: 12px;
+        }
+        .w-btn-play:hover {
+            background: linear-gradient(135deg, rgba(80,180,255,0.45), rgba(100,220,160,0.45));
+            transform: scale(1.06);
+        }
+
+        .wave-spectrum {
+            display: flex; align-items: flex-end;
+            gap: 2px; height: 28px; width: 100%;
+            margin-top: 10px;
+            padding: 0 2px;
+        }
+        .wave-bar {
+            flex: 1; min-width: 3px; max-width: 6px;
+            border-radius: 2px;
+            background: linear-gradient(to top, rgba(80,180,255,0.5), rgba(100,220,160,0.6));
+            transition: height 0.15s ease;
+        }
+        .wave-bar.paused {
+            height: 2px !important;
+            opacity: 0.3;
+        }
+        .wave-time {
+            display: flex; justify-content: space-between;
+            width: 100%; margin-top: 6px;
+        }
+        .wave-time span {
+            font-size: 9px; color: rgba(255,255,255,0.25);
+            font-variant-numeric: tabular-nums;
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-label">Demo 4：波形频谱条 (Waveform Spectrum)</div>
+    <div class="scene">
+        <div class="time" id="time">00:00:00</div>
+        <div class="date" id="date"></div>
+        <div class="music-wave">
+            <div class="wave-player">
+                <div class="wave-top">
+                    <div class="wave-cover">
+                        <img src="https://picsum.photos/80" alt="" crossorigin="anonymous">
+                    </div>
+                    <div class="wave-info">
+                        <div class="wave-title">夜曲</div>
+                        <div class="wave-artist">周杰伦 · 网易云音乐</div>
+                    </div>
+                    <div class="wave-controls">
+                        <button class="w-btn"><i class="fas fa-step-backward"></i></button>
+                        <button class="w-btn w-btn-play" id="play-btn"><i class="fas fa-pause" id="play-icon"></i></button>
+                        <button class="w-btn"><i class="fas fa-step-forward"></i></button>
+                    </div>
+                </div>
+                <div class="wave-spectrum" id="spectrum"></div>
+                <div class="wave-time">
+                    <span id="cur-time">1:24</span>
+                    <span>4:35</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('time').textContent = now.toLocaleTimeString('zh-CN', { hour12: false });
+            document.getElementById('date').textContent = now.toLocaleDateString('zh-CN', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
+        }
+        setInterval(updateTime, 1000); updateTime();
+
+        const spectrum = document.getElementById('spectrum');
+        const barCount = 40;
+        for (let i = 0; i < barCount; i++) {
+            const bar = document.createElement('div');
+            bar.className = 'wave-bar';
+            bar.style.height = (Math.random() * 22 + 4) + 'px';
+            spectrum.appendChild(bar);
+        }
+        const bars = spectrum.querySelectorAll('.wave-bar');
+        let playing = true;
+
+        function animateBars() {
+            if (playing) {
+                bars.forEach(bar => {
+                    bar.style.height = (Math.random() * 24 + 3) + 'px';
+                    bar.classList.remove('paused');
+                });
+            }
+            requestAnimationFrame(() => setTimeout(animateBars, 120));
+        }
+        animateBars();
+
+        document.getElementById('play-btn').addEventListener('click', () => {
+            playing = !playing;
+            document.getElementById('play-icon').className = playing ? 'fas fa-pause' : 'fas fa-play';
+            if (!playing) bars.forEach(b => b.classList.add('paused'));
+        });
+
+        let sec = 84;
+        setInterval(() => {
+            if (playing) {
+                sec++;
+                if (sec >= 275) sec = 0;
+                const m = Math.floor(sec / 60);
+                const s = String(sec % 60).padStart(2, '0');
+                document.getElementById('cur-time').textContent = `${m}:${s}`;
+            }
+        }, 1000);
+    </script>
+</body>
+</html>

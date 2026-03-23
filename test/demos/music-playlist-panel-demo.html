@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音乐播放列表面板 Demo</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            min-height: 100vh;
+            background: url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920') center/cover no-repeat fixed;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            color: #fff;
+        }
+        body::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 0; }
+        .scene { position: relative; z-index: 1; text-align: center; }
+        .time { font-size: 72px; font-weight: 200; letter-spacing: 4px; text-shadow: 0 2px 20px rgba(0,0,0,0.3); }
+        .date { font-size: 16px; opacity: 0.7; margin-top: 4px; }
+        .demo-label {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.5); padding: 8px 20px; border-radius: 20px;
+            font-size: 13px; z-index: 10; backdrop-filter: blur(10px);
+        }
+
+        .music-island {
+            display: flex; justify-content: center;
+            margin-top: 24px;
+            position: relative;
+            overflow: visible;
+        }
+
+        .island-inner {
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 16px;
+            border-radius: 28px;
+            background: rgba(10, 10, 10, 0.75);
+            backdrop-filter: blur(40px) saturate(180%);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.35), inset 0 0.5px 0 rgba(255,255,255,0.06);
+            cursor: pointer;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            min-width: 200px;
+            max-width: 480px;
+            position: relative;
+            flex-wrap: wrap;
+        }
+
+        .island-inner.expanded {
+            padding: 10px 16px 12px;
+            border-radius: 22px;
+        }
+
+        .island-cover {
+            width: 36px; height: 36px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
+            background: rgba(255,255,255,0.06);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .island-cover img { width: 100%; height: 100%; object-fit: cover; }
+        .island-placeholder-icon { color: rgba(255,255,255,0.3); font-size: 14px; }
+
+        .island-wave { display: flex; align-items: flex-end; gap: 2px; height: 16px; }
+        .island-wave span {
+            width: 2px; background: rgba(100, 180, 255, 0.6); border-radius: 1px;
+            animation: island-wave-bar 0.6s ease-in-out infinite alternate;
+        }
+        .island-wave span:nth-child(1) { height: 6px; animation-delay: 0s; }
+        .island-wave span:nth-child(2) { height: 12px; animation-delay: 0.15s; }
+        .island-wave span:nth-child(3) { height: 8px; animation-delay: 0.3s; }
+        .island-wave span:nth-child(4) { height: 14px; animation-delay: 0.45s; }
+        @keyframes island-wave-bar { to { height: 4px; } }
+
+        .island-info { flex: 1; min-width: 0; text-align: left; }
+        .island-title {
+            font-size: 13px; font-weight: 500; color: #fff;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .island-artist { font-size: 10px; color: rgba(255,255,255,0.45); margin-top: 1px; }
+
+        .island-controls { display: flex; align-items: center; gap: 4px; }
+        .island-btn {
+            background: none; border: none; color: rgba(255,255,255,0.7);
+            cursor: pointer; font-size: 13px; padding: 4px 6px; border-radius: 50%;
+            transition: all 0.2s; width: 28px; height: 28px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .island-btn:hover { color: #fff; background: rgba(255,255,255,0.1); }
+
+        .island-expand-area {
+            display: none; width: 100%; padding-top: 4px;
+        }
+        .island-inner.expanded .island-expand-area { display: block; }
+
+        .island-progress-row {
+            display: flex; align-items: center; gap: 6px; width: 100%;
+        }
+        .island-time { font-size: 10px; color: rgba(255,255,255,0.35); min-width: 28px; }
+        .island-progress-track {
+            flex: 1; height: 3px; background: rgba(255,255,255,0.1);
+            border-radius: 2px; position: relative; cursor: pointer;
+        }
+        .island-progress-fill {
+            position: absolute; left: 0; top: 0; height: 100%;
+            background: rgba(100, 180, 255, 0.7); border-radius: 2px;
+            width: 40%;
+        }
+
+        .island-lyric {
+            font-size: 11px; color: rgba(255,255,255,0.45); text-align: center;
+            padding: 4px 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+
+        .island-playlist-row {
+            display: none; align-items: center; gap: 6px; padding-top: 2px;
+            width: 100%; position: relative;
+        }
+        .island-inner.expanded .island-playlist-row { display: flex; }
+
+        .island-playlist-btn {
+            font-size: 11px !important;
+            width: 24px !important; height: 24px !important;
+            opacity: 0.5; transition: opacity 0.2s;
+        }
+        .island-playlist-btn:hover { opacity: 1; }
+
+        .island-platform {
+            font-size: 9px; color: rgba(255,255,255,0.2);
+            white-space: nowrap; flex-shrink: 0; display: none;
+        }
+        .island-inner.expanded .island-platform { display: block; margin-left: auto; }
+
+        /* === 播放列表面板 === */
+        .island-playlist-panel {
+            position: absolute; bottom: calc(100% + 8px);
+            left: 50%; transform: translateX(-50%);
+            width: 320px; max-height: 380px;
+            background: rgba(10, 10, 10, 0.88);
+            backdrop-filter: blur(40px) saturate(180%);
+            border-radius: 16px;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.5), inset 0 0.5px 0 rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.06);
+            display: flex; flex-direction: column;
+            animation: playlist-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 10001; overflow: hidden;
+        }
+        .island-playlist-panel.hidden { display: none; }
+
+        @keyframes playlist-in {
+            from { opacity: 0; transform: translateX(-50%) translateY(8px) scale(0.95); }
+            to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+        }
+
+        .island-playlist-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 16px 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            flex-shrink: 0;
+        }
+        .island-playlist-title {
+            font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.85);
+            display: flex; align-items: center; gap: 6px;
+        }
+        .island-playlist-title i { font-size: 12px; opacity: 0.6; }
+        .island-playlist-count { font-size: 11px; color: rgba(255,255,255,0.35); font-weight: 400; }
+
+        .island-playlist-close {
+            background: none; border: none;
+            color: rgba(255,255,255,0.4); cursor: pointer;
+            padding: 4px; font-size: 12px; border-radius: 50%;
+            width: 24px; height: 24px;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s;
+        }
+        .island-playlist-close:hover { color: rgba(255,255,255,0.8); background: rgba(255,255,255,0.1); }
+
+        .island-playlist-list {
+            overflow-y: auto; flex: 1; padding: 4px 0;
+            scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent;
+        }
+        .island-playlist-list::-webkit-scrollbar { width: 4px; }
+        .island-playlist-list::-webkit-scrollbar-track { background: transparent; }
+        .island-playlist-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
+
+        .island-playlist-empty {
+            padding: 40px 16px; text-align: center;
+            color: rgba(255,255,255,0.25); font-size: 12px;
+        }
+        .island-playlist-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 16px; cursor: pointer; transition: background 0.15s;
+        }
+        .island-playlist-item:hover { background: rgba(255,255,255,0.06); }
+        .island-playlist-item.active { background: rgba(100,180,255,0.08); }
+
+        .island-playlist-idx {
+            width: 24px; text-align: center; font-size: 11px;
+            color: rgba(255,255,255,0.25); flex-shrink: 0;
+        }
+        .island-playlist-item.active .island-playlist-idx { color: rgba(100,180,255,0.8); }
+
+        .island-playlist-song {
+            flex: 1; min-width: 0;
+            display: flex; flex-direction: column; gap: 2px;
+        }
+        .island-playlist-song-title {
+            font-size: 12px; color: rgba(255,255,255,0.75);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .island-playlist-item.active .island-playlist-song-title {
+            color: rgba(100,180,255,0.9); font-weight: 500;
+        }
+        .island-playlist-song-artist {
+            font-size: 10px; color: rgba(255,255,255,0.3);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-label">🎵 播放列表面板 Demo — 点击灵动岛展开 → 点击列表按钮</div>
+
+    <div class="scene">
+        <div class="time" id="clock">12:30</div>
+        <div class="date">2026年3月17日 星期二</div>
+
+        <div class="music-island" id="music-island">
+            <div class="island-inner" id="island-inner">
+                <div class="island-cover">
+                    <img src="https://p2.music.126.net/6y-UleORITEDbvrOLV0Q8A==/5639395138885805.jpg" alt="">
+                </div>
+                <div class="island-wave">
+                    <span></span><span></span><span></span><span></span>
+                </div>
+                <div class="island-info">
+                    <div class="island-title">晴天</div>
+                    <div class="island-artist">周杰伦</div>
+                </div>
+                <div class="island-controls">
+                    <button class="island-btn"><i class="fas fa-step-backward"></i></button>
+                    <button class="island-btn"><i class="fas fa-pause"></i></button>
+                    <button class="island-btn"><i class="fas fa-step-forward"></i></button>
+                </div>
+                <div class="island-expand-area">
+                    <div class="island-progress-row">
+                        <span class="island-time">1:42</span>
+                        <div class="island-progress-track">
+                            <div class="island-progress-fill"></div>
+                        </div>
+                        <span class="island-time">4:29</span>
+                    </div>
+                    <div class="island-lyric">故事的小黄花 从出生那年就飘着</div>
+                </div>
+                <div class="island-playlist-row">
+                    <button class="island-btn island-playlist-btn" id="mc-playlist-btn" title="播放列表"><i class="fas fa-list-ul"></i></button>
+                    <div class="island-platform">🎵 网易云</div>
+                </div>
+            </div>
+
+            <div class="island-playlist-panel hidden" id="island-playlist-panel">
+                <div class="island-playlist-header">
+                    <span class="island-playlist-title"><i class="fas fa-list-ul"></i> 播放列表 <span class="island-playlist-count">12</span></span>
+                    <button class="island-playlist-close" id="island-playlist-close"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="island-playlist-list" id="island-playlist-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const mockPlaylist = [
+            { title: '晴天', artist: '周杰伦', isActive: true },
+            { title: '七里香', artist: '周杰伦', isActive: false },
+            { title: '稻香', artist: '周杰伦', isActive: false },
+            { title: '夜曲', artist: '周杰伦', isActive: false },
+            { title: '简单爱', artist: '周杰伦', isActive: false },
+            { title: '告白气球', artist: '周杰伦', isActive: false },
+            { title: '等你下课', artist: '周杰伦', isActive: false },
+            { title: '青花瓷', artist: '周杰伦', isActive: false },
+            { title: '听妈妈的话', artist: '周杰伦', isActive: false },
+            { title: '以父之名', artist: '周杰伦', isActive: false },
+            { title: '半岛铁盒', artist: '周杰伦', isActive: false },
+            { title: '东风破', artist: '周杰伦', isActive: false },
+        ];
+
+        const inner = document.getElementById('island-inner');
+        inner.addEventListener('click', () => {
+            inner.classList.toggle('expanded');
+        });
+
+        const playlistBtn = document.getElementById('mc-playlist-btn');
+        const panel = document.getElementById('island-playlist-panel');
+        const closeBtn = document.getElementById('island-playlist-close');
+        const listEl = document.getElementById('island-playlist-list');
+
+        function renderPlaylist(playlist) {
+            listEl.innerHTML = playlist.map((song, idx) => `
+                <div class="island-playlist-item${song.isActive ? ' active' : ''}" data-index="${idx}">
+                    <span class="island-playlist-idx">${song.isActive ? '<i class="fas fa-volume-up"></i>' : (idx + 1)}</span>
+                    <div class="island-playlist-song">
+                        <span class="island-playlist-song-title">${song.title}</span>
+                        <span class="island-playlist-song-artist">${song.artist}</span>
+                    </div>
+                </div>
+            `).join('');
+
+            listEl.querySelectorAll('.island-playlist-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const index = parseInt(item.dataset.index);
+                    mockPlaylist.forEach((s, i) => s.isActive = (i === index));
+                    renderPlaylist(mockPlaylist);
+                });
+            });
+        }
+
+        playlistBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = !panel.classList.contains('hidden');
+            if (isOpen) {
+                panel.classList.add('hidden');
+            } else {
+                panel.classList.remove('hidden');
+                renderPlaylist(mockPlaylist);
+            }
+        });
+
+        closeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            panel.classList.add('hidden');
+        });
+
+        panel.addEventListener('click', (e) => e.stopPropagation());
+
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock').textContent =
+                now.getHours().toString().padStart(2, '0') + ':' +
+                now.getMinutes().toString().padStart(2, '0');
+        }
+        updateClock();
+        setInterval(updateClock, 1000);
+    </script>
+</body>
+</html>

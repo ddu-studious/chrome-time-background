@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo 2 - 分类标签抽屉</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920') center/cover no-repeat;
+    height: 100vh; overflow: hidden; color: #fff;
+}
+.bg-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); }
+
+.drawer-trigger {
+    position: fixed; bottom: 24px; right: 24px; z-index: 100;
+    width: 56px; height: 56px; border-radius: 16px; border: none;
+    background: linear-gradient(135deg, rgba(180,100,255,0.3), rgba(100,180,255,0.3));
+    backdrop-filter: blur(20px) saturate(180%);
+    color: #fff; font-size: 22px; cursor: pointer;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.15); transition: all 0.3s;
+}
+.drawer-trigger:hover { transform: scale(1.08); }
+
+/* 底部抽屉 */
+.drawer-overlay {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
+    opacity: 0; visibility: hidden; transition: all 0.3s ease;
+}
+.drawer-overlay.open { opacity: 1; visibility: visible; }
+
+.drawer-panel {
+    position: fixed; bottom: -80vh; left: 50%; transform: translateX(-50%);
+    z-index: 201; width: 720px; max-width: 90vw; height: 70vh;
+    background: linear-gradient(180deg, rgba(35,38,48,0.97), rgba(25,28,38,0.98));
+    backdrop-filter: blur(40px) saturate(200%);
+    border-radius: 20px 20px 0 0;
+    border: 1px solid rgba(255,255,255,0.08); border-bottom: none;
+    box-shadow: 0 -10px 60px rgba(0,0,0,0.5);
+    transition: bottom 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+    display: flex; flex-direction: column; overflow: hidden;
+}
+.drawer-overlay.open .drawer-panel { bottom: 0; }
+
+/* 拖动条 */
+.drawer-handle {
+    padding: 12px 0 4px; display: flex; justify-content: center;
+}
+.drawer-handle-bar {
+    width: 40px; height: 4px; border-radius: 2px;
+    background: rgba(255,255,255,0.15);
+}
+
+/* 标签栏 */
+.drawer-tabs {
+    display: flex; padding: 0 24px; gap: 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.drawer-tab {
+    padding: 12px 20px; font-size: 13px; font-weight: 500;
+    color: rgba(255,255,255,0.4); border: none; background: none;
+    cursor: pointer; transition: all 0.2s; position: relative;
+    display: flex; align-items: center; gap: 8px;
+}
+.drawer-tab i { font-size: 14px; }
+.drawer-tab.active { color: rgba(100,180,255,0.9); }
+.drawer-tab.active::after {
+    content: ''; position: absolute; bottom: -1px; left: 16px; right: 16px;
+    height: 2px; background: rgba(100,180,255,0.7); border-radius: 1px;
+}
+.drawer-tab:hover { color: rgba(255,255,255,0.7); }
+.drawer-tab .tab-count {
+    font-size: 10px; padding: 1px 6px; border-radius: 10px;
+    background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.4);
+}
+.drawer-tab.active .tab-count { background: rgba(100,180,255,0.15); color: rgba(100,180,255,0.7); }
+
+/* 内容区 */
+.drawer-content {
+    flex: 1; overflow-y: auto; padding: 20px 24px;
+}
+.drawer-content::-webkit-scrollbar { width: 4px; }
+.drawer-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* 信息列表 */
+.info-list { display: flex; flex-direction: column; gap: 8px; }
+.info-item {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 16px; border-radius: 12px;
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.04);
+    cursor: pointer; transition: all 0.2s;
+}
+.info-item:hover {
+    background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.08);
+}
+.info-item .item-icon {
+    width: 38px; height: 38px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; flex-shrink: 0;
+}
+.info-item .item-icon.link-icon { background: rgba(100,180,255,0.12); color: rgba(100,180,255,0.8); }
+.info-item .item-icon.note-icon { background: rgba(255,200,80,0.12); color: rgba(255,200,80,0.8); }
+.info-item .item-icon.code-icon { background: rgba(92,216,92,0.12); color: rgba(92,216,92,0.8); }
+.info-item .item-icon.contact-icon { background: rgba(255,100,150,0.12); color: rgba(255,100,150,0.8); }
+.info-item .item-body { flex: 1; min-width: 0; }
+.info-item .item-title { font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.85); margin-bottom: 3px; }
+.info-item .item-desc { font-size: 11px; color: rgba(255,255,255,0.35); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.info-item .item-actions { display: flex; gap: 6px; opacity: 0; transition: opacity 0.2s; }
+.info-item:hover .item-actions { opacity: 1; }
+.info-item .item-actions button {
+    width: 30px; height: 30px; border: none; border-radius: 8px;
+    background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.4);
+    cursor: pointer; font-size: 12px; transition: all 0.15s;
+}
+.info-item .item-actions button:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); }
+.info-item .item-tag {
+    padding: 2px 8px; border-radius: 6px; font-size: 10px;
+    background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.35);
+    flex-shrink: 0;
+}
+
+/* 添加按钮 */
+.add-item {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 14px; border-radius: 12px; border: 1px dashed rgba(255,255,255,0.1);
+    background: transparent; color: rgba(255,255,255,0.3);
+    cursor: pointer; font-size: 13px; width: 100%; transition: all 0.2s; margin-top: 4px;
+}
+.add-item:hover { border-color: rgba(100,180,255,0.3); color: rgba(100,180,255,0.7); }
+
+/* 笔记卡片 */
+.note-card {
+    padding: 16px; border-radius: 12px;
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.04);
+    margin-bottom: 10px; cursor: pointer; transition: all 0.2s;
+}
+.note-card:hover { background: rgba(255,255,255,0.06); }
+.note-card .note-title { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.85); margin-bottom: 6px; }
+.note-card .note-text { font-size: 12px; color: rgba(255,255,255,0.45); line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.note-card .note-meta { display: flex; gap: 12px; margin-top: 10px; font-size: 11px; color: rgba(255,255,255,0.25); }
+.note-card .note-meta i { margin-right: 4px; }
+
+.demo-label {
+    position: fixed; top: 20px; left: 20px; z-index: 10;
+    padding: 12px 20px; border-radius: 12px;
+    background: rgba(0,0,0,0.5); backdrop-filter: blur(10px);
+    font-size: 14px; color: rgba(255,255,255,0.7);
+    border: 1px solid rgba(255,255,255,0.1);
+}
+.demo-label strong { color: rgba(180,100,255,0.9); }
+</style>
+</head>
+<body>
+<div class="bg-overlay"></div>
+
+<div class="demo-label">
+    <strong>Demo 2</strong> — 底部标签抽屉<br>
+    <span style="font-size:12px;color:rgba(255,255,255,0.4)">从底部滑出，标签页切换分类</span>
+</div>
+
+<button class="drawer-trigger" id="drawerTrigger" title="打开日常信息">
+    <i class="fas fa-layer-group"></i>
+</button>
+
+<div class="drawer-overlay" id="drawerOverlay">
+    <div class="drawer-panel">
+        <div class="drawer-handle"><div class="drawer-handle-bar"></div></div>
+        <div class="drawer-tabs">
+            <button class="drawer-tab active" data-tab="links"><i class="fas fa-link"></i> 链接 <span class="tab-count">5</span></button>
+            <button class="drawer-tab" data-tab="notes"><i class="fas fa-sticky-note"></i> 笔记 <span class="tab-count">3</span></button>
+            <button class="drawer-tab" data-tab="snippets"><i class="fas fa-code"></i> 片段 <span class="tab-count">8</span></button>
+            <button class="drawer-tab" data-tab="contacts"><i class="fas fa-user-friends"></i> 联系人 <span class="tab-count">4</span></button>
+        </div>
+        <div class="drawer-content">
+            <!-- 链接标签页 -->
+            <div class="tab-panel active" id="tab-links">
+                <div class="info-list">
+                    <div class="info-item">
+                        <div class="item-icon link-icon"><i class="fas fa-brands fa-github"></i></div>
+                        <div class="item-body">
+                            <div class="item-title">GitHub</div>
+                            <div class="item-desc">https://github.com/dashboard</div>
+                        </div>
+                        <span class="item-tag">开发</span>
+                        <div class="item-actions">
+                            <button title="复制"><i class="fas fa-copy"></i></button>
+                            <button title="编辑"><i class="fas fa-pen"></i></button>
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <div class="item-icon link-icon"><i class="fas fa-envelope"></i></div>
+                        <div class="item-body">
+                            <div class="item-title">企业邮箱</div>
+                            <div class="item-desc">https://mail.company.com</div>
+                        </div>
+                        <span class="item-tag">工作</span>
+                        <div class="item-actions">
+                            <button title="复制"><i class="fas fa-copy"></i></button>
+                            <button title="编辑"><i class="fas fa-pen"></i></button>
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <div class="item-icon link-icon"><i class="fas fa-chart-line"></i></div>
+                        <div class="item-body">
+                            <div class="item-title">数据面板</div>
+                            <div class="item-desc">https://analytics.company.com/dashboard</div>
+                        </div>
+                        <span class="item-tag">分析</span>
+                        <div class="item-actions">
+                            <button title="复制"><i class="fas fa-copy"></i></button>
+                            <button title="编辑"><i class="fas fa-pen"></i></button>
+                        </div>
+                    </div>
+                    <button class="add-item"><i class="fas fa-plus"></i> 添加链接</button>
+                </div>
+            </div>
+            <!-- 笔记标签页 -->
+            <div class="tab-panel" id="tab-notes">
+                <div class="note-card">
+                    <div class="note-title">项目排期 Q1</div>
+                    <div class="note-text">1月：完成用户模块重构；2月：上线支付功能；3月：性能优化和压测。注意关键节点需提前对齐资源。</div>
+                    <div class="note-meta"><span><i class="fas fa-clock"></i> 2026-03-10</span><span><i class="fas fa-tag"></i> 工作</span></div>
+                </div>
+                <div class="note-card">
+                    <div class="note-title">会议纪要 3/10</div>
+                    <div class="note-text">讨论了新功能上线计划，确认了测试方案，下周三进行代码评审。</div>
+                    <div class="note-meta"><span><i class="fas fa-clock"></i> 2026-03-10</span><span><i class="fas fa-tag"></i> 会议</span></div>
+                </div>
+                <button class="add-item"><i class="fas fa-plus"></i> 添加笔记</button>
+            </div>
+            <!-- 片段标签页 -->
+            <div class="tab-panel" id="tab-snippets">
+                <div class="info-list">
+                    <div class="info-item">
+                        <div class="item-icon code-icon"><i class="fas fa-terminal"></i></div>
+                        <div class="item-body">
+                            <div class="item-title">Git 常用命令</div>
+                            <div class="item-desc">git stash / git rebase / git cherry-pick</div>
+                        </div>
+                        <div class="item-actions">
+                            <button title="复制"><i class="fas fa-copy"></i></button>
+                            <button title="编辑"><i class="fas fa-pen"></i></button>
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <div class="item-icon code-icon"><i class="fas fa-database"></i></div>
+                        <div class="item-body">
+                            <div class="item-title">SQL 查询模板</div>
+                            <div class="item-desc">SELECT * FROM users WHERE ...</div>
+                        </div>
+                        <div class="item-actions">
+                            <button title="复制"><i class="fas fa-copy"></i></button>
+                            <button title="编辑"><i class="fas fa-pen"></i></button>
+                        </div>
+                    </div>
+                    <button class="add-item"><i class="fas fa-plus"></i> 添加代码片段</button>
+                </div>
+            </div>
+            <!-- 联系人标签页 -->
+            <div class="tab-panel" id="tab-contacts">
+                <div class="info-list">
+                    <div class="info-item">
+                        <div class="item-icon contact-icon"><i class="fas fa-user"></i></div>
+                        <div class="item-body">
+                            <div class="item-title">张三</div>
+                            <div class="item-desc">后端开发 · zhangsan@company.com · 138-xxxx-xxxx</div>
+                        </div>
+                        <div class="item-actions">
+                            <button title="复制"><i class="fas fa-copy"></i></button>
+                            <button title="编辑"><i class="fas fa-pen"></i></button>
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <div class="item-icon contact-icon"><i class="fas fa-user"></i></div>
+                        <div class="item-body">
+                            <div class="item-title">李四</div>
+                            <div class="item-desc">产品经理 · lisi@company.com · 139-xxxx-xxxx</div>
+                        </div>
+                        <div class="item-actions">
+                            <button title="复制"><i class="fas fa-copy"></i></button>
+                            <button title="编辑"><i class="fas fa-pen"></i></button>
+                        </div>
+                    </div>
+                    <button class="add-item"><i class="fas fa-plus"></i> 添加联系人</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const trigger = document.getElementById('drawerTrigger');
+const overlay = document.getElementById('drawerOverlay');
+trigger.addEventListener('click', () => overlay.classList.add('open'));
+overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.classList.remove('open'); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') overlay.classList.remove('open'); });
+
+document.querySelectorAll('.drawer-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.drawer-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    });
+});
+</script>
+</body>
+</html>

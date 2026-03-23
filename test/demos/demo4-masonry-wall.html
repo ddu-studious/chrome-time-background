@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo 4 - 瀑布流知识墙</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920') center/cover no-repeat;
+    height: 100vh; overflow: hidden; color: #fff;
+}
+.bg-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); }
+
+.drawer-trigger {
+    position: fixed; bottom: 24px; right: 24px; z-index: 100;
+    width: 56px; height: 56px; border-radius: 16px; border: none;
+    background: linear-gradient(135deg, rgba(255,180,80,0.3), rgba(255,100,150,0.3));
+    backdrop-filter: blur(20px) saturate(180%);
+    color: #fff; font-size: 22px; cursor: pointer;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.15); transition: all 0.3s;
+}
+.drawer-trigger:hover { transform: scale(1.08); }
+
+/* 全屏面板遮罩 */
+.wall-overlay {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+    opacity: 0; visibility: hidden; transition: all 0.3s ease;
+}
+.wall-overlay.open { opacity: 1; visibility: visible; }
+
+/* 知识墙面板 */
+.wall-panel {
+    position: fixed; top: 5vh; left: 5vw; right: 5vw; bottom: 5vh;
+    z-index: 201;
+    background: linear-gradient(135deg, rgba(30,32,42,0.96), rgba(22,24,34,0.98));
+    backdrop-filter: blur(40px) saturate(200%);
+    border-radius: 20px; border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 20px 80px rgba(0,0,0,0.5);
+    transform: scale(0.95); opacity: 0;
+    transition: all 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+    display: flex; flex-direction: column; overflow: hidden;
+}
+.wall-overlay.open .wall-panel { transform: scale(1); opacity: 1; }
+
+/* 头部 */
+.wall-header {
+    padding: 20px 28px; display: flex; align-items: center; gap: 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 100%);
+}
+.wall-header h2 {
+    font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+}
+.wall-header h2 i { color: rgba(255,180,80,0.85); }
+.wall-search {
+    flex: 1; max-width: 400px; position: relative;
+}
+.wall-search input {
+    width: 100%; padding: 9px 14px 9px 36px; border: none; border-radius: 10px;
+    background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.9);
+    font-size: 13px; outline: none; transition: all 0.25s;
+}
+.wall-search input:focus { background: rgba(255,255,255,0.1); box-shadow: 0 0 0 2px rgba(100,180,255,0.25); }
+.wall-search input::placeholder { color: rgba(255,255,255,0.3); }
+.wall-search i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: rgba(255,255,255,0.3); font-size: 13px; }
+.wall-actions { margin-left: auto; display: flex; gap: 8px; }
+.wall-actions button {
+    width: 36px; height: 36px; border: none; border-radius: 10px;
+    background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.5);
+    cursor: pointer; font-size: 14px; transition: all 0.2s;
+}
+.wall-actions button:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); }
+.wall-close {
+    width: 36px; height: 36px; border: none; border-radius: 10px;
+    background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.5);
+    cursor: pointer; font-size: 16px; transition: all 0.2s;
+}
+.wall-close:hover { background: rgba(255,100,100,0.2); color: #ff6b6b; }
+
+/* 瀑布流内容 */
+.wall-content {
+    flex: 1; overflow-y: auto; padding: 24px 28px;
+}
+.wall-content::-webkit-scrollbar { width: 5px; }
+.wall-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
+
+.masonry {
+    column-count: 3; column-gap: 16px;
+}
+@media (max-width: 1000px) { .masonry { column-count: 2; } }
+
+/* 知识卡片 */
+.wall-card {
+    break-inside: avoid; margin-bottom: 16px;
+    padding: 18px; border-radius: 14px;
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05);
+    cursor: pointer; transition: all 0.25s;
+}
+.wall-card:hover {
+    background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1);
+    transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+}
+.wall-card .wc-type {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 10px; border-radius: 6px; font-size: 10px; font-weight: 600;
+    margin-bottom: 10px;
+}
+.wall-card .wc-type.link { background: rgba(100,180,255,0.1); color: rgba(100,180,255,0.8); }
+.wall-card .wc-type.note { background: rgba(255,200,80,0.1); color: rgba(255,200,80,0.8); }
+.wall-card .wc-type.code { background: rgba(92,216,92,0.1); color: rgba(92,216,92,0.8); }
+.wall-card .wc-type.contact { background: rgba(255,100,150,0.1); color: rgba(255,100,150,0.8); }
+.wall-card .wc-type.weekly { background: rgba(180,100,255,0.1); color: rgba(180,100,255,0.8); }
+.wall-card .wc-title { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.85); margin-bottom: 8px; }
+.wall-card .wc-text { font-size: 12px; color: rgba(255,255,255,0.4); line-height: 1.7; }
+.wall-card .wc-text a { color: rgba(100,180,255,0.7); text-decoration: none; }
+.wall-card .wc-text a:hover { text-decoration: underline; }
+.wall-card .wc-meta {
+    display: flex; align-items: center; gap: 12px; margin-top: 12px;
+    padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.04);
+    font-size: 11px; color: rgba(255,255,255,0.2);
+}
+.wall-card .wc-meta i { margin-right: 3px; }
+.wall-card .wc-tags { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.wall-card .wc-tags span {
+    padding: 2px 8px; border-radius: 6px; font-size: 10px;
+    background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.3);
+}
+.wall-card pre {
+    margin-top: 10px; padding: 12px; border-radius: 8px;
+    background: rgba(0,0,0,0.3); font-size: 11px; color: rgba(92,216,92,0.8);
+    font-family: 'SF Mono', Menlo, monospace; overflow-x: auto; line-height: 1.6;
+}
+.wall-card .wc-links { margin-top: 8px; }
+.wall-card .wc-links a {
+    display: flex; align-items: center; gap: 8px; padding: 6px 0;
+    font-size: 12px; color: rgba(100,180,255,0.7); text-decoration: none;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.wall-card .wc-links a:last-child { border-bottom: none; }
+.wall-card .wc-links a:hover { color: rgba(100,180,255,0.95); }
+.wall-card .wc-links a i { font-size: 10px; }
+
+/* 添加卡片 */
+.wall-card.add-new {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 8px; min-height: 120px; border-style: dashed;
+    color: rgba(255,255,255,0.3); background: transparent;
+}
+.wall-card.add-new:hover { color: rgba(100,180,255,0.7); border-color: rgba(100,180,255,0.3); }
+.wall-card.add-new i { font-size: 28px; }
+.wall-card.add-new span { font-size: 13px; }
+
+.demo-label {
+    position: fixed; top: 20px; left: 20px; z-index: 10;
+    padding: 12px 20px; border-radius: 12px;
+    background: rgba(0,0,0,0.5); backdrop-filter: blur(10px);
+    font-size: 14px; color: rgba(255,255,255,0.7);
+    border: 1px solid rgba(255,255,255,0.1);
+}
+.demo-label strong { color: rgba(255,180,80,0.9); }
+</style>
+</head>
+<body>
+<div class="bg-overlay"></div>
+
+<div class="demo-label">
+    <strong>Demo 4</strong> — 瀑布流知识墙<br>
+    <span style="font-size:12px;color:rgba(255,255,255,0.4)">全屏面板，瀑布流布局展示所有信息</span>
+</div>
+
+<button class="drawer-trigger" id="drawerTrigger" title="打开知识墙">
+    <i class="fas fa-grip-vertical"></i>
+</button>
+
+<div class="wall-overlay" id="wallOverlay">
+    <div class="wall-panel">
+        <div class="wall-header">
+            <h2><i class="fas fa-brain"></i> 知识墙</h2>
+            <div class="wall-search">
+                <i class="fas fa-search"></i>
+                <input type="text" placeholder="搜索知识...">
+            </div>
+            <div class="wall-actions">
+                <button title="列表视图"><i class="fas fa-list"></i></button>
+                <button title="添加"><i class="fas fa-plus"></i></button>
+            </div>
+            <button class="wall-close" id="wallClose"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="wall-content">
+            <div class="masonry">
+                <div class="wall-card">
+                    <div class="wc-type link"><i class="fas fa-link"></i> 常用链接</div>
+                    <div class="wc-title">开发工具集</div>
+                    <div class="wc-links">
+                        <a href="#"><i class="fas fa-external-link-alt"></i> GitHub Dashboard</a>
+                        <a href="#"><i class="fas fa-external-link-alt"></i> Jenkins CI/CD</a>
+                        <a href="#"><i class="fas fa-external-link-alt"></i> Jira 看板</a>
+                        <a href="#"><i class="fas fa-external-link-alt"></i> Confluence 文档</a>
+                    </div>
+                    <div class="wc-meta"><span><i class="fas fa-clock"></i> 3/10 更新</span></div>
+                </div>
+
+                <div class="wall-card">
+                    <div class="wc-type note"><i class="fas fa-sticky-note"></i> 笔记</div>
+                    <div class="wc-title">项目排期 Q1 2026</div>
+                    <div class="wc-text">
+                        1月：完成用户模块重构<br>
+                        2月：上线支付功能 & A/B 测试<br>
+                        3月：性能优化和压测<br><br>
+                        关键节点需提前对齐资源，注意人力缺口。
+                    </div>
+                    <div class="wc-tags"><span>工作</span><span>排期</span></div>
+                    <div class="wc-meta"><span><i class="fas fa-clock"></i> 3/8</span><span><i class="fas fa-eye"></i> 12 次</span></div>
+                </div>
+
+                <div class="wall-card">
+                    <div class="wc-type code"><i class="fas fa-code"></i> 代码片段</div>
+                    <div class="wc-title">Git 常用命令</div>
+                    <pre>git stash save "msg"
+git stash pop
+git rebase -i HEAD~3
+git cherry-pick abc123
+git log --oneline --graph</pre>
+                    <div class="wc-tags"><span>Git</span><span>工具</span></div>
+                    <div class="wc-meta"><span><i class="fas fa-copy"></i> 复制 28 次</span></div>
+                </div>
+
+                <div class="wall-card">
+                    <div class="wc-type contact"><i class="fas fa-user"></i> 联系人</div>
+                    <div class="wc-title">项目组通讯录</div>
+                    <div class="wc-text">
+                        <strong>张三</strong> — 后端 · 138-xxxx<br>
+                        <strong>李四</strong> — 产品 · 139-xxxx<br>
+                        <strong>王五</strong> — 前端 · 137-xxxx<br>
+                        <strong>赵六</strong> — 测试 · 136-xxxx
+                    </div>
+                    <div class="wc-meta"><span><i class="fas fa-users"></i> 4 人</span></div>
+                </div>
+
+                <div class="wall-card">
+                    <div class="wc-type weekly"><i class="fas fa-calendar-week"></i> 周记</div>
+                    <div class="wc-title">本周要点 (3/9 - 3/15)</div>
+                    <div class="wc-text">
+                        ✅ 完成 v1.5.1 发布<br>
+                        🔄 进行中：信息抽屉功能<br>
+                        📋 待办：搜索功能增强<br>
+                        ⚠️ 风险：服务器证书 3/20 到期
+                    </div>
+                    <div class="wc-tags"><span>周报</span></div>
+                    <div class="wc-meta"><span><i class="fas fa-clock"></i> 3/11 更新</span></div>
+                </div>
+
+                <div class="wall-card">
+                    <div class="wc-type code"><i class="fas fa-code"></i> 代码片段</div>
+                    <div class="wc-title">SQL 查询模板</div>
+                    <pre>SELECT u.name, COUNT(o.id) AS cnt
+FROM users u
+LEFT JOIN orders o ON u.id = o.user_id
+WHERE u.created_at >= '2026-01-01'
+GROUP BY u.id
+HAVING cnt > 5
+ORDER BY cnt DESC
+LIMIT 20;</pre>
+                    <div class="wc-tags"><span>SQL</span><span>数据库</span></div>
+                </div>
+
+                <div class="wall-card">
+                    <div class="wc-type link"><i class="fas fa-link"></i> 链接</div>
+                    <div class="wc-title">学习资源</div>
+                    <div class="wc-links">
+                        <a href="#"><i class="fas fa-external-link-alt"></i> MDN Web Docs</a>
+                        <a href="#"><i class="fas fa-external-link-alt"></i> Chrome API 文档</a>
+                        <a href="#"><i class="fas fa-external-link-alt"></i> CSS Tricks</a>
+                    </div>
+                </div>
+
+                <div class="wall-card">
+                    <div class="wc-type note"><i class="fas fa-sticky-note"></i> 笔记</div>
+                    <div class="wc-title">会议纪要 3/10</div>
+                    <div class="wc-text">
+                        讨论新功能上线计划。确认测试方案：先灰度10%用户，观察一周后全量发布。下周三代码评审。
+                    </div>
+                    <div class="wc-tags"><span>会议</span></div>
+                    <div class="wc-meta"><span><i class="fas fa-clock"></i> 3/10</span></div>
+                </div>
+
+                <div class="wall-card add-new">
+                    <i class="fas fa-plus-circle"></i>
+                    <span>添加新卡片</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const trigger = document.getElementById('drawerTrigger');
+const overlay = document.getElementById('wallOverlay');
+const close = document.getElementById('wallClose');
+
+trigger.addEventListener('click', () => overlay.classList.add('open'));
+close.addEventListener('click', () => overlay.classList.remove('open'));
+overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.classList.remove('open'); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') overlay.classList.remove('open'); });
+</script>
+</body>
+</html>

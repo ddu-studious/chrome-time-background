@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo 5 - Minimal Card（极简紧凑 + 滑动切换）</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a0a;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','PingFang SC',system-ui,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;overflow:hidden}
+body::before{content:'';position:fixed;inset:0;background:url('https://images.unsplash.com/photo-1548919973-5cef591cdbc9?w=1920') center/cover;filter:blur(50px) brightness(0.3);z-index:-1}
+
+.demo-label{position:fixed;top:16px;left:16px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.1);backdrop-filter:blur(20px);padding:8px 16px;border-radius:20px;font-size:12px;color:rgba(255,255,255,0.6);z-index:999}
+.demo-label b{color:rgba(200,160,255,0.9)}
+.demo-desc{position:fixed;top:16px;right:16px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);backdrop-filter:blur(20px);padding:12px 16px;border-radius:12px;font-size:11px;color:rgba(255,255,255,0.5);max-width:260px;line-height:1.6;z-index:999}
+
+/* ===== 面板 ===== */
+.panel{width:340px;max-height:500px;background:rgba(16,14,22,0.95);backdrop-filter:blur(60px) saturate(200%);border-radius:24px;box-shadow:0 16px 64px rgba(0,0,0,0.7),inset 0 0.5px 0 rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.05);display:flex;flex-direction:column;overflow:hidden;animation:panelIn .5s cubic-bezier(.4,0,.2,1)}
+@keyframes panelIn{from{opacity:0;transform:translateY(16px) scale(.94)}to{opacity:1;transform:none}}
+
+/* ===== 顶部紧凑播放条 ===== */
+.player-strip{display:flex;align-items:center;gap:8px;padding:14px 16px 10px;flex-shrink:0}
+.ps-cover{width:44px;height:44px;border-radius:12px;overflow:hidden;flex-shrink:0;position:relative}
+.ps-cover img{width:100%;height:100%;object-fit:cover}
+.ps-cover::after{content:'';position:absolute;inset:0;border-radius:12px;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.08)}
+.ps-info{flex:1;min-width:0}
+.ps-title{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ps-sub{font-size:11px;color:rgba(255,255,255,0.4);display:flex;align-items:center;gap:6px;margin-top:1px}
+.ps-lyric-line{font-size:10px;color:rgba(200,160,255,0.5);font-style:italic;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ps-controls{display:flex;gap:4px;flex-shrink:0}
+.ps-controls button{background:none;border:none;color:rgba(255,255,255,0.45);cursor:pointer;width:28px;height:28px;border-radius:50%;font-size:12px;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.ps-controls button:hover{color:#fff;background:rgba(255,255,255,0.08)}
+.ps-controls .ps-play{background:rgba(200,160,255,0.85);color:#000;font-size:14px;width:32px;height:32px}
+.ps-controls .ps-play:hover{background:rgba(200,160,255,1);transform:scale(1.05)}
+
+/* ===== 进度条 ===== */
+.progress-strip{display:flex;align-items:center;gap:6px;padding:0 16px 10px;flex-shrink:0}
+.prg-time{font-size:9px;color:rgba(255,255,255,0.25);font-variant-numeric:tabular-nums}
+.prg-bar{flex:1;height:3px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;cursor:pointer}
+.prg-fill{height:100%;width:55%;background:linear-gradient(90deg,rgba(200,160,255,0.8),rgba(150,120,255,0.8));border-radius:2px;transition:width .3s}
+
+/* ===== 滑动式 Tab ===== */
+.swipe-tabs{display:flex;padding:0 16px;gap:0;border-bottom:1px solid rgba(255,255,255,0.04);flex-shrink:0;position:relative}
+.sw-tab{flex:1;padding:8px 0;text-align:center;font-size:11px;color:rgba(255,255,255,0.35);cursor:pointer;border:none;background:none;transition:color .2s;position:relative;z-index:1}
+.sw-tab:hover{color:rgba(255,255,255,0.6)}
+.sw-tab.active{color:rgba(200,160,255,0.95);font-weight:500}
+.sw-indicator{position:absolute;bottom:0;height:2px;background:rgba(200,160,255,0.8);border-radius:1px;transition:all .3s cubic-bezier(.4,0,.2,1)}
+
+/* ===== 内容 ===== */
+.sw-content{flex:1;overflow:hidden;position:relative}
+.sw-pane{position:absolute;inset:0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.06) transparent;opacity:0;transform:translateX(20px);transition:all .3s cubic-bezier(.4,0,.2,1);pointer-events:none}
+.sw-pane::-webkit-scrollbar{width:3px}
+.sw-pane::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.08);border-radius:2px}
+.sw-pane.active{opacity:1;transform:none;pointer-events:auto}
+
+/* ===== 极简歌曲行 ===== */
+.row{display:flex;align-items:center;gap:6px;padding:8px 16px;cursor:pointer;transition:background .12s}
+.row:hover{background:rgba(255,255,255,0.03)}
+.row.now{background:rgba(200,160,255,0.04)}
+.r-num{width:16px;text-align:right;font-size:10px;color:rgba(255,255,255,0.18);flex-shrink:0}
+.row.now .r-num{color:rgba(200,160,255,0.7)}
+.r-title{flex:1;font-size:12px;color:rgba(255,255,255,0.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row.now .r-title{color:rgba(200,160,255,0.95);font-weight:500}
+.r-artist{font-size:10px;color:rgba(255,255,255,0.2);flex-shrink:0;max-width:60px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.r-hover-play{opacity:0;background:none;border:none;color:rgba(200,160,255,0.6);cursor:pointer;font-size:10px;transition:opacity .12s}
+.row:hover .r-hover-play{opacity:1}
+
+/* ===== 歌单 ===== */
+.pl-compact{padding:8px 12px;display:flex;flex-direction:column;gap:3px}
+.pl-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;cursor:pointer;transition:all .12s}
+.pl-row:hover{background:rgba(255,255,255,0.04)}
+.pl-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.pl-label{flex:1;font-size:12px;color:rgba(255,255,255,0.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl-num{font-size:10px;color:rgba(255,255,255,0.2)}
+.pl-chev{font-size:9px;color:rgba(255,255,255,0.12)}
+.pl-row:hover .pl-chev{color:rgba(255,255,255,0.35)}
+
+/* ===== 歌词面板 ===== */
+.lrc-pane{padding:16px 20px}
+.lrc{font-size:13px;line-height:2.4;color:rgba(255,255,255,0.12);transition:all .4s cubic-bezier(.4,0,.2,1);cursor:pointer;padding:1px 4px;border-radius:4px}
+.lrc:hover{color:rgba(255,255,255,0.3)}
+.lrc.on{font-size:17px;font-weight:700;color:rgba(255,255,255,0.95);background:rgba(200,160,255,0.04)}
+.lrc.adj{color:rgba(255,255,255,0.35)}
+.lrc-sub{font-size:10px;color:rgba(200,160,255,0.3);margin-top:-6px;padding-left:4px}
+
+/* ===== 搜索 ===== */
+.sch-bar{padding:10px 16px 6px}
+.sch-wrap{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.04);border-radius:12px;padding:0 10px;border:1px solid transparent;transition:border-color .2s}
+.sch-wrap:focus-within{border-color:rgba(200,160,255,0.25)}
+.sch-wrap i{font-size:11px;color:rgba(255,255,255,0.2)}
+.sch-wrap input{flex:1;background:none;border:none;color:#fff;font-size:12px;padding:8px 0;outline:none}
+.sch-wrap input::placeholder{color:rgba(255,255,255,0.18)}
+
+/* ===== 推荐 ===== */
+.rec-compact{padding:8px 16px}
+.rec-tag{font-size:9px;color:rgba(255,255,255,0.25);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px}
+
+/* ===== 模式 ===== */
+.mode-dots{display:flex;align-items:center;justify-content:center;gap:12px;padding:8px 16px 10px;flex-shrink:0}
+.md-btn{background:none;border:none;color:rgba(255,255,255,0.2);cursor:pointer;font-size:12px;transition:all .2s;padding:3px}
+.md-btn:hover{color:rgba(255,255,255,0.5)}
+.md-btn.on{color:rgba(200,160,255,0.9)}
+.md-divider{width:1px;height:12px;background:rgba(255,255,255,0.06)}
+.md-text{font-size:9px;color:rgba(255,255,255,0.15)}
+</style>
+</head>
+<body>
+<div class="demo-label"><b>Demo 5</b> — Minimal Card（极简紧凑 + 滑动切换）</div>
+<div class="demo-desc">
+    <b>设计理念：</b>极简美学，面板窄且紧凑（340px），适合嵌入浮窗。顶部播放条 + 进度 + 歌词预览一体。Tab 切换带滑动指示器。<br><br>
+    <b>特色：</b>最紧凑尺寸、歌词行内预览 + 完整歌词页、歌单用色点标识、紫色主题、滑动 Tab 指示器动画。
+</div>
+
+<div class="panel">
+    <div class="player-strip">
+        <div class="ps-cover"><img src="https://p2.music.126.net/6y-UleORITEDbvrOLV0Q8A==/5639395138885805.jpg?param=200y200"></div>
+        <div class="ps-info">
+            <div class="ps-title">晴天</div>
+            <div class="ps-sub">周杰伦 · 叶惠美</div>
+            <div class="ps-lyric-line">随记忆一直晃到现在</div>
+        </div>
+        <div class="ps-controls">
+            <button><i class="fas fa-step-backward"></i></button>
+            <button class="ps-play"><i class="fas fa-pause"></i></button>
+            <button><i class="fas fa-step-forward"></i></button>
+        </div>
+    </div>
+
+    <div class="progress-strip">
+        <span class="prg-time">2:28</span>
+        <div class="prg-bar"><div class="prg-fill"></div></div>
+        <span class="prg-time">4:29</span>
+    </div>
+
+    <div class="swipe-tabs" id="swipeTabs">
+        <button class="sw-tab active" data-sw="queue">队列</button>
+        <button class="sw-tab" data-sw="playlists">歌单</button>
+        <button class="sw-tab" data-sw="lyrics">歌词</button>
+        <button class="sw-tab" data-sw="discover">发现</button>
+        <button class="sw-tab" data-sw="search">搜索</button>
+        <div class="sw-indicator" id="swIndicator"></div>
+    </div>
+
+    <div class="sw-content">
+        <div class="sw-pane active" data-sw="queue">
+            <div class="row"><span class="r-num">1</span><span class="r-title">东风破</span><span class="r-artist">周杰伦</span><button class="r-hover-play"><i class="fas fa-play"></i></button></div>
+            <div class="row now"><span class="r-num"><i class="fas fa-volume-up" style="font-size:9px"></i></span><span class="r-title">晴天</span><span class="r-artist">周杰伦</span><button class="r-hover-play"><i class="fas fa-play"></i></button></div>
+            <div class="row"><span class="r-num">3</span><span class="r-title">七里香</span><span class="r-artist">周杰伦</span><button class="r-hover-play"><i class="fas fa-play"></i></button></div>
+            <div class="row"><span class="r-num">4</span><span class="r-title">稻香</span><span class="r-artist">周杰伦</span><button class="r-hover-play"><i class="fas fa-play"></i></button></div>
+            <div class="row"><span class="r-num">5</span><span class="r-title">简单爱</span><span class="r-artist">周杰伦</span><button class="r-hover-play"><i class="fas fa-play"></i></button></div>
+            <div class="row"><span class="r-num">6</span><span class="r-title">夜曲</span><span class="r-artist">周杰伦</span><button class="r-hover-play"><i class="fas fa-play"></i></button></div>
+            <div class="row"><span class="r-num">7</span><span class="r-title">听妈妈的话</span><span class="r-artist">周杰伦</span><button class="r-hover-play"><i class="fas fa-play"></i></button></div>
+        </div>
+
+        <div class="sw-pane" data-sw="playlists">
+            <div class="pl-compact">
+                <div class="pl-row"><div class="pl-dot" style="background:#ff6b8a"></div><span class="pl-label">我喜欢的音乐</span><span class="pl-num">196</span><i class="fas fa-chevron-right pl-chev"></i></div>
+                <div class="pl-row"><div class="pl-dot" style="background:#ffa040"></div><span class="pl-label">高</span><span class="pl-num">184</span><i class="fas fa-chevron-right pl-chev"></i></div>
+                <div class="pl-row"><div class="pl-dot" style="background:#64b4ff"></div><span class="pl-label">李宗盛 罗大佑 五佰 许巍 朴树 老狼</span><span class="pl-num">94</span><i class="fas fa-chevron-right pl-chev"></i></div>
+                <div class="pl-row"><div class="pl-dot" style="background:#5cd85c"></div><span class="pl-label">【华语】～QQ音乐三巨头</span><span class="pl-num">149</span><i class="fas fa-chevron-right pl-chev"></i></div>
+                <div class="pl-row"><div class="pl-dot" style="background:#c478ff"></div><span class="pl-label">适合努力学习英语时听的歌曲</span><span class="pl-num">80</span><i class="fas fa-chevron-right pl-chev"></i></div>
+                <div class="pl-row"><div class="pl-dot" style="background:#64d8ff"></div><span class="pl-label">最适合学习英语的英文歌曲80首</span><span class="pl-num">92</span><i class="fas fa-chevron-right pl-chev"></i></div>
+            </div>
+        </div>
+
+        <div class="sw-pane" data-sw="lyrics">
+            <div class="lrc-pane">
+                <div class="lrc">故事的小黄花</div>
+                <div class="lrc">从出生那年就飘着</div>
+                <div class="lrc adj">童年的荡秋千</div>
+                <div class="lrc on">随记忆一直晃到现在</div>
+                <div class="lrc-sub">Swinging with memories until now</div>
+                <div class="lrc adj">Re So So Si Do Si La</div>
+                <div class="lrc">So La Si Si Si Si La Si La So</div>
+                <div class="lrc">吹着前奏望着天空</div>
+                <div class="lrc">我想起花瓣试着掉落</div>
+                <div class="lrc">为你翘课的那一天</div>
+                <div class="lrc">花落的那一天</div>
+                <div class="lrc">教室的那一间</div>
+            </div>
+        </div>
+
+        <div class="sw-pane" data-sw="discover">
+            <div class="rec-compact">
+                <div class="rec-tag"><i class="fas fa-calendar-day"></i> 每日推荐</div>
+                <div class="row"><span class="r-num" style="color:rgba(200,160,255,0.5)">1</span><span class="r-title">孤勇者</span><span class="r-artist">陈奕迅</span><button class="r-hover-play"><i class="fas fa-play"></i></button></div>
+                <div class="row"><span class="r-num" style="color:rgba(200,160,255,0.4)">2</span><span class="r-title">起风了</span><span class="r-artist">买辣椒也用券</span><button class="r-hover-play"><i class="fas fa-play"></i></button></div>
+                <div class="row"><span class="r-num" style="color:rgba(200,160,255,0.3)">3</span><span class="r-title">错位时空</span><span class="r-artist">艾辰</span><button class="r-hover-play"><i class="fas fa-play"></i></button></div>
+                <div class="row"><span class="r-num" style="color:rgba(200,160,255,0.2)">4</span><span class="r-title">漠河舞厅</span><span class="r-artist">柳爽</span><button class="r-hover-play"><i class="fas fa-play"></i></button></div>
+                <div class="row"><span class="r-num" style="color:rgba(200,160,255,0.15)">5</span><span class="r-title">富士山下</span><span class="r-artist">陈奕迅</span><button class="r-hover-play"><i class="fas fa-play"></i></button></div>
+            </div>
+        </div>
+
+        <div class="sw-pane" data-sw="search">
+            <div class="sch-bar">
+                <div class="sch-wrap"><i class="fas fa-search"></i><input type="text" placeholder="搜索歌曲、歌手..."></div>
+            </div>
+            <div class="rec-compact" style="padding-top:4px">
+                <div class="rec-tag"><i class="fas fa-bolt"></i> 热门搜索</div>
+                <div style="display:flex;gap:4px;flex-wrap:wrap;padding:0 4px">
+                    <span style="font-size:10px;padding:4px 10px;border-radius:10px;background:rgba(200,160,255,0.06);color:rgba(255,255,255,0.4);cursor:pointer">周杰伦</span>
+                    <span style="font-size:10px;padding:4px 10px;border-radius:10px;background:rgba(200,160,255,0.06);color:rgba(255,255,255,0.4);cursor:pointer">陈奕迅</span>
+                    <span style="font-size:10px;padding:4px 10px;border-radius:10px;background:rgba(200,160,255,0.06);color:rgba(255,255,255,0.4);cursor:pointer">林俊杰</span>
+                    <span style="font-size:10px;padding:4px 10px;border-radius:10px;background:rgba(200,160,255,0.06);color:rgba(255,255,255,0.4);cursor:pointer">薛之谦</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mode-dots">
+        <button class="md-btn" title="顺序"><i class="fas fa-arrow-right"></i></button>
+        <button class="md-btn on" title="循环"><i class="fas fa-redo"></i></button>
+        <button class="md-btn" title="单曲"><i class="fas fa-redo-alt"></i></button>
+        <button class="md-btn" title="随机"><i class="fas fa-random"></i></button>
+        <div class="md-divider"></div>
+        <span class="md-text">列表循环</span>
+    </div>
+</div>
+
+<script>
+const tabs = document.querySelectorAll('.sw-tab');
+const indicator = document.getElementById('swIndicator');
+function updateIndicator() {
+    const active = document.querySelector('.sw-tab.active');
+    if(!active) return;
+    indicator.style.left = active.offsetLeft + 'px';
+    indicator.style.width = active.offsetWidth + 'px';
+}
+tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.sw-pane').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.querySelector(`.sw-pane[data-sw="${tab.dataset.sw}"]`).classList.add('active');
+        updateIndicator();
+    });
+});
+updateIndicator();
+window.addEventListener('resize', updateIndicator);
+document.querySelectorAll('.md-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.md-btn').forEach(b => b.classList.remove('on'));
+        btn.classList.add('on');
+        const labels = {'fa-arrow-right':'顺序播放','fa-redo':'列表循环','fa-redo-alt':'单曲循环','fa-random':'随机播放'};
+        const icon = btn.querySelector('i').className.split(' ').pop();
+        document.querySelector('.md-text').textContent = labels[icon] || '';
+    });
+});
+</script>
+</body>
+</html>

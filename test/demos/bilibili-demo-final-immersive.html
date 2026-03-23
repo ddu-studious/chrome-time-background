@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B站集成 — 沉浸式面板（方案A技术 + 方案C风格）</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+:root {
+    --bm-bg: #0f0f0f;
+    --bm-surface: #181818;
+    --bm-card: #212121;
+    --bm-pink: #fb7299;
+    --bm-pink-dim: rgba(251,114,153,0.12);
+    --bm-blue: #00a1d6;
+    --bm-text: #f1f1f1;
+    --bm-text-sub: #aaa;
+    --bm-text-dim: #717171;
+    --bm-border: rgba(255,255,255,0.08);
+    --bm-hover: rgba(255,255,255,0.06);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: var(--bm-bg);
+    color: var(--bm-text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* ====== Top Nav ====== */
+.bn-topbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    background: var(--bm-surface);
+    border-bottom: 1px solid var(--bm-border);
+    flex-shrink: 0;
+    z-index: 100;
+}
+.bn-logo {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--bm-pink);
+    font-weight: 700;
+    font-size: 15px;
+    flex-shrink: 0;
+    padding-right: 8px;
+    border-right: 1px solid var(--bm-border);
+    margin-right: 4px;
+}
+.bn-logo i { font-size: 20px; }
+.bn-search {
+    flex: 1;
+    max-width: 420px;
+    display: flex;
+    background: rgba(255,255,255,0.06);
+    border-radius: 20px;
+    border: 1px solid transparent;
+    transition: border-color 0.2s;
+    overflow: hidden;
+}
+.bn-search:focus-within { border-color: var(--bm-pink); }
+.bn-search input {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--bm-text);
+    font-size: 12px;
+    padding: 7px 14px;
+    outline: none;
+}
+.bn-search input::placeholder { color: var(--bm-text-dim); }
+.bn-search button {
+    background: var(--bm-pink);
+    border: none;
+    color: #fff;
+    padding: 0 16px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: opacity 0.15s;
+}
+.bn-search button:hover { opacity: 0.85; }
+.bn-nav-pills {
+    display: flex;
+    gap: 3px;
+    margin-left: auto;
+}
+.bn-pill {
+    background: none;
+    border: 1px solid var(--bm-border);
+    color: var(--bm-text-sub);
+    font-size: 11px;
+    padding: 5px 12px;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.bn-pill:hover { background: var(--bm-hover); color: var(--bm-text); border-color: rgba(255,255,255,0.15); }
+.bn-pill.active { background: var(--bm-pink); color: #fff; border-color: var(--bm-pink); }
+.bn-pill i { font-size: 10px; }
+.bn-sidebar-toggle {
+    background: none;
+    border: 1px solid var(--bm-border);
+    color: var(--bm-text-sub);
+    font-size: 15px;
+    padding: 5px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-left: 6px;
+}
+.bn-sidebar-toggle:hover { background: var(--bm-hover); color: var(--bm-text); }
+.bn-sidebar-toggle.open { color: var(--bm-pink); border-color: var(--bm-pink); }
+
+/* ====== Main Layout ====== */
+.bn-main {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    position: relative;
+}
+
+/* ====== Player Area ====== */
+.bn-player-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+.bn-player-frame {
+    flex: 1;
+    background: #000;
+    position: relative;
+}
+.bn-player-frame iframe { width: 100%; height: 100%; border: none; }
+.bn-player-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 14px;
+    color: var(--bm-text-dim);
+}
+.bn-player-empty i { font-size: 56px; opacity: 0.3; }
+.bn-player-empty p { font-size: 14px; }
+
+.bn-player-info {
+    background: var(--bm-surface);
+    padding: 12px 20px;
+    border-top: 1px solid var(--bm-border);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-shrink: 0;
+}
+.bn-pi-text { flex: 1; min-width: 0; }
+.bn-pi-title {
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.bn-pi-meta {
+    font-size: 11px;
+    color: var(--bm-text-sub);
+    margin-top: 2px;
+    display: flex;
+    gap: 14px;
+}
+.bn-pi-meta span { display: flex; align-items: center; gap: 3px; }
+.bn-pi-meta i { font-size: 10px; }
+.bn-pi-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.bn-pi-btn {
+    background: var(--bm-card);
+    border: 1px solid var(--bm-border);
+    color: var(--bm-text-sub);
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.bn-pi-btn:hover { background: var(--bm-hover); color: var(--bm-text); }
+.bn-pi-btn i { font-size: 11px; }
+
+/* ====== Sidebar ====== */
+.bn-sidebar {
+    width: 380px;
+    background: var(--bm-surface);
+    border-left: 1px solid var(--bm-border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    transform: translateX(100%);
+    margin-right: -380px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.bn-sidebar.visible {
+    transform: translateX(0);
+    margin-right: 0;
+}
+
+.bn-stabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    border-bottom: 1px solid var(--bm-border);
+    flex-shrink: 0;
+    padding: 0 4px;
+    overflow-x: auto;
+}
+.bn-stab {
+    padding: 11px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--bm-text-sub);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.bn-stab:hover { color: var(--bm-text); }
+.bn-stab.active { color: var(--bm-pink); border-bottom-color: var(--bm-pink); }
+.bn-stab i { font-size: 11px; }
+
+.bn-list-info {
+    padding: 8px 14px;
+    font-size: 11px;
+    color: var(--bm-text-dim);
+    border-bottom: 1px solid var(--bm-border);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.bn-list-info code {
+    background: rgba(251,114,153,0.1);
+    color: var(--bm-pink);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-family: monospace;
+}
+
+.bn-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px;
+}
+.bn-item {
+    display: flex;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+    position: relative;
+}
+.bn-item:hover { background: var(--bm-hover); }
+.bn-item.playing { background: var(--bm-pink-dim); }
+.bn-item.playing .bn-item-title { color: var(--bm-pink); }
+
+.bn-item-cover {
+    width: 120px;
+    height: 68px;
+    border-radius: 6px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--bm-card);
+}
+.bn-item-dur {
+    position: absolute;
+    top: 54px;
+    left: 98px;
+    background: rgba(0,0,0,0.78);
+    color: #ddd;
+    font-size: 10px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-family: monospace;
+}
+.bn-item-info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+.bn-item-title {
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.bn-item-meta {
+    font-size: 11px;
+    color: var(--bm-text-dim);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.bn-item-meta i { font-size: 9px; }
+.bn-item-progress {
+    height: 2px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 1px;
+    overflow: hidden;
+}
+.bn-item-progress-bar { height: 100%; background: var(--bm-pink); border-radius: 1px; }
+
+.bn-item-badge {
+    position: absolute;
+    top: 10px;
+    left: 14px;
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-weight: 600;
+}
+.bn-item-badge.free { background: #4ade80; color: #000; }
+.bn-item-badge.paid { background: #f59e0b; color: #000; }
+
+.bn-list::-webkit-scrollbar { width: 4px; }
+.bn-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+.bn-list::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+</style>
+</head>
+<body>
+
+<div class="bn-topbar">
+    <div class="bn-logo">
+        <i class="fab fa-bilibili"></i>
+        <span>哔哩哔哩</span>
+    </div>
+    <div class="bn-search">
+        <input type="text" placeholder="搜索视频、课程、UP主..." id="searchInput">
+        <button id="searchBtn"><i class="fas fa-search"></i></button>
+    </div>
+    <div class="bn-nav-pills">
+        <button class="bn-pill active" data-tab="popular"><i class="fas fa-fire"></i>热门</button>
+        <button class="bn-pill" data-tab="history"><i class="fas fa-history"></i>历史</button>
+        <button class="bn-pill" data-tab="watchlater"><i class="fas fa-clock"></i>稍后看</button>
+        <button class="bn-pill" data-tab="favorite"><i class="fas fa-star"></i>收藏</button>
+        <button class="bn-pill" data-tab="ranking"><i class="fas fa-trophy"></i>排行</button>
+        <button class="bn-pill" data-tab="course"><i class="fas fa-graduation-cap"></i>课程</button>
+    </div>
+    <button class="bn-sidebar-toggle open" id="sidebarToggle" title="展开/收起列表"><i class="fas fa-columns"></i></button>
+</div>
+
+<div class="bn-main">
+    <div class="bn-player-area">
+        <div class="bn-player-frame" id="playerFrame">
+            <div class="bn-player-empty">
+                <i class="fab fa-bilibili"></i>
+                <p>从右侧列表中选择一个视频开始播放</p>
+            </div>
+        </div>
+        <div class="bn-player-info" id="playerInfo" style="display:none">
+            <div class="bn-pi-text">
+                <div class="bn-pi-title" id="piTitle"></div>
+                <div class="bn-pi-meta">
+                    <span><i class="fas fa-user"></i><span id="piAuthor"></span></span>
+                    <span><i class="fas fa-play"></i><span id="piViews"></span></span>
+                    <span><i class="fas fa-comment-dots"></i><span id="piDanmaku"></span></span>
+                </div>
+            </div>
+            <div class="bn-pi-actions">
+                <button class="bn-pi-btn"><i class="fas fa-thumbs-up"></i>点赞</button>
+                <button class="bn-pi-btn"><i class="fas fa-star"></i>收藏</button>
+                <button class="bn-pi-btn"><i class="fas fa-clock"></i>稍后看</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="bn-sidebar visible" id="sidebar">
+        <div class="bn-stabs" id="sidebarTabs">
+            <div class="bn-stab active" data-tab="popular"><i class="fas fa-fire"></i>热门</div>
+            <div class="bn-stab" data-tab="history"><i class="fas fa-history"></i>历史</div>
+            <div class="bn-stab" data-tab="watchlater"><i class="fas fa-clock"></i>稍后看</div>
+            <div class="bn-stab" data-tab="favorite"><i class="fas fa-star"></i>收藏</div>
+            <div class="bn-stab" data-tab="ranking"><i class="fas fa-trophy"></i>排行</div>
+            <div class="bn-stab" data-tab="course"><i class="fas fa-graduation-cap"></i>课程</div>
+        </div>
+        <div class="bn-list-info" id="listInfo">
+            <i class="fas fa-info-circle"></i>
+            <span>热门视频</span>
+            <code>/x/web-interface/popular</code>
+        </div>
+        <div class="bn-list" id="videoList"></div>
+    </div>
+</div>
+
+<script>
+const TABS = {
+    popular: {
+        label: '热门视频', api: '/x/web-interface/popular', auth: '公开 API，无需登录',
+        items: [
+            { bvid:'BV1GJ411x7h7', title:'【4K】中国城市航拍合集 · 感受中国的壮美', cover:'https://picsum.photos/320/180?random=1', author:'航拍中国', dur:'12:35', views:'486.2万', danmaku:'1.2万' },
+            { bvid:'BV1x54y1e7zf', title:'当代年轻人下班后的真实写照...看完扎心了', cover:'https://picsum.photos/320/180?random=2', author:'老番茄', dur:'8:22', views:'892.1万', danmaku:'5.8万' },
+            { bvid:'BV1bK4y1C7yR', title:'一个视频看懂量子计算机的工作原理', cover:'https://picsum.photos/320/180?random=3', author:'妈咪说MommyTalk', dur:'18:47', views:'315.6万', danmaku:'8932' },
+            { bvid:'BV1WJ411Y7GJ', title:'用 AI 给老照片上色，爷爷奶奶看到后哭了', cover:'https://picsum.photos/320/180?random=4', author:'AI小助手', dur:'6:18', views:'1024.3万', danmaku:'3.6万' },
+            { bvid:'BV1YE411F7qQ', title:'【钢琴】超燃！在街头弹《千本樱》路人反应', cover:'https://picsum.photos/320/180?random=5', author:'A叔钢琴', dur:'5:42', views:'672.8万', danmaku:'2.1万' },
+            { bvid:'BV1Vz4y1Z7Y8', title:'30天挑战只吃日本便利店食物！最后的结果', cover:'https://picsum.photos/320/180?random=6', author:'食贫道', dur:'22:15', views:'1568.9万', danmaku:'7.2万' },
+            { bvid:'BV1Kf4y1e7Lx', title:'教你 5 分钟做出米其林级别的牛排', cover:'https://picsum.photos/320/180?random=7', author:'美食作家王刚', dur:'9:38', views:'432.1万', danmaku:'1.5万' },
+            { bvid:'BV1tJ411S7wP', title:'为什么中国建筑工人是世界上最强的？', cover:'https://picsum.photos/320/180?random=8', author:'硬核半佛', dur:'15:23', views:'765.4万', danmaku:'3.3万' },
+        ]
+    },
+    history: {
+        label: '观看历史', api: '/x/web-interface/history/cursor', auth: 'Cookie API，无需 WBI',
+        items: [
+            { bvid:'BV1Xx411c7mu', title:'【科技美学】2026 年最值得买的笔记本推荐', cover:'https://picsum.photos/320/180?random=10', author:'科技美学', dur:'25:18', views:'234.5万', danmaku:'6543', progress:65 },
+            { bvid:'BV1uE411y7Ry', title:'React 19 新特性深度解析 — 前端开发者必看', cover:'https://picsum.photos/320/180?random=11', author:'技术胖', dur:'42:07', views:'89.2万', danmaku:'3210', progress:30 },
+            { bvid:'BV1pJ411Y7Gx', title:'在冰岛拍到了此生最美的极光', cover:'https://picsum.photos/320/180?random=12', author:'影视飓风', dur:'14:56', views:'562.3万', danmaku:'1.8万', progress:100 },
+            { bvid:'BV1qE411A7Kx', title:'从零搭建 Chrome 扩展 — 完整实战教程', cover:'https://picsum.photos/320/180?random=13', author:'程序员鱼皮', dur:'1:15:30', views:'156.8万', danmaku:'4521', progress:12 },
+        ]
+    },
+    watchlater: {
+        label: '稍后再看', api: '/x/v2/history/toview', auth: 'Cookie API，无需 WBI',
+        items: [
+            { bvid:'BV1sE411A7Kx', title:'一口气看完《三体》全三季解说', cover:'https://picsum.photos/320/180?random=20', author:'说电影', dur:'3:22:45', views:'2356.7万', danmaku:'18.6万' },
+            { bvid:'BV1Gx411B7nE', title:'Vue 3.5 Composition API 高级技巧', cover:'https://picsum.photos/320/180?random=21', author:'Anthony Fu', dur:'58:30', views:'76.8万', danmaku:'2521' },
+            { bvid:'BV1hE411x7qQ', title:'宫崎骏退休后的最后一部作品幕后', cover:'https://picsum.photos/320/180?random=22', author:'动画考古', dur:'28:15', views:'432.1万', danmaku:'1.9万' },
+        ]
+    },
+    favorite: {
+        label: '我的收藏', api: '/x/v3/fav/resource/list', auth: 'Cookie API，无需 WBI',
+        items: [
+            { bvid:'BV1F4411F7qQ', title:'【合集】宫崎骏动画音乐精选 BGM 1小时', cover:'https://picsum.photos/320/180?random=30', author:'音乐精选集', dur:'1:28:33', views:'896.4万', danmaku:'2.8万' },
+            { bvid:'BV1pE411x7GJ', title:'4K 高清放松视频 · 雨声 + 钢琴 ASMR', cover:'https://picsum.photos/320/180?random=31', author:'白噪音频道', dur:'3:00:00', views:'1234.5万', danmaku:'5.2万', progress:45 },
+            { bvid:'BV1Jx411c7Ry', title:'李子柒回归！中国传统文化的魅力', cover:'https://picsum.photos/320/180?random=32', author:'李子柒', dur:'16:42', views:'3456.7万', danmaku:'12.3万' },
+            { bvid:'BV1RJ411x7qQ', title:'何同学：当我把 GPT-5 接入了整个家', cover:'https://picsum.photos/320/180?random=33', author:'何同学', dur:'12:28', views:'5678.9万', danmaku:'28.6万' },
+        ]
+    },
+    ranking: {
+        label: '全站排行', api: '/x/web-interface/ranking/v2', auth: '公开 API，无需登录',
+        items: [
+            { bvid:'BV1RJ411x7qQ', title:'🏆 #1 · 何同学年度最火视频', cover:'https://picsum.photos/320/180?random=40', author:'何同学', dur:'10:28', views:'5678.9万', danmaku:'28.6万' },
+            { bvid:'BV1vE411F7h7', title:'🏆 #2 · 当 AI 开始自我意识觉醒', cover:'https://picsum.photos/320/180?random=41', author:'回形针', dur:'14:15', views:'4321.2万', danmaku:'18.9万' },
+            { bvid:'BV1Kf411e7Lx', title:'🏆 #3 · 用100台无人机拍出的中国', cover:'https://picsum.photos/320/180?random=42', author:'大疆创新', dur:'8:56', views:'3876.5万', danmaku:'15.2万' },
+        ]
+    },
+    course: {
+        label: '我的课程', api: '/pugv/view/web/season', auth: 'Cookie API，需 Referer',
+        items: [
+            { bvid:'BV_cheese_1', title:'唐盾：0-N4 日语精讲（已完结 · 53期）', cover:'https://picsum.photos/320/180?random=60', author:'盾盾桑教你学日语', dur:'53期', views:'287.8万', danmaku:'8.5万', badge:'已购', progress:38 },
+            { bvid:'BV_cheese_2', title:'3Blue1Brown · 线性代数的本质', cover:'https://picsum.photos/320/180?random=61', author:'3Blue1Brown', dur:'16期', views:'1256.3万', danmaku:'12.1万', badge:'免费' },
+            { bvid:'BV_cheese_3', title:'Python 数据分析从入门到精通', cover:'https://picsum.photos/320/180?random=62', author:'小甲鱼', dur:'128期', views:'896.7万', danmaku:'6.3万', badge:'已购', progress:72 },
+            { bvid:'BV_cheese_4', title:'Blender 3D 建模零基础完全教程', cover:'https://picsum.photos/320/180?random=63', author:'Ducky 3D', dur:'42期', views:'345.2万', danmaku:'2.8万', badge:'试看' },
+            { bvid:'BV_cheese_5', title:'影视飓风 · 短视频拍摄与剪辑大师课', cover:'https://picsum.photos/320/180?random=64', author:'影视飓风', dur:'36期', views:'567.8万', danmaku:'4.1万', badge:'已购', progress:15 },
+        ]
+    },
+};
+
+let currentTab = 'popular';
+let currentVideo = null;
+let sidebarOpen = true;
+
+function renderList(tab) {
+    const data = TABS[tab];
+    currentTab = tab;
+
+    document.getElementById('listInfo').innerHTML = `<i class="fas fa-info-circle"></i><span>${data.label}${data.auth ? ' · ' + data.auth : ''}</span><code>${data.api}</code>`;
+
+    const listEl = document.getElementById('videoList');
+    listEl.innerHTML = data.items.map((v, i) => `
+        <div class="bn-item${currentVideo?.bvid === v.bvid ? ' playing' : ''}" data-tab="${tab}" data-idx="${i}">
+            <img class="bn-item-cover" src="${v.cover}" alt="" loading="lazy">
+            <span class="bn-item-dur">${v.dur}</span>
+            ${v.badge ? `<span class="bn-item-badge ${v.badge === '免费' ? 'free' : 'paid'}">${v.badge}</span>` : ''}
+            <div class="bn-item-info">
+                <div class="bn-item-title">${v.title}</div>
+                <div class="bn-item-meta">
+                    <span><i class="fas fa-user"></i> ${v.author}</span>
+                    <span><i class="fas fa-play"></i> ${v.views}</span>
+                </div>
+                ${v.progress > 0 && v.progress < 100 ? `<div class="bn-item-progress"><div class="bn-item-progress-bar" style="width:${v.progress}%"></div></div>` : ''}
+            </div>
+        </div>
+    `).join('');
+
+    listEl.querySelectorAll('.bn-item').forEach(el => {
+        el.addEventListener('click', () => {
+            const idx = parseInt(el.dataset.idx);
+            const t = el.dataset.tab;
+            playVideo(TABS[t].items[idx]);
+            listEl.querySelectorAll('.bn-item').forEach(e => e.classList.remove('playing'));
+            el.classList.add('playing');
+        });
+    });
+}
+
+function playVideo(video) {
+    currentVideo = video;
+    const frame = document.getElementById('playerFrame');
+
+    if (video.bvid.startsWith('BV_cheese_')) {
+        frame.innerHTML = `<div class="bn-player-empty" style="background:linear-gradient(135deg,#1a1a2e,#16213e)">
+            <i class="fas fa-graduation-cap" style="font-size:48px;color:var(--bm-pink);opacity:0.6"></i>
+            <p style="color:var(--bm-text-sub)">课程播放 · ${video.title}</p>
+            <p style="font-size:12px;color:var(--bm-text-dim)">实际实现中将加载 B 站课程嵌入播放器</p>
+        </div>`;
+    } else {
+        frame.innerHTML = `<iframe src="//player.bilibili.com/player.html?bvid=${video.bvid}&high_quality=1&danmaku=0&autoplay=1" allowfullscreen></iframe>`;
+    }
+
+    document.getElementById('playerInfo').style.display = '';
+    document.getElementById('piTitle').textContent = video.title;
+    document.getElementById('piAuthor').textContent = video.author;
+    document.getElementById('piViews').textContent = video.views;
+    document.getElementById('piDanmaku').textContent = video.danmaku;
+}
+
+document.querySelectorAll('.bn-stab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.bn-stab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        renderList(tab.dataset.tab);
+        document.querySelectorAll('.bn-pill').forEach(p => p.classList.remove('active'));
+        const pill = document.querySelector(`.bn-pill[data-tab="${tab.dataset.tab}"]`);
+        if (pill) pill.classList.add('active');
+    });
+});
+
+document.querySelectorAll('.bn-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+        document.querySelectorAll('.bn-pill').forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        const tab = pill.dataset.tab;
+        renderList(tab);
+        document.querySelectorAll('.bn-stab').forEach(t => t.classList.remove('active'));
+        const stab = document.querySelector(`.bn-stab[data-tab="${tab}"]`);
+        if (stab) stab.classList.add('active');
+        if (!sidebarOpen) toggleSidebar();
+    });
+});
+
+document.getElementById('sidebarToggle').addEventListener('click', toggleSidebar);
+
+function toggleSidebar() {
+    sidebarOpen = !sidebarOpen;
+    document.getElementById('sidebar').classList.toggle('visible', sidebarOpen);
+    document.getElementById('sidebarToggle').classList.toggle('open', sidebarOpen);
+}
+
+document.getElementById('searchInput').addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const q = e.target.value.trim();
+    if (!q) return;
+    doSearch(q);
+});
+document.getElementById('searchBtn').addEventListener('click', () => {
+    const q = document.getElementById('searchInput').value.trim();
+    if (q) doSearch(q);
+});
+
+function doSearch(q) {
+    document.querySelectorAll('.bn-pill, .bn-stab').forEach(el => el.classList.remove('active'));
+    document.getElementById('listInfo').innerHTML = `<i class="fas fa-search"></i><span>搜索 "${q}"</span><code>s.search.bilibili.com/main/suggest</code>`;
+    document.getElementById('videoList').innerHTML = '<div style="padding:40px;text-align:center;color:var(--bm-text-dim);font-size:13px"><i class="fas fa-spinner fa-spin"></i> 搜索中...</div>';
+    if (!sidebarOpen) toggleSidebar();
+    setTimeout(() => {
+        const results = TABS.popular.items.slice(0, 4).map(v => ({ ...v, title: `[搜索] ${q} — ${v.title}` }));
+        TABS['_search'] = { label: `搜索 "${q}"`, api: 'suggest', items: results };
+        renderList('_search');
+    }, 500);
+}
+
+renderList('popular');
+</script>
+</body>
+</html>

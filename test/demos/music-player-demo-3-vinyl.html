@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音乐播放器 Demo 3 - 黑胶唱片风格</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            min-height: 100vh;
+            background: url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920') center/cover no-repeat fixed;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            color: #fff;
+        }
+        body::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 0; }
+        .scene { position: relative; z-index: 1; text-align: center; }
+        .time { font-size: 72px; font-weight: 200; letter-spacing: 4px; text-shadow: 0 2px 20px rgba(0,0,0,0.3); }
+        .date { font-size: 16px; opacity: 0.7; margin-top: 4px; }
+        .demo-label {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.5); padding: 8px 20px; border-radius: 20px;
+            font-size: 13px; z-index: 10; backdrop-filter: blur(10px);
+        }
+
+        /* === 黑胶唱片风格 === */
+        .music-vinyl {
+            display: flex; justify-content: center;
+            margin-top: 24px;
+        }
+        .vinyl-player {
+            display: flex; align-items: center;
+            background: rgba(0, 0, 0, 0.45);
+            backdrop-filter: blur(30px) saturate(150%);
+            -webkit-backdrop-filter: blur(30px) saturate(150%);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 10px 20px 10px 10px;
+            gap: 16px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+            animation: vinyl-slide 0.6s ease;
+        }
+        @keyframes vinyl-slide {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        .vinyl-disc {
+            width: 56px; height: 56px;
+            border-radius: 50%; flex-shrink: 0;
+            position: relative;
+            background: conic-gradient(from 0deg, #111 0%, #333 10%, #111 20%, #333 30%, #111 40%, #222 50%, #111 60%, #333 70%, #111 80%, #222 90%, #111 100%);
+            box-shadow: 0 0 0 3px rgba(255,255,255,0.05), 0 2px 12px rgba(0,0,0,0.3);
+            animation: vinyl-spin 3s linear infinite;
+        }
+        .vinyl-disc.paused { animation-play-state: paused; }
+        @keyframes vinyl-spin { to { transform: rotate(360deg); } }
+        .vinyl-disc::before {
+            content: '';
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 24px; height: 24px;
+            border-radius: 50%;
+            overflow: hidden;
+        }
+        .vinyl-disc img {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 26px; height: 26px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #333;
+        }
+        .vinyl-disc::after {
+            content: '';
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: #444;
+            box-shadow: 0 0 0 1px #555;
+        }
+        .vinyl-info { flex: 1; min-width: 0; }
+        .vinyl-title {
+            font-size: 13px; font-weight: 600;
+            color: rgba(255,255,255,0.88);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .vinyl-meta {
+            display: flex; align-items: center; gap: 8px;
+            margin-top: 3px;
+        }
+        .vinyl-artist {
+            font-size: 11px; color: rgba(255,255,255,0.4);
+        }
+        .vinyl-platform {
+            font-size: 9px; color: rgba(255,255,255,0.2);
+            padding: 1px 6px; border-radius: 8px;
+            background: rgba(255,255,255,0.05);
+        }
+        .vinyl-progress {
+            width: 100%; height: 2px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 2px; margin-top: 8px;
+            overflow: hidden;
+        }
+        .vinyl-progress-fill {
+            height: 100%; width: 35%;
+            background: linear-gradient(90deg, rgba(255,255,255,0.3), rgba(255,255,255,0.5));
+            border-radius: 2px;
+            transition: width 1s linear;
+        }
+        .vinyl-controls {
+            display: flex; align-items: center; gap: 6px;
+        }
+        .v-btn {
+            width: 32px; height: 32px; border: none; border-radius: 50%;
+            background: transparent; color: rgba(255,255,255,0.5);
+            cursor: pointer; font-size: 12px;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s;
+        }
+        .v-btn:hover { color: rgba(255,255,255,0.85); }
+        .v-btn-play {
+            width: 38px; height: 38px;
+            background: rgba(255,255,255,0.08);
+            color: rgba(255,255,255,0.8); font-size: 13px;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .v-btn-play:hover {
+            background: rgba(255,255,255,0.14);
+            color: #fff; transform: scale(1.06);
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-label">Demo 3：黑胶唱片风格 (Vinyl Record)</div>
+    <div class="scene">
+        <div class="time" id="time">00:00:00</div>
+        <div class="date" id="date"></div>
+        <div class="music-vinyl">
+            <div class="vinyl-player">
+                <div class="vinyl-disc" id="vinyl-disc">
+                    <img src="https://picsum.photos/80" alt="" crossorigin="anonymous">
+                </div>
+                <div class="vinyl-info">
+                    <div class="vinyl-title">夜曲</div>
+                    <div class="vinyl-meta">
+                        <span class="vinyl-artist">周杰伦</span>
+                        <span class="vinyl-platform">🎵 网易云</span>
+                    </div>
+                    <div class="vinyl-progress">
+                        <div class="vinyl-progress-fill" id="progress-fill"></div>
+                    </div>
+                </div>
+                <div class="vinyl-controls">
+                    <button class="v-btn"><i class="fas fa-step-backward"></i></button>
+                    <button class="v-btn v-btn-play" id="play-btn"><i class="fas fa-pause" id="play-icon"></i></button>
+                    <button class="v-btn"><i class="fas fa-step-forward"></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('time').textContent = now.toLocaleTimeString('zh-CN', { hour12: false });
+            document.getElementById('date').textContent = now.toLocaleDateString('zh-CN', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
+        }
+        setInterval(updateTime, 1000); updateTime();
+        let playing = true;
+        let progress = 35;
+        document.getElementById('play-btn').addEventListener('click', () => {
+            playing = !playing;
+            document.getElementById('play-icon').className = playing ? 'fas fa-pause' : 'fas fa-play';
+            document.getElementById('vinyl-disc').classList.toggle('paused', !playing);
+        });
+        setInterval(() => {
+            if (playing) {
+                progress = (progress + 0.5) % 100;
+                document.getElementById('progress-fill').style.width = progress + '%';
+            }
+        }, 500);
+    </script>
+</body>
+</html>

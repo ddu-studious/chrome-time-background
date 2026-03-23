@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B站集成 Demo 1 — Bilibili Lite（嵌入播放器 + API 数据面板）</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+:root {
+    --bili-pink: #fb7299;
+    --bili-blue: #00a1d6;
+    --bili-bg: #f4f5f7;
+    --bili-card: #ffffff;
+    --bili-text: #18191c;
+    --bili-text-sub: #9499a0;
+    --bili-border: #e3e5e7;
+    --bili-hover: #f1f2f3;
+    --bili-pink-light: rgba(251, 114, 153, 0.08);
+    --bili-radius: 10px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: var(--bili-bg);
+    color: var(--bili-text);
+}
+
+.demo-banner {
+    background: linear-gradient(135deg, var(--bili-pink), #ff9aad);
+    color: #fff;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.demo-banner h2 { font-size: 16px; font-weight: 600; }
+.demo-banner p { font-size: 12px; opacity: 0.85; margin-top: 2px; }
+.demo-banner .badge {
+    background: rgba(255,255,255,0.2);
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+.bl-layout {
+    display: flex;
+    height: calc(100vh - 56px);
+}
+
+.bl-sidebar {
+    width: 380px;
+    background: var(--bili-card);
+    border-right: 1px solid var(--bili-border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.bl-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--bili-border);
+    padding: 0 8px;
+    overflow-x: auto;
+    flex-shrink: 0;
+}
+.bl-tab {
+    padding: 12px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--bili-text-sub);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.bl-tab:hover { color: var(--bili-text); }
+.bl-tab.active {
+    color: var(--bili-pink);
+    border-bottom-color: var(--bili-pink);
+}
+.bl-tab i { font-size: 12px; }
+
+.bl-search {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--bili-border);
+    flex-shrink: 0;
+}
+.bl-search-box {
+    display: flex;
+    background: var(--bili-bg);
+    border-radius: 20px;
+    overflow: hidden;
+    border: 1px solid var(--bili-border);
+    transition: border-color 0.2s;
+}
+.bl-search-box:focus-within { border-color: var(--bili-pink); }
+.bl-search-box input {
+    flex: 1;
+    border: none;
+    background: none;
+    padding: 8px 14px;
+    font-size: 13px;
+    color: var(--bili-text);
+    outline: none;
+}
+.bl-search-box button {
+    background: none;
+    border: none;
+    padding: 8px 14px;
+    color: var(--bili-pink);
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.bl-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.bl-item {
+    display: flex;
+    gap: 10px;
+    padding: 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+    position: relative;
+}
+.bl-item:hover { background: var(--bili-hover); }
+.bl-item.playing { background: var(--bili-pink-light); }
+.bl-item.playing .bl-item-title { color: var(--bili-pink); }
+
+.bl-item-cover {
+    width: 120px;
+    height: 75px;
+    border-radius: 6px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--bili-border);
+}
+
+.bl-item-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 2px 0;
+}
+.bl-item-title {
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.bl-item-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--bili-text-sub);
+}
+.bl-item-meta i { font-size: 10px; }
+.bl-item-duration {
+    position: absolute;
+    bottom: 14px;
+    left: 100px;
+    background: rgba(0,0,0,0.7);
+    color: #fff;
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 3px;
+}
+.bl-item-progress {
+    height: 2px;
+    background: var(--bili-border);
+    border-radius: 1px;
+    margin-top: 4px;
+    overflow: hidden;
+}
+.bl-item-progress-bar {
+    height: 100%;
+    background: var(--bili-pink);
+    border-radius: 1px;
+}
+
+.bl-player {
+    flex: 1;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+}
+.bl-player-frame {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+.bl-player-frame iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+.bl-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #fff;
+    opacity: 0.6;
+    gap: 12px;
+}
+.bl-empty i { font-size: 48px; }
+.bl-empty p { font-size: 14px; }
+
+.bl-player-info {
+    background: var(--bili-card);
+    padding: 14px 20px;
+    border-top: 1px solid var(--bili-border);
+    flex-shrink: 0;
+}
+.bl-player-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.bl-player-author {
+    font-size: 12px;
+    color: var(--bili-text-sub);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.bl-player-stat { display: flex; align-items: center; gap: 4px; }
+.bl-player-stat i { font-size: 11px; }
+
+.bl-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    color: var(--bili-text-sub);
+    font-size: 13px;
+    gap: 8px;
+}
+.bl-loading i { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.scheme-tag {
+    display: inline-block;
+    background: var(--bili-pink);
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    vertical-align: middle;
+}
+
+.bl-info-bar {
+    background: var(--bili-card);
+    border-bottom: 1px solid var(--bili-border);
+    padding: 10px 16px;
+    font-size: 12px;
+    color: var(--bili-text-sub);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.bl-info-bar i { color: var(--bili-blue); }
+
+.bl-list::-webkit-scrollbar { width: 4px; }
+.bl-list::-webkit-scrollbar-thumb { background: var(--bili-border); border-radius: 2px; }
+.bl-list::-webkit-scrollbar-thumb:hover { background: var(--bili-text-sub); }
+</style>
+</head>
+<body>
+
+<div class="demo-banner">
+    <i class="fab fa-bilibili" style="font-size:24px"></i>
+    <div>
+        <h2>方案 A：Bilibili Lite <span class="scheme-tag">推荐</span></h2>
+        <p>嵌入播放器 + Cookie API 数据面板 — 无需 WBI 签名，稳定可靠</p>
+    </div>
+    <span class="badge"><i class="fas fa-code"></i> 技术：iframe embed + REST API</span>
+</div>
+
+<div class="bl-layout">
+    <div class="bl-sidebar">
+        <div class="bl-tabs">
+            <div class="bl-tab active" data-tab="popular"><i class="fas fa-fire"></i>热门</div>
+            <div class="bl-tab" data-tab="history"><i class="fas fa-history"></i>历史</div>
+            <div class="bl-tab" data-tab="watchlater"><i class="fas fa-clock"></i>稍后看</div>
+            <div class="bl-tab" data-tab="favorite"><i class="fas fa-star"></i>收藏</div>
+            <div class="bl-tab" data-tab="ranking"><i class="fas fa-trophy"></i>排行</div>
+        </div>
+        <div class="bl-search">
+            <div class="bl-search-box">
+                <input type="text" placeholder="搜索B站视频..." id="searchInput">
+                <button><i class="fas fa-search"></i></button>
+            </div>
+        </div>
+        <div class="bl-info-bar" id="infoBar">
+            <i class="fas fa-info-circle"></i>
+            <span>热门 · 实时热门内容（公开 API，无需登录）</span>
+        </div>
+        <div class="bl-list" id="videoList"></div>
+    </div>
+    <div class="bl-player">
+        <div class="bl-player-frame" id="playerFrame">
+            <div class="bl-empty">
+                <i class="fab fa-bilibili"></i>
+                <p>选择一个视频开始播放</p>
+            </div>
+        </div>
+        <div class="bl-player-info" id="playerInfo" style="display:none">
+            <div class="bl-player-title" id="playerTitle"></div>
+            <div class="bl-player-author">
+                <span id="playerAuthor"></span>
+                <span class="bl-player-stat"><i class="fas fa-play"></i><span id="playerViews"></span></span>
+                <span class="bl-player-stat"><i class="fas fa-thumbs-up"></i><span id="playerLikes"></span></span>
+                <span class="bl-player-stat"><i class="fas fa-comment"></i><span id="playerDanmaku"></span></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const MOCK_POPULAR = [
+    { bvid: 'BV1GJ411x7h7', title: '【4K】中国城市航拍合集 · 感受中国的壮美', cover: 'https://picsum.photos/320/200?random=1', author: '航拍中国', duration: '12:35', views: '486.2万', likes: '28.3万', danmaku: '1.2万', progress: 0 },
+    { bvid: 'BV1x54y1e7zf', title: '当代年轻人下班后的真实写照...', cover: 'https://picsum.photos/320/200?random=2', author: '老番茄', duration: '8:22', views: '892.1万', likes: '65.1万', danmaku: '5.8万', progress: 0 },
+    { bvid: 'BV1bK4y1C7yR', title: '一个视频看懂量子计算机的工作原理', cover: 'https://picsum.photos/320/200?random=3', author: '妈咪说MommyTalk', duration: '18:47', views: '315.6万', likes: '18.7万', danmaku: '8932', progress: 0 },
+    { bvid: 'BV1WJ411Y7GJ', title: '用 AI 给老照片上色，爷爷奶奶看到后哭了...', cover: 'https://picsum.photos/320/200?random=4', author: 'AI小助手', duration: '6:18', views: '1024.3万', likes: '89.2万', danmaku: '3.6万', progress: 0 },
+    { bvid: 'BV1YE411F7qQ', title: '【钢琴】超燃！在街头弹《千本樱》路人的反应', cover: 'https://picsum.photos/320/200?random=5', author: 'A叔钢琴', duration: '5:42', views: '672.8万', likes: '42.1万', danmaku: '2.1万', progress: 0 },
+    { bvid: 'BV1Vz4y1Z7Y8', title: '30天挑战只吃日本便利店食物！最后的结果...', cover: 'https://picsum.photos/320/200?random=6', author: '食贫道', duration: '22:15', views: '1568.9万', likes: '95.4万', danmaku: '7.2万', progress: 0 },
+    { bvid: 'BV1Kf4y1e7Lx', title: '教你 5 分钟做出米其林级别的牛排', cover: 'https://picsum.photos/320/200?random=7', author: '美食作家王刚', duration: '9:38', views: '432.1万', likes: '31.2万', danmaku: '1.5万', progress: 0 },
+    { bvid: 'BV1tJ411S7wP', title: '为什么中国建筑工人是世界上最强的？', cover: 'https://picsum.photos/320/200?random=8', author: '硬核半佛', duration: '15:23', views: '765.4万', likes: '52.8万', danmaku: '3.3万', progress: 0 },
+];
+
+const MOCK_HISTORY = [
+    { bvid: 'BV1Xx411c7mu', title: '【科技美学】2026 年最值得买的笔记本电脑', cover: 'https://picsum.photos/320/200?random=10', author: '科技美学', duration: '25:18', views: '234.5万', likes: '12.3万', danmaku: '6543', progress: 65 },
+    { bvid: 'BV1uE411y7Ry', title: 'React 19 新特性深度解析 — 前端开发者必看', cover: 'https://picsum.photos/320/200?random=11', author: '技术胖', duration: '42:07', views: '89.2万', likes: '5.6万', danmaku: '3210', progress: 30 },
+    { bvid: 'BV1pJ411Y7Gx', title: '在冰岛拍到了此生最美的极光', cover: 'https://picsum.photos/320/200?random=12', author: '影视飓风', duration: '14:56', views: '562.3万', likes: '38.9万', danmaku: '1.8万', progress: 100 },
+];
+
+const MOCK_WATCHLATER = [
+    { bvid: 'BV1sE411A7Kx', title: '一口气看完《三体》全三季 85 集', cover: 'https://picsum.photos/320/200?random=20', author: '说电影', duration: '3:22:45', views: '2356.7万', likes: '128.5万', danmaku: '18.6万', progress: 0 },
+    { bvid: 'BV1Gx411B7nE', title: '从零搭建一个 Chrome 扩展 — 完整教程', cover: 'https://picsum.photos/320/200?random=21', author: '程序员鱼皮', duration: '1:15:30', views: '156.8万', likes: '8.9万', danmaku: '4521', progress: 0 },
+];
+
+const MOCK_FAVORITE = [
+    { bvid: 'BV1F4411F7qQ', title: '【合集】宫崎骏动画电影音乐精选 BGM', cover: 'https://picsum.photos/320/200?random=30', author: '音乐精选集', duration: '1:28:33', views: '896.4万', likes: '62.1万', danmaku: '2.8万', progress: 0 },
+    { bvid: 'BV1pE411x7GJ', title: '4K 高清放松视频 · 雨声 + 钢琴 ASMR 3小时', cover: 'https://picsum.photos/320/200?random=31', author: '白噪音频道', duration: '3:00:00', views: '1234.5万', likes: '78.3万', danmaku: '5.2万', progress: 45 },
+    { bvid: 'BV1Jx411c7Ry', title: '李子柒回归！新视频讲述中国传统文化的魅力', cover: 'https://picsum.photos/320/200?random=32', author: '李子柒', duration: '16:42', views: '3456.7万', likes: '198.5万', danmaku: '12.3万', progress: 0 },
+];
+
+const MOCK_RANKING = [
+    { bvid: 'BV1RJ411x7qQ', title: '🏆 全站排行第1 · 这个视频让全网都沸腾了', cover: 'https://picsum.photos/320/200?random=40', author: '何同学', duration: '10:28', views: '5678.9万', likes: '312.4万', danmaku: '28.6万', progress: 0 },
+    { bvid: 'BV1vE411F7h7', title: '🏆 全站排行第2 · 当 AI 开始自我意识觉醒...', cover: 'https://picsum.photos/320/200?random=41', author: '回形针PaperClip', duration: '14:15', views: '4321.2万', likes: '256.8万', danmaku: '18.9万', progress: 0 },
+    { bvid: 'BV1Kf411e7Lx', title: '🏆 全站排行第3 · 震撼！用100台无人机拍出的中国', cover: 'https://picsum.photos/320/200?random=42', author: '大疆创新', duration: '8:56', views: '3876.5万', likes: '198.3万', danmaku: '15.2万', progress: 0 },
+];
+
+const DATA_MAP = {
+    popular: { data: MOCK_POPULAR, label: '热门 · 实时热门内容（公开 API，无需登录）', api: '/x/web-interface/popular' },
+    history: { data: MOCK_HISTORY, label: '历史 · 观看记录（Cookie API，无需 WBI）', api: '/x/web-interface/history/cursor' },
+    watchlater: { data: MOCK_WATCHLATER, label: '稍后看 · 待观看列表（Cookie API，无需 WBI）', api: '/x/v2/history/toview' },
+    favorite: { data: MOCK_FAVORITE, label: '收藏 · 默认收藏夹（Cookie API，无需 WBI）', api: '/x/v3/fav/resource/list' },
+    ranking: { data: MOCK_RANKING, label: '排行 · 全站排行榜（公开 API，无需登录）', api: '/x/web-interface/ranking/v2' },
+};
+
+let currentTab = 'popular';
+let currentVideo = null;
+
+function formatNum(str) { return str; }
+
+function renderList(tab) {
+    const listEl = document.getElementById('videoList');
+    const info = DATA_MAP[tab];
+    document.getElementById('infoBar').innerHTML = `<i class="fas fa-info-circle"></i><span>${info.label}</span><span style="margin-left:auto;font-family:monospace;font-size:10px;color:#ccc">API: ${info.api}</span>`;
+
+    listEl.innerHTML = info.data.map((v, i) => `
+        <div class="bl-item${currentVideo?.bvid === v.bvid ? ' playing' : ''}" data-bvid="${v.bvid}" data-idx="${i}" data-tab="${tab}">
+            <img class="bl-item-cover" src="${v.cover}" alt="" loading="lazy">
+            <span class="bl-item-duration">${v.duration}</span>
+            <div class="bl-item-info">
+                <div class="bl-item-title">${v.title}</div>
+                <div class="bl-item-meta">
+                    <span><i class="fas fa-user"></i> ${v.author}</span>
+                    <span><i class="fas fa-play"></i> ${v.views}</span>
+                </div>
+                ${v.progress > 0 ? `<div class="bl-item-progress"><div class="bl-item-progress-bar" style="width:${v.progress}%"></div></div>` : ''}
+            </div>
+        </div>
+    `).join('');
+
+    listEl.querySelectorAll('.bl-item').forEach(el => {
+        el.addEventListener('click', () => {
+            const bvid = el.dataset.bvid;
+            const tab = el.dataset.tab;
+            const idx = parseInt(el.dataset.idx);
+            const video = DATA_MAP[tab].data[idx];
+            playVideo(video);
+            listEl.querySelectorAll('.bl-item').forEach(e => e.classList.remove('playing'));
+            el.classList.add('playing');
+        });
+    });
+}
+
+function playVideo(video) {
+    currentVideo = video;
+    const frame = document.getElementById('playerFrame');
+    frame.innerHTML = `<iframe src="//player.bilibili.com/player.html?bvid=${video.bvid}&high_quality=1&danmaku=0&autoplay=1" allowfullscreen></iframe>`;
+
+    document.getElementById('playerInfo').style.display = '';
+    document.getElementById('playerTitle').textContent = video.title;
+    document.getElementById('playerAuthor').textContent = video.author;
+    document.getElementById('playerViews').textContent = video.views;
+    document.getElementById('playerLikes').textContent = video.likes;
+    document.getElementById('playerDanmaku').textContent = video.danmaku;
+}
+
+document.querySelectorAll('.bl-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.bl-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        currentTab = tab.dataset.tab;
+        renderList(currentTab);
+    });
+});
+
+document.getElementById('searchInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+        const q = e.target.value.trim();
+        if (!q) return;
+        document.getElementById('infoBar').innerHTML = `<i class="fas fa-search"></i><span>搜索 "${q}" · Suggest API（无需 WBI）</span><span style="margin-left:auto;font-family:monospace;font-size:10px;color:#ccc">API: s.search.bilibili.com/main/suggest</span>`;
+        document.getElementById('videoList').innerHTML = `<div class="bl-loading"><i class="fas fa-spinner"></i>搜索中...</div>`;
+        setTimeout(() => {
+            const results = MOCK_POPULAR.slice(0, 3).map(v => ({ ...v, title: `[搜索] ${q} — ${v.title}` }));
+            DATA_MAP['_search'] = { data: results, label: `搜索 "${q}"`, api: 'suggest' };
+            document.getElementById('videoList').innerHTML = results.map((v, i) => `
+                <div class="bl-item" data-bvid="${v.bvid}" data-idx="${i}" data-tab="_search">
+                    <img class="bl-item-cover" src="${v.cover}" alt="" loading="lazy">
+                    <span class="bl-item-duration">${v.duration}</span>
+                    <div class="bl-item-info">
+                        <div class="bl-item-title">${v.title}</div>
+                        <div class="bl-item-meta"><span><i class="fas fa-user"></i> ${v.author}</span><span><i class="fas fa-play"></i> ${v.views}</span></div>
+                    </div>
+                </div>
+            `).join('');
+            document.getElementById('videoList').querySelectorAll('.bl-item').forEach(el => {
+                el.addEventListener('click', () => {
+                    const idx = parseInt(el.dataset.idx);
+                    playVideo(DATA_MAP['_search'].data[idx]);
+                });
+            });
+        }, 600);
+    }
+});
+
+renderList('popular');
+</script>
+</body>
+</html>

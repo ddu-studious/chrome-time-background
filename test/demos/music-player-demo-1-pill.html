@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音乐播放器 Demo 1 - 药丸胶囊条</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            min-height: 100vh;
+            background: url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920') center/cover no-repeat fixed;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.3);
+            z-index: 0;
+        }
+        .scene { position: relative; z-index: 1; text-align: center; }
+        .time { font-size: 72px; font-weight: 200; letter-spacing: 4px; text-shadow: 0 2px 20px rgba(0,0,0,0.3); }
+        .date { font-size: 16px; opacity: 0.7; margin-top: 4px; }
+        .demo-label {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.5); padding: 8px 20px; border-radius: 20px;
+            font-size: 13px; z-index: 10; backdrop-filter: blur(10px);
+        }
+
+        /* === 药丸胶囊条 === */
+        .music-ctrl {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .music-ctrl-inner {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 8px 18px 8px 8px;
+            border-radius: 50px;
+            background: rgba(0, 0, 0, 0.45);
+            backdrop-filter: blur(20px) saturate(170%);
+            -webkit-backdrop-filter: blur(20px) saturate(170%);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            max-width: 420px;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            animation: mc-fadein 0.5s ease;
+        }
+        @keyframes mc-fadein {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .music-ctrl-inner:hover {
+            background: rgba(255, 255, 255, 0.09);
+            box-shadow: 0 6px 28px rgba(0, 0, 0, 0.25);
+        }
+        .mc-cover {
+            width: 38px; height: 38px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.05);
+            overflow: hidden; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            animation: mc-spin 8s linear infinite;
+        }
+        .mc-cover.paused { animation-play-state: paused; }
+        @keyframes mc-spin { to { transform: rotate(360deg); } }
+        .mc-cover img {
+            width: 100%; height: 100%;
+            object-fit: cover; border-radius: 50%;
+        }
+        .mc-info { flex: 1; min-width: 0; max-width: 160px; }
+        .mc-title {
+            font-size: 12px; font-weight: 600;
+            color: rgba(255, 255, 255, 0.85);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .mc-artist {
+            font-size: 10px; color: rgba(255, 255, 255, 0.4);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            margin-top: 1px;
+        }
+        .mc-controls { display: flex; align-items: center; gap: 4px; }
+        .mc-btn {
+            width: 30px; height: 30px;
+            border: none; border-radius: 50%;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.55);
+            cursor: pointer; font-size: 11px;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s;
+        }
+        .mc-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.85);
+        }
+        .mc-btn-play {
+            width: 34px; height: 34px;
+            background: rgba(255, 255, 255, 0.1);
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.75);
+        }
+        .mc-btn-play:hover {
+            background: rgba(255, 255, 255, 0.18);
+            color: #fff; transform: scale(1.05);
+        }
+        .mc-platform {
+            font-size: 9px;
+            color: rgba(255, 255, 255, 0.25);
+            white-space: nowrap; flex-shrink: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-label">Demo 1：药丸胶囊条 (Pill Bar)</div>
+    <div class="scene">
+        <div class="time" id="time">00:00:00</div>
+        <div class="date" id="date"></div>
+        <div class="music-ctrl">
+            <div class="music-ctrl-inner">
+                <div class="mc-cover" id="mc-cover">
+                    <img src="https://picsum.photos/80" alt="" crossorigin="anonymous">
+                </div>
+                <div class="mc-info">
+                    <div class="mc-title">夜曲</div>
+                    <div class="mc-artist">周杰伦</div>
+                </div>
+                <div class="mc-controls">
+                    <button class="mc-btn" title="上一曲"><i class="fas fa-step-backward"></i></button>
+                    <button class="mc-btn mc-btn-play" id="mc-play" title="播放/暂停"><i class="fas fa-pause" id="mc-play-icon"></i></button>
+                    <button class="mc-btn" title="下一曲"><i class="fas fa-step-forward"></i></button>
+                </div>
+                <div class="mc-platform">🎵 网易云</div>
+            </div>
+        </div>
+    </div>
+    <script>
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('time').textContent = now.toLocaleTimeString('zh-CN', { hour12: false });
+            document.getElementById('date').textContent = now.toLocaleDateString('zh-CN', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+        let playing = true;
+        document.getElementById('mc-play').addEventListener('click', () => {
+            playing = !playing;
+            document.getElementById('mc-play-icon').className = playing ? 'fas fa-pause' : 'fas fa-play';
+            document.getElementById('mc-cover').classList.toggle('paused', !playing);
+        });
+    </script>
+</body>
+</html>

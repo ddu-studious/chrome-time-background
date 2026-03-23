@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B站集成 Demo 3 — Bilibili Mini（迷你浏览器 · 沉浸式）</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+:root {
+    --bm-bg: #141414;
+    --bm-surface: #1e1e1e;
+    --bm-pink: #fb7299;
+    --bm-blue: #00a1d6;
+    --bm-text: #ffffff;
+    --bm-text-sub: #999;
+    --bm-border: rgba(255,255,255,0.08);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: var(--bm-bg);
+    color: var(--bm-text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.demo-banner {
+    background: var(--bm-surface);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--bm-border);
+    flex-shrink: 0;
+    z-index: 100;
+}
+.demo-banner h2 { font-size: 15px; font-weight: 600; }
+.demo-banner p { font-size: 12px; color: var(--bm-text-sub); margin-top: 2px; }
+.demo-banner .badge {
+    background: rgba(0,161,214,0.15);
+    color: var(--bm-blue);
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    margin-left: auto;
+    white-space: nowrap;
+}
+.scheme-tag {
+    display: inline-block;
+    background: var(--bm-blue);
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    vertical-align: middle;
+}
+
+.bm-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+.bm-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: var(--bm-surface);
+    border-bottom: 1px solid var(--bm-border);
+    flex-shrink: 0;
+    z-index: 50;
+}
+
+.bm-nav-btn {
+    background: none;
+    border: none;
+    color: var(--bm-text-sub);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 6px 8px;
+    border-radius: 6px;
+    transition: all 0.15s;
+}
+.bm-nav-btn:hover { background: rgba(255,255,255,0.08); color: var(--bm-text); }
+.bm-nav-btn.active { color: var(--bm-pink); }
+
+.bm-url-bar {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    background: rgba(255,255,255,0.06);
+    border-radius: 20px;
+    padding: 6px 14px;
+    gap: 8px;
+}
+.bm-url-bar i { font-size: 12px; color: var(--bm-text-sub); }
+.bm-url-bar input {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--bm-text);
+    font-size: 12px;
+    outline: none;
+}
+.bm-url-bar input::placeholder { color: var(--bm-text-sub); }
+
+.bm-quick-nav {
+    display: flex;
+    gap: 4px;
+    margin-left: 8px;
+}
+.bm-qn-btn {
+    background: rgba(255,255,255,0.06);
+    border: none;
+    color: var(--bm-text-sub);
+    font-size: 11px;
+    padding: 5px 12px;
+    border-radius: 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+.bm-qn-btn:hover { background: rgba(255,255,255,0.12); color: var(--bm-text); }
+.bm-qn-btn.active { background: var(--bm-pink); color: #fff; }
+
+.bm-iframe-wrap {
+    flex: 1;
+    position: relative;
+}
+.bm-iframe-wrap iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+.bm-overlay-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(transparent, rgba(0,0,0,0.9));
+    padding: 20px 24px 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    z-index: 30;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+.bm-container:hover .bm-overlay-bar { opacity: 1; }
+
+.bm-float-cover {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+.bm-float-info {
+    flex: 1;
+    min-width: 0;
+}
+.bm-float-title {
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.bm-float-meta {
+    font-size: 11px;
+    color: var(--bm-text-sub);
+    margin-top: 2px;
+}
+
+.bm-float-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.bm-fc-btn {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.7);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 8px;
+    transition: all 0.15s;
+}
+.bm-fc-btn:hover { color: #fff; transform: scale(1.1); }
+.bm-fc-play {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--bm-pink);
+    color: #fff;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.bm-sidebar {
+    position: absolute;
+    top: 0;
+    right: -360px;
+    width: 360px;
+    height: 100%;
+    background: var(--bm-surface);
+    border-left: 1px solid var(--bm-border);
+    z-index: 40;
+    transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+}
+.bm-sidebar.visible { right: 0; }
+
+.bm-sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--bm-border);
+    flex-shrink: 0;
+}
+.bm-sidebar-header h3 { font-size: 14px; font-weight: 600; }
+.bm-sidebar-close {
+    background: none;
+    border: none;
+    color: var(--bm-text-sub);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px;
+}
+
+.bm-sidebar-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--bm-border);
+    flex-shrink: 0;
+}
+.bm-stab {
+    flex: 1;
+    padding: 10px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--bm-text-sub);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+}
+.bm-stab:hover { color: var(--bm-text); }
+.bm-stab.active { color: var(--bm-pink); border-bottom-color: var(--bm-pink); }
+
+.bm-sidebar-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.bm-s-item {
+    display: flex;
+    gap: 10px;
+    padding: 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.bm-s-item:hover { background: rgba(255,255,255,0.04); }
+.bm-s-cover {
+    width: 100px;
+    height: 62px;
+    border-radius: 6px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: rgba(255,255,255,0.06);
+}
+.bm-s-info { flex: 1; min-width: 0; }
+.bm-s-title {
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.bm-s-meta {
+    font-size: 11px;
+    color: var(--bm-text-sub);
+    margin-top: 4px;
+}
+
+.bm-mock-page {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(180deg, #222 0%, #1a1a1a 100%);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.bm-mock-player {
+    width: 100%;
+    aspect-ratio: 16/9;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    position: relative;
+}
+.bm-mock-player img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.6;
+}
+.bm-mock-play-big {
+    position: absolute;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: rgba(251,114,153,0.9);
+    color: #fff;
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+.bm-mock-play-big:hover { transform: scale(1.1); }
+
+.bm-mock-info {
+    padding: 20px 24px;
+}
+.bm-mock-title {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    line-height: 1.4;
+}
+.bm-mock-stats {
+    display: flex;
+    gap: 20px;
+    font-size: 12px;
+    color: var(--bm-text-sub);
+    margin-bottom: 16px;
+}
+.bm-mock-stats span { display: flex; align-items: center; gap: 4px; }
+.bm-mock-author {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 0;
+    border-top: 1px solid var(--bm-border);
+}
+.bm-mock-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+.bm-mock-author-name { font-size: 13px; font-weight: 600; }
+.bm-mock-author-fans { font-size: 11px; color: var(--bm-text-sub); }
+
+.bm-mock-actions {
+    display: flex;
+    gap: 8px;
+    padding: 12px 24px;
+    border-top: 1px solid var(--bm-border);
+}
+.bm-mock-act {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 10px 18px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-size: 18px;
+    color: var(--bm-text-sub);
+}
+.bm-mock-act span { font-size: 10px; }
+.bm-mock-act:hover { background: rgba(255,255,255,0.08); }
+
+.bm-mock-recommend {
+    padding: 20px 24px;
+}
+.bm-mock-recommend h4 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 14px;
+}
+.bm-mock-rec-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+.bm-mock-rec-item { cursor: pointer; }
+.bm-mock-rec-cover {
+    width: 100%;
+    aspect-ratio: 16/9;
+    border-radius: 8px;
+    object-fit: cover;
+    background: rgba(255,255,255,0.06);
+}
+.bm-mock-rec-title {
+    font-size: 12px;
+    margin-top: 6px;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.bm-mock-rec-meta {
+    font-size: 11px;
+    color: var(--bm-text-sub);
+    margin-top: 3px;
+}
+
+.bm-sidebar-list::-webkit-scrollbar { width: 4px; }
+.bm-sidebar-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+.bm-mock-page::-webkit-scrollbar { width: 6px; }
+.bm-mock-page::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="demo-banner">
+    <i class="fab fa-bilibili" style="font-size:22px;color:var(--bm-pink)"></i>
+    <div>
+        <h2>方案 C：Bilibili Mini <span class="scheme-tag">功能最全</span></h2>
+        <p>迷你浏览器 · 沉浸式体验 — 完整嵌入 B 站页面 + 浮动控制层</p>
+    </div>
+    <span class="badge"><i class="fas fa-code"></i> 技术：iframe 全页嵌入 + Content Script 增强</span>
+</div>
+
+<div class="bm-container">
+    <div class="bm-nav">
+        <button class="bm-nav-btn" title="后退"><i class="fas fa-chevron-left"></i></button>
+        <button class="bm-nav-btn" title="前进"><i class="fas fa-chevron-right"></i></button>
+        <button class="bm-nav-btn" title="刷新"><i class="fas fa-redo"></i></button>
+
+        <div class="bm-url-bar">
+            <i class="fas fa-lock" style="color:#4ade80"></i>
+            <input type="text" value="https://www.bilibili.com/video/BV1GJ411x7h7" readonly>
+        </div>
+
+        <div class="bm-quick-nav">
+            <button class="bm-qn-btn active"><i class="fas fa-home"></i> 首页</button>
+            <button class="bm-qn-btn"><i class="fas fa-fire"></i> 热门</button>
+            <button class="bm-qn-btn"><i class="fas fa-compass"></i> 排行</button>
+        </div>
+
+        <button class="bm-nav-btn" id="sidebarToggle" title="播放列表"><i class="fas fa-list"></i></button>
+    </div>
+
+    <div class="bm-iframe-wrap">
+        <div class="bm-mock-page">
+            <div class="bm-mock-player">
+                <img src="https://picsum.photos/1280/720?random=70" alt="">
+                <div class="bm-mock-play-big"><i class="fas fa-play"></i></div>
+            </div>
+            <div class="bm-mock-info">
+                <div class="bm-mock-title">【4K】中国城市航拍合集 · 感受中国的壮美与繁华</div>
+                <div class="bm-mock-stats">
+                    <span><i class="fas fa-play"></i> 486.2万</span>
+                    <span><i class="fas fa-comment-dots"></i> 1.2万弹幕</span>
+                    <span><i class="fas fa-clock"></i> 2026-03-15</span>
+                </div>
+                <div class="bm-mock-author">
+                    <img class="bm-mock-avatar" src="https://picsum.photos/72/72?random=71" alt="">
+                    <div>
+                        <div class="bm-mock-author-name">航拍中国</div>
+                        <div class="bm-mock-author-fans">128.5万粉丝</div>
+                    </div>
+                </div>
+            </div>
+            <div class="bm-mock-actions">
+                <div class="bm-mock-act"><i class="fas fa-thumbs-up"></i><span>28.3万</span></div>
+                <div class="bm-mock-act"><i class="fas fa-thumbs-down"></i><span>不喜欢</span></div>
+                <div class="bm-mock-act"><i class="fas fa-coins"></i><span>投币</span></div>
+                <div class="bm-mock-act"><i class="fas fa-star"></i><span>收藏</span></div>
+                <div class="bm-mock-act"><i class="fas fa-share"></i><span>分享</span></div>
+                <div class="bm-mock-act"><i class="fas fa-clock"></i><span>稍后看</span></div>
+            </div>
+            <div class="bm-mock-recommend">
+                <h4>相关推荐</h4>
+                <div class="bm-mock-rec-grid">
+                    <div class="bm-mock-rec-item">
+                        <img class="bm-mock-rec-cover" src="https://picsum.photos/400/225?random=72" alt="">
+                        <div class="bm-mock-rec-title">上海 4K 航拍 · 魔都的日与夜</div>
+                        <div class="bm-mock-rec-meta">城市航拍 · 326.8万播放</div>
+                    </div>
+                    <div class="bm-mock-rec-item">
+                        <img class="bm-mock-rec-cover" src="https://picsum.photos/400/225?random=73" alt="">
+                        <div class="bm-mock-rec-title">成都 · 一座来了就不想离开的城市</div>
+                        <div class="bm-mock-rec-meta">旅行日记 · 215.4万播放</div>
+                    </div>
+                    <div class="bm-mock-rec-item">
+                        <img class="bm-mock-rec-cover" src="https://picsum.photos/400/225?random=74" alt="">
+                        <div class="bm-mock-rec-title">深圳速度！看中国最年轻的超级城市</div>
+                        <div class="bm-mock-rec-meta">科技探索 · 189.2万播放</div>
+                    </div>
+                    <div class="bm-mock-rec-item">
+                        <img class="bm-mock-rec-cover" src="https://picsum.photos/400/225?random=75" alt="">
+                        <div class="bm-mock-rec-title">北京故宫 · 600 年紫禁城的前世今生</div>
+                        <div class="bm-mock-rec-meta">文化历史 · 456.7万播放</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bm-overlay-bar">
+            <img class="bm-float-cover" src="https://picsum.photos/96/96?random=70" alt="">
+            <div class="bm-float-info">
+                <div class="bm-float-title">【4K】中国城市航拍合集 · 感受中国的壮美与繁华</div>
+                <div class="bm-float-meta">航拍中国 · 12:35 · 486.2万播放</div>
+            </div>
+            <div class="bm-float-controls">
+                <button class="bm-fc-btn"><i class="fas fa-step-backward"></i></button>
+                <button class="bm-fc-btn bm-fc-play"><i class="fas fa-play"></i></button>
+                <button class="bm-fc-btn"><i class="fas fa-step-forward"></i></button>
+                <button class="bm-fc-btn"><i class="fas fa-clock"></i></button>
+                <button class="bm-fc-btn"><i class="fas fa-star"></i></button>
+            </div>
+        </div>
+
+        <div class="bm-sidebar" id="sidebar">
+            <div class="bm-sidebar-header">
+                <h3>播放列表</h3>
+                <button class="bm-sidebar-close" id="sidebarClose"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="bm-sidebar-tabs">
+                <div class="bm-stab active">收藏</div>
+                <div class="bm-stab">历史</div>
+                <div class="bm-stab">稍后看</div>
+                <div class="bm-stab">热门</div>
+            </div>
+            <div class="bm-sidebar-list" id="sidebarList"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+const SIDEBAR_ITEMS = [
+    { title: '当代年轻人下班后的真实写照', author: '老番茄', views: '892.1万', cover: 'https://picsum.photos/200/125?random=80' },
+    { title: '一个视频看懂量子计算机', author: '妈咪说', views: '315.6万', cover: 'https://picsum.photos/200/125?random=81' },
+    { title: '用 AI 给老照片上色，爷爷看到后哭了', author: 'AI小助手', views: '1024万', cover: 'https://picsum.photos/200/125?random=82' },
+    { title: '30天挑战只吃便利店食物', author: '食贫道', views: '1568万', cover: 'https://picsum.photos/200/125?random=83' },
+    { title: '教你 5 分钟做出米其林牛排', author: '王刚', views: '432.1万', cover: 'https://picsum.photos/200/125?random=84' },
+    { title: '为什么中国建筑工人是最强的', author: '硬核半佛', views: '765.4万', cover: 'https://picsum.photos/200/125?random=85' },
+    { title: '科技美学 2026 笔记本推荐', author: '科技美学', views: '234.5万', cover: 'https://picsum.photos/200/125?random=86' },
+    { title: 'React 19 新特性全解析', author: '技术胖', views: '89.2万', cover: 'https://picsum.photos/200/125?random=87' },
+];
+
+document.getElementById('sidebarList').innerHTML = SIDEBAR_ITEMS.map(item => `
+    <div class="bm-s-item">
+        <img class="bm-s-cover" src="${item.cover}" alt="" loading="lazy">
+        <div class="bm-s-info">
+            <div class="bm-s-title">${item.title}</div>
+            <div class="bm-s-meta">${item.author} · ${item.views}播放</div>
+        </div>
+    </div>
+`).join('');
+
+document.getElementById('sidebarToggle').addEventListener('click', () => {
+    document.getElementById('sidebar').classList.toggle('visible');
+});
+document.getElementById('sidebarClose').addEventListener('click', () => {
+    document.getElementById('sidebar').classList.remove('visible');
+});
+
+document.querySelectorAll('.bm-stab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.bm-stab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+    });
+});
+document.querySelectorAll('.bm-qn-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.bm-qn-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    });
+});
+</script>
+</body>
+</html>

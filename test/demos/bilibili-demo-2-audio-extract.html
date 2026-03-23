@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B站集成 Demo 2 — Bilibili Audio（纯音频提取 · 类网易云）</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+:root {
+    --ba-bg: #1a1a2e;
+    --ba-surface: #16213e;
+    --ba-card: #1f2b47;
+    --ba-pink: #fb7299;
+    --ba-pink-dim: rgba(251, 114, 153, 0.15);
+    --ba-blue: #00a1d6;
+    --ba-text: #e8eaed;
+    --ba-text-sub: #8b95a5;
+    --ba-border: rgba(255,255,255,0.06);
+    --ba-radius: 12px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: var(--ba-bg);
+    color: var(--ba-text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.demo-banner {
+    background: linear-gradient(135deg, #16213e, #0f3460);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--ba-border);
+    flex-shrink: 0;
+}
+.demo-banner h2 { font-size: 15px; font-weight: 600; color: var(--ba-text); }
+.demo-banner p { font-size: 12px; color: var(--ba-text-sub); margin-top: 2px; }
+.demo-banner .badge {
+    background: var(--ba-pink-dim);
+    color: var(--ba-pink);
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    margin-left: auto;
+    white-space: nowrap;
+}
+.scheme-tag {
+    display: inline-block;
+    background: #e53e3e;
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    vertical-align: middle;
+}
+
+.ba-layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+.ba-panel {
+    width: 400px;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--ba-border);
+    flex-shrink: 0;
+}
+
+.ba-tabs {
+    display: flex;
+    padding: 4px;
+    gap: 2px;
+    background: var(--ba-surface);
+    margin: 12px;
+    border-radius: 10px;
+    flex-shrink: 0;
+}
+.ba-tab {
+    flex: 1;
+    padding: 8px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ba-text-sub);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.ba-tab:hover { color: var(--ba-text); }
+.ba-tab.active {
+    background: var(--ba-card);
+    color: var(--ba-pink);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.ba-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 12px 12px;
+}
+
+.ba-track {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.ba-track:hover { background: var(--ba-card); }
+.ba-track.playing { background: var(--ba-pink-dim); }
+.ba-track.playing .ba-track-title { color: var(--ba-pink); }
+.ba-track.playing .ba-track-idx { color: var(--ba-pink); }
+
+.ba-track-idx {
+    width: 24px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--ba-text-sub);
+    flex-shrink: 0;
+}
+.ba-track-cover {
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--ba-surface);
+}
+.ba-track-info {
+    flex: 1;
+    min-width: 0;
+}
+.ba-track-title {
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.ba-track-artist {
+    font-size: 11px;
+    color: var(--ba-text-sub);
+    margin-top: 2px;
+}
+.ba-track-dur {
+    font-size: 11px;
+    color: var(--ba-text-sub);
+    flex-shrink: 0;
+}
+
+.ba-player-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    position: relative;
+    background: radial-gradient(ellipse at 50% 30%, rgba(251,114,153,0.05) 0%, transparent 70%);
+}
+
+.ba-cover-wrap {
+    position: relative;
+    margin-bottom: 32px;
+}
+.ba-cover-large {
+    width: 280px;
+    height: 280px;
+    border-radius: 16px;
+    object-fit: cover;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    transition: transform 0.3s;
+}
+.ba-cover-large.spinning {
+    animation: albumSpin 20s linear infinite;
+    border-radius: 50%;
+}
+@keyframes albumSpin { to { transform: rotate(360deg); } }
+
+.ba-now-title {
+    font-size: 20px;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 6px;
+    max-width: 400px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.ba-now-artist {
+    font-size: 14px;
+    color: var(--ba-text-sub);
+    text-align: center;
+    margin-bottom: 28px;
+}
+
+.ba-progress {
+    width: 100%;
+    max-width: 440px;
+    margin-bottom: 20px;
+}
+.ba-progress-bar {
+    height: 4px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px;
+    cursor: pointer;
+    position: relative;
+}
+.ba-progress-fill {
+    height: 100%;
+    background: var(--ba-pink);
+    border-radius: 2px;
+    width: 35%;
+    position: relative;
+}
+.ba-progress-fill::after {
+    content: '';
+    position: absolute;
+    right: -6px;
+    top: -4px;
+    width: 12px;
+    height: 12px;
+    background: var(--ba-pink);
+    border-radius: 50%;
+    box-shadow: 0 0 8px rgba(251,114,153,0.5);
+}
+.ba-progress-time {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--ba-text-sub);
+    margin-top: 6px;
+}
+
+.ba-controls {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+}
+.ba-ctrl-btn {
+    background: none;
+    border: none;
+    color: var(--ba-text-sub);
+    font-size: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    padding: 8px;
+}
+.ba-ctrl-btn:hover { color: var(--ba-text); transform: scale(1.1); }
+.ba-ctrl-play {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--ba-pink);
+    color: #fff;
+    font-size: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 20px rgba(251,114,153,0.4);
+    transition: all 0.2s;
+}
+.ba-ctrl-play:hover { transform: scale(1.08); box-shadow: 0 6px 28px rgba(251,114,153,0.5); }
+
+.ba-wbi-warn {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(229, 62, 62, 0.1);
+    border: 1px solid rgba(229, 62, 62, 0.2);
+    color: #fc8181;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.ba-list::-webkit-scrollbar { width: 4px; }
+.ba-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+.ba-tech-flow {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: var(--ba-card);
+    border: 1px solid var(--ba-border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-size: 11px;
+    color: var(--ba-text-sub);
+    line-height: 1.8;
+    max-width: 260px;
+}
+.ba-tech-flow strong { color: var(--ba-pink); font-size: 12px; }
+.ba-tech-flow code {
+    background: rgba(251,114,153,0.1);
+    color: var(--ba-pink);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 10px;
+}
+</style>
+</head>
+<body>
+
+<div class="demo-banner">
+    <i class="fab fa-bilibili" style="font-size:22px;color:var(--ba-pink)"></i>
+    <div>
+        <h2>方案 B：Bilibili Audio <span class="scheme-tag">复杂度高</span></h2>
+        <p>纯音频提取 · 复用网易云 Offscreen 架构 — 需要 WBI 签名 + DASH 处理</p>
+    </div>
+    <span class="badge"><i class="fas fa-code"></i> 技术：WBI + DASH + Offscreen Audio</span>
+</div>
+
+<div class="ba-layout">
+    <div class="ba-panel">
+        <div class="ba-tabs">
+            <div class="ba-tab active">热门</div>
+            <div class="ba-tab">收藏</div>
+            <div class="ba-tab">历史</div>
+            <div class="ba-tab">稍后</div>
+        </div>
+        <div class="ba-list" id="trackList"></div>
+    </div>
+
+    <div class="ba-player-area">
+        <div class="ba-tech-flow">
+            <strong>音频提取流程</strong><br>
+            1. <code>Cookie</code> 获取 SESSDATA<br>
+            2. <code>/nav</code> 取 WBI 密钥<br>
+            3. <code>MD5 签名</code> 生成 w_rid<br>
+            4. <code>/playurl</code> 获取 DASH<br>
+            5. 解析 <code>dash.audio[]</code><br>
+            6. <code>DNR</code> 注入 Referer<br>
+            7. <code>&lt;audio&gt;</code> 播放音频轨
+        </div>
+
+        <div class="ba-cover-wrap">
+            <img class="ba-cover-large spinning" id="coverLarge" src="https://picsum.photos/400/400?random=100" alt="">
+        </div>
+
+        <div class="ba-now-title" id="nowTitle">【钢琴】超燃！在街头弹《千本樱》</div>
+        <div class="ba-now-artist" id="nowArtist">A叔钢琴 · 5:42</div>
+
+        <div class="ba-progress">
+            <div class="ba-progress-bar">
+                <div class="ba-progress-fill" id="progressFill"></div>
+            </div>
+            <div class="ba-progress-time">
+                <span id="timeCur">2:01</span>
+                <span id="timeDur">5:42</span>
+            </div>
+        </div>
+
+        <div class="ba-controls">
+            <button class="ba-ctrl-btn"><i class="fas fa-random"></i></button>
+            <button class="ba-ctrl-btn"><i class="fas fa-step-backward"></i></button>
+            <button class="ba-ctrl-btn ba-ctrl-play" id="playBtn"><i class="fas fa-pause"></i></button>
+            <button class="ba-ctrl-btn"><i class="fas fa-step-forward"></i></button>
+            <button class="ba-ctrl-btn"><i class="fas fa-redo"></i></button>
+        </div>
+
+        <div class="ba-wbi-warn">
+            <i class="fas fa-exclamation-triangle"></i>
+            此方案需要实现 WBI 签名算法，密钥可能随 B 站版本更新变化，维护成本较高
+        </div>
+    </div>
+</div>
+
+<script>
+const TRACKS = [
+    { title: '【钢琴】超燃！在街头弹《千本樱》', artist: 'A叔钢琴', dur: '5:42', cover: 'https://picsum.photos/100/100?random=50' },
+    { title: '周杰伦《晴天》吉他指弹', artist: '指弹大叔', dur: '4:18', cover: 'https://picsum.photos/100/100?random=51' },
+    { title: '纯音乐 · 雨夜钢琴曲合集', artist: '夜的钢琴手', dur: '45:30', cover: 'https://picsum.photos/100/100?random=52' },
+    { title: '【翻唱】《起风了》超好听版本', artist: '音乐小镇', dur: '4:55', cover: 'https://picsum.photos/100/100?random=53' },
+    { title: '宫崎骏动画音乐 钢琴串烧', artist: 'Animenz', dur: '18:22', cover: 'https://picsum.photos/100/100?random=54' },
+    { title: 'Lofi Hip Hop · 学习/工作BGM', artist: 'ChilledCow', dur: '1:02:15', cover: 'https://picsum.photos/100/100?random=55' },
+    { title: '【古筝】《青花瓷》中国风纯享', artist: '玉面小嫣然', dur: '3:56', cover: 'https://picsum.photos/100/100?random=56' },
+    { title: '新海诚电影OST精选 你的名字/天气之子', artist: 'RADWIMPS', dur: '32:10', cover: 'https://picsum.photos/100/100?random=57' },
+    { title: '催眠向 ASMR 白噪音 · 深度睡眠', artist: '白噪音工坊', dur: '2:00:00', cover: 'https://picsum.photos/100/100?random=58' },
+    { title: '吉他弹唱 · 那些年我们一起听过的歌', artist: '吉他少年', dur: '28:45', cover: 'https://picsum.photos/100/100?random=59' },
+];
+
+let currentIdx = 0;
+let isPlaying = true;
+
+function renderTracks() {
+    document.getElementById('trackList').innerHTML = TRACKS.map((t, i) => `
+        <div class="ba-track${i === currentIdx ? ' playing' : ''}" data-idx="${i}">
+            <span class="ba-track-idx">${i === currentIdx ? '<i class="fas fa-volume-up" style="font-size:11px;color:var(--ba-pink)"></i>' : i + 1}</span>
+            <img class="ba-track-cover" src="${t.cover}" alt="">
+            <div class="ba-track-info">
+                <div class="ba-track-title">${t.title}</div>
+                <div class="ba-track-artist">${t.artist}</div>
+            </div>
+            <span class="ba-track-dur">${t.dur}</span>
+        </div>
+    `).join('');
+
+    document.querySelectorAll('.ba-track').forEach(el => {
+        el.addEventListener('click', () => {
+            currentIdx = parseInt(el.dataset.idx);
+            updatePlayer();
+            renderTracks();
+        });
+    });
+}
+
+function updatePlayer() {
+    const t = TRACKS[currentIdx];
+    document.getElementById('coverLarge').src = t.cover.replace('100/100', '400/400');
+    document.getElementById('nowTitle').textContent = t.title;
+    document.getElementById('nowArtist').textContent = `${t.artist} · ${t.dur}`;
+    document.getElementById('timeDur').textContent = t.dur;
+    document.getElementById('timeCur').textContent = '0:00';
+    document.getElementById('progressFill').style.width = '0%';
+}
+
+document.getElementById('playBtn').addEventListener('click', function() {
+    isPlaying = !isPlaying;
+    this.innerHTML = isPlaying ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>';
+    document.getElementById('coverLarge').classList.toggle('spinning', isPlaying);
+});
+
+document.querySelectorAll('.ba-tab').forEach((tab, i) => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.ba-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+    });
+});
+
+let progress = 35;
+setInterval(() => {
+    if (!isPlaying) return;
+    progress += 0.3;
+    if (progress > 100) progress = 0;
+    document.getElementById('progressFill').style.width = progress + '%';
+    const totalSec = 342;
+    const cur = Math.floor(totalSec * progress / 100);
+    const m = Math.floor(cur / 60);
+    const s = cur % 60;
+    document.getElementById('timeCur').textContent = `${m}:${s.toString().padStart(2, '0')}`;
+}, 1000);
+
+renderTracks();
+</script>
+</body>
+</html>
