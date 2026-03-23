@@ -65,14 +65,15 @@ EXCLUDE_PATTERNS=(
 REQUIRED_FILES=(
     "manifest.json"
     "index.html"
-    "js/main.js"
-    "js/background.js"
+    "tasks.html"
+    "uninstall.html"
 )
 
 REQUIRED_DIRS=(
     "js"
     "css"
     "icons"
+    "vendor"
 )
 
 # ===== 帮助信息 =====

@@ -6,6 +6,7 @@
     <title>任务管理 - 中国风景时钟</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="css/tasks.css">
+    <link rel="stylesheet" href="vendor/highlight-theme.css">
 </head>
 <body>
     <!-- 顶部导航栏 -->
@@ -44,7 +45,9 @@
             <div class="filter-group">
                 <select id="filter-status" class="filter-select">
                     <option value="all">全部状态</option>
-                    <option value="active">进行中</option>
+                    <option value="active">未完成</option>
+                    <option value="in_progress">进行中</option>
+                    <option value="not_started">未开始</option>
                     <option value="completed">已完成</option>
                     <option value="overdue">已过期</option>
                     <option value="today">今日到期</option>
@@ -148,6 +151,10 @@
         </select>
     </div>
 
+    <script src="vendor/marked.min.js"></script>
+    <script src="vendor/purify.min.js"></script>
+    <script src="vendor/highlight.min.js"></script>
+    <script src="vendor/mermaid.tiny.min.js"></script>
     <script src="js/chrome-shim.js"></script>
     <script src="js/tasks.js"></script>
 </body>

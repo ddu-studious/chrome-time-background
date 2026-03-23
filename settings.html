@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>设置 - 中国风景时钟</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="css/settings-page.css">
+</head>
+<body>
+    <div class="sp-layout">
+        <!-- 左侧导航 -->
+        <nav class="sp-sidebar">
+            <div class="sp-logo">
+                <img src="icons/icon48.png" alt="中国风景时钟" class="sp-logo-img">
+                <div class="sp-logo-text">
+                    <h1>中国风景时钟</h1>
+                    <span class="sp-version" id="sp-version">v3.8.0</span>
+                </div>
+            </div>
+
+            <div class="sp-nav-section">
+                <div class="sp-nav-label">设置</div>
+                <a class="sp-nav-item active" data-page="general" href="#general">
+                    <i class="fas fa-cog"></i> 常规设置
+                </a>
+                <a class="sp-nav-item" data-page="appearance" href="#appearance">
+                    <i class="fas fa-palette"></i> 外观主题
+                </a>
+                <a class="sp-nav-item" data-page="performance" href="#performance">
+                    <i class="fas fa-bolt"></i> 性能与省电
+                </a>
+            </div>
+
+            <div class="sp-nav-section">
+                <div class="sp-nav-label">帮助</div>
+                <a class="sp-nav-item" data-page="guide" href="#guide">
+                    <i class="fas fa-book"></i> 使用说明
+                </a>
+                <a class="sp-nav-item" data-page="about" href="#about">
+                    <i class="fas fa-info-circle"></i> 关于
+                </a>
+            </div>
+        </nav>
+
+        <!-- 右侧内容 -->
+        <main class="sp-main">
+            <!-- 常规设置 -->
+            <section class="sp-page active" id="page-general">
+                <div class="sp-page-header">
+                    <h2>常规设置</h2>
+                    <p>配置时间、天气、背景等基础功能</p>
+                </div>
+
+                <div class="sp-card">
+                    <h3 class="sp-card-title">时间设置</h3>
+                    <div class="sp-field">
+                        <div class="sp-field-info">
+                            <span class="sp-field-label">时间格式</span>
+                        </div>
+                        <select name="timeFormat" class="sp-select" id="set-timeFormat">
+                            <option value="12">12小时制</option>
+                            <option value="24">24小时制</option>
+                        </select>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info">
+                            <span class="sp-field-label">显示秒数</span>
+                        </div>
+                        <label class="sp-toggle">
+                            <input type="checkbox" name="showSeconds" id="set-showSeconds">
+                            <span class="sp-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info">
+                            <span class="sp-field-label">显示日期</span>
+                        </div>
+                        <label class="sp-toggle">
+                            <input type="checkbox" name="showDate" id="set-showDate">
+                            <span class="sp-toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="sp-card">
+                    <h3 class="sp-card-title">天气设置</h3>
+                    <div class="sp-field">
+                        <div class="sp-field-info">
+                            <span class="sp-field-label">显示天气</span>
+                        </div>
+                        <label class="sp-toggle">
+                            <input type="checkbox" name="showWeather" id="set-showWeather">
+                            <span class="sp-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info">
+                            <span class="sp-field-label">温度单位</span>
+                        </div>
+                        <select name="temperatureUnit" class="sp-select" id="set-temperatureUnit">
+                            <option value="C">摄氏度 (°C)</option>
+                            <option value="F">华氏度 (°F)</option>
+                        </select>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info">
+                            <span class="sp-field-label">手动设置城市</span>
+                            <span class="sp-field-hint">无法自动定位时，可手动输入城市名（如：北京、上海）</span>
+                        </div>
+                        <input type="text" name="weatherCity" id="set-weatherCity" class="sp-input" placeholder="留空则自动定位">
+                    </div>
+                </div>
+
+                <div class="sp-card">
+                    <h3 class="sp-card-title">背景设置</h3>
+                    <div class="sp-field">
+                        <div class="sp-field-info">
+                            <span class="sp-field-label">背景切换间隔</span>
+                        </div>
+                        <select name="backgroundInterval" class="sp-select" id="set-backgroundInterval">
+                            <option value="5">5分钟</option>
+                            <option value="15">15分钟</option>
+                            <option value="30">30分钟</option>
+                            <option value="60">1小时</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="sp-card">
+                    <h3 class="sp-card-title">节假日设置</h3>
+                    <div class="sp-field">
+                        <div class="sp-field-info">
+                            <span class="sp-field-label">显示节假日</span>
+                        </div>
+                        <label class="sp-toggle">
+                            <input type="checkbox" name="showHolidays" id="set-showHolidays">
+                            <span class="sp-toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="sp-card">
+                    <h3 class="sp-card-title">热榜设置</h3>
+                    <div class="sp-field">
+                        <div class="sp-field-info">
+                            <span class="sp-field-label">刷新间隔（分钟）</span>
+                            <span class="sp-field-hint">热榜数据自动刷新间隔，最小 5 分钟，最大 120 分钟</span>
+                        </div>
+                        <input type="number" name="tickerRefreshInterval" id="set-tickerRefreshInterval" class="sp-input sp-input-num" min="5" max="120" step="1" placeholder="20">
+                    </div>
+                </div>
+            </section>
+
+            <!-- 外观主题 -->
+            <section class="sp-page" id="page-appearance">
+                <div class="sp-page-header">
+                    <h2>外观主题</h2>
+                    <p>自定义界面风格和语言</p>
+                </div>
+                <div class="sp-card">
+                    <h3 class="sp-card-title">界面设置</h3>
+                    <div class="sp-field">
+                        <div class="sp-field-info">
+                            <span class="sp-field-label">主题模式</span>
+                        </div>
+                        <select name="theme" class="sp-select" id="set-theme">
+                            <option value="auto">自动</option>
+                            <option value="light">浅色</option>
+                            <option value="dark">深色</option>
+                        </select>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info">
+                            <span class="sp-field-label">语言</span>
+                        </div>
+                        <select name="language" class="sp-select" id="set-language">
+                            <option value="zh">中文</option>
+                            <option value="en">English</option>
+                        </select>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 性能与省电 -->
+            <section class="sp-page" id="page-performance">
+                <div class="sp-page-header">
+                    <h2>性能与省电</h2>
+                    <p>低配电脑建议关闭非必要功能以提升流畅度</p>
+                </div>
+                <div class="sp-card">
+                    <h3 class="sp-card-title">功能开关</h3>
+                    <div class="sp-field">
+                        <div class="sp-field-info">
+                            <span class="sp-field-label">热搜资讯</span>
+                            <span class="sp-field-hint">滚动热搜信息栏，6秒轮播 + 定期网络请求</span>
+                        </div>
+                        <label class="sp-toggle">
+                            <input type="checkbox" name="enableTicker" id="set-enableTicker">
+                            <span class="sp-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info">
+                            <span class="sp-field-label">音乐播放器</span>
+                            <span class="sp-field-hint">独立音乐播放器，Offscreen 播放 + 音频解码</span>
+                        </div>
+                        <label class="sp-toggle">
+                            <input type="checkbox" name="enableMusic" id="set-enableMusic">
+                            <span class="sp-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info">
+                            <span class="sp-field-label">哔哩哔哩</span>
+                            <span class="sp-field-hint">B站视频/课程/关注面板，共享浏览器登录状态(Cookie)，支持已购课程、关注列表分组分类</span>
+                        </div>
+                        <label class="sp-toggle">
+                            <input type="checkbox" name="enableBilibili" id="set-enableBilibili">
+                            <span class="sp-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info">
+                            <span class="sp-field-label">系统资源监控</span>
+                            <span class="sp-field-hint">CPU/内存/磁盘占用监控，后台定期采集</span>
+                        </div>
+                        <label class="sp-toggle">
+                            <input type="checkbox" name="enableSystemMonitor" id="set-enableSystemMonitor">
+                            <span class="sp-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info">
+                            <span class="sp-field-label">系统监控采集间隔（分钟）</span>
+                            <span class="sp-field-hint">采集频率越低越省电，推荐 5 分钟</span>
+                        </div>
+                        <input type="number" name="systemMonitorInterval" id="set-systemMonitorInterval" class="sp-input sp-input-num" min="1" max="30" step="1" placeholder="5">
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info">
+                            <span class="sp-field-label">关键字实时监控</span>
+                            <span class="sp-field-hint">定期扫描热搜关键字，频率可达 1-10 分钟</span>
+                        </div>
+                        <label class="sp-toggle">
+                            <input type="checkbox" name="enableKeywordScan" id="set-enableKeywordScan">
+                            <span class="sp-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info">
+                            <span class="sp-field-label">温情提示</span>
+                            <span class="sp-field-hint">每2小时推送名言/健康小贴士</span>
+                        </div>
+                        <label class="sp-toggle">
+                            <input type="checkbox" name="enableWarmTip" id="set-enableWarmTip">
+                            <span class="sp-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info">
+                            <span class="sp-field-label">知识墙</span>
+                            <span class="sp-field-hint">知识卡片收集与展示面板</span>
+                        </div>
+                        <label class="sp-toggle">
+                            <input type="checkbox" name="enableKnowledgeWall" id="set-enableKnowledgeWall">
+                            <span class="sp-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info">
+                            <span class="sp-field-label">任务提醒滚动条</span>
+                            <span class="sp-field-hint">顶部未完成任务提醒滚动栏</span>
+                        </div>
+                        <label class="sp-toggle">
+                            <input type="checkbox" name="enableTaskTicker" id="set-enableTaskTicker">
+                            <span class="sp-toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 使用说明 -->
+            <section class="sp-page" id="page-guide">
+                <div class="sp-page-header">
+                    <h2>使用说明</h2>
+                    <p>全面了解中国风景时钟的功能和使用技巧</p>
+                </div>
+
+                <div class="sp-guide-quick">
+                    <div class="sp-guide-step">
+                        <span class="sp-step-num">1</span>
+                        <h4>打开新标签页</h4>
+                        <p>安装扩展后，每次打开新标签页即显示中国风景时钟</p>
+                    </div>
+                    <div class="sp-guide-step">
+                        <span class="sp-step-num">2</span>
+                        <h4>个性化配置</h4>
+                        <p>通过右下角工具栏进入设置，按需开关各项功能</p>
+                    </div>
+                    <div class="sp-guide-step">
+                        <span class="sp-step-num">3</span>
+                        <h4>开始使用</h4>
+                        <p>享受精美的中国风景壁纸、时钟、天气和效率工具</p>
+                    </div>
+                </div>
+
+                <div class="sp-guide-grid">
+                    <div class="sp-guide-card">
+                        <div class="sp-guide-card-icon"><i class="fas fa-clock"></i></div>
+                        <h4>核心功能</h4>
+                        <ul>
+                            <li><strong>精美时钟</strong> — 支持 12/24 小时制，显示农历和节假日</li>
+                            <li><strong>中国风景壁纸</strong> — 自动切换高清中国风景图，支持自定义间隔</li>
+                            <li><strong>实时天气</strong> — 当前天气、3 天预报、24 小时温度曲线</li>
+                            <li><strong>节假日提醒</strong> — 自动显示即将到来的节假日和调休信息</li>
+                        </ul>
+                    </div>
+                    <div class="sp-guide-card">
+                        <div class="sp-guide-card-icon"><i class="fas fa-keyboard"></i></div>
+                        <h4>快捷键指南</h4>
+                        <ul>
+                            <li><kbd>Ctrl/⌘</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd> — 切换背景壁纸</li>
+                            <li>点击时钟 — 展开/收起详细信息</li>
+                            <li>点击天气 — 展开温度曲线图</li>
+                            <li>右下角工具栏 — 快速访问各功能面板</li>
+                        </ul>
+                    </div>
+                    <div class="sp-guide-card">
+                        <div class="sp-guide-card-icon"><i class="fas fa-tasks"></i></div>
+                        <h4>任务管理</h4>
+                        <ul>
+                            <li><strong>任务面板</strong> — 左侧常驻任务列表，支持分类、标签、优先级</li>
+                            <li><strong>进度追踪</strong> — 设置任务进度百分比，直观了解完成情况</li>
+                            <li><strong>截止日期</strong> — 到期自动提醒，过期任务高亮显示</li>
+                            <li><strong>习惯打卡</strong> — 支持每日/每周重复任务和习惯追踪</li>
+                            <li><strong>Markdown 备忘</strong> — 支持完整 Markdown 语法和代码高亮</li>
+                        </ul>
+                    </div>
+                    <div class="sp-guide-card">
+                        <div class="sp-guide-card-icon"><i class="fas fa-music"></i></div>
+                        <h4>音乐播放器</h4>
+                        <ul>
+                            <li><strong>独立播放</strong> — 无需打开音乐网站，浏览器登录过网易云即可</li>
+                            <li><strong>歌单管理</strong> — 浏览和播放个人歌单、每日推荐</li>
+                            <li><strong>歌词同步</strong> — 实时歌词显示，支持点击歌词跳转</li>
+                            <li><strong>搜索</strong> — 内置搜索，快速找到想听的歌曲</li>
+                            <li><strong>播放模式</strong> — 顺序、循环、单曲、随机四种模式</li>
+                        </ul>
+                    </div>
+                    <div class="sp-guide-card">
+                        <div class="sp-guide-card-icon"><i class="fab fa-bilibili"></i></div>
+                        <h4>哔哩哔哩集成</h4>
+                        <ul>
+                            <li><strong>Cookie 共享</strong> — 自动共享浏览器登录状态，无需重复登录</li>
+                            <li><strong>七大分类</strong> — 热门、历史、稍后看、收藏、排行、课程、关注</li>
+                            <li><strong>已购课程</strong> — 直接访问已购买的 B站课堂课程</li>
+                            <li><strong>关注列表</strong> — 按分组浏览关注的 UP 主，一键查看最新视频</li>
+                            <li><strong>沉浸播放</strong> — 所有操作不离开当前标签页，关闭面板自动清除资源</li>
+                        </ul>
+                    </div>
+                    <div class="sp-guide-card">
+                        <div class="sp-guide-card-icon"><i class="fas fa-fire"></i></div>
+                        <h4>热搜资讯</h4>
+                        <ul>
+                            <li><strong>多平台热搜</strong> — 聚合微博、知乎、百度等热搜榜单</li>
+                            <li><strong>实时滚动</strong> — 双层信息栏，主卡片 + 迷你滚动条</li>
+                            <li><strong>关键字监控</strong> — 设置关注关键字，出现时自动通知</li>
+                            <li><strong>收藏热搜</strong> — 一键保存感兴趣的热搜为任务待看</li>
+                        </ul>
+                    </div>
+                    <div class="sp-guide-card">
+                        <div class="sp-guide-card-icon"><i class="fas fa-heartbeat"></i></div>
+                        <h4>扩展监控</h4>
+                        <ul>
+                            <li><strong>资源监控</strong> — CPU、内存、磁盘实时占用率</li>
+                            <li><strong>活动日志</strong> — 扩展网络请求、任务操作等活动记录</li>
+                            <li><strong>温情提示</strong> — 定期推送名言金句和健康小贴士</li>
+                            <li><strong>省电模式</strong> — 按需关闭功能，降低资源占用</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 关于 -->
+            <section class="sp-page" id="page-about">
+                <div class="sp-page-header">
+                    <h2>关于</h2>
+                    <p>中国风景时钟 — 让每次打开新标签页都是一次旅行</p>
+                </div>
+                <div class="sp-card">
+                    <div class="sp-about-hero">
+                        <img src="icons/icon128.png" alt="中国风景时钟" class="sp-about-icon">
+                        <h3>中国风景时钟</h3>
+                        <p class="sp-about-ver" id="sp-about-version">版本 3.8.0</p>
+                        <p class="sp-about-desc">中国风景新标签页时钟，集成天气预报、任务管理、音乐播放、哔哩哔哩集成、热搜资讯等功能的一站式效率工具。</p>
+                    </div>
+                    <div class="sp-about-features">
+                        <div class="sp-about-badge"><i class="fas fa-image"></i> 精美壁纸</div>
+                        <div class="sp-about-badge"><i class="fas fa-clock"></i> 时间与农历</div>
+                        <div class="sp-about-badge"><i class="fas fa-cloud-sun"></i> 天气预报</div>
+                        <div class="sp-about-badge"><i class="fas fa-tasks"></i> 任务管理</div>
+                        <div class="sp-about-badge"><i class="fas fa-music"></i> 音乐播放</div>
+                        <div class="sp-about-badge"><i class="fab fa-bilibili"></i> 哔哩哔哩</div>
+                        <div class="sp-about-badge"><i class="fas fa-fire"></i> 热搜资讯</div>
+                        <div class="sp-about-badge"><i class="fas fa-heartbeat"></i> 扩展监控</div>
+                        <div class="sp-about-badge"><i class="fas fa-brain"></i> 知识墙</div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="js/settings-page.js"></script>
+</body>
+</html>

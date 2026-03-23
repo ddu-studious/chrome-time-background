@@ -20,7 +20,17 @@ class SettingsManager {
                 defaultReminderTime: '09:00',   // 默认提醒时间
                 showOverdueFirst: true,         // 过期任务置顶
                 reminderAdvanceMinutes: 30      // 提前提醒时间（分钟）
-            }
+            },
+            // v3.4.0: 性能与省电设置
+            enableTicker: true,            // 热搜资讯
+            enableMusic: true,             // 音乐播放器
+            enableSystemMonitor: false,    // 系统监控（默认关闭，较耗资源）
+            enableKeywordScan: false,      // 关键字扫描（默认关闭）
+            enableWarmTip: true,           // 温情提示
+            enableBilibili: true,          // 哔哩哔哩集成
+            enableKnowledgeWall: true,     // 知识墙
+            enableTaskTicker: true,        // 任务提醒滚动条
+            systemMonitorInterval: 5,      // 系统监控采集间隔（分钟），默认5min比之前1min降80%
         };
         this.settings = { ...this.defaults };
         this.listeners = new Set();
@@ -57,206 +67,28 @@ class SettingsManager {
     }
 
     setupSettingsUI() {
-        // 创建设置按钮
-        const settingsButton = document.createElement('button');
-        settingsButton.className = 'settings-button';
-        settingsButton.innerHTML = '<i class="fas fa-cog"></i>';
-        document.body.appendChild(settingsButton);
+        const settingsButton = document.getElementById('settings-dock-btn');
+        if (!settingsButton) {
+            const fb = document.createElement('button');
+            fb.className = 'settings-button';
+            fb.innerHTML = '<i class="fas fa-cog"></i>';
+            document.body.appendChild(fb);
+        }
+        const btn = settingsButton || document.querySelector('.settings-button');
 
-        // 创建设置面板
-        const settingsPanel = document.createElement('div');
-        settingsPanel.className = 'settings-panel';
-        settingsPanel.innerHTML = this.generateSettingsHTML();
-        document.body.appendChild(settingsPanel);
-
-        // 添加事件监听
-        settingsButton.addEventListener('click', () => {
-            settingsPanel.classList.toggle('visible');
+        btn.addEventListener('click', () => {
+            window.open(chrome.runtime.getURL('settings.html'), '_blank');
         });
 
-        // 关闭按钮
-        const closeButton = settingsPanel.querySelector('.close-button');
-        closeButton.addEventListener('click', () => {
-            settingsPanel.classList.remove('visible');
-        });
-
-        // 设置项变更监听
-        settingsPanel.addEventListener('change', async (e) => {
-            const target = e.target;
-            if (target.name && target.name in this.settings) {
-                if (target.type === 'checkbox') {
-                    this.settings[target.name] = target.checked;
-                } else {
-                    this.settings[target.name] = target.value;
+        chrome.storage.onChanged.addListener((changes, area) => {
+            if (area === 'sync' && changes.settings) {
+                const newSettings = changes.settings.newValue;
+                if (newSettings) {
+                    this.settings = { ...this.defaults, ...newSettings };
+                    this.notifyListeners();
                 }
-                await this.saveSettings();
             }
         });
-
-        // 文本输入框在失焦时保存（避免每次按键都保存）
-        settingsPanel.querySelectorAll('input[type="text"]').forEach(input => {
-            input.addEventListener('blur', async (e) => {
-                const target = e.target;
-                if (target.name && target.name in this.settings && this.settings[target.name] !== target.value) {
-                    this.settings[target.name] = target.value.trim();
-                    await this.saveSettings();
-                }
-            });
-            // 回车键也触发保存
-            input.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    e.target.blur();
-                }
-            });
-        });
-
-        // 数字输入框保存（转为 number 类型）
-        settingsPanel.querySelectorAll('input[type="number"]').forEach(input => {
-            input.addEventListener('blur', async (e) => {
-                const target = e.target;
-                if (target.name && target.name in this.settings) {
-                    const min = parseFloat(target.min) || 0;
-                    const max = parseFloat(target.max) || Infinity;
-                    let val = parseFloat(target.value);
-                    if (isNaN(val)) val = parseFloat(target.placeholder) || min;
-                    val = Math.max(min, Math.min(max, val));
-                    target.value = val;
-                    if (this.settings[target.name] !== val) {
-                        this.settings[target.name] = val;
-                        await this.saveSettings();
-                    }
-                }
-            });
-            input.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    e.target.blur();
-                }
-            });
-        });
-    }
-
-    generateSettingsHTML() {
-        return `
-            <div class="settings-header">
-                <h2>设置</h2>
-                <button class="close-button">&times;</button>
-            </div>
-            <div class="settings-content">
-                <div class="settings-group">
-                    <h3>时间显示</h3>
-                    <div class="setting-item">
-                        <label>
-                            时间格式
-                            <select name="timeFormat">
-                                <option value="12" ${this.settings.timeFormat === '12' ? 'selected' : ''}>12小时制</option>
-                                <option value="24" ${this.settings.timeFormat === '24' ? 'selected' : ''}>24小时制</option>
-                            </select>
-                        </label>
-                    </div>
-                    <div class="setting-item">
-                        <label>
-                            <input type="checkbox" name="showSeconds" ${this.settings.showSeconds ? 'checked' : ''}>
-                            显示秒数
-                        </label>
-                    </div>
-                    <div class="setting-item">
-                        <label>
-                            <input type="checkbox" name="showDate" ${this.settings.showDate ? 'checked' : ''}>
-                            显示日期
-                        </label>
-                    </div>
-                </div>
-
-                <div class="settings-group">
-                    <h3>天气设置</h3>
-                    <div class="setting-item">
-                        <label>
-                            <input type="checkbox" name="showWeather" ${this.settings.showWeather ? 'checked' : ''}>
-                            显示天气
-                        </label>
-                    </div>
-                    <div class="setting-item">
-                        <label>
-                            温度单位
-                            <select name="temperatureUnit">
-                                <option value="C" ${this.settings.temperatureUnit === 'C' ? 'selected' : ''}>摄氏度 (°C)</option>
-                                <option value="F" ${this.settings.temperatureUnit === 'F' ? 'selected' : ''}>华氏度 (°F)</option>
-                            </select>
-                        </label>
-                    </div>
-                    <div class="setting-item">
-                        <label>
-                            手动设置城市
-                            <input type="text" name="weatherCity" value="${this.escapeAttr(this.settings.weatherCity || '')}" placeholder="留空则自动定位" class="settings-input">
-                        </label>
-                        <p class="setting-hint">无法自动定位时，可手动输入城市名（如：北京、上海）</p>
-                    </div>
-                </div>
-
-                <div class="settings-group">
-                    <h3>背景设置</h3>
-                    <div class="setting-item">
-                        <label>
-                            背景切换间隔
-                            <select name="backgroundInterval">
-                                <option value="5" ${this.settings.backgroundInterval === 5 ? 'selected' : ''}>5分钟</option>
-                                <option value="15" ${this.settings.backgroundInterval === 15 ? 'selected' : ''}>15分钟</option>
-                                <option value="30" ${this.settings.backgroundInterval === 30 ? 'selected' : ''}>30分钟</option>
-                                <option value="60" ${this.settings.backgroundInterval === 60 ? 'selected' : ''}>1小时</option>
-                            </select>
-                        </label>
-                    </div>
-                </div>
-
-                <div class="settings-group">
-                    <h3>热榜设置</h3>
-                    <div class="setting-item">
-                        <label>
-                            刷新间隔（分钟）
-                            <input type="number" name="tickerRefreshInterval" 
-                                   value="${this.settings.tickerRefreshInterval || 20}" 
-                                   min="5" max="120" step="1" 
-                                   class="settings-input settings-number-input"
-                                   placeholder="20">
-                        </label>
-                        <p class="setting-hint">热榜数据自动刷新间隔，最小 5 分钟，最大 120 分钟</p>
-                    </div>
-                </div>
-
-                <div class="settings-group">
-                    <h3>节假日设置</h3>
-                    <div class="setting-item">
-                        <label>
-                            <input type="checkbox" name="showHolidays" ${this.settings.showHolidays ? 'checked' : ''}>
-                            显示节假日
-                        </label>
-                    </div>
-                </div>
-
-                <div class="settings-group">
-                    <h3>界面设置</h3>
-                    <div class="setting-item">
-                        <label>
-                            主题
-                            <select name="theme">
-                                <option value="auto" ${this.settings.theme === 'auto' ? 'selected' : ''}>自动</option>
-                                <option value="light" ${this.settings.theme === 'light' ? 'selected' : ''}>浅色</option>
-                                <option value="dark" ${this.settings.theme === 'dark' ? 'selected' : ''}>深色</option>
-                            </select>
-                        </label>
-                    </div>
-                    <div class="setting-item">
-                        <label>
-                            语言
-                            <select name="language">
-                                <option value="zh" ${this.settings.language === 'zh' ? 'selected' : ''}>中文</option>
-                                <option value="en" ${this.settings.language === 'en' ? 'selected' : ''}>English</option>
-                            </select>
-                        </label>
-                    </div>
-                </div>
-            </div>
-        `;
     }
 
     escapeAttr(str) {

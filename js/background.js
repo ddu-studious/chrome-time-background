@@ -361,6 +361,173 @@
         return null;
     }
 
+    // ==================== Offscreen Document 管理（v3.0.0）====================
+
+    let _offscreenCreating = null;
+
+    async function ensureOffscreen() {
+        if (await chrome.offscreen.hasDocument?.()) return;
+        if (_offscreenCreating) { await _offscreenCreating; return; }
+        _offscreenCreating = chrome.offscreen.createDocument({
+            url: 'offscreen.html',
+            reasons: ['AUDIO_PLAYBACK'],
+            justification: 'Playing music via NetEase Cloud Music API with cookie auth'
+        });
+        try { await _offscreenCreating; } finally { _offscreenCreating = null; }
+    }
+
+    async function sendToOffscreen(msg) {
+        await ensureOffscreen();
+        return new Promise((resolve) => {
+            chrome.runtime.sendMessage({ ...msg, target: 'offscreen' }, (resp) => {
+                resolve(resp || { ok: false });
+            });
+        });
+    }
+
+    // ==================== 温情提示内置数据库（v3.0.0）====================
+
+    const WARM_QUOTES = [
+        { type: 'quote', text: '千里之行，始于足下。', author: '老子' },
+        { type: 'quote', text: '学而不思则罔，思而不学则殆。', author: '孔子' },
+        { type: 'quote', text: '不积跬步，无以至千里。', author: '荀子' },
+        { type: 'quote', text: '天行健，君子以自强不息。', author: '《周易》' },
+        { type: 'quote', text: '生活不是等待暴风雨过去，而是学会在雨中跳舞。', author: '维维安·格林' },
+        { type: 'quote', text: '世上无难事，只怕有心人。', author: '谚语' },
+        { type: 'quote', text: '己所不欲，勿施于人。', author: '孔子' },
+        { type: 'quote', text: '知之为知之，不知为不知，是知也。', author: '孔子' },
+        { type: 'quote', text: '路漫漫其修远兮，吾将上下而求索。', author: '屈原' },
+        { type: 'quote', text: '书山有路勤为径，学海无涯苦作舟。', author: '韩愈' },
+        { type: 'quote', text: '温故而知新，可以为师矣。', author: '孔子' },
+        { type: 'quote', text: '三人行，必有我师焉。', author: '孔子' },
+        { type: 'quote', text: '宝剑锋从磨砺出，梅花香自苦寒来。', author: '古训' },
+        { type: 'quote', text: '业精于勤荒于嬉，行成于思毁于随。', author: '韩愈' },
+        { type: 'quote', text: '人生自古谁无死，留取丹心照汗青。', author: '文天祥' },
+        { type: 'quote', text: '莫等闲，白了少年头，空悲切。', author: '岳飞' },
+        { type: 'quote', text: 'Stay hungry, stay foolish.', author: 'Steve Jobs' },
+        { type: 'quote', text: 'The only way to do great work is to love what you do.', author: 'Steve Jobs' },
+        { type: 'quote', text: '不要因为走得太远，而忘记为什么出发。', author: '纪伯伦' },
+        { type: 'quote', text: '种一棵树最好的时间是十年前，其次是现在。', author: '谚语' },
+        { type: 'method', text: '🍅 番茄工作法：专注25分钟 → 休息5分钟 → 重复4次后长休息15分钟' },
+        { type: 'method', text: '📋 二分钟法则：如果一件事两分钟内能做完，马上就做' },
+        { type: 'method', text: '🎯 三只青蛙法：每天早上先做三件最重要的事' },
+        { type: 'method', text: '📦 四象限法：按紧急/重要分类，优先做"重要不紧急"的事' },
+        { type: 'method', text: '🧊 冰山模型：看到的问题只是冰山一角，深入思考根本原因' },
+        { type: 'method', text: '🔄 PDCA循环：计划→执行→检查→改进，持续迭代' },
+        { type: 'method', text: '✂️ 奥卡姆剃刀：如无必要，勿增实体——保持简单' },
+        { type: 'method', text: '🎪 帕累托法则：80%的成果来自20%的努力，找到关键的20%' },
+        { type: 'method', text: '🧘 正念工作：专注当下任务，一次只做一件事' },
+        { type: 'method', text: '📝 每日回顾：睡前花5分钟回顾今天的收获和明天的计划' },
+        { type: 'joke', text: '程序员的一天：开机 → 打开IDE → 关闭IDE → 打开Stack Overflow → 复制粘贴 → 下班 😄' },
+        { type: 'joke', text: '为什么程序员总是搞混万圣节和圣诞节？因为 Oct 31 == Dec 25 🎃' },
+        { type: 'joke', text: '老板：你怎么总是迟到？程序员：因为我家的路由器每天都要重启一次 🔌' },
+        { type: 'joke', text: 'A SQL query walks into a bar, walks up to two tables and asks, "Can I join you?" 🍺' },
+        { type: 'joke', text: '世界上最远的距离不是生与死，而是你写的代码我无法debug 💻' },
+        { type: 'joke', text: '人生如代码，有时候需要delete重写，而不是一直fix bug 🐛' },
+        { type: 'joke', text: '今天也是元气满满的一天呢！虽然我不知道元气是什么...大概是一种充电方式？🔋' },
+        { type: 'joke', text: '有人问我："你的梦想是什么？" 我说："不上班还有钱花。" 然后我醒了 💤' },
+        { type: 'fable', text: '🐢 龟兔赛跑告诉我们：持续稳定的努力，胜过短暂的冲刺。坚持就是力量。' },
+        { type: 'fable', text: '🪨 愚公移山的故事：再大的困难，只要持之以恒，终将克服。' },
+        { type: 'fable', text: '🦁 狮子与老鼠：不要小看任何人，每个人都有独特的价值。' },
+        { type: 'fable', text: '🌱 竹子的故事：前四年只长了3厘米，第五年以每天30厘米的速度疯长。所有的努力都不会白费。' },
+        { type: 'fable', text: '🦅 鹰的重生：鹰到40岁时会拔掉旧喙和爪，等待新生。有时候，放下才是新的开始。' },
+        { type: 'fable', text: '🐸 温水青蛙：安逸是最大的陷阱，保持危机意识，才能不断进步。' },
+        { type: 'fable', text: '🌊 滴水穿石：没有一滴水觉得自己能穿石，但坚持的力量超乎想象。' },
+        { type: 'health', text: '💧 该喝水了！保持水分充足有助于集中注意力。建议每小时喝一杯水。' },
+        { type: 'health', text: '🧘 站起来活动一下吧！久坐30分钟后起身伸展5分钟，对身体很有好处。' },
+        { type: 'health', text: '👀 20-20-20法则：每20分钟看20英尺外的东西20秒，保护你的眼睛。' },
+        { type: 'health', text: '🌿 深呼吸放松：吸气4秒 → 屏气7秒 → 呼气8秒，这是最有效的放松技巧之一。' },
+        { type: 'health', text: '🎵 听一首喜欢的歌吧！音乐能有效缓解压力，提升创造力。' },
+    ];
+
+    function getRandomWarmTip(type) {
+        const pool = type ? WARM_QUOTES.filter(q => q.type === type) : WARM_QUOTES;
+        return pool[Math.floor(Math.random() * pool.length)];
+    }
+
+    function formatWarmTip(tip) {
+        if (!tip) return '';
+        if (tip.author) return `「${tip.text}」—— ${tip.author}`;
+        return tip.text;
+    }
+
+    // ==================== v3.1.0: 扩展活动事件日志 ====================
+
+    const EXT_EVENT_MAX = 200;
+    const EXT_EVENT_CATEGORIES = ['music', 'task', 'storage', 'network', 'system', 'alarm'];
+
+    async function logExtEvent(category, action, detail = {}) {
+        try {
+            const { extEventLog } = await chrome.storage.local.get('extEventLog');
+            const log = Array.isArray(extEventLog) ? extEventLog : [];
+            log.push({
+                ts: Date.now(),
+                cat: category,
+                act: action,
+                ok: detail.ok !== false,
+                ms: detail.durationMs || 0,
+                ctx: detail.context || '',
+                err: detail.error || '',
+            });
+            while (log.length > EXT_EVENT_MAX) log.shift();
+            await chrome.storage.local.set({ extEventLog: log });
+        } catch { /* storage full or unavailable */ }
+    }
+
+    // ==================== 系统资源监控（v3.0.0）====================
+
+    async function getSystemStats() {
+        const stats = {};
+        try {
+            const cpuInfo = await chrome.system.cpu.getInfo();
+            stats.cpu = {
+                model: cpuInfo.modelName,
+                arch: cpuInfo.archName,
+                numProcessors: cpuInfo.numOfProcessors,
+                processors: cpuInfo.processors.map(p => ({
+                    user: p.usage.user,
+                    kernel: p.usage.kernel,
+                    idle: p.usage.idle,
+                    total: p.usage.total,
+                })),
+            };
+        } catch { stats.cpu = null; }
+
+        try {
+            const memInfo = await chrome.system.memory.getInfo();
+            stats.memory = {
+                total: memInfo.capacity,
+                available: memInfo.availableCapacity,
+                used: memInfo.capacity - memInfo.availableCapacity,
+                usagePercent: Math.round((1 - memInfo.availableCapacity / memInfo.capacity) * 100),
+            };
+        } catch { stats.memory = null; }
+
+        try {
+            const storageInfo = await chrome.system.storage.getInfo();
+            stats.storage = storageInfo
+                .filter(u => u.type === 'fixed')
+                .map(u => ({
+                    id: u.id,
+                    name: u.name,
+                    capacity: u.capacity,
+                    type: u.type,
+                }));
+        } catch { stats.storage = null; }
+
+        try {
+            if (performance?.memory) {
+                stats.extMemory = {
+                    jsHeapUsed: performance.memory.usedJSHeapSize,
+                    jsHeapTotal: performance.memory.totalJSHeapSize,
+                    jsHeapLimit: performance.memory.jsHeapSizeLimit,
+                };
+            }
+        } catch { /* not available */ }
+
+        return stats;
+    }
+
     // ==================== 任务提醒功能 ====================
 
     /**
@@ -452,15 +619,43 @@
         
         // 设置单个任务的提醒
         await setupTaskReminders();
-        
-        // 热搜关键字监控（按用户设置的间隔，默认 10 分钟）
-        const kwSettings = await getKeywordSettings();
-        if (kwSettings.enabled) {
-            const interval = Math.max(1, kwSettings.scanInterval || 10);
-            await chrome.alarms.create('keyword-scan', {
-                periodInMinutes: interval
+
+        // v3.4.0: 读取用户性能设置，按开关创建后台 alarm
+        const { settings: perfSettings } = await chrome.storage.sync.get('settings');
+
+        // v3.0.0: 温情提示（每2小时推送一次）
+        if (perfSettings?.enableWarmTip !== false) {
+            await chrome.alarms.create('warm-tip', {
+                periodInMinutes: 120
             });
-            console.log(`已设置关键字扫描: 每${interval}分钟`);
+            console.log('已设置温情提示: 每2小时');
+        } else {
+            console.log('温情提示已禁用（用户设置）');
+        }
+
+        // v3.0.0 → v3.4.0: 系统资源监控（默认5分钟，用户可调）
+        if (perfSettings?.enableSystemMonitor !== false) {
+            const monitorInterval = Math.max(1, Math.min(30, perfSettings?.systemMonitorInterval || 5));
+            await chrome.alarms.create('system-monitor', {
+                periodInMinutes: monitorInterval
+            });
+            console.log(`已设置系统资源监控: 每${monitorInterval}分钟`);
+        } else {
+            console.log('系统资源监控已禁用（用户设置）');
+        }
+
+        // 热搜关键字监控（按用户设置的间隔，默认 10 分钟）
+        if (perfSettings?.enableKeywordScan !== false) {
+            const kwSettings = await getKeywordSettings();
+            if (kwSettings.enabled) {
+                const interval = Math.max(1, kwSettings.scanInterval || 10);
+                await chrome.alarms.create('keyword-scan', {
+                    periodInMinutes: interval
+                });
+                console.log(`已设置关键字扫描: 每${interval}分钟`);
+            }
+        } else {
+            console.log('关键字扫描已禁用（用户设置）');
         }
     }
     
@@ -622,6 +817,12 @@
             message += `过期任务: ${overdueTasks.length} 个`;
         }
         
+        // v3.0.0: 附加温情提示
+        const tip = getRandomWarmTip('quote');
+        if (tip) {
+            message += '\n\n💡 ' + formatWarmTip(tip);
+        }
+        
         // 发送通知
         try {
             await chrome.notifications.create('daily-summary', {
@@ -661,13 +862,18 @@
             return;
         }
         
+        // v3.0.0: 附加鼓励方法论
+        const methodTip = getRandomWarmTip('method');
+        const overdueMsg = `您有 ${overdueTasks.length} 个任务已过期，请及时处理`
+            + (methodTip ? `\n\n💪 ${methodTip.text}` : '');
+
         // 发送过期任务通知
         try {
             await chrome.notifications.create('overdue-tasks', {
                 type: 'basic',
                 iconUrl: chrome.runtime.getURL('icons/icon128.png'),
                 title: '⚠️ 任务过期提醒',
-                message: `您有 ${overdueTasks.length} 个任务已过期，请及时处理`,
+                message: overdueMsg,
                 priority: 2,
                 requireInteraction: true
             });
@@ -681,6 +887,51 @@
             console.log('过期任务通知已发送');
         } catch (error) {
             console.error('发送通知失败:', error);
+        }
+    }
+
+    /**
+     * v3.0.0: 温情提示推送
+     */
+    async function sendWarmTipNotification() {
+        const { warmTipEnabled } = await chrome.storage.sync.get('warmTipEnabled');
+        if (warmTipEnabled === false) return;
+
+        const types = ['quote', 'method', 'joke', 'fable', 'health'];
+        const tip = getRandomWarmTip(types[Math.floor(Math.random() * types.length)]);
+        if (!tip) return;
+
+        const icons = { quote: '💡', method: '📐', joke: '😄', fable: '📖', health: '💚' };
+        const titles = { quote: '名人名言', method: '效率方法论', joke: '轻松一刻', fable: '小故事大道理', health: '健康小贴士' };
+
+        try {
+            await chrome.notifications.create(`warm-tip-${Date.now()}`, {
+                type: 'basic',
+                iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+                title: `${icons[tip.type] || '💡'} ${titles[tip.type] || '温馨提示'}`,
+                message: formatWarmTip(tip),
+                priority: 0,
+            });
+        } catch (e) {
+            console.warn('温情提示通知失败:', e);
+        }
+    }
+
+    /**
+     * v3.0.0: 系统资源监控数据采集
+     */
+    async function collectSystemStats() {
+        try {
+            const stats = await getSystemStats();
+            const { sysMonitorHistory } = await chrome.storage.local.get('sysMonitorHistory');
+            const history = Array.isArray(sysMonitorHistory) ? sysMonitorHistory : [];
+
+            history.push({ ts: Date.now(), ...stats });
+            // 保留最近 60 个采样点（约1小时）
+            while (history.length > 60) history.shift();
+            await chrome.storage.local.set({ sysMonitorHistory: history });
+        } catch (e) {
+            console.warn('系统监控采集失败:', e);
         }
     }
 
@@ -889,12 +1140,12 @@
         maxNotifications: 5,   // 单次最大通知数
         quietHoursStart: '',   // 免打扰开始（空=不启用）
         quietHoursEnd: '',     // 免打扰结束
-        sources: ['weibo', 'bilibili', 'zhihu']
+        sources: ['weibo', 'bilibili', 'zhihu', 'douyin', 'kuaishou', 'history', 'ithome']
     });
 
     const KEYWORD_HISTORY_KEY = 'keywordAlertHistory';
     const KEYWORD_HISTORY_TTL = 24 * 60 * 60 * 1000; // 24 小时去重
-    const DAILYHOT_API_BASE = 'https://dailyhotapi-production-cad3.up.railway.app';
+    const DAILYHOT_API_BASE = 'https://www.meczyc6.info/hotapi/';
 
     /**
      * 获取关键字监控设置
@@ -1139,12 +1390,22 @@
         chrome.tabs.create({ url: 'index.html' });
     });
 
+    chrome.contextMenus.onClicked.addListener((info) => {
+        if (info.menuItemId === "settings") {
+            chrome.tabs.create({ url: 'settings.html' });
+        }
+    });
+
     // 监听安装/更新事件
     chrome.runtime.onInstalled.addListener(async (details) => {
         console.log('Chrome Time Extension installed/updated:', details.reason);
         
-        // 设置卸载页面 URL - 提醒用户数据已丢失
-        // 使用 GitHub Pages 托管卸载页面
+        chrome.contextMenus.create({
+            id: 'settings',
+            title: '设置',
+            contexts: ['all'] // 建议设为 all 方便测试
+        });
+
         try {
             chrome.runtime.setUninstallURL('https://ddu-studious.github.io/chrome-time-background/uninstall.html');
             console.log('卸载页面 URL 已设置');
@@ -1152,7 +1413,6 @@
             console.warn('设置卸载页面失败:', error);
         }
         
-        // 初始化默认设置
         if (details.reason === 'install') {
             await chrome.storage.sync.set({
                 dailyTaskSettings: {
@@ -1163,19 +1423,20 @@
                 }
             });
             
-            // 初始化备份设置
             await chrome.storage.local.set({
                 backupSettings: {
                     autoRemindBackup: true,
                     lastBackupDate: null,
-                    backupReminderDays: 7  // 每7天提醒一次
+                    backupReminderDays: 7
                 }
             });
         }
         
-        // 初始化闹钟
         await initAlarms();
+
     });
+
+
 
     // 监听浏览器启动事件
     chrome.runtime.onStartup.addListener(async () => {
@@ -1186,28 +1447,42 @@
     // 监听闹钟事件
     chrome.alarms.onAlarm.addListener(async (alarm) => {
         console.log('闹钟触发:', alarm.name);
+        const _alarmStart = Date.now();
         
         switch (alarm.name) {
             case 'daily-summary':
                 await sendDailySummary();
+                logExtEvent('alarm', 'daily-summary', { durationMs: Date.now() - _alarmStart });
                 break;
             case 'check-overdue':
                 await checkOverdueTasks();
+                logExtEvent('alarm', 'check-overdue', { durationMs: Date.now() - _alarmStart });
                 break;
             case 'check-backup-reminder':
                 await checkBackupReminder();
+                logExtEvent('alarm', 'check-backup-reminder', { durationMs: Date.now() - _alarmStart });
                 break;
             case 'reset-daily-habits':
                 await resetDailyHabits();
+                logExtEvent('alarm', 'reset-daily-habits', { durationMs: Date.now() - _alarmStart });
                 break;
             case 'keyword-scan':
                 await scanKeywordAlerts();
+                logExtEvent('alarm', 'keyword-scan', { durationMs: Date.now() - _alarmStart });
+                break;
+            case 'warm-tip':
+                await sendWarmTipNotification();
+                logExtEvent('alarm', 'warm-tip', { durationMs: Date.now() - _alarmStart });
+                break;
+            case 'system-monitor':
+                await collectSystemStats();
+                logExtEvent('system', 'stats-sample', { durationMs: Date.now() - _alarmStart });
                 break;
             default:
-                // 处理单个任务提醒
                 if (alarm.name.startsWith('task-reminder-')) {
                     const taskId = alarm.name.replace('task-reminder-', '');
                     await sendTaskReminder(taskId);
+                    logExtEvent('task', 'reminder-fired', { durationMs: Date.now() - _alarmStart, context: taskId });
                 }
         }
     });
@@ -1363,6 +1638,158 @@
         }
     }
 
+    // ==================== 网易云音乐 API 直连 ====================
+
+    async function getNeteaseCookies() {
+        try {
+            const cookies = await chrome.cookies.getAll({ domain: '.music.163.com' });
+            return cookies.map(c => `${c.name}=${c.value}`).join('; ');
+        } catch (e) {
+            console.warn('[NeteaseAPI] 获取 Cookie 失败:', e);
+            return '';
+        }
+    }
+
+    async function neteaseApiCall(endpoint, params = {}, method = 'GET') {
+        const _apiStart = Date.now();
+        const cookieStr = await getNeteaseCookies();
+        if (!cookieStr) {
+            logExtEvent('network', 'netease-api', { ok: false, context: endpoint, error: 'no-cookie' });
+            throw new Error('未登录网易云音乐，请先在浏览器中登录 music.163.com');
+        }
+
+        const csrfMatch = cookieStr.match(/__csrf=([^;]+)/);
+        const csrf = csrfMatch ? csrfMatch[1] : '';
+        const baseHeaders = {
+            'Cookie': cookieStr,
+            'Referer': 'https://music.163.com/',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        };
+
+        let fetchUrl, fetchOpts;
+        if (method === 'POST') {
+            fetchUrl = new URL(endpoint, 'https://music.163.com').toString();
+            const body = new URLSearchParams(params);
+            if (csrf) body.set('csrf_token', csrf);
+            fetchOpts = {
+                method: 'POST',
+                headers: { ...baseHeaders, 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: body.toString(),
+                credentials: 'include',
+            };
+        } else {
+            const url = new URL(endpoint, 'https://music.163.com');
+            Object.entries(params).forEach(([k, v]) => {
+                if (v !== undefined && v !== null) url.searchParams.set(k, v);
+            });
+            if (csrf) url.searchParams.set('csrf_token', csrf);
+            fetchUrl = url.toString();
+            fetchOpts = { method: 'GET', headers: baseHeaders, credentials: 'include' };
+        }
+
+        try {
+            const resp = await fetch(fetchUrl, fetchOpts);
+            if (!resp.ok) {
+                logExtEvent('network', 'netease-api', { ok: false, durationMs: Date.now() - _apiStart, context: endpoint, error: `http-${resp.status}` });
+                throw new Error(`API 请求失败: ${resp.status}`);
+            }
+            const data = await resp.json();
+            logExtEvent('network', 'netease-api', { durationMs: Date.now() - _apiStart, context: endpoint });
+            return data;
+        } catch (e) {
+            if (!e.message?.startsWith('API 请求失败')) {
+                logExtEvent('network', 'netease-api', { ok: false, durationMs: Date.now() - _apiStart, context: endpoint, error: e.message });
+            }
+            throw e;
+        }
+    }
+
+    // ==================== v3.8.0: 哔哩哔哩 API 直连（GET + POST） ====================
+
+    const BILI_API_WHITELIST = [
+        '/x/web-interface/popular',
+        '/x/web-interface/nav',
+        '/x/web-interface/history/cursor',
+        '/x/v2/history/toview',
+        '/x/v3/fav/folder/created/list-all',
+        '/x/v3/fav/resource/list',
+        '/x/v3/fav/resource/deal',
+        '/x/web-interface/ranking/v2',
+        '/x/web-interface/wbi/search/all/v2',
+        '/pugv/view/web/season',
+        '/pugv/view/web/ep/list',
+        '/x/web-interface/wbi/search/type',
+        '/x/relation/followings',
+        '/x/relation/tags',
+        '/x/relation/tag',
+        '/x/polymer/web-dynamic/v1/feed/all',
+        '/x/space/wbi/arc/search',
+        '/x/v2/history/toview/add',
+        '/x/v2/history/toview/del',
+        '/x/web-interface/archive/like',
+    ];
+
+    async function getBilibiliCookies() {
+        try {
+            const cookies = await chrome.cookies.getAll({ domain: '.bilibili.com' });
+            return cookies.map(c => `${c.name}=${c.value}`).join('; ');
+        } catch (e) {
+            console.warn('[BilibiliAPI] 获取 Cookie 失败:', e);
+            return '';
+        }
+    }
+
+    async function getBiliCsrf() {
+        try {
+            const c = await chrome.cookies.get({ url: 'https://www.bilibili.com', name: 'bili_jct' });
+            return c?.value || '';
+        } catch { return ''; }
+    }
+
+    async function bilibiliApiCall(endpoint, params = {}, method = 'GET') {
+        if (!BILI_API_WHITELIST.some(p => endpoint.startsWith(p))) {
+            throw new Error(`不允许的 API 端点: ${endpoint}`);
+        }
+
+        const _apiStart = Date.now();
+        const cookieStr = await getBilibiliCookies();
+        const headers = {
+            'Referer': 'https://www.bilibili.com/',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        };
+        if (cookieStr) headers['Cookie'] = cookieStr;
+
+        let fetchOpts = { method, headers, credentials: 'include' };
+        const url = new URL(endpoint, 'https://api.bilibili.com');
+
+        if (method === 'POST') {
+            const csrf = await getBiliCsrf();
+            if (csrf) params.csrf = csrf;
+            headers['Content-Type'] = 'application/x-www-form-urlencoded';
+            fetchOpts.body = new URLSearchParams(params).toString();
+        } else {
+            Object.entries(params).forEach(([k, v]) => {
+                if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
+            });
+        }
+
+        try {
+            const resp = await fetch(url.toString(), fetchOpts);
+            if (!resp.ok) {
+                logExtEvent('network', 'bilibili-api', { ok: false, durationMs: Date.now() - _apiStart, context: endpoint, error: `http-${resp.status}` });
+                throw new Error(`B站 API 请求失败: ${resp.status}`);
+            }
+            const data = await resp.json();
+            logExtEvent('network', 'bilibili-api', { durationMs: Date.now() - _apiStart, context: endpoint });
+            return data;
+        } catch (e) {
+            if (!e.message?.startsWith('B站 API')) {
+                logExtEvent('network', 'bilibili-api', { ok: false, durationMs: Date.now() - _apiStart, context: endpoint, error: e.message });
+            }
+            throw e;
+        }
+    }
+
     // 监听消息事件
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.action === 'getBackgrounds') {
@@ -1454,9 +1881,213 @@
             });
             return true;
         }
-        
+
+        // ========== 音乐控制器消息处理 ==========
+
+        if (message.action === 'netease_api') {
+            (async () => {
+                try {
+                    const result = await neteaseApiCall(message.endpoint, message.params, message.method || 'GET');
+                    sendResponse({ ok: true, data: result });
+                } catch (e) {
+                    sendResponse({ ok: false, error: e.message });
+                }
+            })();
+            return true;
+        }
+
+        // ========== v3.6.0: 哔哩哔哩 API 代理 ==========
+
+        if (message.action === 'bilibili_api') {
+            (async () => {
+                try {
+                    const result = await bilibiliApiCall(message.endpoint, message.params || {}, message.method || 'GET');
+                    sendResponse({ ok: true, data: result });
+                } catch (e) {
+                    sendResponse({ ok: false, error: e.message });
+                }
+            })();
+            return true;
+        }
+
+        // ========== v3.0.0: Offscreen 播放器消息 ==========
+
+        if (message.action === 'offscreen_play') {
+            (async () => {
+                const _t = Date.now();
+                try {
+                    const resp = await sendToOffscreen({
+                        command: 'play',
+                        url: message.url,
+                        songId: message.songId,
+                        title: message.title,
+                        artist: message.artist,
+                        cover: message.cover,
+                    });
+                    logExtEvent('music', 'offscreen-play', { durationMs: Date.now() - _t, context: message.title || message.songId });
+                    sendResponse(resp);
+                } catch (e) {
+                    logExtEvent('music', 'offscreen-play', { ok: false, durationMs: Date.now() - _t, error: e.message });
+                    sendResponse({ ok: false, error: e.message });
+                }
+            })();
+            return true;
+        }
+
+        if (message.action === 'offscreen_command') {
+            (async () => {
+                try {
+                    const { action: _, ...payload } = message;
+                    const resp = await sendToOffscreen(payload);
+                    sendResponse(resp);
+                } catch (e) {
+                    sendResponse({ ok: false, error: e.message });
+                }
+            })();
+            return true;
+        }
+
+        if (message.action === 'offscreen_state_update') {
+            chrome.runtime.sendMessage({
+                action: 'music_state_from_offscreen',
+                data: message.data
+            }).catch(() => {});
+            return false;
+        }
+
+        if (message.action === 'offscreen_error') {
+            logExtEvent('music', 'playback-error', { ok: false, error: message.error, context: `code=${message.code}` });
+            chrome.runtime.sendMessage({
+                action: 'music_playback_error',
+                error: message.error,
+                code: message.code,
+            }).catch(() => {});
+            return false;
+        }
+
+        if (message.action === 'offscreen_track_ended') {
+            logExtEvent('music', 'track-ended');
+            chrome.runtime.sendMessage({ action: 'music_track_ended' }).catch(() => {});
+            return false;
+        }
+
+        if (message.action === 'offscreen_media_action') {
+            chrome.runtime.sendMessage({
+                action: 'music_media_action',
+                command: message.command
+            }).catch(() => {});
+            return false;
+        }
+
+        // ========== v3.0.0: 系统资源监控消息 ==========
+
+        if (message.action === 'get_system_stats') {
+            (async () => {
+                try {
+                    const stats = await getSystemStats();
+                    sendResponse({ ok: true, data: stats });
+                } catch (e) {
+                    sendResponse({ ok: false, error: e.message });
+                }
+            })();
+            return true;
+        }
+
+        if (message.action === 'get_system_history') {
+            (async () => {
+                try {
+                    const { sysMonitorHistory } = await chrome.storage.local.get('sysMonitorHistory');
+                    sendResponse({ ok: true, data: sysMonitorHistory || [] });
+                } catch (e) {
+                    sendResponse({ ok: false, error: e.message });
+                }
+            })();
+            return true;
+        }
+
+        // ========== v3.1.0: 扩展事件日志查询 ==========
+
+        if (message.action === 'get_ext_event_log') {
+            (async () => {
+                try {
+                    const { extEventLog } = await chrome.storage.local.get('extEventLog');
+                    const log = Array.isArray(extEventLog) ? extEventLog : [];
+                    const cat = message.category;
+                    const filtered = cat && cat !== 'all' ? log.filter(e => e.cat === cat) : log;
+                    sendResponse({ ok: true, data: filtered });
+                } catch (e) {
+                    sendResponse({ ok: false, error: e.message });
+                }
+            })();
+            return true;
+        }
+
+        if (message.action === 'clear_ext_event_log') {
+            chrome.storage.local.set({ extEventLog: [] }).then(() => {
+                sendResponse({ ok: true });
+            }).catch(e => sendResponse({ ok: false, error: e.message }));
+            return true;
+        }
+
+        // ========== v3.0.0: 温情提示消息 ==========
+
+        if (message.action === 'get_warm_tip') {
+            const tip = getRandomWarmTip(message.type || null);
+            sendResponse({ ok: true, data: tip ? formatWarmTip(tip) : '', raw: tip });
+            return false;
+        }
+
+        // ========== v3.0.0: 登录状态检查 ==========
+
+        if (message.action === 'check_netease_login') {
+            (async () => {
+                try {
+                    const cookieStr = await getNeteaseCookies();
+                    if (!cookieStr || !cookieStr.includes('MUSIC_U')) {
+                        logExtEvent('music', 'login-check', { ok: false, context: 'no-cookie' });
+                        sendResponse({ ok: true, loggedIn: false, reason: 'no-cookie' });
+                        return;
+                    }
+                    const profile = await neteaseApiCall('/api/nuser/account/get');
+                    const loggedIn = !!profile?.account?.id;
+                    logExtEvent('music', 'login-check', { context: loggedIn ? 'ok' : 'no-account' });
+                    sendResponse({
+                        ok: true,
+                        loggedIn,
+                        profile: profile?.profile || null,
+                    });
+                } catch (e) {
+                    logExtEvent('music', 'login-check', { ok: false, error: e.message });
+                    sendResponse({ ok: true, loggedIn: false, error: e.message, reason: 'api-error' });
+                }
+            })();
+            return true;
+        }
+
         return false;
     });
+
+    // ========== v3.9.2: 拦截 Bilibili 播放器触发的新标签页 ==========
+    // 场景：newtab 扩展页中的 iframe 播放器调用 window.open，导致跳出到新标签页
+    if (chrome.webNavigation?.onCreatedNavigationTarget) {
+        chrome.webNavigation.onCreatedNavigationTarget.addListener(async (details) => {
+            try {
+                const targetUrl = details?.url || '';
+                if (!/https?:\/\/([^.]+\.)?bilibili\.com\//i.test(targetUrl)) return;
+                if (!details?.sourceTabId || details.sourceTabId === chrome.tabs.TAB_ID_NONE) return;
+
+                const sourceTab = await chrome.tabs.get(details.sourceTabId).catch(() => null);
+                const sourceUrl = sourceTab?.url || '';
+                const isFromExtensionPage = sourceUrl.startsWith(`chrome-extension://${chrome.runtime.id}/`);
+                if (!isFromExtensionPage) return;
+
+                await chrome.tabs.remove(details.tabId).catch(() => {});
+                logExtEvent('bilibili', 'block-new-tab', { context: targetUrl.slice(0, 120) });
+            } catch (e) {
+                console.warn('[Bilibili] 拦截新标签失败:', e?.message || e);
+            }
+        });
+    }
 
     // 监听存储变化
     chrome.storage.onChanged.addListener(async (changes, area) => {
@@ -1480,6 +2111,16 @@
         if (area === 'local' && changes.memos) {
             console.log('任务数据已更改，更新任务提醒...');
             await setupTaskReminders();
+            const oldLen = changes.memos.oldValue?.length || 0;
+            const newLen = changes.memos.newValue?.length || 0;
+            logExtEvent('storage', 'memos-write', { context: `${oldLen}→${newLen}` });
+        }
+
+        const ignoredKeys = new Set(['extEventLog', 'sysMonitorHistory', 'lastMusicState']);
+        for (const key of Object.keys(changes)) {
+            if (!ignoredKeys.has(key) && area === 'local' && key !== 'memos') {
+                logExtEvent('storage', 'local-write', { context: key });
+            }
         }
     });
 })();

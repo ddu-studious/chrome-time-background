@@ -71,7 +71,7 @@ class TechTicker {
         this.CACHE_TTL = 20 * 60 * 1000;
         this.CACHE_KEY = 'ticker_cache_v4';
         
-        this.DAILYHOT_API = 'https://dailyhotapi-production-cad3.up.railway.app';
+        this.DAILYHOT_API = 'https://www.meczyc6.info/hotapi';
         
         this.ROTATE_INTERVAL = 6000;
         this.currentIndex = 0;

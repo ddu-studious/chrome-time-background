@@ -533,15 +533,20 @@ body {
     background: rgba(239, 68, 68, 0.1);
 }
 
-/* ===== 卡片视图 ===== */
+/* ===== 卡片视图（瀑布流） ===== */
 .card-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 1rem;
+    column-count: 3;
+    column-gap: 16px;
     padding: 1rem 0;
 }
 
+@media (max-width: 1200px) {
+    .card-grid { column-count: 2; }
+}
+
 .task-card {
+    break-inside: avoid;
+    margin-bottom: 16px;
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
@@ -585,10 +590,7 @@ body {
     font-size: 0.85rem;
     color: var(--text-secondary);
     margin-bottom: 0.75rem;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+    line-height: 1.7;
 }
 
 .task-card .card-progress {
@@ -601,6 +603,9 @@ body {
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 0.5rem;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .task-card .card-tags {
@@ -725,6 +730,33 @@ body {
     white-space: pre-wrap;
     word-break: break-word;
 }
+
+.detail-text.memo-md-body { white-space: normal; }
+
+/* Markdown rendered body in task detail */
+.memo-md-body h1,.memo-md-body h2,.memo-md-body h3,.memo-md-body h4,.memo-md-body h5,.memo-md-body h6 { color: var(--text-primary); font-weight: 600; margin: 12px 0 6px; line-height: 1.4; }
+.memo-md-body h1 { font-size: 1.4em; } .memo-md-body h2 { font-size: 1.2em; } .memo-md-body h3 { font-size: 1.1em; }
+.memo-md-body p { margin: 6px 0; color: var(--text-secondary); line-height: 1.8; }
+.memo-md-body strong { color: var(--text-primary); }
+.memo-md-body em { font-style: italic; }
+.memo-md-body del { opacity: 0.5; text-decoration: line-through; }
+.memo-md-body a { color: var(--accent-blue); text-decoration: none; border-bottom: 1px solid rgba(96,165,250,0.3); }
+.memo-md-body a:hover { border-bottom-color: var(--accent-blue); }
+.memo-md-body blockquote { border-left: 3px solid rgba(96,165,250,0.4); margin: 8px 0; padding: 6px 14px; background: rgba(96,165,250,0.06); border-radius: 0 6px 6px 0; color: var(--text-muted); }
+.memo-md-body ul,.memo-md-body ol { margin: 6px 0; padding-left: 20px; color: var(--text-secondary); }
+.memo-md-body li { margin: 3px 0; }
+.memo-md-body code { background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px; font-family: 'SF Mono','Menlo','Consolas',monospace; font-size: 0.88em; color: #fbbf24; }
+.memo-md-body pre { margin: 8px 0; border-radius: 8px; overflow-x: auto; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); }
+.memo-md-body pre code { display: block; padding: 12px 16px; background: transparent; color: var(--text-secondary); font-size: 13px; line-height: 1.6; white-space: pre; }
+.memo-md-body pre code.hljs { background: transparent; padding: 12px 16px; }
+.memo-md-body table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 13px; }
+.memo-md-body th,.memo-md-body td { padding: 8px 12px; border: 1px solid rgba(255,255,255,0.08); text-align: left; color: var(--text-secondary); }
+.memo-md-body th { background: rgba(255,255,255,0.04); color: var(--text-primary); font-weight: 600; }
+.memo-md-body hr { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 12px 0; }
+.memo-md-body img { max-width: 100%; border-radius: 6px; margin: 6px 0; }
+.kw-mermaid-block { margin: 10px 0; padding: 12px; background: rgba(0,0,0,0.15); border-radius: 8px; }
+.kw-mermaid-rendered { text-align: center; }
+.kw-mermaid-error code { color: #ef4444; font-size: 12px; }
 
 .detail-meta-grid {
     display: grid;
@@ -1098,7 +1130,7 @@ body {
     }
 
     .card-grid {
-        grid-template-columns: 1fr;
+        column-count: 1;
     }
 
     /* 在小屏幕上隐藏部分表格列 */

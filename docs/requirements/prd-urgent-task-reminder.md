@@ -180,10 +180,10 @@ function getUrgencyLevel(task) {
 
 ## 5. 开发计划（分阶段）
 
-### Phase 1：基础能力（推荐先做）
-1. 实现 `getUrgencyLevel()` 紧急度计算函数
-2. 任务列表中的倒计时徽章（已有部分实现：`renderDueDate` 中的 overdue 样式）
-3. 增强现有的到期日颜色编码（今天橙色、明天黄色、3天内蓝色）
+### Phase 1：基础能力 ✅ 已完成
+1. ✅ 实现 `getUrgencyLevel()` 紧急度计算函数
+2. ✅ 任务列表中的倒计时徽章（`renderDueDate` 中的 overdue/today 样式）
+3. ✅ 到期日颜色编码（过期红色、今天黄色）
 
 ### Phase 2：侧边栏紧急横幅
 1. 在侧边栏任务列表顶部添加紧急任务汇总区

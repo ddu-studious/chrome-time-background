@@ -468,10 +468,13 @@ class WeatherService {
         }
 
         container.style.display = '';
+
+        // v3.3.0: 默认收起时仅缓存数据，不渲染 Canvas
+        if (container.classList.contains('collapsed')) return;
+
         const chartEl = document.getElementById('hourly-chart');
         if (!chartEl) return;
 
-        // 初始化或更新图表
         if (!this.temperatureChart) {
             this.temperatureChart = new HourlyTemperatureChart(chartEl, this.hourlyData, this);
         } else {
@@ -481,6 +484,7 @@ class WeatherService {
 
     /**
      * 绑定逐小时图表切换事件
+     * v3.3.0: 默认收起，展开时才渲染图表（使用缓存数据）
      */
     bindChartEvents() {
         const toggleBtn = document.getElementById('hourly-chart-toggle');
@@ -493,6 +497,10 @@ class WeatherService {
             toggleBtn.querySelector('i').className = isVisible 
                 ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
             toggleBtn.title = isVisible ? '展开温度曲线' : '收起温度曲线';
+
+            if (!isVisible && this.hourlyData && this.hourlyData.length > 0) {
+                this.renderHourlyChart();
+            }
         });
     }
 

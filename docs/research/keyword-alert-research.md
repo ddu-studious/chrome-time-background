@@ -43,7 +43,7 @@
 
 | 组件 | 现状 | 适配度 |
 |------|------|--------|
-| **DailyHot API** | ✅ 已部署运行（Railway），返回微博/B站/知乎热搜 | 直接复用 |
+| **DailyHot API** | ✅ 已部署运行（https://www.meczyc6.info/hotapi），返回微博/B站/知乎热搜 | 直接复用 |
 | **Service Worker** | ✅ `background.js` 已有完整的 alarm + notification 体系 | 直接扩展 |
 | **chrome.alarms** | ✅ 已声明权限，已有多个定时任务 | 新增一个 alarm |
 | **chrome.notifications** | ✅ 已声明权限，已有通知创建/按钮/点击完整链路 | 直接复用 |
@@ -107,7 +107,7 @@ await chrome.alarms.create('keyword-scan', {
 
 #### DailyHot API 数据结构
 
-实际请求 `https://dailyhotapi-production-cad3.up.railway.app/weibo` 返回：
+实际请求 `https://www.meczyc6.info/hotapi/weibo` 返回：
 
 ```json
 {
@@ -316,7 +316,7 @@ async function scanKeywordAlerts() {
     
     // 并行请求所有数据源
     const sources = keywordAlertSettings.sources || ['weibo', 'bilibili', 'zhihu'];
-    const API_BASE = 'https://dailyhotapi-production-cad3.up.railway.app';
+    const API_BASE = 'https://www.meczyc6.info/hotapi';
     
     const results = await Promise.allSettled(
         sources.map(s => fetch(`${API_BASE}/${s}`).then(r => r.json()))

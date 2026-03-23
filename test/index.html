@@ -140,6 +140,16 @@
             --color-end: #651fff;
         }
         
+        .tool-card.demo-music {
+            --color-start: #4caf50;
+            --color-end: #388e3c;
+        }
+        
+        .tool-card.demo-bilibili {
+            --color-start: #fb7299;
+            --color-end: #e85580;
+        }
+        
         .tool-icon {
             width: 64px;
             height: 64px;
@@ -464,6 +474,47 @@
             </a>
         </div>
         
+        <div class="section-title">方案 Demo — Dock Bar（4 个）</div>
+        
+        <div class="tools-grid">
+            <a href="demos/dockbar-demo-1-pill-base.html" class="tool-card demo-music">
+                <div class="tool-icon"><i class="fas fa-grip-lines"></i></div>
+                <div class="tool-name">Demo 1 · 胶囊底座</div>
+                <div class="tool-desc">把底座做成一个“整体胶囊”，按钮更统一、层次更清晰。</div>
+                <div class="tool-tags">
+                    <span class="tool-tag">Dock</span>
+                    <span class="tool-tag">视觉</span>
+                </div>
+            </a>
+            <a href="demos/dockbar-demo-2-macos-magnify.html" class="tool-card demo-music">
+                <div class="tool-icon"><i class="fas fa-up-right-and-down-left-from-center"></i></div>
+                <div class="tool-name">Demo 2 · 类 macOS 放大</div>
+                <div class="tool-desc">根据鼠标位置动态缩放，模拟 macOS dock 的交互手感。</div>
+                <div class="tool-tags">
+                    <span class="tool-tag">Dock</span>
+                    <span class="tool-tag">交互</span>
+                </div>
+            </a>
+            <a href="demos/dockbar-demo-3-neon-segmented.html" class="tool-card demo-music">
+                <div class="tool-icon"><i class="fas fa-bolt"></i></div>
+                <div class="tool-name">Demo 3 · 霓虹分段</div>
+                <div class="tool-desc">更克制的分段条形 Dock，active 用霓虹短横线提示。</div>
+                <div class="tool-tags">
+                    <span class="tool-tag">Dock</span>
+                    <span class="tool-tag">克制</span>
+                </div>
+            </a>
+            <a href="demos/dockbar-demo-4-hover-labels.html" class="tool-card demo-music">
+                <div class="tool-icon"><i class="fas fa-file-signature"></i></div>
+                <div class="tool-name">Demo 4 · 悬停展开标签</div>
+                <div class="tool-desc">图标+悬停 label，兼顾识别度和紧凑性，适合新用户。</div>
+                <div class="tool-tags">
+                    <span class="tool-tag">Dock</span>
+                    <span class="tool-tag">易用</span>
+                </div>
+            </a>
+        </div>
+        
         <div class="section-title">设计审计</div>
         
         <div class="tools-grid">
@@ -480,6 +531,62 @@
                     <span class="tool-tag new">新增</span>
                     <span class="tool-tag">审计</span>
                     <span class="tool-tag">设计系统</span>
+                </div>
+            </a>
+        </div>
+        
+        <div class="section-title">方案 Demo — 音乐播放器</div>
+        
+        <div class="tools-grid">
+            <a href="demos/music-playlist-panel-demo.html" class="tool-card demo-music">
+                <div class="tool-icon"><i class="fas fa-list-ul"></i></div>
+                <div class="tool-name">播放列表面板</div>
+                <div class="tool-desc">灵动岛播放列表面板 Demo，支持歌曲切换、当前播放高亮、滚动定位。</div>
+                <div class="tool-tags">
+                    <span class="tool-tag new">新增</span>
+                    <span class="tool-tag">v2.6.0</span>
+                </div>
+            </a>
+        </div>
+        
+        <div class="section-title">方案 Demo — B站集成（4 个）</div>
+        
+        <div class="tools-grid">
+            <a href="demos/bilibili-demo-final-immersive.html" class="tool-card demo-bilibili">
+                <div class="tool-icon"><i class="fab fa-bilibili"></i></div>
+                <div class="tool-name">最终方案 · 沉浸式面板 ⭐</div>
+                <div class="tool-desc">方案A技术(嵌入播放器+Cookie API) + 方案C沉浸式暗色风格，含热门/历史/稍后看/收藏/排行/课程六个分类。</div>
+                <div class="tool-tags">
+                    <span class="tool-tag new">已采用</span>
+                    <span class="tool-tag">哔哩哔哩</span>
+                    <span class="tool-tag">融合方案</span>
+                </div>
+            </a>
+            <a href="demos/bilibili-demo-1-lite-panel.html" class="tool-card demo-bilibili">
+                <div class="tool-icon"><i class="fas fa-tv"></i></div>
+                <div class="tool-name">Demo 1 · Bilibili Lite</div>
+                <div class="tool-desc">嵌入播放器 + API 数据面板，技术复杂度低，稳定性高。</div>
+                <div class="tool-tags">
+                    <span class="tool-tag">方案A</span>
+                    <span class="tool-tag">嵌入播放</span>
+                </div>
+            </a>
+            <a href="demos/bilibili-demo-2-audio-extract.html" class="tool-card demo-bilibili">
+                <div class="tool-icon"><i class="fas fa-music"></i></div>
+                <div class="tool-name">Demo 2 · 纯音频提取</div>
+                <div class="tool-desc">DASH 音频流提取，需 WBI 签名，技术复杂度极高。</div>
+                <div class="tool-tags">
+                    <span class="tool-tag">方案B</span>
+                    <span class="tool-tag">高复杂度</span>
+                </div>
+            </a>
+            <a href="demos/bilibili-demo-3-mini-browser.html" class="tool-card demo-bilibili">
+                <div class="tool-icon"><i class="fas fa-window-maximize"></i></div>
+                <div class="tool-name">Demo 3 · 迷你浏览器</div>
+                <div class="tool-desc">沉浸式全页嵌入 + 浮动控制层，功能最全但体验依赖 B 站。</div>
+                <div class="tool-tags">
+                    <span class="tool-tag">方案C</span>
+                    <span class="tool-tag">全页嵌入</span>
                 </div>
             </a>
         </div>

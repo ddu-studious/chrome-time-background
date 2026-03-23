@@ -132,27 +132,356 @@ async function initApp() {
         console.error('备忘录模块初始化失败:', error);
     }
 
-    // 初始化滚动信息栏（延迟加载，不阻塞主功能）
-    try {
-        if (window.techTicker && typeof window.techTicker.init === 'function') {
-            window.techTicker.init();
+    // v3.4.0: 读取性能开关设置，按需初始化模块
+    const sm = window.settingsManager;
+
+    // 初始化知识墙
+    if (sm.getSetting('enableKnowledgeWall') !== false) {
+        try {
+            if (window.knowledgeWall && typeof window.knowledgeWall.init === 'function') {
+                window.knowledgeWall.init();
+            }
+            console.log('知识墙模块初始化完成');
+        } catch (error) {
+            console.error('知识墙模块初始化失败:', error);
         }
-        console.log('滚动信息栏初始化完成');
-    } catch (error) {
-        console.error('滚动信息栏初始化失败:', error);
+    } else {
+        console.log('知识墙模块已禁用（性能设置）');
+    }
+
+    // 初始化滚动信息栏（延迟加载，不阻塞主功能）
+    if (sm.getSetting('enableTicker') !== false) {
+        try {
+            if (window.techTicker && typeof window.techTicker.init === 'function') {
+                window.techTicker.init();
+            }
+            console.log('滚动信息栏初始化完成');
+        } catch (error) {
+            console.error('滚动信息栏初始化失败:', error);
+        }
+    } else {
+        console.log('热搜资讯模块已禁用（性能设置）');
+        document.getElementById('tech-ticker')?.classList.add('hidden');
     }
 
     // 初始化任务滚动提醒条
-    try {
-        if (window.taskTicker && typeof window.taskTicker.init === 'function') {
-            window.taskTicker.init();
+    if (sm.getSetting('enableTaskTicker') !== false) {
+        try {
+            if (window.taskTicker && typeof window.taskTicker.init === 'function') {
+                window.taskTicker.init();
+            }
+            console.log('任务提醒条初始化完成');
+        } catch (error) {
+            console.error('任务提醒条初始化失败:', error);
         }
-        console.log('任务提醒条初始化完成');
-    } catch (error) {
-        console.error('任务提醒条初始化失败:', error);
+    } else {
+        console.log('任务提醒条已禁用（性能设置）');
+        document.getElementById('task-ticker')?.classList.add('hidden');
+    }
+
+    // 初始化音乐控制器
+    if (sm.getSetting('enableMusic') !== false) {
+        try {
+            if (window.musicController && typeof window.musicController.init === 'function') {
+                window.musicController.init();
+            }
+            console.log('音乐控制器初始化完成');
+        } catch (error) {
+            console.error('音乐控制器初始化失败:', error);
+        }
+    } else {
+        console.log('音乐播放器已禁用（性能设置）');
+    }
+
+    // v3.6.0: 初始化哔哩哔哩控制器
+    if (sm.getSetting('enableBilibili') !== false) {
+        try {
+            if (window.bilibiliController && typeof window.bilibiliController.init === 'function') {
+                window.bilibiliController.init();
+            }
+            const biliDockBtn = document.getElementById('bili-dock-btn');
+            if (biliDockBtn) {
+                biliDockBtn.addEventListener('click', () => {
+                    if (window.bilibiliController) window.bilibiliController.toggle();
+                });
+            }
+            console.log('哔哩哔哩控制器初始化完成');
+        } catch (error) {
+            console.error('哔哩哔哩控制器初始化失败:', error);
+        }
+    } else {
+        console.log('哔哩哔哩模块已禁用（性能设置）');
+        document.getElementById('bili-dock-btn')?.classList.add('hidden');
+    }
+
+    // v3.0.0: 初始化系统监控
+    if (sm.getSetting('enableSystemMonitor') !== false) {
+        try {
+            initSystemMonitor();
+            console.log('系统监控初始化完成');
+        } catch (error) {
+            console.error('系统监控初始化失败:', error);
+        }
+    } else {
+        console.log('系统监控已禁用（性能设置）');
+        document.getElementById('sys-monitor-toggle')?.classList.add('hidden');
+    }
+
+    // v3.0.0: 初始化温情提示
+    if (sm.getSetting('enableWarmTip') !== false) {
+        try {
+            initWarmTip();
+            console.log('温情提示初始化完成');
+        } catch (error) {
+            console.error('温情提示初始化失败:', error);
+        }
+    } else {
+        console.log('温情提示已禁用（性能设置）');
     }
 
     console.log('应用初始化完成（可能部分模块降级）');
+}
+
+// ===================== v3.0.0: 系统监控 =====================
+
+function initSystemMonitor() {
+    const toggle = document.getElementById('sys-monitor-toggle');
+    const panel = document.getElementById('sys-monitor-panel');
+    const close = document.getElementById('sys-monitor-close');
+    if (!toggle || !panel) return;
+
+    toggle.addEventListener('click', () => {
+        panel.classList.toggle('hidden');
+        if (!panel.classList.contains('hidden')) {
+            refreshSystemStats();
+        }
+    });
+    close?.addEventListener('click', () => panel.classList.add('hidden'));
+
+    let cpuHistory = [];
+
+    async function refreshSystemStats() {
+        try {
+            const resp = await new Promise(resolve => {
+                chrome.runtime.sendMessage({ action: 'get_system_stats' }, resolve);
+            });
+            if (!resp?.ok || !resp.data) return;
+            const { cpu, memory, storage } = resp.data;
+
+            if (cpu) {
+                const totalIdle = cpu.processors.reduce((s, p) => s + p.idle, 0);
+                const totalAll = cpu.processors.reduce((s, p) => s + p.total, 0);
+                let usagePercent = 0;
+
+                if (window._lastCpuTotal && window._lastCpuIdle) {
+                    const deltaTotal = totalAll - window._lastCpuTotal;
+                    const deltaIdle = totalIdle - window._lastCpuIdle;
+                    usagePercent = deltaTotal > 0 ? Math.round((1 - deltaIdle / deltaTotal) * 100) : 0;
+                }
+                window._lastCpuTotal = totalAll;
+                window._lastCpuIdle = totalIdle;
+
+                const cpuFill = document.getElementById('sys-cpu-fill');
+                const cpuVal = document.getElementById('sys-cpu-value');
+                if (cpuFill) {
+                    cpuFill.style.width = usagePercent + '%';
+                    cpuFill.dataset.level = usagePercent > 85 ? 'danger' : usagePercent > 65 ? 'warning' : '';
+                }
+                if (cpuVal) cpuVal.textContent = usagePercent + '%';
+
+                cpuHistory.push(usagePercent);
+                if (cpuHistory.length > 30) cpuHistory.shift();
+                drawCpuChart(cpuHistory);
+            }
+
+            if (memory) {
+                const memFill = document.getElementById('sys-mem-fill');
+                const memVal = document.getElementById('sys-mem-value');
+                const pct = memory.usagePercent;
+                if (memFill) {
+                    memFill.style.width = pct + '%';
+                    memFill.dataset.level = pct > 85 ? 'danger' : pct > 70 ? 'warning' : '';
+                }
+                const usedGB = (memory.used / (1024 ** 3)).toFixed(1);
+                const totalGB = (memory.total / (1024 ** 3)).toFixed(1);
+                if (memVal) memVal.textContent = `${usedGB}/${totalGB}G`;
+            }
+
+            if (storage && storage.length > 0) {
+                const disk = storage[0];
+                const diskFill = document.getElementById('sys-disk-fill');
+                const diskVal = document.getElementById('sys-disk-value');
+                const totalGB = (disk.capacity / (1024 ** 3)).toFixed(0);
+                if (diskFill) diskFill.style.width = '0%';
+                if (diskVal) diskVal.textContent = totalGB + 'GB';
+            }
+
+            const extFill = document.getElementById('sys-ext-mem-fill');
+            const extVal = document.getElementById('sys-ext-mem-value');
+            let extMem = resp.data.extMemory;
+            if (!extMem && performance?.memory) {
+                extMem = {
+                    jsHeapUsed: performance.memory.usedJSHeapSize,
+                    jsHeapTotal: performance.memory.totalJSHeapSize,
+                    jsHeapLimit: performance.memory.jsHeapSizeLimit,
+                };
+            }
+            if (extMem) {
+                const usedMB = (extMem.jsHeapUsed / (1024 ** 2)).toFixed(1);
+                const pct = Math.round((extMem.jsHeapUsed / extMem.jsHeapLimit) * 100);
+                if (extFill) {
+                    extFill.style.width = pct + '%';
+                    extFill.dataset.level = pct > 60 ? 'warning' : '';
+                }
+                if (extVal) extVal.textContent = `${usedMB}MB`;
+            }
+        } catch (e) {
+            console.warn('系统监控刷新失败:', e);
+        }
+    }
+
+    function drawCpuChart(data) {
+        const canvas = document.getElementById('sys-cpu-chart');
+        if (!canvas) return;
+        const detail = document.getElementById('sys-cpu-detail');
+        if (detail) detail.classList.remove('hidden');
+
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+
+        if (data.length < 2) return;
+
+        const grad = ctx.createLinearGradient(0, 0, 0, h);
+        grad.addColorStop(0, 'rgba(167, 139, 250, 0.3)');
+        grad.addColorStop(1, 'rgba(167, 139, 250, 0.02)');
+
+        ctx.beginPath();
+        ctx.moveTo(0, h);
+        data.forEach((val, i) => {
+            const x = (i / (data.length - 1)) * w;
+            const y = h - (val / 100) * h;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.lineTo(w, h);
+        ctx.lineTo(0, h);
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        ctx.beginPath();
+        data.forEach((val, i) => {
+            const x = (i / (data.length - 1)) * w;
+            const y = h - (val / 100) * h;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.strokeStyle = 'rgba(167, 139, 250, 0.6)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+    }
+
+    setInterval(() => {
+        if (!panel.classList.contains('hidden')) {
+            refreshSystemStats();
+            refreshTimeline();
+        }
+    }, 3000);
+
+    // v3.2.1: 扩展活动时间线（可读化事件描述）
+    let _activeFilter = 'all';
+    const CAT_ICONS = { music: 'fa-music', network: 'fa-globe', task: 'fa-tasks', alarm: 'fa-bell', storage: 'fa-database', system: 'fa-cog' };
+    const EVT_LABELS = {
+        'offscreen-play': '播放歌曲', 'track-ended': '播放结束', 'playback-error': '播放出错',
+        'login-check': '登录检测', 'netease-api': '网易云接口', 'stats-sample': '资源采集',
+        'reminder-fired': '任务提醒', 'daily-summary': '每日摘要', 'storage-write': '数据保存',
+        'memo-write': '备忘录保存', 'keyword-scan': '关键字扫描', 'warm-tip': '温情提示',
+        'tabs-detect': '标签页检测', 'offscreen-init': '播放引擎初始化',
+    };
+
+    const filterBtns = panel.querySelectorAll('.ext-filter-btn');
+    filterBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            filterBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            _activeFilter = btn.dataset.cat;
+            refreshTimeline();
+        });
+    });
+
+    panel.querySelector('#ext-timeline-clear')?.addEventListener('click', () => {
+        chrome.runtime.sendMessage({ action: 'clear_ext_event_log' }, () => refreshTimeline());
+    });
+
+    function refreshTimeline() {
+        chrome.runtime.sendMessage({ action: 'get_ext_event_log', category: _activeFilter }, (resp) => {
+            const list = panel.querySelector('#ext-timeline-list');
+            const countEl = panel.querySelector('#ext-timeline-count');
+            if (!resp?.ok || !list) return;
+            const events = resp.data || [];
+            if (countEl) countEl.textContent = events.length + ' 条';
+            if (events.length === 0) {
+                list.innerHTML = '<div class="ext-timeline-empty">暂无活动记录</div>';
+                return;
+            }
+            const rows = events.slice(-50).reverse().map(e => {
+                const t = new Date(e.ts);
+                const time = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}:${String(t.getSeconds()).padStart(2, '0')}`;
+                const icon = CAT_ICONS[e.cat] || 'fa-circle';
+                const label = EVT_LABELS[e.act] || e.act;
+                let badge = '';
+                if (e.err) badge = `<span class="ext-evt-badge fail" title="${escHtml(e.err)}">失败</span>`;
+                else if (e.ms > 2000) badge = `<span class="ext-evt-badge slow">${(e.ms / 1000).toFixed(1)}s</span>`;
+                else if (e.ms > 0) badge = `<span class="ext-evt-badge ok">${e.ms}ms</span>`;
+                else badge = '';
+                const ctx = e.ctx ? formatCtx(e.ctx) : '';
+                return `<div class="ext-evt-row${e.err ? ' ext-evt-error' : ''}"><span class="ext-evt-time">${time}</span><span class="ext-evt-icon" data-cat="${e.cat}"><i class="fas ${icon}"></i></span><span class="ext-evt-action">${escHtml(label)}</span><span class="ext-evt-ctx">${ctx}</span>${badge}</div>`;
+            }).join('');
+            list.innerHTML = rows;
+        });
+    }
+
+    function formatCtx(ctx) {
+        const s = String(ctx);
+        if (s.startsWith('/api/')) return escHtml(s.split('/').pop());
+        if (s.startsWith('memo_')) return '备忘录';
+        if (s.length > 20) return escHtml(s.slice(0, 18) + '…');
+        return escHtml(s);
+    }
+    function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+}
+
+// ===================== v3.0.0: 温情提示 =====================
+
+function initWarmTip() {
+    const bar = document.getElementById('warm-tip-bar');
+    const text = document.getElementById('warm-tip-text');
+    const refresh = document.getElementById('warm-tip-refresh');
+    if (!bar || !text) return;
+
+    async function loadTip() {
+        try {
+            const resp = await new Promise(resolve => {
+                chrome.runtime.sendMessage({ action: 'get_warm_tip' }, resolve);
+            });
+            if (resp?.ok && resp.data) {
+                text.textContent = resp.data;
+                const icons = { quote: '💡', method: '📐', joke: '😄', fable: '📖', health: '💚' };
+                const icon = bar.querySelector('.warm-tip-icon');
+                if (icon && resp.raw?.type) icon.textContent = icons[resp.raw.type] || '💡';
+                bar.style.display = 'flex';
+            }
+        } catch { /* ignore */ }
+    }
+
+    refresh?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        refresh.style.transform = 'rotate(360deg)';
+        setTimeout(() => { refresh.style.transform = ''; }, 500);
+        loadTip();
+    });
+
+    loadTip();
+    setInterval(loadTip, 5 * 60 * 1000);
 }
 
 // 设置键盘快捷键
@@ -180,6 +509,8 @@ function setupKeyboardShortcuts() {
             }
         });
     }
+
+    // v3.3.0: dock-bar 中知识墙按钮由 knowledge-wall.js 自行绑定
     
     // 侧边栏折叠按钮
     const collapseBtn = document.getElementById('sidebar-collapse-btn');

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "中国风景时钟",
-  "version": "2.3.1",
-  "description": "一个展示中国风景的新标签页时钟，支持天气显示、多语言、备忘录、每日任务提醒和书签智能检索功能",
+  "version": "3.12.0",
+  "description": "中国风景新标签页时钟，支持天气、备忘录、独立音乐播放器、哔哩哔哩集成(关注分组/UP主主页/已购课程/倍速画质控制/Cookie共享)、温情提示、扩展活动监控、热搜资讯、书签智能检索，含性能省电模式",
   "permissions": [
     "storage",
     "unlimitedStorage",
@@ -11,7 +11,14 @@
     "alarms",
     "notifications",
     "downloads",
-    "scripting"
+    "scripting",
+    "webNavigation",
+    "cookies",
+    "offscreen",
+    "system.cpu",
+    "system.memory",
+    "system.storage",
+    "contextMenus"
   ],
   "optional_permissions": [
     "bookmarks"
@@ -28,12 +35,16 @@
     "https://hacker-news.firebaseio.com/*",
     "https://www.reddit.com/*",
     "https://dev.to/*",
-    "https://dailyhotapi-production-cad3.up.railway.app/*",
     "https://www.meczyc6.info/*",
     "https://dashscope.aliyuncs.com/*",
     "https://api.deepseek.com/*",
     "https://api.openai.com/*",
-    "https://generativelanguage.googleapis.com/*"
+    "https://generativelanguage.googleapis.com/*",
+    "*://music.163.com/*",
+    "*://*.music.163.com/*",
+    "*://*.bilibili.com/*",
+    "*://api.bilibili.com/*",
+    "*://s.search.bilibili.com/*"
   ],
   "chrome_url_overrides": {
     "newtab": "index.html"
@@ -51,6 +62,15 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
+  "content_scripts": [
+    {
+      "matches": ["*://player.bilibili.com/*"],
+      "js": ["js/bilibili-player-inject.js"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "MAIN"
+    }
+  ],
   "background": {
     "service_worker": "js/background.js"
   }

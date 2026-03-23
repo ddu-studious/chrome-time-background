@@ -390,7 +390,7 @@ class MemoManager {
         const toolbar = document.createElement('div');
         toolbar.className = 'sidebar-toolbar';
         toolbar.innerHTML = `
-            <input type="text" class="sidebar-search" id="sidebar-search" placeholder="搜索任务...">
+            <input type="text" class="sidebar-search" id="sidebar-search" placeholder="搜索任务... 空格AND -排除" title="多关键字空格分隔(AND)，-排除关键字(逗号分割)&#10;例: 项目 排期&#10;例: 开发 -测试,bug">
             <button class="sidebar-add-btn" id="sidebar-add-btn" title="新增任务">
                 <i class="fas fa-plus"></i>
             </button>
@@ -430,6 +430,7 @@ class MemoManager {
                 <option value="completed">已完成</option>
                 <option value="today">今日</option>
                 <option value="overdue">已过期</option>
+                <option value="in_progress">进行中</option>
                 <option value="habits">每日习惯</option>
             </select>
             <div class="sidebar-category-combobox-wrap" id="sidebar-category-combobox-wrap"></div>
@@ -472,9 +473,34 @@ class MemoManager {
                             <label for="sidebar-task-title">标题 <span class="required">*</span></label>
                             <input type="text" id="sidebar-task-title" placeholder="输入任务标题..." required>
                         </div>
-                        <div class="form-group">
-                            <label for="sidebar-task-text">详情</label>
-                            <textarea id="sidebar-task-text" placeholder="输入任务详情..." rows="4"></textarea>
+                        <div class="form-group memo-md-editor-group">
+                            <div class="memo-md-label-row">
+                                <label for="sidebar-task-text">详情</label>
+                                <div class="memo-md-mode-toggle">
+                                    <button type="button" class="memo-md-mode-btn active" data-mode="edit" title="编辑"><i class="fas fa-edit"></i></button>
+                                    <button type="button" class="memo-md-mode-btn" data-mode="preview" title="预览 Markdown"><i class="fas fa-eye"></i></button>
+                                </div>
+                            </div>
+                            <div class="memo-md-toolbar" id="memo-md-toolbar">
+                                <button type="button" data-md-action="bold" title="粗体 (Ctrl+B)"><i class="fas fa-bold"></i></button>
+                                <button type="button" data-md-action="italic" title="斜体 (Ctrl+I)"><i class="fas fa-italic"></i></button>
+                                <button type="button" data-md-action="strikethrough" title="删除线"><i class="fas fa-strikethrough"></i></button>
+                                <span class="memo-md-toolbar-sep"></span>
+                                <button type="button" data-md-action="heading" title="标题"><i class="fas fa-heading"></i></button>
+                                <button type="button" data-md-action="quote" title="引用"><i class="fas fa-quote-right"></i></button>
+                                <button type="button" data-md-action="ul" title="无序列表"><i class="fas fa-list-ul"></i></button>
+                                <button type="button" data-md-action="ol" title="有序列表"><i class="fas fa-list-ol"></i></button>
+                                <span class="memo-md-toolbar-sep"></span>
+                                <button type="button" data-md-action="code" title="行内代码"><i class="fas fa-code"></i></button>
+                                <button type="button" data-md-action="codeblock" title="代码块"><i class="fas fa-file-code"></i></button>
+                                <button type="button" data-md-action="link" title="链接"><i class="fas fa-link"></i></button>
+                                <button type="button" data-md-action="table" title="表格"><i class="fas fa-table"></i></button>
+                                <button type="button" data-md-action="mermaid" title="Mermaid 图表"><i class="fas fa-project-diagram"></i></button>
+                            </div>
+                            <div class="memo-md-editor-wrap">
+                                <textarea id="sidebar-task-text" placeholder="输入任务详情，支持 Markdown 语法..." rows="6"></textarea>
+                                <div class="memo-md-preview memo-md-body hidden" id="memo-md-preview"></div>
+                            </div>
                         </div>
                         <div class="form-row">
                             <div class="form-group">
@@ -899,6 +925,53 @@ class MemoManager {
                 }
             });
         }
+        
+        // Markdown 编辑器：模式切换（编辑/预览）
+        document.querySelectorAll('.memo-md-mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const mode = btn.dataset.mode;
+                document.querySelectorAll('.memo-md-mode-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const textInput = document.getElementById('sidebar-task-text');
+                const preview = document.getElementById('memo-md-preview');
+                const toolbar = document.getElementById('memo-md-toolbar');
+                if (mode === 'preview') {
+                    if (textInput) textInput.classList.add('hidden');
+                    if (toolbar) toolbar.classList.add('preview-mode');
+                    if (preview) {
+                        preview.innerHTML = this._renderMemoMarkdown(textInput?.value || '');
+                        preview.classList.remove('hidden');
+                        this._renderMemoMermaid(preview);
+                    }
+                } else {
+                    if (textInput) textInput.classList.remove('hidden');
+                    if (toolbar) toolbar.classList.remove('preview-mode');
+                    if (preview) preview.classList.add('hidden');
+                }
+            });
+        });
+        
+        // Markdown 工具栏按钮
+        const mdToolbar = document.getElementById('memo-md-toolbar');
+        if (mdToolbar) {
+            mdToolbar.addEventListener('click', (e) => {
+                const btn = e.target.closest('[data-md-action]');
+                if (!btn) return;
+                this._applyMdAction(btn.dataset.mdAction);
+            });
+        }
+        
+        // Markdown 快捷键
+        const mdTextInput = document.getElementById('sidebar-task-text');
+        if (mdTextInput) {
+            mdTextInput.addEventListener('keydown', (e) => {
+                const isMod = e.ctrlKey || e.metaKey;
+                if (isMod && e.key === 'b') { e.preventDefault(); this._applyMdAction('bold'); }
+                else if (isMod && e.key === 'i') { e.preventDefault(); this._applyMdAction('italic'); }
+                else if (isMod && e.key === 'k') { e.preventDefault(); this._applyMdAction('link'); }
+                else if (isMod && e.key === '`') { e.preventDefault(); this._applyMdAction('code'); }
+            });
+        }
     }
     
     /**
@@ -1207,18 +1280,32 @@ class MemoManager {
         const priorityValue = priorityActive ? priorityActive.dataset.priority : 'all';
         const categoryValue = this._sidebarCategoryCombobox ? this._sidebarCategoryCombobox.getValue() : 'all';
         
-        const searchText = searchInput ? searchInput.value.toLowerCase().trim() : '';
+        const searchText = searchInput ? searchInput.value.trim() : '';
         const filterValue = filterSelect ? filterSelect.value : 'all';
         
         // 筛选任务
         let filteredMemos = [...this.memos];
         
-        // 文本搜索
+        // 高级文本搜索：支持空格多关键字 AND、-排除关键字（逗号分割，中英文逗号）
         if (searchText) {
-            filteredMemos = filteredMemos.filter(memo => 
-                (memo.title || '').toLowerCase().includes(searchText) ||
-                (memo.text || '').toLowerCase().includes(searchText)
-            );
+            const { includeTerms, excludeTerms } = this._parseSearchQuery(searchText);
+            filteredMemos = filteredMemos.filter(memo => {
+                const titleLower = (memo.title || '').toLowerCase();
+                const textLower = (memo.text || '').toLowerCase();
+                const combined = titleLower + ' ' + textLower;
+                
+                if (includeTerms.length > 0) {
+                    const allIncluded = includeTerms.every(term => combined.includes(term));
+                    if (!allIncluded) return false;
+                }
+                
+                if (excludeTerms.length > 0) {
+                    const anyExcluded = excludeTerms.some(term => combined.includes(term));
+                    if (anyExcluded) return false;
+                }
+                
+                return true;
+            });
         }
         
         // 分类筛选（选择一级分类时包含其所有子分类）
@@ -1245,7 +1332,10 @@ class MemoManager {
                 filteredMemos = filteredMemos.filter(m => m.dueDate === today);
                 break;
             case 'overdue':
-                filteredMemos = filteredMemos.filter(m => m.dueDate && m.dueDate < today && !m.completed);
+                filteredMemos = filteredMemos.filter(m => this.getTaskStatus(m).key === 'overdue');
+                break;
+            case 'in_progress':
+                filteredMemos = filteredMemos.filter(m => this.getTaskStatus(m).key === 'in_progress');
                 break;
             case 'habits':
                 filteredMemos = filteredMemos.filter(m => m.recurrence?.enabled && m.recurrence?.type === 'daily');
@@ -1608,7 +1698,8 @@ class MemoManager {
             case 'completed': filteredMemos = filteredMemos.filter(m => m.completed); break;
             case 'uncompleted': filteredMemos = filteredMemos.filter(m => !m.completed); break;
             case 'today': filteredMemos = filteredMemos.filter(m => m.dueDate === today); break;
-            case 'overdue': filteredMemos = filteredMemos.filter(m => m.dueDate && m.dueDate < today && !m.completed); break;
+            case 'overdue': filteredMemos = filteredMemos.filter(m => this.getTaskStatus(m).key === 'overdue'); break;
+            case 'in_progress': filteredMemos = filteredMemos.filter(m => this.getTaskStatus(m).key === 'in_progress'); break;
             case 'habits': filteredMemos = filteredMemos.filter(m => m.recurrence?.enabled && m.recurrence?.type === 'daily'); break;
         }
         
@@ -2680,8 +2771,8 @@ class MemoManager {
             this._bindProgressDrag(progressEl, task);
         }
         
-        // 点击任务项编辑
-        item.addEventListener('click', () => this.showSidebarForm(task));
+        // 点击任务项打开查看器
+        item.addEventListener('click', () => this.showTaskViewer(task));
         
         // 右键菜单（复制标题/描述/子任务、编辑、删除）
         const taskBody = item.querySelector('.task-body');
@@ -7214,6 +7305,178 @@ class MemoManager {
     }
     
     /**
+     * 显示任务查看器（只读模式，屏幕居中）
+     */
+    showTaskViewer(task) {
+        if (!task) return;
+        
+        let overlay = document.getElementById('task-viewer-overlay');
+        if (overlay) overlay.remove();
+        
+        overlay = document.createElement('div');
+        overlay.className = 'task-viewer-overlay';
+        overlay.id = 'task-viewer-overlay';
+        
+        const today = this.getTodayDate();
+        const isOverdue = task.dueDate && task.dueDate < today && !task.completed;
+        const priorityLabels = { high: '高优先级', medium: '中优先级', low: '低优先级' };
+        const categoryName = task.categoryId ? this.getCategoryName(task.categoryId) : '';
+        
+        let badgesHtml = '';
+        if (task.completed) badgesHtml += `<span class="viewer-badge status-completed"><i class="fas fa-check-circle"></i> 已完成</span>`;
+        if (isOverdue) badgesHtml += `<span class="viewer-badge status-overdue"><i class="fas fa-exclamation-circle"></i> 已过期</span>`;
+        if (categoryName) badgesHtml += `<span class="viewer-badge category"><i class="fas fa-folder"></i> ${this.escapeHtml(categoryName)}</span>`;
+        if (task.priority && task.priority !== 'none') badgesHtml += `<span class="viewer-badge priority-${task.priority}"><i class="fas fa-flag"></i> ${priorityLabels[task.priority]}</span>`;
+        if (task.startDate && task.dueDate) {
+            badgesHtml += `<span class="viewer-badge date"><i class="far fa-calendar"></i> ${task.startDate} → ${task.dueDate}</span>`;
+        } else if (task.dueDate) {
+            badgesHtml += `<span class="viewer-badge date"><i class="far fa-calendar"></i> ${task.dueDate}</span>`;
+        }
+        
+        let sectionsHtml = '';
+        
+        if (task.text && task.text.trim()) {
+            const hasMd = this._hasMarkdownSyntax(task.text);
+            const renderedText = hasMd ? this._renderMemoMarkdown(task.text) : this.escapeHtml(task.text).replace(/\n/g, '<br>');
+            sectionsHtml += `
+                <div class="task-viewer-section">
+                    <div class="task-viewer-section-title"><i class="fas fa-align-left"></i> 详情${hasMd ? ' <span class="viewer-md-badge"><i class="fab fa-markdown"></i></span>' : ''}</div>
+                    <div class="task-viewer-text${hasMd ? ' memo-md-body kw-md-body' : ''}">${renderedText}</div>
+                </div>`;
+        }
+        
+        const hasSubtasks = task.subtasks && task.subtasks.length > 0;
+        const showProgress = (task.progress !== null && task.progress !== undefined) || hasSubtasks;
+        if (showProgress) {
+            let percentage;
+            if (hasSubtasks) {
+                const doneCount = task.subtasks.filter(st => st.completed).length;
+                percentage = Math.round((doneCount / task.subtasks.length) * 100);
+            } else {
+                percentage = parseInt(task.progress) || 0;
+            }
+            let progressClass = 'low';
+            if (percentage === 100) progressClass = 'complete';
+            else if (percentage >= 60) progressClass = 'high';
+            else if (percentage >= 30) progressClass = 'medium';
+            
+            sectionsHtml += `
+                <div class="task-viewer-section">
+                    <div class="task-viewer-section-title"><i class="fas fa-tasks"></i> 进度</div>
+                    <div class="task-viewer-progress">
+                        <div class="task-viewer-progress-bar">
+                            <div class="task-viewer-progress-fill ${progressClass}" style="width: ${percentage}%"></div>
+                        </div>
+                        <span class="task-viewer-progress-text">${percentage}%</span>
+                    </div>
+                </div>`;
+        }
+        
+        if (hasSubtasks) {
+            const subtasksItems = task.subtasks.map(st => `
+                <div class="viewer-subtask-item${st.completed ? ' done' : ''}">
+                    <div class="subtask-dot"><i class="fas fa-check"></i></div>
+                    <span>${this.escapeHtml(st.title)}</span>
+                </div>`).join('');
+            sectionsHtml += `
+                <div class="task-viewer-section">
+                    <div class="task-viewer-section-title"><i class="fas fa-list-check"></i> 子任务 (${task.subtasks.filter(s=>s.completed).length}/${task.subtasks.length})</div>
+                    <div class="task-viewer-subtasks">${subtasksItems}</div>
+                </div>`;
+        }
+        
+        if (task.links && task.links.length > 0) {
+            const linksItems = task.links.map(link => `
+                <a class="viewer-link-item" href="${this.escapeHtml(link.shortUrl || link.url)}" target="_blank" rel="noopener noreferrer" title="${this.escapeHtml(link.url)}">
+                    <i class="fas fa-external-link-alt"></i>
+                    <span>${this.escapeHtml(link.title || this.extractDomain(link.url))}</span>
+                </a>`).join('');
+            sectionsHtml += `
+                <div class="task-viewer-section">
+                    <div class="task-viewer-section-title"><i class="fas fa-link"></i> 链接 (${task.links.length})</div>
+                    <div class="task-viewer-links">${linksItems}</div>
+                </div>`;
+        }
+        
+        if (task.images && task.images.length > 0) {
+            const imagesItems = task.images.map((img, idx) => {
+                const thumbUrl = this.getImageThumbnail(img);
+                return `<img src="${thumbUrl}" alt="图片" data-image-index="${idx}" loading="lazy">`;
+            }).join('');
+            sectionsHtml += `
+                <div class="task-viewer-section">
+                    <div class="task-viewer-section-title"><i class="fas fa-image"></i> 图片 (${task.images.length})</div>
+                    <div class="task-viewer-images" id="viewer-images">${imagesItems}</div>
+                </div>`;
+        }
+        
+        const createdDate = task.createdAt ? new Date(task.createdAt).toLocaleString('zh-CN') : '';
+        const updatedDate = task.updatedAt ? new Date(task.updatedAt).toLocaleString('zh-CN') : '';
+        const completedDate = task.completedAt ? new Date(task.completedAt).toLocaleString('zh-CN') : '';
+        
+        let metaHtml = '';
+        if (createdDate) metaHtml += `<span><i class="fas fa-plus-circle"></i> 创建于 ${createdDate}</span>`;
+        if (updatedDate) metaHtml += `<span><i class="fas fa-edit"></i> 更新于 ${updatedDate}</span>`;
+        if (completedDate) metaHtml += `<span><i class="fas fa-check-circle"></i> 完成于 ${completedDate}</span>`;
+        
+        overlay.innerHTML = `
+            <div class="task-viewer-panel">
+                <div class="task-viewer-header">
+                    <div class="viewer-priority-indicator ${task.priority || 'none'}"></div>
+                    <div class="task-viewer-title-area">
+                        <div class="task-viewer-title${task.completed ? ' completed' : ''}">${this.escapeHtml(task.title || '无标题')}</div>
+                        <div class="task-viewer-badges">${badgesHtml}</div>
+                    </div>
+                    <button class="task-viewer-close" id="viewer-close-btn" title="关闭"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="task-viewer-body">
+                    ${sectionsHtml}
+                    ${metaHtml ? `<div class="task-viewer-meta">${metaHtml}</div>` : ''}
+                </div>
+                <div class="task-viewer-footer">
+                    <button class="viewer-close-btn" id="viewer-close-btn2">关闭</button>
+                    <button class="viewer-edit-btn" id="viewer-edit-btn"><i class="fas fa-pen"></i> 编辑</button>
+                </div>
+            </div>`;
+        
+        document.body.appendChild(overlay);
+        
+        this._renderMemoMermaid(overlay.querySelector('.task-viewer-text'));
+        
+        requestAnimationFrame(() => overlay.classList.add('open'));
+        
+        const closeViewer = () => {
+            overlay.classList.remove('open');
+            setTimeout(() => overlay.remove(), 300);
+        };
+        
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) closeViewer(); });
+        overlay.querySelector('#viewer-close-btn').addEventListener('click', closeViewer);
+        overlay.querySelector('#viewer-close-btn2').addEventListener('click', closeViewer);
+        overlay.querySelector('#viewer-edit-btn').addEventListener('click', () => {
+            closeViewer();
+            setTimeout(() => this.showSidebarForm(task), 150);
+        });
+        
+        const viewerImages = overlay.querySelector('#viewer-images');
+        if (viewerImages && task.images) {
+            viewerImages.addEventListener('click', (e) => {
+                const imgEl = e.target.closest('img');
+                if (imgEl) {
+                    e.stopPropagation();
+                    const idx = parseInt(imgEl.dataset.imageIndex) || 0;
+                    this.showImageLightbox(task.images, idx);
+                }
+            });
+        }
+        
+        const handleEsc = (e) => {
+            if (e.key === 'Escape') { closeViewer(); document.removeEventListener('keydown', handleEsc); }
+        };
+        document.addEventListener('keydown', handleEsc);
+    }
+    
+    /**
      * 显示侧边栏任务表单
      */
     showSidebarForm(task = null, options = {}) {
@@ -7397,23 +7660,16 @@ class MemoManager {
             return;
         }
         
-        let statusClass = 'not-started';
-        let statusText = '未开始';
-        let statusIcon = 'far fa-clock';
-        
-        if (task.completed) {
-            statusClass = 'completed';
-            statusText = '已完成';
-            statusIcon = 'fas fa-check-circle';
-        } else if (task.dueDate && new Date(task.dueDate) < new Date()) {
-            statusClass = 'overdue';
-            statusText = '已逾期';
-            statusIcon = 'fas fa-exclamation-circle';
-        } else if (task.progress > 0) {
-            statusClass = 'in-progress';
-            statusText = '进行中';
-            statusIcon = 'fas fa-spinner';
-        }
+        const status = this.getTaskStatus(task);
+        const statusClassMap = {
+            completed: 'completed',
+            overdue: 'overdue',
+            in_progress: 'in-progress',
+            not_started: 'not-started'
+        };
+        const statusClass = statusClassMap[status.key] || 'not-started';
+        const statusText = status.label;
+        const statusIcon = status.icon;
         
         const priorityMap = { high: '高', medium: '中', low: '低' };
         const priorityLabel = priorityMap[task.priority];
@@ -8071,6 +8327,16 @@ class MemoManager {
         const firstPanel = document.getElementById('form-tab-basic');
         if (firstTab) firstTab.classList.add('active');
         if (firstPanel) firstPanel.classList.add('active');
+        // 重置 Markdown 编辑器到编辑模式
+        const textInput = document.getElementById('sidebar-task-text');
+        const mdPreview = document.getElementById('memo-md-preview');
+        const mdToolbar = document.getElementById('memo-md-toolbar');
+        if (textInput) textInput.classList.remove('hidden');
+        if (mdPreview) { mdPreview.classList.add('hidden'); mdPreview.innerHTML = ''; }
+        if (mdToolbar) mdToolbar.classList.remove('preview-mode');
+        document.querySelectorAll('.memo-md-mode-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.mode === 'edit');
+        });
         // 清空底部状态
         const statusArea = document.getElementById('sidebar-form-status');
         if (statusArea) statusArea.innerHTML = '';
@@ -10364,7 +10630,8 @@ class MemoManager {
                 { value: 'uncompleted', text: '未完成' },
                 { value: 'completed', text: '已完成' },
                 { value: 'today', text: '今日任务' },
-                { value: 'overdue', text: '已过期' }
+                { value: 'overdue', text: '已过期' },
+                { value: 'in_progress', text: '进行中' }
             ];
             options.forEach(opt => {
                 const option = document.createElement('option');
@@ -10604,7 +10871,10 @@ class MemoManager {
                 filteredMemos = filteredMemos.filter(m => m.dueDate === today);
                 break;
             case 'overdue':
-                filteredMemos = filteredMemos.filter(m => m.dueDate && m.dueDate < today && !m.completed);
+                filteredMemos = filteredMemos.filter(m => this.getTaskStatus(m).key === 'overdue');
+                break;
+            case 'in_progress':
+                filteredMemos = filteredMemos.filter(m => this.getTaskStatus(m).key === 'in_progress');
                 break;
         }
         
@@ -10730,6 +11000,142 @@ class MemoManager {
         this.renderPanelTaskList();
     }
     
+    // ===================== Markdown 渲染（复用 vendor 库） =====================
+
+    _renderMemoMarkdown(text) {
+        if (!text) return '';
+        try {
+            if (typeof marked !== 'undefined' && marked.parse) {
+                const raw = marked.parse(text, { breaks: true, gfm: true });
+                if (typeof DOMPurify !== 'undefined') {
+                    return DOMPurify.sanitize(raw, {
+                        ADD_ATTR: ['target', 'rel', 'data-mermaid-id'],
+                        ADD_TAGS: ['svg', 'g', 'path', 'line', 'rect', 'circle', 'text', 'tspan', 'polygon', 'polyline', 'marker', 'defs', 'style', 'foreignObject'],
+                        ALLOWED_TAGS: [
+                            'h1','h2','h3','h4','h5','h6','p','br','hr',
+                            'strong','em','del','s','blockquote',
+                            'ul','ol','li','a','img','code','pre',
+                            'table','thead','tbody','tr','th','td',
+                            'input','div','span',
+                        ],
+                    });
+                }
+                return raw;
+            }
+        } catch (e) {
+            console.warn('Markdown 渲染失败，回退纯文本:', e);
+        }
+        return this.escapeHtml(text).replace(/\n/g, '<br>');
+    }
+
+    _renderMemoMermaid(containerEl) {
+        if (typeof mermaid === 'undefined' || !containerEl) return;
+        const blocks = containerEl.querySelectorAll('.kw-mermaid-block[data-mermaid-id]');
+        if (blocks.length === 0) return;
+        try {
+            mermaid.initialize({
+                startOnLoad: false,
+                theme: 'dark',
+                themeVariables: {
+                    darkMode: true,
+                    background: 'transparent',
+                    primaryColor: '#3b82f6',
+                    primaryTextColor: '#e2e8f0',
+                    primaryBorderColor: '#4b5563',
+                    lineColor: '#6b7280',
+                    secondaryColor: '#1e3a5f',
+                    tertiaryColor: '#1a1a2e',
+                },
+                flowchart: { htmlLabels: true, curve: 'basis' },
+                sequence: { showSequenceNumbers: true },
+            });
+            blocks.forEach(async (block) => {
+                const id = block.dataset.mermaidId;
+                const preEl = block.querySelector('pre.mermaid');
+                if (!preEl) return;
+                const definition = preEl.textContent;
+                try {
+                    const { svg } = await mermaid.render(id, definition);
+                    block.innerHTML = svg;
+                    block.classList.add('kw-mermaid-rendered');
+                } catch (err) {
+                    block.innerHTML = `<pre class="kw-mermaid-error"><code>Mermaid 渲染失败: ${err.message}\n\n${definition}</code></pre>`;
+                }
+            });
+        } catch (e) {
+            console.warn('Mermaid 初始化失败:', e);
+        }
+    }
+
+    _hasMarkdownSyntax(text) {
+        if (!text) return false;
+        return /^#{1,3} |^\d+\. |^- |\*\*|`{1,3}|^> |^---|\[.+\]\(.+\)|!\[/.test(text);
+    }
+
+    _applyMdAction(action) {
+        const ta = document.getElementById('sidebar-task-text');
+        if (!ta) return;
+        const start = ta.selectionStart;
+        const end = ta.selectionEnd;
+        const sel = ta.value.substring(start, end);
+        const before = ta.value.substring(0, start);
+        const after = ta.value.substring(end);
+
+        const wrap = (prefix, suffix, placeholder) => {
+            const text = sel || placeholder;
+            ta.value = before + prefix + text + suffix + after;
+            const cursorStart = start + prefix.length;
+            ta.setSelectionRange(cursorStart, cursorStart + text.length);
+            ta.focus();
+        };
+
+        const insertLine = (prefix, placeholder) => {
+            const lineStart = before.lastIndexOf('\n') + 1;
+            const linePrefix = before.substring(lineStart);
+            if (linePrefix === '' && before.endsWith('\n')) {
+                ta.value = before + prefix + (sel || placeholder) + after;
+            } else {
+                ta.value = before + '\n' + prefix + (sel || placeholder) + after;
+            }
+            ta.focus();
+        };
+
+        const actions = {
+            bold:          () => wrap('**', '**', '粗体文本'),
+            italic:        () => wrap('*', '*', '斜体文本'),
+            strikethrough: () => wrap('~~', '~~', '删除文本'),
+            code:          () => wrap('`', '`', 'code'),
+            heading:       () => insertLine('## ', '标题'),
+            quote:         () => insertLine('> ', '引用内容'),
+            ul:            () => insertLine('- ', '列表项'),
+            ol:            () => insertLine('1. ', '列表项'),
+            link:          () => {
+                const url = sel && /^https?:\/\//.test(sel) ? sel : 'https://';
+                const linkText = sel && !/^https?:\/\//.test(sel) ? sel : '链接文本';
+                ta.value = before + `[${linkText}](${url})` + after;
+                ta.focus();
+            },
+            table:         () => {
+                const tpl = '\n| 列1 | 列2 | 列3 |\n|------|------|------|\n| 内容 | 内容 | 内容 |\n';
+                ta.value = before + tpl + after;
+                ta.focus();
+            },
+            codeblock:     () => {
+                const lang = 'javascript';
+                const code = sel || '// 代码';
+                ta.value = before + '\n```' + lang + '\n' + code + '\n```\n' + after;
+                ta.focus();
+            },
+            mermaid:       () => {
+                const chart = sel || 'graph TD\n    A[开始] --> B[结束]';
+                ta.value = before + '\n```mermaid\n' + chart + '\n```\n' + after;
+                ta.focus();
+            },
+        };
+
+        if (actions[action]) actions[action]();
+    }
+
     /**
      * HTML 转义
      * @param {string} str - 原始字符串
@@ -10739,6 +11145,36 @@ class MemoManager {
         const div = document.createElement('div');
         div.textContent = str;
         return div.innerHTML;
+    }
+
+    /**
+     * 解析高级搜索查询
+     * 支持：空格分隔多关键字（AND），-前缀排除关键字（逗号分割，中英文逗号）
+     * 例："项目 排期" → 必须同时包含"项目"和"排期"
+     * 例："项目 -测试,bug" → 包含"项目"但不含"测试"和"bug"
+     * 例："-已完成，取消" → 排除含"已完成"或"取消"的结果
+     */
+    _parseSearchQuery(query) {
+        const includeTerms = [];
+        const excludeTerms = [];
+        
+        const tokens = query.split(/\s+/).filter(Boolean);
+        
+        for (const token of tokens) {
+            if (token.startsWith('-') && token.length > 1) {
+                const excludePart = token.substring(1);
+                const parts = excludePart.split(/[,，]/).filter(Boolean);
+                for (const part of parts) {
+                    const trimmed = part.trim().toLowerCase();
+                    if (trimmed) excludeTerms.push(trimmed);
+                }
+            } else {
+                const trimmed = token.toLowerCase();
+                if (trimmed) includeTerms.push(trimmed);
+            }
+        }
+        
+        return { includeTerms, excludeTerms };
     }
 
     /**
@@ -10803,6 +11239,7 @@ class MemoManager {
             ? task.subtasks.map(st => (st.completed ? '[x] ' : '[ ] ') + (st.title || '')).join('\n')
             : '';
         menu.innerHTML = `
+            <button type="button" data-action="view"><i class="fas fa-eye"></i> 查看</button>
             <button type="button" data-action="copy-title"><i class="fas fa-heading"></i> 复制标题</button>
             <button type="button" data-action="copy-desc"><i class="fas fa-align-left"></i> 复制描述</button>
             ${subtasksText ? '<button type="button" data-action="copy-subtasks"><i class="fas fa-list-check"></i> 复制子任务列表</button>' : ''}
@@ -10831,6 +11268,8 @@ class MemoManager {
                     const text = (task.subtasks || []).map(st => (st.completed ? '[x] ' : '[ ] ') + (st.title || '')).join('\n');
                     const ok = await this.copyToClipboard(text);
                     this.showToast(ok ? '已复制子任务列表' : '复制失败');
+                } else if (action === 'view') {
+                    this.showTaskViewer(task);
                 } else if (action === 'edit') {
                     this.showSidebarForm(task);
                 } else if (action === 'delete') {
@@ -11948,7 +12387,7 @@ class MemoManager {
             bodyEl.querySelectorAll('.urgent-task-item').forEach(item => {
                 item.addEventListener('click', () => {
                     const task = this.memos.find(m => m.id === item.dataset.id);
-                    if (task) this.showSidebarForm(task);
+                    if (task) this.showTaskViewer(task);
                     bubble.classList.remove('expanded');
                 });
             });
@@ -12045,6 +12484,15 @@ class MemoManager {
         wrapper.style.display = '';
         this._renderReadingRecommendation(reviewQueue, unreviewed);
         this._bindReadingRecoEvents();
+
+        // v3.3.0: 默认收起，节省空间
+        const body = document.getElementById('reading-reco-body');
+        const toggle = document.getElementById('reading-reco-toggle');
+        if (body && !body.classList.contains('collapsed')) {
+            body.classList.add('collapsed');
+            const icon = toggle?.querySelector('i');
+            if (icon) icon.className = 'fas fa-chevron-down';
+        }
     }
 
     _renderReadingRecommendation(reviewQueue, unreviewed) {

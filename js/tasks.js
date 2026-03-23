@@ -204,13 +204,15 @@ class TaskManager {
         const today = new Date().toISOString().split('T')[0];
         let tasks = [...this.memos];
 
-        // 搜索
+        // 高级搜索：多关键字 AND + 排除关键字
         if (this.filters.search) {
-            const query = this.filters.search.toLowerCase();
-            tasks = tasks.filter(t =>
-                (t.title && t.title.toLowerCase().includes(query)) ||
-                (t.text && t.text.toLowerCase().includes(query))
-            );
+            const { includeTerms, excludeTerms } = this._parseSearchQuery(this.filters.search);
+            tasks = tasks.filter(t => {
+                const combined = ((t.title || '') + ' ' + (t.text || '')).toLowerCase();
+                if (includeTerms.length > 0 && !includeTerms.every(term => combined.includes(term))) return false;
+                if (excludeTerms.length > 0 && excludeTerms.some(term => combined.includes(term))) return false;
+                return true;
+            });
         }
 
         // 状态筛选
@@ -222,7 +224,13 @@ class TaskManager {
                 tasks = tasks.filter(t => t.completed);
                 break;
             case 'overdue':
-                tasks = tasks.filter(t => t.dueDate && t.dueDate < today && !t.completed);
+                tasks = tasks.filter(t => this.getTaskStatus(t).key === 'overdue');
+                break;
+            case 'in_progress':
+                tasks = tasks.filter(t => this.getTaskStatus(t).key === 'in_progress');
+                break;
+            case 'not_started':
+                tasks = tasks.filter(t => this.getTaskStatus(t).key === 'not_started');
                 break;
             case 'today':
                 tasks = tasks.filter(t => t.dueDate === today);
@@ -273,14 +281,13 @@ class TaskManager {
     // ===================== 统计更新 =====================
 
     updateStats() {
-        const today = new Date().toISOString().split('T')[0];
         const all = this.memos;
-        const active = all.filter(t => !t.completed);
+        const inProgress = all.filter(t => this.getTaskStatus(t).key === 'in_progress');
         const done = all.filter(t => t.completed);
-        const overdue = all.filter(t => t.dueDate && t.dueDate < today && !t.completed);
+        const overdue = all.filter(t => this.getTaskStatus(t).key === 'overdue');
 
         document.getElementById('stat-total').textContent = all.length;
-        document.getElementById('stat-active').textContent = active.length;
+        document.getElementById('stat-active').textContent = inProgress.length;
         document.getElementById('stat-done').textContent = done.length;
         document.getElementById('stat-overdue').textContent = overdue.length;
     }
@@ -545,6 +552,8 @@ class TaskManager {
 
         body.innerHTML = this.createDetailContent(task);
         
+        this.renderMermaid(body.querySelector('.detail-text'));
+        
         // 绑定详情面板内的事件（避免内联事件违反 CSP）
         body.querySelectorAll('.detail-image').forEach(img => {
             const fullUrl = img.dataset.fullUrl;
@@ -735,8 +744,8 @@ class TaskManager {
             <!-- 内容 -->
             ${task.text ? `
             <div class="detail-section">
-                <div class="detail-section-title">内容</div>
-                <div class="detail-text">${this.escapeHtml(task.text)}</div>
+                <div class="detail-section-title">内容${this.hasMarkdownSyntax(task.text) ? ' <span style="font-size:11px;color:rgba(100,180,255,0.5);margin-left:4px;"><i class="fab fa-markdown"></i></span>' : ''}</div>
+                <div class="detail-text${this.hasMarkdownSyntax(task.text) ? ' memo-md-body' : ''}">${this.hasMarkdownSyntax(task.text) ? this.renderMarkdown(task.text) : this.escapeHtml(task.text)}</div>
             </div>
             ` : ''}
 
@@ -1440,6 +1449,91 @@ class TaskManager {
         const div = document.createElement('div');
         div.textContent = str;
         return div.innerHTML;
+    }
+
+    _initMarked() {
+        if (typeof marked === 'undefined' || this._markedReady) return;
+        try {
+            const renderer = new marked.Renderer();
+            renderer.link = function({ href, title, text }) {
+                const t = title ? ` title="${title}"` : '';
+                return `<a href="${href}" target="_blank" rel="noopener noreferrer"${t}>${text}</a>`;
+            };
+            renderer.code = function({ text, lang }) {
+                if (lang === 'mermaid') {
+                    const id = 'mermaid-' + Math.random().toString(36).slice(2, 10);
+                    return `<div class="kw-mermaid-block" data-mermaid-id="${id}"><pre class="mermaid">${text}</pre></div>`;
+                }
+                if (typeof hljs !== 'undefined' && lang && hljs.getLanguage(lang)) {
+                    return `<pre><code class="hljs language-${lang}">${hljs.highlight(text, { language: lang, ignoreIllegals: true }).value}</code></pre>`;
+                }
+                if (typeof hljs !== 'undefined') return `<pre><code class="hljs">${hljs.highlightAuto(text).value}</code></pre>`;
+                return `<pre><code>${text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>`;
+            };
+            marked.setOptions({ renderer, breaks: true, gfm: true });
+            this._markedReady = true;
+        } catch (e) { console.warn('marked 配置失败:', e); }
+    }
+
+    renderMarkdown(text) {
+        if (!text) return '';
+        this._initMarked();
+        try {
+            if (typeof marked !== 'undefined' && marked.parse) {
+                const raw = marked.parse(text, { breaks: true, gfm: true });
+                if (typeof DOMPurify !== 'undefined') {
+                    return DOMPurify.sanitize(raw, {
+                        ADD_ATTR: ['target', 'rel', 'data-mermaid-id'],
+                        ADD_TAGS: ['svg','g','path','line','rect','circle','text','tspan','polygon','polyline','marker','defs','style','foreignObject'],
+                        ALLOWED_TAGS: ['h1','h2','h3','h4','h5','h6','p','br','hr','strong','em','del','s','blockquote','ul','ol','li','a','img','code','pre','table','thead','tbody','tr','th','td','input','div','span'],
+                    });
+                }
+                return raw;
+            }
+        } catch (e) { console.warn('Markdown 渲染失败:', e); }
+        return this.escapeHtml(text).replace(/\n/g, '<br>');
+    }
+
+    renderMermaid(container) {
+        if (typeof mermaid === 'undefined' || !container) return;
+        const blocks = container.querySelectorAll('.kw-mermaid-block[data-mermaid-id]');
+        if (!blocks.length) return;
+        mermaid.initialize({ startOnLoad: false, theme: 'dark', themeVariables: { darkMode: true, background: 'transparent', primaryColor: '#3b82f6', primaryTextColor: '#e2e8f0', primaryBorderColor: '#4b5563', lineColor: '#6b7280' } });
+        blocks.forEach(async block => {
+            const preEl = block.querySelector('pre.mermaid');
+            if (!preEl) return;
+            try {
+                const { svg } = await mermaid.render(block.dataset.mermaidId, preEl.textContent);
+                block.innerHTML = svg;
+                block.classList.add('kw-mermaid-rendered');
+            } catch (err) {
+                block.innerHTML = `<pre class="kw-mermaid-error"><code>Mermaid 渲染失败: ${err.message}</code></pre>`;
+            }
+        });
+    }
+
+    hasMarkdownSyntax(text) {
+        if (!text) return false;
+        return /^#{1,3} |^\d+\. |^- |\*\*|`{1,3}|^> |^---|\[.+\]\(.+\)|!\[/.test(text);
+    }
+
+    _parseSearchQuery(query) {
+        const includeTerms = [];
+        const excludeTerms = [];
+        const tokens = query.split(/\s+/).filter(Boolean);
+        for (const token of tokens) {
+            if (token.startsWith('-') && token.length > 1) {
+                const parts = token.substring(1).split(/[,，]/).filter(Boolean);
+                for (const part of parts) {
+                    const trimmed = part.trim().toLowerCase();
+                    if (trimmed) excludeTerms.push(trimmed);
+                }
+            } else {
+                const trimmed = token.toLowerCase();
+                if (trimmed) includeTerms.push(trimmed);
+            }
+        }
+        return { includeTerms, excludeTerms };
     }
 }
 
