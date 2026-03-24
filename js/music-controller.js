@@ -1,8 +1,9 @@
 /**
- * 音乐控制器模块 v3.12.0
+ * 音乐控制器模块 v3.13.0
  * UI 风格：Minimal Card（极简紧凑 + 滑动切换）— 基于 Demo 5
  * v3.0.0: 纯 API + Offscreen Document 独立播放器模式
  * v3.12.0: 音量浮层修复、发现全播、搜索队列、状态持久化、歌词防抖
+ * v3.13.0: 音量浮层定位修正、歌单队列持久化（刷新不丢失）
  */
 class MusicController {
     constructor() {
@@ -80,13 +81,21 @@ class MusicController {
 
     async _restoreMusicState() {
         try {
-            const { lastMusicState } = await chrome.storage.local.get('lastMusicState');
+            const { lastMusicState, musicPlaylistCache } = await chrome.storage.local.get(['lastMusicState', 'musicPlaylistCache']);
             if (lastMusicState && lastMusicState.title) {
                 const age = Date.now() - (lastMusicState.savedAt || 0);
                 if (age < 30 * 60 * 1000) {
                     this.state = { ...this.state, ...lastMusicState };
                     this.platform = lastMusicState.platform || null;
                     this._lastUpdateTs = Date.now();
+                }
+            }
+            if (musicPlaylistCache && Array.isArray(musicPlaylistCache.playlist) && musicPlaylistCache.playlist.length > 0) {
+                const cacheAge = Date.now() - (musicPlaylistCache.savedAt || 0);
+                if (cacheAge < 24 * 60 * 60 * 1000) {
+                    this._playlist = musicPlaylistCache.playlist;
+                    this._currentPlaylistId = musicPlaylistCache.playlistId || null;
+                    this._currentPlaylistName = musicPlaylistCache.playlistName || '';
                 }
             }
         } catch { /* storage may not be available */ }
@@ -104,6 +113,26 @@ class MusicController {
 
     async _saveVolume(vol) {
         try { await chrome.storage.local.set({ musicVolume: vol }); } catch { /* ignore */ }
+    }
+
+    _savePlaylistCache() {
+        if (this._savePlaylistTimer) return;
+        this._savePlaylistTimer = setTimeout(() => {
+            this._savePlaylistTimer = null;
+            try {
+                const trimmed = (this._playlist || []).slice(0, 300).map(s => ({
+                    title: s.title, artist: s.artist, songId: s.songId, index: s.index,
+                }));
+                chrome.storage.local.set({
+                    musicPlaylistCache: {
+                        playlist: trimmed,
+                        playlistId: this._currentPlaylistId || null,
+                        playlistName: this._currentPlaylistName || '',
+                        savedAt: Date.now(),
+                    }
+                });
+            } catch { /* ignore */ }
+        }, 2000);
     }
 
     async _restorePlayMode() {
@@ -467,13 +496,13 @@ class MusicController {
     _positionFloatingVolume() {
         const toggle = this._el?.querySelector('#mc-vol-toggle');
         const floating = this._volFloating;
-        const panel = this._el?.querySelector('#mc-panel');
-        if (!toggle || !floating || !panel) return;
+        const island = this._el;
+        if (!toggle || !floating || !island) return;
 
-        const panelRect = panel.getBoundingClientRect();
+        const islandRect = island.getBoundingClientRect();
         const toggleRect = toggle.getBoundingClientRect();
-        floating.style.bottom = (panelRect.bottom - panelRect.top + 8) + 'px';
-        floating.style.right = (panelRect.right - toggleRect.right + toggleRect.width / 2 - 20) + 'px';
+        floating.style.bottom = (islandRect.bottom - toggleRect.top + 6) + 'px';
+        floating.style.right = (islandRect.right - toggleRect.left - toggleRect.width / 2 - 20) + 'px';
     }
 
     _updatePanelExpand() {
@@ -572,7 +601,7 @@ class MusicController {
         this._currentLyricIndex = -1;
         this._lyricSongId = null;
         this._currentSongId = null;
-        try { await chrome.storage.local.remove('lastMusicState'); } catch { /* ignore */ }
+        try { await chrome.storage.local.remove(['lastMusicState', 'musicPlaylistCache']); } catch { /* ignore */ }
         this._hide();
         this._showConnect();
     }
@@ -662,6 +691,7 @@ class MusicController {
                         volume: this.state.volume,
                         platform: this.platform,
                         songId: this._currentSongId,
+                        playlistName: this._currentPlaylistName || '',
                         savedAt: Date.now(),
                     }
                 });
@@ -1143,6 +1173,7 @@ class MusicController {
         }
 
         this._playlist = allSongs;
+        this._savePlaylistCache();
         this._apiLoadingQueue = false;
         this._renderPlaylistDetail(pane, allSongs, playlistName, coverUrl, totalCount);
     }
@@ -1247,6 +1278,7 @@ class MusicController {
             if (!Array.isArray(this._playlist) || this._playlist.length === 0) {
                 this._playlist = [{ title, artist, index: 0, isActive: true, songId }];
                 this._currentPlaylistName = this._currentPlaylistName || '播放队列';
+                this._savePlaylistCache();
             }
 
             this.state.title = title;
@@ -1511,6 +1543,7 @@ class MusicController {
             if (songs.length > 0) {
                 this._playlist = songs.map((s, i) => ({ ...s, index: i, isActive: false }));
                 this._currentPlaylistName = label;
+                this._savePlaylistCache();
                 this._setPlayMode('sequence');
                 if (songs[0].songId) this._playSongById(songs[0].songId);
             }
@@ -1521,6 +1554,7 @@ class MusicController {
             if (songs.length > 0) {
                 this._playlist = songs.map((s, i) => ({ ...s, index: i, isActive: false }));
                 this._currentPlaylistName = label;
+                this._savePlaylistCache();
                 this._setPlayMode('shuffle');
                 this._generateShuffleQueue();
                 const randIdx = this._shuffleQueue[0];
@@ -1536,6 +1570,7 @@ class MusicController {
                     if (this._playlist.length === 0 || this._currentPlaylistName !== label) {
                         this._playlist = songs.map((s, i) => ({ ...s, index: i, isActive: false }));
                         this._currentPlaylistName = label;
+                        this._savePlaylistCache();
                     }
                     this._playSongById(songId);
                 }
@@ -1611,6 +1646,7 @@ class MusicController {
                     if (this._playlist.length === 0 || this._currentPlaylistName !== searchLabel) {
                         this._playlist = results.map((s, i) => ({ ...s, index: i, isActive: false }));
                         this._currentPlaylistName = searchLabel;
+                        this._savePlaylistCache();
                     }
                     this._playSongById(songId);
                 }
@@ -1651,10 +1687,10 @@ class MusicController {
             }
         }
 
-        // 内置播放场景下，同样保证队列至少包含当前歌曲
         if ((!Array.isArray(this._playlist) || this._playlist.length === 0) && songId) {
             this._playlist = [{ title: this.state.title, artist: this.state.artist, index: 0, isActive: true, songId }];
             this._currentPlaylistName = this._currentPlaylistName || '播放队列';
+            this._savePlaylistCache();
         }
 
         this._updateUI();

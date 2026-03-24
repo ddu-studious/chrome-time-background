@@ -911,7 +911,7 @@ class BilibiliController {
         if (item.type === 'course' && item.seasonId) {
             frame.innerHTML = `<iframe src="https://www.bilibili.com/cheese/play/ss${item.seasonId}" sandbox="${SANDBOX_PLAYER}" allowfullscreen allow="autoplay; encrypted-media"></iframe>`;
         } else if (item.bvid) {
-            frame.innerHTML = `<iframe src="https://player.bilibili.com/player.html?bvid=${item.bvid}&high_quality=1&danmaku=0&autoplay=1" sandbox="${SANDBOX_PLAYER}" allowfullscreen allow="autoplay; encrypted-media"></iframe>`;
+            frame.innerHTML = `<iframe src="https://player.bilibili.com/player.html?bvid=${item.bvid}&high_quality=1&quality=80&danmaku=0&autoplay=1&as_wide=1" sandbox="${SANDBOX_PLAYER}" allowfullscreen allow="autoplay; encrypted-media"></iframe>`;
         }
 
         const info = this._el.querySelector('#bili-player-info');
