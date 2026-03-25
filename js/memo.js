@@ -826,11 +826,11 @@ class MemoManager {
             });
         }
         
-        // 点击遮罩关闭
+        // 点击遮罩不关闭，仅通过关闭按钮/取消按钮关闭
         const modal = document.getElementById('sidebar-form-modal');
         if (modal) {
             modal.addEventListener('click', (e) => {
-                if (e.target === modal) this.hideSidebarForm();
+                if (e.target === modal) e.stopPropagation();
             });
         }
         
@@ -10718,9 +10718,9 @@ class MemoManager {
         document.getElementById('task-form-cancel').addEventListener('click', () => this.hideTaskFormModal());
         document.getElementById('task-form-save').addEventListener('click', () => this.saveTaskFromModal());
         
-        // 点击遮罩关闭
+        // 点击遮罩不关闭，仅通过关闭按钮/取消按钮关闭
         modal.addEventListener('click', (e) => {
-            if (e.target === modal) this.hideTaskFormModal();
+            if (e.target === modal) e.stopPropagation();
         });
         
         // 回车保存

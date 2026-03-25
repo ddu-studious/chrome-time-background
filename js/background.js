@@ -1746,20 +1746,56 @@
         } catch { return ''; }
     }
 
+    const BILI_API_DNR_RULE_ID = 9010;
+    let _biliApiDnrActive = false;
+
+    async function ensureBiliApiDnr() {
+        if (_biliApiDnrActive) return;
+        try {
+            const cookieStr = await getBilibiliCookies();
+            const ruleHeaders = [
+                { header: 'Origin', operation: 'set', value: 'https://www.bilibili.com' },
+                { header: 'Referer', operation: 'set', value: 'https://www.bilibili.com/' },
+            ];
+            if (cookieStr) {
+                ruleHeaders.push({ header: 'Cookie', operation: 'set', value: cookieStr });
+            }
+            await chrome.declarativeNetRequest.updateDynamicRules({
+                removeRuleIds: [BILI_API_DNR_RULE_ID],
+                addRules: [{
+                    id: BILI_API_DNR_RULE_ID,
+                    priority: 2,
+                    action: { type: 'modifyHeaders', requestHeaders: ruleHeaders },
+                    condition: {
+                        urlFilter: '||api.bilibili.com/',
+                        resourceTypes: ['xmlhttprequest'],
+                    }
+                }]
+            });
+            _biliApiDnrActive = true;
+        } catch (e) {
+            console.warn('[BilibiliAPI] DNR 规则设置失败:', e.message);
+        }
+    }
+
+    async function refreshBiliApiDnr() {
+        _biliApiDnrActive = false;
+        await ensureBiliApiDnr();
+    }
+
     async function bilibiliApiCall(endpoint, params = {}, method = 'GET') {
         if (!BILI_API_WHITELIST.some(p => endpoint.startsWith(p))) {
             throw new Error(`不允许的 API 端点: ${endpoint}`);
         }
 
         const _apiStart = Date.now();
-        const cookieStr = await getBilibiliCookies();
+        await ensureBiliApiDnr();
+
         const headers = {
-            'Referer': 'https://www.bilibili.com/',
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
         };
-        if (cookieStr) headers['Cookie'] = cookieStr;
 
-        let fetchOpts = { method, headers, credentials: 'include' };
+        let fetchOpts = { method, headers };
         const url = new URL(endpoint, 'https://api.bilibili.com');
 
         if (method === 'POST') {
@@ -1776,6 +1812,9 @@
         try {
             const resp = await fetch(url.toString(), fetchOpts);
             if (!resp.ok) {
+                if (resp.status === 412) {
+                    await refreshBiliApiDnr();
+                }
                 logExtEvent('network', 'bilibili-api', { ok: false, durationMs: Date.now() - _apiStart, context: endpoint, error: `http-${resp.status}` });
                 throw new Error(`B站 API 请求失败: ${resp.status}`);
             }
@@ -1903,6 +1942,99 @@
                 try {
                     const result = await bilibiliApiCall(message.endpoint, message.params || {}, message.method || 'GET');
                     sendResponse({ ok: true, data: result });
+                } catch (e) {
+                    sendResponse({ ok: false, error: e.message });
+                }
+            })();
+            return true;
+        }
+
+        // ========== v3.15.0: B站嵌入播放器 Cookie 注入（declarativeNetRequest）==========
+
+        if (message.action === 'bilibili_inject_cookies') {
+            (async () => {
+                try {
+                    const cookieStr = await getBilibiliCookies();
+                    if (!cookieStr || !cookieStr.includes('SESSDATA')) {
+                        sendResponse({ ok: false, error: 'no-login-cookie' });
+                        return;
+                    }
+
+                    const BILI_DNR_RULE_IDS = [9001, 9002, 9003, 9004];
+
+                    await chrome.declarativeNetRequest.updateDynamicRules({
+                        removeRuleIds: BILI_DNR_RULE_IDS,
+                        addRules: [
+                            {
+                                id: 9001,
+                                priority: 1,
+                                action: {
+                                    type: 'modifyHeaders',
+                                    requestHeaders: [{ header: 'Cookie', operation: 'set', value: cookieStr }]
+                                },
+                                condition: {
+                                    urlFilter: '||www.bilibili.com/video/',
+                                    resourceTypes: ['sub_frame']
+                                }
+                            },
+                            {
+                                id: 9002,
+                                priority: 1,
+                                action: {
+                                    type: 'modifyHeaders',
+                                    requestHeaders: [{ header: 'Cookie', operation: 'set', value: cookieStr }]
+                                },
+                                condition: {
+                                    urlFilter: '||api.bilibili.com/',
+                                    initiatorDomains: ['www.bilibili.com'],
+                                    resourceTypes: ['xmlhttprequest']
+                                }
+                            },
+                            {
+                                id: 9003,
+                                priority: 1,
+                                action: {
+                                    type: 'modifyHeaders',
+                                    requestHeaders: [{ header: 'Cookie', operation: 'set', value: cookieStr }]
+                                },
+                                condition: {
+                                    urlFilter: '||player.bilibili.com/',
+                                    resourceTypes: ['sub_frame', 'xmlhttprequest', 'script']
+                                }
+                            },
+                            {
+                                id: 9004,
+                                priority: 1,
+                                action: {
+                                    type: 'modifyHeaders',
+                                    requestHeaders: [{ header: 'Cookie', operation: 'set', value: cookieStr }]
+                                },
+                                condition: {
+                                    urlFilter: '||www.bilibili.com/bangumi/',
+                                    resourceTypes: ['sub_frame']
+                                }
+                            }
+                        ]
+                    });
+
+                    logExtEvent('bilibili', 'dnr-cookie-inject', { ok: true });
+                    sendResponse({ ok: true });
+                } catch (e) {
+                    console.warn('[Bilibili] DNR Cookie 注入失败:', e.message);
+                    logExtEvent('bilibili', 'dnr-cookie-inject', { ok: false, error: e.message });
+                    sendResponse({ ok: false, error: e.message });
+                }
+            })();
+            return true;
+        }
+
+        if (message.action === 'bilibili_clear_cookie_rules') {
+            (async () => {
+                try {
+                    await chrome.declarativeNetRequest.updateDynamicRules({
+                        removeRuleIds: [9001, 9002, 9003, 9004]
+                    });
+                    sendResponse({ ok: true });
                 } catch (e) {
                     sendResponse({ ok: false, error: e.message });
                 }
@@ -2067,27 +2199,7 @@
         return false;
     });
 
-    // ========== v3.9.2: 拦截 Bilibili 播放器触发的新标签页 ==========
-    // 场景：newtab 扩展页中的 iframe 播放器调用 window.open，导致跳出到新标签页
-    if (chrome.webNavigation?.onCreatedNavigationTarget) {
-        chrome.webNavigation.onCreatedNavigationTarget.addListener(async (details) => {
-            try {
-                const targetUrl = details?.url || '';
-                if (!/https?:\/\/([^.]+\.)?bilibili\.com\//i.test(targetUrl)) return;
-                if (!details?.sourceTabId || details.sourceTabId === chrome.tabs.TAB_ID_NONE) return;
-
-                const sourceTab = await chrome.tabs.get(details.sourceTabId).catch(() => null);
-                const sourceUrl = sourceTab?.url || '';
-                const isFromExtensionPage = sourceUrl.startsWith(`chrome-extension://${chrome.runtime.id}/`);
-                if (!isFromExtensionPage) return;
-
-                await chrome.tabs.remove(details.tabId).catch(() => {});
-                logExtEvent('bilibili', 'block-new-tab', { context: targetUrl.slice(0, 120) });
-            } catch (e) {
-                console.warn('[Bilibili] 拦截新标签失败:', e?.message || e);
-            }
-        });
-    }
+    // ========== v3.15.0: B站跳转不再拦截，允许用户跳转到 B 站站内 ==========
 
     // 监听存储变化
     chrome.storage.onChanged.addListener(async (changes, area) => {

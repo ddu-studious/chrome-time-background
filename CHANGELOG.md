@@ -1,5 +1,86 @@
 # 更新日志
 
+## [3.15.1] - 2026-03-25
+
+### 修复
+- **视频自动进入网页全屏模式**
+  - 在 iframe 内加载完整 B 站页面时，自动触发播放器原生"网页全屏"模式
+  - 多时机重试（2s/4s/6s/8s/12s），兼容慢速加载场景
+  - 优先使用 `player.requestWebFullScreen()` API，降级到点击 `.bpx-player-ctrl-web` 按钮
+
+- **修复稍后看/收藏删除 412 风控拦截**
+  - 根因：Service Worker 中 `fetch()` 的 `Origin` header 被浏览器自动替换为 `chrome-extension://xxx`（forbidden header 限制），B 站风控检测到非法来源返回 412
+  - 通过 `declarativeNetRequest` DNR 规则在网络层注入正确的 `Origin`、`Referer`、`Cookie` 头
+  - DNR 规则在首次 API 调用时自动创建，遇到 412 时自动刷新 Cookie 并重建规则
+  - 同时优化：删除成功后本地直接从缓存移除该项，DOM 淡出动画消失，不再依赖重新拉取列表
+
+- **画质横条与播放器显示不同步**
+  - 根因：`_setQuality` 乐观更新 UI，未等播放器确认就标记为已切换
+  - 改为切换时标记 "pending" 闪烁状态，不更新实际画质值
+  - 等播放器回报 `quality-info` 确认后才真正更新 UI
+  - 8 秒超时未确认则回退 UI 并提示切换失败
+
+## [3.15.0] - 2026-03-25
+
+### 重要更新
+- **B站播放器升级：从嵌入播放器切换到完整版页面（彻底解决画质受限）**
+  - **问题根因**：B 站嵌入播放器（`player.bilibili.com/player.html`）从底层架构上限制画质
+    - `quality`/`high_quality` URL 参数不在 embed player 的 `SEARCH_PARAM` 支持列表中，被完全忽略
+    - 使用 `nano.createPlayer` 框架，内置 `ChannelKind.Embedded_Other` 标记，服务端强制返回 360P
+    - embed player 无画质选择 UI，无 `window.player.requestQuality` 等 API
+    - 与 Cookie/登录态无关，是 B 站对第三方嵌入的业务策略限制
+  - **方案**：iframe 直接加载完整版 B 站视频页面（`www.bilibili.com/video/BVxxx`）
+    - 完整版页面拥有原生画质切换 UI（含 1080P+/4K 等全部选项）
+    - `declarativeNetRequest` 动态规则注入 bilibili Cookie，确保 iframe 内登录态可用
+    - `bilibili-player-inject.js` 检测 iframe 环境后自动注入全屏 CSS，隐藏导航/评论/推荐等非播放器元素
+    - 播放器区域铺满整个 iframe，体验与原 embed player 一致但功能完整
+  - content_scripts 扩展匹配 `www.bilibili.com/video/*` 和 `bangumi/*`
+  - 新增 `declarativeNetRequest` 权限
+
+- **修复画质 toast 显示 `[object Object]` 问题**
+  - 新增 `_safeQualityLabel()` 安全标签提取方法
+  - 对 `_onQualityInfo()` 中的 descriptions 值和 current 画质代码增加类型安全检查
+
+- **允许跳转到 B 站站内**
+  - 移除 `bilibili-player-inject.js` 中对 window.open 和链接的全面拦截
+  - 改为仅拦截播放器控件（画质/倍速菜单）内的无意跳转
+  - 移除 `background.js` 中 webNavigation 新标签页拦截
+  - iframe sandbox 添加 `allow-popups allow-popups-to-escape-sandbox`
+
+- **修复取消收藏/稍后看 412 风控错误**
+  - B 站 POST 请求风控要求 `Origin` header，`bilibiliApiCall` 中新增 `Origin: https://www.bilibili.com`
+
+- **修复手动切换低画质后自动回切 1080P 问题**
+  - 根因：`autoSetBestQuality()` 每 2 秒周期检测画质 < 80 就自动切回，覆盖用户手动选择
+  - 新增 `_userQualityOverride` 标志：用户通过 postMessage 主动切换画质时设为 true
+  - `autoSetBestQuality()` 检测到用户覆盖后永久跳过自动切换
+  - 修正循环条件逻辑：`_autoQualityAttempted` 设为 true 后不再重复进入
+
+## [3.14.0] - 2026-03-25
+
+### 修复 & 优化
+- **任务弹窗 UI 优化**
+  - 编辑任务和添加任务的弹窗浮层不再响应点击外部关闭，仅通过关闭/取消按钮关闭
+  - 避免误触导致编辑内容丢失
+
+- **网易云音乐播放器 UI 优化**
+  - 队列列表新增"我喜欢"按钮：hover 显示心形图标，点击即可收藏/取消歌曲到网易云"我喜欢"
+  - 列表布局重构：歌名和歌手改为上下双行布局（.mc-row-info），解决左侧拥挤问题
+  - 序号列宽调整为 22px 居中对齐，整体间距优化（gap: 8px, padding: 14px）
+
+- **播放器队列刷新恢复修复**
+  - 刷新页面后队列列表自动从缓存恢复并渲染，不再显示"暂无歌曲"
+  - 修复 `_restoreMusicState` 未恢复 `_currentSongId` 的问题
+  - 恢复时自动高亮当前播放歌曲
+
+- **B站播放器画质切换增强**
+  - 重构 `bilibili-player-inject.js` 画质探测：增加 DOM 解析策略作为降级方案
+  - 新增 `getQualityFromDOM()` 方法：遍历多种选择器匹配新版/旧版播放器画质菜单
+  - 新增 `setQualityViaDOM()` 方法：通过模拟 mouseenter + click 切换画质
+  - 新增 `QUALITY_LABEL_TO_QN` 中文标签到画质代码的映射
+  - 增加自动画质重试机制（最多 3 次）
+  - 画质切换失败提示根据等级区分（大会员/登录/通用提示）
+
 ## [2.3.1] - 2026-03-05
 
 ### 修复 & 优化

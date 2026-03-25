@@ -1,13 +1,9 @@
 /**
- * 哔哩哔哩集成控制器 v3.12.0
- * 技术方案：Embed Player + Cookie API（方案A + 沉浸式 UI）
+ * 哔哩哔哩集成控制器 v3.15.0
+ * 技术方案：Embed Player + Cookie API + declarativeNetRequest Cookie 注入
  * 功能：热门/历史/稍后看/收藏/排行/课程/关注 七分类 + 搜索 + 嵌入播放器
- * v3.8.0: 已购课程主区域展示 / 取消收藏&稍后看 / 彻底拦截跳转 / 关闭清除资源
- * v3.9.0: 关注UP主主页左侧展示
- * v3.9.1~3.9.2: Content Script + webNavigation 双层防跳转
- * v3.10.0: 自定义倍速控制（postMessage 操控 <video>.playbackRate）
- * v3.11.0: 画质切换（探测 player 内部 API）+ 视频元数据增强（发布时间/时长/BV号）
- * v3.12.0: 画质切换 toast 反馈 + 验证 + 定时器清理
+ * v3.15.0: DNR Cookie 注入（解决嵌入播放器第三方 Cookie 隔离导致画质受限）
+ *          + 允许跳转到 B 站站内 + 修复画质 toast 显示 [object Object]
  */
 class BilibiliController {
     constructor() {
@@ -25,6 +21,7 @@ class BilibiliController {
         this._favFolderId = 0;
         this._currentSpeed = 1;
         this._currentQuality = 0;
+        this._pendingQuality = 0;
         this._qualityList = [];
         this._qualityDescriptions = {};
         this._playerState = null;
@@ -38,6 +35,9 @@ class BilibiliController {
             this._loggedIn = loginInfo.loggedIn;
             this._userMid = loginInfo.mid;
         } catch { this._loggedIn = false; }
+        if (this._loggedIn) {
+            await this._injectBiliCookies();
+        }
         try {
             await this._loadTab('popular');
         } catch (e) { console.warn('[Bilibili] 初始化加载失败:', e.message); }
@@ -57,6 +57,29 @@ class BilibiliController {
                 }
             );
         });
+    }
+
+    async _injectBiliCookies() {
+        try {
+            const resp = await new Promise((resolve) => {
+                chrome.runtime.sendMessage({ action: 'bilibili_inject_cookies' }, r => {
+                    if (chrome.runtime.lastError) resolve({ ok: false });
+                    else resolve(r || { ok: false });
+                });
+            });
+            if (resp.ok) console.log('[Bilibili] Cookie DNR 注入成功');
+            else console.warn('[Bilibili] Cookie DNR 注入失败:', resp.error);
+            return resp.ok;
+        } catch (e) {
+            console.warn('[Bilibili] Cookie 注入异常:', e.message);
+            return false;
+        }
+    }
+
+    async _clearBiliCookieRules() {
+        try {
+            chrome.runtime.sendMessage({ action: 'bilibili_clear_cookie_rules' }, () => {});
+        } catch (_) {}
     }
 
     async _checkLogin() {
@@ -158,8 +181,9 @@ class BilibiliController {
 
     async _cancelWatchlater(aid) {
         await this._biliApi('/x/v2/history/toview/del', { aid }, 'POST');
-        delete this._cache['watchlater'];
-        if (this._currentTab === 'watchlater') await this._loadTab('watchlater');
+        if (this._cache['watchlater']) {
+            this._cache['watchlater'] = this._cache['watchlater'].filter(v => v.aid !== aid);
+        }
     }
 
     async _addWatchlater(aid) {
@@ -172,8 +196,9 @@ class BilibiliController {
         await this._biliApi('/x/v3/fav/resource/deal', {
             rid: aid, type: 2, del_media_ids: this._favFolderId, add_media_ids: ''
         }, 'POST');
-        delete this._cache['favorite'];
-        if (this._currentTab === 'favorite') await this._loadTab('favorite');
+        if (this._cache['favorite']) {
+            this._cache['favorite'] = this._cache['favorite'].filter(v => v.aid !== aid);
+        }
     }
 
     async _likeVideo(aid, like = 1) {
@@ -310,9 +335,10 @@ class BilibiliController {
         });
     }
 
-    _loadUserSpace(mid, uname) {
+    async _loadUserSpace(mid, uname) {
         const frame = this._el.querySelector('#bili-player-frame');
-        const SANDBOX_SPACE = 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox';
+        const SANDBOX_SPACE = 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation';
+        if (this._loggedIn) await this._injectBiliCookies();
         frame.innerHTML = `<iframe src="https://space.bilibili.com/${mid}" sandbox="${SANDBOX_SPACE}" allowfullscreen></iframe>`;
 
         this._el.querySelector('#bili-ctrl-bar')?.classList.add('hidden');
@@ -389,8 +415,9 @@ class BilibiliController {
         }
     }
 
-    _loadMyCoursesInPlayer() {
+    async _loadMyCoursesInPlayer() {
         const frame = this._el.querySelector('#bili-player-frame');
+        if (this._loggedIn) await this._injectBiliCookies();
         frame.innerHTML = `<iframe src="https://www.bilibili.com/cheese/mine/list" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation" allowfullscreen></iframe>`;
         this._el.querySelector('#bili-player-info').classList.add('hidden');
         this._el.querySelector('#bili-ctrl-bar')?.classList.add('hidden');
@@ -622,8 +649,6 @@ class BilibiliController {
         el.querySelector('#bili-search-btn').addEventListener('click', () => this._doSearch(searchInput.value));
 
         el.addEventListener('click', (e) => {
-            const anchor = e.target.closest('a[href]');
-            if (anchor) { e.preventDefault(); e.stopPropagation(); return; }
             e.stopPropagation();
         });
         el.addEventListener('keydown', e => { if (e.key === 'Escape') this.hide(); });
@@ -677,22 +702,43 @@ class BilibiliController {
     }
 
     _setQuality(qn) {
-        const prevQuality = this._currentQuality;
-        this._currentQuality = qn;
+        this._pendingQuality = qn;
         this._sendPlayerMsg({ type: 'bili-ext-set-quality', quality: qn });
-        this._updateQualityUI();
-        const label = this._qualityDescriptions[qn] || String(qn);
+        this._markQualityPending(qn);
+        const label = this._safeQualityLabel(this._qualityDescriptions, qn);
         this._showBiliToast(`切换画质: ${label}`, 'info');
 
         this._qualityVerifyTimer && clearTimeout(this._qualityVerifyTimer);
         this._qualityVerifyTimer = setTimeout(() => {
             this._sendPlayerMsg({ type: 'bili-ext-get-quality' });
-            setTimeout(() => {
-                if (this._currentQuality !== qn && prevQuality !== qn) {
+        }, 3000);
+
+        this._qualityFailTimer && clearTimeout(this._qualityFailTimer);
+        this._qualityFailTimer = setTimeout(() => {
+            if (this._pendingQuality === qn && this._currentQuality !== qn) {
+                this._pendingQuality = 0;
+                this._updateQualityUI();
+                if (qn >= 112) {
                     this._showBiliToast(`画质切换失败，可能需要大会员权限`, 'warn');
+                } else if (qn >= 64) {
+                    this._showBiliToast(`画质切换失败，可能需要登录B站`, 'warn');
+                } else {
+                    this._showBiliToast(`画质切换失败`, 'warn');
                 }
-            }, 2000);
-        }, 2500);
+            }
+        }, 8000);
+    }
+
+    _markQualityPending(qn) {
+        this._el.querySelectorAll('.bili-quality-btn').forEach(btn => {
+            const q = parseInt(btn.dataset.quality);
+            btn.classList.remove('active');
+            if (q === qn) {
+                btn.classList.add('pending');
+            } else {
+                btn.classList.remove('pending');
+            }
+        });
     }
 
     _showBiliToast(msg, type = 'info') {
@@ -712,20 +758,38 @@ class BilibiliController {
         this._el.querySelectorAll('.bili-quality-btn').forEach(btn => {
             const q = parseInt(btn.dataset.quality);
             btn.classList.toggle('active', q === this._currentQuality);
+            btn.classList.remove('pending');
         });
     }
 
+    _safeQualityLabel(descriptions, qn) {
+        const raw = descriptions?.[qn];
+        if (typeof raw === 'string') return raw;
+        if (raw && typeof raw === 'object') return raw.desc || raw.text || raw.name || String(qn);
+        return String(qn || '未知');
+    }
+
     _onQualityInfo(data) {
-        const available = data.available || [];
-        const descriptions = data.descriptions || {};
+        const available = (data.available || []).filter(q => typeof q === 'number' && q > 0);
+        const rawDescs = data.descriptions || {};
+        const descriptions = {};
+        for (const [k, v] of Object.entries(rawDescs)) {
+            descriptions[k] = typeof v === 'string' ? v : (v?.desc || v?.text || v?.name || String(k));
+        }
         if (!available.length) return;
         this._qualityList = available;
         this._qualityDescriptions = descriptions;
         const oldQuality = this._currentQuality;
-        if (data.current) this._currentQuality = data.current;
+        const current = typeof data.current === 'number' ? data.current : parseInt(data.current) || 0;
+        if (current > 0) this._currentQuality = current;
 
-        if (oldQuality && data.current && oldQuality !== data.current) {
-            const label = descriptions[data.current] || String(data.current);
+        if (this._pendingQuality && current === this._pendingQuality) {
+            this._pendingQuality = 0;
+            clearTimeout(this._qualityFailTimer);
+        }
+
+        if (oldQuality && current && oldQuality !== current && !this._pendingQuality) {
+            const label = this._safeQualityLabel(descriptions, current);
             this._showBiliToast(`当前画质: ${label}`, 'info');
         }
 
@@ -773,6 +837,7 @@ class BilibiliController {
         try {
             await this._cancelWatchlater(v.aid);
             btn.innerHTML = '<i class="fas fa-check"></i>已移除';
+            this._removeListItemByAid(v.aid);
             setTimeout(() => { btn.innerHTML = '<i class="fas fa-times-circle"></i>移除稍后看'; }, 1500);
         } catch (e) { console.warn('[Bilibili] 移除稍后看失败:', e.message); }
     }
@@ -784,8 +849,25 @@ class BilibiliController {
         try {
             await this._cancelFavorite(v.aid);
             btn.innerHTML = '<i class="fas fa-check"></i>已取消';
+            this._removeListItemByAid(v.aid);
             setTimeout(() => { btn.innerHTML = '<i class="fas fa-heart-broken"></i>取消收藏'; }, 1500);
         } catch (e) { console.warn('[Bilibili] 取消收藏失败:', e.message); }
+    }
+
+    _removeListItemByAid(aid) {
+        const listEl = this._el.querySelector('#bili-list');
+        if (!listEl) return;
+        listEl.querySelectorAll('.bili-item').forEach(el => {
+            const idx = parseInt(el.dataset.idx);
+            const cache = this._cache[this._currentTab];
+            if (cache && cache[idx]?.aid === aid) {
+                el.style.transition = 'opacity 0.3s, max-height 0.3s';
+                el.style.opacity = '0';
+                el.style.maxHeight = '0';
+                el.style.overflow = 'hidden';
+                setTimeout(() => el.remove(), 350);
+            }
+        });
     }
 
     _syncTabs(tab) {
@@ -833,15 +915,23 @@ class BilibiliController {
             listEl.querySelectorAll('.bili-item-rm-btn').forEach(btn => {
                 btn.addEventListener('click', async (e) => {
                     e.stopPropagation();
-                    const idx = parseInt(btn.closest('.bili-item').dataset.idx);
+                    const itemEl = btn.closest('.bili-item');
+                    const idx = parseInt(itemEl?.dataset.idx);
                     const item = items[idx];
-                    if (!item) return;
+                    if (!item || !item.aid) return;
                     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                    btn.disabled = true;
                     try {
                         if (tab === 'watchlater') await this._cancelWatchlater(item.aid);
                         else if (tab === 'favorite') await this._cancelFavorite(item.aid);
+                        itemEl.style.transition = 'opacity 0.3s, max-height 0.3s';
+                        itemEl.style.opacity = '0';
+                        itemEl.style.maxHeight = '0';
+                        itemEl.style.overflow = 'hidden';
+                        setTimeout(() => itemEl.remove(), 350);
                     } catch (err) {
                         btn.innerHTML = '<i class="fas fa-times"></i>';
+                        btn.disabled = false;
                         console.warn('[Bilibili] 移除失败:', err.message);
                     }
                 });
@@ -903,15 +993,19 @@ class BilibiliController {
 
     // ===================== Player =====================
 
-    _playItem(item) {
+    async _playItem(item) {
         this._currentVideo = item;
         const frame = this._el.querySelector('#bili-player-frame');
-        const SANDBOX_PLAYER = 'allow-scripts allow-same-origin allow-forms allow-presentation';
+        const SANDBOX_PLAYER = 'allow-scripts allow-same-origin allow-forms allow-presentation allow-popups allow-popups-to-escape-sandbox';
+
+        if (this._loggedIn) {
+            await this._injectBiliCookies();
+        }
 
         if (item.type === 'course' && item.seasonId) {
             frame.innerHTML = `<iframe src="https://www.bilibili.com/cheese/play/ss${item.seasonId}" sandbox="${SANDBOX_PLAYER}" allowfullscreen allow="autoplay; encrypted-media"></iframe>`;
         } else if (item.bvid) {
-            frame.innerHTML = `<iframe src="https://player.bilibili.com/player.html?bvid=${item.bvid}&high_quality=1&quality=80&danmaku=0&autoplay=1&as_wide=1" sandbox="${SANDBOX_PLAYER}" allowfullscreen allow="autoplay; encrypted-media"></iframe>`;
+            frame.innerHTML = `<iframe src="https://www.bilibili.com/video/${item.bvid}/" sandbox="${SANDBOX_PLAYER}" allowfullscreen allow="autoplay; encrypted-media"></iframe>`;
         }
 
         const info = this._el.querySelector('#bili-player-info');
@@ -955,6 +1049,8 @@ class BilibiliController {
             this._el.querySelector('#bili-quality-btns').innerHTML = '<span class="bili-quality-hint">加载中...</span>';
             this._qualityList = [];
             this._currentQuality = 0;
+            this._pendingQuality = 0;
+            clearTimeout(this._qualityFailTimer);
             if (this._currentSpeed !== 1) {
                 setTimeout(() => this._setSpeed(this._currentSpeed), 2000);
             }
@@ -978,6 +1074,7 @@ class BilibiliController {
         this._destroyAllIframes();
         clearTimeout(this._qualityVerifyTimer);
         clearTimeout(this._biliToastTimer);
+        this._clearBiliCookieRules();
         this._panelOpen = false;
         this._el.classList.remove('visible');
         document.body.classList.remove('bili-panel-open');

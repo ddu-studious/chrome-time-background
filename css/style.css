@@ -12520,15 +12520,21 @@ body.bright-bg .ticker-sources-panel {
 .mc-panel-expanded .mc-content { min-height: 260px; }
 
 /* --- 歌曲行 --- */
-.mc-row { display: flex; align-items: center; gap: 6px; padding: 8px 16px; cursor: pointer; transition: background .12s; }
+.mc-row { display: flex; align-items: center; gap: 8px; padding: 8px 12px 8px 14px; cursor: pointer; transition: background .12s; }
 .mc-row:hover { background: rgba(255,255,255,0.03); }
 .mc-row-active { background: rgba(200,160,255,0.04); }
-.mc-row-num { width: 16px; text-align: right; font-size: 10px; color: rgba(255,255,255,0.18); flex-shrink: 0; }
+.mc-row-num { width: 22px; text-align: center; font-size: 10px; color: rgba(255,255,255,0.22); flex-shrink: 0; }
 .mc-row-active .mc-row-num { color: rgba(200,160,255,0.7); }
-.mc-row-title { flex: 1; font-size: 12px; color: rgba(255,255,255,0.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mc-row-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mc-row-title { font-size: 12px; color: rgba(255,255,255,0.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
 .mc-row-active .mc-row-title { color: rgba(200,160,255,0.95); font-weight: 500; }
-.mc-row-artist { font-size: 10px; color: rgba(255,255,255,0.2); flex-shrink: 0; max-width: 60px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mc-row-play { opacity: 0; background: none; border: none; color: rgba(200,160,255,0.6); cursor: pointer; font-size: 10px; transition: opacity .12s; }
+.mc-row-artist { font-size: 10px; color: rgba(255,255,255,0.25); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+.mc-row-like { opacity: 0; background: none; border: none; color: rgba(255,255,255,0.15); cursor: pointer; font-size: 10px; transition: all .15s; flex-shrink: 0; padding: 2px; }
+.mc-row:hover .mc-row-like { opacity: 1; }
+.mc-row-like:hover { color: rgba(255,80,80,0.7); transform: scale(1.15); }
+.mc-row-like.mc-row-liked { opacity: 1; color: rgba(255,80,80,0.8); }
+.mc-row-like.mc-row-liked:hover { color: rgba(255,80,80,0.5); }
+.mc-row-play { opacity: 0; background: none; border: none; color: rgba(200,160,255,0.6); cursor: pointer; font-size: 10px; transition: opacity .12s; flex-shrink: 0; padding: 2px; }
 .mc-row:hover .mc-row-play { opacity: 1; }
 
 /* --- 歌单面板 --- */
@@ -16198,6 +16204,18 @@ body.bili-panel-open { overflow: hidden; }
     border-color: rgba(251,114,153,0.5);
     font-weight: 600;
     box-shadow: 0 0 6px rgba(251,114,153,0.15);
+}
+
+.bili-quality-btn.pending {
+    background: rgba(251,114,153,0.12);
+    color: #fb7299;
+    border-color: rgba(251,114,153,0.3);
+    animation: bili-quality-pulse 1s ease-in-out infinite;
+}
+
+@keyframes bili-quality-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
 }
 
 .bili-quality-hint {

@@ -1,12 +1,12 @@
 /**
- * Bilibili 嵌入播放器增强 (MAIN world content script)
- * 注入到 player.bilibili.com 页面的主世界中
- * v3.13.0:
- *   1. 拦截 window.open / 链接跳转（防倍速/画质点击打开新 tab）
- *   2. postMessage 双向通信：接收父页面的倍速/画质/进度指令，直接操控 <video>
- *   3. 画质探测：读取 window.__playinfo__ 和 window.player 内部 API
- *   4. 周期性上报播放状态（含当前画质）给父页面
- *   5. 自动请求最高可用画质（优先 1080P）、DOM 点击降级
+ * Bilibili 播放器增强 (MAIN world content script)
+ * 注入到 player.bilibili.com 和 www.bilibili.com/video/* 页面
+ * v3.15.0:
+ *   1. 完整版页面模式：在 iframe 中加载完整 B 站视频页面，注入全屏 CSS
+ *   2. postMessage 双向通信：倍速/画质/进度控制
+ *   3. 画质探测与切换：__playinfo__ → player API → DOM 点击
+ *   4. 周期性上报播放状态
+ *   5. 仅拦截播放器控件内的无意跳转
  */
 (function () {
     'use strict';
@@ -15,47 +15,162 @@
     let _video = null;
     let _reportTimer = null;
     let _qualitySent = false;
+    let _userQualityOverride = false;
 
-    // =============== 1. 跳转拦截 ===============
+    const IS_IFRAME = window !== window.top;
+    const IS_FULL_PAGE = /www\.bilibili\.com\/(video|bangumi)/.test(location.hostname + location.pathname);
+    const IS_EMBED_PLAYER = /player\.bilibili\.com/.test(location.hostname);
 
-    const _origOpen = window.open;
-    window.open = function (url, target, features) {
-        if (url && typeof url === 'string' && /bilibili\.com/i.test(url)) {
-            return null;
+    // =============== 1. iframe 全屏模式（完整页面）===============
+
+    if (IS_IFRAME && IS_FULL_PAGE) {
+        const style = document.createElement('style');
+        style.textContent = `
+            #biliMainHeader, .bili-header, .bili-header-m,
+            #bili-header-container, .bili-header__bar,
+            .video-info-container, .video-toolbar-container,
+            #comment, .comment-container, .reply-warp,
+            .right-container, .right-container-inner,
+            .bili-mini-mask, .bili-footer,
+            #activity_vote, .ad-report, .vcd,
+            .video-page-special-card-small,
+            .login-panel-popover, #slide_ad,
+            .pop-live-small-mode, .palette-button-outer,
+            .storage-box, .fixed-sidenav-storage,
+            .up-panel-container, .video-page-game-card-small,
+            .video-page-card-small, .trending,
+            .floor-single-card, .bili-dyn-card,
+            .nav-search-content, .v-popover,
+            .video-capture-toolbar,
+            .bpx-player-video-info, .bpx-player-top-wrap,
+            .bpx-player-toast-wrap .bpx-player-toast-item[data-type="quality"],
+            .video-desc-container, .tag-panel,
+            .video-share-popover, .van-popover {
+                display: none !important;
+            }
+
+            html, body, #app, #__next {
+                overflow: hidden !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 100vw !important;
+                height: 100vh !important;
+                background: #000 !important;
+            }
+
+            .video-container-v1, .left-container,
+            .video-container-v2, .main-container {
+                width: 100vw !important;
+                max-width: 100vw !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+
+            #playerWrap, #bilibili-player,
+            .player-wrap, .bpx-player-primary-area {
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100vw !important;
+                height: 100vh !important;
+                z-index: 999 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            .bpx-player-container {
+                width: 100% !important;
+                height: 100% !important;
+            }
+
+            .bpx-player-video-area {
+                width: 100% !important;
+                height: 100% !important;
+            }
+        `;
+
+        if (document.head) {
+            document.head.appendChild(style);
+        } else {
+            document.addEventListener('DOMContentLoaded', () => {
+                (document.head || document.documentElement).appendChild(style);
+            });
         }
-        return _origOpen.call(window, url, target, features);
-    };
 
-    function neutralizeLinks(root) {
-        if (!root || !root.querySelectorAll) return;
-        root.querySelectorAll('a[target="_blank"], a[target="_top"]').forEach(a => {
-            a.removeAttribute('target');
-            a.addEventListener('click', e => {
-                e.preventDefault();
-                e.stopPropagation();
-            }, { capture: true, once: false });
-        });
+        let _webFullscreenDone = false;
+
+        function enterWebFullscreen() {
+            if (_webFullscreenDone) return true;
+
+            const player = window.player;
+            if (player?.requestWebFullScreen) {
+                try { player.requestWebFullScreen(); _webFullscreenDone = true; return true; } catch (_) {}
+            }
+
+            const WEB_FS_SELECTORS = [
+                '.bpx-player-ctrl-web',
+                '.bpx-player-ctrl-btn[aria-label="网页全屏"]',
+                '.squirtle-video-pagefullscreen',
+            ];
+            for (const sel of WEB_FS_SELECTORS) {
+                const btn = document.querySelector(sel);
+                if (!btn) continue;
+                const isEntered = btn.classList.contains('bpx-state-entered') ||
+                                  btn.getAttribute('aria-label')?.includes('退出');
+                if (!isEntered) {
+                    btn.click();
+                    _webFullscreenDone = true;
+                    return true;
+                } else {
+                    _webFullscreenDone = true;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function tryAutoWebFullscreen() {
+            const delays = [2000, 4000, 6000, 8000, 12000];
+            delays.forEach(ms => {
+                setTimeout(() => {
+                    if (!_webFullscreenDone) enterWebFullscreen();
+                }, ms);
+            });
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', tryAutoWebFullscreen);
+        } else {
+            tryAutoWebFullscreen();
+        }
     }
 
-    const domObserver = new MutationObserver(mutations => {
-        for (const m of mutations) {
-            if (m.type !== 'childList') continue;
-            for (const node of m.addedNodes) {
-                if (node.nodeType === 1) neutralizeLinks(node);
+    // =============== 2. 跳转控制（仅拦截播放器控件内的无意跳转）===============
+
+    const PLAYER_CTRL_SELECTORS = [
+        '.bpx-player-ctrl-quality',
+        '.bpx-player-ctrl-playbackrate',
+        '.squirtle-quality-wrap',
+        '.squirtle-speed-wrap',
+        '.bilibili-player-video-quality',
+        '.bilibili-player-video-time',
+    ];
+
+    function isPlayerControlClick(el) {
+        return PLAYER_CTRL_SELECTORS.some(sel => el.closest?.(sel));
+    }
+
+    if (IS_IFRAME) {
+        document.addEventListener('click', e => {
+            const a = e.target.closest?.('a[href]');
+            if (a && a.href && isPlayerControlClick(a)) {
+                e.preventDefault();
+                e.stopPropagation();
             }
-        }
-    });
+        }, true);
+    }
 
-    document.addEventListener('click', e => {
-        const a = e.target.closest?.('a[href]');
-        if (a && a.href && /bilibili\.com/i.test(a.href) &&
-            (a.closest('.bilibili-player-video-top') || a.target === '_blank' || a.target === '_top')) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-    }, true);
-
-    // =============== 2. 查找 <video> 元素 ===============
+    // =============== 3. 查找 <video> 元素 ===============
 
     function findVideo() {
         if (_video && document.contains(_video)) return _video;
@@ -74,7 +189,7 @@
         check();
     }
 
-    // =============== 3. 画质探测与切换 ===============
+    // =============== 4. 画质探测与切换 ===============
 
     const QUALITY_MAP = {
         127: '8K', 126: '杜比视界', 125: 'HDR', 120: '4K',
@@ -82,8 +197,68 @@
         74: '720P60', 64: '720P', 32: '480P', 16: '360P'
     };
 
+    const QUALITY_LABEL_TO_QN = {
+        '8K': 127, '杜比视界': 126, 'HDR': 125, '4K': 120,
+        '1080P60': 116, '1080P 高码率': 112, '1080P+': 112,
+        '1080P 高清': 80, '1080P': 80,
+        '720P 高清': 64, '720P60': 74, '720P': 64,
+        '480P 清晰': 32, '480P': 32,
+        '360P 流畅': 16, '360P': 16,
+    };
+
+    function getQualityFromDOM() {
+        const info = { available: [], current: 0, descriptions: {} };
+
+        const qualitySelectors = [
+            '.bpx-player-ctrl-quality-menu .bpx-player-ctrl-quality-menu-item',
+            '.squirtle-quality-wrap .squirtle-quality-item',
+            '.bui-select-list .bui-select-list-item',
+            '.bilibili-player-video-quality-menu li',
+            '.bpx-player-ctrl-quality .bpx-player-ctrl-quality-menu-item',
+        ];
+
+        for (const selector of qualitySelectors) {
+            const items = document.querySelectorAll(selector);
+            if (!items.length) continue;
+
+            items.forEach(item => {
+                const val = item.getAttribute('data-value') || item.getAttribute('data-quality');
+                const text = item.textContent?.trim().replace(/大会员|登录|试看/g, '').trim() || '';
+                const qn = parseInt(val) || QUALITY_LABEL_TO_QN[text] || 0;
+                if (qn > 0 && !info.available.includes(qn)) {
+                    info.available.push(qn);
+                    info.descriptions[qn] = text || QUALITY_MAP[qn] || String(qn);
+                }
+                if (item.classList.contains('bpx-state-active') || item.classList.contains('active') ||
+                    item.classList.contains('bui-select-item-active') || item.getAttribute('aria-checked') === 'true') {
+                    info.current = qn;
+                }
+            });
+            if (info.available.length) break;
+        }
+
+        if (!info.current) {
+            const currentLabel = document.querySelector(
+                '.bpx-player-ctrl-quality-result, .squirtle-quality-text, .bilibili-player-video-quality-text, .bpx-player-ctrl-quality .bpx-player-ctrl-btn-text'
+            );
+            if (currentLabel) {
+                const text = currentLabel.textContent?.trim().replace(/大会员|登录|试看/g, '').trim() || '';
+                const match = text.match(/(\d+P)/);
+                if (match) {
+                    for (const [label, qn] of Object.entries(QUALITY_LABEL_TO_QN)) {
+                        if (label.includes(match[1])) { info.current = qn; break; }
+                    }
+                }
+            }
+        }
+
+        info.available.sort((a, b) => b - a);
+        return info;
+    }
+
     function getQualityInfo() {
         const info = { available: [], current: 0, descriptions: {} };
+
         try {
             const pi = window.__playinfo__;
             if (pi?.data) {
@@ -100,10 +275,22 @@
         if (!info.available.length) {
             try {
                 const player = window.player;
-                if (player?.getSupportedQualityList) {
+                if (player?.getQualityList) {
+                    info.available = player.getQualityList() || [];
+                } else if (player?.getSupportedQualityList) {
                     info.available = player.getSupportedQualityList() || [];
                 }
+                if (player?.getQuality) info.current = player.getQuality() || info.current;
             } catch (_) {}
+        }
+
+        if (!info.available.length) {
+            const domInfo = getQualityFromDOM();
+            if (domInfo.available.length) {
+                info.available = domInfo.available;
+                info.descriptions = domInfo.descriptions;
+                if (domInfo.current) info.current = domInfo.current;
+            }
         }
 
         info.available.forEach(q => {
@@ -113,61 +300,97 @@
         return info;
     }
 
-    function setQuality(qn) {
-        const player = window.player;
-        if (!player) return false;
+    function setQualityViaDOM(qn) {
+        const qualityTriggers = [
+            '.bpx-player-ctrl-quality',
+            '.squirtle-quality-wrap',
+            '.bilibili-player-video-quality',
+        ];
 
-        if (typeof player.requestQuality === 'function') {
-            try {
-                const result = player.requestQuality(qn, null);
-                if (result && typeof result.then === 'function') {
-                    result.catch(() => {});
-                }
-                return true;
-            } catch (_) {}
+        for (const triggerSel of qualityTriggers) {
+            const trigger = document.querySelector(triggerSel);
+            if (!trigger) continue;
+            trigger.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+            trigger.click?.();
         }
 
-        for (const method of ['setQuality', 'setPlaybackQuality']) {
-            if (typeof player[method] === 'function') {
-                try { player[method](qn); return true; } catch (_) {}
-            }
-        }
+        return new Promise(resolve => {
+            setTimeout(() => {
+                const itemSelectors = [
+                    '.bpx-player-ctrl-quality-menu-item',
+                    '.squirtle-quality-item',
+                    '.bui-select-list-item',
+                    '.bilibili-player-video-quality-menu li',
+                ];
 
-        try {
-            const settingsPanel = document.querySelector('.bpx-player-ctrl-quality');
-            if (settingsPanel) {
-                const items = settingsPanel.querySelectorAll('.bpx-player-ctrl-quality-menu-item, .squirtle-quality-item, .bui-select-list-item');
-                for (const item of items) {
-                    const val = item.getAttribute('data-value') || item.getAttribute('data-quality');
-                    if (parseInt(val) === qn) {
-                        item.click();
-                        return true;
+                for (const sel of itemSelectors) {
+                    const items = document.querySelectorAll(sel);
+                    for (const item of items) {
+                        const val = parseInt(item.getAttribute('data-value') || item.getAttribute('data-quality') || '0');
+                        const text = item.textContent?.trim().replace(/大会员|登录|试看/g, '').trim() || '';
+                        const labelQn = QUALITY_LABEL_TO_QN[text] || 0;
+
+                        if (val === qn || labelQn === qn) {
+                            item.click();
+                            resolve(true);
+                            return;
+                        }
                     }
                 }
-            }
-        } catch (_) {}
+                resolve(false);
+            }, 300);
+        });
+    }
 
-        return false;
+    function setQuality(qn) {
+        const player = window.player;
+
+        if (player) {
+            if (typeof player.requestQuality === 'function') {
+                try {
+                    const result = player.requestQuality(qn, null);
+                    if (result && typeof result.then === 'function') {
+                        result.catch(() => {});
+                    }
+                    setTimeout(() => postQualityInfo(), 2000);
+                    return true;
+                } catch (_) {}
+            }
+
+            for (const method of ['setQuality', 'setPlaybackQuality', 'switchQuality']) {
+                if (typeof player[method] === 'function') {
+                    try { player[method](qn); setTimeout(() => postQualityInfo(), 2000); return true; } catch (_) {}
+                }
+            }
+        }
+
+        setQualityViaDOM(qn).then(ok => {
+            if (ok) setTimeout(() => postQualityInfo(), 1500);
+        });
+        return true;
     }
 
     const PREFERRED_QUALITIES = [80, 64, 32];
     let _autoQualityAttempted = false;
+    let _autoQualityRetries = 0;
 
     function autoSetBestQuality() {
+        if (_userQualityOverride) return;
         if (_autoQualityAttempted) return;
         const info = getQualityInfo();
-        if (!info.available.length) return;
-
+        if (!info.available.length) {
+            _autoQualityRetries++;
+            if (_autoQualityRetries >= 3) _autoQualityAttempted = true;
+            return;
+        }
         if (info.current >= 80) {
             _autoQualityAttempted = true;
             return;
         }
-
         for (const qn of PREFERRED_QUALITIES) {
             if (info.available.includes(qn)) {
                 _autoQualityAttempted = true;
                 setQuality(qn);
-                setTimeout(postQualityInfo, 2000);
                 return;
             }
         }
@@ -188,7 +411,7 @@
         } catch (_) {}
     }
 
-    // =============== 4. postMessage 指令处理 ===============
+    // =============== 5. postMessage 指令处理 ===============
 
     window.addEventListener('message', (e) => {
         if (!e.data || typeof e.data !== 'object') return;
@@ -210,8 +433,9 @@
             case 'set-quality': {
                 const qn = parseInt(e.data.quality);
                 if (qn > 0) {
-                    const ok = setQuality(qn);
-                    if (ok) setTimeout(() => postQualityInfo(), 1500);
+                    _userQualityOverride = true;
+                    _autoQualityAttempted = true;
+                    setQuality(qn);
                 }
                 break;
             }
@@ -272,7 +496,7 @@
         } catch (_) {}
     }
 
-    // =============== 5. 周期性上报 ===============
+    // =============== 6. 周期性上报 ===============
 
     function startReporting(video) {
         if (_reportTimer) clearInterval(_reportTimer);
@@ -293,20 +517,16 @@
         video.addEventListener('volumechange', () => postState(video));
     }
 
-    // =============== 6. 初始化 ===============
+    // =============== 7. 初始化 ===============
 
     function init() {
-        neutralizeLinks(document);
-        domObserver.observe(document.documentElement || document.body, {
-            childList: true, subtree: true
-        });
-
         waitForVideo((video) => {
             startReporting(video);
             postState(video);
-            setTimeout(() => { postQualityInfo(); autoSetBestQuality(); }, 3000);
-            setTimeout(() => { postQualityInfo(); autoSetBestQuality(); }, 6000);
-            setTimeout(() => { postQualityInfo(); autoSetBestQuality(); }, 10000);
+            const delays = IS_FULL_PAGE ? [3000, 6000, 10000, 15000, 20000] : [3000, 6000, 10000, 15000];
+            delays.forEach(ms => {
+                setTimeout(() => { postQualityInfo(); autoSetBestQuality(); }, ms);
+            });
         });
     }
 

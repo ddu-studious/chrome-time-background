@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "中国风景时钟",
-  "version": "3.13.0",
+  "version": "3.15.0",
   "description": "中国风景新标签页时钟，支持天气、备忘录、独立音乐播放器、哔哩哔哩集成(关注分组/UP主主页/已购课程/倍速画质控制/Cookie共享)、温情提示、扩展活动监控、热搜资讯、书签智能检索，含性能省电模式",
   "permissions": [
     "storage",
@@ -18,7 +18,8 @@
     "system.cpu",
     "system.memory",
     "system.storage",
-    "contextMenus"
+    "contextMenus",
+    "declarativeNetRequest"
   ],
   "optional_permissions": [
     "bookmarks"
@@ -64,7 +65,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://player.bilibili.com/*"],
+      "matches": ["*://player.bilibili.com/*", "*://www.bilibili.com/video/*", "*://www.bilibili.com/bangumi/*"],
       "js": ["js/bilibili-player-inject.js"],
       "run_at": "document_start",
       "all_frames": true,

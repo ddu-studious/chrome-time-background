@@ -1,9 +1,10 @@
 /**
- * 音乐控制器模块 v3.13.0
+ * 音乐控制器模块 v3.14.0
  * UI 风格：Minimal Card（极简紧凑 + 滑动切换）— 基于 Demo 5
  * v3.0.0: 纯 API + Offscreen Document 独立播放器模式
  * v3.12.0: 音量浮层修复、发现全播、搜索队列、状态持久化、歌词防抖
  * v3.13.0: 音量浮层定位修正、歌单队列持久化（刷新不丢失）
+ * v3.14.0: 队列列表UI优化（双行布局+喜欢按钮）、刷新后队列自动恢复
  */
 class MusicController {
     constructor() {
@@ -67,6 +68,9 @@ class MusicController {
             this.platform = 'netease';
             this.isActive = true;
             this._show();
+            if (Array.isArray(this._playlist) && this._playlist.length > 0) {
+                this._refreshPlaylist();
+            }
             if (!this.state.title) {
                 this._showMetaGuide('default');
                 this._loadRecommended();
@@ -88,6 +92,7 @@ class MusicController {
                     this.state = { ...this.state, ...lastMusicState };
                     this.platform = lastMusicState.platform || null;
                     this._lastUpdateTs = Date.now();
+                    if (lastMusicState.songId) this._currentSongId = lastMusicState.songId;
                 }
             }
             if (musicPlaylistCache && Array.isArray(musicPlaylistCache.playlist) && musicPlaylistCache.playlist.length > 0) {
@@ -96,6 +101,10 @@ class MusicController {
                     this._playlist = musicPlaylistCache.playlist;
                     this._currentPlaylistId = musicPlaylistCache.playlistId || null;
                     this._currentPlaylistName = musicPlaylistCache.playlistName || '';
+                    if (this._currentSongId || lastMusicState?.songId) {
+                        const activeSongId = String(this._currentSongId || lastMusicState.songId);
+                        this._playlist.forEach(s => { s.isActive = (String(s.songId) === activeSongId); });
+                    }
                 }
             }
         } catch { /* storage may not be available */ }
@@ -1200,8 +1209,11 @@ class MusicController {
         pane.innerHTML = headerHtml + songs.map((song, idx) => `
             <div class="mc-row${song.isActive ? ' mc-row-active' : ''}" data-song-id="${song.songId || ''}" data-index="${idx}">
                 <span class="mc-row-num">${song.isActive ? '<i class="fas fa-volume-up" style="font-size:9px"></i>' : (idx + 1)}</span>
-                <span class="mc-row-title">${this._esc(song.title)}</span>
-                <span class="mc-row-artist">${this._esc(song.artist)}</span>
+                <div class="mc-row-info">
+                    <span class="mc-row-title">${this._esc(song.title)}</span>
+                    <span class="mc-row-artist">${this._esc(song.artist)}</span>
+                </div>
+                <button class="mc-row-like" data-song-id="${song.songId || ''}" title="添加到我喜欢"><i class="fas fa-heart"></i></button>
                 <button class="mc-row-play"><i class="fas fa-play"></i></button>
             </div>
         `).join('');
@@ -1231,11 +1243,20 @@ class MusicController {
 
         pane.querySelectorAll('.mc-row').forEach(item => {
             item.addEventListener('click', (e) => {
+                if (e.target.closest('.mc-row-like') || e.target.closest('.mc-row-play')) return;
                 e.stopPropagation();
                 const songId = item.dataset.songId;
                 if (songId) {
                     this._playSongById(songId);
                 }
+            });
+        });
+
+        pane.querySelectorAll('.mc-row-like').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const songId = btn.dataset.songId;
+                if (songId) this._likeSong(songId, btn);
             });
         });
 
@@ -1347,6 +1368,33 @@ class MusicController {
         toast.classList.add('mc-toast-show');
         clearTimeout(this._toastTimer);
         this._toastTimer = setTimeout(() => toast.classList.remove('mc-toast-show'), duration);
+    }
+
+    async _likeSong(songId, btnEl) {
+        if (!songId) return;
+        const icon = btnEl?.querySelector('i');
+        const wasLiked = btnEl?.classList.contains('mc-row-liked');
+        const like = !wasLiked;
+
+        if (icon) icon.className = 'fas fa-spinner fa-spin';
+
+        try {
+            const resp = await this._neteaseApi('/api/song/like', { trackId: songId, like, time: 3 }, 'POST');
+            if (resp?.ok || resp?.data?.code === 200) {
+                if (like) {
+                    btnEl?.classList.add('mc-row-liked');
+                    this._showToast('已添加到我喜欢');
+                } else {
+                    btnEl?.classList.remove('mc-row-liked');
+                    this._showToast('已取消喜欢');
+                }
+            } else {
+                this._showToast('操作失败，请重试');
+            }
+        } catch {
+            this._showToast('网络错误，请重试');
+        }
+        if (icon) icon.className = 'fas fa-heart';
     }
 
     _updatePlaylistActiveState(songId) {
@@ -1531,8 +1579,11 @@ class MusicController {
             ${songs.map((song, idx) => `
                 <div class="mc-row mc-rec-row" data-song-id="${song.songId || ''}" data-index="${idx}">
                     <span class="mc-row-num" style="color:rgba(200,160,255,${gradients[idx] || 0.06})">${idx + 1}</span>
-                    <span class="mc-row-title">${this._esc(song.title)}</span>
-                    <span class="mc-row-artist">${this._esc(song.artist || '')}</span>
+                    <div class="mc-row-info">
+                        <span class="mc-row-title">${this._esc(song.title)}</span>
+                        <span class="mc-row-artist">${this._esc(song.artist || '')}</span>
+                    </div>
+                    <button class="mc-row-like" data-song-id="${song.songId || ''}" title="添加到我喜欢"><i class="fas fa-heart"></i></button>
                     <button class="mc-row-play"><i class="fas fa-play"></i></button>
                 </div>
             `).join('')}
@@ -1564,6 +1615,7 @@ class MusicController {
 
         pane.querySelectorAll('.mc-rec-row').forEach(item => {
             item.addEventListener('click', (e) => {
+                if (e.target.closest('.mc-row-like') || e.target.closest('.mc-row-play')) return;
                 e.stopPropagation();
                 const songId = item.dataset.songId;
                 if (songId) {
@@ -1574,6 +1626,14 @@ class MusicController {
                     }
                     this._playSongById(songId);
                 }
+            });
+        });
+
+        pane.querySelectorAll('.mc-rec-row .mc-row-like').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const songId = btn.dataset.songId;
+                if (songId) this._likeSong(songId, btn);
             });
         });
     }
@@ -1629,14 +1689,18 @@ class MusicController {
         resultsEl.innerHTML = results.map((song, idx) => `
             <div class="mc-row mc-search-row" data-song-id="${song.songId || ''}" data-index="${song.index}">
                 <span class="mc-row-num">${idx + 1}</span>
-                <span class="mc-row-title">${this._esc(song.title)}</span>
-                <span class="mc-row-artist">${this._esc(song.artist || '')}</span>
+                <div class="mc-row-info">
+                    <span class="mc-row-title">${this._esc(song.title)}</span>
+                    <span class="mc-row-artist">${this._esc(song.artist || '')}</span>
+                </div>
+                <button class="mc-row-like" data-song-id="${song.songId || ''}" title="添加到我喜欢"><i class="fas fa-heart"></i></button>
                 <button class="mc-row-play"><i class="fas fa-play"></i></button>
             </div>
         `).join('');
 
         resultsEl.querySelectorAll('.mc-search-row').forEach(item => {
             item.addEventListener('click', (e) => {
+                if (e.target.closest('.mc-row-like')) return;
                 e.stopPropagation();
                 item.querySelector('.mc-row-play i')?.classList.replace('fa-play', 'fa-spinner');
                 item.querySelector('.mc-row-play i')?.classList.add('fa-spin');
@@ -1650,6 +1714,14 @@ class MusicController {
                     }
                     this._playSongById(songId);
                 }
+            });
+        });
+
+        resultsEl.querySelectorAll('.mc-search-row .mc-row-like').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const songId = btn.dataset.songId;
+                if (songId) this._likeSong(songId, btn);
             });
         });
     }
