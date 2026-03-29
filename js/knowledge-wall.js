@@ -2,6 +2,7 @@
  * 知识墙模块 - 瀑布流信息管理
  * 支持笔记、链接、代码片段、联系人、周记等多种卡片类型
  * v2.0: 密码保护、Markdown 渲染
+ * v2.1: 标签归类筛选、Markdown Tab 缩进与快捷键增强
  */
 class KnowledgeWall {
     constructor() {
@@ -9,6 +10,7 @@ class KnowledgeWall {
         this.filteredCards = [];
         this.searchQuery = '';
         this.filterType = 'all';
+        this.selectedTags = new Set();
         this.isOpen = false;
         this.editingCardId = null;
         this._unlockedCards = new Set();
@@ -237,6 +239,7 @@ class KnowledgeWall {
                     </div>
                     <button class="kw-close" id="kw-close"><i class="fas fa-times"></i></button>
                 </div>
+                <div class="kw-tag-cloud" id="kw-tag-cloud"></div>
                 <div class="kw-content" id="kw-content">
                     <div class="kw-masonry" id="kw-masonry"></div>
                     <div class="kw-empty hidden" id="kw-empty">
@@ -283,6 +286,7 @@ class KnowledgeWall {
             filterBar.querySelectorAll('.kw-filter-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             this.filterType = btn.dataset.type;
+            this.selectedTags.clear();
             this.applyFilter();
             this.render();
         });
@@ -325,6 +329,12 @@ class KnowledgeWall {
         if (this.filterType !== 'all') {
             list = list.filter(c => c.type === this.filterType);
         }
+        if (this.selectedTags.size > 0) {
+            list = list.filter(c => {
+                const cardTags = new Set(c.tags || []);
+                return [...this.selectedTags].every(t => cardTags.has(t));
+            });
+        }
         if (this.searchQuery) {
             list = list.filter(c => {
                 const text = `${c.title} ${c.content} ${(c.tags || []).join(' ')} ${(c.links || []).map(l => l.title + ' ' + l.url).join(' ')}`.toLowerCase();
@@ -339,6 +349,77 @@ class KnowledgeWall {
         this.filteredCards = list;
     }
 
+    // ===================== 标签云 =====================
+
+    _getTagStats() {
+        const sourceCards = this.filterType !== 'all'
+            ? this.cards.filter(c => c.type === this.filterType)
+            : this.cards;
+        const stats = {};
+        sourceCards.forEach(card => {
+            (card.tags || []).forEach(tag => {
+                stats[tag] = (stats[tag] || 0) + 1;
+            });
+        });
+        return Object.entries(stats)
+            .sort((a, b) => b[1] - a[1])
+            .map(([tag, count]) => ({ tag, count }));
+    }
+
+    _renderTagCloud() {
+        const container = document.getElementById('kw-tag-cloud');
+        if (!container) return;
+
+        const stats = this._getTagStats();
+        if (stats.length === 0) {
+            container.classList.add('hidden');
+            container.innerHTML = '';
+            return;
+        }
+
+        container.classList.remove('hidden');
+        const chips = stats.map(({ tag, count }) => {
+            const isActive = this.selectedTags.has(tag);
+            return `<span class="kw-tag-chip${isActive ? ' active' : ''}" data-tag="${this._escapeHtml(tag)}">
+                ${this._escapeHtml(tag)}<span class="kw-tag-count">×${count}</span>
+            </span>`;
+        }).join('');
+
+        const clearBtn = this.selectedTags.size > 0
+            ? `<span class="kw-tag-chip kw-tag-clear" title="清除标签筛选"><i class="fas fa-times-circle"></i> 清除</span>`
+            : '';
+
+        container.innerHTML = `<span class="kw-tag-label"><i class="fas fa-tags"></i></span>${chips}${clearBtn}`;
+
+        container.querySelectorAll('.kw-tag-chip:not(.kw-tag-clear)').forEach(chip => {
+            chip.addEventListener('click', () => {
+                const tag = chip.dataset.tag;
+                this._toggleTag(tag);
+            });
+        });
+
+        const clearEl = container.querySelector('.kw-tag-clear');
+        if (clearEl) {
+            clearEl.addEventListener('click', () => {
+                this.selectedTags.clear();
+                this.applyFilter();
+                this.render();
+                this._renderTagCloud();
+            });
+        }
+    }
+
+    _toggleTag(tag) {
+        if (this.selectedTags.has(tag)) {
+            this.selectedTags.delete(tag);
+        } else {
+            this.selectedTags.add(tag);
+        }
+        this.applyFilter();
+        this.render();
+        this._renderTagCloud();
+    }
+
     // ===================== 渲染 =====================
 
     render() {
@@ -348,6 +429,7 @@ class KnowledgeWall {
         if (this.filteredCards.length === 0) {
             masonry.innerHTML = '';
             empty.classList.remove('hidden');
+            this._renderTagCloud();
             return;
         }
         empty.classList.add('hidden');
@@ -355,6 +437,7 @@ class KnowledgeWall {
         masonry.innerHTML = this.filteredCards.map(card => this.renderCard(card)).join('');
         this.bindCardEvents(masonry);
         this._renderMermaidBlocks(masonry);
+        this._renderTagCloud();
     }
 
     renderCard(card) {
@@ -396,7 +479,10 @@ class KnowledgeWall {
         }
 
         const tagsHtml = card.tags && card.tags.length > 0
-            ? `<div class="wc-tags">${card.tags.map(t => `<span>${esc(t)}</span>`).join('')}</div>`
+            ? `<div class="wc-tags">${card.tags.map(t => {
+                const isActive = this.selectedTags.has(t);
+                return `<span class="wc-tag-clickable${isActive ? ' wc-tag-active' : ''}" data-tag="${esc(t)}">${esc(t)}</span>`;
+            }).join('')}</div>`
             : '';
 
         const lockIcon = isProtected
@@ -458,6 +544,13 @@ class KnowledgeWall {
                     this._showPasswordDialog(cardId);
                 });
             }
+
+            el.querySelectorAll('.wc-tag-clickable').forEach(tagEl => {
+                tagEl.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this._toggleTag(tagEl.dataset.tag);
+                });
+            });
 
             const lockToggle = el.querySelector('.wc-lock-toggle');
             if (lockToggle) {
@@ -760,6 +853,64 @@ class KnowledgeWall {
             });
         });
 
+        // Markdown Tab 缩进 + 快捷键
+        textarea.addEventListener('keydown', (e) => {
+            // Tab / Shift+Tab 缩进控制
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                const indent = '    ';
+                if (e.shiftKey) {
+                    this._unindentSelection(textarea, indent);
+                } else {
+                    if (textarea.selectionStart === textarea.selectionEnd) {
+                        textarea.setRangeText(indent, textarea.selectionStart, textarea.selectionStart, 'end');
+                    } else {
+                        this._indentSelection(textarea, indent);
+                    }
+                }
+                textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                return;
+            }
+
+            // Markdown 列表自动续行
+            if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+                const { selectionStart, value } = textarea;
+                const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1;
+                const currentLine = value.substring(lineStart, selectionStart);
+
+                const listMatch = currentLine.match(/^(\s*)([-*+]|\d+\.)\s(\[[ x]\]\s)?/);
+                if (listMatch) {
+                    const [fullMatch, leadingSpace, bullet, checkbox] = listMatch;
+                    const contentAfterPrefix = currentLine.substring(fullMatch.length);
+
+                    if (contentAfterPrefix.trim() === '') {
+                        e.preventDefault();
+                        textarea.setRangeText('\n', lineStart, selectionStart, 'end');
+                        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                        return;
+                    }
+
+                    e.preventDefault();
+                    let nextBullet = bullet;
+                    const numMatch = bullet.match(/^(\d+)\.$/);
+                    if (numMatch) nextBullet = (parseInt(numMatch[1]) + 1) + '.';
+                    const prefix = leadingSpace + nextBullet + ' ' + (checkbox ? '[ ] ' : '');
+                    textarea.setRangeText('\n' + prefix, selectionStart, selectionStart, 'end');
+                    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                    return;
+                }
+            }
+
+            // Ctrl/Cmd 快捷键
+            if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+                const key = e.key.toLowerCase();
+                if (key === 'b') { e.preventDefault(); this._insertMarkdownSyntax(textarea, 'bold'); }
+                else if (key === 'i' && !e.shiftKey) { e.preventDefault(); this._insertMarkdownSyntax(textarea, 'italic'); }
+                else if (key === 'k' && !e.shiftKey) { e.preventDefault(); this._insertMarkdownSyntax(textarea, 'link'); }
+                else if (key === 'k' && e.shiftKey) { e.preventDefault(); this._insertMarkdownSyntax(textarea, 'code'); }
+            }
+        });
+
         // Markdown 实时预览
         let previewTimer;
         textarea.addEventListener('input', () => {
@@ -907,6 +1058,40 @@ class KnowledgeWall {
             selected ? cursorPos : start + ins.before.length,
             cursorPos
         );
+    }
+
+    _indentSelection(textarea, indent) {
+        const { selectionStart, selectionEnd, value } = textarea;
+        const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1;
+        const selectedText = value.substring(lineStart, selectionEnd);
+        const lines = selectedText.split('\n');
+        const indented = lines.map(line => indent + line).join('\n');
+
+        textarea.value = value.substring(0, lineStart) + indented + value.substring(selectionEnd);
+        textarea.selectionStart = selectionStart + indent.length;
+        textarea.selectionEnd = selectionEnd + indent.length * lines.length;
+        textarea.focus();
+    }
+
+    _unindentSelection(textarea, indent) {
+        const { selectionStart, selectionEnd, value } = textarea;
+        const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1;
+        const selectedText = value.substring(lineStart, selectionEnd);
+
+        let removedBefore = 0;
+        let totalRemoved = 0;
+        const lines = selectedText.split('\n');
+        const unindented = lines.map((line, i) => {
+            const spaces = line.match(/^ {1,4}/)?.[0]?.length || 0;
+            if (i === 0) removedBefore = Math.min(spaces, selectionStart - lineStart);
+            totalRemoved += spaces;
+            return line.substring(spaces);
+        }).join('\n');
+
+        textarea.value = value.substring(0, lineStart) + unindented + value.substring(selectionEnd);
+        textarea.selectionStart = Math.max(lineStart, selectionStart - removedBefore);
+        textarea.selectionEnd = Math.max(textarea.selectionStart, selectionEnd - totalRemoved);
+        textarea.focus();
     }
 
     _bindLinkRemove(container) {
