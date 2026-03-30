@@ -236,6 +236,11 @@ class MusicController {
                                 <i class="fas fa-search"></i>
                                 <input type="text" id="mc-search-input" placeholder="搜索歌曲、歌手..." maxlength="60">
                             </div>
+                            <div class="mc-search-type-tabs" id="mc-search-type-tabs">
+                                <button class="mc-search-type active" data-type="1">歌曲</button>
+                                <button class="mc-search-type" data-type="1000">歌单</button>
+                                <button class="mc-search-type" data-type="100">歌手</button>
+                            </div>
                         </div>
                         <div id="mc-search-results">
                             <div class="mc-search-history" id="mc-search-history-area"></div>
@@ -407,6 +412,7 @@ class MusicController {
         });
 
         // 搜索
+        this._searchType = 1;
         const searchInput = el.querySelector('#mc-search-input');
         if (searchInput) {
             searchInput.addEventListener('keydown', (e) => {
@@ -415,6 +421,17 @@ class MusicController {
             });
             searchInput.addEventListener('click', (e) => e.stopPropagation());
         }
+        el.querySelectorAll('.mc-search-type').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const type = parseInt(btn.dataset.type);
+                if (type === this._searchType) return;
+                this._searchType = type;
+                el.querySelectorAll('.mc-search-type').forEach(b => b.classList.toggle('active', b === btn));
+                const q = el.querySelector('#mc-search-input')?.value;
+                if (q?.trim()) this._performSearch(q);
+            });
+        });
 
         // 断开连接
         el.querySelector('#mc-disconnect')?.addEventListener('click', (e) => {
@@ -1542,6 +1559,8 @@ class MusicController {
         if (!pane) return;
         pane.innerHTML = '<div class="mc-empty"><i class="fas fa-spinner fa-spin"></i> 加载中...</div>';
 
+        let songRendered = false;
+
         const resp = await this._neteaseApi('/api/v3/discovery/recommend/songs');
         const dailySongs = resp?.ok ? (resp?.data?.data?.dailySongs || resp?.data?.dailySongs) : null;
         if (dailySongs?.length > 0) {
@@ -1549,21 +1568,72 @@ class MusicController {
                 title: s.name, artist: (s.ar || []).map(a => a.name).join('/'), songId: s.id, index: i,
             }));
             this._renderRecommend(pane, this._recommendSongs, '每日推荐');
-            return;
+            songRendered = true;
         }
 
-        const hotResp = await this._neteaseApi('/api/playlist/detail', { id: 3778678, n: 20 });
-        const hotPlaylist = hotResp?.ok ? (hotResp?.data?.playlist || hotResp?.data?.result?.playlist) : null;
-        if (hotPlaylist?.tracks?.length > 0) {
-            const songs = hotPlaylist.tracks.slice(0, 20).map((s, i) => ({
-                title: s.name, artist: (s.ar || []).map(a => a.name).join('/'), songId: s.id, index: i,
-            }));
-            this._recommendSongs = songs;
-            this._renderRecommend(pane, songs, '热门歌曲');
-            return;
+        if (!songRendered) {
+            const hotResp = await this._neteaseApi('/api/playlist/detail', { id: 3778678, n: 20 });
+            const hotPlaylist = hotResp?.ok ? (hotResp?.data?.playlist || hotResp?.data?.result?.playlist) : null;
+            if (hotPlaylist?.tracks?.length > 0) {
+                const songs = hotPlaylist.tracks.slice(0, 20).map((s, i) => ({
+                    title: s.name, artist: (s.ar || []).map(a => a.name).join('/'), songId: s.id, index: i,
+                }));
+                this._recommendSongs = songs;
+                this._renderRecommend(pane, songs, '热门歌曲');
+                songRendered = true;
+            }
         }
 
-        pane.innerHTML = '<div class="mc-empty">暂无推荐，请确认已登录网易云</div>';
+        await this._loadRecommendPlaylists(pane, songRendered);
+    }
+
+    async _loadRecommendPlaylists(pane, hasSongs) {
+        if (!pane) return;
+
+        const plResp = await this._neteaseApi('/api/personalized/playlist', { limit: 6 });
+        const playlists = plResp?.ok ? (plResp?.data?.result || []) : [];
+
+        if (playlists.length === 0 && !hasSongs) {
+            pane.innerHTML = '<div class="mc-empty">暂无推荐，请确认已登录网易云</div>';
+            return;
+        }
+        if (playlists.length === 0) return;
+
+        const plHtml = `
+            <div class="mc-discover-playlists">
+                <div class="mc-rec-header" style="margin-top:8px">
+                    <div class="mc-rec-tag"><i class="fas fa-compact-disc"></i> 推荐歌单</div>
+                </div>
+                <div class="mc-pl-grid">
+                    ${playlists.map(pl => `
+                        <div class="mc-pl-card" data-pl-id="${pl.id || ''}" title="${this._esc(pl.name || '')}">
+                            <div class="mc-pl-card-cover">
+                                ${pl.picUrl ? `<img src="${this._esc(pl.picUrl)}?param=120y120" alt="">` : '<i class="fas fa-music"></i>'}
+                                <div class="mc-pl-card-play"><i class="fas fa-play"></i></div>
+                                ${pl.playCount ? `<span class="mc-pl-card-count"><i class="fas fa-headphones"></i> ${this._formatCount(pl.playCount)}</span>` : ''}
+                            </div>
+                            <div class="mc-pl-card-name">${this._esc(pl.name || '未命名歌单')}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+        pane.insertAdjacentHTML('beforeend', plHtml);
+
+        pane.querySelectorAll('.mc-pl-card').forEach(card => {
+            card.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const plId = card.dataset.plId;
+                if (plId) this._loadPlaylistSongsViaApi(plId, null);
+            });
+        });
+    }
+
+    _formatCount(n) {
+        if (!n) return '0';
+        if (n >= 100000000) return (n / 100000000).toFixed(1) + '亿';
+        if (n >= 10000) return (n / 10000).toFixed(1) + '万';
+        return String(n);
     }
 
     _renderRecommend(pane, songs, label) {
@@ -1668,18 +1738,28 @@ class MusicController {
         const resultsEl = this._el?.querySelector('#mc-search-results');
         if (!resultsEl) return;
 
-        // 保存搜索历史
         this._searchHistory = [query.trim(), ...this._searchHistory.filter(q => q !== query.trim())].slice(0, 10);
         this._saveSearchHistory();
 
+        const searchType = this._searchType || 1;
         resultsEl.innerHTML = '<div class="mc-empty"><i class="fas fa-spinner fa-spin"></i> 搜索中...</div>';
-        let results = [];
-        const apiResp = await this._neteaseApi('/api/search/get/web', { s: query.trim(), type: 1, limit: 20, offset: 0 });
-        if (apiResp?.ok && apiResp?.data?.result?.songs) {
-            results = apiResp.data.result.songs.map((s, idx) => ({
-                index: idx, title: s.name || '', artist: (s.artists || []).map(a => a.name).join('/') || '', songId: s.id,
-            }));
+
+        if (searchType === 1000) {
+            await this._searchPlaylists(query.trim(), resultsEl);
+        } else if (searchType === 100) {
+            await this._searchArtists(query.trim(), resultsEl);
+        } else {
+            await this._searchSongs(query.trim(), resultsEl);
         }
+    }
+
+    async _searchSongs(query, resultsEl) {
+        const apiResp = await this._neteaseApi('/api/search/get/web', { s: query, type: 1, limit: 20, offset: 0 });
+        const results = (apiResp?.ok && apiResp?.data?.result?.songs)
+            ? apiResp.data.result.songs.map((s, idx) => ({
+                index: idx, title: s.name || '', artist: (s.artists || []).map(a => a.name).join('/') || '', songId: s.id,
+            }))
+            : [];
 
         if (results.length === 0) {
             resultsEl.innerHTML = '<div class="mc-empty">未找到相关歌曲</div>';
@@ -1706,7 +1786,7 @@ class MusicController {
                 item.querySelector('.mc-row-play i')?.classList.add('fa-spin');
                 const songId = item.dataset.songId;
                 if (songId) {
-                    const searchLabel = `搜索: ${query.trim()}`;
+                    const searchLabel = `搜索: ${query}`;
                     if (this._playlist.length === 0 || this._currentPlaylistName !== searchLabel) {
                         this._playlist = results.map((s, i) => ({ ...s, index: i, isActive: false }));
                         this._currentPlaylistName = searchLabel;
@@ -1722,6 +1802,88 @@ class MusicController {
                 e.stopPropagation();
                 const songId = btn.dataset.songId;
                 if (songId) this._likeSong(songId, btn);
+            });
+        });
+    }
+
+    async _searchPlaylists(query, resultsEl) {
+        const apiResp = await this._neteaseApi('/api/search/get/web', { s: query, type: 1000, limit: 20, offset: 0 });
+        const playlists = apiResp?.ok ? (apiResp?.data?.result?.playlists || []) : [];
+
+        if (playlists.length === 0) {
+            resultsEl.innerHTML = '<div class="mc-empty">未找到相关歌单</div>';
+            return;
+        }
+
+        resultsEl.innerHTML = `<div class="mc-pl-grid mc-search-pl-grid">
+            ${playlists.map(pl => `
+                <div class="mc-pl-card" data-pl-id="${pl.id || ''}" title="${this._esc(pl.name || '')}">
+                    <div class="mc-pl-card-cover">
+                        ${pl.coverImgUrl ? `<img src="${this._esc(pl.coverImgUrl)}?param=120y120" alt="">` : '<i class="fas fa-music"></i>'}
+                        <div class="mc-pl-card-play"><i class="fas fa-play"></i></div>
+                        ${pl.playCount ? `<span class="mc-pl-card-count"><i class="fas fa-headphones"></i> ${this._formatCount(pl.playCount)}</span>` : ''}
+                    </div>
+                    <div class="mc-pl-card-name">${this._esc(pl.name || '未命名歌单')}</div>
+                    <div class="mc-pl-card-creator">${this._esc(pl.creator?.nickname || '')}</div>
+                </div>
+            `).join('')}
+        </div>`;
+
+        resultsEl.querySelectorAll('.mc-pl-card').forEach(card => {
+            card.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const plId = card.dataset.plId;
+                if (plId) this._loadPlaylistSongsViaApi(plId, null);
+            });
+        });
+    }
+
+    async _searchArtists(query, resultsEl) {
+        const apiResp = await this._neteaseApi('/api/search/get/web', { s: query, type: 100, limit: 20, offset: 0 });
+        const artists = apiResp?.ok ? (apiResp?.data?.result?.artists || []) : [];
+
+        if (artists.length === 0) {
+            resultsEl.innerHTML = '<div class="mc-empty">未找到相关歌手</div>';
+            return;
+        }
+
+        resultsEl.innerHTML = artists.map((ar, idx) => `
+            <div class="mc-row mc-artist-row" data-artist-id="${ar.id || ''}" data-artist-name="${this._esc(ar.name || '')}">
+                <div class="mc-artist-avatar">
+                    ${ar.img1v1Url ? `<img src="${this._esc(ar.img1v1Url)}?param=80y80" alt="">` : '<i class="fas fa-user"></i>'}
+                </div>
+                <div class="mc-row-info">
+                    <span class="mc-row-title">${this._esc(ar.name || '')}</span>
+                    <span class="mc-row-artist">${ar.albumSize ? ar.albumSize + ' 张专辑' : ''}${ar.albumSize && ar.musicSize ? ' · ' : ''}${ar.musicSize ? ar.musicSize + ' 首歌曲' : ''}</span>
+                </div>
+                <button class="mc-row-play" title="播放热门歌曲"><i class="fas fa-play"></i></button>
+            </div>
+        `).join('');
+
+        resultsEl.querySelectorAll('.mc-artist-row').forEach(item => {
+            item.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const artistId = item.dataset.artistId;
+                const artistName = item.dataset.artistName;
+                if (!artistId) return;
+                item.querySelector('.mc-row-play i')?.classList.replace('fa-play', 'fa-spinner');
+                item.querySelector('.mc-row-play i')?.classList.add('fa-spin');
+                const hotResp = await this._neteaseApi('/api/v1/artist', { id: artistId });
+                const hotSongs = hotResp?.ok ? (hotResp?.data?.hotSongs || []) : [];
+                if (hotSongs.length > 0) {
+                    this._playlist = hotSongs.slice(0, 50).map((s, i) => ({
+                        title: s.name || '', artist: (s.ar || []).map(a => a.name).join('/') || '',
+                        songId: s.id, index: i, isActive: false,
+                    }));
+                    this._currentPlaylistName = `${artistName} 热门`;
+                    this._savePlaylistCache();
+                    this._switchTab('queue', true);
+                    this._renderQueueWithApi(this._playlist);
+                    if (hotSongs[0]?.id) this._playSongById(hotSongs[0].id);
+                } else {
+                    item.querySelector('.mc-row-play i')?.classList.replace('fa-spinner', 'fa-play');
+                    item.querySelector('.mc-row-play i')?.classList.remove('fa-spin');
+                }
             });
         });
     }

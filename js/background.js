@@ -1434,6 +1434,12 @@
         
         await initAlarms();
 
+        try {
+            await chrome.declarativeNetRequest.updateDynamicRules({
+                removeRuleIds: [9001, 9002, 9003, 9004, 9010]
+            });
+        } catch (_) {}
+
     });
 
 
@@ -1760,7 +1766,7 @@
             if (cookieStr) {
                 ruleHeaders.push({ header: 'Cookie', operation: 'set', value: cookieStr });
             }
-            await chrome.declarativeNetRequest.updateDynamicRules({
+            await chrome.declarativeNetRequest.updateSessionRules({
                 removeRuleIds: [BILI_API_DNR_RULE_ID],
                 addRules: [{
                     id: BILI_API_DNR_RULE_ID,
@@ -1769,6 +1775,7 @@
                     condition: {
                         urlFilter: '||api.bilibili.com/',
                         resourceTypes: ['xmlhttprequest'],
+                        tabIds: [-1],
                     }
                 }]
             });
@@ -1960,9 +1967,16 @@
                         return;
                     }
 
+                    const senderTabId = sender?.tab?.id;
+                    if (!senderTabId || senderTabId < 0) {
+                        console.warn('[Bilibili] 无法获取发送者标签页 ID，跳过 Cookie 注入');
+                        sendResponse({ ok: false, error: 'no-tab-id' });
+                        return;
+                    }
+
                     const BILI_DNR_RULE_IDS = [9001, 9002, 9003, 9004];
 
-                    await chrome.declarativeNetRequest.updateDynamicRules({
+                    await chrome.declarativeNetRequest.updateSessionRules({
                         removeRuleIds: BILI_DNR_RULE_IDS,
                         addRules: [
                             {
@@ -1974,7 +1988,8 @@
                                 },
                                 condition: {
                                     urlFilter: '||www.bilibili.com/video/',
-                                    resourceTypes: ['sub_frame']
+                                    resourceTypes: ['sub_frame'],
+                                    tabIds: [senderTabId],
                                 }
                             },
                             {
@@ -1986,8 +2001,8 @@
                                 },
                                 condition: {
                                     urlFilter: '||api.bilibili.com/',
-                                    initiatorDomains: ['www.bilibili.com'],
-                                    resourceTypes: ['xmlhttprequest']
+                                    resourceTypes: ['xmlhttprequest'],
+                                    tabIds: [senderTabId],
                                 }
                             },
                             {
@@ -1999,7 +2014,8 @@
                                 },
                                 condition: {
                                     urlFilter: '||player.bilibili.com/',
-                                    resourceTypes: ['sub_frame', 'xmlhttprequest', 'script']
+                                    resourceTypes: ['sub_frame', 'xmlhttprequest', 'script'],
+                                    tabIds: [senderTabId],
                                 }
                             },
                             {
@@ -2011,13 +2027,14 @@
                                 },
                                 condition: {
                                     urlFilter: '||www.bilibili.com/bangumi/',
-                                    resourceTypes: ['sub_frame']
+                                    resourceTypes: ['sub_frame'],
+                                    tabIds: [senderTabId],
                                 }
                             }
                         ]
                     });
 
-                    logExtEvent('bilibili', 'dnr-cookie-inject', { ok: true });
+                    logExtEvent('bilibili', 'dnr-cookie-inject', { ok: true, tabId: senderTabId });
                     sendResponse({ ok: true });
                 } catch (e) {
                     console.warn('[Bilibili] DNR Cookie 注入失败:', e.message);
@@ -2031,7 +2048,7 @@
         if (message.action === 'bilibili_clear_cookie_rules') {
             (async () => {
                 try {
-                    await chrome.declarativeNetRequest.updateDynamicRules({
+                    await chrome.declarativeNetRequest.updateSessionRules({
                         removeRuleIds: [9001, 9002, 9003, 9004]
                     });
                     sendResponse({ ok: true });

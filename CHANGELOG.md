@@ -1,5 +1,32 @@
 # 更新日志
 
+## [3.16.1] - 2026-03-30
+
+### 修复
+- **网易播放器演唱者文字溢出**
+  - 修复多位演唱者名字过长时撑开播放条，导致播放/下一首按钮被挤出可视区域
+  - `.mc-sub` 增加 `white-space: nowrap; overflow: hidden; text-overflow: ellipsis` 截断
+  - `.mc-info` 增加 `overflow: hidden` 防止子元素溢出
+
+- **B 站主站点赞 CSRF 校验失败**
+  - 根因：`declarativeNetRequest` DNR 规则无 `tabIds` 限制，拦截了 B 站主站的原生 API 请求，用静态 Cookie 覆盖了浏览器原生 Cookie，导致 `bili_jct` CSRF token 不匹配
+  - Rule 9010（background API 代理）添加 `tabIds: [-1]` 限制为 Service Worker 请求
+  - Rule 9001-9004（iframe Cookie 注入）通过 `sender.tab.id` 精确限定到扩展新标签页
+  - 所有含 `tabIds` 的规则改用 `updateSessionRules`（`tabIds` 仅 session-scoped rules 支持）
+  - 扩展安装/更新时自动清理旧版 dynamic rules 残留
+  - `no-login-cookie` 状态降级为 `console.log`，避免正常未登录时产生误导性警告
+
+### 新增
+- **发现页推荐歌单模块**
+  - 在每日推荐/热门歌曲下方展示推荐歌单（3×2 卡片网格）
+  - 歌单卡片显示封面、名称、播放量
+  - 悬浮显示播放按钮，点击直接加载歌单播放队列
+
+- **搜索类型切换**
+  - 搜索栏新增「歌曲/歌单/歌手」类型切换标签
+  - 歌单搜索（type=1000）以卡片网格展示，点击加载歌单
+  - 歌手搜索（type=100）显示头像和作品数量，点击播放歌手热门歌曲
+
 ## [3.16.0] - 2026-03-29
 
 ### 新增

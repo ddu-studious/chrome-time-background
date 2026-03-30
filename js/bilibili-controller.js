@@ -68,6 +68,7 @@ class BilibiliController {
                 });
             });
             if (resp.ok) console.log('[Bilibili] Cookie DNR 注入成功');
+            else if (resp.error === 'no-login-cookie') console.log('[Bilibili] 未检测到 B 站登录态，跳过 Cookie 注入');
             else console.warn('[Bilibili] Cookie DNR 注入失败:', resp.error);
             return resp.ok;
         } catch (e) {

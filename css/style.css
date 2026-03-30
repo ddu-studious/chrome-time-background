@@ -12484,9 +12484,9 @@ body.bright-bg .ticker-sources-panel {
     justify-content: center;
 }
 
-.mc-info { flex: 1; min-width: 0; }
+.mc-info { flex: 1; min-width: 0; overflow: hidden; }
 .mc-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: rgba(255,255,255,0.95); }
-.mc-sub { font-size: 11px; color: rgba(255,255,255,0.4); display: flex; align-items: center; gap: 6px; margin-top: 1px; }
+.mc-sub { font-size: 11px; color: rgba(255,255,255,0.4); display: flex; align-items: center; gap: 6px; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .mc-lyric-preview { font-size: 10px; color: rgba(200,160,255,0.5); font-style: italic; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: opacity 0.2s; }
 .mc-lyric-preview.mc-lyric-fade { opacity: 0; }
 
@@ -12589,6 +12589,33 @@ body.bright-bg .ticker-sources-panel {
 .mc-rec-action-btn { background: rgba(200,160,255,0.1); border: 1px solid rgba(200,160,255,0.15); color: rgba(200,160,255,0.7); padding: 3px 10px; border-radius: 10px; font-size: 10px; cursor: pointer; transition: all .2s; display: flex; align-items: center; gap: 4px; }
 .mc-rec-action-btn:hover { background: rgba(200,160,255,0.2); color: rgba(200,160,255,1); border-color: rgba(200,160,255,0.3); }
 .mc-rec-action-btn i { font-size: 9px; }
+
+/* --- 搜索类型切换 --- */
+.mc-search-type-tabs { display: flex; gap: 4px; margin-top: 6px; }
+.mc-search-type { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); color: rgba(255,255,255,0.35); padding: 3px 12px; border-radius: 10px; font-size: 10px; cursor: pointer; transition: all .2s; }
+.mc-search-type:hover { background: rgba(200,160,255,0.08); color: rgba(255,255,255,0.5); }
+.mc-search-type.active { background: rgba(200,160,255,0.15); color: rgba(200,160,255,0.95); border-color: rgba(200,160,255,0.25); font-weight: 500; }
+
+/* --- 歌单卡片网格 --- */
+.mc-pl-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 4px 16px 12px; }
+.mc-search-pl-grid { padding: 8px 12px; }
+.mc-pl-card { cursor: pointer; border-radius: 10px; transition: all .15s; padding: 4px; }
+.mc-pl-card:hover { background: rgba(255,255,255,0.04); }
+.mc-pl-card-cover { position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: rgba(255,255,255,0.03); display: flex; align-items: center; justify-content: center; }
+.mc-pl-card-cover img { width: 100%; height: 100%; object-fit: cover; }
+.mc-pl-card-cover i { font-size: 20px; color: rgba(255,255,255,0.1); }
+.mc-pl-card-play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); opacity: 0; transition: opacity .2s; }
+.mc-pl-card:hover .mc-pl-card-play { opacity: 1; }
+.mc-pl-card-play i { color: #fff; font-size: 16px; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.3)); }
+.mc-pl-card-count { position: absolute; top: 3px; right: 4px; font-size: 8px; color: rgba(255,255,255,0.8); background: rgba(0,0,0,0.4); padding: 1px 5px; border-radius: 6px; display: flex; align-items: center; gap: 2px; }
+.mc-pl-card-count i { font-size: 7px; }
+.mc-pl-card-name { font-size: 10px; color: rgba(255,255,255,0.6); margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
+.mc-pl-card-creator { font-size: 9px; color: rgba(255,255,255,0.2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* --- 歌手搜索结果 --- */
+.mc-artist-avatar { width: 36px; height: 36px; border-radius: 50%; overflow: hidden; flex-shrink: 0; background: rgba(200,160,255,0.08); display: flex; align-items: center; justify-content: center; }
+.mc-artist-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.mc-artist-avatar i { font-size: 14px; color: rgba(200,160,255,0.3); }
 
 /* --- 播放模式 --- */
 .mc-modes { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 16px 10px; flex-shrink: 0; flex-wrap: wrap; display: none; }
