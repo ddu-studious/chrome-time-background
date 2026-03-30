@@ -15926,6 +15926,28 @@ body.bili-panel-open { overflow: hidden; }
 .bili-stab.active { color: #fb7299; border-bottom-color: #fb7299; }
 .bili-stab i { font-size: 11px; }
 
+.bili-refresh-btn {
+    margin-left: auto;
+    flex-shrink: 0;
+    background: transparent;
+    border: none;
+    color: #888;
+    font-size: 12px;
+    padding: 8px 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+}
+.bili-refresh-btn:hover { color: #fb7299; }
+.bili-refresh-btn.bili-refreshing i {
+    animation: bili-spin 0.6s ease-in-out;
+}
+@keyframes bili-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
 .bili-list {
     flex: 1;
     overflow-y: auto;

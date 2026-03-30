@@ -130,8 +130,22 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             sendResponse({ ok: true });
             break;
         case 'togglePlay':
-            if (player.paused) player.play().catch(() => {}); else player.pause();
-            sendResponse({ ok: true });
+            if (player.paused) {
+                if (!player.src || player.src === '' || player.src === location.href) {
+                    sendResponse({ ok: false, error: 'no-src', songId: currentState.songId });
+                    return true;
+                }
+                player.play().then(() => {
+                    sendResponse({ ok: true });
+                }).catch((e) => {
+                    console.warn('[Offscreen] togglePlay resume failed:', e);
+                    sendResponse({ ok: false, error: 'play-failed', songId: currentState.songId });
+                });
+                return true;
+            } else {
+                player.pause();
+                sendResponse({ ok: true });
+            }
             break;
         case 'seekTo':
             if (isFinite(msg.value)) player.currentTime = msg.value;

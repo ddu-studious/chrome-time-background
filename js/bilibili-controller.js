@@ -38,9 +38,25 @@ class BilibiliController {
         if (this._loggedIn) {
             await this._injectBiliCookies();
         }
+        const initialTab = await this._restoreLastTab();
         try {
-            await this._loadTab('popular');
+            this._syncTabs(initialTab);
+            await this._loadTab(initialTab);
         } catch (e) { console.warn('[Bilibili] 初始化加载失败:', e.message); }
+    }
+
+    async _restoreLastTab() {
+        try {
+            const { biliLastTab } = await chrome.storage.local.get('biliLastTab');
+            if (biliLastTab && ['popular', 'history', 'watchlater', 'favorite', 'ranking', 'course', 'following'].includes(biliLastTab)) {
+                return biliLastTab;
+            }
+        } catch {}
+        return 'popular';
+    }
+
+    _saveLastTab(tab) {
+        try { chrome.storage.local.set({ biliLastTab: tab }); } catch {}
     }
 
     // ===================== API =====================
@@ -93,9 +109,20 @@ class BilibiliController {
 
     // ===================== Data Loaders =====================
 
+    _refreshCurrentTab() {
+        const tab = this._currentTab;
+        delete this._cache[tab];
+        if (tab === 'following') {
+            this._followGroups = null;
+            Object.keys(this._cache).forEach(k => { if (k.startsWith('following_')) delete this._cache[k]; });
+        }
+        this._loadTab(tab);
+    }
+
     async _loadTab(tab) {
         if (this._loading) return;
         this._currentTab = tab;
+        this._saveLastTab(tab);
 
         if (tab === 'following') {
             this._loading = true;
@@ -624,6 +651,7 @@ class BilibiliController {
                         <div class="bili-stab" data-tab="ranking"><i class="fas fa-trophy"></i>排行</div>
                         <div class="bili-stab" data-tab="course"><i class="fas fa-graduation-cap"></i>课程</div>
                         <div class="bili-stab" data-tab="following"><i class="fas fa-users"></i>关注</div>
+                        <button class="bili-refresh-btn" id="bili-refresh-btn" title="刷新当前列表"><i class="fas fa-sync-alt"></i></button>
                     </div>
                     <div class="bili-list" id="bili-list"></div>
                 </div>
@@ -644,6 +672,14 @@ class BilibiliController {
         });
 
         el.querySelector('#bili-sidebar-toggle').addEventListener('click', () => this._toggleSidebar());
+
+        el.querySelector('#bili-refresh-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const btn = e.currentTarget;
+            btn.classList.add('bili-refreshing');
+            this._refreshCurrentTab();
+            setTimeout(() => btn.classList.remove('bili-refreshing'), 800);
+        });
 
         const searchInput = el.querySelector('#bili-search-input');
         searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') this._doSearch(searchInput.value); });

@@ -81,6 +81,7 @@ class MusicController {
         this._startPolling();
         this._startProgressInterpolation();
         this._restoreSearchHistory();
+        await this._restoreLastTab();
     }
 
     async _restoreMusicState() {
@@ -738,12 +739,25 @@ class MusicController {
 
     // ===================== 播放控制 =====================
 
-    _togglePlay() {
+    async _togglePlay() {
         if (this._offscreenMode) {
-            this._offscreenCommand('togglePlay');
+            const resp = await this._offscreenCommand('togglePlay');
+            if (resp && !resp.ok && (resp.error === 'no-src' || resp.error === 'play-failed')) {
+                await this._resumeCurrentSong();
+            }
         } else if (this._builtinMode && this._builtinAudio) {
             if (this._builtinAudio.paused) this._builtinAudio.play(); else this._builtinAudio.pause();
         }
+    }
+
+    async _resumeCurrentSong() {
+        const songId = this._currentSongId;
+        if (!songId) {
+            this._showToast('无法恢复播放，请重新选择歌曲');
+            return;
+        }
+        this._showToast('正在恢复播放…');
+        await this._playSongById(songId);
     }
 
     _prevTrack() {
@@ -1028,6 +1042,7 @@ class MusicController {
         el.querySelectorAll('#mc-tabs .mc-tab').forEach(t => t.classList.toggle('active', t.dataset.mcTab === tabName));
         el.querySelectorAll('.mc-pane').forEach(c => c.classList.toggle('active', c.dataset.mcPane === tabName));
         this._updateTabIndicator();
+        this._saveLastMusicTab(tabName);
 
         const loginPrompt = el.querySelector('#mc-login-prompt');
         if (loginPrompt) loginPrompt.classList.add('hidden');
@@ -1046,6 +1061,23 @@ class MusicController {
                 this._renderSearchHistory();
                 break;
         }
+    }
+
+    _saveLastMusicTab(tabName) {
+        try { chrome.storage.local.set({ musicLastTab: tabName }); } catch {}
+    }
+
+    async _restoreLastTab() {
+        try {
+            const { musicLastTab } = await chrome.storage.local.get('musicLastTab');
+            if (musicLastTab && ['queue', 'playlists', 'lyrics', 'discover', 'search'].includes(musicLastTab)) {
+                if (this._expanded) {
+                    this._switchTab(musicLastTab);
+                } else {
+                    this._switchTab(musicLastTab, true);
+                }
+            }
+        } catch {}
     }
 
     _updateTabIndicator() {
