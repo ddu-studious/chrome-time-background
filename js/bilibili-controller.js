@@ -19,19 +19,27 @@ class BilibiliController {
         this._followGroups = null;
         this._activeGroupId = 'all';
         this._favFolderId = 0;
+        this._favFolders = null;
+        this._activeFavId = 0;
         this._currentSpeed = 1;
         this._currentQuality = 0;
         this._pendingQuality = 0;
+        this._preferredQuality = 0;
         this._qualityList = [];
         this._qualityDescriptions = {};
         this._playerState = null;
         this._pendingSeek = null;
         this._seekRetries = 0;
+        this._commentSort = 0;
+        this._commentPage = 1;
+        this._commentLoading = false;
+        this._commentsOpen = false;
     }
 
     async init() {
         this._injectDOM();
         this._bindEvents();
+        await this._restorePlayerPrefs();
         try {
             const loginInfo = await this._checkLogin();
             this._loggedIn = loginInfo.loggedIn;
@@ -59,6 +67,28 @@ class BilibiliController {
 
     _saveLastTab(tab) {
         try { chrome.storage.local.set({ biliLastTab: tab }); } catch {}
+    }
+
+    async _restorePlayerPrefs() {
+        try {
+            const { biliPlayerPrefs } = await chrome.storage.local.get('biliPlayerPrefs');
+            if (biliPlayerPrefs) {
+                if (biliPlayerPrefs.speed > 0) this._currentSpeed = biliPlayerPrefs.speed;
+                if (biliPlayerPrefs.quality > 0) this._preferredQuality = biliPlayerPrefs.quality;
+                this._updateSpeedUI();
+            }
+        } catch {}
+    }
+
+    _savePlayerPrefs() {
+        try {
+            chrome.storage.local.set({
+                biliPlayerPrefs: {
+                    speed: this._currentSpeed,
+                    quality: this._preferredQuality || 0,
+                }
+            });
+        } catch {}
     }
 
     // ===================== API =====================
@@ -118,6 +148,10 @@ class BilibiliController {
             this._followGroups = null;
             Object.keys(this._cache).forEach(k => { if (k.startsWith('following_')) delete this._cache[k]; });
         }
+        if (tab === 'favorite') {
+            this._favFolders = null;
+            Object.keys(this._cache).forEach(k => { if (k.startsWith('fav_')) delete this._cache[k]; });
+        }
         this._loadTab(tab);
     }
 
@@ -144,6 +178,15 @@ class BilibiliController {
             return;
         }
 
+        if (tab === 'favorite') {
+            this._loading = true;
+            this._showListLoading();
+            try { await this._loadFavoritePanel(); }
+            catch (e) { this._showListError(tab, e.message); }
+            finally { this._loading = false; }
+            return;
+        }
+
         if (this._cache[tab]) {
             this._renderList(tab, this._cache[tab]);
             return;
@@ -158,7 +201,6 @@ class BilibiliController {
                 case 'popular':   items = await this._fetchPopular(); break;
                 case 'history':   items = await this._fetchHistory(); break;
                 case 'watchlater':items = await this._fetchWatchlater(); break;
-                case 'favorite':  items = await this._fetchFavorite(); break;
                 case 'ranking':   items = await this._fetchRanking(); break;
             }
             this._cache[tab] = items;
@@ -187,16 +229,96 @@ class BilibiliController {
         return (resp?.data?.list || []).map(v => this._normalizeVideo(v));
     }
 
-    async _fetchFavorite() {
-        if (!this._loggedIn) return [];
-        const mid = this._userMid || (await this._checkLogin()).mid;
-        if (!mid) return [];
-        const foldersResp = await this._biliApi('/x/v3/fav/folder/created/list-all', { up_mid: mid });
-        const folders = foldersResp?.data?.list || [];
-        if (!folders.length) return [];
-        this._favFolderId = folders[0].id;
-        const listResp = await this._biliApi('/x/v3/fav/resource/list', { media_id: this._favFolderId, pn: 1, ps: 20 });
-        return (listResp?.data?.medias || []).map(v => this._normalizeFav(v));
+    async _loadFavoritePanel() {
+        if (!this._loggedIn) {
+            this._showListError('favorite', '请先登录');
+            return;
+        }
+
+        if (!this._favFolders) {
+            const mid = this._userMid || (await this._checkLogin()).mid;
+            if (!mid) { this._showListError('favorite', '获取用户信息失败'); return; }
+            const foldersResp = await this._biliApi('/x/v3/fav/folder/created/list-all', { up_mid: mid });
+            this._favFolders = (foldersResp?.data?.list || []).map(f => ({
+                id: f.id,
+                title: f.title || '未命名',
+                count: f.media_count || 0,
+            }));
+        }
+
+        if (!this._favFolders.length) {
+            this._showListError('favorite', '暂无收藏夹');
+            return;
+        }
+
+        if (!this._activeFavId) {
+            this._activeFavId = this._favFolders[0].id;
+        }
+        this._favFolderId = this._activeFavId;
+
+        const listEl = this._el.querySelector('#bili-list');
+        const folderTabs = this._buildFavFolderTabs();
+
+        const cacheKey = 'fav_' + this._activeFavId;
+        let items;
+        if (this._cache[cacheKey]) {
+            items = this._cache[cacheKey];
+        } else {
+            const listResp = await this._biliApi('/x/v3/fav/resource/list', { media_id: this._activeFavId, pn: 1, ps: 20 });
+            items = (listResp?.data?.medias || []).map(v => this._normalizeFav(v));
+            this._cache[cacheKey] = items;
+        }
+
+        const itemsHtml = items.length
+            ? items.map((v, i) => this._renderVideoItem(v, i, 'favorite', true)).join('')
+            : '<div class="bili-list-msg"><i class="fas fa-inbox"></i> 该收藏夹暂无内容</div>';
+
+        listEl.innerHTML = folderTabs + itemsHtml;
+        this._bindFavFolderEvents(listEl);
+        this._bindListItemEvents(listEl, items);
+
+        if (items.length) {
+            listEl.querySelectorAll('.bili-item-rm-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const itemEl = btn.closest('.bili-item');
+                    const idx = parseInt(itemEl?.dataset.idx);
+                    const item = items[idx];
+                    if (!item || !item.aid) return;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                    btn.disabled = true;
+                    try {
+                        await this._cancelFavorite(item.aid);
+                        itemEl.style.transition = 'opacity 0.3s, max-height 0.3s';
+                        itemEl.style.opacity = '0';
+                        itemEl.style.maxHeight = '0';
+                        itemEl.style.overflow = 'hidden';
+                        setTimeout(() => itemEl.remove(), 350);
+                    } catch (err) {
+                        btn.innerHTML = '<i class="fas fa-times"></i>';
+                        btn.disabled = false;
+                    }
+                });
+            });
+        }
+    }
+
+    _buildFavFolderTabs() {
+        if (!this._favFolders?.length) return '';
+        return `<div class="bili-fav-folders">${this._favFolders.map(f =>
+            `<button class="bili-fav-folder-btn${f.id === this._activeFavId ? ' active' : ''}" data-fid="${f.id}">${this._esc(f.title)}<span class="bili-ff-count">${f.count}</span></button>`
+        ).join('')}</div>`;
+    }
+
+    _bindFavFolderEvents(listEl) {
+        listEl.querySelectorAll('.bili-fav-folder-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this._activeFavId = parseInt(btn.dataset.fid);
+                this._favFolderId = this._activeFavId;
+                this._loadTab('favorite');
+            });
+        });
     }
 
     async _fetchRanking() {
@@ -226,8 +348,9 @@ class BilibiliController {
         await this._biliApi('/x/v3/fav/resource/deal', {
             rid: aid, type: 2, del_media_ids: this._favFolderId, add_media_ids: ''
         }, 'POST');
-        if (this._cache['favorite']) {
-            this._cache['favorite'] = this._cache['favorite'].filter(v => v.aid !== aid);
+        const cacheKey = 'fav_' + this._favFolderId;
+        if (this._cache[cacheKey]) {
+            this._cache[cacheKey] = this._cache[cacheKey].filter(v => v.aid !== aid);
         }
     }
 
@@ -677,6 +800,21 @@ class BilibiliController {
                             <button class="bili-pi-btn" id="bili-act-later" title="稍后看"><i class="fas fa-clock"></i>稍后看</button>
                             <button class="bili-pi-btn bili-act-danger" id="bili-act-rm-later" title="移除稍后看"><i class="fas fa-times-circle"></i>移除稍后看</button>
                             <button class="bili-pi-btn bili-act-danger" id="bili-act-rm-fav" title="取消收藏"><i class="fas fa-heart-broken"></i>取消收藏</button>
+                            <button class="bili-pi-btn" id="bili-act-comments" title="评论"><i class="fas fa-comments"></i>评论</button>
+                        </div>
+                    </div>
+                    <div class="bili-comments hidden" id="bili-comments">
+                        <div class="bili-comments-header">
+                            <span class="bili-comments-title"><i class="fas fa-comments"></i> 评论 <span class="bili-comments-count" id="bili-comments-count"></span></span>
+                            <div class="bili-comments-sort">
+                                <button class="bili-comments-sort-btn active" data-sort="0">最新</button>
+                                <button class="bili-comments-sort-btn" data-sort="2">最热</button>
+                            </div>
+                            <button class="bili-comments-close" id="bili-comments-close" title="收起评论"><i class="fas fa-chevron-up"></i></button>
+                        </div>
+                        <div class="bili-comments-list" id="bili-comments-list"></div>
+                        <div class="bili-comments-more hidden" id="bili-comments-more">
+                            <button class="bili-comments-more-btn" id="bili-comments-more-btn">加载更多评论</button>
                         </div>
                     </div>
                 </div>
@@ -732,6 +870,19 @@ class BilibiliController {
         el.querySelector('#bili-act-later').addEventListener('click', () => this._onActionAddLater());
         el.querySelector('#bili-act-rm-later').addEventListener('click', () => this._onActionRemoveLater());
         el.querySelector('#bili-act-rm-fav').addEventListener('click', () => this._onActionRemoveFav());
+        el.querySelector('#bili-act-comments').addEventListener('click', () => this._toggleComments());
+        el.querySelector('#bili-comments-close').addEventListener('click', () => this._hideComments());
+        el.querySelector('#bili-comments-more-btn').addEventListener('click', () => this._loadMoreComments());
+        el.querySelectorAll('.bili-comments-sort-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                el.querySelectorAll('.bili-comments-sort-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this._commentSort = parseInt(btn.dataset.sort);
+                this._commentPage = 1;
+                this._loadComments();
+            });
+        });
 
         window.addEventListener('message', (e) => {
             if (!e.data || typeof e.data.type !== 'string') return;
@@ -803,6 +954,7 @@ class BilibiliController {
         this._currentSpeed = speed;
         this._sendPlayerMsg({ type: 'bili-ext-set-speed', speed });
         this._updateSpeedUI();
+        this._savePlayerPrefs();
     }
 
     _updateSpeedUI() {
@@ -814,10 +966,12 @@ class BilibiliController {
 
     _setQuality(qn) {
         this._pendingQuality = qn;
+        this._preferredQuality = qn;
         this._sendPlayerMsg({ type: 'bili-ext-set-quality', quality: qn });
         this._markQualityPending(qn);
         const label = this._safeQualityLabel(this._qualityDescriptions, qn);
         this._showBiliToast(`切换画质: ${label}`, 'info');
+        this._savePlayerPrefs();
 
         this._qualityVerifyTimer && clearTimeout(this._qualityVerifyTimer);
         this._qualityVerifyTimer = setTimeout(() => {
@@ -919,6 +1073,18 @@ class BilibiliController {
                 this._setQuality(qn);
             });
         });
+
+        if (!this._qualityAutoApplied && this._preferredQuality > 0 && !this._pendingQuality) {
+            this._qualityAutoApplied = true;
+            if (available.includes(this._preferredQuality) && current !== this._preferredQuality) {
+                setTimeout(() => this._setQuality(this._preferredQuality), 500);
+            } else if (!available.includes(this._preferredQuality)) {
+                const best = available.find(q => q <= this._preferredQuality) || available[available.length - 1];
+                if (best && current !== best) {
+                    setTimeout(() => this._setQuality(best), 500);
+                }
+            }
+        }
     }
 
     _onTitleInfo(data) {
@@ -933,8 +1099,10 @@ class BilibiliController {
             return;
         }
 
-        if (data.title) {
-            titleEl.textContent = data.title;
+        const mainTitle = this._currentVideo?.title || '';
+        const displayTitle = data.title || mainTitle;
+        if (displayTitle) {
+            titleEl.textContent = displayTitle;
             titleEl.style.display = '';
         } else {
             titleEl.style.display = 'none';
@@ -944,9 +1112,11 @@ class BilibiliController {
             let epText = '';
             if (data.partIndex > 0 && data.totalParts > 1) {
                 epText = `P${data.partIndex}/${data.totalParts}`;
-                if (data.episode) epText += ` ${data.episode}`;
-            } else if (data.episode) {
-                epText = data.episode;
+            } else if (data.partIndex > 0) {
+                epText = `P${data.partIndex}`;
+            }
+            if (data.episode) {
+                epText = epText ? `${epText} ${data.episode}` : data.episode;
             }
             episodeEl.textContent = epText;
             episodeEl.style.display = '';
@@ -999,6 +1169,215 @@ class BilibiliController {
             this._removeListItemByAid(v.aid);
             setTimeout(() => { btn.innerHTML = '<i class="fas fa-heart-broken"></i>取消收藏'; }, 1500);
         } catch (e) { console.warn('[Bilibili] 取消收藏失败:', e.message); }
+    }
+
+    // ===================== Comments (评论) =====================
+
+    _toggleComments() {
+        const panel = this._el.querySelector('#bili-comments');
+        if (!panel || !this._currentVideo?.aid) return;
+        if (this._commentsOpen) {
+            this._hideComments();
+        } else {
+            this._showComments();
+        }
+    }
+
+    _showComments() {
+        const panel = this._el.querySelector('#bili-comments');
+        if (!panel) return;
+        this._commentsOpen = true;
+        panel.classList.remove('hidden');
+        this._el.querySelector('#bili-act-comments')?.classList.add('active');
+        this._commentPage = 1;
+        this._loadComments();
+    }
+
+    _hideComments() {
+        const panel = this._el.querySelector('#bili-comments');
+        if (!panel) return;
+        this._commentsOpen = false;
+        panel.classList.add('hidden');
+        this._el.querySelector('#bili-act-comments')?.classList.remove('active');
+    }
+
+    async _loadComments() {
+        const v = this._currentVideo;
+        if (!v?.aid) return;
+        if (this._commentLoading) return;
+        this._commentLoading = true;
+
+        const listEl = this._el.querySelector('#bili-comments-list');
+        const moreEl = this._el.querySelector('#bili-comments-more');
+        if (this._commentPage === 1) {
+            listEl.innerHTML = '<div class="bili-comments-loading"><i class="fas fa-spinner fa-spin"></i> 加载评论中...</div>';
+        }
+
+        try {
+            const resp = await this._biliApi('/x/v2/reply', {
+                oid: v.aid,
+                type: 1,
+                pn: this._commentPage,
+                ps: 20,
+                sort: this._commentSort,
+            });
+
+            const data = resp?.data;
+            const replies = data?.replies || [];
+            const totalCount = data?.page?.count || 0;
+
+            this._el.querySelector('#bili-comments-count').textContent = totalCount > 0 ? `(${this._fmtNum(totalCount)})` : '';
+
+            if (this._commentPage === 1) {
+                const topReplies = data?.top_replies || [];
+                const topRpids = new Set(topReplies.map(r => r.rpid));
+                const normalReplies = replies.filter(r => !topRpids.has(r.rpid));
+                const topHtml = topReplies.map(r => this._renderComment(r, true)).join('');
+                const normalHtml = normalReplies.map(r => this._renderComment(r, false)).join('');
+                listEl.innerHTML = (topReplies.length || normalReplies.length)
+                    ? topHtml + normalHtml
+                    : '<div class="bili-comments-empty"><i class="fas fa-comment-slash"></i> 暂无评论</div>';
+            } else {
+                listEl.insertAdjacentHTML('beforeend', replies.map(r => this._renderComment(r, false)).join(''));
+            }
+
+            const hasMore = replies.length >= 20;
+            moreEl.classList.toggle('hidden', !hasMore);
+
+            this._bindCommentEvents(listEl);
+        } catch (e) {
+            if (this._commentPage === 1) {
+                listEl.innerHTML = `<div class="bili-comments-empty"><i class="fas fa-exclamation-circle"></i> 加载失败: ${this._esc(e.message)}</div>`;
+            }
+            console.warn('[Bilibili] 评论加载失败:', e.message);
+        } finally {
+            this._commentLoading = false;
+        }
+    }
+
+    _loadMoreComments() {
+        this._commentPage++;
+        this._loadComments();
+    }
+
+    _renderComment(reply, isTop) {
+        const member = reply.member || {};
+        const avatar = this._httpsCover(member.avatar || '');
+        const uname = member.uname || '匿名';
+        const content = reply.content?.message || '';
+        const likes = reply.like || 0;
+        const rcount = reply.rcount || 0;
+        const ctime = reply.ctime || 0;
+        const timeStr = this._fmtCommentTime(ctime);
+        const levelInfo = member.level_info || {};
+        const level = levelInfo.current_level || 0;
+        const isUploader = reply.member?.mid && this._currentVideo?.mid && String(reply.member.mid) === String(this._currentVideo.mid);
+        const topBadge = isTop ? '<span class="bili-comment-badge bili-comment-top">置顶</span>' : '';
+        const upBadge = isUploader ? '<span class="bili-comment-badge bili-comment-up">UP</span>' : '';
+
+        const subReplies = (reply.replies || []).slice(0, 3);
+        const subHtml = subReplies.length ? `
+            <div class="bili-comment-sub-list">
+                ${subReplies.map(sub => {
+                    const subName = sub.member?.uname || '匿名';
+                    const subContent = sub.content?.message || '';
+                    const subTime = this._fmtCommentTime(sub.ctime || 0);
+                    const subLikes = sub.like || 0;
+                    return `<div class="bili-comment-sub">
+                        <span class="bili-comment-sub-name">${this._esc(subName)}</span>
+                        <span class="bili-comment-sub-content">${this._esc(subContent)}</span>
+                        <div class="bili-comment-sub-meta">
+                            <span>${subTime}</span>
+                            ${subLikes > 0 ? `<span><i class="fas fa-thumbs-up"></i> ${subLikes}</span>` : ''}
+                        </div>
+                    </div>`;
+                }).join('')}
+                ${rcount > 3 ? `<button class="bili-comment-sub-more" data-rpid="${reply.rpid}" data-oid="${this._currentVideo?.aid || 0}">查看全部 ${rcount} 条回复 <i class="fas fa-chevron-right"></i></button>` : ''}
+            </div>` : '';
+
+        return `<div class="bili-comment" data-rpid="${reply.rpid}">
+            <img class="bili-comment-avatar" src="${this._esc(avatar)}" alt="" loading="lazy">
+            <div class="bili-comment-body">
+                <div class="bili-comment-header">
+                    <span class="bili-comment-name">${this._esc(uname)}</span>
+                    ${upBadge}${topBadge}
+                    ${level > 0 ? `<span class="bili-comment-level lv${Math.min(level, 6)}">Lv${level}</span>` : ''}
+                </div>
+                <div class="bili-comment-content">${this._esc(content)}</div>
+                <div class="bili-comment-meta">
+                    <span class="bili-comment-time">${timeStr}</span>
+                    <span class="bili-comment-like"><i class="fas fa-thumbs-up"></i> ${likes > 0 ? this._fmtNum(likes) : '点赞'}</span>
+                    ${rcount > 0 ? `<span class="bili-comment-reply-count"><i class="fas fa-comment"></i> ${rcount}</span>` : ''}
+                </div>
+                ${subHtml}
+            </div>
+        </div>`;
+    }
+
+    _bindCommentEvents(listEl) {
+        listEl.querySelectorAll('.bili-comment-sub-more').forEach(btn => {
+            if (btn._bound) return;
+            btn._bound = true;
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const rpid = btn.dataset.rpid;
+                const oid = btn.dataset.oid;
+                if (!rpid || !oid) return;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 加载中...';
+                try {
+                    const resp = await this._biliApi('/x/v2/reply/reply', {
+                        oid: parseInt(oid),
+                        type: 1,
+                        root: parseInt(rpid),
+                        pn: 1,
+                        ps: 20,
+                    });
+                    const replies = resp?.data?.replies || [];
+                    if (replies.length) {
+                        const subList = btn.closest('.bili-comment-sub-list');
+                        const prevSubs = subList.querySelectorAll('.bili-comment-sub');
+                        prevSubs.forEach(el => el.remove());
+                        const html = replies.map(sub => {
+                            const subName = sub.member?.uname || '匿名';
+                            const subContent = sub.content?.message || '';
+                            const subTime = this._fmtCommentTime(sub.ctime || 0);
+                            const subLikes = sub.like || 0;
+                            return `<div class="bili-comment-sub">
+                                <span class="bili-comment-sub-name">${this._esc(subName)}</span>
+                                <span class="bili-comment-sub-content">${this._esc(subContent)}</span>
+                                <div class="bili-comment-sub-meta">
+                                    <span>${subTime}</span>
+                                    ${subLikes > 0 ? `<span><i class="fas fa-thumbs-up"></i> ${subLikes}</span>` : ''}
+                                </div>
+                            </div>`;
+                        }).join('');
+                        subList.insertAdjacentHTML('afterbegin', html);
+                        btn.remove();
+                    }
+                } catch (err) {
+                    btn.innerHTML = '加载失败，点击重试';
+                    btn._bound = false;
+                    console.warn('[Bilibili] 子评论加载失败:', err.message);
+                }
+            });
+        });
+    }
+
+    _fmtCommentTime(ts) {
+        if (!ts) return '';
+        const d = new Date(ts * 1000);
+        if (isNaN(d.getTime())) return '';
+        const now = new Date();
+        const diffMs = now - d;
+        const diffMin = Math.floor(diffMs / 60000);
+        if (diffMin < 1) return '刚刚';
+        if (diffMin < 60) return `${diffMin}分钟前`;
+        const diffHours = Math.floor(diffMin / 60);
+        if (diffHours < 24) return `${diffHours}小时前`;
+        const diffDays = Math.floor(diffHours / 24);
+        if (diffDays < 7) return `${diffDays}天前`;
+        if (diffDays < 365) return `${d.getMonth() + 1}-${d.getDate()}`;
+        return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
     }
 
     _removeListItemByAid(aid) {
@@ -1147,6 +1526,33 @@ class BilibiliController {
                 itemEl.classList.add('playing');
             });
         });
+
+        this._scrollToPlayingItem(listEl);
+    }
+
+    _scrollToPlayingItem(listEl) {
+        if (!listEl) return;
+        const playingEl = listEl.querySelector('.bili-item.playing');
+        if (playingEl) {
+            setTimeout(() => {
+                playingEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 100);
+            return;
+        }
+        if (!this._currentVideo?.bvid) return;
+        const currentBvid = this._currentVideo.bvid;
+        const items = listEl.querySelectorAll('.bili-item');
+        for (const itemEl of items) {
+            const idx = parseInt(itemEl.dataset.idx);
+            const cache = this._cache[this._currentTab];
+            if (cache?.[idx]?.bvid === currentBvid) {
+                itemEl.classList.add('playing');
+                setTimeout(() => {
+                    itemEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 100);
+                break;
+            }
+        }
     }
 
     // ===================== Player =====================
@@ -1155,6 +1561,9 @@ class BilibiliController {
         this._currentVideo = item;
         this._pendingSeek = item.progressSec > 0 ? item.progressSec : null;
         this._seekRetries = 0;
+
+        this._hideComments();
+        this._commentPage = 1;
         const frame = this._el.querySelector('#bili-player-frame');
         const SANDBOX_PLAYER = 'allow-scripts allow-same-origin allow-forms allow-presentation allow-popups allow-popups-to-escape-sandbox';
 
@@ -1220,11 +1629,14 @@ class BilibiliController {
             this._qualityList = [];
             this._currentQuality = 0;
             this._pendingQuality = 0;
+            this._qualityAutoApplied = false;
             clearTimeout(this._qualityFailTimer);
             if (this._currentSpeed !== 1) {
                 setTimeout(() => this._setSpeed(this._currentSpeed), 2000);
             }
-            setTimeout(() => this._sendPlayerMsg({ type: 'bili-ext-get-quality' }), 4000);
+            setTimeout(() => {
+                this._sendPlayerMsg({ type: 'bili-ext-get-quality' });
+            }, 4000);
         } else {
             ctrlBar?.classList.add('hidden');
         }
@@ -1260,6 +1672,7 @@ class BilibiliController {
         this._el.querySelector('#bili-player-info').classList.add('hidden');
         this._el.querySelector('#bili-ctrl-bar')?.classList.add('hidden');
         this._el.querySelector('#bili-now-playing')?.classList.add('hidden');
+        this._hideComments();
         this._currentVideo = null;
         this._pendingSeek = null;
     }

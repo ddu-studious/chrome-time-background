@@ -1,0 +1,61 @@
+[   12062ms] [INFO] %c%s line-height: 30px; color: #FF6699 bili-fe-fp: 1.1.4 @ https://s1.hdslb.com/bfs/seed/jinkela/short/user-fingerprint/bili-user-fingerprint.min.js:0
+[   31053ms] [INFO] %c bili-fe-mirror %c v2.0.18  padding: 2px 6px; border-radius: 3px 0 0 3px; color: #fff; background: #FF6699; font-weight: bold; padding: 2px 6px; border-radius: 0 3px 3px 0; color: #fff; background: #FF9999; font-weight: bold; @ https://s1.hdslb.com/bfs/seed/jinkela/short/b-mirror/biliMirror.umd.mini.js:1
+[   31405ms] [LOG] %c
+                     //
+         \\         //
+          \\       //
+    ##DDDDDDDDDDDDDDDDDDDDDD##
+    ## DDDDDDDDDDDDDDDDDDDD ##   ________   ___   ___        ___   ________   ___   ___        ___
+    ## hh                hh ##   |\   __  \ |\  \ |\  \      |\  \ |\   __  \ |\  \ |\  \      |\  \
+    ## hh    //    \\    hh ##   \ \  \|\ /_\ \  \\ \  \     \ \  \\ \  \|\ /_\ \  \\ \  \     \ \  \
+    ## hh   //      \\   hh ##    \ \   __  \\ \  \\ \  \     \ \  \\ \   __  \\ \  \\ \  \     \ \  \
+    ## hh                hh ##     \ \  \|\  \\ \  \\ \  \____ \ \  \\ \  \|\  \\ \  \\ \  \____ \ \  \
+    ## hh      wwww      hh ##      \ \_______\\ \__\\ \_______\\ \__\\ \_______\\ \__\\ \_______\\ \__\
+    ## hh                hh ##       \|_______| \|__| \|_______| \|__| \|_______| \|__| \|_______| \|__|
+    ## MMMMMMMMMMMMMMMMMMMM ##
+    ##MMMMMMMMMMMMMMMMMMMMMM##                                          Release undefined@no release yet
+         \/            \/                                       Powered by @bilibili/jinkela-core@2.8.14 color:#00a1d6 @ https://s1.hdslb.com/bfs/static/jinkela/video/video.f0327faecd2d9f46147bf25886a4f6ea203a23b2.js:0
+[   67957ms] Error: COLS: response timeout
+    at https://s1.hdslb.com/bfs/seed/log/report/log-reporter.js:2:23539
+[   67974ms] Error: COLS: response timeout
+    at https://s1.hdslb.com/bfs/seed/log/report/log-reporter.js:2:23539
+[   67975ms] Error: COLS: response timeout
+    at https://s1.hdslb.com/bfs/seed/log/report/log-reporter.js:2:23539
+[   67975ms] Error: COLS: response timeout
+    at https://s1.hdslb.com/bfs/seed/log/report/log-reporter.js:2:23539
+[   78248ms] [LOG] 白屏检测是否正常 {status: ok, loop: 0, data: Object} @ https://www.bilibili.com/video/BV1FE411P7B3/:4
+[  487238ms] [WARNING] bili comments load error undefined @ https://s1.hdslb.com/bfs/seed/jinkela/commentpc/bili-comments.b9a766be27.js:92
+[  492440ms] undefined
+[  494991ms] Error: COLS: response timeout
+    at https://s1.hdslb.com/bfs/seed/log/report/log-reporter.js:2:23539
+[  494991ms] Error: COLS: response timeout
+    at https://s1.hdslb.com/bfs/seed/log/report/log-reporter.js:2:23539
+[  497412ms] [WARNING] [Mirror]: Promise拒绝错误解析失败: undefined @ https://s1.hdslb.com/bfs/seed/jinkela/short/b-mirror/biliMirror.umd.mini.js:1
+[  971462ms] [WARNING] bili comments load error undefined @ https://s1.hdslb.com/bfs/seed/jinkela/commentpc/bili-comments.b9a766be27.js:92
+[  974030ms] Uncaught (in promise) undefined
+    at n (https://s1.hdslb.com/bfs/seed/jinkela/commentpc/bili-comments.b9a766be27.js:5:536)
+    at l (https://s1.hdslb.com/bfs/seed/jinkela/commentpc/bili-comments.b9a766be27.js:5:739)
+[  975822ms] Error: COLS: response timeout
+    at https://s1.hdslb.com/bfs/seed/log/report/log-reporter.js:2:23539
+[  975823ms] Error: COLS: response timeout
+    at https://s1.hdslb.com/bfs/seed/log/report/log-reporter.js:2:23539
+[ 1224285ms] [WARNING] bili comments load error undefined @ https://s1.hdslb.com/bfs/seed/jinkela/commentpc/bili-comments.b9a766be27.js:92
+[ 1225631ms] Uncaught (in promise) undefined
+    at n (https://s1.hdslb.com/bfs/seed/jinkela/commentpc/bili-comments.b9a766be27.js:5:536)
+    at l (https://s1.hdslb.com/bfs/seed/jinkela/commentpc/bili-comments.b9a766be27.js:5:739)
+[ 1229560ms] Error: COLS: response timeout
+    at https://s1.hdslb.com/bfs/seed/log/report/log-reporter.js:2:23539
+[ 1229560ms] Error: COLS: response timeout
+    at https://s1.hdslb.com/bfs/seed/log/report/log-reporter.js:2:23539
+[ 1662221ms] [WARNING] bili comments load error undefined @ https://s1.hdslb.com/bfs/seed/jinkela/commentpc/bili-comments.b9a766be27.js:92
+[ 1667005ms] Uncaught (in promise) undefined
+    at n (https://s1.hdslb.com/bfs/seed/jinkela/commentpc/bili-comments.b9a766be27.js:5:536)
+    at l (https://s1.hdslb.com/bfs/seed/jinkela/commentpc/bili-comments.b9a766be27.js:5:739)
+[ 1669909ms] Error: COLS: response timeout
+    at https://s1.hdslb.com/bfs/seed/log/report/log-reporter.js:2:23539
+[ 1669946ms] Error: COLS: response timeout
+    at https://s1.hdslb.com/bfs/seed/log/report/log-reporter.js:2:23539
+[ 1669946ms] Error: COLS: response timeout
+    at https://s1.hdslb.com/bfs/seed/log/report/log-reporter.js:2:23539
+[ 1669946ms] Error: COLS: response timeout
+    at https://s1.hdslb.com/bfs/seed/log/report/log-reporter.js:2:23539

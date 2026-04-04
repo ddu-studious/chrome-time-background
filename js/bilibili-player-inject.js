@@ -549,13 +549,39 @@
         const selectors = [
             '.bpx-player-eplist-item.bpx-state-active .bpx-player-eplist-item-title',
             '.video-episode-card__info-title-active',
+            '.video-episode-card.active .video-episode-card__info-title',
+            '.video-pod__item.active .video-pod__title',
+            '.video-pod__item.on .video-pod__title',
             '.list-box li.on .clickitem .router-link-active',
             '.cur-page .page-title',
             '.bpx-player-ctrl-eplist-menu-item.bpx-state-active',
+            '.multi-page-v1 .cur-page .page-title',
+            '.video-sections-item_active .video-sections-title',
         ];
         for (const sel of selectors) {
             const el = document.querySelector(sel);
             if (el?.textContent?.trim()) return el.textContent.trim();
+        }
+        return '';
+    }
+
+    function getPartInfoFromUrl() {
+        const params = new URLSearchParams(location.search);
+        const p = parseInt(params.get('p'));
+        return (isFinite(p) && p > 0) ? p : 0;
+    }
+
+    function getEpisodeTitleFromPageTitle() {
+        const pageTitle = document.title || '';
+        const cleaned = pageTitle.replace(/_哔哩哔哩.*$/, '').replace(/-.*bilibili.*$/i, '').trim();
+
+        const mainTitleEl = document.querySelector(
+            '#viewbox_report .video-title, .video-info-title, h1.video-title'
+        );
+        const mainTitle = mainTitleEl?.textContent?.trim() || '';
+
+        if (mainTitle && cleaned && cleaned !== mainTitle) {
+            return cleaned;
         }
         return '';
     }
@@ -575,22 +601,66 @@
             info.title = pageTitle.replace(/_哔哩哔哩.*$/, '').replace(/-.*bilibili.*$/i, '').trim();
         }
 
-        const activeIndex = document.querySelector(
-            '.bpx-player-eplist-item.bpx-state-active, .video-episode-card.active'
-        );
-        if (activeIndex) {
-            const allItems = activeIndex.parentElement?.children;
-            if (allItems) {
+        const activeSelectors = [
+            '.bpx-player-eplist-item.bpx-state-active',
+            '.video-episode-card.active',
+            '.video-pod__item.active',
+            '.video-pod__item.on',
+            '.video-sections-item_active',
+        ];
+        for (const sel of activeSelectors) {
+            const activeEl = document.querySelector(sel);
+            if (!activeEl) continue;
+            const container = activeEl.parentElement;
+            if (!container) continue;
+            const siblings = container.querySelectorAll(sel.replace(/\.active|\.on|\.bpx-state-active|_active/g, '').replace(/\s+$/, ''));
+            if (siblings.length > 1) {
+                info.totalParts = siblings.length;
+                info.partIndex = Array.from(siblings).indexOf(activeEl) + 1;
+                break;
+            }
+            const allItems = container.children;
+            if (allItems.length > 1) {
                 info.totalParts = allItems.length;
-                info.partIndex = Array.from(allItems).indexOf(activeIndex) + 1;
+                info.partIndex = Array.from(allItems).indexOf(activeEl) + 1;
+                break;
             }
         }
+
+        const urlPart = getPartInfoFromUrl();
 
         if (!info.episode) {
             const match = pageTitle.match(/[Pp](\d+)\s+(.+?)(?:_哔哩|$)/);
             if (match) {
-                info.partIndex = parseInt(match[1]);
+                info.partIndex = info.partIndex || parseInt(match[1]);
                 info.episode = match[2].trim();
+            }
+        }
+
+        if (!info.episode) {
+            const fromPageTitle = getEpisodeTitleFromPageTitle();
+            if (fromPageTitle) {
+                info.episode = fromPageTitle;
+            }
+        }
+
+        if (!info.partIndex && urlPart > 0) {
+            info.partIndex = urlPart;
+        }
+
+        if (!info.totalParts) {
+            const countSelectors = [
+                '.bpx-player-eplist-item',
+                '.video-episode-card',
+                '.video-pod__item',
+                '.video-sections-item',
+            ];
+            for (const sel of countSelectors) {
+                const items = document.querySelectorAll(sel);
+                if (items.length > 1) {
+                    info.totalParts = items.length;
+                    break;
+                }
             }
         }
 
@@ -611,6 +681,32 @@
                 totalParts: info.totalParts,
             }, '*');
         } catch (_) {}
+    }
+
+    // =============== 5b. 选集列表自动滚动到当前集 ===============
+
+    let _eplistScrollDone = false;
+
+    function scrollEplistToActive() {
+        if (_eplistScrollDone) return true;
+        const activeSelectors = [
+            '.bpx-player-eplist-item.bpx-state-active',
+            '.video-episode-card.active',
+            '.video-pod__item.active',
+            '.video-pod__item.on',
+            '.video-sections-item_active',
+            '.list-box li.on',
+        ];
+        for (const sel of activeSelectors) {
+            const activeEl = document.querySelector(sel);
+            if (!activeEl) continue;
+            try {
+                activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                _eplistScrollDone = true;
+                return true;
+            } catch (_) {}
+        }
+        return false;
     }
 
     // =============== 6. 周期性上报 ===============
@@ -647,6 +743,7 @@
                 setTimeout(() => {
                     postQualityInfo(); autoSetBestQuality(); postTitleInfo();
                     if (!_initialSeekDone) tryInitialSeek(video);
+                    if (!_eplistScrollDone) scrollEplistToActive();
                 }, ms);
             });
         });

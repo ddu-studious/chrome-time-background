@@ -1734,6 +1734,9 @@
         '/x/v2/history/toview/add',
         '/x/v2/history/toview/del',
         '/x/web-interface/archive/like',
+        '/x/v2/reply',
+        '/x/v2/reply/reply',
+        '/x/web-interface/view',
     ];
 
     async function getBilibiliCookies() {

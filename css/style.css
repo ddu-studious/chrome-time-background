@@ -17364,3 +17364,315 @@ body.bili-panel-open { overflow: hidden; }
 .bili-course-hint i { font-size: 36px; color: #fb7299; opacity: 0.6; }
 .bili-course-hint p { font-size: 13px; color: #aaa; margin: 0; }
 .bili-course-hint small { font-size: 11px; color: #555; }
+
+/* ===================== 评论区 ===================== */
+
+.bili-comments {
+    background: #1a1a1a;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    max-height: 400px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: bili-comments-slidedown 0.25s ease;
+}
+
+.bili-comments.hidden { display: none; }
+
+@keyframes bili-comments-slidedown {
+    from { max-height: 0; opacity: 0; }
+    to { max-height: 400px; opacity: 1; }
+}
+
+.bili-comments-header {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    background: #1e1e1e;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    flex-shrink: 0;
+    gap: 10px;
+}
+
+.bili-comments-title {
+    font-size: 13px;
+    color: #e0e0e0;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.bili-comments-title i { color: #fb7299; font-size: 13px; }
+
+.bili-comments-count {
+    font-size: 11px;
+    color: #888;
+    font-weight: 400;
+}
+
+.bili-comments-sort {
+    display: flex;
+    gap: 2px;
+    margin-left: auto;
+}
+
+.bili-comments-sort-btn {
+    background: none;
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #999;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.bili-comments-sort-btn:hover { color: #ccc; border-color: rgba(255,255,255,0.2); }
+.bili-comments-sort-btn.active { background: #fb7299; color: #fff; border-color: #fb7299; }
+
+.bili-comments-close {
+    background: none;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.15s;
+}
+
+.bili-comments-close:hover { color: #fff; background: rgba(255,255,255,0.1); }
+
+.bili-comments-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 12px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.15) transparent;
+}
+
+.bili-comments-list::-webkit-scrollbar { width: 4px; }
+.bili-comments-list::-webkit-scrollbar-track { background: transparent; }
+.bili-comments-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+
+.bili-comments-loading,
+.bili-comments-empty {
+    padding: 30px;
+    text-align: center;
+    color: #777;
+    font-size: 12px;
+}
+
+.bili-comments-loading i,
+.bili-comments-empty i {
+    font-size: 16px;
+    margin-right: 6px;
+}
+
+.bili-comment {
+    display: flex;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.bili-comment:last-child { border-bottom: none; }
+
+.bili-comment-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    object-fit: cover;
+}
+
+.bili-comment-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.bili-comment-header {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 4px;
+}
+
+.bili-comment-name {
+    font-size: 12px;
+    color: #fb7299;
+    font-weight: 500;
+}
+
+.bili-comment-badge {
+    font-size: 9px;
+    padding: 0 4px;
+    border-radius: 3px;
+    line-height: 16px;
+    font-weight: 500;
+}
+
+.bili-comment-up { background: #fb7299; color: #fff; }
+.bili-comment-top { background: #00aeec; color: #fff; }
+
+.bili-comment-level {
+    font-size: 9px;
+    padding: 0 3px;
+    border-radius: 2px;
+    line-height: 14px;
+    font-weight: 600;
+}
+
+.bili-comment-level.lv0,
+.bili-comment-level.lv1 { color: #999; }
+.bili-comment-level.lv2 { color: #7fcf6d; }
+.bili-comment-level.lv3 { color: #6ac0f6; }
+.bili-comment-level.lv4 { color: #f6a96c; }
+.bili-comment-level.lv5 { color: #f6776c; }
+.bili-comment-level.lv6 { color: #fb7299; }
+
+.bili-comment-content {
+    font-size: 12px;
+    color: #d0d0d0;
+    line-height: 1.6;
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+
+.bili-comment-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 4px;
+    font-size: 10px;
+    color: #666;
+}
+
+.bili-comment-meta span {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.bili-comment-like { cursor: pointer; transition: color 0.15s; }
+.bili-comment-like:hover { color: #fb7299; }
+
+.bili-comment-sub-list {
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 6px;
+}
+
+.bili-comment-sub {
+    padding: 4px 0;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.bili-comment-sub + .bili-comment-sub {
+    border-top: 1px solid rgba(255,255,255,0.03);
+    margin-top: 4px;
+    padding-top: 6px;
+}
+
+.bili-comment-sub-name {
+    color: #fb7299;
+    font-weight: 500;
+    margin-right: 4px;
+}
+
+.bili-comment-sub-name::after { content: '：'; color: #666; }
+
+.bili-comment-sub-content { color: #bbb; word-break: break-word; }
+
+.bili-comment-sub-meta {
+    display: flex;
+    gap: 10px;
+    font-size: 10px;
+    color: #555;
+    margin-top: 2px;
+}
+
+.bili-comment-sub-more {
+    background: none;
+    border: none;
+    color: #00aeec;
+    font-size: 11px;
+    cursor: pointer;
+    padding: 4px 0;
+    transition: color 0.15s;
+}
+
+.bili-comment-sub-more:hover { color: #fb7299; }
+
+.bili-comments-more {
+    padding: 8px 12px;
+    text-align: center;
+    flex-shrink: 0;
+    border-top: 1px solid rgba(255,255,255,0.04);
+}
+
+.bili-comments-more.hidden { display: none; }
+
+.bili-comments-more-btn {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #bbb;
+    font-size: 12px;
+    padding: 6px 20px;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.15s;
+    width: 100%;
+}
+
+.bili-comments-more-btn:hover { background: rgba(251,114,153,0.15); color: #fb7299; border-color: #fb7299; }
+
+#bili-act-comments.active { background: #fb7299 !important; color: #fff !important; }
+
+/* ===================== 收藏夹文件夹标签 ===================== */
+
+.bili-fav-folders {
+    display: flex;
+    gap: 4px;
+    padding: 8px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    overflow-x: auto;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.bili-fav-folders::-webkit-scrollbar { height: 3px; }
+.bili-fav-folders::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+
+.bili-fav-folder-btn {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: #aaa;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 14px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.bili-fav-folder-btn:hover { background: rgba(255,255,255,0.08); color: #f1f1f1; }
+.bili-fav-folder-btn.active { background: #fb7299; color: #fff; border-color: #fb7299; }
+
+.bili-ff-count {
+    font-size: 9px;
+    background: rgba(255,255,255,0.12);
+    padding: 0 4px;
+    border-radius: 8px;
+    line-height: 14px;
+    min-width: 14px;
+    text-align: center;
+}
+
+.bili-fav-folder-btn.active .bili-ff-count { background: rgba(255,255,255,0.25); }
