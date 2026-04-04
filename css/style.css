@@ -15509,6 +15509,41 @@ body.bright-bg .ticker-sources-panel {
     border: 1px solid rgba(255, 255, 255, 0.04);
 }
 
+/* ===== 代码块复制按钮 ===== */
+.kw-code-wrapper {
+    position: relative; margin: 10px 0;
+}
+.kw-code-wrapper pre {
+    margin: 0;
+}
+.kw-code-lang {
+    position: absolute; top: 6px; left: 10px; font-size: 10px;
+    color: rgba(255,255,255,0.25); font-family: inherit; pointer-events: none; z-index: 1;
+    text-transform: uppercase; letter-spacing: 0.5px;
+}
+.kw-code-copy-btn {
+    position: absolute; top: 6px; right: 6px; z-index: 2;
+    width: 28px; height: 26px; border: none; border-radius: 6px;
+    background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.35);
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-size: 12px; opacity: 0; transition: opacity 0.2s, background 0.2s, color 0.2s;
+}
+.kw-code-wrapper:hover .kw-code-copy-btn { opacity: 1; }
+.kw-code-copy-btn:hover { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.7); }
+.kw-code-copy-btn.copied { opacity: 1; background: rgba(92,216,92,0.15); color: rgba(92,216,92,0.9); }
+
+/* ===== 行内代码点击复制 ===== */
+.kw-inline-code-copy {
+    cursor: pointer; transition: background 0.2s, box-shadow 0.2s;
+}
+.kw-inline-code-copy:hover {
+    background: rgba(100,180,255,0.15); box-shadow: 0 0 0 2px rgba(100,180,255,0.15);
+    border-radius: 3px;
+}
+.kw-inline-code-copy.copied {
+    background: rgba(92,216,92,0.15); box-shadow: 0 0 0 2px rgba(92,216,92,0.15);
+}
+
 /* ===== Mermaid 图表样式 ===== */
 
 .kw-mermaid-block {
@@ -16006,9 +16041,9 @@ body.bright-bg .ticker-sources-panel {
     .kw-density-loose .kw-masonry-inner { column-count: 1; }
 }
 
-/* ===== 拖拽排序 ===== */
-.wall-card[draggable="true"] { cursor: grab; }
-.wall-card[draggable="true"]:active { cursor: grabbing; }
+/* ===== 拖拽排序（仅头部触发） ===== */
+.kw-drag-handle { cursor: grab; }
+.kw-drag-handle:active { cursor: grabbing; }
 .kw-dragging { opacity: 0.4; transform: scale(0.95); }
 .kw-drag-over { box-shadow: 0 0 0 2px var(--accent-blue); border-radius: 14px; }
 

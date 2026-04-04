@@ -36,16 +36,20 @@ class MarkdownRenderer {
                             const id = 'mermaid-' + Math.random().toString(36).slice(2, 10);
                             return `<div class="kw-mermaid-block" data-mermaid-id="${id}"><pre class="mermaid">${text}</pre></div>`;
                         }
+                        const langLabel = lang ? `<span class="kw-code-lang">${lang}</span>` : '';
+                        const copyBtn = `<button class="kw-code-copy-btn" aria-label="复制代码" title="复制代码"><i class="fas fa-copy"></i></button>`;
+                        let codeHtml;
                         if (typeof hljs !== 'undefined') {
                             if (lang && hljs.getLanguage(lang)) {
-                                const highlighted = hljs.highlight(text, { language: lang, ignoreIllegals: true }).value;
-                                return `<pre><code class="hljs language-${lang}">${highlighted}</code></pre>`;
+                                codeHtml = `<code class="hljs language-${lang}">${hljs.highlight(text, { language: lang, ignoreIllegals: true }).value}</code>`;
+                            } else {
+                                codeHtml = `<code class="hljs">${hljs.highlightAuto(text).value}</code>`;
                             }
-                            const auto = hljs.highlightAuto(text).value;
-                            return `<pre><code class="hljs">${auto}</code></pre>`;
+                        } else {
+                            const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                            codeHtml = `<code>${escaped}</code>`;
                         }
-                        const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                        return `<pre><code>${escaped}</code></pre>`;
+                        return `<div class="kw-code-wrapper">${langLabel}${copyBtn}<pre>${codeHtml}</pre></div>`;
                     },
 
                     paragraph({ tokens }) {
@@ -118,6 +122,7 @@ class MarkdownRenderer {
             ADD_ATTR: [
                 'target', 'rel', 'data-mermaid-id', 'class',
                 'loading', 'alt', 'type', 'checked', 'disabled',
+                'aria-label',
             ],
             ADD_TAGS: [
                 'svg', 'g', 'path', 'line', 'rect', 'circle',
@@ -129,13 +134,13 @@ class MarkdownRenderer {
                 'strong', 'em', 'del', 's', 'blockquote', 'mark', 'sup', 'sub',
                 'ul', 'ol', 'li', 'a', 'img', 'code', 'pre',
                 'table', 'thead', 'tbody', 'tr', 'th', 'td',
-                'input', 'div', 'span', 'i',
+                'input', 'div', 'span', 'i', 'button',
                 'details', 'summary',
             ],
             ALLOWED_ATTR: [
                 'href', 'src', 'alt', 'title', 'target', 'rel', 'class',
                 'data-mermaid-id', 'loading', 'type', 'checked', 'disabled',
-                'style', 'width', 'height', 'align',
+                'style', 'width', 'height', 'align', 'aria-label',
             ],
         });
     }
@@ -192,5 +197,40 @@ class MarkdownRenderer {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    static bindCopyButtons(container) {
+        if (!container) return;
+        container.querySelectorAll('.kw-code-copy-btn').forEach(btn => {
+            if (btn._copyBound) return;
+            btn._copyBound = true;
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const code = btn.closest('.kw-code-wrapper')?.querySelector('code');
+                if (!code) return;
+                try {
+                    await navigator.clipboard.writeText(code.textContent);
+                    btn.classList.add('copied');
+                    btn.innerHTML = '<i class="fas fa-check"></i>';
+                    setTimeout(() => {
+                        btn.classList.remove('copied');
+                        btn.innerHTML = '<i class="fas fa-copy"></i>';
+                    }, 1500);
+                } catch { /* silent */ }
+            });
+        });
+
+        container.querySelectorAll('code:not(pre code):not(.kw-inline-code-copy)').forEach(el => {
+            el.classList.add('kw-inline-code-copy');
+            el.title = '点击复制';
+            el.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                try {
+                    await navigator.clipboard.writeText(el.textContent);
+                    el.classList.add('copied');
+                    setTimeout(() => el.classList.remove('copied'), 1200);
+                } catch { /* silent */ }
+            });
+        });
     }
 }

@@ -450,6 +450,7 @@ class KnowledgeWall {
 
         masonry.innerHTML = html;
         this.bindCardEvents(masonry);
+        this._bindCopyEvents(masonry);
         this._renderMermaidBlocks(masonry);
         this._renderTagCloud();
         this._applyDensity();
@@ -509,14 +510,14 @@ class KnowledgeWall {
             : '';
 
         return `
-            <div class="wall-card${card.pinned ? ' pinned' : ''}${isProtected && !isUnlocked ? ' protected' : ''}" data-id="${card.id}" draggable="true">
+            <div class="wall-card${card.pinned ? ' pinned' : ''}${isProtected && !isUnlocked ? ' protected' : ''}" data-id="${card.id}">
                 <div class="wc-header">
                     <div class="wc-type" style="background:${cfg.bg};color:${cfg.color};">
                         <i class="${cfg.icon}"></i> ${cfg.label}
                     </div>
                     <div class="wc-badges">${lockIcon}${mdBadge}</div>
                     <div class="wc-card-actions">
-                        ${card.type === 'code' ? `<button class="wc-action-btn" data-action="copy" title="复制内容"><i class="fas fa-copy"></i></button>` : ''}
+                        <button class="wc-action-btn" data-action="copy" title="复制内容"><i class="fas fa-copy"></i></button>
                         <button class="wc-action-btn" data-action="pin" title="${card.pinned ? '取消置顶' : '置顶'}"><i class="fas fa-thumbtack${card.pinned ? '' : ' fa-rotate-90'}"></i></button>
                         <button class="wc-action-btn" data-action="edit" title="编辑"><i class="fas fa-pen"></i></button>
                         <button class="wc-action-btn wc-danger" data-action="delete" title="删除"><i class="fas fa-trash-alt"></i></button>
@@ -576,6 +577,12 @@ class KnowledgeWall {
                 });
             }
 
+            const header = el.querySelector('.wc-header');
+            if (header) {
+                header.classList.add('kw-drag-handle');
+                header.addEventListener('mousedown', () => { el.setAttribute('draggable', 'true'); });
+                header.addEventListener('mouseup', () => { el.removeAttribute('draggable'); });
+            }
             el.addEventListener('dragstart', (e) => {
                 this._dragCardId = cardId;
                 el.classList.add('kw-dragging');
@@ -584,6 +591,7 @@ class KnowledgeWall {
             });
             el.addEventListener('dragend', () => {
                 el.classList.remove('kw-dragging');
+                el.removeAttribute('draggable');
                 container.querySelectorAll('.kw-drag-over').forEach(d => d.classList.remove('kw-drag-over'));
                 this._dragCardId = null;
             });
@@ -2141,6 +2149,12 @@ class KnowledgeWall {
                     ${labels}
                 </svg>
             </div></div>`;
+    }
+
+    _bindCopyEvents(container) {
+        if (typeof MarkdownRenderer !== 'undefined') {
+            MarkdownRenderer.bindCopyButtons(container);
+        }
     }
 
     _showCrossModuleResults(query) {

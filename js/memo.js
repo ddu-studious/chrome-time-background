@@ -11144,6 +11144,7 @@ class MemoManager {
 
     _renderMemoMermaid(containerEl) {
         MarkdownRenderer.renderMermaid(containerEl);
+        MarkdownRenderer.bindCopyButtons(containerEl);
     }
 
     _hasMarkdownSyntax(text) {
