@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo 2 - 分离浮动卡片</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', 'Helvetica Neue', sans-serif;
+    background: #0a0a12;
+    color: #fff;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.demo-label {
+    position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+    background: rgba(200,160,255,0.12); color: rgba(200,160,255,0.8);
+    padding: 6px 18px; border-radius: 20px; font-size: 12px;
+    border: 1px solid rgba(200,160,255,0.15); z-index: 999;
+    backdrop-filter: blur(10px);
+}
+.demo-desc {
+    position: fixed; top: 56px; left: 50%; transform: translateX(-50%);
+    color: rgba(255,255,255,0.35); font-size: 11px; z-index: 999;
+    text-align: center; max-width: 400px; line-height: 1.5;
+}
+
+.bg-image {
+    position: fixed; inset: 0;
+    background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+    z-index: 0;
+}
+.bg-image::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 30% 20%, rgba(100,60,180,0.15), transparent 70%),
+                radial-gradient(ellipse at 70% 80%, rgba(30,100,160,0.1), transparent 60%);
+}
+
+.music-island {
+    position: relative; z-index: 50;
+    display: flex; flex-direction: column; align-items: center;
+    gap: 8px;
+}
+
+.mc-strip-card {
+    width: 340px;
+    background: rgba(16,14,22,0.95);
+    backdrop-filter: blur(60px) saturate(200%);
+    border-radius: 24px;
+    box-shadow: 0 16px 64px rgba(0,0,0,0.7), inset 0 0.5px 0 rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.05);
+    overflow: hidden;
+    z-index: 2;
+    position: relative;
+}
+
+.mc-strip {
+    display: flex; align-items: center; gap: 8px;
+    padding: 14px 16px 10px; cursor: pointer;
+}
+.mc-cover {
+    width: 44px; height: 44px; border-radius: 12px;
+    overflow: hidden; flex-shrink: 0;
+    background: rgba(200,160,255,0.08);
+    display: flex; align-items: center; justify-content: center;
+}
+.mc-cover i { font-size: 16px; color: rgba(200,160,255,0.3); }
+.mc-info { flex: 1; min-width: 0; }
+.mc-title { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.95); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mc-sub { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 1px; }
+.mc-strip-controls { display: flex; gap: 4px; }
+.mc-ctrl-btn {
+    background: none; border: none; color: rgba(255,255,255,0.45);
+    cursor: pointer; width: 28px; height: 28px; border-radius: 50%;
+    font-size: 12px; display: flex; align-items: center; justify-content: center;
+    transition: all .2s;
+}
+.mc-ctrl-btn:hover { color: #fff; background: rgba(255,255,255,0.08); }
+.mc-play-btn { background: rgba(200,160,255,0.85); color: #000; font-size: 14px; width: 32px; height: 32px; }
+.mc-play-btn:hover { background: rgba(200,160,255,1); transform: scale(1.05); }
+.mc-progress { display: flex; align-items: center; gap: 6px; padding: 0 16px 10px; }
+.mc-prg-time { font-size: 9px; color: rgba(255,255,255,0.25); min-width: 28px; text-align: center; }
+.mc-prg-bar { flex: 1; height: 3px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; }
+.mc-prg-fill { height: 100%; width: 35%; background: linear-gradient(90deg, rgba(200,160,255,0.8), rgba(150,120,255,0.8)); border-radius: 2px; }
+
+/* ========= 核心：分离浮动卡片 ========= */
+.mc-float-panel {
+    width: 340px;
+    background: rgba(16,14,22,0.92);
+    backdrop-filter: blur(60px) saturate(180%);
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.06);
+    overflow: hidden;
+    z-index: 1;
+    /* 关键动画 - scale + fade + translate */
+    opacity: 0;
+    transform: scale(0.92) translateY(-20px);
+    max-height: 0;
+    transition: opacity 0.35s cubic-bezier(.4,0,.2,1),
+                transform 0.4s cubic-bezier(.34,1.56,.64,1),
+                max-height 0.45s cubic-bezier(.4,0,.2,1);
+    pointer-events: none;
+}
+.mc-float-panel.visible {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    max-height: 400px;
+    pointer-events: auto;
+}
+
+.mc-panel-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 16px 8px;
+}
+.mc-panel-header-cover {
+    width: 40px; height: 40px; border-radius: 10px;
+    background: rgba(200,160,255,0.1);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+}
+.mc-panel-header-cover i { font-size: 16px; color: rgba(200,160,255,0.3); }
+.mc-panel-header-info { flex: 1; min-width: 0; }
+.mc-panel-header-title { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.85); }
+.mc-panel-header-count { font-size: 10px; color: rgba(255,255,255,0.3); margin-top: 2px; }
+.mc-panel-header-actions { display: flex; gap: 6px; }
+.mc-panel-action {
+    width: 32px; height: 32px; border-radius: 50%; border: none;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-size: 12px; transition: all .15s;
+}
+.mc-panel-play-all { background: rgba(200,160,255,0.25); color: rgba(200,160,255,0.95); }
+.mc-panel-play-all:hover { background: rgba(200,160,255,0.4); transform: scale(1.05); }
+.mc-panel-shuffle { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.5); }
+.mc-panel-shuffle:hover { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.8); }
+
+.mc-tabs { display: flex; padding: 0 16px; border-bottom: 1px solid rgba(255,255,255,0.04); position: relative; }
+.mc-tab {
+    flex: 1; padding: 8px 0; text-align: center; font-size: 11px;
+    color: rgba(255,255,255,0.35); cursor: pointer; border: none; background: none;
+    transition: color .2s;
+}
+.mc-tab:hover { color: rgba(255,255,255,0.6); }
+.mc-tab.active { color: rgba(200,160,255,0.95); font-weight: 500; }
+
+.mc-content { height: 240px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.06) transparent; }
+.mc-content::-webkit-scrollbar { width: 3px; }
+.mc-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+
+.mc-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px 8px 14px; cursor: pointer; transition: background .12s;
+}
+.mc-row:hover { background: rgba(255,255,255,0.03); }
+.mc-row.active { background: rgba(200,160,255,0.04); }
+.mc-row-num { width: 22px; text-align: center; font-size: 10px; color: rgba(255,255,255,0.22); }
+.mc-row.active .mc-row-num { color: rgba(200,160,255,0.7); }
+.mc-row-info { flex: 1; min-width: 0; }
+.mc-row-title { font-size: 12px; color: rgba(255,255,255,0.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mc-row.active .mc-row-title { color: rgba(200,160,255,0.95); font-weight: 500; }
+.mc-row-artist { font-size: 10px; color: rgba(255,255,255,0.25); }
+
+.mc-modes {
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px; padding: 8px 16px 10px;
+    border-top: 1px solid rgba(255,255,255,0.04);
+}
+.mc-mode-btn {
+    background: none; border: none; color: rgba(255,255,255,0.2);
+    cursor: pointer; font-size: 12px; padding: 3px; transition: all .2s;
+}
+.mc-mode-btn:hover { color: rgba(255,255,255,0.5); }
+.mc-mode-btn.active { color: rgba(200,160,255,0.9); }
+.mc-mode-divider { width: 1px; height: 12px; background: rgba(255,255,255,0.06); }
+.mc-mode-label { font-size: 9px; color: rgba(255,255,255,0.15); }
+</style>
+</head>
+<body>
+<div class="demo-label">Demo 2 - 分离浮动卡片</div>
+<div class="demo-desc">播放条与内容面板完全分离，中间有 8px 间距<br>内容面板以弹性缩放动画弹出，像两张独立的卡片</div>
+<div class="bg-image"></div>
+
+<div class="music-island">
+    <div class="mc-strip-card">
+        <div class="mc-strip" id="mc-strip">
+            <div class="mc-cover"><i class="fas fa-music"></i></div>
+            <div class="mc-info">
+                <div class="mc-title">星河万里</div>
+                <div class="mc-sub">Rom邢锐</div>
+            </div>
+            <div class="mc-strip-controls">
+                <button class="mc-ctrl-btn"><i class="fas fa-step-backward"></i></button>
+                <button class="mc-ctrl-btn mc-play-btn"><i class="fas fa-play"></i></button>
+                <button class="mc-ctrl-btn"><i class="fas fa-step-forward"></i></button>
+            </div>
+        </div>
+        <div class="mc-progress">
+            <span class="mc-prg-time">0:54</span>
+            <div class="mc-prg-bar"><div class="mc-prg-fill"></div></div>
+            <span class="mc-prg-time">3:32</span>
+        </div>
+    </div>
+
+    <div class="mc-float-panel" id="float-panel">
+        <div class="mc-panel-header">
+            <div class="mc-panel-header-cover"><i class="fas fa-music"></i></div>
+            <div class="mc-panel-header-info">
+                <div class="mc-panel-header-title">每日推荐</div>
+                <div class="mc-panel-header-count">31 首歌曲</div>
+            </div>
+            <div class="mc-panel-header-actions">
+                <button class="mc-panel-action mc-panel-play-all"><i class="fas fa-play"></i></button>
+                <button class="mc-panel-action mc-panel-shuffle"><i class="fas fa-random"></i></button>
+            </div>
+        </div>
+        <div class="mc-tabs">
+            <button class="mc-tab active">队列</button>
+            <button class="mc-tab">歌单</button>
+            <button class="mc-tab">歌词</button>
+            <button class="mc-tab">发现</button>
+            <button class="mc-tab">搜索</button>
+        </div>
+        <div class="mc-content">
+            <div class="mc-row active">
+                <div class="mc-row-num">1</div>
+                <div class="mc-row-info"><div class="mc-row-title">星河万里</div><div class="mc-row-artist">Rom邢锐</div></div>
+            </div>
+            <div class="mc-row">
+                <div class="mc-row-num">2</div>
+                <div class="mc-row-info"><div class="mc-row-title">触不可及</div><div class="mc-row-artist">周深</div></div>
+            </div>
+            <div class="mc-row">
+                <div class="mc-row-num">3</div>
+                <div class="mc-row-info"><div class="mc-row-title">向往</div><div class="mc-row-artist">李健</div></div>
+            </div>
+            <div class="mc-row">
+                <div class="mc-row-num">4</div>
+                <div class="mc-row-info"><div class="mc-row-title">桃花诺</div><div class="mc-row-artist">G.E.M.邓紫棋</div></div>
+            </div>
+            <div class="mc-row">
+                <div class="mc-row-num">5</div>
+                <div class="mc-row-info"><div class="mc-row-title">你说</div><div class="mc-row-artist">林俊杰</div></div>
+            </div>
+            <div class="mc-row">
+                <div class="mc-row-num">6</div>
+                <div class="mc-row-info"><div class="mc-row-title">平凡之路</div><div class="mc-row-artist">朴树</div></div>
+            </div>
+            <div class="mc-row">
+                <div class="mc-row-num">7</div>
+                <div class="mc-row-info"><div class="mc-row-title">起风了</div><div class="mc-row-artist">买辣椒也用券</div></div>
+            </div>
+            <div class="mc-row">
+                <div class="mc-row-num">8</div>
+                <div class="mc-row-info"><div class="mc-row-title">光年之外</div><div class="mc-row-artist">G.E.M.邓紫棋</div></div>
+            </div>
+        </div>
+        <div class="mc-modes">
+            <button class="mc-mode-btn"><i class="fas fa-arrow-right"></i></button>
+            <button class="mc-mode-btn active"><i class="fas fa-redo"></i></button>
+            <button class="mc-mode-btn"><i class="fas fa-redo-alt"></i></button>
+            <button class="mc-mode-btn"><i class="fas fa-random"></i></button>
+            <div class="mc-mode-divider"></div>
+            <span class="mc-mode-label">顺序播放</span>
+            <div class="mc-mode-divider"></div>
+            <button class="mc-mode-btn"><i class="fas fa-volume-up"></i></button>
+            <div class="mc-mode-divider"></div>
+            <button class="mc-mode-btn" style="color:rgba(255,100,100,0.4)"><i class="fas fa-times-circle"></i></button>
+        </div>
+    </div>
+</div>
+
+<script>
+const strip = document.getElementById('mc-strip');
+const panel = document.getElementById('float-panel');
+let expanded = false;
+
+strip.addEventListener('click', () => {
+    expanded = !expanded;
+    panel.classList.toggle('visible', expanded);
+});
+</script>
+</body>
+</html>

@@ -25,6 +25,8 @@ class BilibiliController {
         this._qualityList = [];
         this._qualityDescriptions = {};
         this._playerState = null;
+        this._pendingSeek = null;
+        this._seekRetries = 0;
     }
 
     async init() {
@@ -450,11 +452,21 @@ class BilibiliController {
         this._el.querySelector('#bili-player-info').classList.add('hidden');
         this._el.querySelector('#bili-ctrl-bar')?.classList.add('hidden');
         this._currentVideo = null;
+        this._pendingSeek = null;
     }
 
     // ===================== Data Normalizers =====================
 
     _normalizeVideo(v) {
+        const dur = v.duration || 0;
+        const prog = v.progress || 0;
+        const totalPages = v.videos || 1;
+        const watchCid = v.cid || 0;
+        let watchPage = v.page || 0;
+        if (!watchPage && totalPages > 1 && watchCid && Array.isArray(v.pages)) {
+            const matched = v.pages.find(p => p.cid === watchCid);
+            if (matched) watchPage = matched.page || 0;
+        }
         return {
             bvid: v.bvid || '',
             aid: v.aid || 0,
@@ -462,8 +474,8 @@ class BilibiliController {
             cover: this._httpsCover(v.pic || v.cover || ''),
             author: v.owner?.name || '',
             mid: v.owner?.mid || 0,
-            duration: this._fmtDuration(v.duration || 0),
-            durationSec: v.duration || 0,
+            duration: this._fmtDuration(dur),
+            durationSec: dur,
             views: this._fmtNum(v.stat?.view || 0),
             danmaku: this._fmtNum(v.stat?.danmaku || 0),
             likes: this._fmtNum(v.stat?.like || 0),
@@ -473,27 +485,39 @@ class BilibiliController {
             pubdate: v.pubdate || 0,
             pubdateStr: this._fmtDate(v.pubdate || 0),
             tname: v.tname || '',
+            progress: prog > 0 && dur > 0 ? Math.round(prog / dur * 100) : 0,
+            progressSec: prog > 0 ? prog : 0,
+            totalPages,
+            watchPage,
             type: 'video',
         };
     }
 
     _normalizeHistory(v) {
         const h = v.history || {};
+        const dur = v.duration || 0;
+        const prog = v.progress || 0;
+        const watchPage = h.page || 0;
+        const totalPages = v.videos || 1;
         return {
             bvid: h.bvid || v.bvid || '',
             aid: h.oid || v.aid || 0,
             title: v.title || '',
+            showTitle: v.show_title || '',
             cover: this._httpsCover(v.cover || ''),
             author: v.author_name || '',
             mid: v.author_mid || 0,
-            duration: this._fmtDuration(v.duration || 0),
-            durationSec: v.duration || 0,
+            duration: this._fmtDuration(dur),
+            durationSec: dur,
             views: this._fmtNum(v.view_at || 0),
             danmaku: '',
             likes: '', coins: '', favorites: '', shares: '',
             pubdate: 0, pubdateStr: '',
             tname: v.tag_name || '',
-            progress: v.progress > 0 && v.duration > 0 ? Math.round(v.progress / v.duration * 100) : 0,
+            progress: prog > 0 && dur > 0 ? Math.round(prog / dur * 100) : 0,
+            progressSec: prog > 0 ? prog : 0,
+            totalPages,
+            watchPage,
             type: 'video',
         };
     }
@@ -514,6 +538,10 @@ class BilibiliController {
             pubdate: v.pubtime || 0,
             pubdateStr: this._fmtDate(v.pubtime || 0),
             tname: '',
+            progress: 0,
+            progressSec: 0,
+            totalPages: 1,
+            watchPage: 0,
             type: 'video',
         };
     }
@@ -556,6 +584,10 @@ class BilibiliController {
                 pubdate: v.pubdate || 0,
                 pubdateStr: this._fmtDate(v.pubdate || 0),
                 tname: v.typename || '',
+                progress: 0,
+                progressSec: 0,
+                totalPages: 1,
+                watchPage: 0,
                 type: 'video',
             }));
             this._renderList('_search', items);
@@ -593,6 +625,12 @@ class BilibiliController {
                 <div class="bili-player-area">
                     <div class="bili-player-frame" id="bili-player-frame">
                         <div class="bili-player-empty"><i class="fab fa-bilibili"></i><p>从右侧列表中选择一个视频开始播放</p></div>
+                    </div>
+                    <div class="bili-now-playing hidden" id="bili-now-playing">
+                        <i class="fas fa-play-circle bili-np-icon"></i>
+                        <span class="bili-np-label">正在播放</span>
+                        <span class="bili-np-title" id="bili-np-title"></span>
+                        <span class="bili-np-episode" id="bili-np-episode"></span>
                     </div>
                     <div class="bili-ctrl-bar hidden" id="bili-ctrl-bar">
                         <div class="bili-ctrl-group">
@@ -703,8 +741,13 @@ class BilibiliController {
                     this._currentSpeed = e.data.speed;
                     this._updateSpeedUI();
                 }
+                this._tryPendingSeek(e.data);
             } else if (e.data.type === 'bili-ext-quality-info') {
                 this._onQualityInfo(e.data);
+            } else if (e.data.type === 'bili-ext-title-info') {
+                this._onTitleInfo(e.data);
+            } else if (e.data.type === 'bili-ext-seek-result') {
+                this._onSeekResult(e.data);
             }
         });
 
@@ -715,6 +758,37 @@ class BilibiliController {
                 this._setSpeed(speed);
             });
         });
+    }
+
+    // ===================== Pending Seek (进度恢复) =====================
+
+    _tryPendingSeek(state) {
+        if (this._pendingSeek === null) return;
+        if (!state.duration || state.duration <= 0) return;
+        const MAX_RETRIES = 8;
+        if (this._seekRetries >= MAX_RETRIES) {
+            this._pendingSeek = null;
+            return;
+        }
+        const target = this._pendingSeek;
+        const current = state.currentTime || 0;
+        if (Math.abs(current - target) < 3) {
+            this._pendingSeek = null;
+            return;
+        }
+        this._seekRetries++;
+        const delay = this._seekRetries <= 2 ? 500 : 1500;
+        setTimeout(() => {
+            if (this._pendingSeek === null) return;
+            this._sendPlayerMsg({ type: 'bili-ext-seek', time: target });
+        }, delay);
+    }
+
+    _onSeekResult(data) {
+        if (this._pendingSeek === null) return;
+        if (data.success && Math.abs((data.currentTime || 0) - this._pendingSeek) < 3) {
+            this._pendingSeek = null;
+        }
     }
 
     // ===================== Player Control (v3.10.0 + v3.11.0) =====================
@@ -845,6 +919,42 @@ class BilibiliController {
                 this._setQuality(qn);
             });
         });
+    }
+
+    _onTitleInfo(data) {
+        const bar = this._el.querySelector('#bili-now-playing');
+        const titleEl = this._el.querySelector('#bili-np-title');
+        const episodeEl = this._el.querySelector('#bili-np-episode');
+        if (!bar || !titleEl || !episodeEl) return;
+
+        const hasEpisode = !!(data.episode || (data.partIndex > 0 && data.totalParts > 1));
+        if (!data.title && !hasEpisode) {
+            bar.classList.add('hidden');
+            return;
+        }
+
+        if (data.title) {
+            titleEl.textContent = data.title;
+            titleEl.style.display = '';
+        } else {
+            titleEl.style.display = 'none';
+        }
+
+        if (hasEpisode) {
+            let epText = '';
+            if (data.partIndex > 0 && data.totalParts > 1) {
+                epText = `P${data.partIndex}/${data.totalParts}`;
+                if (data.episode) epText += ` ${data.episode}`;
+            } else if (data.episode) {
+                epText = data.episode;
+            }
+            episodeEl.textContent = epText;
+            episodeEl.style.display = '';
+        } else {
+            episodeEl.style.display = 'none';
+        }
+
+        bar.classList.remove('hidden');
     }
 
     async _onActionLike() {
@@ -983,15 +1093,26 @@ class BilibiliController {
             ? `<div class="bili-item-progress"><div class="bili-item-progress-bar" style="width:${v.progress}%"></div></div>` : '';
         const rmHtml = showRemoveBtn
             ? `<button class="bili-item-rm-btn" title="${tab === 'watchlater' ? '移除稍后看' : '取消收藏'}"><i class="fas fa-times"></i></button>` : '';
+        let resumeHtml = '';
+        if (v.progressSec > 0 || (v.totalPages > 1 && v.watchPage > 0)) {
+            const parts = [];
+            if (v.totalPages > 1 && v.watchPage > 0) parts.push(`P${v.watchPage}/${v.totalPages}`);
+            if (v.progressSec > 0) parts.push(`看到 ${this._fmtDuration(v.progressSec)}`);
+            resumeHtml = `<span class="bili-item-resume"><i class="fas fa-history"></i> ${parts.join(' · ')}</span>`;
+        }
+        const pagesBadge = v.totalPages > 1 && !v.watchPage
+            ? `<span class="bili-item-pages">${v.totalPages}P</span>` : '';
         return `<div class="bili-item${isPlaying ? ' playing' : ''}" data-idx="${idx}">
             ${rankHtml}
             <img class="bili-item-cover" src="${this._esc(v.cover)}" alt="" loading="lazy">
             <span class="bili-item-dur">${this._esc(v.duration)}</span>
+            ${pagesBadge}
             <div class="bili-item-info">
                 <div class="bili-item-title">${this._esc(v.title)}</div>
                 <div class="bili-item-meta">
                     <span><i class="fas fa-user"></i> ${this._esc(v.author)}</span>
                     <span><i class="fas fa-play"></i> ${v.views}</span>
+                    ${resumeHtml}
                 </div>
                 ${progressHtml}
             </div>
@@ -1032,6 +1153,8 @@ class BilibiliController {
 
     async _playItem(item) {
         this._currentVideo = item;
+        this._pendingSeek = item.progressSec > 0 ? item.progressSec : null;
+        this._seekRetries = 0;
         const frame = this._el.querySelector('#bili-player-frame');
         const SANDBOX_PLAYER = 'allow-scripts allow-same-origin allow-forms allow-presentation allow-popups allow-popups-to-escape-sandbox';
 
@@ -1042,12 +1165,22 @@ class BilibiliController {
         if (item.type === 'course' && item.seasonId) {
             frame.innerHTML = `<iframe src="https://www.bilibili.com/cheese/play/ss${item.seasonId}" sandbox="${SANDBOX_PLAYER}" allowfullscreen allow="autoplay; encrypted-media"></iframe>`;
         } else if (item.bvid) {
-            frame.innerHTML = `<iframe src="https://www.bilibili.com/video/${item.bvid}/" sandbox="${SANDBOX_PLAYER}" allowfullscreen allow="autoplay; encrypted-media"></iframe>`;
+            const params = [];
+            if (item.watchPage > 1) params.push(`p=${item.watchPage}`);
+            if (item.progressSec > 0) params.push(`t=${item.progressSec}`);
+            const qs = params.length ? `?${params.join('&')}` : '';
+            frame.innerHTML = `<iframe src="https://www.bilibili.com/video/${item.bvid}/${qs}" sandbox="${SANDBOX_PLAYER}" allowfullscreen allow="autoplay; encrypted-media"></iframe>`;
         }
 
         const info = this._el.querySelector('#bili-player-info');
         info.classList.remove('hidden');
-        this._el.querySelector('#bili-pi-title').textContent = item.title;
+        let titleText = item.title;
+        if (item.totalPages > 1 && item.watchPage > 0) {
+            titleText += ` [P${item.watchPage}/${item.totalPages}`;
+            if (item.showTitle) titleText += ` ${item.showTitle}`;
+            titleText += ']';
+        }
+        this._el.querySelector('#bili-pi-title').textContent = titleText;
         this._el.querySelector('#bili-pi-author').textContent = item.author;
         this._el.querySelector('#bili-pi-views').textContent = item.views || '';
         this._el.querySelector('#bili-pi-danmaku').textContent = item.danmaku || '';
@@ -1126,7 +1259,9 @@ class BilibiliController {
         frame.innerHTML = '<div class="bili-player-empty"><i class="fab fa-bilibili"></i><p>从右侧列表中选择一个视频开始播放</p></div>';
         this._el.querySelector('#bili-player-info').classList.add('hidden');
         this._el.querySelector('#bili-ctrl-bar')?.classList.add('hidden');
+        this._el.querySelector('#bili-now-playing')?.classList.add('hidden');
         this._currentVideo = null;
+        this._pendingSeek = null;
     }
 
     toggle() { this._panelOpen ? this.hide() : this.show(); }

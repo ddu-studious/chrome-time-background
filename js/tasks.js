@@ -86,7 +86,9 @@ class TaskManager {
                 recurrence: memo.recurrence || null,
                 habit: memo.habit || null,
                 habitCard: memo.habitCard || null,
-                subtasks: Array.isArray(memo.subtasks) ? memo.subtasks : []
+                subtasks: Array.isArray(memo.subtasks) ? memo.subtasks : [],
+                status: memo.status || null,
+                failedAt: memo.failedAt || null,
             }));
 
             console.log(`加载了 ${this.memos.length} 个任务`);
@@ -218,10 +220,13 @@ class TaskManager {
         // 状态筛选
         switch (this.filters.status) {
             case 'active':
-                tasks = tasks.filter(t => !t.completed);
+                tasks = tasks.filter(t => !t.completed && t.status !== 'failed');
                 break;
             case 'completed':
                 tasks = tasks.filter(t => t.completed);
+                break;
+            case 'failed':
+                tasks = tasks.filter(t => t.status === 'failed');
                 break;
             case 'overdue':
                 tasks = tasks.filter(t => this.getTaskStatus(t).key === 'overdue');
@@ -285,11 +290,14 @@ class TaskManager {
         const inProgress = all.filter(t => this.getTaskStatus(t).key === 'in_progress');
         const done = all.filter(t => t.completed);
         const overdue = all.filter(t => this.getTaskStatus(t).key === 'overdue');
+        const failed = all.filter(t => t.status === 'failed');
 
         document.getElementById('stat-total').textContent = all.length;
         document.getElementById('stat-active').textContent = inProgress.length;
         document.getElementById('stat-done').textContent = done.length;
         document.getElementById('stat-overdue').textContent = overdue.length;
+        const failedEl = document.getElementById('stat-failed');
+        if (failedEl) failedEl.textContent = failed.length;
     }
 
     // ===================== 渲染 =====================
@@ -347,12 +355,34 @@ class TaskManager {
                 });
             }
 
-            // 状态切换
+            // 状态切换（失败状态下点击 status-icon 为重新激活）
             const statusIcon = row.querySelector('.status-icon');
             if (statusIcon) {
                 statusIcon.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    this.toggleTaskStatus(taskId);
+                    if (statusIcon.classList.contains('failed')) {
+                        this.reactivateTask(taskId);
+                    } else {
+                        this.toggleTaskStatus(taskId);
+                    }
+                });
+            }
+
+            // 标记为失败
+            const failBtn = row.querySelector('.btn-fail');
+            if (failBtn) {
+                failBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.markTaskFailed(taskId);
+                });
+            }
+
+            // 重新激活
+            const reactivateBtn = row.querySelector('.btn-reactivate');
+            if (reactivateBtn) {
+                reactivateBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.reactivateTask(taskId);
                 });
             }
 
@@ -384,18 +414,23 @@ class TaskManager {
 
     createTableRow(task) {
         const isSelected = this.selectedIds.has(task.id);
+        const isFailed = task.status === 'failed';
         const completedClass = task.completed ? 'completed-row' : '';
+        const failedClass = isFailed ? 'failed-row' : '';
         const selectedClass = isSelected ? 'selected' : '';
 
         return `
-            <tr data-task-id="${task.id}" class="${completedClass} ${selectedClass}">
+            <tr data-task-id="${task.id}" class="${completedClass} ${failedClass} ${selectedClass}">
                 <td class="col-checkbox">
                     <input type="checkbox" class="row-checkbox" ${isSelected ? 'checked' : ''}>
                 </td>
                 <td class="col-status">
-                    <span class="status-icon ${task.completed ? 'completed' : 'active'}" title="${task.completed ? '标记为未完成' : '标记为已完成'}">
-                        <i class="${task.completed ? 'fas fa-check-circle' : 'far fa-circle'}"></i>
-                    </span>
+                    ${isFailed
+                        ? `<span class="status-icon failed" title="已失败 — 点击重新激活"><i class="fas fa-times-circle"></i></span>`
+                        : `<span class="status-icon ${task.completed ? 'completed' : 'active'}" title="${task.completed ? '标记为未完成' : '标记为已完成'}">
+                            <i class="${task.completed ? 'fas fa-check-circle' : 'far fa-circle'}"></i>
+                        </span>`
+                    }
                 </td>
                 <td class="col-priority">
                     ${this.renderPriorityBadge(task.priority)}
@@ -420,6 +455,10 @@ class TaskManager {
                 </td>
                 <td class="col-actions">
                     <div class="action-btns">
+                        ${isFailed
+                            ? `<button class="action-btn-sm btn-reactivate" title="重新激活"><i class="fas fa-redo"></i></button>`
+                            : `<button class="action-btn-sm btn-fail" title="标记为失败"><i class="fas fa-times-circle"></i></button>`
+                        }
                         <button class="action-btn-sm btn-detail" title="查看详情">
                             <i class="fas fa-eye"></i>
                         </button>
@@ -449,8 +488,9 @@ class TaskManager {
     }
 
     createCard(task) {
+        const isFailed = task.status === 'failed';
         return `
-            <div class="task-card ${task.completed ? 'completed' : ''}" data-task-id="${task.id}">
+            <div class="task-card ${task.completed ? 'completed' : ''} ${isFailed ? 'failed' : ''}" data-task-id="${task.id}">
                 <div class="card-top">
                     <div class="card-title">${this.escapeHtml(task.title || '无标题')}</div>
                     ${this.renderPriorityBadge(task.priority)}
@@ -565,6 +605,11 @@ class TaskManager {
         });
         
         this.bindDetailSubtaskEvents(body, task);
+
+        const reactivateBtn = body.querySelector('.detail-reactivate-btn');
+        if (reactivateBtn) {
+            reactivateBtn.addEventListener('click', () => this.reactivateTask(taskId));
+        }
         
         panel.classList.remove('hidden');
         overlay.classList.remove('hidden');
@@ -687,12 +732,16 @@ class TaskManager {
         const ageDays = Math.floor(ageMs / (1000 * 60 * 60 * 24));
         const ageText = ageDays === 0 ? '今天创建' : `已创建 ${ageDays} 天`;
 
+        const isFailed = task.status === 'failed';
+        const statusIconClass = isFailed ? 'failed' : (task.completed ? 'completed' : 'active');
+        const statusIconI = isFailed ? 'fas fa-times-circle' : (task.completed ? 'fas fa-check-circle' : 'far fa-circle');
+
         return `
             <!-- 标题 -->
             <div class="detail-section">
                 <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
-                    <span class="status-icon ${task.completed ? 'completed' : 'active'}" style="font-size: 1.5rem;">
-                        <i class="${task.completed ? 'fas fa-check-circle' : 'far fa-circle'}"></i>
+                    <span class="status-icon ${statusIconClass}" style="font-size: 1.5rem;">
+                        <i class="${statusIconI}"></i>
                     </span>
                     <div class="detail-title">${this.escapeHtml(task.title || '无标题')}</div>
                 </div>
@@ -700,6 +749,7 @@ class TaskManager {
                     ${this.renderPriorityBadge(task.priority)}
                     ${(() => { const s = this.getTaskStatus(task); return `<span class="category-tag" style="color:${s.color}"><i class="${s.icon}"></i> ${s.label}</span>`; })()}
                     <span class="category-tag"><i class="fas fa-calendar-alt"></i> ${ageText}</span>
+                    ${isFailed ? `<button class="detail-reactivate-btn" data-task-id="${task.id}"><i class="fas fa-redo"></i> 重新激活</button>` : ''}
                 </div>
             </div>
 
@@ -973,6 +1023,32 @@ class TaskManager {
         this.render();
     }
 
+    async markTaskFailed(taskId) {
+        const task = this.memos.find(t => t.id === taskId);
+        if (!task) return;
+        task.status = 'failed';
+        task.failedAt = Date.now();
+        task.updatedAt = Date.now();
+        await this.saveData();
+        this.applyFilters();
+        this.render();
+        this.closeDetail();
+    }
+
+    async reactivateTask(taskId) {
+        const task = this.memos.find(t => t.id === taskId);
+        if (!task) return;
+        task.status = null;
+        task.failedAt = null;
+        task.completed = false;
+        task.completedAt = null;
+        task.updatedAt = Date.now();
+        await this.saveData();
+        this.applyFilters();
+        this.render();
+        this.closeDetail();
+    }
+
     async batchDelete() {
         if (this.selectedIds.size === 0) return;
         if (!confirm(`确定要删除选中的 ${this.selectedIds.size} 个任务吗？此操作不可撤销。`)) return;
@@ -1077,12 +1153,15 @@ class TaskManager {
         const renderList = (filterText = '') => {
             const q = (filterText || '').toLowerCase().trim();
             const filtered = q ? options.filter(o => (o.name || '').toLowerCase().includes(q)) : options;
-            listbox.innerHTML = filtered.map((opt, i) => `
-                <li class="category-combobox-option" role="option" data-value="${this.escapeHtml(opt.id)}" data-index="${i}" aria-selected="false">
+            listbox.innerHTML = filtered.map((opt, i) => {
+                const isSelected = opt.id === value;
+                return `
+                <li class="category-combobox-option${isSelected ? ' selected' : ''}" role="option" data-value="${this.escapeHtml(opt.id)}" data-index="${i}" aria-selected="false">
                     <span class="category-combobox-option-color" style="background:${opt.color || 'transparent'}"></span>
                     <span class="category-combobox-option-name">${this.escapeHtml(opt.name)}</span>
-                </li>
-            `).join('');
+                    ${isSelected ? '<i class="fas fa-check category-combobox-check"></i>' : ''}
+                </li>`;
+            }).join('');
             if (opts.showManageEntry !== false) {
                 listbox.innerHTML += `<li class="category-combobox-manage" role="option" data-action="manage"><i class="fas fa-cog"></i> 管理分类</li>`;
             }
@@ -1099,6 +1178,10 @@ class TaskManager {
                     this.openCategoryManagerPopup();
                 });
             }
+            if (!q) {
+                const selectedEl = listbox.querySelector('.category-combobox-option.selected');
+                if (selectedEl) selectedEl.scrollIntoView({ block: 'nearest' });
+            }
         };
 
         const selectValue = (id) => {
@@ -1107,25 +1190,38 @@ class TaskManager {
             colorDot.style.background = getDisplayColor(id);
             listbox.classList.add('hidden');
             input.setAttribute('aria-expanded', 'false');
+            input.placeholder = placeholder;
             onChange(value);
         };
 
         const openList = () => {
             input.setAttribute('aria-expanded', 'true');
+            input.value = '';
+            input.placeholder = '搜索分类...';
             positionListbox();
             listbox.classList.remove('hidden');
-            renderList(input.value);
+            renderList('');
         };
 
         const closeList = () => {
             listbox.classList.add('hidden');
             input.setAttribute('aria-expanded', 'false');
             input.value = getDisplayName(value);
+            input.placeholder = placeholder;
             colorDot.style.background = getDisplayColor(value);
         };
 
-        input.addEventListener('focus', () => openList());
-        input.addEventListener('input', () => { openList(); renderList(input.value); });
+        input.addEventListener('focus', () => {
+            if (listbox.classList.contains('hidden')) openList();
+        });
+        input.addEventListener('input', () => {
+            if (listbox.classList.contains('hidden')) {
+                input.setAttribute('aria-expanded', 'true');
+                positionListbox();
+                listbox.classList.remove('hidden');
+            }
+            renderList(input.value);
+        });
         input.addEventListener('keydown', (e) => {
             const optsEl = listbox.querySelectorAll('.category-combobox-option');
             if (e.key === 'ArrowDown') {
@@ -1144,13 +1240,19 @@ class TaskManager {
             } else if (e.key === 'Escape') {
                 e.preventDefault();
                 closeList();
+                input.blur();
             }
         });
 
         inputWrap.addEventListener('click', (e) => {
-            if (e.target === input || e.target.closest('.category-combobox-arrow')) {
-                if (listbox.classList.contains('hidden')) openList();
-                else closeList();
+            if (e.target.closest('.category-combobox-arrow')) {
+                if (listbox.classList.contains('hidden')) {
+                    input.focus();
+                } else {
+                    closeList();
+                    input.blur();
+                }
+                e.preventDefault();
             }
         });
 
@@ -1404,6 +1506,9 @@ class TaskManager {
     }
 
     getTaskStatus(task) {
+        if (task.status === 'failed') {
+            return { key: 'failed', label: '已失败', icon: 'fas fa-times-circle', color: '#747d8c' };
+        }
         if (task.completed) {
             return { key: 'completed', label: '已完成', icon: 'fas fa-check-circle', color: '#2ed573' };
         }
@@ -1452,69 +1557,19 @@ class TaskManager {
     }
 
     _initMarked() {
-        if (typeof marked === 'undefined' || this._markedReady) return;
-        try {
-            const renderer = new marked.Renderer();
-            renderer.link = function({ href, title, text }) {
-                const t = title ? ` title="${title}"` : '';
-                return `<a href="${href}" target="_blank" rel="noopener noreferrer"${t}>${text}</a>`;
-            };
-            renderer.code = function({ text, lang }) {
-                if (lang === 'mermaid') {
-                    const id = 'mermaid-' + Math.random().toString(36).slice(2, 10);
-                    return `<div class="kw-mermaid-block" data-mermaid-id="${id}"><pre class="mermaid">${text}</pre></div>`;
-                }
-                if (typeof hljs !== 'undefined' && lang && hljs.getLanguage(lang)) {
-                    return `<pre><code class="hljs language-${lang}">${hljs.highlight(text, { language: lang, ignoreIllegals: true }).value}</code></pre>`;
-                }
-                if (typeof hljs !== 'undefined') return `<pre><code class="hljs">${hljs.highlightAuto(text).value}</code></pre>`;
-                return `<pre><code>${text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>`;
-            };
-            marked.setOptions({ renderer, breaks: true, gfm: true });
-            this._markedReady = true;
-        } catch (e) { console.warn('marked 配置失败:', e); }
+        MarkdownRenderer.configure();
     }
 
     renderMarkdown(text) {
-        if (!text) return '';
-        this._initMarked();
-        try {
-            if (typeof marked !== 'undefined' && marked.parse) {
-                const raw = marked.parse(text, { breaks: true, gfm: true });
-                if (typeof DOMPurify !== 'undefined') {
-                    return DOMPurify.sanitize(raw, {
-                        ADD_ATTR: ['target', 'rel', 'data-mermaid-id'],
-                        ADD_TAGS: ['svg','g','path','line','rect','circle','text','tspan','polygon','polyline','marker','defs','style','foreignObject'],
-                        ALLOWED_TAGS: ['h1','h2','h3','h4','h5','h6','p','br','hr','strong','em','del','s','blockquote','ul','ol','li','a','img','code','pre','table','thead','tbody','tr','th','td','input','div','span'],
-                    });
-                }
-                return raw;
-            }
-        } catch (e) { console.warn('Markdown 渲染失败:', e); }
-        return this.escapeHtml(text).replace(/\n/g, '<br>');
+        return MarkdownRenderer.render(text);
     }
 
     renderMermaid(container) {
-        if (typeof mermaid === 'undefined' || !container) return;
-        const blocks = container.querySelectorAll('.kw-mermaid-block[data-mermaid-id]');
-        if (!blocks.length) return;
-        mermaid.initialize({ startOnLoad: false, theme: 'dark', themeVariables: { darkMode: true, background: 'transparent', primaryColor: '#3b82f6', primaryTextColor: '#e2e8f0', primaryBorderColor: '#4b5563', lineColor: '#6b7280' } });
-        blocks.forEach(async block => {
-            const preEl = block.querySelector('pre.mermaid');
-            if (!preEl) return;
-            try {
-                const { svg } = await mermaid.render(block.dataset.mermaidId, preEl.textContent);
-                block.innerHTML = svg;
-                block.classList.add('kw-mermaid-rendered');
-            } catch (err) {
-                block.innerHTML = `<pre class="kw-mermaid-error"><code>Mermaid 渲染失败: ${err.message}</code></pre>`;
-            }
-        });
+        MarkdownRenderer.renderMermaid(container);
     }
 
     hasMarkdownSyntax(text) {
-        if (!text) return false;
-        return /^#{1,3} |^\d+\. |^- |\*\*|`{1,3}|^> |^---|\[.+\]\(.+\)|!\[/.test(text);
+        return MarkdownRenderer.hasMarkdownSyntax(text);
     }
 
     _parseSearchQuery(query) {

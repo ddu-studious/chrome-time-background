@@ -1,0 +1,58 @@
+[    4138ms] [LOG] 农历更新: {lunarYear: 2026, lunarMonth: 2, lunarDay: 17, isLeap: false, ganZhi: 丙午} @ http://localhost:8765/js/lunar.js:235
+[    4184ms] [LOG] 正在初始化应用... @ http://localhost:8765/js/main.js:76
+[    4185ms] [LOG] 键盘快捷键设置完成 @ http://localhost:8765/js/main.js:81
+[    4325ms] [ERROR] 设置管理器初始化失败: TypeError: Cannot read properties of undefined (reading 'addListener')
+    at SettingsManager.setupSettingsUI (http://localhost:8765/js/settings.js:83:34)
+    at SettingsManager.init (http://localhost:8765/js/settings.js:41:14)
+    at async HTMLDocument.initApp (http://localhost:8765/js/main.js:89:9) @ http://localhost:8765/js/main.js:91
+[    4352ms] [LOG] 国际化模块初始化完成 @ http://localhost:8765/js/main.js:96
+[    4352ms] [LOG] 时钟模块初始化完成 @ http://localhost:8765/js/main.js:103
+[    4358ms] [LOG] 节假日模块初始化完成 @ http://localhost:8765/js/main.js:110
+[    4871ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://localhost:8765/favicon.ico:0
+[   10368ms] [WARNING] Geolocation error: {code: 3, message: Timeout expired} @ http://localhost:8765/js/weather.js:168
+[   10386ms] [WARNING] Location error: Error: 获取位置请求超时。
+    at http://localhost:8765/js/weather.js:188:28 @ http://localhost:8765/js/weather.js:394
+[   10387ms] [WARNING] 无法获取位置，且未设置手动城市，隐藏天气区域 @ http://localhost:8765/js/weather.js:400
+[   10388ms] [LOG] 天气模块初始化完成 @ http://localhost:8765/js/main.js:117
+[   10390ms] [LOG] 开始初始化备忘录管理器... @ http://localhost:8765/js/memo.js:115
+[   10402ms] [LOG] 备忘录模块初始化完成 @ http://localhost:8765/js/main.js:129
+[   10408ms] [LOG] 知识墙模块初始化完成 @ http://localhost:8765/js/main.js:143
+[   10408ms] [LOG] 滚动信息栏初始化完成 @ http://localhost:8765/js/main.js:157
+[   10408ms] [LOG] 任务提醒条初始化完成 @ http://localhost:8765/js/main.js:172
+[   10408ms] [LOG] 音乐控制器初始化完成 @ http://localhost:8765/js/main.js:187
+[   10449ms] [LOG] 哔哩哔哩控制器初始化完成 @ http://localhost:8765/js/main.js:207
+[   10449ms] [LOG] 系统监控已禁用（性能设置） @ http://localhost:8765/js/main.js:225
+[   10449ms] [LOG] 温情提示初始化完成 @ http://localhost:8765/js/main.js:233
+[   10449ms] [LOG] 应用初始化完成（可能部分模块降级） @ http://localhost:8765/js/main.js:241
+[   10449ms] [LOG] 从 settings 加载备忘录（旧版本兼容） @ http://localhost:8765/js/memo.js:8876
+[   10520ms] [LOG] 备忘录加载成功，数量: 0 @ http://localhost:8765/js/memo.js:8898
+[   10540ms] [LOG] [Ticker] 自动刷新已启动，间隔 20 分钟 @ http://localhost:8765/js/ticker.js:168
+[   10570ms] [LOG] 备忘录数据加载完成，开始创建UI @ http://localhost:8765/js/memo.js:124
+[   10570ms] [LOG] 备忘录数量: 0 @ http://localhost:8765/js/memo.js:125
+[   10570ms] [LOG] 分类数量: 0 @ http://localhost:8765/js/memo.js:126
+[   10570ms] [LOG] 标签数量: 0 @ http://localhost:8765/js/memo.js:127
+[   10593ms] [LOG] 每日重复任务状态更新完成 @ http://localhost:8765/js/memo.js:135
+[   10614ms] [LOG] 侧边栏内容渲染完成 @ http://localhost:8765/js/memo.js:143
+[   10620ms] [LOG] 初始化键盘快捷键... @ http://localhost:8765/js/memo.js:11480
+[   10620ms] [LOG] 键盘快捷键初始化完成 @ http://localhost:8765/js/memo.js:11493
+[   10621ms] [LOG] 键盘快捷键初始化完成 @ http://localhost:8765/js/memo.js:166
+[   10621ms] [LOG] 排序选项名称更新完成 @ http://localhost:8765/js/memo.js:174
+[   10621ms] [LOG] 备忘录管理器初始化完成 @ http://localhost:8765/js/memo.js:179
+[   10621ms] [LOG] [TaskTicker] memoManager 就绪，刷新数据 @ http://localhost:8765/js/ticker.js:1561
+[   10628ms] [LOG] [TaskTicker] 暂无数据，第 1 次重试（1.5s 后） @ http://localhost:8765/js/ticker.js:1587
+[   11365ms] [ERROR] 未处理的 Promise 错误: TypeError: Cannot read properties of undefined (reading 'addListener')
+    at MusicController._listenMessages (http://localhost:8765/js/music-controller.js:645:34)
+    at MusicController.init (http://localhost:8765/js/music-controller.js:62:14) @ http://localhost:8765/js/memo.js:215
+[   12132ms] [LOG] [TaskTicker] 暂无数据，第 2 次重试（2.3s 后） @ http://localhost:8765/js/ticker.js:1587
+[   12410ms] [LOG] [TaskTicker] 暂无数据，第 3 次重试（3.4s 后） @ http://localhost:8765/js/ticker.js:1587
+[   14005ms] [ERROR] Access to fetch at 'https://www.reddit.com/r/programming/hot.json?limit=8&raw_json=1' from origin 'http://localhost:8765' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://localhost:8765/index.html:0
+[   14007ms] [ERROR] Failed to load resource: net::ERR_FAILED @ https://www.reddit.com/r/programming/hot.json?limit=8&raw_json=1:0
+[   14008ms] [WARNING] [Ticker] reddit 失败: TypeError: Failed to fetch
+    at TechTicker.fetchReddit (http://localhost:8765/js/ticker.js:501:28)
+    at reddit (http://localhost:8765/js/ticker.js:391:32)
+    at http://localhost:8765/js/ticker.js:429:25
+    at Array.map (<anonymous>)
+    at TechTicker.fetchAllData (http://localhost:8765/js/ticker.js:427:34)
+    at TechTicker.loadData (http://localhost:8765/js/ticker.js:333:24) @ http://localhost:8765/js/ticker.js:428
+[   14393ms] [LOG] [TaskTicker] 暂无数据，第 4 次重试（5.1s 后） @ http://localhost:8765/js/ticker.js:1587
+[   15789ms] [LOG] [TaskTicker] 暂无数据，第 5 次重试（7.6s 后） @ http://localhost:8765/js/ticker.js:1587

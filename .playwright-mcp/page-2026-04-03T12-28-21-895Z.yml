@@ -1,0 +1,623 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e90]:
+        - generic [ref=e91]:
+          - button " 概览" [ref=e92] [cursor=pointer]:
+            - generic [ref=e93]: 
+            - generic [ref=e94]: 概览
+          - button " 时间线" [ref=e95] [cursor=pointer]:
+            - generic [ref=e96]: 
+            - generic [ref=e97]: 时间线
+          - button " 任务" [ref=e98] [cursor=pointer]:
+            - generic [ref=e99]: 
+            - generic [ref=e100]: 任务
+          - button " 搜索" [ref=e101] [cursor=pointer]:
+            - generic [ref=e102]: 
+            - generic [ref=e103]: 搜索
+        - generic [ref=e104]:
+          - link "" [ref=e105] [cursor=pointer]:
+            - /url: tasks.html
+            - generic [ref=e106]: 
+          - button "" [ref=e107] [cursor=pointer]:
+            - generic [ref=e108]: 
+      - generic [ref=e109]:
+        - generic [ref=e110]:
+          - generic [ref=e111]:
+            - generic [ref=e112]:
+              - heading " 今日聚焦" [level=3] [ref=e113]:
+                - generic [ref=e114]: 
+                - text: 今日聚焦
+              - generic "连续活跃天数"
+            - generic [ref=e115]:
+              - generic [ref=e116]: 
+              - generic [ref=e117]: 暂无待办任务，享受当下
+          - generic [ref=e118]:
+            - generic [ref=e119]:
+              - heading " 活跃度" [level=3] [ref=e120]:
+                - generic [ref=e121]: 
+                - text: 活跃度
+              - generic [ref=e122]: 0 个事件今日
+            - generic [ref=e124]:
+              - generic [ref=e125]:
+                - generic [ref=e127]: 一
+                - generic [ref=e129]: 三
+                - generic [ref=e131]: 五
+              - generic [ref=e133]:
+                - generic [ref=e134]:
+                  - 'generic "2026-02-06: 0 个活动" [ref=e139]'
+                  - 'generic "2026-02-07: 0 个活动" [ref=e140]'
+                  - 'generic "2026-02-08: 0 个活动" [ref=e141]'
+                - generic [ref=e142]:
+                  - 'generic "2026-02-09: 0 个活动" [ref=e143]'
+                  - 'generic "2026-02-10: 0 个活动" [ref=e144]'
+                  - 'generic "2026-02-11: 0 个活动" [ref=e145]'
+                  - 'generic "2026-02-12: 0 个活动" [ref=e146]'
+                  - 'generic "2026-02-13: 0 个活动" [ref=e147]'
+                  - 'generic "2026-02-14: 0 个活动" [ref=e148]'
+                  - 'generic "2026-02-15: 0 个活动" [ref=e149]'
+                - generic [ref=e150]:
+                  - 'generic "2026-02-16: 0 个活动" [ref=e151]'
+                  - 'generic "2026-02-17: 0 个活动" [ref=e152]'
+                  - 'generic "2026-02-18: 0 个活动" [ref=e153]'
+                  - 'generic "2026-02-19: 0 个活动" [ref=e154]'
+                  - 'generic "2026-02-20: 0 个活动" [ref=e155]'
+                  - 'generic "2026-02-21: 0 个活动" [ref=e156]'
+                  - 'generic "2026-02-22: 0 个活动" [ref=e157]'
+                - generic [ref=e158]:
+                  - 'generic "2026-02-23: 0 个活动" [ref=e159]'
+                  - 'generic "2026-02-24: 0 个活动" [ref=e160]'
+                  - 'generic "2026-02-25: 0 个活动" [ref=e161]'
+                  - 'generic "2026-02-26: 0 个活动" [ref=e162]'
+                  - 'generic "2026-02-27: 0 个活动" [ref=e163]'
+                  - 'generic "2026-02-28: 0 个活动" [ref=e164]'
+                  - 'generic "2026-03-01: 0 个活动" [ref=e165]'
+                - generic [ref=e166]:
+                  - 'generic "2026-03-02: 0 个活动" [ref=e167]'
+                  - 'generic "2026-03-03: 0 个活动" [ref=e168]'
+                  - 'generic "2026-03-04: 0 个活动" [ref=e169]'
+                  - 'generic "2026-03-05: 0 个活动" [ref=e170]'
+                  - 'generic "2026-03-06: 0 个活动" [ref=e171]'
+                  - 'generic "2026-03-07: 0 个活动" [ref=e172]'
+                  - 'generic "2026-03-08: 0 个活动" [ref=e173]'
+                - generic [ref=e174]:
+                  - 'generic "2026-03-09: 0 个活动" [ref=e175]'
+                  - 'generic "2026-03-10: 0 个活动" [ref=e176]'
+                  - 'generic "2026-03-11: 0 个活动" [ref=e177]'
+                  - 'generic "2026-03-12: 0 个活动" [ref=e178]'
+                  - 'generic "2026-03-13: 0 个活动" [ref=e179]'
+                  - 'generic "2026-03-14: 0 个活动" [ref=e180]'
+                  - 'generic "2026-03-15: 0 个活动" [ref=e181]'
+                - generic [ref=e182]:
+                  - 'generic "2026-03-16: 0 个活动" [ref=e183]'
+                  - 'generic "2026-03-17: 0 个活动" [ref=e184]'
+                  - 'generic "2026-03-18: 0 个活动" [ref=e185]'
+                  - 'generic "2026-03-19: 0 个活动" [ref=e186]'
+                  - 'generic "2026-03-20: 0 个活动" [ref=e187]'
+                  - 'generic "2026-03-21: 0 个活动" [ref=e188]'
+                  - 'generic "2026-03-22: 0 个活动" [ref=e189]'
+                - generic [ref=e190]:
+                  - 'generic "2026-03-23: 0 个活动" [ref=e191]'
+                  - 'generic "2026-03-24: 0 个活动" [ref=e192]'
+                  - 'generic "2026-03-25: 0 个活动" [ref=e193]'
+                  - 'generic "2026-03-26: 0 个活动" [ref=e194]'
+                  - 'generic "2026-03-27: 0 个活动" [ref=e195]'
+                  - 'generic "2026-03-28: 0 个活动" [ref=e196]'
+                  - 'generic "2026-03-29: 0 个活动" [ref=e197]'
+                - generic [ref=e198]:
+                  - 'generic "2026-03-30: 0 个活动" [ref=e199]'
+                  - 'generic "2026-03-31: 0 个活动" [ref=e200]'
+                  - 'generic "2026-04-01: 0 个活动" [ref=e201]'
+                  - 'generic "2026-04-02: 0 个活动" [ref=e202]'
+                  - 'generic "2026-04-03: 0 个活动" [ref=e203]'
+            - generic [ref=e204]:
+              - generic [ref=e205]: 少
+              - generic [ref=e210]: 多
+          - generic [ref=e211]:
+            - generic [ref=e212]:
+              - heading " 最近动态" [level=3] [ref=e213]:
+                - generic [ref=e214]: 
+                - text: 最近动态
+              - button "查看全部 →" [ref=e215] [cursor=pointer]
+            - generic [ref=e217]:
+              - generic [ref=e218]: 
+              - generic [ref=e219]: 今日还没有活动记录
+              - generic [ref=e220]: 完成任务、添加知识卡片、收藏热搜都会自动记录
+          - generic [ref=e221]:
+            - heading " 快速操作" [level=3] [ref=e223]:
+              - generic [ref=e224]: 
+              - text: 快速操作
+            - generic [ref=e225]:
+              - button "+ 新建任务" [ref=e226] [cursor=pointer]:
+                - generic [ref=e227]: +
+                - text: 新建任务
+              - button " 知识卡片" [ref=e228] [cursor=pointer]:
+                - generic [ref=e229]: 
+                - text: 知识卡片
+              - button " 周回顾" [ref=e230] [cursor=pointer]:
+                - generic [ref=e231]: 
+                - text: 周回顾
+              - button " 搜索 ⌘K" [ref=e232] [cursor=pointer]:
+                - generic [ref=e233]: 
+                - text: 搜索 ⌘K
+        - text: +               +                    + +
+    - main [ref=e23]:
+      - generic [ref=e24]:
+        - generic [ref=e25]:
+          - generic [ref=e26] [cursor=pointer]:
+            - generic [ref=e27]: 🔥
+            - generic [ref=e28]:
+              - generic [ref=e29]: ultraworkers/claw-code
+              - generic [ref=e234]: "[Notice] The repo temporarily locked while ownership transfer. in the meantime we maintain on here:"
+            - generic [ref=e30]: 158k
+            - generic:
+              - generic [ref=e235]: 1/48
+              - button "" [ref=e31]:
+                - generic [ref=e32]: 
+              - button "" [ref=e33]:
+                - generic [ref=e34]: 
+              - button "" [ref=e35]:
+                - generic [ref=e36]: 
+              - button "" [ref=e37]:
+                - generic [ref=e38]: 
+              - button "" [ref=e39]:
+                - generic [ref=e40]: 
+              - button "" [ref=e41]:
+                - generic [ref=e42]: 
+              - button "" [ref=e43]:
+                - generic [ref=e44]: 
+          - generic [ref=e236]:
+            - generic "ultraworkers/claw-code" [ref=e237] [cursor=pointer]:
+              - generic [ref=e238]: 🔥
+              - text: ultraworkers/claw-code
+              - generic [ref=e239]: 158k
+            - 'generic "Show HN: European alternatives to Google, Apple, Dropbox and 120 US apps" [ref=e241] [cursor=pointer]':
+              - generic [ref=e242]: 📰
+              - text: "Show HN: European alternatives…"
+              - generic [ref=e243]: ▲296
+            - generic "Join our April Fools Challenge for a chance at TEA-RRIFIC prizes!!!" [ref=e245] [cursor=pointer]:
+              - generic [ref=e246]: 📝
+              - text: Join our April Fools Challenge…
+              - generic [ref=e247]: ❤️242
+            - generic "马兴瑞被查" [ref=e249] [cursor=pointer]:
+              - generic [ref=e250]: 🔥
+              - text: 马兴瑞被查
+            - generic "贵州一县委书记闭幕致辞火了，全程 6 秒仅说两个字，这一极简致辞为何能火？折射出公众怎样的情绪？" [ref=e252] [cursor=pointer]:
+              - generic [ref=e253]: 💭
+              - text: 贵州一县委书记闭幕致辞火了，全程 6 秒仅说两个字，这一极简…
+              - generic [ref=e254]: 493万
+            - generic "鸟，为什么会飞？" [ref=e256] [cursor=pointer]:
+              - generic [ref=e257]: 📺
+              - text: 鸟，为什么会飞？
+              - generic [ref=e258]: 8万
+            - generic "claude-code-best/claude-code" [ref=e260] [cursor=pointer]:
+              - generic [ref=e261]: 🔥
+              - text: claude-code-best/claude-code
+              - generic [ref=e262]: 13k
+            - 'generic "Show HN: Apfel – The free AI already on your Mac" [ref=e264] [cursor=pointer]':
+              - generic [ref=e265]: 📰
+              - text: "Show HN: Apfel – The free AI a…"
+              - generic [ref=e266]: ▲167
+            - generic "A Year of Change and Persistence" [ref=e268] [cursor=pointer]:
+              - generic [ref=e269]: 📝
+              - text: A Year of Change and Persisten…
+              - generic [ref=e270]: ❤️84
+            - generic "优思益称无力售后" [ref=e272] [cursor=pointer]:
+              - generic [ref=e273]: 🔥
+              - text: 优思益称无力售后
+            - generic "神似拉夫劳伦的品牌「保罗散步」常年打一折，单平台月销超两千万，「像素级复刻+极致低价」的模式能走多远？" [ref=e275] [cursor=pointer]:
+              - generic [ref=e276]: 💭
+              - text: 神似拉夫劳伦的品牌「保罗散步」常年打一折，单平台月销超两千万…
+              - generic [ref=e277]: 330万
+            - generic "⚡对 对 子 战 神 2⚡" [ref=e279] [cursor=pointer]:
+              - generic [ref=e280]: 📺
+              - text: ⚡对 对 子 战 神 2⚡
+              - generic [ref=e281]: 1万
+            - generic "sanbuphy/learn-coding-agent" [ref=e283] [cursor=pointer]:
+              - generic [ref=e284]: 🔥
+              - text: sanbuphy/learn-coding-agent
+              - generic [ref=e285]: 11k
+            - generic "April 2026 TLDR Setup for Ollama and Gemma 4 26B on a Mac mini" [ref=e287] [cursor=pointer]:
+              - generic [ref=e288]: 📰
+              - text: April 2026 TLDR Setup for Olla…
+              - generic [ref=e289]: ▲59
+            - generic "Top 7 Featured DEV Posts of the Week" [ref=e291] [cursor=pointer]:
+              - generic [ref=e292]: 📝
+              - text: Top 7 Featured DEV Posts of th…
+              - generic [ref=e293]: ❤️78
+            - generic "不知道你是谁但知道你为了谁" [ref=e295] [cursor=pointer]:
+              - generic [ref=e296]: 🔥
+              - text: 不知道你是谁但知道你为了谁
+            - generic "为什么国外的家都喜欢暖光，但国内却喜欢冷白光？" [ref=e298] [cursor=pointer]:
+              - generic [ref=e299]: 💭
+              - text: 为什么国外的家都喜欢暖光，但国内却喜欢冷白光？
+              - generic [ref=e300]: 123万
+            - generic "《崩坏：星穹铁道》动画短片：「Never Gonna Give You Up」" [ref=e302] [cursor=pointer]:
+              - generic [ref=e303]: 📺
+              - text: 《崩坏：星穹铁道》动画短片：「Never Gonna Giv…
+              - generic [ref=e304]: 1万
+            - generic "openai/codex-plugin-cc" [ref=e306] [cursor=pointer]:
+              - generic [ref=e307]: 🔥
+              - text: openai/codex-plugin-cc
+              - generic [ref=e308]: 11k
+            - generic "Google releases Gemma 4 open models" [ref=e310] [cursor=pointer]:
+              - generic [ref=e311]: 📰
+              - text: Google releases Gemma 4 open m…
+              - generic [ref=e312]: ▲1552
+            - 'generic "The Great Claude Code Leak of 2026: Accident, Incompetence, or the Best PR Stunt in AI History?" [ref=e314] [cursor=pointer]':
+              - generic [ref=e315]: 📝
+              - text: The Great Claude Code Leak of …
+              - generic [ref=e316]: ❤️142
+            - generic "王楚钦vsF勒布伦" [ref=e318] [cursor=pointer]:
+              - generic [ref=e319]: 🔥
+              - text: 王楚钦vsF勒布伦
+            - generic "苹果被曝高价扫荡全球手机内存，不惜牺牲利润锁死对手供应链，内存价格会再度暴涨吗？对安卓阵营冲击有多大？" [ref=e321] [cursor=pointer]:
+              - generic [ref=e322]: 💭
+              - text: 苹果被曝高价扫荡全球手机内存，不惜牺牲利润锁死对手供应链，内…
+              - generic [ref=e323]: 115万
+            - generic "凶手一句话，造就十年悬案" [ref=e325] [cursor=pointer]:
+              - generic [ref=e326]: 📺
+              - text: 凶手一句话，造就十年悬案
+              - generic [ref=e327]: 6.2k
+            - generic "Gitlawb/openclaude" [ref=e329] [cursor=pointer]:
+              - generic [ref=e330]: 🔥
+              - text: Gitlawb/openclaude
+              - generic [ref=e331]: 9.1k
+            - generic "Decisions that eroded trust in Azure – by a former Azure Core engineer" [ref=e333] [cursor=pointer]:
+              - generic [ref=e334]: 📰
+              - text: Decisions that eroded trust in…
+              - generic [ref=e335]: ▲879
+            - 'generic "Trading My Body for Logic: The Physical Decay We Ignore" [ref=e337] [cursor=pointer]':
+              - generic [ref=e338]: 📝
+              - text: "Trading My Body for Logic: The…"
+              - generic [ref=e339]: ❤️64
+            - generic "韩国遭围殴致死导演儿子目睹全程" [ref=e341] [cursor=pointer]:
+              - generic [ref=e342]: 🔥
+              - text: 韩国遭围殴致死导演儿子目睹全程
+            - generic "为什么游戏里魔法师永远是体弱、脆皮、拄拐杖的刻板印象？有没有肌肉、近战、狂战士型的反套路魔法师？" [ref=e344] [cursor=pointer]:
+              - generic [ref=e345]: 💭
+              - text: 为什么游戏里魔法师永远是体弱、脆皮、拄拐杖的刻板印象？有没有…
+              - generic [ref=e346]: 106万
+            - generic "感谢这位同学的拼豆，同学，你也要有自己的爱好哟" [ref=e348] [cursor=pointer]:
+              - generic [ref=e349]: 📺
+              - text: 感谢这位同学的拼豆，同学，你也要有自己的爱好哟
+              - generic [ref=e350]: 1.4k
+            - generic "ChinaSiro/claude-code-sourcemap" [ref=e352] [cursor=pointer]:
+              - generic [ref=e353]: 🔥
+              - text: ChinaSiro/claude-code-sourcema…
+              - generic [ref=e354]: 8.2k
+            - generic "NHS staff refusing to use FDP over Palantir ethical concerns" [ref=e356] [cursor=pointer]:
+              - generic [ref=e357]: 📰
+              - text: NHS staff refusing to use FDP …
+              - generic [ref=e358]: ▲110
+            - generic "Surviving as a Human in the Age of AI" [ref=e360] [cursor=pointer]:
+              - generic [ref=e361]: 📝
+              - text: Surviving as a Human in the Ag…
+              - generic [ref=e362]: ❤️66
+            - generic "工信部紧急提醒苹果用户" [ref=e364] [cursor=pointer]:
+              - generic [ref=e365]: 🔥
+              - text: 工信部紧急提醒苹果用户
+            - generic "如何评价伊朗再次声称又击落一架美军F35战斗机？这次F35战斗机可能是如何被击落的？" [ref=e367] [cursor=pointer]:
+              - generic [ref=e368]: 💭
+              - text: 如何评价伊朗再次声称又击落一架美军F35战斗机？这次F35战…
+              - generic [ref=e369]: 105万
+            - generic "《忘本》" [ref=e371] [cursor=pointer]:
+              - generic [ref=e372]: 📺
+              - text: 《忘本》
+              - generic [ref=e373]: 2万
+            - generic "Kuberwastaken/claurst" [ref=e375] [cursor=pointer]:
+              - generic [ref=e376]: 🔥
+              - text: Kuberwastaken/claurst
+              - generic [ref=e377]: 7.6k
+            - 'generic "ESP32-S31: 320MHz 2C RV32IMAFCP+CLIC, 512KB SRAM, GbE, 802.11ax, 61 GPIO" [ref=e379] [cursor=pointer]':
+              - generic [ref=e380]: 📰
+              - text: "ESP32-S31: 320MHz 2C RV32IMAFC…"
+              - generic [ref=e381]: ▲79
+            - 'generic "BrewOps: I built a production-grade HTCPCP server because nobody else would" [ref=e383] [cursor=pointer]':
+              - generic [ref=e384]: 📝
+              - text: "BrewOps: I built a production-…"
+              - generic [ref=e385]: ❤️31
+            - generic "我的妈耶又笑又哭的" [ref=e387] [cursor=pointer]:
+              - generic [ref=e388]: 🔥
+              - text: 我的妈耶又笑又哭的
+            - generic "教育部发布通知，义务教育学校严禁设立或变相设立重点班、实验班、快慢班，这一政策有何影响？" [ref=e390] [cursor=pointer]:
+              - generic [ref=e391]: 💭
+              - text: 教育部发布通知，义务教育学校严禁设立或变相设立重点班、实验班…
+              - generic [ref=e392]: 104万
+            - generic "一切都来的太突然了" [ref=e394] [cursor=pointer]:
+              - generic [ref=e395]: 📺
+              - text: 一切都来的太突然了
+              - generic [ref=e396]: 3.3k
+            - generic "titanwings/colleague-skill" [ref=e398] [cursor=pointer]:
+              - generic [ref=e399]: 🔥
+              - text: titanwings/colleague-skill
+              - generic [ref=e400]: 6.3k
+            - generic "What Category Theory Teaches Us About DataFrames" [ref=e402] [cursor=pointer]:
+              - generic [ref=e403]: 📰
+              - text: What Category Theory Teaches U…
+              - generic [ref=e404]: ▲42
+            - generic "9 Things You’re Overengineering (The Browser Already Solved Them)" [ref=e406] [cursor=pointer]:
+              - generic [ref=e407]: 📝
+              - text: 9 Things You’re Overengineerin…
+              - generic [ref=e408]: ❤️82
+            - generic "浪姐赛制" [ref=e410] [cursor=pointer]:
+              - generic [ref=e411]: 🔥
+              - text: 浪姐赛制
+            - generic "日本、韩国、伊朗、澳大利亚、约旦、乌兹别克斯坦、沙特阿拉伯、卡塔尔、伊拉克等九队入选世界杯，你怎么看？" [ref=e413] [cursor=pointer]:
+              - generic [ref=e414]: 💭
+              - text: 日本、韩国、伊朗、澳大利亚、约旦、乌兹别克斯坦、沙特阿拉伯、…
+              - generic [ref=e415]: 98万
+            - generic "华语乐坛又迎新法师？李荣浩教科书级撕X！【单依纯事件细盘深扒】" [ref=e417] [cursor=pointer]:
+              - generic [ref=e418]: 📺
+              - text: 华语乐坛又迎新法师？李荣浩教科书级撕X！【单依纯事件细盘深扒…
+              - generic [ref=e419]: 3万
+            - generic "ultraworkers/claw-code" [ref=e421] [cursor=pointer]:
+              - generic [ref=e422]: 🔥
+              - text: ultraworkers/claw-code
+              - generic [ref=e423]: 158k
+            - 'generic "Show HN: European alternatives to Google, Apple, Dropbox and 120 US apps" [ref=e425] [cursor=pointer]':
+              - generic [ref=e426]: 📰
+              - text: "Show HN: European alternatives…"
+              - generic [ref=e427]: ▲296
+            - generic "Join our April Fools Challenge for a chance at TEA-RRIFIC prizes!!!" [ref=e429] [cursor=pointer]:
+              - generic [ref=e430]: 📝
+              - text: Join our April Fools Challenge…
+              - generic [ref=e431]: ❤️242
+            - generic "马兴瑞被查" [ref=e433] [cursor=pointer]:
+              - generic [ref=e434]: 🔥
+              - text: 马兴瑞被查
+            - generic "贵州一县委书记闭幕致辞火了，全程 6 秒仅说两个字，这一极简致辞为何能火？折射出公众怎样的情绪？" [ref=e436] [cursor=pointer]:
+              - generic [ref=e437]: 💭
+              - text: 贵州一县委书记闭幕致辞火了，全程 6 秒仅说两个字，这一极简…
+              - generic [ref=e438]: 493万
+            - generic "鸟，为什么会飞？" [ref=e440] [cursor=pointer]:
+              - generic [ref=e441]: 📺
+              - text: 鸟，为什么会飞？
+              - generic [ref=e442]: 8万
+            - generic "claude-code-best/claude-code" [ref=e444] [cursor=pointer]:
+              - generic [ref=e445]: 🔥
+              - text: claude-code-best/claude-code
+              - generic [ref=e446]: 13k
+            - 'generic "Show HN: Apfel – The free AI already on your Mac" [ref=e448] [cursor=pointer]':
+              - generic [ref=e449]: 📰
+              - text: "Show HN: Apfel – The free AI a…"
+              - generic [ref=e450]: ▲167
+            - generic "A Year of Change and Persistence" [ref=e452] [cursor=pointer]:
+              - generic [ref=e453]: 📝
+              - text: A Year of Change and Persisten…
+              - generic [ref=e454]: ❤️84
+            - generic "优思益称无力售后" [ref=e456] [cursor=pointer]:
+              - generic [ref=e457]: 🔥
+              - text: 优思益称无力售后
+            - generic "神似拉夫劳伦的品牌「保罗散步」常年打一折，单平台月销超两千万，「像素级复刻+极致低价」的模式能走多远？" [ref=e459] [cursor=pointer]:
+              - generic [ref=e460]: 💭
+              - text: 神似拉夫劳伦的品牌「保罗散步」常年打一折，单平台月销超两千万…
+              - generic [ref=e461]: 330万
+            - generic "⚡对 对 子 战 神 2⚡" [ref=e463] [cursor=pointer]:
+              - generic [ref=e464]: 📺
+              - text: ⚡对 对 子 战 神 2⚡
+              - generic [ref=e465]: 1万
+            - generic "sanbuphy/learn-coding-agent" [ref=e467] [cursor=pointer]:
+              - generic [ref=e468]: 🔥
+              - text: sanbuphy/learn-coding-agent
+              - generic [ref=e469]: 11k
+            - generic "April 2026 TLDR Setup for Ollama and Gemma 4 26B on a Mac mini" [ref=e471] [cursor=pointer]:
+              - generic [ref=e472]: 📰
+              - text: April 2026 TLDR Setup for Olla…
+              - generic [ref=e473]: ▲59
+            - generic "Top 7 Featured DEV Posts of the Week" [ref=e475] [cursor=pointer]:
+              - generic [ref=e476]: 📝
+              - text: Top 7 Featured DEV Posts of th…
+              - generic [ref=e477]: ❤️78
+            - generic "不知道你是谁但知道你为了谁" [ref=e479] [cursor=pointer]:
+              - generic [ref=e480]: 🔥
+              - text: 不知道你是谁但知道你为了谁
+            - generic "为什么国外的家都喜欢暖光，但国内却喜欢冷白光？" [ref=e482] [cursor=pointer]:
+              - generic [ref=e483]: 💭
+              - text: 为什么国外的家都喜欢暖光，但国内却喜欢冷白光？
+              - generic [ref=e484]: 123万
+            - generic "《崩坏：星穹铁道》动画短片：「Never Gonna Give You Up」" [ref=e486] [cursor=pointer]:
+              - generic [ref=e487]: 📺
+              - text: 《崩坏：星穹铁道》动画短片：「Never Gonna Giv…
+              - generic [ref=e488]: 1万
+            - generic "openai/codex-plugin-cc" [ref=e490] [cursor=pointer]:
+              - generic [ref=e491]: 🔥
+              - text: openai/codex-plugin-cc
+              - generic [ref=e492]: 11k
+            - generic "Google releases Gemma 4 open models" [ref=e494] [cursor=pointer]:
+              - generic [ref=e495]: 📰
+              - text: Google releases Gemma 4 open m…
+              - generic [ref=e496]: ▲1552
+            - 'generic "The Great Claude Code Leak of 2026: Accident, Incompetence, or the Best PR Stunt in AI History?" [ref=e498] [cursor=pointer]':
+              - generic [ref=e499]: 📝
+              - text: The Great Claude Code Leak of …
+              - generic [ref=e500]: ❤️142
+            - generic "王楚钦vsF勒布伦" [ref=e502] [cursor=pointer]:
+              - generic [ref=e503]: 🔥
+              - text: 王楚钦vsF勒布伦
+            - generic "苹果被曝高价扫荡全球手机内存，不惜牺牲利润锁死对手供应链，内存价格会再度暴涨吗？对安卓阵营冲击有多大？" [ref=e505] [cursor=pointer]:
+              - generic [ref=e506]: 💭
+              - text: 苹果被曝高价扫荡全球手机内存，不惜牺牲利润锁死对手供应链，内…
+              - generic [ref=e507]: 115万
+            - generic "凶手一句话，造就十年悬案" [ref=e509] [cursor=pointer]:
+              - generic [ref=e510]: 📺
+              - text: 凶手一句话，造就十年悬案
+              - generic [ref=e511]: 6.2k
+            - generic "Gitlawb/openclaude" [ref=e513] [cursor=pointer]:
+              - generic [ref=e514]: 🔥
+              - text: Gitlawb/openclaude
+              - generic [ref=e515]: 9.1k
+            - generic "Decisions that eroded trust in Azure – by a former Azure Core engineer" [ref=e517] [cursor=pointer]:
+              - generic [ref=e518]: 📰
+              - text: Decisions that eroded trust in…
+              - generic [ref=e519]: ▲879
+            - 'generic "Trading My Body for Logic: The Physical Decay We Ignore" [ref=e521] [cursor=pointer]':
+              - generic [ref=e522]: 📝
+              - text: "Trading My Body for Logic: The…"
+              - generic [ref=e523]: ❤️64
+            - generic "韩国遭围殴致死导演儿子目睹全程" [ref=e525] [cursor=pointer]:
+              - generic [ref=e526]: 🔥
+              - text: 韩国遭围殴致死导演儿子目睹全程
+            - generic "为什么游戏里魔法师永远是体弱、脆皮、拄拐杖的刻板印象？有没有肌肉、近战、狂战士型的反套路魔法师？" [ref=e528] [cursor=pointer]:
+              - generic [ref=e529]: 💭
+              - text: 为什么游戏里魔法师永远是体弱、脆皮、拄拐杖的刻板印象？有没有…
+              - generic [ref=e530]: 106万
+            - generic "感谢这位同学的拼豆，同学，你也要有自己的爱好哟" [ref=e532] [cursor=pointer]:
+              - generic [ref=e533]: 📺
+              - text: 感谢这位同学的拼豆，同学，你也要有自己的爱好哟
+              - generic [ref=e534]: 1.4k
+            - generic "ChinaSiro/claude-code-sourcemap" [ref=e536] [cursor=pointer]:
+              - generic [ref=e537]: 🔥
+              - text: ChinaSiro/claude-code-sourcema…
+              - generic [ref=e538]: 8.2k
+            - generic "NHS staff refusing to use FDP over Palantir ethical concerns" [ref=e540] [cursor=pointer]:
+              - generic [ref=e541]: 📰
+              - text: NHS staff refusing to use FDP …
+              - generic [ref=e542]: ▲110
+            - generic "Surviving as a Human in the Age of AI" [ref=e544] [cursor=pointer]:
+              - generic [ref=e545]: 📝
+              - text: Surviving as a Human in the Ag…
+              - generic [ref=e546]: ❤️66
+            - generic "工信部紧急提醒苹果用户" [ref=e548] [cursor=pointer]:
+              - generic [ref=e549]: 🔥
+              - text: 工信部紧急提醒苹果用户
+            - generic "如何评价伊朗再次声称又击落一架美军F35战斗机？这次F35战斗机可能是如何被击落的？" [ref=e551] [cursor=pointer]:
+              - generic [ref=e552]: 💭
+              - text: 如何评价伊朗再次声称又击落一架美军F35战斗机？这次F35战…
+              - generic [ref=e553]: 105万
+            - generic "《忘本》" [ref=e555] [cursor=pointer]:
+              - generic [ref=e556]: 📺
+              - text: 《忘本》
+              - generic [ref=e557]: 2万
+            - generic "Kuberwastaken/claurst" [ref=e559] [cursor=pointer]:
+              - generic [ref=e560]: 🔥
+              - text: Kuberwastaken/claurst
+              - generic [ref=e561]: 7.6k
+            - 'generic "ESP32-S31: 320MHz 2C RV32IMAFCP+CLIC, 512KB SRAM, GbE, 802.11ax, 61 GPIO" [ref=e563] [cursor=pointer]':
+              - generic [ref=e564]: 📰
+              - text: "ESP32-S31: 320MHz 2C RV32IMAFC…"
+              - generic [ref=e565]: ▲79
+            - 'generic "BrewOps: I built a production-grade HTCPCP server because nobody else would" [ref=e567] [cursor=pointer]':
+              - generic [ref=e568]: 📝
+              - text: "BrewOps: I built a production-…"
+              - generic [ref=e569]: ❤️31
+            - generic "我的妈耶又笑又哭的" [ref=e571] [cursor=pointer]:
+              - generic [ref=e572]: 🔥
+              - text: 我的妈耶又笑又哭的
+            - generic "教育部发布通知，义务教育学校严禁设立或变相设立重点班、实验班、快慢班，这一政策有何影响？" [ref=e574] [cursor=pointer]:
+              - generic [ref=e575]: 💭
+              - text: 教育部发布通知，义务教育学校严禁设立或变相设立重点班、实验班…
+              - generic [ref=e576]: 104万
+            - generic "一切都来的太突然了" [ref=e578] [cursor=pointer]:
+              - generic [ref=e579]: 📺
+              - text: 一切都来的太突然了
+              - generic [ref=e580]: 3.3k
+            - generic "titanwings/colleague-skill" [ref=e582] [cursor=pointer]:
+              - generic [ref=e583]: 🔥
+              - text: titanwings/colleague-skill
+              - generic [ref=e584]: 6.3k
+            - generic "What Category Theory Teaches Us About DataFrames" [ref=e586] [cursor=pointer]:
+              - generic [ref=e587]: 📰
+              - text: What Category Theory Teaches U…
+              - generic [ref=e588]: ▲42
+            - generic "9 Things You’re Overengineering (The Browser Already Solved Them)" [ref=e590] [cursor=pointer]:
+              - generic [ref=e591]: 📝
+              - text: 9 Things You’re Overengineerin…
+              - generic [ref=e592]: ❤️82
+            - generic "浪姐赛制" [ref=e594] [cursor=pointer]:
+              - generic [ref=e595]: 🔥
+              - text: 浪姐赛制
+            - generic "日本、韩国、伊朗、澳大利亚、约旦、乌兹别克斯坦、沙特阿拉伯、卡塔尔、伊拉克等九队入选世界杯，你怎么看？" [ref=e597] [cursor=pointer]:
+              - generic [ref=e598]: 💭
+              - text: 日本、韩国、伊朗、澳大利亚、约旦、乌兹别克斯坦、沙特阿拉伯、…
+              - generic [ref=e599]: 98万
+            - generic "华语乐坛又迎新法师？李荣浩教科书级撕X！【单依纯事件细盘深扒】" [ref=e601] [cursor=pointer]:
+              - generic [ref=e602]: 📺
+              - text: 华语乐坛又迎新法师？李荣浩教科书级撕X！【单依纯事件细盘深扒…
+              - generic [ref=e603]: 3万
+        - generic:
+          - generic:
+            - generic:
+              - generic: 
+              - generic: 热搜关键字监控
+            - generic:
+              - generic "总开关":
+                - checkbox
+              - button "":
+                - generic: 
+          - generic:
+            - generic:
+              - textbox "输入关键字，回车添加…"
+              - button "+":
+                - generic: +
+            - generic:
+              - generic: 暂无关键字，请添加需要监控的词
+            - button " 高级设置":
+              - generic: 
+              - text: 高级设置
+            - generic:
+              - generic:
+                - generic:
+                  - generic: 
+                  - text: 扫描间隔
+                - combobox:
+                  - option "5 分钟"
+                  - option "10 分钟" [selected]
+                  - option "20 分钟"
+                  - option "30 分钟"
+                  - option "60 分钟"
+              - generic:
+                - generic:
+                  - generic: 
+                  - text: 免打扰
+                - generic:
+                  - textbox
+                  - generic: —
+                  - textbox
+              - generic:
+                - generic:
+                  - generic: 
+                  - text: 数据源
+                - generic:
+                  - generic:
+                    - checkbox "🔥 微博" [checked]
+                    - text: 🔥 微博
+                  - generic:
+                    - checkbox "📺 B站" [checked]
+                    - text: 📺 B站
+                  - generic:
+                    - checkbox "💭 知乎" [checked]
+                    - text: 💭 知乎
+            - generic:
+              - button " 立即扫描":
+                - generic: 
+                - text: 立即扫描
+        - text: 
+      - generic [ref=e56]:
+        - generic [ref=e57]:
+          - generic [ref=e58]: 20:28:20
+          - generic [ref=e59]: 2026年4月3日星期五
+          - generic [ref=e61]: 农历丙午年二月十六
+        - generic:                
+      - text:    
+  - text:  
+  - generic:             
+  - generic [ref=e69]:
+    - generic [ref=e70]: 💡
+    - button "" [ref=e71] [cursor=pointer]:
+      - generic [ref=e72]: 
+  - generic [ref=e73]: 长城 - 慕田峪长城
+  - generic [ref=e74]: 按 Ctrl/⌘ + Shift + B 切换背景
+  - generic [ref=e75]:
+    - button "" [ref=e76] [cursor=pointer]:
+      - generic [ref=e77]: 
+    - button "" [ref=e79] [cursor=pointer]:
+      - generic [ref=e80]: 
+    - button "" [ref=e82] [cursor=pointer]:
+      - generic [ref=e83]: 
+    - button "" [ref=e85] [cursor=pointer]:
+      - generic [ref=e86]: 
+    - button "" [ref=e88] [cursor=pointer]:
+      - generic [ref=e89]: 
+  - button "":
+    - generic: 

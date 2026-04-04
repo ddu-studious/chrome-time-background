@@ -757,7 +757,7 @@
         const now = Date.now();
         
         for (const task of memos) {
-            if (task.completed) continue;
+            if (task.completed || task.status === 'failed') continue;
             if (!task.dueDate) continue;
             
             // 计算提醒时间
@@ -791,14 +791,14 @@
         
         const today = getTodayDate();
         
-        // 统计今日任务
+        // 统计今日任务（排除失败任务）
         const todayTasks = memos.filter(task => 
-            task.dueDate === today && !task.completed
+            task.dueDate === today && !task.completed && task.status !== 'failed'
         );
         
-        // 统计过期任务
+        // 统计过期任务（排除失败任务）
         const overdueTasks = memos.filter(task => 
-            task.dueDate && task.dueDate < today && !task.completed
+            task.dueDate && task.dueDate < today && !task.completed && task.status !== 'failed'
         );
         
         // 如果没有任务，不发送通知
@@ -854,7 +854,8 @@
             task.dueDate && 
             task.dueDate < today && 
             !task.completed &&
-            !task.overdueNotified  // 避免重复通知
+            task.status !== 'failed' &&
+            !task.overdueNotified
         );
         
         if (overdueTasks.length === 0) {

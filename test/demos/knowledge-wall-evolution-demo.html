@@ -1,0 +1,1295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>常用信息模块升级原型 — 多视图 + 活动流 + 仪表盘</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+<style>
+:root {
+    --overlay-bg: rgba(0, 0, 0, 0.6);
+    --panel-bg-start: rgba(255, 255, 255, 0.08);
+    --panel-bg-end: rgba(255, 255, 255, 0.03);
+    --panel-bg: linear-gradient(135deg, var(--panel-bg-start) 0%, var(--panel-bg-end) 100%);
+    --glass-blur: blur(24px) saturate(180%);
+    --radius-panel: 20px;
+    --radius-card: 16px;
+    --radius-element: 12px;
+    --radius-button: 8px;
+    --border-panel: 1px solid rgba(255, 255, 255, 0.1);
+    --border-light: 1px solid rgba(255, 255, 255, 0.08);
+    --shadow-panel: 0 20px 60px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    --accent-blue: rgba(100, 180, 255, 0.85);
+    --accent-red: #ff6b6b;
+    --accent-green: #5cd85c;
+    --accent-orange: #ff9800;
+    --accent-purple: #ab47bc;
+    --text-primary: rgba(255, 255, 255, 0.95);
+    --text-secondary: rgba(255, 255, 255, 0.7);
+    --text-muted: rgba(255, 255, 255, 0.5);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+.demo-bg {
+    position: fixed; inset: 0; z-index: 0;
+    background: url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920') center/cover;
+}
+.demo-bg::after {
+    content: ''; position: absolute; inset: 0;
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(2px);
+}
+
+.kw-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+}
+
+.kw-panel {
+    position: relative;
+    width: 100%; max-width: 1200px; height: 90vh;
+    background: var(--panel-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: var(--border-panel);
+    border-radius: var(--radius-panel);
+    box-shadow: var(--shadow-panel);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+}
+
+/* Header */
+.kw-header {
+    padding: 20px 24px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    flex-shrink: 0;
+}
+.kw-header-top {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+}
+.kw-title {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 20px; font-weight: 600;
+}
+.kw-title i { color: var(--accent-blue); }
+.kw-header-actions { display: flex; gap: 8px; }
+.kw-header-actions button {
+    background: rgba(255,255,255,0.08); border: none; color: var(--text-secondary);
+    width: 36px; height: 36px; border-radius: var(--radius-button);
+    cursor: pointer; font-size: 14px; transition: all 0.2s;
+}
+.kw-header-actions button:hover {
+    background: rgba(255,255,255,0.15); color: #fff;
+}
+
+/* View Tabs */
+.kw-view-tabs {
+    display: flex; gap: 0; margin-bottom: 0;
+    border-bottom: none;
+}
+.kw-view-tab {
+    padding: 10px 20px;
+    background: none; border: none; color: var(--text-muted);
+    font-size: 14px; cursor: pointer; transition: all 0.25s;
+    border-bottom: 2px solid transparent;
+    display: flex; align-items: center; gap: 7px;
+    position: relative;
+}
+.kw-view-tab:hover { color: var(--text-secondary); }
+.kw-view-tab.active {
+    color: var(--accent-blue);
+    border-bottom-color: var(--accent-blue);
+}
+.kw-view-tab .tab-badge {
+    font-size: 10px; padding: 1px 6px; border-radius: 10px;
+    background: rgba(100,180,255,0.15); color: var(--accent-blue);
+}
+.kw-view-tab.new-badge::after {
+    content: 'NEW'; font-size: 9px; padding: 1px 5px; border-radius: 4px;
+    background: var(--accent-orange); color: #fff; font-weight: 700;
+    margin-left: 4px;
+}
+
+/* Search bar in header */
+.kw-search-bar {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 12px;
+}
+.kw-search-box {
+    flex: 1; display: flex; align-items: center; gap: 8px;
+    background: rgba(255,255,255,0.06); border-radius: var(--radius-element);
+    padding: 8px 14px; border: 1px solid rgba(255,255,255,0.06);
+    transition: border-color 0.2s;
+}
+.kw-search-box:focus-within { border-color: rgba(100,180,255,0.3); }
+.kw-search-box i { color: var(--text-muted); font-size: 13px; }
+.kw-search-box input {
+    flex: 1; background: none; border: none; outline: none;
+    color: var(--text-primary); font-size: 13px;
+}
+.kw-search-box input::placeholder { color: var(--text-muted); }
+
+/* Tag Cloud */
+.kw-tag-cloud {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    padding: 10px 24px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    flex-shrink: 0;
+}
+.kw-tag-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 4px 12px; border-radius: 14px;
+    background: rgba(255,255,255,0.06); color: var(--text-secondary);
+    font-size: 12px; cursor: pointer; transition: all 0.2s; user-select: none;
+}
+.kw-tag-chip:hover { background: rgba(255,255,255,0.12); color: #fff; }
+.kw-tag-chip.active {
+    background: rgba(100,180,255,0.2); color: var(--accent-blue);
+    border: 1px solid rgba(100,180,255,0.3);
+}
+.kw-tag-count { font-size: 10px; opacity: 0.5; }
+
+/* Content Area */
+.kw-content {
+    flex: 1; overflow-y: auto; padding: 20px 24px;
+    scroll-behavior: smooth;
+}
+.kw-content::-webkit-scrollbar { width: 6px; }
+.kw-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+
+/* ====== VIEW 1: Card Wall (existing enhanced) ====== */
+.view-panel { display: none; }
+.view-panel.active { display: block; }
+
+.kw-masonry {
+    columns: 3; column-gap: 16px;
+}
+.wc-card {
+    break-inside: avoid; margin-bottom: 16px;
+    background: rgba(255,255,255,0.05); border-radius: var(--radius-card);
+    border: 1px solid rgba(255,255,255,0.06); padding: 16px;
+    transition: all 0.25s; cursor: pointer;
+}
+.wc-card:hover {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.12);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+}
+.wc-card-header {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 10px;
+}
+.wc-type-icon {
+    width: 28px; height: 28px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; flex-shrink: 0;
+}
+.wc-card-title { font-size: 14px; font-weight: 600; flex: 1; }
+.wc-card-time { font-size: 11px; color: var(--text-muted); }
+.wc-card-body { font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 10px; }
+.wc-card-body ul { padding-left: 18px; }
+.wc-card-body li { margin-bottom: 3px; }
+.wc-card-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.wc-card-tags span {
+    font-size: 11px; padding: 2px 8px; border-radius: 8px;
+    background: rgba(255,255,255,0.06); color: var(--text-muted);
+    cursor: pointer; transition: all 0.15s;
+}
+.wc-card-tags span:hover { background: rgba(100,180,255,0.15); color: var(--accent-blue); }
+
+.wc-card-actions {
+    display: flex; gap: 6px; margin-top: 10px; opacity: 0;
+    transition: opacity 0.2s;
+}
+.wc-card:hover .wc-card-actions { opacity: 1; }
+.wc-card-actions button {
+    background: rgba(255,255,255,0.08); border: none;
+    color: var(--text-muted); padding: 4px 8px; border-radius: 6px;
+    font-size: 11px; cursor: pointer; transition: all 0.15s;
+}
+.wc-card-actions button:hover { background: rgba(255,255,255,0.15); color: #fff; }
+
+/* Card type colors */
+.type-note .wc-type-icon { background: rgba(255,200,80,0.15); color: rgba(255,200,80,0.9); }
+.type-link .wc-type-icon { background: rgba(100,180,255,0.15); color: rgba(100,180,255,0.9); }
+.type-code .wc-type-icon { background: rgba(92,216,92,0.15); color: rgba(92,216,92,0.9); }
+.type-contact .wc-type-icon { background: rgba(255,100,150,0.15); color: rgba(255,100,150,0.9); }
+.type-weekly .wc-type-icon { background: rgba(180,100,255,0.15); color: rgba(180,100,255,0.9); }
+
+/* Pinned section */
+.wc-section-title {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--text-muted); margin-bottom: 12px;
+    text-transform: uppercase; letter-spacing: 1px;
+}
+.wc-section-title::after {
+    content: ''; flex: 1; height: 1px;
+    background: rgba(255,255,255,0.06);
+}
+.wc-locked-overlay {
+    display: flex; align-items: center; justify-content: center;
+    gap: 6px; padding: 20px; color: var(--text-muted); font-size: 13px;
+}
+
+/* ====== VIEW 2: Timeline ====== */
+.tl-container { max-width: 800px; margin: 0 auto; }
+
+.tl-week-group { margin-bottom: 32px; }
+.tl-week-header {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 16px; position: sticky; top: 0;
+    background: rgba(15,12,41,0.7); backdrop-filter: blur(12px);
+    padding: 8px 0; z-index: 2;
+}
+.tl-week-label {
+    font-size: 14px; font-weight: 600; color: var(--accent-blue);
+    white-space: nowrap;
+}
+.tl-week-stats {
+    display: flex; gap: 12px; font-size: 12px; color: var(--text-muted);
+}
+.tl-week-stats span { display: flex; align-items: center; gap: 4px; }
+.tl-week-line { flex: 1; height: 1px; background: rgba(100,180,255,0.15); }
+
+.tl-day-group { margin-bottom: 20px; position: relative; padding-left: 36px; }
+.tl-day-group::before {
+    content: ''; position: absolute; left: 12px; top: 28px; bottom: 0;
+    width: 2px; background: rgba(255,255,255,0.06);
+}
+.tl-day-header {
+    font-size: 13px; font-weight: 600; color: var(--text-secondary);
+    margin-bottom: 10px; display: flex; align-items: center; gap: 8px;
+}
+.tl-day-dot {
+    position: absolute; left: 6px; top: 4px;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: rgba(100,180,255,0.2); border: 2px solid var(--accent-blue);
+}
+.tl-day-header .tl-day-weekday {
+    font-size: 11px; color: var(--text-muted); font-weight: 400;
+}
+
+.tl-item {
+    display: flex; gap: 12px; padding: 10px 14px; margin-bottom: 6px;
+    background: rgba(255,255,255,0.04); border-radius: var(--radius-element);
+    border: 1px solid transparent; transition: all 0.2s; cursor: pointer;
+    position: relative;
+}
+.tl-item::before {
+    content: ''; position: absolute; left: -24px; top: 50%;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: rgba(255,255,255,0.15); transform: translateY(-50%);
+}
+.tl-item:hover {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.08);
+}
+.tl-item-icon {
+    width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+}
+.tl-item-body { flex: 1; min-width: 0; }
+.tl-item-title { font-size: 13px; font-weight: 500; margin-bottom: 2px; }
+.tl-item-desc {
+    font-size: 12px; color: var(--text-muted); line-height: 1.5;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.tl-item-meta {
+    display: flex; align-items: center; gap: 8px; margin-top: 4px;
+}
+.tl-item-time { font-size: 11px; color: var(--text-muted); }
+.tl-item-tag {
+    font-size: 10px; padding: 1px 6px; border-radius: 6px;
+    background: rgba(255,255,255,0.06); color: var(--text-muted);
+}
+
+/* Timeline icon colors */
+.tl-icon-note { background: rgba(255,200,80,0.12); color: rgba(255,200,80,0.9); }
+.tl-icon-task { background: rgba(92,216,92,0.12); color: rgba(92,216,92,0.9); }
+.tl-icon-bookmark { background: rgba(100,180,255,0.12); color: rgba(100,180,255,0.9); }
+.tl-icon-weekly { background: rgba(180,100,255,0.12); color: rgba(180,100,255,0.9); }
+.tl-icon-link { background: rgba(255,150,50,0.12); color: rgba(255,150,50,0.9); }
+.tl-icon-ticker { background: rgba(255,100,150,0.12); color: rgba(255,100,150,0.9); }
+
+/* ====== VIEW 3: Dashboard ====== */
+.db-container { max-width: 900px; margin: 0 auto; }
+
+.db-stats-row {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
+    margin-bottom: 24px;
+}
+.db-stat-card {
+    background: rgba(255,255,255,0.05); border-radius: var(--radius-card);
+    border: 1px solid rgba(255,255,255,0.06); padding: 18px;
+    transition: all 0.2s; cursor: pointer;
+}
+.db-stat-card:hover {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.12);
+}
+.db-stat-icon {
+    width: 40px; height: 40px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; margin-bottom: 12px;
+}
+.db-stat-value { font-size: 28px; font-weight: 700; margin-bottom: 2px; }
+.db-stat-label { font-size: 12px; color: var(--text-muted); }
+.db-stat-trend {
+    display: flex; align-items: center; gap: 4px;
+    font-size: 11px; margin-top: 6px;
+}
+.db-stat-trend.up { color: var(--accent-green); }
+.db-stat-trend.down { color: var(--accent-red); }
+
+/* AI Weekly Summary */
+.db-summary-card {
+    background: linear-gradient(135deg, rgba(100,180,255,0.08), rgba(180,100,255,0.05));
+    border-radius: var(--radius-card); border: 1px solid rgba(100,180,255,0.12);
+    padding: 20px; margin-bottom: 20px;
+}
+.db-summary-header {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+}
+.db-summary-header i { color: var(--accent-blue); font-size: 18px; }
+.db-summary-header h3 { font-size: 15px; font-weight: 600; }
+.db-summary-header .db-period {
+    margin-left: auto; font-size: 12px; color: var(--text-muted);
+}
+.db-summary-body { font-size: 13px; color: var(--text-secondary); line-height: 1.8; }
+.db-summary-body strong { color: var(--text-primary); }
+.db-summary-actions {
+    display: flex; gap: 8px; margin-top: 14px;
+}
+.db-summary-actions button {
+    background: rgba(255,255,255,0.08); border: none;
+    color: var(--text-secondary); padding: 6px 14px; border-radius: var(--radius-button);
+    font-size: 12px; cursor: pointer; transition: all 0.2s;
+    display: flex; align-items: center; gap: 6px;
+}
+.db-summary-actions button:hover { background: rgba(255,255,255,0.15); color: #fff; }
+.db-summary-actions button.primary {
+    background: rgba(100,180,255,0.15); color: var(--accent-blue);
+}
+
+/* Heatmap */
+.db-section { margin-bottom: 24px; }
+.db-section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+}
+.db-section-title {
+    font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px;
+}
+.db-section-title i { color: var(--text-muted); font-size: 13px; }
+
+.db-heatmap {
+    display: flex; gap: 3px; padding: 14px; background: rgba(255,255,255,0.03);
+    border-radius: var(--radius-element); overflow-x: auto;
+}
+.heatmap-week { display: flex; flex-direction: column; gap: 3px; }
+.heatmap-day {
+    width: 14px; height: 14px; border-radius: 3px;
+    background: rgba(255,255,255,0.04);
+    transition: all 0.15s; cursor: pointer;
+    position: relative;
+}
+.heatmap-day:hover { transform: scale(1.3); z-index: 1; }
+.heatmap-day[data-level="1"] { background: rgba(100,180,255,0.15); }
+.heatmap-day[data-level="2"] { background: rgba(100,180,255,0.3); }
+.heatmap-day[data-level="3"] { background: rgba(100,180,255,0.5); }
+.heatmap-day[data-level="4"] { background: rgba(100,180,255,0.75); }
+.heatmap-day.today { border: 1px solid var(--accent-blue); }
+.heatmap-legend {
+    display: flex; align-items: center; gap: 6px; margin-top: 8px;
+    font-size: 11px; color: var(--text-muted); justify-content: flex-end;
+}
+.heatmap-legend-block { width: 12px; height: 12px; border-radius: 2px; }
+
+/* Two columns layout */
+.db-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+.db-list-card {
+    background: rgba(255,255,255,0.04); border-radius: var(--radius-card);
+    border: 1px solid rgba(255,255,255,0.04); padding: 16px;
+}
+.db-list-title {
+    font-size: 13px; font-weight: 600; margin-bottom: 12px;
+    display: flex; align-items: center; gap: 8px;
+}
+.db-list-title i { font-size: 12px; color: var(--text-muted); }
+.db-list-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.03);
+    font-size: 13px;
+}
+.db-list-item:last-child { border-bottom: none; }
+.db-list-item-icon {
+    width: 24px; height: 24px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; flex-shrink: 0;
+}
+.db-list-item-text { flex: 1; color: var(--text-secondary); }
+.db-list-item-count {
+    font-size: 11px; color: var(--text-muted);
+    background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 8px;
+}
+
+/* Active tags */
+.db-active-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.db-active-tag {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 14px; border-radius: var(--radius-element);
+    background: rgba(255,255,255,0.05); font-size: 13px;
+    color: var(--text-secondary); transition: all 0.2s; cursor: pointer;
+}
+.db-active-tag:hover { background: rgba(255,255,255,0.1); }
+.db-active-tag .tag-bar {
+    width: 3px; height: 16px; border-radius: 2px;
+}
+
+/* ====== VIEW 4: Activity Feed ====== */
+.af-container { max-width: 750px; margin: 0 auto; }
+
+.af-filter-bar {
+    display: flex; gap: 8px; margin-bottom: 20px;
+    position: sticky; top: 0; z-index: 2;
+    background: rgba(15,12,41,0.6); backdrop-filter: blur(12px);
+    padding: 8px 0;
+}
+.af-filter-btn {
+    background: rgba(255,255,255,0.06); border: none;
+    color: var(--text-muted); padding: 6px 14px; border-radius: 20px;
+    font-size: 12px; cursor: pointer; transition: all 0.2s;
+    display: flex; align-items: center; gap: 5px;
+}
+.af-filter-btn:hover { background: rgba(255,255,255,0.12); color: var(--text-secondary); }
+.af-filter-btn.active {
+    background: rgba(100,180,255,0.15); color: var(--accent-blue);
+    border: 1px solid rgba(100,180,255,0.2);
+}
+
+.af-day-group { margin-bottom: 24px; }
+.af-day-header {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 12px; font-size: 13px; font-weight: 600;
+    color: var(--text-secondary);
+}
+.af-day-header::after {
+    content: ''; flex: 1; height: 1px; background: rgba(255,255,255,0.06);
+}
+.af-day-count {
+    font-size: 11px; font-weight: 400; color: var(--text-muted);
+    background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 8px;
+}
+
+.af-item {
+    display: flex; gap: 14px; padding: 12px 16px; margin-bottom: 6px;
+    background: rgba(255,255,255,0.03); border-radius: var(--radius-element);
+    border: 1px solid transparent; transition: all 0.2s; cursor: pointer;
+}
+.af-item:hover {
+    background: rgba(255,255,255,0.07);
+    border-color: rgba(255,255,255,0.06);
+}
+.af-item-icon {
+    width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 15px;
+}
+.af-item-content { flex: 1; min-width: 0; }
+.af-item-headline {
+    font-size: 13px; line-height: 1.5;
+}
+.af-item-headline strong { color: var(--text-primary); }
+.af-item-headline .af-action { color: var(--text-muted); }
+.af-item-headline .af-target { color: var(--accent-blue); cursor: pointer; }
+.af-item-headline .af-target:hover { text-decoration: underline; }
+.af-item-detail {
+    font-size: 12px; color: var(--text-muted); margin-top: 4px; line-height: 1.5;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.af-item-time {
+    font-size: 11px; color: var(--text-muted); white-space: nowrap;
+    margin-top: 4px;
+}
+.af-item-actions {
+    display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s;
+}
+.af-item:hover .af-item-actions { opacity: 1; }
+.af-item-actions button {
+    background: rgba(255,255,255,0.08); border: none;
+    color: var(--text-muted); width: 28px; height: 28px; border-radius: 6px;
+    cursor: pointer; font-size: 11px; transition: all 0.15s;
+}
+.af-item-actions button:hover { background: rgba(255,255,255,0.15); color: #fff; }
+
+/* Cross-module reference badge */
+.af-module-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; padding: 1px 6px; border-radius: 4px;
+    background: rgba(255,255,255,0.06); color: var(--text-muted);
+    margin-left: 6px;
+}
+
+/* Empty states */
+.kw-empty-state {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; padding: 60px 20px; color: var(--text-muted);
+}
+.kw-empty-state i { font-size: 48px; margin-bottom: 16px; opacity: 0.3; }
+.kw-empty-state p { font-size: 14px; }
+
+/* Animations */
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.tl-item, .af-item, .wc-card, .db-stat-card {
+    animation: fadeInUp 0.3s ease-out both;
+}
+.tl-item:nth-child(2) { animation-delay: 0.04s; }
+.tl-item:nth-child(3) { animation-delay: 0.08s; }
+.af-item:nth-child(2) { animation-delay: 0.04s; }
+.af-item:nth-child(3) { animation-delay: 0.08s; }
+</style>
+</head>
+<body>
+
+<div class="demo-bg"></div>
+
+<div class="kw-overlay">
+<div class="kw-panel">
+    <!-- Header -->
+    <div class="kw-header">
+        <div class="kw-header-top">
+            <div class="kw-title"><i class="fas fa-brain"></i> 常用信息</div>
+            <div class="kw-search-bar" style="flex:1;max-width:360px;margin:0 24px;">
+                <div class="kw-search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="搜索信息... (Ctrl+F)" id="kw-search">
+                </div>
+            </div>
+            <div class="kw-header-actions">
+                <button title="添加卡片"><i class="fas fa-plus"></i></button>
+                <button title="导出"><i class="fas fa-file-export"></i></button>
+                <button title="导入"><i class="fas fa-file-import"></i></button>
+                <button title="关闭"><i class="fas fa-times"></i></button>
+            </div>
+        </div>
+        <div class="kw-view-tabs" id="viewTabs">
+            <button class="kw-view-tab active" data-view="cards">
+                <i class="fas fa-th-large"></i> 卡片墙
+                <span class="tab-badge">23</span>
+            </button>
+            <button class="kw-view-tab new-badge" data-view="timeline">
+                <i class="fas fa-stream"></i> 时间线
+            </button>
+            <button class="kw-view-tab new-badge" data-view="dashboard">
+                <i class="fas fa-chart-pie"></i> 仪表盘
+            </button>
+            <button class="kw-view-tab new-badge" data-view="activity">
+                <i class="fas fa-rss"></i> 活动流
+            </button>
+        </div>
+    </div>
+
+    <!-- Tag Cloud -->
+    <div class="kw-tag-cloud">
+        <span class="kw-tag-chip active"><i class="fas fa-tags" style="font-size:11px;margin-right:2px;"></i></span>
+        <span class="kw-tag-chip">工作 <span class="kw-tag-count">x8</span></span>
+        <span class="kw-tag-chip">学习 <span class="kw-tag-count">x6</span></span>
+        <span class="kw-tag-chip">codex <span class="kw-tag-count">x4</span></span>
+        <span class="kw-tag-chip">LangChain <span class="kw-tag-count">x3</span></span>
+        <span class="kw-tag-chip">周记 <span class="kw-tag-count">x3</span></span>
+        <span class="kw-tag-chip">idea <span class="kw-tag-count">x2</span></span>
+        <span class="kw-tag-chip">大模型 <span class="kw-tag-count">x2</span></span>
+        <span class="kw-tag-chip">项目交接 <span class="kw-tag-count">x2</span></span>
+        <span class="kw-tag-chip">密码 <span class="kw-tag-count">x1</span></span>
+    </div>
+
+    <!-- Content -->
+    <div class="kw-content">
+
+        <!-- ====== VIEW: Cards ====== -->
+        <div class="view-panel active" id="view-cards">
+            <div class="wc-section-title"><i class="fas fa-thumbtack"></i> 置顶</div>
+            <div class="kw-masonry" style="margin-bottom:20px;">
+                <div class="wc-card type-note">
+                    <div class="wc-card-header">
+                        <div class="wc-type-icon"><i class="fas fa-sticky-note"></i></div>
+                        <div class="wc-card-title">工作常用信息</div>
+                        <div class="wc-card-time">4/3 14:31</div>
+                    </div>
+                    <div class="wc-card-body">
+                        <div>UID: 2028025265</div>
+                    </div>
+                    <div class="wc-card-tags">
+                        <span>工作</span> <span>常用</span>
+                    </div>
+                    <div class="wc-card-actions">
+                        <button><i class="fas fa-edit"></i> 编辑</button>
+                        <button><i class="fas fa-copy"></i></button>
+                        <button><i class="fas fa-thumbtack"></i></button>
+                    </div>
+                </div>
+                <div class="wc-card type-note">
+                    <div class="wc-card-header">
+                        <div class="wc-type-icon"><i class="fas fa-sticky-note"></i></div>
+                        <div class="wc-card-title">Stripe 账号密码信息</div>
+                        <div class="wc-card-time">4/1 10:26</div>
+                    </div>
+                    <div class="wc-card-body">
+                        <div class="wc-locked-overlay">
+                            <i class="fas fa-lock"></i> 内容已加密保护
+                        </div>
+                    </div>
+                    <div class="wc-card-tags">
+                        <span>密码</span> <span>工作</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="wc-section-title"><i class="fas fa-clock"></i> 最近</div>
+            <div class="kw-masonry">
+                <div class="wc-card type-weekly">
+                    <div class="wc-card-header">
+                        <div class="wc-type-icon"><i class="fas fa-calendar-week"></i></div>
+                        <div class="wc-card-title">W - 3.27 - 4.02 日常学习/工作内容</div>
+                        <div class="wc-card-time">4/3 14:30</div>
+                    </div>
+                    <div class="wc-card-body">
+                        <ul>
+                            <li><strong>已完成</strong>: VIPDEV-21945 已提测</li>
+                            <li>读文：harness / codex 相关</li>
+                            <li><strong>进行中</strong>: codex 学习、调研</li>
+                        </ul>
+                    </div>
+                    <div class="wc-card-tags">
+                        <span>周记</span> <span>工作</span> <span>学习</span>
+                    </div>
+                </div>
+                <div class="wc-card type-weekly">
+                    <div class="wc-card-header">
+                        <div class="wc-type-icon"><i class="fas fa-calendar-week"></i></div>
+                        <div class="wc-card-title">W - 3.13 - 3.19 日常学习/工作内容</div>
+                        <div class="wc-card-time">3/19</div>
+                    </div>
+                    <div class="wc-card-body">
+                        <ul>
+                            <li><strong>已做</strong>: Agent/Skills/Teams 架构演进</li>
+                            <li>会员大盘+展厅，demo 能力验证</li>
+                            <li>优化「飞书置顶鼓励马甲力」</li>
+                        </ul>
+                    </div>
+                    <div class="wc-card-tags">
+                        <span>周记</span> <span>工作</span>
+                    </div>
+                </div>
+                <div class="wc-card type-note">
+                    <div class="wc-card-header">
+                        <div class="wc-type-icon"><i class="fas fa-sticky-note"></i></div>
+                        <div class="wc-card-title">对于使用 AI 编写代码，是否真的会提升效率的思考</div>
+                        <div class="wc-card-time">4/1 14:30</div>
+                    </div>
+                    <div class="wc-card-body">
+                        提高效率有两个方面的讨论：相同的编码方式，都是按照既用方法编写代码...
+                    </div>
+                    <div class="wc-card-tags">
+                        <span>学习</span> <span>idea</span>
+                    </div>
+                </div>
+                <div class="wc-card type-note">
+                    <div class="wc-card-header">
+                        <div class="wc-type-icon"><i class="fas fa-sticky-note"></i></div>
+                        <div class="wc-card-title">LLM: SKILL: MCP</div>
+                        <div class="wc-card-time">3/28</div>
+                    </div>
+                    <div class="wc-card-body">
+                        一段时间以来，我都觉得 skill 是可以覆盖 mcp 的，有这场景就 skill 可以进而辅助替代 mcp...
+                    </div>
+                    <div class="wc-card-tags">
+                        <span>学习</span> <span>大模型</span>
+                    </div>
+                </div>
+                <div class="wc-card type-note">
+                    <div class="wc-card-header">
+                        <div class="wc-type-icon"><i class="fas fa-sticky-note"></i></div>
+                        <div class="wc-card-title">Openai</div>
+                        <div class="wc-card-time">4/1 10:26</div>
+                    </div>
+                    <div class="wc-card-body">
+                        内容已添加，点击查看详情...
+                    </div>
+                    <div class="wc-card-tags">
+                        <span>codex</span> <span>学习</span>
+                    </div>
+                </div>
+                <div class="wc-card type-link">
+                    <div class="wc-card-header">
+                        <div class="wc-type-icon"><i class="fas fa-link"></i></div>
+                        <div class="wc-card-title">未做清单</div>
+                        <div class="wc-card-time">3/28 12:00</div>
+                    </div>
+                    <div class="wc-card-body">
+                        <div>《Towards a Science of Scaling Agent Systems》By Google Deepmind</div>
+                        <div>《The Complete Guide to Building Skills for Claude》By Anthropic</div>
+                    </div>
+                    <div class="wc-card-tags">
+                        <span>学习</span> <span>工作</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ====== VIEW: Timeline ====== -->
+        <div class="view-panel" id="view-timeline">
+            <div class="tl-container">
+                <!-- This Week -->
+                <div class="tl-week-group">
+                    <div class="tl-week-header">
+                        <span class="tl-week-label">本周 (3.31 - 4.06)</span>
+                        <div class="tl-week-stats">
+                            <span><i class="fas fa-sticky-note"></i> 3 笔记</span>
+                            <span><i class="fas fa-check-circle"></i> 2 任务</span>
+                            <span><i class="fas fa-bookmark"></i> 5 链接</span>
+                        </div>
+                        <div class="tl-week-line"></div>
+                    </div>
+
+                    <div class="tl-day-group">
+                        <div class="tl-day-dot"></div>
+                        <div class="tl-day-header">
+                            4月3日 <span class="tl-day-weekday">周四 · 今天</span>
+                        </div>
+                        <div class="tl-item">
+                            <div class="tl-item-icon tl-icon-weekly"><i class="fas fa-calendar-week"></i></div>
+                            <div class="tl-item-body">
+                                <div class="tl-item-title">更新周记「W - 3.27 - 4.02 日常学习/工作内容」</div>
+                                <div class="tl-item-desc">已完成: VIPDEV-21945 已提测；读文：harness / codex 相关</div>
+                                <div class="tl-item-meta">
+                                    <span class="tl-item-time">14:30</span>
+                                    <span class="tl-item-tag">周记</span>
+                                    <span class="tl-item-tag">工作</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="tl-item">
+                            <div class="tl-item-icon tl-icon-note"><i class="fas fa-sticky-note"></i></div>
+                            <div class="tl-item-body">
+                                <div class="tl-item-title">更新笔记「工作常用信息」</div>
+                                <div class="tl-item-desc">更新了 UID 和其他常用字段</div>
+                                <div class="tl-item-meta">
+                                    <span class="tl-item-time">14:31</span>
+                                    <span class="tl-item-tag">工作</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="tl-item">
+                            <div class="tl-item-icon tl-icon-task"><i class="fas fa-check-circle"></i></div>
+                            <div class="tl-item-body">
+                                <div class="tl-item-title">完成任务「VIPDEV-21945 功能测试」</div>
+                                <div class="tl-item-desc">已提测完成，进入回归测试阶段</div>
+                                <div class="tl-item-meta">
+                                    <span class="tl-item-time">10:15</span>
+                                    <span class="tl-item-tag">任务</span>
+                                    <span class="af-module-badge"><i class="fas fa-tasks" style="font-size:9px"></i> 任务模块</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tl-day-group">
+                        <div class="tl-day-dot" style="border-color: rgba(255,255,255,0.3);background:rgba(255,255,255,0.05);"></div>
+                        <div class="tl-day-header">
+                            4月2日 <span class="tl-day-weekday">周三</span>
+                        </div>
+                        <div class="tl-item">
+                            <div class="tl-item-icon tl-icon-ticker"><i class="fas fa-fire"></i></div>
+                            <div class="tl-item-body">
+                                <div class="tl-item-title">收藏热榜「OpenAI 发布 Codex CLI 工具」</div>
+                                <div class="tl-item-desc">从 HackerNews 热榜保存，已转为待读任务</div>
+                                <div class="tl-item-meta">
+                                    <span class="tl-item-time">16:20</span>
+                                    <span class="tl-item-tag">codex</span>
+                                    <span class="af-module-badge"><i class="fas fa-fire" style="font-size:9px"></i> 热榜</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="tl-item">
+                            <div class="tl-item-icon tl-icon-bookmark"><i class="fas fa-bookmark"></i></div>
+                            <div class="tl-item-body">
+                                <div class="tl-item-title">收藏书签「developers.openai.com/codex/workflows」</div>
+                                <div class="tl-item-desc">引 codex 相关的视频及文章</div>
+                                <div class="tl-item-meta">
+                                    <span class="tl-item-time">11:30</span>
+                                    <span class="tl-item-tag">codex</span>
+                                    <span class="af-module-badge"><i class="fas fa-bookmark" style="font-size:9px"></i> 书签</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tl-day-group">
+                        <div class="tl-day-dot" style="border-color: rgba(255,255,255,0.3);background:rgba(255,255,255,0.05);"></div>
+                        <div class="tl-day-header">
+                            4月1日 <span class="tl-day-weekday">周二</span>
+                        </div>
+                        <div class="tl-item">
+                            <div class="tl-item-icon tl-icon-note"><i class="fas fa-sticky-note"></i></div>
+                            <div class="tl-item-body">
+                                <div class="tl-item-title">新增笔记「对于使用 AI 编写代码是否真的会提升效率的思考」</div>
+                                <div class="tl-item-desc">提高效率有两个方面的讨论：相同的编码方式，都是按照既用方法编写代码...</div>
+                                <div class="tl-item-meta">
+                                    <span class="tl-item-time">14:30</span>
+                                    <span class="tl-item-tag">学习</span>
+                                    <span class="tl-item-tag">idea</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="tl-item">
+                            <div class="tl-item-icon tl-icon-note"><i class="fas fa-sticky-note"></i></div>
+                            <div class="tl-item-body">
+                                <div class="tl-item-title">更新笔记「Openai」相关内容</div>
+                                <div class="tl-item-desc">补充了 codex workflows 和 harness 相关链接</div>
+                                <div class="tl-item-meta">
+                                    <span class="tl-item-time">10:26</span>
+                                    <span class="tl-item-tag">codex</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="tl-item">
+                            <div class="tl-item-icon tl-icon-note"><i class="fas fa-sticky-note"></i></div>
+                            <div class="tl-item-body">
+                                <div class="tl-item-title">更新「Stripe 账号密码信息」</div>
+                                <div class="tl-item-desc">更新了加密内容</div>
+                                <div class="tl-item-meta">
+                                    <span class="tl-item-time">10:26</span>
+                                    <span class="tl-item-tag">密码</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Last Week -->
+                <div class="tl-week-group">
+                    <div class="tl-week-header">
+                        <span class="tl-week-label">上周 (3.24 - 3.30)</span>
+                        <div class="tl-week-stats">
+                            <span><i class="fas fa-sticky-note"></i> 4 笔记</span>
+                            <span><i class="fas fa-check-circle"></i> 5 任务</span>
+                            <span><i class="fas fa-bookmark"></i> 3 链接</span>
+                        </div>
+                        <div class="tl-week-line"></div>
+                    </div>
+
+                    <div class="tl-day-group">
+                        <div class="tl-day-dot" style="border-color: rgba(255,255,255,0.3);background:rgba(255,255,255,0.05);"></div>
+                        <div class="tl-day-header">
+                            3月28日 <span class="tl-day-weekday">周五</span>
+                        </div>
+                        <div class="tl-item">
+                            <div class="tl-item-icon tl-icon-note"><i class="fas fa-sticky-note"></i></div>
+                            <div class="tl-item-body">
+                                <div class="tl-item-title">新增笔记「LLM: SKILL: MCP」</div>
+                                <div class="tl-item-desc">一段时间以来，我都觉得 skill 是可以覆盖 mcp 的...</div>
+                                <div class="tl-item-meta">
+                                    <span class="tl-item-time">15:00</span>
+                                    <span class="tl-item-tag">学习</span>
+                                    <span class="tl-item-tag">大模型</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="tl-item">
+                            <div class="tl-item-icon tl-icon-link"><i class="fas fa-link"></i></div>
+                            <div class="tl-item-body">
+                                <div class="tl-item-title">新增链接卡片「未做清单」</div>
+                                <div class="tl-item-desc">《Towards a Science of Scaling Agent Systems》《The Complete Guide to Building Skills for Claude》</div>
+                                <div class="tl-item-meta">
+                                    <span class="tl-item-time">12:00</span>
+                                    <span class="tl-item-tag">学习</span>
+                                    <span class="tl-item-tag">工作</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="tl-item">
+                            <div class="tl-item-icon tl-icon-task"><i class="fas fa-check-circle"></i></div>
+                            <div class="tl-item-body">
+                                <div class="tl-item-title">完成任务「知识墙标签筛选功能开发」</div>
+                                <div class="tl-item-desc">实现了标签云、交叉筛选、Markdown 快捷键增强</div>
+                                <div class="tl-item-meta">
+                                    <span class="tl-item-time">17:30</span>
+                                    <span class="tl-item-tag">工作</span>
+                                    <span class="af-module-badge"><i class="fas fa-tasks" style="font-size:9px"></i> 任务模块</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ====== VIEW: Dashboard ====== -->
+        <div class="view-panel" id="view-dashboard">
+            <div class="db-container">
+                <!-- Stats -->
+                <div class="db-stats-row">
+                    <div class="db-stat-card">
+                        <div class="db-stat-icon" style="background:rgba(255,200,80,0.12);color:rgba(255,200,80,0.9);"><i class="fas fa-sticky-note"></i></div>
+                        <div class="db-stat-value">15</div>
+                        <div class="db-stat-label">笔记</div>
+                        <div class="db-stat-trend up"><i class="fas fa-arrow-up"></i> 本周 +3</div>
+                    </div>
+                    <div class="db-stat-card">
+                        <div class="db-stat-icon" style="background:rgba(100,180,255,0.12);color:rgba(100,180,255,0.9);"><i class="fas fa-link"></i></div>
+                        <div class="db-stat-value">5</div>
+                        <div class="db-stat-label">链接</div>
+                        <div class="db-stat-trend up"><i class="fas fa-arrow-up"></i> 本周 +2</div>
+                    </div>
+                    <div class="db-stat-card">
+                        <div class="db-stat-icon" style="background:rgba(180,100,255,0.12);color:rgba(180,100,255,0.9);"><i class="fas fa-calendar-week"></i></div>
+                        <div class="db-stat-value">8</div>
+                        <div class="db-stat-label">周记</div>
+                        <div class="db-stat-trend up"><i class="fas fa-arrow-up"></i> 本周 +1</div>
+                    </div>
+                    <div class="db-stat-card">
+                        <div class="db-stat-icon" style="background:rgba(92,216,92,0.12);color:rgba(92,216,92,0.9);"><i class="fas fa-check-double"></i></div>
+                        <div class="db-stat-value">7</div>
+                        <div class="db-stat-label">本周完成任务</div>
+                        <div class="db-stat-trend up"><i class="fas fa-arrow-up"></i> 较上周 +2</div>
+                    </div>
+                </div>
+
+                <!-- AI Summary -->
+                <div class="db-summary-card">
+                    <div class="db-summary-header">
+                        <i class="fas fa-magic"></i>
+                        <h3>AI 周报摘要</h3>
+                        <span class="db-period">3.31 - 4.06</span>
+                    </div>
+                    <div class="db-summary-body">
+                        本周主要推进了 <strong>VIPDEV-21945</strong> 项目，已完成提测。
+                        学习方面，深入研究了 <strong>Codex 工作流</strong>和 <strong>harness 工程实践</strong>，
+                        阅读了 OpenAI 的 Codex workflows 文档和相关视频。
+                        思考方面，撰写了关于 <strong>AI 编码效率</strong>的思考笔记，
+                        以及 <strong>LLM/SKILL/MCP 架构关系</strong>的分析。
+                        收藏了来自 Google Deepmind 和 Anthropic 的 2 篇重要论文待读。
+                    </div>
+                    <div class="db-summary-actions">
+                        <button class="primary"><i class="fas fa-copy"></i> 复制周报</button>
+                        <button><i class="fas fa-redo"></i> 重新生成</button>
+                        <button><i class="fas fa-edit"></i> 编辑微调</button>
+                        <button><i class="fas fa-file-export"></i> 导出 Markdown</button>
+                    </div>
+                </div>
+
+                <!-- Heatmap -->
+                <div class="db-section">
+                    <div class="db-section-header">
+                        <div class="db-section-title"><i class="fas fa-fire"></i> 活动热力图</div>
+                        <span style="font-size:12px;color:var(--text-muted);">最近 12 周</span>
+                    </div>
+                    <div class="db-heatmap" id="heatmap"></div>
+                    <div class="heatmap-legend">
+                        少
+                        <div class="heatmap-legend-block" style="background:rgba(255,255,255,0.04);"></div>
+                        <div class="heatmap-legend-block" style="background:rgba(100,180,255,0.15);"></div>
+                        <div class="heatmap-legend-block" style="background:rgba(100,180,255,0.3);"></div>
+                        <div class="heatmap-legend-block" style="background:rgba(100,180,255,0.5);"></div>
+                        <div class="heatmap-legend-block" style="background:rgba(100,180,255,0.75);"></div>
+                        多
+                    </div>
+                </div>
+
+                <!-- Two columns: Recent Activity + Active Tags -->
+                <div class="db-two-col">
+                    <div class="db-list-card">
+                        <div class="db-list-title"><i class="fas fa-clock"></i> 最近更新</div>
+                        <div class="db-list-item">
+                            <div class="db-list-item-icon" style="background:rgba(180,100,255,0.12);color:rgba(180,100,255,0.9);"><i class="fas fa-calendar-week"></i></div>
+                            <div class="db-list-item-text">W - 3.27 - 4.02 周记</div>
+                            <span class="db-list-item-count">今天</span>
+                        </div>
+                        <div class="db-list-item">
+                            <div class="db-list-item-icon" style="background:rgba(255,200,80,0.12);color:rgba(255,200,80,0.9);"><i class="fas fa-sticky-note"></i></div>
+                            <div class="db-list-item-text">工作常用信息</div>
+                            <span class="db-list-item-count">今天</span>
+                        </div>
+                        <div class="db-list-item">
+                            <div class="db-list-item-icon" style="background:rgba(255,200,80,0.12);color:rgba(255,200,80,0.9);"><i class="fas fa-sticky-note"></i></div>
+                            <div class="db-list-item-text">AI 编码效率思考</div>
+                            <span class="db-list-item-count">4/1</span>
+                        </div>
+                        <div class="db-list-item">
+                            <div class="db-list-item-icon" style="background:rgba(255,200,80,0.12);color:rgba(255,200,80,0.9);"><i class="fas fa-sticky-note"></i></div>
+                            <div class="db-list-item-text">Openai 笔记</div>
+                            <span class="db-list-item-count">4/1</span>
+                        </div>
+                        <div class="db-list-item">
+                            <div class="db-list-item-icon" style="background:rgba(255,200,80,0.12);color:rgba(255,200,80,0.9);"><i class="fas fa-sticky-note"></i></div>
+                            <div class="db-list-item-text">LLM: SKILL: MCP</div>
+                            <span class="db-list-item-count">3/28</span>
+                        </div>
+                    </div>
+
+                    <div class="db-list-card">
+                        <div class="db-list-title"><i class="fas fa-tags"></i> 活跃标签（本月）</div>
+                        <div class="db-active-tags">
+                            <div class="db-active-tag">
+                                <div class="tag-bar" style="background:var(--accent-blue);"></div>
+                                工作 <span style="color:var(--text-muted);font-size:12px;">12 条</span>
+                            </div>
+                            <div class="db-active-tag">
+                                <div class="tag-bar" style="background:var(--accent-green);"></div>
+                                学习 <span style="color:var(--text-muted);font-size:12px;">9 条</span>
+                            </div>
+                            <div class="db-active-tag">
+                                <div class="tag-bar" style="background:var(--accent-orange);"></div>
+                                codex <span style="color:var(--text-muted);font-size:12px;">6 条</span>
+                            </div>
+                            <div class="db-active-tag">
+                                <div class="tag-bar" style="background:var(--accent-purple);"></div>
+                                周记 <span style="color:var(--text-muted);font-size:12px;">4 条</span>
+                            </div>
+                            <div class="db-active-tag">
+                                <div class="tag-bar" style="background:var(--accent-red);"></div>
+                                大模型 <span style="color:var(--text-muted);font-size:12px;">3 条</span>
+                            </div>
+                            <div class="db-active-tag">
+                                <div class="tag-bar" style="background:rgba(255,200,80,0.8);"></div>
+                                idea <span style="color:var(--text-muted);font-size:12px;">2 条</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ====== VIEW: Activity Feed ====== -->
+        <div class="view-panel" id="view-activity">
+            <div class="af-container">
+                <div class="af-filter-bar">
+                    <button class="af-filter-btn active"><i class="fas fa-stream"></i> 全部</button>
+                    <button class="af-filter-btn"><i class="fas fa-sticky-note"></i> 笔记</button>
+                    <button class="af-filter-btn"><i class="fas fa-tasks"></i> 任务</button>
+                    <button class="af-filter-btn"><i class="fas fa-bookmark"></i> 书签</button>
+                    <button class="af-filter-btn"><i class="fas fa-fire"></i> 热榜</button>
+                    <button class="af-filter-btn"><i class="fas fa-music"></i> 音乐</button>
+                </div>
+
+                <div class="af-day-group">
+                    <div class="af-day-header">
+                        今天 · 4月3日 周四
+                        <span class="af-day-count">6 条活动</span>
+                    </div>
+
+                    <div class="af-item">
+                        <div class="af-item-icon" style="background:rgba(180,100,255,0.12);color:rgba(180,100,255,0.9);"><i class="fas fa-edit"></i></div>
+                        <div class="af-item-content">
+                            <div class="af-item-headline">
+                                <span class="af-action">更新了周记</span>
+                                <span class="af-target">「W - 3.27 - 4.02 日常学习/工作内容」</span>
+                            </div>
+                            <div class="af-item-detail">新增了"已完成"板块和"进行中"内容</div>
+                            <div class="af-item-time">14:30</div>
+                        </div>
+                        <div class="af-item-actions">
+                            <button title="查看"><i class="fas fa-eye"></i></button>
+                            <button title="编辑"><i class="fas fa-edit"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="af-item">
+                        <div class="af-item-icon" style="background:rgba(255,200,80,0.12);color:rgba(255,200,80,0.9);"><i class="fas fa-pencil-alt"></i></div>
+                        <div class="af-item-content">
+                            <div class="af-item-headline">
+                                <span class="af-action">更新了笔记</span>
+                                <span class="af-target">「工作常用信息」</span>
+                            </div>
+                            <div class="af-item-detail">更新了 UID 和其他常用字段</div>
+                            <div class="af-item-time">14:31</div>
+                        </div>
+                        <div class="af-item-actions">
+                            <button title="查看"><i class="fas fa-eye"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="af-item">
+                        <div class="af-item-icon" style="background:rgba(92,216,92,0.12);color:rgba(92,216,92,0.9);"><i class="fas fa-check"></i></div>
+                        <div class="af-item-content">
+                            <div class="af-item-headline">
+                                <span class="af-action">完成了任务</span>
+                                <span class="af-target">「VIPDEV-21945 功能测试」</span>
+                                <span class="af-module-badge"><i class="fas fa-tasks" style="font-size:9px"></i> 任务</span>
+                            </div>
+                            <div class="af-item-detail">已提测完成，进入回归测试阶段</div>
+                            <div class="af-item-time">10:15</div>
+                        </div>
+                    </div>
+
+                    <div class="af-item">
+                        <div class="af-item-icon" style="background:rgba(255,100,150,0.12);color:rgba(255,100,150,0.9);"><i class="fas fa-fire"></i></div>
+                        <div class="af-item-content">
+                            <div class="af-item-headline">
+                                <span class="af-action">从热榜收藏</span>
+                                <span class="af-target">「Claude 4 Opus 正式发布」</span>
+                                <span class="af-module-badge"><i class="fas fa-fire" style="font-size:9px"></i> 热榜</span>
+                            </div>
+                            <div class="af-item-detail">HackerNews 热度 TOP 3 · 已保存为待读任务</div>
+                            <div class="af-item-time">09:45</div>
+                        </div>
+                    </div>
+
+                    <div class="af-item">
+                        <div class="af-item-icon" style="background:rgba(100,180,255,0.12);color:rgba(100,180,255,0.9);"><i class="fas fa-bookmark"></i></div>
+                        <div class="af-item-content">
+                            <div class="af-item-headline">
+                                <span class="af-action">收藏了书签</span>
+                                <span class="af-target">「Orchestrate Teams of Claude Code Sessions」</span>
+                                <span class="af-module-badge"><i class="fas fa-bookmark" style="font-size:9px"></i> 书签</span>
+                            </div>
+                            <div class="af-item-detail">Anthropic 官方文档 · AI 自动生成摘要</div>
+                            <div class="af-item-time">09:20</div>
+                        </div>
+                    </div>
+
+                    <div class="af-item">
+                        <div class="af-item-icon" style="background:rgba(255,150,50,0.12);color:rgba(255,150,50,0.9);"><i class="fas fa-music"></i></div>
+                        <div class="af-item-content">
+                            <div class="af-item-headline">
+                                <span class="af-action">播放了歌单</span>
+                                <span class="af-target">「专注工作 · 电子」</span>
+                                <span class="af-module-badge"><i class="fas fa-music" style="font-size:9px"></i> 音乐</span>
+                            </div>
+                            <div class="af-item-time">08:30</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="af-day-group">
+                    <div class="af-day-header">
+                        昨天 · 4月2日 周三
+                        <span class="af-day-count">4 条活动</span>
+                    </div>
+
+                    <div class="af-item">
+                        <div class="af-item-icon" style="background:rgba(255,100,150,0.12);color:rgba(255,100,150,0.9);"><i class="fas fa-fire"></i></div>
+                        <div class="af-item-content">
+                            <div class="af-item-headline">
+                                <span class="af-action">从热榜保存为任务</span>
+                                <span class="af-target">「OpenAI 发布 Codex CLI 工具」</span>
+                            </div>
+                            <div class="af-item-detail">HackerNews · 创建为高优先级待读任务</div>
+                            <div class="af-item-time">16:20</div>
+                        </div>
+                    </div>
+
+                    <div class="af-item">
+                        <div class="af-item-icon" style="background:rgba(100,180,255,0.12);color:rgba(100,180,255,0.9);"><i class="fas fa-bookmark"></i></div>
+                        <div class="af-item-content">
+                            <div class="af-item-headline">
+                                <span class="af-action">收藏了书签</span>
+                                <span class="af-target">「developers.openai.com/codex/workflows」</span>
+                            </div>
+                            <div class="af-item-detail">Codex 工作流官方文档</div>
+                            <div class="af-item-time">11:30</div>
+                        </div>
+                    </div>
+
+                    <div class="af-item">
+                        <div class="af-item-icon" style="background:rgba(92,216,92,0.12);color:rgba(92,216,92,0.9);"><i class="fas fa-plus-circle"></i></div>
+                        <div class="af-item-content">
+                            <div class="af-item-headline">
+                                <span class="af-action">创建了任务</span>
+                                <span class="af-target">「尝试环境DSM环境搭建」</span>
+                            </div>
+                            <div class="af-item-detail">包含 3 个系统: 会员中心、积分商城、代理系统</div>
+                            <div class="af-item-time">10:00</div>
+                        </div>
+                    </div>
+
+                    <div class="af-item">
+                        <div class="af-item-icon" style="background:rgba(255,200,80,0.12);color:rgba(255,200,80,0.9);"><i class="fas fa-lightbulb"></i></div>
+                        <div class="af-item-content">
+                            <div class="af-item-headline">
+                                <span class="af-action">查看了笔记</span>
+                                <span class="af-target">「LLM: SKILL: MCP」</span>
+                            </div>
+                            <div class="af-item-detail">浏览了 45 秒</div>
+                            <div class="af-item-time">09:15</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+</div>
+
+<script>
+document.querySelectorAll('.kw-view-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.kw-view-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
+        document.getElementById('view-' + tab.dataset.view).classList.add('active');
+    });
+});
+
+document.querySelectorAll('.af-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.af-filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    });
+});
+
+document.querySelectorAll('.kw-tag-chip:not(:first-child)').forEach(chip => {
+    chip.addEventListener('click', () => {
+        chip.classList.toggle('active');
+    });
+});
+
+(function renderHeatmap() {
+    const container = document.getElementById('heatmap');
+    const today = new Date();
+    const levels = [0,0,1,0,2,3,0, 1,0,0,2,1,0,0, 0,1,2,0,0,1,0, 1,3,2,0,1,0,0,
+                    2,1,0,4,2,1,0, 0,1,3,2,0,0,1, 2,0,1,0,3,2,0, 1,0,0,2,1,3,0,
+                    0,2,1,0,0,1,2, 3,1,0,2,0,1,0, 1,2,3,4,2,0,1, 2,3,1,4,0,0,0];
+    let idx = 0;
+    for (let w = 0; w < 12; w++) {
+        const week = document.createElement('div');
+        week.className = 'heatmap-week';
+        for (let d = 0; d < 7; d++) {
+            const day = document.createElement('div');
+            day.className = 'heatmap-day';
+            const level = levels[idx] || 0;
+            if (level > 0) day.dataset.level = level;
+            if (w === 11 && d === today.getDay()) day.classList.add('today');
+            const daysBack = (11 - w) * 7 + (6 - d);
+            const date = new Date(today);
+            date.setDate(date.getDate() - daysBack);
+            day.title = `${date.getMonth()+1}/${date.getDate()} · ${level} 条活动`;
+            week.appendChild(day);
+            idx++;
+        }
+        container.appendChild(week);
+    }
+})();
+</script>
+</body>
+</html>

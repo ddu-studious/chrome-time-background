@@ -208,65 +208,70 @@ class MusicController {
                     </div>
                     <span class="mc-prg-time" id="mc-time-total">0:00</span>
                 </div>
-                <div class="mc-tabs" id="mc-tabs">
-                    <button class="mc-tab active" data-mc-tab="queue">队列</button>
-                    <button class="mc-tab" data-mc-tab="playlists">歌单</button>
-                    <button class="mc-tab" data-mc-tab="lyrics">歌词</button>
-                    <button class="mc-tab" data-mc-tab="discover">发现</button>
-                    <button class="mc-tab" data-mc-tab="search">搜索</button>
-                    <div class="mc-tab-indicator" id="mc-tab-indicator"></div>
-                </div>
-                <div class="mc-content" id="mc-content">
-                    <div class="mc-pane active" data-mc-pane="queue" id="mc-pane-queue">
-                        <div class="mc-empty">暂无歌曲，请先播放音乐</div>
+                <div class="mc-drawer-wrapper" id="mc-drawer-wrapper">
+                  <div class="mc-drawer-inner">
+                    <div class="mc-drawer-handle"><div class="mc-drawer-handle-bar"></div></div>
+                    <div class="mc-tabs" id="mc-tabs">
+                        <button class="mc-tab active" data-mc-tab="queue">队列</button>
+                        <button class="mc-tab" data-mc-tab="playlists">歌单</button>
+                        <button class="mc-tab" data-mc-tab="lyrics">歌词</button>
+                        <button class="mc-tab" data-mc-tab="discover">发现</button>
+                        <button class="mc-tab" data-mc-tab="search">搜索</button>
+                        <div class="mc-tab-indicator" id="mc-tab-indicator"></div>
                     </div>
-                    <div class="mc-pane" data-mc-pane="playlists" id="mc-pane-playlists">
-                        <div class="mc-empty"><i class="fas fa-spinner fa-spin"></i> 加载中...</div>
-                    </div>
-                    <div class="mc-pane" data-mc-pane="lyrics" id="mc-pane-lyrics">
-                        <div class="mc-lrc-pane">
-                            <div class="mc-empty">播放音乐后自动获取歌词</div>
+                    <div class="mc-content" id="mc-content">
+                        <div class="mc-pane active" data-mc-pane="queue" id="mc-pane-queue">
+                            <div class="mc-empty">暂无歌曲，请先播放音乐</div>
                         </div>
-                    </div>
-                    <div class="mc-pane" data-mc-pane="discover" id="mc-pane-discover">
-                        <div class="mc-empty"><i class="fas fa-spinner fa-spin"></i> 加载中...</div>
-                    </div>
-                    <div class="mc-pane" data-mc-pane="search" id="mc-pane-search">
-                        <div class="mc-search-bar">
-                            <div class="mc-search-wrap">
-                                <i class="fas fa-search"></i>
-                                <input type="text" id="mc-search-input" placeholder="搜索歌曲、歌手..." maxlength="60">
-                            </div>
-                            <div class="mc-search-type-tabs" id="mc-search-type-tabs">
-                                <button class="mc-search-type active" data-type="1">歌曲</button>
-                                <button class="mc-search-type" data-type="1000">歌单</button>
-                                <button class="mc-search-type" data-type="100">歌手</button>
+                        <div class="mc-pane" data-mc-pane="playlists" id="mc-pane-playlists">
+                            <div class="mc-empty"><i class="fas fa-spinner fa-spin"></i> 加载中...</div>
+                        </div>
+                        <div class="mc-pane" data-mc-pane="lyrics" id="mc-pane-lyrics">
+                            <div class="mc-lrc-pane">
+                                <div class="mc-empty">播放音乐后自动获取歌词</div>
                             </div>
                         </div>
-                        <div id="mc-search-results">
-                            <div class="mc-search-history" id="mc-search-history-area"></div>
+                        <div class="mc-pane" data-mc-pane="discover" id="mc-pane-discover">
+                            <div class="mc-empty"><i class="fas fa-spinner fa-spin"></i> 加载中...</div>
+                        </div>
+                        <div class="mc-pane" data-mc-pane="search" id="mc-pane-search">
+                            <div class="mc-search-bar">
+                                <div class="mc-search-wrap">
+                                    <i class="fas fa-search"></i>
+                                    <input type="text" id="mc-search-input" placeholder="搜索歌曲、歌手..." maxlength="60">
+                                </div>
+                                <div class="mc-search-type-tabs" id="mc-search-type-tabs">
+                                    <button class="mc-search-type active" data-type="1">歌曲</button>
+                                    <button class="mc-search-type" data-type="1000">歌单</button>
+                                    <button class="mc-search-type" data-type="100">歌手</button>
+                                </div>
+                            </div>
+                            <div id="mc-search-results">
+                                <div class="mc-search-history" id="mc-search-history-area"></div>
+                            </div>
                         </div>
                     </div>
-                </div>
-                <div class="mc-modes" id="mc-modes">
-                    <button class="mc-mode-btn" data-mode="sequence" title="顺序播放"><i class="fas fa-arrow-right"></i></button>
-                    <button class="mc-mode-btn" data-mode="loop" title="列表循环"><i class="fas fa-redo"></i></button>
-                    <button class="mc-mode-btn" data-mode="single" title="单曲循环"><i class="fas fa-redo-alt"></i></button>
-                    <button class="mc-mode-btn" data-mode="shuffle" title="随机播放"><i class="fas fa-random"></i></button>
-                    <div class="mc-mode-divider"></div>
-                    <span class="mc-mode-label" id="mc-mode-label">顺序播放</span>
-                    <div class="mc-mode-divider"></div>
-                    <button class="mc-ctrl-btn mc-vol-toggle" id="mc-vol-toggle" title="音量"><i class="fas fa-volume-up" id="mc-vol-icon"></i></button>
-                    <div class="mc-vol-slider hidden" id="mc-vol-slider">
-                        <div class="mc-vol-pct" id="mc-vol-pct">100%</div>
-                        <div class="mc-vol-track">
-                            <div class="mc-vol-track-bg"></div>
-                            <div class="mc-vol-fill" id="mc-vol-fill"></div>
-                            <input type="range" class="mc-vol-input" id="mc-vol-input" min="0" max="100" value="100">
+                    <div class="mc-modes" id="mc-modes">
+                        <button class="mc-mode-btn" data-mode="sequence" title="顺序播放"><i class="fas fa-long-arrow-alt-right"></i></button>
+                        <button class="mc-mode-btn" data-mode="loop" title="列表循环"><i class="fas fa-retweet"></i></button>
+                        <button class="mc-mode-btn" data-mode="single" title="单曲循环"><span class="mc-mode-single-icon"><i class="fas fa-redo"></i><span class="mc-mode-single-1">1</span></span></button>
+                        <button class="mc-mode-btn" data-mode="shuffle" title="随机播放"><i class="fas fa-random"></i></button>
+                        <div class="mc-mode-divider"></div>
+                        <span class="mc-mode-label" id="mc-mode-label">顺序播放</span>
+                        <div class="mc-mode-divider"></div>
+                        <button class="mc-ctrl-btn mc-vol-toggle" id="mc-vol-toggle" title="音量"><i class="fas fa-volume-up" id="mc-vol-icon"></i></button>
+                        <div class="mc-vol-slider hidden" id="mc-vol-slider">
+                            <div class="mc-vol-pct" id="mc-vol-pct">100%</div>
+                            <div class="mc-vol-track">
+                                <div class="mc-vol-track-bg"></div>
+                                <div class="mc-vol-fill" id="mc-vol-fill"></div>
+                                <input type="range" class="mc-vol-input" id="mc-vol-input" min="0" max="100" value="100">
+                            </div>
                         </div>
+                        <div class="mc-mode-divider"></div>
+                        <button class="mc-ctrl-btn mc-disconnect" id="mc-disconnect" title="断开连接"><i class="fas fa-times-circle"></i></button>
                     </div>
-                    <div class="mc-mode-divider"></div>
-                    <button class="mc-ctrl-btn mc-disconnect" id="mc-disconnect" title="断开连接"><i class="fas fa-times-circle"></i></button>
+                  </div>
                 </div>
                 <div class="mc-login-prompt hidden" id="mc-login-prompt">
                     <i class="fas fa-user-lock"></i>
@@ -537,7 +542,8 @@ class MusicController {
         if (!panel) return;
         panel.classList.toggle('mc-panel-expanded', this._expanded);
         if (this._expanded) {
-            this._updateTabIndicator();
+            requestAnimationFrame(() => this._updateTabIndicator());
+            setTimeout(() => this._updateTabIndicator(), 120);
         }
     }
 
@@ -1301,6 +1307,15 @@ class MusicController {
             });
         });
 
+        pane.querySelectorAll('.mc-row-play').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const row = btn.closest('.mc-row');
+                const songId = row?.dataset.songId;
+                if (songId) this._playSongById(songId);
+            });
+        });
+
         pane.querySelectorAll('.mc-row-like').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -1310,7 +1325,7 @@ class MusicController {
         });
 
         const active = pane.querySelector('.mc-row-active');
-        if (active) active.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        if (active) this._scrollToCenter(pane, active);
     }
 
     _renderQueueWithApi(songs) {
@@ -1573,7 +1588,7 @@ class MusicController {
         this._lrcScrollTimer = setTimeout(() => {
             this._lrcScrollTimer = null;
             const active = pane.querySelector('.mc-lrc-on');
-            if (active) active.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            if (active) this._scrollToCenter(pane, active);
         }, 300);
     }
 
@@ -1720,6 +1735,22 @@ class MusicController {
                 if (e.target.closest('.mc-row-like') || e.target.closest('.mc-row-play')) return;
                 e.stopPropagation();
                 const songId = item.dataset.songId;
+                if (songId) {
+                    if (this._playlist.length === 0 || this._currentPlaylistName !== label) {
+                        this._playlist = songs.map((s, i) => ({ ...s, index: i, isActive: false }));
+                        this._currentPlaylistName = label;
+                        this._savePlaylistCache();
+                    }
+                    this._playSongById(songId);
+                }
+            });
+        });
+
+        pane.querySelectorAll('.mc-rec-row .mc-row-play').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const row = btn.closest('.mc-rec-row');
+                const songId = row?.dataset.songId;
                 if (songId) {
                     if (this._playlist.length === 0 || this._currentPlaylistName !== label) {
                         this._playlist = songs.map((s, i) => ({ ...s, index: i, isActive: false }));
@@ -1879,7 +1910,7 @@ class MusicController {
             return;
         }
 
-        resultsEl.innerHTML = artists.map((ar, idx) => `
+        resultsEl.innerHTML = `<div class="mc-artist-list">` + artists.map((ar, idx) => `
             <div class="mc-row mc-artist-row" data-artist-id="${ar.id || ''}" data-artist-name="${this._esc(ar.name || '')}">
                 <div class="mc-artist-avatar">
                     ${ar.img1v1Url ? `<img src="${this._esc(ar.img1v1Url)}?param=80y80" alt="">` : '<i class="fas fa-user"></i>'}
@@ -1890,7 +1921,7 @@ class MusicController {
                 </div>
                 <button class="mc-row-play" title="播放热门歌曲"><i class="fas fa-play"></i></button>
             </div>
-        `).join('');
+        `).join('') + `</div>`;
 
         resultsEl.querySelectorAll('.mc-artist-row').forEach(item => {
             item.addEventListener('click', async (e) => {
@@ -2043,6 +2074,19 @@ class MusicController {
     }
 
     // ===================== 工具 =====================
+
+    _scrollToCenter(container, target) {
+        if (!container || !target) return;
+        const scrollParent = container.closest('.mc-pane') || container;
+        let offsetTop = 0;
+        let el = target;
+        while (el && el !== scrollParent) {
+            offsetTop += el.offsetTop;
+            el = el.offsetParent;
+        }
+        const desiredScroll = offsetTop - scrollParent.clientHeight / 2 + target.offsetHeight / 2;
+        scrollParent.scrollTo({ top: Math.max(0, desiredScroll), behavior: 'smooth' });
+    }
 
     _esc(str) {
         const div = document.createElement('div');

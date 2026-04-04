@@ -411,6 +411,51 @@
         } catch (_) {}
     }
 
+    // =============== 4b. 精准 seek（等待 readyState）===============
+
+    let _initialSeekDone = false;
+
+    function seekTo(video, time, retries = 0) {
+        const MAX_RETRIES = 10;
+        const target = Math.min(time, video.duration || Infinity);
+
+        if (video.readyState >= 1 && video.duration > 0) {
+            video.currentTime = target;
+            setTimeout(() => {
+                const actual = video.currentTime || 0;
+                const ok = Math.abs(actual - target) < 3;
+                try {
+                    window.parent.postMessage({
+                        type: MSG_PREFIX + 'seek-result',
+                        success: ok,
+                        currentTime: actual,
+                        target: target,
+                    }, '*');
+                } catch (_) {}
+                if (!ok && retries < MAX_RETRIES) {
+                    setTimeout(() => seekTo(video, time, retries + 1), 1000);
+                }
+            }, 300);
+        } else if (retries < MAX_RETRIES) {
+            setTimeout(() => seekTo(video, time, retries + 1), 800);
+        }
+    }
+
+    function getUrlSeekTime() {
+        const params = new URLSearchParams(location.search);
+        const t = parseFloat(params.get('t'));
+        return (isFinite(t) && t > 0) ? t : 0;
+    }
+
+    function tryInitialSeek(video) {
+        if (_initialSeekDone) return;
+        const t = getUrlSeekTime();
+        if (t > 0) {
+            _initialSeekDone = true;
+            seekTo(video, t);
+        }
+    }
+
     // =============== 5. postMessage 指令处理 ===============
 
     window.addEventListener('message', (e) => {
@@ -451,7 +496,7 @@
             case 'seek': {
                 const time = parseFloat(e.data.time);
                 if (video && isFinite(time) && time >= 0) {
-                    video.currentTime = Math.min(time, video.duration || Infinity);
+                    seekTo(video, time);
                 }
                 break;
             }
@@ -496,6 +541,78 @@
         } catch (_) {}
     }
 
+    // =============== 标题/分P信息上报 ===============
+
+    let _lastReportedTitle = '';
+
+    function getEpisodeTitle() {
+        const selectors = [
+            '.bpx-player-eplist-item.bpx-state-active .bpx-player-eplist-item-title',
+            '.video-episode-card__info-title-active',
+            '.list-box li.on .clickitem .router-link-active',
+            '.cur-page .page-title',
+            '.bpx-player-ctrl-eplist-menu-item.bpx-state-active',
+        ];
+        for (const sel of selectors) {
+            const el = document.querySelector(sel);
+            if (el?.textContent?.trim()) return el.textContent.trim();
+        }
+        return '';
+    }
+
+    function getVideoTitleInfo() {
+        const info = { title: '', episode: '', partIndex: 0, totalParts: 0 };
+
+        const titleEl = document.querySelector(
+            '#viewbox_report .video-title, .video-info-title, h1.video-title'
+        );
+        if (titleEl) info.title = titleEl.textContent?.trim() || '';
+
+        info.episode = getEpisodeTitle();
+
+        const pageTitle = document.title || '';
+        if (!info.title && pageTitle) {
+            info.title = pageTitle.replace(/_哔哩哔哩.*$/, '').replace(/-.*bilibili.*$/i, '').trim();
+        }
+
+        const activeIndex = document.querySelector(
+            '.bpx-player-eplist-item.bpx-state-active, .video-episode-card.active'
+        );
+        if (activeIndex) {
+            const allItems = activeIndex.parentElement?.children;
+            if (allItems) {
+                info.totalParts = allItems.length;
+                info.partIndex = Array.from(allItems).indexOf(activeIndex) + 1;
+            }
+        }
+
+        if (!info.episode) {
+            const match = pageTitle.match(/[Pp](\d+)\s+(.+?)(?:_哔哩|$)/);
+            if (match) {
+                info.partIndex = parseInt(match[1]);
+                info.episode = match[2].trim();
+            }
+        }
+
+        return info;
+    }
+
+    function postTitleInfo() {
+        const info = getVideoTitleInfo();
+        const key = `${info.title}|${info.episode}|${info.partIndex}`;
+        if (key === _lastReportedTitle && key !== '||0') return;
+        _lastReportedTitle = key;
+        try {
+            window.parent.postMessage({
+                type: MSG_PREFIX + 'title-info',
+                title: info.title,
+                episode: info.episode,
+                partIndex: info.partIndex,
+                totalParts: info.totalParts,
+            }, '*');
+        } catch (_) {}
+    }
+
     // =============== 6. 周期性上报 ===============
 
     function startReporting(video) {
@@ -507,6 +624,7 @@
                 video = v;
             }
             postState(video);
+            postTitleInfo();
             if (!_qualitySent) postQualityInfo();
             if (!_autoQualityAttempted) autoSetBestQuality();
         }, 2000);
@@ -523,9 +641,13 @@
         waitForVideo((video) => {
             startReporting(video);
             postState(video);
+            tryInitialSeek(video);
             const delays = IS_FULL_PAGE ? [3000, 6000, 10000, 15000, 20000] : [3000, 6000, 10000, 15000];
             delays.forEach(ms => {
-                setTimeout(() => { postQualityInfo(); autoSetBestQuality(); }, ms);
+                setTimeout(() => {
+                    postQualityInfo(); autoSetBestQuality(); postTitleInfo();
+                    if (!_initialSeekDone) tryInitialSeek(video);
+                }, ms);
             });
         });
     }

@@ -428,6 +428,7 @@ class MemoManager {
                 <option value="all">全部任务</option>
                 <option value="uncompleted">未完成</option>
                 <option value="completed">已完成</option>
+                <option value="failed">已失败</option>
                 <option value="today">今日</option>
                 <option value="overdue">已过期</option>
                 <option value="in_progress">进行中</option>
@@ -1326,7 +1327,10 @@ class MemoManager {
                 filteredMemos = filteredMemos.filter(m => m.completed);
                 break;
             case 'uncompleted':
-                filteredMemos = filteredMemos.filter(m => !m.completed);
+                filteredMemos = filteredMemos.filter(m => !m.completed && m.status !== 'failed');
+                break;
+            case 'failed':
+                filteredMemos = filteredMemos.filter(m => m.status === 'failed');
                 break;
             case 'today':
                 filteredMemos = filteredMemos.filter(m => m.dueDate === today);
@@ -1342,10 +1346,12 @@ class MemoManager {
                 break;
         }
         
-        // 排序
+        // 排序：失败任务排在已完成之后
         const priorityOrder = { high: 0, medium: 1, low: 2, none: 3 };
         filteredMemos.sort((a, b) => {
-            if (a.completed !== b.completed) return a.completed ? 1 : -1;
+            const aTerminal = a.completed || a.status === 'failed';
+            const bTerminal = b.completed || b.status === 'failed';
+            if (aTerminal !== bTerminal) return aTerminal ? 1 : -1;
             const pa = priorityOrder[a.priority] ?? 3;
             const pb = priorityOrder[b.priority] ?? 3;
             if (pa !== pb) return pa - pb;
@@ -1696,7 +1702,8 @@ class MemoManager {
         const today = this.getTodayDate();
         switch (filterValue) {
             case 'completed': filteredMemos = filteredMemos.filter(m => m.completed); break;
-            case 'uncompleted': filteredMemos = filteredMemos.filter(m => !m.completed); break;
+            case 'uncompleted': filteredMemos = filteredMemos.filter(m => !m.completed && m.status !== 'failed'); break;
+            case 'failed': filteredMemos = filteredMemos.filter(m => m.status === 'failed'); break;
             case 'today': filteredMemos = filteredMemos.filter(m => m.dueDate === today); break;
             case 'overdue': filteredMemos = filteredMemos.filter(m => this.getTaskStatus(m).key === 'overdue'); break;
             case 'in_progress': filteredMemos = filteredMemos.filter(m => this.getTaskStatus(m).key === 'in_progress'); break;
@@ -2489,12 +2496,13 @@ class MemoManager {
      */
     createSidebarTaskItem(task, index = 0, total = 0) {
         const item = document.createElement('div');
-        item.className = `sidebar-task-item ${task.completed ? 'completed' : ''} priority-${task.priority || 'none'}`;
+        const isFailed = task.status === 'failed';
+        item.className = `sidebar-task-item ${task.completed ? 'completed' : ''} ${isFailed ? 'failed' : ''} priority-${task.priority || 'none'}`;
         item.dataset.id = task.id;
         item.dataset.index = index;
         
         const today = this.getTodayDate();
-        const isOverdue = task.dueDate && task.dueDate < today && !task.completed;
+        const isOverdue = !isFailed && task.dueDate && task.dueDate < today && !task.completed;
         if (isOverdue) item.classList.add('overdue');
         
         const priorityColors = { high: '#ff6b6b', medium: '#ffc857', low: '#5cd85c', none: 'transparent' };
@@ -2624,6 +2632,10 @@ class MemoManager {
                 </div>
             </div>
             <div class="task-actions">
+                ${isFailed
+                    ? `<button class="task-reactivate-btn" title="重新激活"><i class="fas fa-redo"></i></button>`
+                    : `<button class="task-fail-btn" title="标记为失败"><i class="fas fa-times-circle"></i></button>`
+                }
                 <button class="task-edit-btn" title="编辑"><i class="fas fa-pen"></i></button>
                 <button class="task-delete-btn" title="删除"><i class="fas fa-trash"></i></button>
             </div>
@@ -2632,8 +2644,25 @@ class MemoManager {
         // 绑定事件
         item.querySelector('.task-checkbox').addEventListener('click', (e) => {
             e.stopPropagation();
+            if (isFailed) return;
             this.toggleSidebarTaskComplete(task.id);
         });
+        
+        const failBtn = item.querySelector('.task-fail-btn');
+        if (failBtn) {
+            failBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.markTaskFailed(task.id);
+            });
+        }
+        
+        const reactivateBtn = item.querySelector('.task-reactivate-btn');
+        if (reactivateBtn) {
+            reactivateBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.reactivateTask(task.id);
+            });
+        }
         
         item.querySelector('.task-edit-btn').addEventListener('click', (e) => {
             e.stopPropagation();
@@ -3745,7 +3774,10 @@ class MemoManager {
             // 习惯卡片配置
             habitCard: memo.habitCard || null,
             // 子任务列表 [{id, title, completed}]
-            subtasks: Array.isArray(memo.subtasks) ? memo.subtasks : []
+            subtasks: Array.isArray(memo.subtasks) ? memo.subtasks : [],
+            // 终态标记: null(正常) | 'failed'(失败) — 失败任务不触发逾期提醒，用于回顾
+            status: memo.status || null,
+            failedAt: memo.failedAt || null,
         };
         
         // 兼容旧数据：如果存在 isDaily 标记但没有 recurrence，自动迁移
@@ -7663,6 +7695,7 @@ class MemoManager {
         const status = this.getTaskStatus(task);
         const statusClassMap = {
             completed: 'completed',
+            failed: 'failed',
             overdue: 'overdue',
             in_progress: 'in-progress',
             not_started: 'not-started'
@@ -8237,6 +8270,9 @@ class MemoManager {
      * @returns {{ key: string, label: string, icon: string, color: string }}
      */
     getTaskStatus(task) {
+        if (task.status === 'failed') {
+            return { key: 'failed', label: '已失败', icon: 'fas fa-times-circle', color: '#747d8c' };
+        }
         if (task.completed) {
             return { key: 'completed', label: '已完成', icon: 'fas fa-check-circle', color: '#2ed573' };
         }
@@ -8522,10 +8558,23 @@ class MemoManager {
             this.memos.unshift(newTask);
         }
         
+        const isEdit = !!taskId;
         await this.saveMemos();
-        this.tempImages = [];    // 清空临时图片
-        this.tempLinks = [];     // 清空临时链接
-        this.tempSubtasks = [];  // 清空临时子任务
+
+        if (typeof activityLogger !== 'undefined') {
+            activityLogger.log({
+                type: isEdit ? ActivityLogger.TYPES.TASK_UPDATE : ActivityLogger.TYPES.TASK_CREATE,
+                module: ActivityLogger.MODULES.MEMO,
+                title: `${isEdit ? '更新' : '创建'}任务「${title}」`,
+                targetId: taskId || (this.memos[0]?.id || ''),
+                targetTitle: title,
+                meta: { priority: taskData.priority }
+            });
+        }
+
+        this.tempImages = [];
+        this.tempLinks = [];
+        this.tempSubtasks = [];
         this.hideSidebarForm();
         this.renderSidebarTaskList();
     }
@@ -8535,18 +8584,28 @@ class MemoManager {
      */
     async toggleSidebarTaskComplete(taskId) {
         const task = this.memos.find(m => m.id === taskId);
-        if (!task) return;
+        if (!task || task.status === 'failed') return;
         
         task.completed = !task.completed;
         task.completedAt = task.completed ? Date.now() : null;
         task.updatedAt = Date.now();
         
-        // 完成时如果有进度条，自动拉到 100%
         if (task.completed && task.progress !== null && task.progress !== undefined) {
             task.progress = 100;
         }
         
         await this.saveMemos();
+
+        if (typeof activityLogger !== 'undefined' && task.completed) {
+            activityLogger.log({
+                type: ActivityLogger.TYPES.TASK_COMPLETE,
+                module: ActivityLogger.MODULES.MEMO,
+                title: `完成任务「${task.title}」`,
+                targetId: taskId,
+                targetTitle: task.title
+            });
+        }
+
         this.renderSidebarTaskList();
         this.refreshCalendarPanelIfOpen();
     }
@@ -8557,10 +8616,56 @@ class MemoManager {
     async deleteSidebarTask(taskId) {
         const index = this.memos.findIndex(m => m.id === taskId);
         if (index === -1) return;
-        
+
+        const task = this.memos[index];
         this.memos.splice(index, 1);
         await this.saveMemos();
+
+        if (typeof activityLogger !== 'undefined') {
+            activityLogger.log({
+                type: ActivityLogger.TYPES.TASK_DELETE,
+                module: ActivityLogger.MODULES.MEMO,
+                title: `删除任务「${task.title}」`,
+                targetId: taskId,
+                targetTitle: task.title
+            });
+        }
+
         this.renderSidebarTaskList();
+    }
+
+    /**
+     * 标记任务为失败（终态，不再触发逾期提醒）
+     */
+    async markTaskFailed(taskId) {
+        const task = this.memos.find(m => m.id === taskId);
+        if (!task) return;
+        
+        task.status = 'failed';
+        task.failedAt = Date.now();
+        task.updatedAt = Date.now();
+        await this.saveMemos();
+        this.renderSidebarTaskList();
+        this.refreshCalendarPanelIfOpen();
+        this.showToast('任务已标记为失败，可随时重新激活', 2500);
+    }
+
+    /**
+     * 重新激活已失败的任务（恢复到正常流程）
+     */
+    async reactivateTask(taskId) {
+        const task = this.memos.find(m => m.id === taskId);
+        if (!task) return;
+        
+        task.status = null;
+        task.failedAt = null;
+        task.completed = false;
+        task.completedAt = null;
+        task.updatedAt = Date.now();
+        await this.saveMemos();
+        this.renderSidebarTaskList();
+        this.refreshCalendarPanelIfOpen();
+        this.showToast('任务已重新激活', 2000);
     }
     
     /**
@@ -9371,12 +9476,15 @@ class MemoManager {
         const renderList = (filterText = '') => {
             const q = (filterText || '').toLowerCase().trim();
             const filtered = q ? options.filter(o => (o.name || '').toLowerCase().includes(q)) : options;
-            listbox.innerHTML = filtered.map((opt, i) => `
-                <li class="category-combobox-option" role="option" data-value="${this.escapeHtml(opt.id)}" data-index="${i}" aria-selected="false">
+            listbox.innerHTML = filtered.map((opt, i) => {
+                const isSelected = opt.id === value;
+                return `
+                <li class="category-combobox-option${isSelected ? ' selected' : ''}" role="option" data-value="${this.escapeHtml(opt.id)}" data-index="${i}" aria-selected="false">
                     <span class="category-combobox-option-color" style="background:${opt.color || 'transparent'}"></span>
                     <span class="category-combobox-option-name">${this.escapeHtml(opt.name)}</span>
-                </li>
-            `).join('');
+                    ${isSelected ? '<i class="fas fa-check category-combobox-check"></i>' : ''}
+                </li>`;
+            }).join('');
             if (opts.showManageEntry !== false) {
                 listbox.innerHTML += `<li class="category-combobox-manage" role="option" data-action="manage"><i class="fas fa-cog"></i> 管理分类</li>`;
             }
@@ -9393,6 +9501,10 @@ class MemoManager {
                     this.showCategoryManager();
                 });
             }
+            if (!q) {
+                const selectedEl = listbox.querySelector('.category-combobox-option.selected');
+                if (selectedEl) selectedEl.scrollIntoView({ block: 'nearest' });
+            }
         };
         
         const selectValue = (id) => {
@@ -9401,25 +9513,38 @@ class MemoManager {
             colorDot.style.background = getDisplayColor(id);
             listbox.classList.add('hidden');
             input.setAttribute('aria-expanded', 'false');
+            input.placeholder = placeholder;
             onChange(value);
         };
         
         const openList = () => {
             input.setAttribute('aria-expanded', 'true');
+            input.value = '';
+            input.placeholder = '搜索分类...';
             positionListbox();
             listbox.classList.remove('hidden');
-            renderList(input.value);
+            renderList('');
         };
         
         const closeList = () => {
             listbox.classList.add('hidden');
             input.setAttribute('aria-expanded', 'false');
             input.value = getDisplayName(value);
+            input.placeholder = placeholder;
             colorDot.style.background = getDisplayColor(value);
         };
         
-        input.addEventListener('focus', () => openList());
-        input.addEventListener('input', () => { openList(); renderList(input.value); });
+        input.addEventListener('focus', () => {
+            if (listbox.classList.contains('hidden')) openList();
+        });
+        input.addEventListener('input', () => {
+            if (listbox.classList.contains('hidden')) {
+                input.setAttribute('aria-expanded', 'true');
+                positionListbox();
+                listbox.classList.remove('hidden');
+            }
+            renderList(input.value);
+        });
         input.addEventListener('keydown', (e) => {
             const optsEl = listbox.querySelectorAll('.category-combobox-option');
             if (e.key === 'ArrowDown') {
@@ -9438,13 +9563,19 @@ class MemoManager {
             } else if (e.key === 'Escape') {
                 e.preventDefault();
                 closeList();
+                input.blur();
             }
         });
         
         inputWrap.addEventListener('click', (e) => {
-            if (e.target === input || e.target.closest('.category-combobox-arrow')) {
-                if (listbox.classList.contains('hidden')) openList();
-                else closeList();
+            if (e.target.closest('.category-combobox-arrow')) {
+                if (listbox.classList.contains('hidden')) {
+                    input.focus();
+                } else {
+                    closeList();
+                    input.blur();
+                }
+                e.preventDefault();
             }
         });
         
@@ -10865,7 +10996,10 @@ class MemoManager {
                 filteredMemos = filteredMemos.filter(m => m.completed);
                 break;
             case 'uncompleted':
-                filteredMemos = filteredMemos.filter(m => !m.completed);
+                filteredMemos = filteredMemos.filter(m => !m.completed && m.status !== 'failed');
+                break;
+            case 'failed':
+                filteredMemos = filteredMemos.filter(m => m.status === 'failed');
                 break;
             case 'today':
                 filteredMemos = filteredMemos.filter(m => m.dueDate === today);
@@ -10878,10 +11012,12 @@ class MemoManager {
                 break;
         }
         
-        // 排序：未完成在前，按优先级、截止日期排序
+        // 排序：失败任务与已完成任务一样排在后面
         const priorityOrder = { high: 0, medium: 1, low: 2, none: 3 };
         filteredMemos.sort((a, b) => {
-            if (a.completed !== b.completed) return a.completed ? 1 : -1;
+            const aTerminal = a.completed || a.status === 'failed';
+            const bTerminal = b.completed || b.status === 'failed';
+            if (aTerminal !== bTerminal) return aTerminal ? 1 : -1;
             const pa = priorityOrder[a.priority] ?? 3;
             const pb = priorityOrder[b.priority] ?? 3;
             if (pa !== pb) return pa - pb;
@@ -11000,76 +11136,18 @@ class MemoManager {
         this.renderPanelTaskList();
     }
     
-    // ===================== Markdown 渲染（复用 vendor 库） =====================
+    // ===================== Markdown 渲染（委托 MarkdownRenderer） =====================
 
     _renderMemoMarkdown(text) {
-        if (!text) return '';
-        try {
-            if (typeof marked !== 'undefined' && marked.parse) {
-                const raw = marked.parse(text, { breaks: true, gfm: true });
-                if (typeof DOMPurify !== 'undefined') {
-                    return DOMPurify.sanitize(raw, {
-                        ADD_ATTR: ['target', 'rel', 'data-mermaid-id'],
-                        ADD_TAGS: ['svg', 'g', 'path', 'line', 'rect', 'circle', 'text', 'tspan', 'polygon', 'polyline', 'marker', 'defs', 'style', 'foreignObject'],
-                        ALLOWED_TAGS: [
-                            'h1','h2','h3','h4','h5','h6','p','br','hr',
-                            'strong','em','del','s','blockquote',
-                            'ul','ol','li','a','img','code','pre',
-                            'table','thead','tbody','tr','th','td',
-                            'input','div','span',
-                        ],
-                    });
-                }
-                return raw;
-            }
-        } catch (e) {
-            console.warn('Markdown 渲染失败，回退纯文本:', e);
-        }
-        return this.escapeHtml(text).replace(/\n/g, '<br>');
+        return MarkdownRenderer.render(text);
     }
 
     _renderMemoMermaid(containerEl) {
-        if (typeof mermaid === 'undefined' || !containerEl) return;
-        const blocks = containerEl.querySelectorAll('.kw-mermaid-block[data-mermaid-id]');
-        if (blocks.length === 0) return;
-        try {
-            mermaid.initialize({
-                startOnLoad: false,
-                theme: 'dark',
-                themeVariables: {
-                    darkMode: true,
-                    background: 'transparent',
-                    primaryColor: '#3b82f6',
-                    primaryTextColor: '#e2e8f0',
-                    primaryBorderColor: '#4b5563',
-                    lineColor: '#6b7280',
-                    secondaryColor: '#1e3a5f',
-                    tertiaryColor: '#1a1a2e',
-                },
-                flowchart: { htmlLabels: true, curve: 'basis' },
-                sequence: { showSequenceNumbers: true },
-            });
-            blocks.forEach(async (block) => {
-                const id = block.dataset.mermaidId;
-                const preEl = block.querySelector('pre.mermaid');
-                if (!preEl) return;
-                const definition = preEl.textContent;
-                try {
-                    const { svg } = await mermaid.render(id, definition);
-                    block.innerHTML = svg;
-                    block.classList.add('kw-mermaid-rendered');
-                } catch (err) {
-                    block.innerHTML = `<pre class="kw-mermaid-error"><code>Mermaid 渲染失败: ${err.message}\n\n${definition}</code></pre>`;
-                }
-            });
-        } catch (e) {
-            console.warn('Mermaid 初始化失败:', e);
-        }
+        MarkdownRenderer.renderMermaid(containerEl);
     }
 
     _hasMarkdownSyntax(text) {
-        if (!text) return false;
-        return /^#{1,3} |^\d+\. |^- |\*\*|`{1,3}|^> |^---|\[.+\]\(.+\)|!\[/.test(text);
+        return MarkdownRenderer.hasMarkdownSyntax(text);
     }
 
     _applyMdAction(action) {
@@ -12306,7 +12384,7 @@ class MemoManager {
     // ===================== 紧急任务浮动气泡 =====================
 
     _getUrgencyLevel(task) {
-        if (!task.dueDate || task.completed) return null;
+        if (!task.dueDate || task.completed || task.status === 'failed') return null;
         const today = this.getTodayDate();
         const d = new Date();
         const tomorrow = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).toISOString().split('T')[0];

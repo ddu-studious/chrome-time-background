@@ -719,7 +719,18 @@ class TechTicker {
             }
             
             this._showSaveToast('已保存为任务');
-            
+
+            if (typeof activityLogger !== 'undefined') {
+                activityLogger.log({
+                    type: ActivityLogger.TYPES.TICKER_SAVE,
+                    module: ActivityLogger.MODULES.TICKER,
+                    title: `从热榜保存为任务「${item.title}」`,
+                    targetId: newMemo.id,
+                    targetTitle: item.title,
+                    meta: { source: sourceName, url: item.url || '' }
+                });
+            }
+
             btn.classList.add('saved');
             setTimeout(() => btn.classList.remove('saved'), 2000);
         } catch (err) {
@@ -1606,8 +1617,8 @@ class TaskTicker {
         
         const today = new Date().toISOString().split('T')[0];
         
-        // 筛选未完成任务
-        const pending = memos.filter(m => !m.completed);
+        // 筛选未完成任务（排除失败任务）
+        const pending = memos.filter(m => !m.completed && m.status !== 'failed');
         const completed = memos.filter(m => m.completed);
         
         this.totalCount = memos.length;
@@ -1787,7 +1798,7 @@ class TaskTicker {
         const today = new Date().toISOString().split('T')[0];
         let dueHtml = '';
         if (task.dueDate) {
-            const isOverdue = task.dueDate < today && !task.completed;
+            const isOverdue = task.dueDate < today && !task.completed && task.status !== 'failed';
             const isToday = task.dueDate === today;
             dueHtml = `<span class="ttp-due ${isOverdue ? 'overdue' : ''} ${isToday ? 'today' : ''}">
                 <i class="fas fa-calendar-alt"></i> ${task.dueDate}${isOverdue ? ' 已过期' : ''}${isToday ? ' 今天' : ''}

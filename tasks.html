@@ -26,6 +26,7 @@
                 <span class="stat-item stat-active" title="进行中"><i class="fas fa-spinner"></i> <span id="stat-active">0</span></span>
                 <span class="stat-item stat-done" title="已完成"><i class="fas fa-check"></i> <span id="stat-done">0</span></span>
                 <span class="stat-item stat-overdue" title="已过期"><i class="fas fa-exclamation-triangle"></i> <span id="stat-overdue">0</span></span>
+                <span class="stat-item stat-failed" title="已失败"><i class="fas fa-times-circle"></i> <span id="stat-failed">0</span></span>
             </div>
         </div>
     </header>
@@ -49,6 +50,7 @@
                     <option value="in_progress">进行中</option>
                     <option value="not_started">未开始</option>
                     <option value="completed">已完成</option>
+                    <option value="failed">已失败</option>
                     <option value="overdue">已过期</option>
                     <option value="today">今日到期</option>
                 </select>
@@ -155,6 +157,7 @@
     <script src="vendor/purify.min.js"></script>
     <script src="vendor/highlight.min.js"></script>
     <script src="vendor/mermaid.tiny.min.js"></script>
+    <script src="js/markdown-renderer.js"></script>
     <script src="js/chrome-shim.js"></script>
     <script src="js/tasks.js"></script>
 </body>
