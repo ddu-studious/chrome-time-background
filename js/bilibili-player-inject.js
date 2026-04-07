@@ -530,9 +530,40 @@
         }
     });
 
+    function getBvidFromUrl() {
+        const m = location.pathname.match(/\/(BV[0-9A-Za-z]+)/);
+        return m ? m[1] : '';
+    }
+
+    let _currentPage = 0;
+
+    function detectCurrentPage() {
+        const urlPage = getPartInfoFromUrl();
+        if (urlPage > 0) { _currentPage = urlPage; return; }
+        const activeSelectors = [
+            '.bpx-player-eplist-item.bpx-state-active',
+            '.video-episode-card.active',
+            '.video-pod__item.active',
+            '.video-pod__item.on',
+            '.video-sections-item_active',
+        ];
+        for (const sel of activeSelectors) {
+            const el = document.querySelector(sel);
+            if (!el) continue;
+            const parent = el.parentElement;
+            if (!parent) continue;
+            const baseSel = sel.replace(/\.active|\.on|\.bpx-state-active|_active/g, '').trim();
+            const siblings = parent.querySelectorAll(baseSel);
+            const idx = Array.from(siblings.length > 1 ? siblings : parent.children).indexOf(el);
+            if (idx >= 0) { _currentPage = idx + 1; return; }
+        }
+        if (!_currentPage) _currentPage = 1;
+    }
+
     function postState(video) {
         if (!video) return;
         try {
+            detectCurrentPage();
             window.parent.postMessage({
                 type: MSG_PREFIX + 'state',
                 speed: video.playbackRate || 1,
@@ -541,6 +572,8 @@
                 paused: video.paused,
                 volume: video.volume,
                 muted: video.muted,
+                bvid: getBvidFromUrl(),
+                page: _currentPage || 1,
             }, '*');
         } catch (_) {}
     }

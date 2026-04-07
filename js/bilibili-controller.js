@@ -34,12 +34,14 @@ class BilibiliController {
         this._commentPage = 1;
         this._commentLoading = false;
         this._commentsOpen = false;
+        this._watchMemory = {};
     }
 
     async init() {
         this._injectDOM();
         this._bindEvents();
         await this._restorePlayerPrefs();
+        await this._loadWatchMemory();
         try {
             const loginInfo = await this._checkLogin();
             this._loggedIn = loginInfo.loggedIn;
@@ -89,6 +91,28 @@ class BilibiliController {
                 }
             });
         } catch {}
+    }
+
+    async _loadWatchMemory() {
+        try {
+            const { biliWatchMemory } = await chrome.storage.local.get('biliWatchMemory');
+            this._watchMemory = biliWatchMemory || {};
+        } catch {}
+    }
+
+    _saveWatchMemory(bvid, page, currentTime) {
+        if (!bvid) return;
+        this._watchMemory[bvid] = { page, time: currentTime, ts: Date.now() };
+        const keys = Object.keys(this._watchMemory);
+        if (keys.length > 200) {
+            const sorted = keys.sort((a, b) => (this._watchMemory[a].ts || 0) - (this._watchMemory[b].ts || 0));
+            for (let i = 0; i < keys.length - 200; i++) delete this._watchMemory[sorted[i]];
+        }
+        try { chrome.storage.local.set({ biliWatchMemory: this._watchMemory }); } catch {}
+    }
+
+    _getWatchMemory(bvid) {
+        return bvid ? (this._watchMemory[bvid] || null) : null;
     }
 
     // ===================== API =====================
@@ -226,7 +250,35 @@ class BilibiliController {
     async _fetchWatchlater() {
         if (!this._loggedIn) return [];
         const resp = await this._biliApi('/x/v2/history/toview');
-        return (resp?.data?.list || []).map(v => this._normalizeVideo(v));
+        const rawList = resp?.data?.list || [];
+        const items = rawList.map(v => {
+            const normalized = this._normalizeVideo(v);
+            if (!normalized.watchPage && v.videos > 1 && v.cid) {
+                normalized._pendingCid = v.cid;
+                normalized._bvid = v.bvid;
+            }
+            return normalized;
+        });
+        await this._resolveWatchPages(items);
+        return items;
+    }
+
+    async _resolveWatchPages(items) {
+        const pending = items.filter(v => v._pendingCid);
+        if (!pending.length) return;
+        const tasks = pending.slice(0, 5).map(async (v) => {
+            try {
+                const info = await this._biliApi('/x/web-interface/view', { bvid: v._bvid || v.bvid });
+                const pages = info?.data?.pages;
+                if (Array.isArray(pages)) {
+                    const matched = pages.find(p => p.cid === v._pendingCid);
+                    if (matched) v.watchPage = matched.page || 0;
+                }
+            } catch {}
+            delete v._pendingCid;
+            delete v._bvid;
+        });
+        await Promise.all(tasks);
     }
 
     async _loadFavoritePanel() {
@@ -889,6 +941,14 @@ class BilibiliController {
             if (e.data.type === 'bili-ext-state') {
                 this._playerState = e.data;
                 this._tryPendingSeek(e.data);
+                if (e.data.bvid && e.data.page > 0 && e.data.currentTime > 5) {
+                    const memKey = `${e.data.bvid}:${e.data.page}`;
+                    if (memKey !== this._lastMemKey || Date.now() - (this._lastMemTs || 0) > 15000) {
+                        this._lastMemKey = memKey;
+                        this._lastMemTs = Date.now();
+                        this._saveWatchMemory(e.data.bvid, e.data.page, Math.floor(e.data.currentTime));
+                    }
+                }
             } else if (e.data.type === 'bili-ext-quality-info') {
                 this._onQualityInfo(e.data);
             } else if (e.data.type === 'bili-ext-title-info') {
@@ -1554,6 +1614,14 @@ class BilibiliController {
     // ===================== Player =====================
 
     async _playItem(item) {
+        if (!item.watchPage && item.bvid) {
+            const mem = this._getWatchMemory(item.bvid);
+            if (mem && mem.page > 1) {
+                item.watchPage = mem.page;
+                if (!item.progressSec && mem.time > 0) item.progressSec = mem.time;
+            }
+        }
+
         this._currentVideo = item;
         this._pendingSeek = item.progressSec > 0 ? item.progressSec : null;
         this._seekRetries = 0;
