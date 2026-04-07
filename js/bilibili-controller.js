@@ -888,10 +888,6 @@ class BilibiliController {
             if (!e.data || typeof e.data.type !== 'string') return;
             if (e.data.type === 'bili-ext-state') {
                 this._playerState = e.data;
-                if (e.data.speed && e.data.speed !== this._currentSpeed) {
-                    this._currentSpeed = e.data.speed;
-                    this._updateSpeedUI();
-                }
                 this._tryPendingSeek(e.data);
             } else if (e.data.type === 'bili-ext-quality-info') {
                 this._onQualityInfo(e.data);

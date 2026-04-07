@@ -16,6 +16,7 @@
     let _reportTimer = null;
     let _qualitySent = false;
     let _userQualityOverride = false;
+    let _lastSetSpeed = 0;
 
     const IS_IFRAME = window !== window.top;
     const IS_FULL_PAGE = /www\.bilibili\.com\/(video|bangumi)/.test(location.hostname + location.pathname);
@@ -469,9 +470,12 @@
         switch (cmd) {
             case 'set-speed': {
                 const speed = parseFloat(e.data.speed);
-                if (video && speed > 0 && speed <= 16) {
-                    video.playbackRate = speed;
-                    postState(video);
+                if (speed > 0 && speed <= 16) {
+                    _lastSetSpeed = speed;
+                    if (video) {
+                        video.playbackRate = speed;
+                        postState(video);
+                    }
                 }
                 break;
             }
@@ -718,6 +722,15 @@
                 const v = findVideo();
                 if (!v) { clearInterval(_reportTimer); return; }
                 video = v;
+                if (_lastSetSpeed > 0 && video.playbackRate !== _lastSetSpeed) {
+                    video.playbackRate = _lastSetSpeed;
+                }
+                _qualitySent = false;
+                _eplistScrollDone = false;
+                bindVideoEvents(video);
+            }
+            if (_lastSetSpeed > 0 && video.playbackRate !== _lastSetSpeed) {
+                video.playbackRate = _lastSetSpeed;
             }
             postState(video);
             postTitleInfo();
@@ -725,8 +738,19 @@
             if (!_autoQualityAttempted) autoSetBestQuality();
         }, 2000);
 
+        bindVideoEvents(video);
+    }
+
+    function bindVideoEvents(video) {
+        if (video._biliExtBound) return;
+        video._biliExtBound = true;
         video.addEventListener('ratechange', () => postState(video));
-        video.addEventListener('play', () => postState(video));
+        video.addEventListener('play', () => {
+            postState(video);
+            if (_lastSetSpeed > 0 && video.playbackRate !== _lastSetSpeed) {
+                video.playbackRate = _lastSetSpeed;
+            }
+        });
         video.addEventListener('pause', () => postState(video));
         video.addEventListener('volumechange', () => postState(video));
     }
