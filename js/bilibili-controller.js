@@ -1,16 +1,15 @@
 /**
- * 哔哩哔哩集成控制器 v3.15.0
+ * 哔哩哔哩集成控制器 v3.16.0
  * 技术方案：Embed Player + Cookie API + declarativeNetRequest Cookie 注入
- * 功能：热门/历史/稍后看/收藏/排行/课程/关注 七分类 + 搜索 + 嵌入播放器
- * v3.15.0: DNR Cookie 注入（解决嵌入播放器第三方 Cookie 隔离导致画质受限）
- *          + 允许跳转到 B 站站内 + 修复画质 toast 显示 [object Object]
+ * 功能：推荐/热门/历史/稍后看/收藏/排行/课程/关注 八分类 + 搜索 + 嵌入播放器
+ * v3.16.0: 新增个性化推荐 tab（换一换）+ 浮层刷新按钮
  */
 class BilibiliController {
     constructor() {
         this._el = null;
         this._panelOpen = false;
         this._sidebarOpen = true;
-        this._currentTab = 'popular';
+        this._currentTab = 'recommend';
         this._currentVideo = null;
         this._loggedIn = false;
         this._userMid = 0;
@@ -35,6 +34,7 @@ class BilibiliController {
         this._commentLoading = false;
         this._commentsOpen = false;
         this._watchMemory = {};
+        this._rcmdFreshIdx = 1;
     }
 
     async init() {
@@ -60,11 +60,11 @@ class BilibiliController {
     async _restoreLastTab() {
         try {
             const { biliLastTab } = await chrome.storage.local.get('biliLastTab');
-            if (biliLastTab && ['popular', 'history', 'watchlater', 'favorite', 'ranking', 'course', 'following'].includes(biliLastTab)) {
+            if (biliLastTab && ['recommend', 'popular', 'history', 'watchlater', 'favorite', 'ranking', 'course', 'following'].includes(biliLastTab)) {
                 return biliLastTab;
             }
         } catch {}
-        return 'popular';
+        return 'recommend';
     }
 
     _saveLastTab(tab) {
@@ -168,6 +168,9 @@ class BilibiliController {
     _refreshCurrentTab() {
         const tab = this._currentTab;
         delete this._cache[tab];
+        if (tab === 'recommend') {
+            this._rcmdFreshIdx++;
+        }
         if (tab === 'following') {
             this._followGroups = null;
             Object.keys(this._cache).forEach(k => { if (k.startsWith('following_')) delete this._cache[k]; });
@@ -222,6 +225,7 @@ class BilibiliController {
         try {
             let items = [];
             switch (tab) {
+                case 'recommend': items = await this._fetchRecommend(); break;
                 case 'popular':   items = await this._fetchPopular(); break;
                 case 'history':   items = await this._fetchHistory(); break;
                 case 'watchlater':items = await this._fetchWatchlater(); break;
@@ -234,6 +238,82 @@ class BilibiliController {
         } finally {
             this._loading = false;
         }
+    }
+
+    async _fetchRecommend() {
+        const resp = await this._biliApi('/x/web-interface/wbi/index/top/feed/rcmd', {
+            fresh_type: 4, ps: 12, fresh_idx: this._rcmdFreshIdx,
+            fresh_idx_1h: this._rcmdFreshIdx, fetch_row: 4
+        });
+        return (resp?.data?.item || [])
+            .filter(v => v.bvid && v.goto === 'av')
+            .map(v => this._normalizeRcmd(v));
+    }
+
+    async _shuffleRecommend() {
+        if (this._loading) return;
+        this._rcmdFreshIdx++;
+        delete this._cache['recommend'];
+        this._loading = true;
+        this._showListLoading();
+        try {
+            const items = await this._fetchRecommend();
+            this._cache['recommend'] = items;
+            this._renderRecommendList(items);
+        } catch (e) {
+            this._showListError('recommend', e.message);
+        } finally {
+            this._loading = false;
+        }
+    }
+
+    _normalizeRcmd(v) {
+        const dur = v.duration || 0;
+        return {
+            bvid: v.bvid || '',
+            aid: v.id || 0,
+            title: v.title || '',
+            cover: this._httpsCover(v.pic || ''),
+            author: v.owner?.name || '',
+            mid: v.owner?.mid || 0,
+            duration: this._fmtDuration(dur),
+            durationSec: dur,
+            views: this._fmtNum(v.stat?.view || 0),
+            danmaku: this._fmtNum(v.stat?.danmaku || 0),
+            likes: this._fmtNum(v.stat?.like || 0),
+            coins: '', favorites: '', shares: '',
+            pubdate: v.pubdate || 0,
+            pubdateStr: this._fmtDate(v.pubdate || 0),
+            tname: v.goto || '',
+            progress: 0,
+            progressSec: 0,
+            totalPages: 1,
+            watchPage: 0,
+            rcmdReason: v.rcmd_reason?.content || '',
+            type: 'video',
+        };
+    }
+
+    _renderRecommendList(items) {
+        const listEl = this._el.querySelector('#bili-list');
+        const shuffleBar = `<div class="bili-rcmd-shuffle-bar">
+            <button class="bili-rcmd-shuffle-btn" id="bili-rcmd-shuffle">
+                <i class="fas fa-sync-alt"></i><span>换一换</span>
+            </button>
+        </div>`;
+        if (!items.length) {
+            listEl.innerHTML = shuffleBar + '<div class="bili-list-msg"><i class="fas fa-inbox"></i> 暂无推荐</div>';
+        } else {
+            listEl.innerHTML = shuffleBar + items.map((v, i) => this._renderVideoItem(v, i, 'recommend', false)).join('');
+            this._bindListItemEvents(listEl, items);
+        }
+        listEl.querySelector('#bili-rcmd-shuffle')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const btn = e.currentTarget;
+            btn.classList.add('bili-shuffling');
+            this._shuffleRecommend();
+            setTimeout(() => btn.classList.remove('bili-shuffling'), 800);
+        });
     }
 
     async _fetchPopular() {
@@ -684,9 +764,10 @@ class BilibiliController {
             mid: v.author_mid || 0,
             duration: this._fmtDuration(dur),
             durationSec: dur,
-            views: this._fmtNum(v.view_at || 0),
+            views: '',
             danmaku: '',
             likes: '', coins: '', favorites: '', shares: '',
+            viewedAt: v.view_at ? this._fmtDate(v.view_at) : '',
             pubdate: 0, pubdateStr: '',
             tname: v.tag_name || '',
             progress: prog > 0 && dur > 0 ? Math.round(prog / dur * 100) : 0,
@@ -785,7 +866,8 @@ class BilibiliController {
                     <button id="bili-search-btn"><i class="fas fa-search"></i></button>
                 </div>
                 <div class="bili-nav-pills">
-                    <button class="bili-pill active" data-tab="popular"><i class="fas fa-fire"></i>热门</button>
+                    <button class="bili-pill active" data-tab="recommend"><i class="fas fa-thumbs-up"></i>推荐</button>
+                    <button class="bili-pill" data-tab="popular"><i class="fas fa-fire"></i>热门</button>
                     <button class="bili-pill" data-tab="history"><i class="fas fa-history"></i>历史</button>
                     <button class="bili-pill" data-tab="watchlater"><i class="fas fa-clock"></i>稍后看</button>
                     <button class="bili-pill" data-tab="favorite"><i class="fas fa-star"></i>收藏</button>
@@ -872,16 +954,19 @@ class BilibiliController {
                 </div>
                 <div class="bili-sidebar visible" id="bili-sidebar">
                     <div class="bili-stabs">
-                        <div class="bili-stab active" data-tab="popular"><i class="fas fa-fire"></i>热门</div>
+                        <div class="bili-stab active" data-tab="recommend"><i class="fas fa-thumbs-up"></i>推荐</div>
+                        <div class="bili-stab" data-tab="popular"><i class="fas fa-fire"></i>热门</div>
                         <div class="bili-stab" data-tab="history"><i class="fas fa-history"></i>历史</div>
                         <div class="bili-stab" data-tab="watchlater"><i class="fas fa-clock"></i>稍后看</div>
                         <div class="bili-stab" data-tab="favorite"><i class="fas fa-star"></i>收藏</div>
                         <div class="bili-stab" data-tab="ranking"><i class="fas fa-trophy"></i>排行</div>
                         <div class="bili-stab" data-tab="course"><i class="fas fa-graduation-cap"></i>课程</div>
                         <div class="bili-stab" data-tab="following"><i class="fas fa-users"></i>关注</div>
-                        <button class="bili-refresh-btn" id="bili-refresh-btn" title="刷新当前列表"><i class="fas fa-sync-alt"></i></button>
                     </div>
-                    <div class="bili-list" id="bili-list"></div>
+                    <div class="bili-list-wrap" id="bili-list-wrap">
+                        <div class="bili-list" id="bili-list"></div>
+                        <button class="bili-float-refresh" id="bili-float-refresh" title="刷新当前列表"><i class="fas fa-sync-alt"></i></button>
+                    </div>
                 </div>
             </div>`;
         document.body.appendChild(el);
@@ -901,7 +986,7 @@ class BilibiliController {
 
         el.querySelector('#bili-sidebar-toggle').addEventListener('click', () => this._toggleSidebar());
 
-        el.querySelector('#bili-refresh-btn').addEventListener('click', (e) => {
+        el.querySelector('#bili-float-refresh').addEventListener('click', (e) => {
             e.stopPropagation();
             const btn = e.currentTarget;
             btn.classList.add('bili-refreshing');
@@ -1478,6 +1563,10 @@ class BilibiliController {
     }
 
     _renderList(tab, items) {
+        if (tab === 'recommend') {
+            this._renderRecommendList(items);
+            return;
+        }
         const listEl = this._el.querySelector('#bili-list');
         if (!items.length) {
             const needLogin = ['history', 'watchlater', 'favorite'].includes(tab) && !this._loggedIn;
@@ -1537,6 +1626,15 @@ class BilibiliController {
         }
         const pagesBadge = v.totalPages > 1 && !v.watchPage
             ? `<span class="bili-item-pages">${v.totalPages}P</span>` : '';
+        const rcmdBadge = v.rcmdReason ? `<span class="bili-item-rcmd-tag">${this._esc(v.rcmdReason)}</span>` : '';
+        let metricHtml;
+        if (v.viewedAt) {
+            metricHtml = `<span><i class="fas fa-clock"></i> ${this._esc(v.viewedAt)}</span>`;
+        } else if (v.views) {
+            metricHtml = `<span><i class="fas fa-play"></i> ${v.views}</span>`;
+        } else {
+            metricHtml = '';
+        }
         return `<div class="bili-item${isPlaying ? ' playing' : ''}" data-idx="${idx}">
             ${rankHtml}
             <img class="bili-item-cover" src="${this._esc(v.cover)}" alt="" loading="lazy">
@@ -1546,8 +1644,9 @@ class BilibiliController {
                 <div class="bili-item-title">${this._esc(v.title)}</div>
                 <div class="bili-item-meta">
                     <span><i class="fas fa-user"></i> ${this._esc(v.author)}</span>
-                    <span><i class="fas fa-play"></i> ${v.views}</span>
+                    ${metricHtml}
                     ${resumeHtml}
+                    ${rcmdBadge}
                 </div>
                 ${progressHtml}
             </div>
@@ -1655,7 +1754,16 @@ class BilibiliController {
         }
         this._el.querySelector('#bili-pi-title').textContent = titleText;
         this._el.querySelector('#bili-pi-author').textContent = item.author;
-        this._el.querySelector('#bili-pi-views').textContent = item.views || '';
+
+        const viewsEl = this._el.querySelector('#bili-pi-views');
+        const viewsIconEl = viewsEl?.parentElement?.querySelector('i');
+        if (item.viewedAt && !item.views) {
+            if (viewsIconEl) { viewsIconEl.className = 'fas fa-clock'; }
+            viewsEl.textContent = item.viewedAt;
+        } else {
+            if (viewsIconEl) { viewsIconEl.className = 'fas fa-play'; }
+            viewsEl.textContent = item.views || '';
+        }
         this._el.querySelector('#bili-pi-danmaku').textContent = item.danmaku || '';
 
         const dateEl = this._el.querySelector('#bili-pi-date');

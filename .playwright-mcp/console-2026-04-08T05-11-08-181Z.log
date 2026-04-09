@@ -1,0 +1,5 @@
+[    4566ms] [LOG] Download the Vue Devtools for a better development experience:
+https://github.com/vuejs/vue-devtools @ https://s1.hdslb.com/bfs/static/history-record/app_8186959b.js:32
+[   12596ms] [LOG] [bili-Mirror]:333.880-没有对应配置,返回默认配置 @ https://s1.hdslb.com/bfs/seed/jinkela/short/b-mirror/biliMirror.umd.mini.js:0
+[   12629ms] [INFO] %c bili-fe-mirror %c v2.0.18  padding: 2px 6px; border-radius: 3px 0 0 3px; color: #fff; background: #FF6699; font-weight: bold; padding: 2px 6px; border-radius: 0 3px 3px 0; color: #fff; background: #FF9999; font-weight: bold; @ https://s1.hdslb.com/bfs/seed/jinkela/short/b-mirror/biliMirror.umd.mini.js:1
+[   12646ms] [LOG] 白屏检测是否正常 {status: ok, loop: 0, data: Object} @ https://www.bilibili.com/account/history:59

@@ -1715,6 +1715,7 @@
 
     const BILI_API_WHITELIST = [
         '/x/web-interface/popular',
+        '/x/web-interface/wbi/index/top/feed/rcmd',
         '/x/web-interface/nav',
         '/x/web-interface/history/cursor',
         '/x/v2/history/toview',
