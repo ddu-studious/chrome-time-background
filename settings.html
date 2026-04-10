@@ -125,6 +125,181 @@
                             <option value="60">1小时</option>
                         </select>
                     </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info">
+                            <span class="sp-field-label">优先展示中国风景</span>
+                            <span class="sp-field-hint">开启后，支持的数据源会优先搜索中国相关风景</span>
+                        </div>
+                        <label class="sp-toggle">
+                            <input type="checkbox" id="set-bgChinaFirst" checked>
+                            <span class="sp-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info">
+                            <span class="sp-field-label">启用视频背景</span>
+                            <span class="sp-field-hint">允许从 Pexels/Pixabay/Coverr 获取视频作为动态背景（耗流量）</span>
+                        </div>
+                        <label class="sp-toggle">
+                            <input type="checkbox" id="set-bgEnableVideo">
+                            <span class="sp-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info">
+                            <span class="sp-field-label">设置页也使用背景图</span>
+                            <span class="sp-field-hint">在本设置页面显示风景背景（默认关闭，保持简洁）</span>
+                        </div>
+                        <label class="sp-toggle">
+                            <input type="checkbox" id="set-bgSettingsPage">
+                            <span class="sp-toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="sp-card">
+                    <h3 class="sp-card-title">背景数据源</h3>
+                    <p class="sp-card-desc">勾选启用的数据源，需要 API Key 的源请填写密钥。无需密钥的源开箱即用。</p>
+
+                    <div class="sp-bg-source" data-source="wikimedia">
+                        <div class="sp-field">
+                            <div class="sp-field-info">
+                                <span class="sp-field-label">Wikimedia Commons</span>
+                                <span class="sp-field-hint">免费开源图库，无需密钥，含中国风景专属分类</span>
+                            </div>
+                            <label class="sp-toggle">
+                                <input type="checkbox" class="bg-source-toggle" data-source="wikimedia" checked>
+                                <span class="sp-toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="sp-bg-source" data-source="bing">
+                        <div class="sp-field">
+                            <div class="sp-field-info">
+                                <span class="sp-field-label">Bing 每日壁纸</span>
+                                <span class="sp-field-hint">每日精选 UHD 壁纸，无需密钥</span>
+                            </div>
+                            <label class="sp-toggle">
+                                <input type="checkbox" class="bg-source-toggle" data-source="bing" checked>
+                                <span class="sp-toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="sp-bg-source" data-source="unsplash">
+                        <div class="sp-field">
+                            <div class="sp-field-info">
+                                <span class="sp-field-label">Unsplash</span>
+                                <span class="sp-field-hint">高质量专业摄影图库，需要 <a href="https://unsplash.com/developers" target="_blank">API Key</a></span>
+                            </div>
+                            <label class="sp-toggle">
+                                <input type="checkbox" class="bg-source-toggle" data-source="unsplash">
+                                <span class="sp-toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="sp-field sp-bg-key-field" data-for="unsplash" style="display:none;">
+                            <div class="sp-field-info">
+                                <span class="sp-field-label">Access Key</span>
+                            </div>
+                            <input type="password" class="sp-input bg-api-key" data-source="unsplash" placeholder="输入 Unsplash Access Key">
+                        </div>
+                    </div>
+
+                    <div class="sp-bg-source" data-source="pexels">
+                        <div class="sp-field">
+                            <div class="sp-field-info">
+                                <span class="sp-field-label">Pexels</span>
+                                <span class="sp-field-hint">高清图片+视频，需要 <a href="https://www.pexels.com/api/" target="_blank">API Key</a></span>
+                            </div>
+                            <label class="sp-toggle">
+                                <input type="checkbox" class="bg-source-toggle" data-source="pexels">
+                                <span class="sp-toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="sp-field sp-bg-key-field" data-for="pexels" style="display:none;">
+                            <div class="sp-field-info">
+                                <span class="sp-field-label">API Key</span>
+                            </div>
+                            <input type="password" class="sp-input bg-api-key" data-source="pexels" placeholder="输入 Pexels API Key">
+                        </div>
+                    </div>
+
+                    <div class="sp-bg-source" data-source="pixabay">
+                        <div class="sp-field">
+                            <div class="sp-field-info">
+                                <span class="sp-field-label">Pixabay</span>
+                                <span class="sp-field-hint">图片+视频，需要 <a href="https://pixabay.com/api/docs/" target="_blank">API Key</a></span>
+                            </div>
+                            <label class="sp-toggle">
+                                <input type="checkbox" class="bg-source-toggle" data-source="pixabay">
+                                <span class="sp-toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="sp-field sp-bg-key-field" data-for="pixabay" style="display:none;">
+                            <div class="sp-field-info">
+                                <span class="sp-field-label">API Key</span>
+                            </div>
+                            <input type="password" class="sp-input bg-api-key" data-source="pixabay" placeholder="输入 Pixabay API Key">
+                        </div>
+                    </div>
+
+                    <div class="sp-bg-source" data-source="wallhaven">
+                        <div class="sp-field">
+                            <div class="sp-field-info">
+                                <span class="sp-field-label">Wallhaven</span>
+                                <span class="sp-field-hint">壁纸级高清图，SFW 内容无需密钥，<a href="https://wallhaven.cc/settings/account" target="_blank">可选 Key</a></span>
+                            </div>
+                            <label class="sp-toggle">
+                                <input type="checkbox" class="bg-source-toggle" data-source="wallhaven">
+                                <span class="sp-toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="sp-field sp-bg-key-field" data-for="wallhaven" style="display:none;">
+                            <div class="sp-field-info">
+                                <span class="sp-field-label">API Key（可选）</span>
+                            </div>
+                            <input type="password" class="sp-input bg-api-key" data-source="wallhaven" placeholder="可选，不填也能用">
+                        </div>
+                    </div>
+
+                    <div class="sp-bg-source" data-source="coverr">
+                        <div class="sp-field">
+                            <div class="sp-field-info">
+                                <span class="sp-field-label">Coverr</span>
+                                <span class="sp-field-hint">专业视频背景，需要 <a href="https://api.coverr.co" target="_blank">API Key</a>（需开启视频背景）</span>
+                            </div>
+                            <label class="sp-toggle">
+                                <input type="checkbox" class="bg-source-toggle" data-source="coverr">
+                                <span class="sp-toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="sp-field sp-bg-key-field" data-for="coverr" style="display:none;">
+                            <div class="sp-field-info">
+                                <span class="sp-field-label">API Key</span>
+                            </div>
+                            <input type="password" class="sp-input bg-api-key" data-source="coverr" placeholder="输入 Coverr API Key">
+                        </div>
+                    </div>
+
+                    <div class="sp-bg-source" data-source="nasa">
+                        <div class="sp-field">
+                            <div class="sp-field-info">
+                                <span class="sp-field-label">NASA APOD</span>
+                                <span class="sp-field-hint">每日天文美图，需要 <a href="https://api.nasa.gov/" target="_blank">API Key</a>（免费申请）</span>
+                            </div>
+                            <label class="sp-toggle">
+                                <input type="checkbox" class="bg-source-toggle" data-source="nasa">
+                                <span class="sp-toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="sp-field sp-bg-key-field" data-for="nasa" style="display:none;">
+                            <div class="sp-field-info">
+                                <span class="sp-field-label">API Key</span>
+                            </div>
+                            <input type="password" class="sp-input bg-api-key" data-source="nasa" placeholder="输入 NASA API Key">
+                        </div>
+                    </div>
                 </div>
 
                 <div class="sp-card">

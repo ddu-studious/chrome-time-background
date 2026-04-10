@@ -29,6 +29,13 @@
   ],
   "host_permissions": [
     "https://*.unsplash.com/*",
+    "https://api.unsplash.com/*",
+    "https://api.pexels.com/*",
+    "https://pixabay.com/*",
+    "https://www.bing.com/*",
+    "https://wallhaven.cc/*",
+    "https://api.coverr.co/*",
+    "https://api.nasa.gov/*",
     "https://devapi.qweather.com/*",
     "https://commons.wikimedia.org/*",
     "https://upload.wikimedia.org/*",
@@ -45,7 +52,8 @@
     "*://*.music.163.com/*",
     "*://*.bilibili.com/*",
     "*://api.bilibili.com/*",
-    "*://s.search.bilibili.com/*"
+    "*://s.search.bilibili.com/*",
+    "*://*.mashibing.com/*"
   ],
   "chrome_url_overrides": {
     "newtab": "index.html"
@@ -70,6 +78,11 @@
       "run_at": "document_start",
       "all_frames": true,
       "world": "MAIN"
+    },
+    {
+      "matches": ["*://www.mashibing.com/study*"],
+      "js": ["js/mashibing-tracker.js"],
+      "run_at": "document_idle"
     }
   ],
   "background": {

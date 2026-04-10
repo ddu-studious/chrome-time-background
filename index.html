@@ -8,6 +8,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
+    <!-- 视频背景层（v3.16.0 多源背景支持） -->
+    <video id="background-video" autoplay muted loop playsinline></video>
     <!-- 主布局容器 -->
     <div class="main-layout">
         <!-- 左侧：任务面板（常驻） -->
@@ -249,6 +251,10 @@
             <i class="fas fa-brain"></i>
         </button>
         <div class="dock-divider" aria-hidden="true"></div>
+        <button class="dock-btn" id="study-dock-btn" title="学习中心">
+            <i class="fas fa-graduation-cap"></i>
+        </button>
+        <div class="dock-divider" aria-hidden="true"></div>
         <button class="dock-btn" id="bili-dock-btn" title="哔哩哔哩">
             <i class="fab fa-bilibili"></i>
         </button>
@@ -286,6 +292,7 @@
     <script src="js/adaptive-overlay.js"></script>
     <script src="js/music-controller.js"></script>
     <script src="js/bilibili-controller.js"></script>
+    <script src="js/study-center.js"></script>
     <script src="js/main.js"></script>
   </body>
 </html>

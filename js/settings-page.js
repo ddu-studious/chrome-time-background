@@ -125,5 +125,142 @@
         if (navItem) navItem.click();
     }
 
-    loadSettings().then(bindEvents);
+    // ==================== 背景 Provider 设置 (v3.16.0) ====================
+
+    const BG_PROVIDER_DEFAULTS = {
+        enabledSources: ['wikimedia', 'bing'],
+        apiKeys: { unsplash: '', pexels: '', pixabay: '', wallhaven: '', coverr: '', nasa: '' },
+        enableVideoBackground: false,
+        chinaFirst: true,
+        settingsPageBackground: false,
+    };
+
+    let bgProviderSettings = { ...BG_PROVIDER_DEFAULTS, apiKeys: { ...BG_PROVIDER_DEFAULTS.apiKeys } };
+
+    async function loadBgProviderSettings() {
+        try {
+            const { backgroundProviderSettings } = await chrome.storage.sync.get('backgroundProviderSettings');
+            bgProviderSettings = {
+                ...BG_PROVIDER_DEFAULTS,
+                ...(backgroundProviderSettings || {}),
+                apiKeys: { ...BG_PROVIDER_DEFAULTS.apiKeys, ...((backgroundProviderSettings || {}).apiKeys || {}) },
+            };
+        } catch { /* defaults */ }
+        applyBgProviderUI();
+    }
+
+    async function saveBgProviderSettings() {
+        try {
+            await chrome.storage.sync.set({ backgroundProviderSettings: bgProviderSettings });
+        } catch (e) {
+            console.error('保存背景设置失败:', e);
+        }
+    }
+
+    function applyBgProviderUI() {
+        const chinaFirstEl = document.getElementById('set-bgChinaFirst');
+        if (chinaFirstEl) chinaFirstEl.checked = bgProviderSettings.chinaFirst !== false;
+
+        const videoEl = document.getElementById('set-bgEnableVideo');
+        if (videoEl) videoEl.checked = !!bgProviderSettings.enableVideoBackground;
+
+        const settingsBgEl = document.getElementById('set-bgSettingsPage');
+        if (settingsBgEl) settingsBgEl.checked = !!bgProviderSettings.settingsPageBackground;
+
+        document.querySelectorAll('.bg-source-toggle').forEach(toggle => {
+            const src = toggle.dataset.source;
+            toggle.checked = bgProviderSettings.enabledSources.includes(src);
+            const keyField = document.querySelector(`.sp-bg-key-field[data-for="${src}"]`);
+            if (keyField) keyField.style.display = toggle.checked ? '' : 'none';
+        });
+
+        document.querySelectorAll('.bg-api-key').forEach(input => {
+            const src = input.dataset.source;
+            input.value = bgProviderSettings.apiKeys[src] || '';
+        });
+
+        if (bgProviderSettings.settingsPageBackground) {
+            applySettingsPageBackground();
+        }
+    }
+
+    function bindBgProviderEvents() {
+        const chinaFirstEl = document.getElementById('set-bgChinaFirst');
+        if (chinaFirstEl) {
+            chinaFirstEl.addEventListener('change', () => {
+                bgProviderSettings.chinaFirst = chinaFirstEl.checked;
+                saveBgProviderSettings();
+            });
+        }
+
+        const videoEl = document.getElementById('set-bgEnableVideo');
+        if (videoEl) {
+            videoEl.addEventListener('change', () => {
+                bgProviderSettings.enableVideoBackground = videoEl.checked;
+                saveBgProviderSettings();
+            });
+        }
+
+        const settingsBgEl = document.getElementById('set-bgSettingsPage');
+        if (settingsBgEl) {
+            settingsBgEl.addEventListener('change', () => {
+                bgProviderSettings.settingsPageBackground = settingsBgEl.checked;
+                saveBgProviderSettings();
+                if (settingsBgEl.checked) {
+                    applySettingsPageBackground();
+                } else {
+                    removeSettingsPageBackground();
+                }
+            });
+        }
+
+        document.querySelectorAll('.bg-source-toggle').forEach(toggle => {
+            toggle.addEventListener('change', () => {
+                const src = toggle.dataset.source;
+                const set = new Set(bgProviderSettings.enabledSources);
+                if (toggle.checked) set.add(src); else set.delete(src);
+                bgProviderSettings.enabledSources = [...set];
+                saveBgProviderSettings();
+                const keyField = document.querySelector(`.sp-bg-key-field[data-for="${src}"]`);
+                if (keyField) keyField.style.display = toggle.checked ? '' : 'none';
+            });
+        });
+
+        document.querySelectorAll('.bg-api-key').forEach(input => {
+            const save = () => {
+                const src = input.dataset.source;
+                bgProviderSettings.apiKeys[src] = input.value.trim();
+                saveBgProviderSettings();
+            };
+            input.addEventListener('blur', save);
+            input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+        });
+    }
+
+    async function applySettingsPageBackground() {
+        try {
+            const response = await new Promise(resolve => {
+                chrome.runtime.sendMessage({ action: 'getBackgrounds' }, resolve);
+            });
+            if (response?.backgrounds?.length) {
+                const bg = response.backgrounds[Math.floor(Math.random() * response.backgrounds.length)];
+                if (bg.url) {
+                    document.body.style.backgroundImage = `url(${bg.url})`;
+                    document.body.style.backgroundSize = 'cover';
+                    document.body.style.backgroundPosition = 'center';
+                    document.body.classList.add('sp-has-bg');
+                }
+            }
+        } catch { /* ignore */ }
+    }
+
+    function removeSettingsPageBackground() {
+        document.body.style.backgroundImage = '';
+        document.body.classList.remove('sp-has-bg');
+    }
+
+    loadSettings().then(() => {
+        bindEvents();
+        loadBgProviderSettings().then(bindBgProviderEvents);
+    });
 })();

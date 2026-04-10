@@ -1,73 +1,99 @@
-// 获取背景图片数据
+// ==================== 背景系统（v3.16.0 多源 + 视频 + 定时切换）====================
+
 let backgroundImages = [];
+let _bgAutoSwitchTimer = null;
+
 chrome.runtime.sendMessage({ action: 'getBackgrounds' }, function(response) {
     if (response && response.backgrounds) {
         backgroundImages = response.backgrounds;
         initBackgrounds();
+        setupBackgroundAutoSwitch();
     }
 });
 
-// 初始化背景图片
-function initBackgrounds() {
-    if (backgroundImages.length > 0) {
-        const randomIndex = Math.floor(Math.random() * backgroundImages.length);
-        const background = backgroundImages[randomIndex];
-        
-        // 设置背景图片
+function _getVideoElement() {
+    let el = document.getElementById('background-video');
+    if (!el) {
+        el = document.createElement('video');
+        el.id = 'background-video';
+        el.autoplay = true;
+        el.muted = true;
+        el.loop = true;
+        el.playsInline = true;
+        document.body.prepend(el);
+    }
+    return el;
+}
+
+function _applyBackground(background) {
+    if (!background) return;
+    const video = _getVideoElement();
+
+    if (background.mediaType === 'video' && background.videoUrl) {
+        document.body.style.backgroundImage = 'none';
+        video.src = background.videoUrl;
+        video.poster = background.url || '';
+        video.style.display = 'block';
+        video.play().catch(() => {});
+    } else {
+        video.pause();
+        video.removeAttribute('src');
+        video.style.display = 'none';
         document.body.style.backgroundImage = `url(${background.url})`;
         document.body.style.backgroundSize = 'cover';
         document.body.style.backgroundPosition = 'center';
-        
-        // 自适应亮度检测
-        if (window.adaptiveOverlay) {
-            window.adaptiveOverlay.analyzeAndApply(background.url);
-        }
-        
-        // 更新背景信息
-        const creditElement = document.getElementById('background-credit');
-        if (creditElement) {
-            const licenseHtml = background.licenseUrl
-                ? ` · <a href="${background.licenseUrl}" target="_blank" rel="noreferrer">许可</a>`
-                : '';
-            const photographerText = background.photographer ? `摄影/来源：${background.photographer}` : '';
-            creditElement.innerHTML = `
-                <span class="location">${background.location}</span> - 
-                <span class="description" title="${photographerText}">${background.description}</span>
-                ${licenseHtml}
-            `;
-        }
+    }
+
+    if (window.adaptiveOverlay && background.url) {
+        window.adaptiveOverlay.analyzeAndApply(background.url);
+    }
+
+    const creditElement = document.getElementById('background-credit');
+    if (creditElement) {
+        const licenseHtml = background.licenseUrl
+            ? ` · <a href="${background.licenseUrl}" target="_blank" rel="noreferrer">许可</a>`
+            : '';
+        const photographerText = background.photographer ? `摄影/来源：${background.photographer}` : '';
+        const sourceTag = background.source && background.source !== 'fallback'
+            ? `<span class="bg-source-tag">${background.source}</span> ` : '';
+        creditElement.innerHTML = `
+            ${sourceTag}<span class="location">${background.location || ''}</span>${background.location && background.description ? ' - ' : ''}
+            <span class="description" title="${photographerText}">${background.description || ''}</span>
+            ${licenseHtml}
+        `;
     }
 }
 
-// 切换背景图片
+function initBackgrounds() {
+    if (backgroundImages.length > 0) {
+        const randomIndex = Math.floor(Math.random() * backgroundImages.length);
+        _applyBackground(backgroundImages[randomIndex]);
+    }
+}
+
 function changeBackground() {
     if (backgroundImages.length > 0) {
         const randomIndex = Math.floor(Math.random() * backgroundImages.length);
-        const background = backgroundImages[randomIndex];
-        
-        // 设置背景图片
-        document.body.style.backgroundImage = `url(${background.url})`;
-        
-        // 自适应亮度检测
-        if (window.adaptiveOverlay) {
-            window.adaptiveOverlay.analyzeAndApply(background.url);
-        }
-        
-        // 更新背景信息
-        const creditElement = document.getElementById('background-credit');
-        if (creditElement) {
-            const licenseHtml = background.licenseUrl
-                ? ` · <a href="${background.licenseUrl}" target="_blank" rel="noreferrer">许可</a>`
-                : '';
-            const photographerText = background.photographer ? `摄影/来源：${background.photographer}` : '';
-            creditElement.innerHTML = `
-                <span class="location">${background.location}</span> - 
-                <span class="description" title="${photographerText}">${background.description}</span>
-                ${licenseHtml}
-            `;
-        }
+        _applyBackground(backgroundImages[randomIndex]);
     }
 }
+
+function setupBackgroundAutoSwitch() {
+    if (_bgAutoSwitchTimer) { clearInterval(_bgAutoSwitchTimer); _bgAutoSwitchTimer = null; }
+
+    chrome.storage.sync.get('settings', ({ settings }) => {
+        const minutes = Number(settings?.backgroundInterval) || 30;
+        _bgAutoSwitchTimer = setInterval(() => {
+            if (backgroundImages.length > 1) changeBackground();
+        }, minutes * 60 * 1000);
+    });
+}
+
+document.addEventListener('visibilitychange', () => {
+    const video = document.getElementById('background-video');
+    if (!video) return;
+    if (document.hidden) { video.pause(); } else if (video.src) { video.play().catch(() => {}); }
+});
 
 // 注意：时间显示已由 clock.js 模块处理，此处不再重复更新
 // 避免多处同时更新导致的闪烁问题
@@ -191,6 +217,30 @@ async function initApp() {
         }
     } else {
         console.log('音乐播放器已禁用（性能设置）');
+    }
+
+    // 初始化学习中心
+    if (sm.getSetting('enableStudyCenter') !== false) {
+        try {
+            if (window.studyCenter && typeof window.studyCenter.init === 'function') {
+                window.studyCenter.init();
+            }
+            const studyDockBtn = document.getElementById('study-dock-btn');
+            if (studyDockBtn) {
+                studyDockBtn.addEventListener('click', () => {
+                    if (window.studyCenter) {
+                        window.studyCenter.toggle();
+                        studyDockBtn.classList.toggle('sc-active', window.studyCenter._panelOpen);
+                    }
+                });
+            }
+            console.log('学习中心初始化完成');
+        } catch (error) {
+            console.error('学习中心初始化失败:', error);
+        }
+    } else {
+        console.log('学习中心已禁用（性能设置）');
+        document.getElementById('study-dock-btn')?.classList.add('hidden');
     }
 
     // v3.6.0: 初始化哔哩哔哩控制器

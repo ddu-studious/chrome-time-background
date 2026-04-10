@@ -443,6 +443,71 @@ kbd {
     font-weight: 500;
 }
 
+/* ====== 背景数据源卡片 (v3.16.0) ====== */
+
+.sp-card-desc {
+    font-size: 13px;
+    color: var(--sp-text-secondary);
+    margin-bottom: 16px;
+    line-height: 1.5;
+}
+
+.sp-bg-source {
+    border-bottom: 1px solid var(--sp-border);
+    padding-bottom: 4px;
+    margin-bottom: 4px;
+}
+.sp-bg-source:last-child { border-bottom: none; margin-bottom: 0; }
+
+.sp-bg-source .sp-field-hint a {
+    color: var(--sp-accent);
+    text-decoration: none;
+}
+.sp-bg-source .sp-field-hint a:hover { text-decoration: underline; }
+
+.sp-bg-key-field { padding-left: 20px; }
+
+.bg-api-key {
+    width: 100%;
+    max-width: 340px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 13px;
+    letter-spacing: 0.5px;
+}
+
+/* ====== 设置页背景模式 ====== */
+
+body.sp-has-bg {
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+}
+
+body.sp-has-bg .sp-sidebar {
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+}
+
+body.sp-has-bg .sp-main {
+    background: transparent;
+}
+
+body.sp-has-bg .sp-card {
+    background: rgba(255,255,255,0.82);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+body.sp-has-bg .sp-page-header {
+    background: rgba(255,255,255,0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-radius: var(--sp-radius);
+    padding: 16px 20px;
+    margin-bottom: 16px;
+}
+
 /* ====== Responsive ====== */
 
 @media (max-width: 768px) {

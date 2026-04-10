@@ -27,6 +27,7 @@ class SettingsManager {
             enableSystemMonitor: false,    // 系统监控（默认关闭，较耗资源）
             enableKeywordScan: false,      // 关键字扫描（默认关闭）
             enableWarmTip: true,           // 温情提示
+            enableStudyCenter: true,       // 学习中心
             enableBilibili: true,          // 哔哩哔哩集成
             enableKnowledgeWall: true,     // 知识墙
             enableTaskTicker: true,        // 任务提醒滚动条

@@ -1,5 +1,7 @@
+importScripts('background-provider.js');
+
 (function() {
-    // 背景图片数据
+    // v3.16.0: 背景图片数据已迁移至 background-provider.js（多源 Provider 模块）
     const backgrounds = [
         {
             url: 'https://images.unsplash.com/photo-1547981609-4b6bfe67ca0b?auto=format&fit=crop&w=1920&q=80',
@@ -1846,19 +1848,26 @@
         if (message.action === 'getBackgrounds') {
             (async () => {
                 try {
-                    const dynamic = await getDynamicBackgrounds();
-                    if (dynamic && dynamic.length > 0) {
-                        sendResponse({ backgrounds: dynamic, source: 'dynamic' });
-                        return;
-                    }
+                    const result = await self.BackgroundProviderManager.getBackgrounds();
+                    sendResponse(result);
                 } catch (e) {
-                    // ignore and fallback
+                    console.warn('[getBackgrounds] Provider 异常，使用兜底:', e?.message);
+                    sendResponse({
+                        backgrounds: self.BackgroundProviderManager.FALLBACK_BACKGROUNDS,
+                        source: 'fallback'
+                    });
                 }
-
-                // 兜底：继续使用当前内置背景源
-                sendResponse({ backgrounds: backgrounds, source: 'fallback' });
             })();
-            return true; // 异步响应
+            return true;
+        }
+
+        if (message.action === 'getProviderMeta') {
+            sendResponse({
+                ok: true,
+                meta: self.BackgroundProviderManager.PROVIDER_META,
+                defaults: self.BackgroundProviderManager.DEFAULT_PROVIDER_SETTINGS,
+            });
+            return false;
         }
         
         if (message.action === 'extractWebContent') {
@@ -2216,6 +2225,16 @@
                 }
             })();
             return true;
+        }
+
+        if (message.action === 'study_progress_update') {
+            chrome.tabs.query({ url: 'chrome://newtab/*' }, (tabs) => {
+                for (const tab of tabs || []) {
+                    chrome.tabs.sendMessage(tab.id, message).catch(() => {});
+                }
+            });
+            sendResponse({ ok: true });
+            return false;
         }
 
         return false;

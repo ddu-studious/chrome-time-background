@@ -7070,17 +7070,30 @@ body {
     overflow: hidden;
 }
 
-#background-layer {
+/* v3.16.0: 视频背景层 */
+#background-video {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-    transition: opacity 0.5s ease-in-out;
+    object-fit: cover;
     z-index: 0;
+    display: none;
+}
+
+/* 来源标签 */
+.bg-source-tag {
+    display: inline-block;
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.7);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-right: 4px;
+    vertical-align: middle;
 }
 
 body::before {
@@ -17872,3 +17885,400 @@ body.bili-panel-open { overflow: hidden; }
 }
 
 .bili-fav-folder-btn.active .bili-ff-count { background: rgba(255,255,255,0.25); }
+
+/* ===== 学习中心 (StudyCenter) ===== */
+
+.study-center {
+    position: fixed;
+    top: 50%;
+    right: -500px;
+    transform: translateY(-50%);
+    z-index: 8000;
+    transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.study-center.visible {
+    right: 24px;
+}
+
+.sc-panel {
+    width: 420px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--panel-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: var(--border-panel);
+    border-radius: var(--radius-panel);
+    box-shadow: var(--shadow-panel);
+    overflow: hidden;
+    color: var(--text-primary);
+}
+
+.sc-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    background: var(--header-bg);
+    border-bottom: var(--header-border);
+}
+
+.sc-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+}
+
+.sc-title i {
+    font-size: 16px;
+    color: var(--accent-orange);
+}
+
+.sc-header-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.sc-btn {
+    width: var(--btn-close-size);
+    height: var(--btn-close-size);
+    border-radius: var(--btn-close-radius);
+    border: none;
+    background: var(--btn-close-bg);
+    color: var(--btn-close-color);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.sc-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
+}
+
+.sc-close-btn:hover {
+    background: var(--btn-close-hover-bg);
+    color: var(--btn-close-hover-color);
+}
+
+/* Stats Row */
+.sc-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    padding: 12px 18px;
+    border-bottom: var(--border-light);
+}
+
+.sc-stat-item {
+    text-align: center;
+}
+
+.sc-stat-num {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.2;
+}
+
+.sc-stat-unit {
+    font-size: 11px;
+    font-weight: 400;
+    opacity: 0.6;
+    margin-left: 1px;
+}
+
+.sc-stat-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+/* Body */
+.sc-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 12px;
+    max-height: calc(80vh - 200px);
+}
+
+.sc-body::-webkit-scrollbar { width: 4px; }
+.sc-body::-webkit-scrollbar-track { background: transparent; }
+.sc-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+.sc-body::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+
+.sc-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+}
+
+.sc-empty i {
+    font-size: 40px;
+    margin-bottom: 12px;
+    opacity: 0.4;
+}
+
+.sc-empty p {
+    margin: 4px 0;
+    font-size: 14px;
+}
+
+.sc-empty-hint {
+    font-size: 12px !important;
+    opacity: 0.6;
+}
+
+.hidden { display: none !important; }
+
+/* Course Card */
+.sc-card {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px;
+    margin-bottom: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: var(--radius-card);
+    transition: all 0.2s;
+    cursor: default;
+}
+
+.sc-card:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.sc-card.pinned {
+    border-color: rgba(255, 152, 0, 0.3);
+    background: rgba(255, 152, 0, 0.06);
+}
+
+.sc-card-left {
+    flex-shrink: 0;
+    display: flex;
+    align-items: flex-start;
+    padding-top: 2px;
+}
+
+.sc-card-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    color: #fff;
+}
+
+.sc-card-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.sc-card-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 3px;
+}
+
+.sc-card-section {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 5px;
+}
+
+.sc-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.sc-card-platform {
+    background: rgba(255,255,255,0.08);
+    padding: 1px 6px;
+    border-radius: 4px;
+}
+
+.sc-card-time i { margin-right: 3px; }
+
+/* Progress bar */
+.sc-card-progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sc-card-progress-bar {
+    flex: 1;
+    height: 4px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.sc-card-progress-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--accent-green), #4caf50);
+    transition: width 0.4s ease;
+}
+
+.sc-card-progress-text {
+    font-size: 11px;
+    color: var(--text-muted);
+    min-width: 30px;
+    text-align: right;
+}
+
+/* Card Actions */
+.sc-card-actions {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.sc-card:hover .sc-card-actions { opacity: 1; }
+
+.sc-card-actions button {
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    transition: all 0.15s;
+}
+
+.sc-card-actions button:hover {
+    background: rgba(255,255,255,0.1);
+    color: var(--text-primary);
+}
+
+.sc-card-open { color: var(--accent-green) !important; }
+.sc-card-open:hover { background: rgba(92, 216, 92, 0.15) !important; }
+
+.sc-card-pin .fa-thumbtack { transition: transform 0.2s; }
+.sc-card.pinned .sc-card-pin { color: var(--accent-orange) !important; }
+
+.sc-card-delete:hover { color: var(--accent-red) !important; background: rgba(255,107,107,0.15) !important; }
+
+/* Form */
+.sc-form {
+    padding: 16px 18px;
+}
+
+.sc-form-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 14px;
+    color: var(--text-primary);
+}
+
+.sc-form-row {
+    margin-bottom: 12px;
+}
+
+.sc-form-row label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.sc-form-row input,
+.sc-form-row select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: var(--radius-button);
+    background: rgba(255,255,255,0.06);
+    color: var(--text-primary);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+
+.sc-form-row input:focus,
+.sc-form-row select:focus {
+    border-color: var(--accent-orange);
+}
+
+.sc-form-row input::placeholder { color: var(--text-muted); }
+
+.sc-form-row select option {
+    background: #2a2a2a;
+    color: #f1f1f1;
+}
+
+.sc-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.sc-form-cancel,
+.sc-form-save {
+    padding: 7px 20px;
+    border: none;
+    border-radius: var(--radius-button);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.sc-form-cancel {
+    background: rgba(255,255,255,0.08);
+    color: var(--text-secondary);
+}
+
+.sc-form-cancel:hover {
+    background: rgba(255,255,255,0.14);
+    color: var(--text-primary);
+}
+
+.sc-form-save {
+    background: linear-gradient(135deg, #ff9800, #f57c00);
+    color: #fff;
+    font-weight: 600;
+}
+
+.sc-form-save:hover {
+    filter: brightness(1.1);
+}
+
+/* Dock button active state */
+.dock-btn.sc-active {
+    color: var(--accent-orange);
+    background: rgba(255, 152, 0, 0.15);
+}
