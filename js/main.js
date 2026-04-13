@@ -289,6 +289,14 @@ async function initApp() {
         console.log('温情提示已禁用（性能设置）');
     }
 
+    // 极简模式初始化
+    try {
+        await zenMode.init();
+        console.log('极简模式初始化完成');
+    } catch (error) {
+        console.error('极简模式初始化失败:', error);
+    }
+
     console.log('应用初始化完成（可能部分模块降级）');
 }
 
@@ -534,10 +542,82 @@ function initWarmTip() {
     setInterval(loadTip, 5 * 60 * 1000);
 }
 
+// ===================== Zen Mode — 极简模式 =====================
+
+const zenMode = {
+    _active: false,
+    _dblClickTimer: null,
+
+    async init() {
+        try {
+            const { zenModeActive } = await new Promise(resolve =>
+                chrome.storage.local.get('zenModeActive', resolve)
+            );
+            if (zenModeActive) this._apply(true, false);
+        } catch { /* ignore */ }
+
+        const zenBtn = document.getElementById('zen-mode-btn');
+        if (zenBtn) {
+            zenBtn.addEventListener('click', () => this.toggle());
+        }
+
+        const hint = document.getElementById('zen-exit-hint');
+        if (hint) {
+            hint.addEventListener('click', () => {
+                if (this._active) this.toggle();
+            });
+        }
+
+        document.addEventListener('dblclick', (e) => {
+            if (!this._active) return;
+            if (isInputFocused()) return;
+            const tag = e.target.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'BUTTON' || tag === 'A') return;
+            this.toggle();
+        });
+    },
+
+    toggle() {
+        this._apply(!this._active, true);
+    },
+
+    _apply(active, animate) {
+        this._active = active;
+        const body = document.body;
+        const zenBtn = document.getElementById('zen-mode-btn');
+        const hint = document.getElementById('zen-exit-hint');
+
+        if (active) {
+            body.classList.add('zen-mode');
+            if (zenBtn) {
+                zenBtn.classList.add('zen-active');
+                const icon = zenBtn.querySelector('i');
+                if (icon) { icon.className = 'fas fa-eye'; }
+            }
+            if (hint) {
+                hint.style.animation = 'none';
+                void hint.offsetWidth;
+                hint.style.animation = '';
+            }
+        } else {
+            body.classList.remove('zen-mode');
+            if (zenBtn) {
+                zenBtn.classList.remove('zen-active');
+                const icon = zenBtn.querySelector('i');
+                if (icon) { icon.className = 'fas fa-eye-slash'; }
+            }
+        }
+
+        chrome.storage.local.set({ zenModeActive: active });
+    }
+};
+
+window.zenMode = zenMode;
+
 // 设置键盘快捷键
 function setupKeyboardShortcuts() {
     document.addEventListener('keydown', (event) => {
-        // Ctrl/⌘ + Shift + B 切换背景（避免与任务空格键冲突）
+        // Ctrl/⌘ + Shift + B 切换背景
         const isSwitchBackground =
             !isInputFocused() &&
             event.shiftKey &&
@@ -547,6 +627,26 @@ function setupKeyboardShortcuts() {
         if (isSwitchBackground) {
             event.preventDefault();
             changeBackground();
+            return;
+        }
+
+        // Ctrl/⌘ + Shift + . 切换极简模式
+        const isToggleZen =
+            !isInputFocused() &&
+            event.shiftKey &&
+            (event.ctrlKey || event.metaKey) &&
+            event.code === 'Period';
+
+        if (isToggleZen) {
+            event.preventDefault();
+            zenMode.toggle();
+            return;
+        }
+
+        // Esc 退出极简模式
+        if (event.code === 'Escape' && zenMode._active) {
+            event.preventDefault();
+            zenMode.toggle();
         }
     });
     

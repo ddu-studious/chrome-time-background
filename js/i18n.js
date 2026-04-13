@@ -118,6 +118,8 @@ class I18nManager {
                 photographer: '摄影师',
                 location: '位置',
                 changeBackground: '按 Ctrl/⌘ + Shift + B 切换背景',
+                zenMode: '极简模式',
+                zenModeExit: '按 Ctrl/⌘ + Shift + . 或双击退出极简模式',
                 
                 // 任务优先级相关
                 priority: '优先级',
@@ -307,6 +309,8 @@ class I18nManager {
                 photographer: 'Photographer',
                 location: 'Location',
                 changeBackground: 'Press space to change background',
+                zenMode: 'Zen Mode',
+                zenModeExit: 'Press Ctrl/⌘ + Shift + . or double-click to exit Zen Mode',
                 
                 // 任务优先级相关
                 priority: 'Priority',

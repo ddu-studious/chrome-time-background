@@ -241,8 +241,15 @@
     </div>
     <div class="keyboard-hint">按 Ctrl/⌘ + Shift + B 切换背景</div>
     
-    <!-- v3.3.0: 统一右下角工具栏（4 按钮） -->
+    <!-- 极简模式退出提示 -->
+    <div class="zen-exit-hint" id="zen-exit-hint">按 Ctrl/⌘ + Shift + . 或双击退出极简模式</div>
+
+    <!-- v3.3.0: 统一右下角工具栏 -->
     <div class="dock-bar" id="dock-bar">
+        <button class="dock-btn" id="zen-mode-btn" title="极简模式">
+            <i class="fas fa-eye-slash"></i>
+        </button>
+        <div class="dock-divider" aria-hidden="true"></div>
         <button class="dock-btn" id="sys-monitor-toggle" title="扩展监控">
             <i class="fas fa-heartbeat"></i>
         </button>

@@ -386,7 +386,7 @@ class TechTicker {
     
     _getFetcherForSource(sourceKey) {
         const internationalFetchers = {
-            github: () => this.fetchGitHub(),
+            github: () => this.fetchGitHubTrending(),
             hackernews: () => this.fetchHackerNews(),
             reddit: () => this.fetchReddit(),
             devto: () => this.fetchDevTo(),
@@ -448,7 +448,61 @@ class TechTicker {
     
     // ========= 数据源 =========
     
-    async fetchGitHub() {
+    /**
+     * 通过 DailyHotApi 获取 GitHub Trending 日榜+周榜，合并去重
+     * 优先 hotapi，失败时回退到 GitHub Search API
+     */
+    async fetchGitHubTrending() {
+        try {
+            const [dailyResp, weeklyResp] = await Promise.allSettled([
+                fetch(`${this.DAILYHOT_API}/github?type=daily`),
+                fetch(`${this.DAILYHOT_API}/github?type=weekly`),
+            ]);
+
+            const parseResp = async (settled) => {
+                if (settled.status !== 'fulfilled' || !settled.value.ok) return [];
+                const json = await settled.value.json();
+                return (json.code === 200 && Array.isArray(json.data)) ? json.data : [];
+            };
+
+            const dailyItems = await parseResp(dailyResp);
+            const weeklyItems = await parseResp(weeklyResp);
+
+            const seen = new Set();
+            const merged = [];
+
+            const addItems = (items, badge) => {
+                for (const item of items) {
+                    const key = `${item.owner}/${item.repo}`.toLowerCase();
+                    if (seen.has(key)) continue;
+                    seen.add(key);
+                    merged.push({
+                        type: 'github',
+                        title: `${item.owner}/${item.repo}`,
+                        desc: (item.description || item.desc || '').substring(0, 100),
+                        url: item.url || `https://github.com/${item.owner}/${item.repo}`,
+                        icon: '🔥',
+                        metric: item.stars || this.formatHot(item.hot),
+                        metricType: 'stars',
+                        _badge: badge,
+                    });
+                }
+            };
+
+            addItems(dailyItems.slice(0, 8), '日榜');
+            addItems(weeklyItems.slice(0, 8), '周榜');
+
+            if (merged.length > 0) return merged.slice(0, 12);
+
+            console.warn('[Ticker] hotapi GitHub 无数据，回退 Search API');
+        } catch (err) {
+            console.warn('[Ticker] hotapi GitHub 请求失败，回退 Search API:', err);
+        }
+
+        return this._fetchGitHubFallback();
+    }
+
+    async _fetchGitHubFallback() {
         const weekAgo = this.getDateDaysAgo(7);
         const params = new URLSearchParams({
             q: `created:>${weekAgo}`,
@@ -460,7 +514,7 @@ class TechTicker {
         const resp = await fetch(url, { headers: { 'Accept': 'application/vnd.github.v3+json' } });
         if (!resp.ok) throw new Error(`GitHub ${resp.status}`);
         const data = await resp.json();
-        
+
         return (data.items || []).map(repo => ({
             type: 'github',
             title: repo.full_name,
