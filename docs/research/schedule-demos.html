@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>时间计划表 — 5种产品形态 Demo</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+<style>
+:root {
+    --glass-bg: rgba(20, 20, 35, 0.75);
+    --glass-border: rgba(255, 255, 255, 0.12);
+    --glass-hover: rgba(255, 255, 255, 0.06);
+    --text-primary: #e8e6f0;
+    --text-secondary: rgba(255, 255, 255, 0.6);
+    --accent: #a78bfa;
+    --accent-glow: rgba(167, 139, 250, 0.3);
+    --work-color: #60a5fa;
+    --study-color: #34d399;
+    --life-color: #fbbf24;
+    --rest-color: #f87171;
+    --radius: 14px;
+    --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: var(--font);
+    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+.page-header {
+    text-align: center;
+    padding: 40px 20px 20px;
+}
+.page-header h1 {
+    font-size: 28px;
+    font-weight: 600;
+    background: linear-gradient(135deg, #a78bfa, #60a5fa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+}
+.page-header p { color: var(--text-secondary); font-size: 14px; }
+
+.tab-nav {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px 20px;
+    flex-wrap: wrap;
+}
+.tab-btn {
+    padding: 10px 20px;
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    background: var(--glass-bg);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.3s;
+    backdrop-filter: blur(10px);
+}
+.tab-btn:hover { background: var(--glass-hover); color: var(--text-primary); }
+.tab-btn.active {
+    background: var(--accent-glow);
+    border-color: var(--accent);
+    color: #fff;
+    box-shadow: 0 0 20px var(--accent-glow);
+}
+.tab-btn .badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    background: rgba(167, 139, 250, 0.2);
+    color: var(--accent);
+}
+.tab-btn.active .badge { background: rgba(255,255,255,0.2); color: #fff; }
+
+.demo-container {
+    max-width: 520px;
+    margin: 20px auto;
+    padding: 0 20px 40px;
+}
+
+.demo-panel {
+    display: none;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    backdrop-filter: blur(16px);
+    overflow: hidden;
+    animation: fadeIn 0.3s ease;
+}
+.demo-panel.active { display: block; }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+.demo-desc {
+    padding: 16px 20px;
+    background: rgba(167, 139, 250, 0.05);
+    border-bottom: 1px solid var(--glass-border);
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+.demo-desc strong { color: var(--accent); }
+
+/* ===== 共用标签 ===== */
+.cat-tag {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 500;
+}
+.cat-tag.work { background: rgba(96,165,250,0.15); color: var(--work-color); }
+.cat-tag.study { background: rgba(52,211,153,0.15); color: var(--study-color); }
+.cat-tag.life { background: rgba(251,191,36,0.15); color: var(--life-color); }
+.cat-tag.rest { background: rgba(248,113,113,0.15); color: var(--rest-color); }
+
+/* ===== Demo A: 时间块日程表 ===== */
+.timeblock-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--glass-border);
+}
+.timeblock-header h3 { font-size: 15px; font-weight: 600; }
+.timeblock-header h3 i { color: var(--accent); margin-right: 8px; }
+.timeblock-add {
+    width: 32px; height: 32px;
+    border: 1px dashed var(--glass-border);
+    border-radius: 8px;
+    background: none;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+.timeblock-add:hover { background: var(--accent-glow); border-style: solid; }
+
+.timeblock-grid {
+    position: relative;
+    padding: 0 20px 20px;
+}
+.tb-row {
+    display: flex;
+    align-items: stretch;
+    min-height: 48px;
+    position: relative;
+}
+.tb-time {
+    width: 50px;
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--text-secondary);
+    padding-top: 4px;
+    text-align: right;
+    padding-right: 12px;
+}
+.tb-content {
+    flex: 1;
+    border-left: 1px solid rgba(255,255,255,0.06);
+    padding-left: 12px;
+    position: relative;
+}
+.tb-block {
+    padding: 8px 12px;
+    border-radius: 8px;
+    margin: 2px 0;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.tb-block:hover { transform: translateX(2px); }
+.tb-block.work-block { background: rgba(96,165,250,0.12); border-left: 3px solid var(--work-color); }
+.tb-block.study-block { background: rgba(52,211,153,0.12); border-left: 3px solid var(--study-color); }
+.tb-block.life-block { background: rgba(251,191,36,0.12); border-left: 3px solid var(--life-color); }
+.tb-block.rest-block { background: rgba(248,113,113,0.12); border-left: 3px solid var(--rest-color); }
+.tb-block .block-icon { font-size: 14px; }
+.tb-block .block-name { flex: 1; }
+.tb-block .block-dur { font-size: 11px; color: var(--text-secondary); }
+.tb-block.completed { opacity: 0.5; }
+.tb-block.completed .block-name { text-decoration: line-through; }
+
+.tb-now-line {
+    position: absolute;
+    left: 62px;
+    right: 20px;
+    height: 2px;
+    background: #f87171;
+    z-index: 2;
+}
+.tb-now-line::before {
+    content: '';
+    position: absolute;
+    left: -5px;
+    top: -3px;
+    width: 8px;
+    height: 8px;
+    background: #f87171;
+    border-radius: 50%;
+}
+.tb-empty {
+    min-height: 32px;
+}
+
+.tb-summary {
+    display: flex;
+    gap: 12px;
+    padding: 12px 20px;
+    border-top: 1px solid var(--glass-border);
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+.tb-summary-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.tb-summary-dot {
+    width: 8px; height: 8px;
+    border-radius: 2px;
+}
+
+/* ===== Demo B: 每日计划仪表盘 ===== */
+.dashboard-focus {
+    padding: 20px;
+    text-align: center;
+    border-bottom: 1px solid var(--glass-border);
+}
+.dashboard-focus .focus-label {
+    font-size: 11px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+}
+.dashboard-focus .focus-text {
+    font-size: 18px;
+    font-weight: 600;
+}
+.dashboard-sections {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--glass-border);
+}
+.dashboard-section {
+    padding: 16px;
+    background: var(--glass-bg);
+}
+.dashboard-section h4 {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.dashboard-section h4 i { color: var(--accent); }
+.dash-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    font-size: 13px;
+    cursor: pointer;
+}
+.dash-item:hover { color: #fff; }
+.dash-check {
+    width: 16px; height: 16px;
+    border: 1.5px solid var(--glass-border);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 10px;
+    color: transparent;
+    transition: all 0.2s;
+}
+.dash-item.done .dash-check {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+.dash-item.done .dash-text { text-decoration: line-through; opacity: 0.5; }
+.dash-progress {
+    padding: 16px 20px;
+    border-top: 1px solid var(--glass-border);
+}
+.dash-progress-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+.dash-progress-bar {
+    height: 6px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 3px;
+    overflow: hidden;
+}
+.dash-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), #60a5fa);
+    border-radius: 3px;
+    transition: width 0.5s;
+}
+
+/* ===== Demo C: 周计划看板 ===== */
+.weekly-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--glass-border);
+}
+.weekly-header h3 { font-size: 14px; }
+.weekly-header h3 i { color: var(--accent); margin-right: 6px; }
+.weekly-nav { display: flex; gap: 4px; }
+.weekly-nav button {
+    width: 28px; height: 28px;
+    border: 1px solid var(--glass-border);
+    border-radius: 6px;
+    background: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 11px;
+}
+.weekly-nav button:hover { background: var(--glass-hover); color: #fff; }
+
+.weekly-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
+    background: rgba(255,255,255,0.04);
+}
+.weekly-day {
+    background: var(--glass-bg);
+    padding: 8px;
+    min-height: 140px;
+}
+.weekly-day.today { background: rgba(167, 139, 250, 0.08); }
+.weekly-day-label {
+    font-size: 10px;
+    color: var(--text-secondary);
+    text-align: center;
+    margin-bottom: 4px;
+}
+.weekly-day-num {
+    text-align: center;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+.weekly-day.today .weekly-day-num {
+    color: var(--accent);
+}
+.weekly-task {
+    font-size: 11px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    margin-bottom: 3px;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.weekly-task.work { background: rgba(96,165,250,0.15); color: var(--work-color); }
+.weekly-task.study { background: rgba(52,211,153,0.15); color: var(--study-color); }
+.weekly-task.life { background: rgba(251,191,36,0.15); color: var(--life-color); }
+
+.weekly-stats {
+    display: flex;
+    justify-content: space-around;
+    padding: 12px;
+    border-top: 1px solid var(--glass-border);
+    font-size: 11px;
+}
+.weekly-stat { text-align: center; }
+.weekly-stat-num { font-size: 18px; font-weight: 600; color: var(--accent); }
+.weekly-stat-label { color: var(--text-secondary); margin-top: 2px; }
+
+/* ===== Demo D: 时间轮盘 ===== */
+.wheel-container {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+}
+.wheel-svg-wrap {
+    position: relative;
+    width: 220px;
+    height: 220px;
+}
+.wheel-center-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+}
+.wheel-center-text .wct-time { font-size: 22px; font-weight: 700; }
+.wheel-center-text .wct-label { font-size: 11px; color: var(--text-secondary); }
+.wheel-legend {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+    padding: 0 20px;
+}
+.wheel-leg-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+}
+.wheel-leg-dot {
+    width: 10px; height: 10px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+.wheel-leg-name { flex: 1; }
+.wheel-leg-val { color: var(--text-secondary); font-size: 11px; }
+
+.wheel-tip {
+    text-align: center;
+    font-size: 12px;
+    padding: 12px 20px;
+    border-top: 1px solid var(--glass-border);
+    color: var(--text-secondary);
+}
+.wheel-tip i { color: var(--study-color); margin-right: 4px; }
+
+/* ===== Demo E: 时间线 + 习惯追踪 ===== */
+.schedule-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--glass-border);
+}
+.schedule-header h3 { font-size: 15px; }
+.schedule-header h3 i { color: var(--accent); margin-right: 8px; }
+.schedule-header-actions { display: flex; gap: 6px; }
+.sch-btn {
+    width: 30px; height: 30px;
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    background: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 12px;
+}
+.sch-btn:hover { background: var(--glass-hover); color: #fff; }
+
+.routine-section, .plan-section {
+    padding: 12px 20px;
+}
+.section-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.section-label i { color: var(--accent); }
+
+.routine-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.routine-item:hover { background: var(--glass-hover); }
+.routine-check {
+    width: 20px; height: 20px;
+    border: 2px solid var(--glass-border);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 10px;
+    color: transparent;
+    transition: all 0.25s;
+}
+.routine-item.checked .routine-check {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    animation: checkPop 0.3s ease;
+}
+@keyframes checkPop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.3); }
+    100% { transform: scale(1); }
+}
+.routine-info { flex: 1; }
+.routine-name {
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.routine-item.checked .routine-name { text-decoration: line-through; opacity: 0.5; }
+.routine-time { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+.routine-streak {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(251,191,36,0.1);
+    color: #fbbf24;
+}
+.routine-streak.hot { background: rgba(248,113,113,0.15); color: #f87171; }
+
+.plan-divider {
+    height: 1px;
+    background: var(--glass-border);
+    margin: 4px 20px;
+}
+
+.plan-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-left: 3px solid transparent;
+}
+.plan-item:hover { background: var(--glass-hover); }
+.plan-item.work { border-left-color: var(--work-color); }
+.plan-item.study { border-left-color: var(--study-color); }
+.plan-item.life { border-left-color: var(--life-color); }
+.plan-item .plan-time-range {
+    font-size: 11px;
+    color: var(--text-secondary);
+    width: 90px;
+    flex-shrink: 0;
+}
+.plan-item .plan-name {
+    flex: 1;
+    font-size: 13px;
+}
+.plan-item .plan-dur {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+.plan-item.active {
+    background: rgba(167, 139, 250, 0.08);
+}
+.plan-item.active .plan-name { color: #fff; font-weight: 500; }
+.plan-item.completed { opacity: 0.5; }
+.plan-item.completed .plan-name { text-decoration: line-through; }
+
+.schedule-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    border-top: 1px solid var(--glass-border);
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+.schedule-footer .streak-badge {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--accent);
+}
+
+.add-plan-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    padding: 10px;
+    border: 1px dashed var(--glass-border);
+    border-radius: 10px;
+    background: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 12px;
+    margin-bottom: 6px;
+    transition: all 0.2s;
+}
+.add-plan-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(167, 139, 250, 0.05);
+}
+</style>
+</head>
+<body>
+
+<div class="page-header">
+    <h1><i class="fas fa-calendar-alt"></i> 时间计划表 — 产品形态 Demo</h1>
+    <p>5 种设计方案对比，点击切换查看 · 数据为示意，展示交互效果</p>
+</div>
+
+<div class="tab-nav">
+    <button class="tab-btn active" data-tab="a">
+        <i class="fas fa-th-list"></i> A. 时间块日程 <span class="badge">经典</span>
+    </button>
+    <button class="tab-btn" data-tab="b">
+        <i class="fas fa-tachometer-alt"></i> B. 每日仪表盘
+    </button>
+    <button class="tab-btn" data-tab="c">
+        <i class="fas fa-columns"></i> C. 周计划看板
+    </button>
+    <button class="tab-btn" data-tab="d">
+        <i class="fas fa-chart-pie"></i> D. 时间轮盘
+    </button>
+    <button class="tab-btn" data-tab="e">
+        <i class="fas fa-stream"></i> E. 时间线+习惯 <span class="badge">推荐</span>
+    </button>
+</div>
+
+<div class="demo-container">
+
+<!-- ===== Demo A: 时间块日程表 ===== -->
+<div class="demo-panel active" id="demo-a">
+    <div class="demo-desc">
+        <strong>形态A：时间块日程表</strong> — 参考 Sunsama / Google Calendar 日视图。垂直时间轴 + 可视化时间块，最直观展示每日时间分配。点击空白可创建新计划，拖拽可调整时间。
+    </div>
+    <div class="timeblock-header">
+        <h3><i class="fas fa-calendar-day"></i> 今日计划 · 4月15日 周二</h3>
+        <button class="timeblock-add" title="添加计划"><i class="fas fa-plus"></i></button>
+    </div>
+    <div class="timeblock-grid">
+        <div class="tb-row">
+            <div class="tb-time">06:30</div>
+            <div class="tb-content">
+                <div class="tb-block life-block completed" onclick="this.classList.toggle('completed')">
+                    <span class="block-icon">🏃</span>
+                    <span class="block-name">晨跑</span>
+                    <span class="cat-tag life">生活</span>
+                    <span class="block-dur">30min</span>
+                </div>
+            </div>
+        </div>
+        <div class="tb-row">
+            <div class="tb-time">07:30</div>
+            <div class="tb-content">
+                <div class="tb-block study-block completed" onclick="this.classList.toggle('completed')">
+                    <span class="block-icon">📖</span>
+                    <span class="block-name">英语阅读</span>
+                    <span class="cat-tag study">学习</span>
+                    <span class="block-dur">45min</span>
+                </div>
+            </div>
+        </div>
+        <div class="tb-row" style="position:relative;">
+            <div class="tb-time" style="color:#f87171;font-weight:600;">08:20</div>
+            <div class="tb-content">
+                <div class="tb-now-line" style="top:12px;"></div>
+                <div class="tb-block work-block" style="background:rgba(96,165,250,0.18);">
+                    <span class="block-icon">💻</span>
+                    <span class="block-name" style="font-weight:500;">Chrome 扩展开发</span>
+                    <span class="cat-tag work">工作</span>
+                    <span class="block-dur">2h</span>
+                </div>
+            </div>
+        </div>
+        <div class="tb-row">
+            <div class="tb-time">10:30</div>
+            <div class="tb-content">
+                <div class="tb-block work-block">
+                    <span class="block-icon">📝</span>
+                    <span class="block-name">代码 Review</span>
+                    <span class="cat-tag work">工作</span>
+                    <span class="block-dur">1h</span>
+                </div>
+            </div>
+        </div>
+        <div class="tb-row">
+            <div class="tb-time">11:30</div>
+            <div class="tb-content">
+                <div class="tb-block rest-block">
+                    <span class="block-icon">🍜</span>
+                    <span class="block-name">午餐 & 休息</span>
+                    <span class="cat-tag rest">休息</span>
+                    <span class="block-dur">1.5h</span>
+                </div>
+            </div>
+        </div>
+        <div class="tb-row">
+            <div class="tb-time">13:00</div>
+            <div class="tb-content">
+                <div class="tb-block study-block">
+                    <span class="block-icon">📚</span>
+                    <span class="block-name">算法练习</span>
+                    <span class="cat-tag study">学习</span>
+                    <span class="block-dur">1.5h</span>
+                </div>
+            </div>
+        </div>
+        <div class="tb-row">
+            <div class="tb-time">14:30</div>
+            <div class="tb-content">
+                <div class="tb-block work-block">
+                    <span class="block-icon">📋</span>
+                    <span class="block-name">需求文档编写</span>
+                    <span class="cat-tag work">工作</span>
+                    <span class="block-dur">2h</span>
+                </div>
+            </div>
+        </div>
+        <div class="tb-row">
+            <div class="tb-time">17:00</div>
+            <div class="tb-content">
+                <div class="tb-block life-block">
+                    <span class="block-icon">🏋️</span>
+                    <span class="block-name">健身运动</span>
+                    <span class="cat-tag life">生活</span>
+                    <span class="block-dur">1h</span>
+                </div>
+            </div>
+        </div>
+        <div class="tb-row">
+            <div class="tb-time">21:00</div>
+            <div class="tb-content">
+                <div class="tb-block life-block">
+                    <span class="block-icon">📖</span>
+                    <span class="block-name">阅读 & 每日复盘</span>
+                    <span class="cat-tag life">生活</span>
+                    <span class="block-dur">1h</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="tb-summary">
+        <div class="tb-summary-item"><div class="tb-summary-dot" style="background:var(--work-color)"></div> 工作 5h</div>
+        <div class="tb-summary-item"><div class="tb-summary-dot" style="background:var(--study-color)"></div> 学习 2.25h</div>
+        <div class="tb-summary-item"><div class="tb-summary-dot" style="background:var(--life-color)"></div> 生活 2.5h</div>
+        <div class="tb-summary-item"><div class="tb-summary-dot" style="background:var(--rest-color)"></div> 休息 1.5h</div>
+    </div>
+</div>
+
+<!-- ===== Demo B: 每日计划仪表盘 ===== -->
+<div class="demo-panel" id="demo-b">
+    <div class="demo-desc">
+        <strong>形态B：每日计划仪表盘</strong> — 参考 Momentum / Bullet Journal。以"每日焦点"为核心，上午/下午分区展示任务，简洁直观，适合不需要精确到分钟的规划场景。
+    </div>
+    <div class="dashboard-focus">
+        <div class="focus-label"><i class="fas fa-crosshairs"></i> 今日焦点</div>
+        <div class="focus-text">完成扩展 v3.18 时间计划表功能</div>
+    </div>
+    <div class="dashboard-sections">
+        <div class="dashboard-section">
+            <h4><i class="fas fa-sun"></i> 上午</h4>
+            <div class="dash-item done" onclick="this.classList.toggle('done')">
+                <div class="dash-check"><i class="fas fa-check"></i></div>
+                <span class="dash-text">晨跑 30min</span>
+            </div>
+            <div class="dash-item done" onclick="this.classList.toggle('done')">
+                <div class="dash-check"><i class="fas fa-check"></i></div>
+                <span class="dash-text">英语阅读</span>
+            </div>
+            <div class="dash-item" onclick="this.classList.toggle('done')">
+                <div class="dash-check"><i class="fas fa-check"></i></div>
+                <span class="dash-text">扩展开发 2h</span>
+            </div>
+            <div class="dash-item" onclick="this.classList.toggle('done')">
+                <div class="dash-check"><i class="fas fa-check"></i></div>
+                <span class="dash-text">代码 Review</span>
+            </div>
+        </div>
+        <div class="dashboard-section">
+            <h4><i class="fas fa-moon"></i> 下午 & 晚间</h4>
+            <div class="dash-item" onclick="this.classList.toggle('done')">
+                <div class="dash-check"><i class="fas fa-check"></i></div>
+                <span class="dash-text">算法学习 1.5h</span>
+            </div>
+            <div class="dash-item" onclick="this.classList.toggle('done')">
+                <div class="dash-check"><i class="fas fa-check"></i></div>
+                <span class="dash-text">需求文档</span>
+            </div>
+            <div class="dash-item" onclick="this.classList.toggle('done')">
+                <div class="dash-check"><i class="fas fa-check"></i></div>
+                <span class="dash-text">健身运动 1h</span>
+            </div>
+            <div class="dash-item" onclick="this.classList.toggle('done')">
+                <div class="dash-check"><i class="fas fa-check"></i></div>
+                <span class="dash-text">阅读 & 复盘</span>
+            </div>
+        </div>
+        <div class="dashboard-section">
+            <h4><i class="fas fa-star"></i> 晨间例程</h4>
+            <div class="dash-item done" onclick="this.classList.toggle('done')">
+                <div class="dash-check"><i class="fas fa-check"></i></div>
+                <span class="dash-text">起床 6:00</span>
+            </div>
+            <div class="dash-item done" onclick="this.classList.toggle('done')">
+                <div class="dash-check"><i class="fas fa-check"></i></div>
+                <span class="dash-text">冥想 10min</span>
+            </div>
+            <div class="dash-item done" onclick="this.classList.toggle('done')">
+                <div class="dash-check"><i class="fas fa-check"></i></div>
+                <span class="dash-text">早餐</span>
+            </div>
+        </div>
+        <div class="dashboard-section">
+            <h4><i class="fas fa-bed"></i> 睡前例程</h4>
+            <div class="dash-item" onclick="this.classList.toggle('done')">
+                <div class="dash-check"><i class="fas fa-check"></i></div>
+                <span class="dash-text">今日总结</span>
+            </div>
+            <div class="dash-item" onclick="this.classList.toggle('done')">
+                <div class="dash-check"><i class="fas fa-check"></i></div>
+                <span class="dash-text">明日计划</span>
+            </div>
+            <div class="dash-item" onclick="this.classList.toggle('done')">
+                <div class="dash-check"><i class="fas fa-check"></i></div>
+                <span class="dash-text">22:30 就寝</span>
+            </div>
+        </div>
+    </div>
+    <div class="dash-progress">
+        <div class="dash-progress-label">
+            <span>今日进度</span>
+            <span id="dash-progress-text">5 / 14 完成</span>
+        </div>
+        <div class="dash-progress-bar">
+            <div class="dash-progress-fill" style="width: 36%;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== Demo C: 周计划看板 ===== -->
+<div class="demo-panel" id="demo-c">
+    <div class="demo-desc">
+        <strong>形态C：周计划看板</strong> — 参考 Notion 周视图 / Thisweek 扩展。七天一览，适合提前规划整周安排。每列是一天，纵向是任务列表。
+    </div>
+    <div class="weekly-header">
+        <h3><i class="fas fa-calendar-week"></i> 2026年第16周</h3>
+        <div class="weekly-nav">
+            <button title="上一周"><i class="fas fa-chevron-left"></i></button>
+            <button title="今天" style="width:auto;padding:0 8px;font-size:10px;">今天</button>
+            <button title="下一周"><i class="fas fa-chevron-right"></i></button>
+        </div>
+    </div>
+    <div class="weekly-grid">
+        <div class="weekly-day">
+            <div class="weekly-day-label">周一</div>
+            <div class="weekly-day-num">14</div>
+            <div class="weekly-task work">扩展开发</div>
+            <div class="weekly-task study">英语</div>
+            <div class="weekly-task life">晨跑</div>
+        </div>
+        <div class="weekly-day today">
+            <div class="weekly-day-label">周二</div>
+            <div class="weekly-day-num">★ 15</div>
+            <div class="weekly-task work">扩展开发</div>
+            <div class="weekly-task work">代码Review</div>
+            <div class="weekly-task study">算法练习</div>
+            <div class="weekly-task life">健身</div>
+        </div>
+        <div class="weekly-day">
+            <div class="weekly-day-label">周三</div>
+            <div class="weekly-day-num">16</div>
+            <div class="weekly-task work">需求评审</div>
+            <div class="weekly-task study">Python</div>
+            <div class="weekly-task life">游泳</div>
+        </div>
+        <div class="weekly-day">
+            <div class="weekly-day-label">周四</div>
+            <div class="weekly-day-num">17</div>
+            <div class="weekly-task work">Bug修复</div>
+            <div class="weekly-task study">算法</div>
+            <div class="weekly-task life">运动</div>
+        </div>
+        <div class="weekly-day">
+            <div class="weekly-day-label">周五</div>
+            <div class="weekly-day-num">18</div>
+            <div class="weekly-task work">版本发布</div>
+            <div class="weekly-task work">周报</div>
+            <div class="weekly-task life">聚餐</div>
+        </div>
+        <div class="weekly-day">
+            <div class="weekly-day-label">周六</div>
+            <div class="weekly-day-num">19</div>
+            <div class="weekly-task life">远足</div>
+            <div class="weekly-task study">读书</div>
+        </div>
+        <div class="weekly-day">
+            <div class="weekly-day-label">周日</div>
+            <div class="weekly-day-num">20</div>
+            <div class="weekly-task life">休息</div>
+            <div class="weekly-task study">总结</div>
+        </div>
+    </div>
+    <div class="weekly-stats">
+        <div class="weekly-stat">
+            <div class="weekly-stat-num">23</div>
+            <div class="weekly-stat-label">本周任务</div>
+        </div>
+        <div class="weekly-stat">
+            <div class="weekly-stat-num">8</div>
+            <div class="weekly-stat-label">已完成</div>
+        </div>
+        <div class="weekly-stat">
+            <div class="weekly-stat-num">35%</div>
+            <div class="weekly-stat-label">完成率</div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== Demo D: 时间轮盘 ===== -->
+<div class="demo-panel" id="demo-d">
+    <div class="demo-desc">
+        <strong>形态D：时间轮盘</strong> — 参考 RescueTime 时间报告。圆形图表直观展示今日时间分配比例，适合回顾和分析，弱于规划能力。
+    </div>
+    <div class="wheel-container">
+        <div class="wheel-svg-wrap">
+            <svg viewBox="0 0 200 200" width="220" height="220">
+                <circle cx="100" cy="100" r="80" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="28"/>
+                <!-- 工作 5h = 33% -->
+                <circle cx="100" cy="100" r="80" fill="none" stroke="var(--work-color)" stroke-width="28"
+                    stroke-dasharray="166 502" stroke-dashoffset="0"
+                    transform="rotate(-90 100 100)" opacity="0.7"/>
+                <!-- 学习 2.25h = 15% -->
+                <circle cx="100" cy="100" r="80" fill="none" stroke="var(--study-color)" stroke-width="28"
+                    stroke-dasharray="75 502" stroke-dashoffset="-166"
+                    transform="rotate(-90 100 100)" opacity="0.7"/>
+                <!-- 生活 2.5h = 17% -->
+                <circle cx="100" cy="100" r="80" fill="none" stroke="var(--life-color)" stroke-width="28"
+                    stroke-dasharray="85 502" stroke-dashoffset="-241"
+                    transform="rotate(-90 100 100)" opacity="0.7"/>
+                <!-- 休息 1.5h = 10% -->
+                <circle cx="100" cy="100" r="80" fill="none" stroke="var(--rest-color)" stroke-width="28"
+                    stroke-dasharray="50 502" stroke-dashoffset="-326"
+                    transform="rotate(-90 100 100)" opacity="0.7"/>
+            </svg>
+            <div class="wheel-center-text">
+                <div class="wct-time">11.25h</div>
+                <div class="wct-label">已规划</div>
+            </div>
+        </div>
+        <div class="wheel-legend">
+            <div class="wheel-leg-item">
+                <div class="wheel-leg-dot" style="background:var(--work-color)"></div>
+                <span class="wheel-leg-name">工作</span>
+                <span class="wheel-leg-val">5h (33%)</span>
+            </div>
+            <div class="wheel-leg-item">
+                <div class="wheel-leg-dot" style="background:var(--study-color)"></div>
+                <span class="wheel-leg-name">学习</span>
+                <span class="wheel-leg-val">2.25h (15%)</span>
+            </div>
+            <div class="wheel-leg-item">
+                <div class="wheel-leg-dot" style="background:var(--life-color)"></div>
+                <span class="wheel-leg-name">生活</span>
+                <span class="wheel-leg-val">2.5h (17%)</span>
+            </div>
+            <div class="wheel-leg-item">
+                <div class="wheel-leg-dot" style="background:var(--rest-color)"></div>
+                <span class="wheel-leg-name">休息</span>
+                <span class="wheel-leg-val">1.5h (10%)</span>
+            </div>
+        </div>
+    </div>
+    <div class="wheel-tip">
+        <i class="fas fa-lightbulb"></i> 建议：今日学习时间占比偏低，可考虑增加 30min 阅读
+    </div>
+</div>
+
+<!-- ===== Demo E: 时间线 + 习惯追踪 (推荐) ===== -->
+<div class="demo-panel" id="demo-e">
+    <div class="demo-desc">
+        <strong>形态E：时间线 + 习惯追踪 ⭐ 推荐方案</strong> — 融合 TickTick 习惯打卡 + Sunsama 时间块。分为"固定例程"（每日习惯打卡）和"灵活计划"（今日安排）两层，兼顾习惯养成和灵活规划。
+    </div>
+    <div class="schedule-header">
+        <h3><i class="fas fa-stream"></i> 每日计划</h3>
+        <div class="schedule-header-actions">
+            <button class="sch-btn" title="日历"><i class="fas fa-calendar-alt"></i></button>
+            <button class="sch-btn" title="模板"><i class="fas fa-copy"></i></button>
+            <button class="sch-btn" title="设置"><i class="fas fa-cog"></i></button>
+        </div>
+    </div>
+    
+    <div class="routine-section">
+        <div class="section-label"><i class="fas fa-redo"></i> 每日例程 · 习惯打卡</div>
+        <div class="routine-item checked" onclick="this.classList.toggle('checked')">
+            <div class="routine-check"><i class="fas fa-check"></i></div>
+            <div class="routine-info">
+                <div class="routine-name">🏃 晨跑</div>
+                <div class="routine-time">06:30 · 30分钟</div>
+            </div>
+            <span class="routine-streak hot">🔥 连续15天</span>
+        </div>
+        <div class="routine-item checked" onclick="this.classList.toggle('checked')">
+            <div class="routine-check"><i class="fas fa-check"></i></div>
+            <div class="routine-info">
+                <div class="routine-name">📖 英语阅读</div>
+                <div class="routine-time">07:30 · 45分钟</div>
+            </div>
+            <span class="routine-streak">连续7天</span>
+        </div>
+        <div class="routine-item" onclick="this.classList.toggle('checked')">
+            <div class="routine-check"><i class="fas fa-check"></i></div>
+            <div class="routine-info">
+                <div class="routine-name">🧘 冥想</div>
+                <div class="routine-time">07:00 · 10分钟</div>
+            </div>
+            <span class="routine-streak">连续3天</span>
+        </div>
+        <div class="routine-item" onclick="this.classList.toggle('checked')">
+            <div class="routine-check"><i class="fas fa-check"></i></div>
+            <div class="routine-info">
+                <div class="routine-name">📝 睡前总结</div>
+                <div class="routine-time">22:00 · 15分钟</div>
+            </div>
+            <span class="routine-streak hot">🔥 连续22天</span>
+        </div>
+    </div>
+    
+    <div class="plan-divider"></div>
+    
+    <div class="plan-section">
+        <div class="section-label"><i class="fas fa-clock"></i> 灵活计划 · 今日安排</div>
+        <div class="plan-item work completed" onclick="this.classList.toggle('completed')">
+            <span class="plan-time-range">08:00 - 10:00</span>
+            <span class="plan-name">💻 Chrome 扩展开发</span>
+            <span class="cat-tag work">工作</span>
+            <span class="plan-dur">2h</span>
+        </div>
+        <div class="plan-item work active">
+            <span class="plan-time-range">10:30 - 11:30</span>
+            <span class="plan-name">📋 代码 Review</span>
+            <span class="cat-tag work">工作</span>
+            <span class="plan-dur">1h</span>
+        </div>
+        <div class="plan-item study">
+            <span class="plan-time-range">13:00 - 14:30</span>
+            <span class="plan-name">📚 算法练习</span>
+            <span class="cat-tag study">学习</span>
+            <span class="plan-dur">1.5h</span>
+        </div>
+        <div class="plan-item work">
+            <span class="plan-time-range">14:30 - 16:30</span>
+            <span class="plan-name">📝 需求文档编写</span>
+            <span class="cat-tag work">工作</span>
+            <span class="plan-dur">2h</span>
+        </div>
+        <div class="plan-item life">
+            <span class="plan-time-range">17:00 - 18:00</span>
+            <span class="plan-name">🏋️ 健身运动</span>
+            <span class="cat-tag life">生活</span>
+            <span class="plan-dur">1h</span>
+        </div>
+        <button class="add-plan-btn"><i class="fas fa-plus"></i> 添加计划</button>
+    </div>
+    
+    <div class="schedule-footer">
+        <span>已完成 3/9 · 工作 5h · 学习 2.75h · 生活 1.75h</span>
+        <span class="streak-badge"><i class="fas fa-fire"></i> 连续规划 15 天</span>
+    </div>
+</div>
+
+</div>
+
+<script>
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.demo-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('demo-' + btn.dataset.tab).classList.add('active');
+    });
+});
+
+document.querySelectorAll('.dash-item').forEach(item => {
+    item.addEventListener('click', () => {
+        setTimeout(() => {
+            const total = document.querySelectorAll('#demo-b .dash-item').length;
+            const done = document.querySelectorAll('#demo-b .dash-item.done').length;
+            const pct = Math.round((done / total) * 100);
+            document.getElementById('dash-progress-text').textContent = `${done} / ${total} 完成`;
+            document.querySelector('.dash-progress-fill').style.width = pct + '%';
+        }, 50);
+    });
+});
+</script>
+
+</body>
+</html>

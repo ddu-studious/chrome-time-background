@@ -22,6 +22,10 @@
         enableKnowledgeWall: true,
         enableTaskTicker: true,
         systemMonitorInterval: 5,
+        enableSchedule: true,
+        enableWorklog: true,
+        worklogReminderEnabled: true,
+        worklogReminderTime: '18:00',
     };
 
     let settings = { ...defaults };
@@ -120,7 +124,7 @@
             });
         });
 
-        const hash = location.hash.replace('#', '') || 'general';
+        const hash = location.hash.replace('#', '') || 'time';
         const navItem = document.querySelector(`.sp-nav-item[data-page="${hash}"]`);
         if (navItem) navItem.click();
     }

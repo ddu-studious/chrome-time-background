@@ -32,6 +32,10 @@ class SettingsManager {
             enableKnowledgeWall: true,     // 知识墙
             enableTaskTicker: true,        // 任务提醒滚动条
             systemMonitorInterval: 5,      // 系统监控采集间隔（分钟），默认5min比之前1min降80%
+            enableSchedule: true,          // 每日计划
+            enableWorklog: true,           // 工作日志
+            worklogReminderEnabled: true,  // 工作日志每日提醒
+            worklogReminderTime: '18:00',  // 工作日志提醒时间
         };
         this.settings = { ...this.defaults };
         this.listeners = new Set();

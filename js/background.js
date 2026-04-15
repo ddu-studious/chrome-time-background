@@ -646,6 +646,19 @@ importScripts('background-provider.js');
             console.log('系统资源监控已禁用（用户设置）');
         }
 
+        // 工作日志每日提醒
+        if (perfSettings?.enableWorklog !== false && perfSettings?.worklogReminderEnabled !== false) {
+            const wlTime = perfSettings?.worklogReminderTime || '18:00';
+            const [wlHour, wlMinute] = wlTime.split(':').map(Number);
+            await chrome.alarms.create('worklog-reminder', {
+                when: getNextDailyTime(wlHour, wlMinute),
+                periodInMinutes: 24 * 60
+            });
+            console.log(`已设置工作日志提醒: ${wlHour}:${String(wlMinute).padStart(2, '0')}`);
+        } else {
+            console.log('工作日志提醒已禁用（用户设置）');
+        }
+
         // 热搜关键字监控（按用户设置的间隔，默认 10 分钟）
         if (perfSettings?.enableKeywordScan !== false) {
             const kwSettings = await getKeywordSettings();
@@ -890,6 +903,42 @@ importScripts('background-provider.js');
             console.log('过期任务通知已发送');
         } catch (error) {
             console.error('发送通知失败:', error);
+        }
+    }
+
+    /**
+     * 工作日志每日提醒
+     */
+    async function sendWorklogReminder() {
+        try {
+            const { settings } = await chrome.storage.sync.get('settings');
+            if (settings?.enableWorklog === false || settings?.worklogReminderEnabled === false) return;
+
+            const { worklogEntries } = await chrome.storage.local.get('worklogEntries');
+            const today = new Date();
+            const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+            const todayEntries = Array.isArray(worklogEntries) ? worklogEntries.filter(e => e.date === todayStr) : [];
+            const totalMinutes = todayEntries.reduce((sum, e) => sum + (e.duration || 0), 0);
+
+            let message;
+            if (todayEntries.length === 0) {
+                message = '今天还没有记录工作日志，花 30 秒记录一下吧！';
+            } else {
+                const h = Math.floor(totalMinutes / 60);
+                const m = totalMinutes % 60;
+                const timeStr = h > 0 ? `${h}小时${m}分钟` : `${m}分钟`;
+                message = `今天已记录 ${todayEntries.length} 条，共 ${timeStr}。还有遗漏吗？`;
+            }
+
+            await chrome.notifications.create('worklog-reminder', {
+                type: 'basic',
+                iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+                title: '📋 工作日志提醒',
+                message,
+                priority: 1
+            });
+        } catch (error) {
+            console.error('工作日志提醒失败:', error);
         }
     }
 
@@ -1487,6 +1536,10 @@ importScripts('background-provider.js');
                 await collectSystemStats();
                 logExtEvent('system', 'stats-sample', { durationMs: Date.now() - _alarmStart });
                 break;
+            case 'worklog-reminder':
+                await sendWorklogReminder();
+                logExtEvent('alarm', 'worklog-reminder', { durationMs: Date.now() - _alarmStart });
+                break;
             default:
                 if (alarm.name.startsWith('task-reminder-')) {
                     const taskId = alarm.name.replace('task-reminder-', '');
@@ -1550,26 +1603,34 @@ importScripts('background-provider.js');
     // 监听通知点击
     chrome.notifications.onClicked.addListener(async (notificationId) => {
         console.log('通知点击:', notificationId);
-        
+
         // 关键字监控通知 - 跳转到热搜链接
         if (notificationId.startsWith('keyword-alert-')) {
             const detailKey = `ka_notif_${notificationId}`;
             const { [detailKey]: detail } = await chrome.storage.local.get(detailKey);
-            
+
             if (detail?.url) {
                 await chrome.tabs.create({ url: detail.url });
             } else {
                 await chrome.tabs.create({ url: 'chrome://newtab/' });
             }
-            
+
             await chrome.storage.local.remove(detailKey);
             await chrome.notifications.clear(notificationId);
             return;
         }
-        
+
+        // 工作日志提醒 - 打开新标签页并展开日志面板
+        if (notificationId === 'worklog-reminder') {
+            await chrome.tabs.create({ url: 'chrome://newtab/' });
+            await chrome.storage.local.set({ pendingAction: 'openWorklogPanel' });
+            await chrome.notifications.clear(notificationId);
+            return;
+        }
+
         // 打开新标签页
         await chrome.tabs.create({ url: 'chrome://newtab/' });
-        
+
         // 清除通知
         await chrome.notifications.clear(notificationId);
     });

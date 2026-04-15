@@ -20,10 +20,33 @@
             </div>
 
             <div class="sp-nav-section">
-                <div class="sp-nav-label">设置</div>
-                <a class="sp-nav-item active" data-page="general" href="#general">
-                    <i class="fas fa-cog"></i> 常规设置
+                <div class="sp-nav-label">常规</div>
+                <a class="sp-nav-item active" data-page="time" href="#time">
+                    <i class="fas fa-clock"></i> 时间与日期
                 </a>
+                <a class="sp-nav-item" data-page="weather" href="#weather">
+                    <i class="fas fa-cloud-sun"></i> 天气设置
+                </a>
+                <a class="sp-nav-item" data-page="background" href="#background">
+                    <i class="fas fa-image"></i> 背景壁纸
+                </a>
+                <a class="sp-nav-item" data-page="info" href="#info">
+                    <i class="fas fa-newspaper"></i> 信息展示
+                </a>
+            </div>
+
+            <div class="sp-nav-section">
+                <div class="sp-nav-label">效率</div>
+                <a class="sp-nav-item" data-page="schedule" href="#schedule">
+                    <i class="fas fa-calendar-check"></i> 每日计划
+                </a>
+                <a class="sp-nav-item" data-page="worklog" href="#worklog">
+                    <i class="fas fa-clipboard-list"></i> 工作日志
+                </a>
+            </div>
+
+            <div class="sp-nav-section">
+                <div class="sp-nav-label">个性化</div>
                 <a class="sp-nav-item" data-page="appearance" href="#appearance">
                     <i class="fas fa-palette"></i> 外观主题
                 </a>
@@ -45,15 +68,15 @@
 
         <!-- 右侧内容 -->
         <main class="sp-main">
-            <!-- 常规设置 -->
-            <section class="sp-page active" id="page-general">
+            <!-- 时间与日期 -->
+            <section class="sp-page active" id="page-time">
                 <div class="sp-page-header">
-                    <h2>常规设置</h2>
-                    <p>配置时间、天气、背景等基础功能</p>
+                    <h2>时间与日期</h2>
+                    <p>配置时钟显示格式、日期和节假日</p>
                 </div>
 
                 <div class="sp-card">
-                    <h3 class="sp-card-title">时间设置</h3>
+                    <h3 class="sp-card-title">时钟格式</h3>
                     <div class="sp-field">
                         <div class="sp-field-info">
                             <span class="sp-field-label">时间格式</span>
@@ -72,6 +95,10 @@
                             <span class="sp-toggle-slider"></span>
                         </label>
                     </div>
+                </div>
+
+                <div class="sp-card">
+                    <h3 class="sp-card-title">日期与节假日</h3>
                     <div class="sp-field">
                         <div class="sp-field-info">
                             <span class="sp-field-label">显示日期</span>
@@ -81,10 +108,28 @@
                             <span class="sp-toggle-slider"></span>
                         </label>
                     </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info">
+                            <span class="sp-field-label">显示节假日</span>
+                            <span class="sp-field-hint">在时钟区域显示即将到来的节假日和调休信息</span>
+                        </div>
+                        <label class="sp-toggle">
+                            <input type="checkbox" name="showHolidays" id="set-showHolidays">
+                            <span class="sp-toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 天气设置 -->
+            <section class="sp-page" id="page-weather">
+                <div class="sp-page-header">
+                    <h2>天气设置</h2>
+                    <p>配置天气显示、温度单位和定位方式</p>
                 </div>
 
                 <div class="sp-card">
-                    <h3 class="sp-card-title">天气设置</h3>
+                    <h3 class="sp-card-title">天气显示</h3>
                     <div class="sp-field">
                         <div class="sp-field-info">
                             <span class="sp-field-label">显示天气</span>
@@ -103,17 +148,29 @@
                             <option value="F">华氏度 (°F)</option>
                         </select>
                     </div>
+                </div>
+
+                <div class="sp-card">
+                    <h3 class="sp-card-title">定位方式</h3>
                     <div class="sp-field">
                         <div class="sp-field-info">
                             <span class="sp-field-label">手动设置城市</span>
-                            <span class="sp-field-hint">无法自动定位时，可手动输入城市名（如：北京、上海）</span>
+                            <span class="sp-field-hint">无法自动定位时，可手动输入城市名（如：北京、上海）。留空则自动定位。</span>
                         </div>
                         <input type="text" name="weatherCity" id="set-weatherCity" class="sp-input" placeholder="留空则自动定位">
                     </div>
                 </div>
+            </section>
+
+            <!-- 背景壁纸 -->
+            <section class="sp-page" id="page-background">
+                <div class="sp-page-header">
+                    <h2>背景壁纸</h2>
+                    <p>自定义壁纸来源、切换频率和显示偏好</p>
+                </div>
 
                 <div class="sp-card">
-                    <h3 class="sp-card-title">背景设置</h3>
+                    <h3 class="sp-card-title">壁纸偏好</h3>
                     <div class="sp-field">
                         <div class="sp-field-info">
                             <span class="sp-field-label">背景切换间隔</span>
@@ -158,7 +215,7 @@
                 </div>
 
                 <div class="sp-card">
-                    <h3 class="sp-card-title">背景数据源</h3>
+                    <h3 class="sp-card-title">数据源管理</h3>
                     <p class="sp-card-desc">勾选启用的数据源，需要 API Key 的源请填写密钥。无需密钥的源开箱即用。</p>
 
                     <div class="sp-bg-source" data-source="wikimedia">
@@ -301,22 +358,17 @@
                         </div>
                     </div>
                 </div>
+            </section>
 
-                <div class="sp-card">
-                    <h3 class="sp-card-title">节假日设置</h3>
-                    <div class="sp-field">
-                        <div class="sp-field-info">
-                            <span class="sp-field-label">显示节假日</span>
-                        </div>
-                        <label class="sp-toggle">
-                            <input type="checkbox" name="showHolidays" id="set-showHolidays">
-                            <span class="sp-toggle-slider"></span>
-                        </label>
-                    </div>
+            <!-- 信息展示 -->
+            <section class="sp-page" id="page-info">
+                <div class="sp-page-header">
+                    <h2>信息展示</h2>
+                    <p>配置热搜资讯等信息流内容</p>
                 </div>
 
                 <div class="sp-card">
-                    <h3 class="sp-card-title">热榜设置</h3>
+                    <h3 class="sp-card-title">热榜资讯</h3>
                     <div class="sp-field">
                         <div class="sp-field-info">
                             <span class="sp-field-label">刷新间隔（分钟）</span>
@@ -353,6 +405,72 @@
                             <option value="zh">中文</option>
                             <option value="en">English</option>
                         </select>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 每日计划 -->
+            <section class="sp-page" id="page-schedule">
+                <div class="sp-page-header">
+                    <h2>每日计划</h2>
+                    <p>规划每天的时间安排，养成好习惯，平衡工作、学习与生活</p>
+                </div>
+                <div class="sp-card">
+                    <h3>基本设置</h3>
+                    <div class="sp-option">
+                        <div class="sp-option-info">
+                            <div class="sp-option-title">启用每日计划</div>
+                            <div class="sp-option-desc">在底部 Dock 栏显示每日计划入口</div>
+                        </div>
+                        <label class="sp-toggle">
+                            <input type="checkbox" id="set-enableSchedule" name="enableSchedule" checked>
+                            <span class="sp-slider"></span>
+                        </label>
+                    </div>
+                </div>
+                <div class="sp-card">
+                    <h3>功能说明</h3>
+                    <div class="sp-card-desc">每日例程（习惯打卡）：设定每天固定要做的事，支持连续天数追踪。灵活计划（时间块）：为今天安排具体的时间段任务，按工作/学习/生活分类。</div>
+                </div>
+            </section>
+
+            <!-- 工作日志 -->
+            <section class="sp-page" id="page-worklog">
+                <div class="sp-page-header">
+                    <h2>工作日志</h2>
+                    <p>记录每天做了什么，追踪工时，提升做事效率</p>
+                </div>
+                <div class="sp-card">
+                    <h3>基本设置</h3>
+                    <div class="sp-option">
+                        <div class="sp-option-info">
+                            <div class="sp-option-title">启用工作日志</div>
+                            <div class="sp-option-desc">在底部 Dock 栏显示工作日志入口</div>
+                        </div>
+                        <label class="sp-toggle">
+                            <input type="checkbox" id="set-enableWorklog" name="enableWorklog" checked>
+                            <span class="sp-slider"></span>
+                        </label>
+                    </div>
+                </div>
+                <div class="sp-card">
+                    <h3>每日提醒</h3>
+                    <div class="sp-option">
+                        <div class="sp-option-info">
+                            <div class="sp-option-title">日志提醒</div>
+                            <div class="sp-option-desc">每天定时提醒你记录工作日志</div>
+                        </div>
+                        <label class="sp-toggle">
+                            <input type="checkbox" id="set-worklogReminderEnabled" name="worklogReminderEnabled" checked>
+                            <span class="sp-slider"></span>
+                        </label>
+                    </div>
+                    <div class="sp-option">
+                        <div class="sp-option-info">
+                            <div class="sp-option-title">提醒时间</div>
+                            <div class="sp-option-desc">每日提醒的时间点</div>
+                        </div>
+                        <input type="time" id="set-worklogReminderTime" name="worklogReminderTime" value="18:00" class="sp-input">
                     </div>
                 </div>
             </section>

@@ -483,10 +483,34 @@ body.sp-has-bg {
     background-attachment: fixed;
 }
 
+body.sp-has-bg::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.15);
+    z-index: 0;
+    pointer-events: none;
+}
+
+body.sp-has-bg .sp-layout {
+    position: relative;
+    z-index: 1;
+}
+
 body.sp-has-bg .sp-sidebar {
-    background: rgba(255,255,255,0.85);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    background: rgba(255,255,255,0.72);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border-right-color: rgba(255,255,255,0.3);
+    box-shadow: 1px 0 24px rgba(0,0,0,0.08);
+}
+
+body.sp-has-bg .sp-nav-item:hover {
+    background: rgba(79,110,247,0.12);
+}
+
+body.sp-has-bg .sp-nav-item.active {
+    box-shadow: 0 2px 8px rgba(79,110,247,0.3);
 }
 
 body.sp-has-bg .sp-main {
@@ -494,18 +518,45 @@ body.sp-has-bg .sp-main {
 }
 
 body.sp-has-bg .sp-card {
-    background: rgba(255,255,255,0.82);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: rgba(255,255,255,0.68);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-color: rgba(255,255,255,0.35);
+    box-shadow: 0 2px 16px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.5);
+}
+
+body.sp-has-bg .sp-card:hover {
+    background: rgba(255,255,255,0.78);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.6);
 }
 
 body.sp-has-bg .sp-page-header {
-    background: rgba(255,255,255,0.6);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    background: rgba(255,255,255,0.5);
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    border: 1px solid rgba(255,255,255,0.3);
     border-radius: var(--sp-radius);
     padding: 16px 20px;
-    margin-bottom: 16px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 8px rgba(0,0,0,0.04);
+}
+
+body.sp-has-bg .sp-select,
+body.sp-has-bg .sp-input {
+    background: rgba(255,255,255,0.6);
+    border-color: rgba(255,255,255,0.4);
+}
+
+body.sp-has-bg .sp-toggle-slider {
+    box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+}
+
+body.sp-has-bg .sp-card-title {
+    border-bottom-color: rgba(0,0,0,0.06);
+}
+
+body.sp-has-bg .sp-field {
+    border-bottom-color: rgba(0,0,0,0.04);
 }
 
 /* ====== Responsive ====== */

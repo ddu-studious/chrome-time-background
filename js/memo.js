@@ -12761,4 +12761,34 @@ class MemoManager {
 }
 
 // 将备忘录管理器设置为全局变量
+/**
+ * 供 WorkLogManager 调用的任务查询接口
+ */
+MemoManager.prototype.getTasksForWorklog = function (query) {
+    if (!this.memos || !this.memos.length) return [];
+    let tasks = this.memos.map(m => ({
+        id: m.id,
+        title: m.title || '(无标题)',
+        completed: !!m.completed,
+        categoryId: m.categoryId,
+        priority: m.priority
+    }));
+    if (query && query.trim()) {
+        const q = query.trim().toLowerCase();
+        tasks = tasks.filter(t => t.title.toLowerCase().includes(q));
+    }
+    tasks.sort((a, b) => {
+        if (a.completed !== b.completed) return a.completed ? 1 : -1;
+        return 0;
+    });
+    return tasks;
+};
+
+MemoManager.prototype.getTaskById = function (id) {
+    if (!id || !this.memos) return null;
+    const m = this.memos.find(t => t.id === id);
+    if (!m) return null;
+    return { id: m.id, title: m.title || '(无标题)', completed: !!m.completed, categoryId: m.categoryId, priority: m.priority };
+};
+
 window.memoManager = new MemoManager();

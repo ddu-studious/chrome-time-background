@@ -264,6 +264,54 @@ async function initApp() {
         document.getElementById('bili-dock-btn')?.classList.add('hidden');
     }
 
+    // 初始化每日计划
+    if (sm.getSetting('enableSchedule') !== false) {
+        try {
+            if (window.scheduleManager && typeof window.scheduleManager.init === 'function') {
+                await window.scheduleManager.init();
+            }
+            const scheduleDockBtn = document.getElementById('schedule-dock-btn');
+            if (scheduleDockBtn) {
+                scheduleDockBtn.addEventListener('click', () => {
+                    if (window.scheduleManager) {
+                        window.scheduleManager.toggle();
+                        scheduleDockBtn.classList.toggle('active', window.scheduleManager._panelOpen);
+                    }
+                });
+            }
+            console.log('每日计划初始化完成');
+        } catch (error) {
+            console.error('每日计划初始化失败:', error);
+        }
+    } else {
+        console.log('每日计划已禁用（用户设置）');
+        document.getElementById('schedule-dock-btn')?.classList.add('hidden');
+    }
+
+    // 初始化工作日志
+    if (sm.getSetting('enableWorklog') !== false) {
+        try {
+            if (window.workLogManager && typeof window.workLogManager.init === 'function') {
+                await window.workLogManager.init();
+            }
+            const worklogDockBtn = document.getElementById('worklog-dock-btn');
+            if (worklogDockBtn) {
+                worklogDockBtn.addEventListener('click', () => {
+                    if (window.workLogManager) {
+                        window.workLogManager.toggle();
+                        worklogDockBtn.classList.toggle('active', window.workLogManager._panelOpen);
+                    }
+                });
+            }
+            console.log('工作日志初始化完成');
+        } catch (error) {
+            console.error('工作日志初始化失败:', error);
+        }
+    } else {
+        console.log('工作日志已禁用（用户设置）');
+        document.getElementById('worklog-dock-btn')?.classList.add('hidden');
+    }
+
     // v3.0.0: 初始化系统监控
     if (sm.getSetting('enableSystemMonitor') !== false) {
         try {
@@ -615,7 +663,7 @@ const zenMode = {
 window.zenMode = zenMode;
 
 // 设置键盘快捷键
-function setupKeyboardShortcuts() {
+async function setupKeyboardShortcuts() {
     document.addEventListener('keydown', (event) => {
         // Ctrl/⌘ + Shift + B 切换背景
         const isSwitchBackground =
@@ -671,6 +719,23 @@ function setupKeyboardShortcuts() {
             }
         });
     }
+
+    // 处理来自 background 的 pendingAction
+    try {
+        const { pendingAction } = await new Promise(r => chrome.storage.local.get('pendingAction', r));
+        if (pendingAction) {
+            await chrome.storage.local.remove('pendingAction');
+            if (pendingAction === 'openWorklogPanel' && window.workLogManager) {
+                setTimeout(() => window.workLogManager.openPanel(), 500);
+            }
+            if (pendingAction === 'openBackupPanel' && window.memoManager) {
+                setTimeout(() => {
+                    const backupBtn = document.getElementById('sidebar-backup-btn');
+                    if (backupBtn) backupBtn.click();
+                }, 500);
+            }
+        }
+    } catch { /* ignore */ }
 }
 
 // 检查是否有输入框聚焦
