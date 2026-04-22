@@ -312,6 +312,30 @@ async function initApp() {
         document.getElementById('worklog-dock-btn')?.classList.add('hidden');
     }
 
+    // 初始化写作空间（博客模块）
+    if (sm.getSetting('enableBlog') !== false) {
+        try {
+            if (window.blogManager && typeof window.blogManager.init === 'function') {
+                await window.blogManager.init();
+            }
+            const blogDockBtn = document.getElementById('blog-dock-btn');
+            if (blogDockBtn) {
+                blogDockBtn.addEventListener('click', () => {
+                    if (window.blogManager) {
+                        window.blogManager.toggle();
+                        blogDockBtn.classList.toggle('active', window.blogManager.isOpen);
+                    }
+                });
+            }
+            console.log('写作空间初始化完成');
+        } catch (error) {
+            console.error('写作空间初始化失败:', error);
+        }
+    } else {
+        console.log('写作空间已禁用（用户设置）');
+        document.getElementById('blog-dock-btn')?.classList.add('hidden');
+    }
+
     // v3.0.0: 初始化系统监控
     if (sm.getSetting('enableSystemMonitor') !== false) {
         try {

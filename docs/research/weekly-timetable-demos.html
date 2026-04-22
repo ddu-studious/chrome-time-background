@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>课表风格周视图 — 3 套 Demo</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#08081a;color:#e8e6f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;overflow-x:hidden}
+
+/* Nav */
+.nav{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;gap:8px;padding:14px 24px;background:rgba(8,8,26,0.94);backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,255,255,0.05)}
+.nav h1{font-size:15px;font-weight:700;color:#c4b5fd;margin-right:16px;white-space:nowrap}
+.tab{padding:9px 18px;border-radius:10px;border:1px solid rgba(255,255,255,0.07);background:rgba(255,255,255,0.02);color:rgba(255,255,255,0.45);cursor:pointer;font-size:12px;font-weight:600;transition:all .25s;letter-spacing:0.3px}
+.tab:hover{background:rgba(255,255,255,0.06);color:#fff}
+.tab.active{background:rgba(167,139,250,0.12);border-color:rgba(167,139,250,0.25);color:#c4b5fd}
+
+.main{margin-top:64px;padding:24px}
+.section{display:block;margin-bottom:48px;padding-bottom:48px;border-bottom:2px solid rgba(255,255,255,0.05)}
+.desc{max-width:900px;margin:0 auto 24px;padding:16px 22px;background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.05);border-radius:14px;font-size:13px;line-height:1.8;color:rgba(255,255,255,0.5)}
+.desc b{color:#c4b5fd}
+.desc .tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;margin:0 2px}
+.tag-p{background:rgba(52,211,153,0.1);color:#34d399}
+.tag-w{background:rgba(251,191,36,0.1);color:#fbbf24}
+
+:root{--work:#60a5fa;--study:#34d399;--life:#fbbf24;--accent:#a78bfa;--glass:rgba(16,14,28,0.88)}
+
+/* =====================================================
+   DEMO 1: 经典课表网格 (Classic Timetable Grid)
+   ===================================================== */
+.tt1{max-width:960px;margin:0 auto}
+.tt1 .header{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+.tt1 .title{font-size:18px;font-weight:700;color:#f0eef8}
+.tt1 .week-label{font-size:12px;color:rgba(255,255,255,0.35);padding:5px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:20px}
+.tt1 .legend{margin-left:auto;display:flex;gap:12px;font-size:11px;color:rgba(255,255,255,0.35)}
+.tt1 .legend span{display:flex;align-items:center;gap:4px}
+.tt1 .legend .dot{width:8px;height:8px;border-radius:3px}
+
+.tt1 .grid{
+  display:grid;
+  grid-template-columns:56px repeat(7,1fr);
+  grid-template-rows:40px repeat(16,48px);
+  border:1px solid rgba(255,255,255,0.06);
+  border-radius:14px;
+  overflow:hidden;
+  background:rgba(255,255,255,0.015);
+}
+.tt1 .corner{background:rgba(255,255,255,0.02);border-bottom:1px solid rgba(255,255,255,0.06);border-right:1px solid rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:center;font-size:9px;color:rgba(255,255,255,0.2)}
+.tt1 .day-hd{background:rgba(255,255,255,0.02);border-bottom:1px solid rgba(255,255,255,0.06);border-right:1px solid rgba(255,255,255,0.03);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;transition:background .2s}
+.tt1 .day-hd:last-child{border-right:none}
+.tt1 .day-hd .dn{font-size:10px;font-weight:600;letter-spacing:1px;color:rgba(255,255,255,0.3)}
+.tt1 .day-hd .dd{font-size:14px;font-weight:700;color:#e8e6f0}
+.tt1 .day-hd.today{background:rgba(167,139,250,0.06)}
+.tt1 .day-hd.today .dn{color:var(--accent)}
+.tt1 .day-hd.today .dd{color:var(--accent)}
+
+.tt1 .time-lb{border-right:1px solid rgba(255,255,255,0.05);border-bottom:1px solid rgba(255,255,255,0.03);display:flex;align-items:flex-start;justify-content:flex-end;padding:3px 8px 0 0;font-size:10px;color:rgba(255,255,255,0.18);font-variant-numeric:tabular-nums}
+.tt1 .cell{border-right:1px solid rgba(255,255,255,0.025);border-bottom:1px solid rgba(255,255,255,0.025);position:relative;cursor:pointer;transition:background .15s}
+.tt1 .cell:nth-child(8n+8){border-right:none}
+.tt1 .cell:hover{background:rgba(255,255,255,0.02)}
+.tt1 .cell.today-col{background:rgba(167,139,250,0.015)}
+
+/* 课程块 */
+.tt1 .block{
+  position:absolute;left:2px;right:2px;border-radius:8px;padding:6px 8px;
+  font-size:11px;overflow:hidden;cursor:pointer;
+  transition:all .25s cubic-bezier(0.4,0,0.2,1);
+  display:flex;flex-direction:column;justify-content:center;
+  border:1px solid transparent;z-index:2;
+}
+.tt1 .block:hover{transform:scale(1.03);z-index:5;box-shadow:0 4px 20px rgba(0,0,0,0.4)}
+.tt1 .block .b-name{font-weight:600;color:#fff;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tt1 .block .b-time{font-size:9px;opacity:0.65;margin-top:2px;font-variant-numeric:tabular-nums}
+.tt1 .block .b-icon{position:absolute;right:6px;top:6px;font-size:12px;opacity:0.5}
+.tt1 .block.done{opacity:0.35}.tt1 .block.done .b-name{text-decoration:line-through}
+
+.tt1 .block.cat-work{background:rgba(96,165,250,0.18);border-color:rgba(96,165,250,0.25);color:#bfdbfe}
+.tt1 .block.cat-work:hover{background:rgba(96,165,250,0.28)}
+.tt1 .block.cat-study{background:rgba(52,211,153,0.16);border-color:rgba(52,211,153,0.22);color:#a7f3d0}
+.tt1 .block.cat-study:hover{background:rgba(52,211,153,0.26)}
+.tt1 .block.cat-life{background:rgba(251,191,36,0.14);border-color:rgba(251,191,36,0.2);color:#fde68a}
+.tt1 .block.cat-life:hover{background:rgba(251,191,36,0.24)}
+
+/* 当前时间线 */
+.tt1 .now-line{position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#f87171,transparent);z-index:4;pointer-events:none}
+.tt1 .now-dot{position:absolute;left:-5px;top:-4px;width:10px;height:10px;border-radius:50%;background:#f87171;box-shadow:0 0 8px rgba(248,113,113,0.5)}
+
+/* =====================================================
+   DEMO 2: 圆角卡片课表 (Rounded Card Timetable)
+   ===================================================== */
+.tt2{max-width:960px;margin:0 auto}
+.tt2 .header{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+.tt2 .title{font-size:18px;font-weight:700;color:#f0eef8}
+.tt2 .week-range{font-size:12px;color:rgba(255,255,255,0.35);padding:5px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:20px}
+.tt2 .nav-btns{margin-left:auto;display:flex;gap:4px}
+.tt2 .nav-btn{width:32px;height:32px;border-radius:9px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);color:rgba(255,255,255,0.4);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;transition:all .2s}
+.tt2 .nav-btn:hover{background:rgba(255,255,255,0.06);color:#fff}
+
+.tt2 .top-row{display:grid;grid-template-columns:52px repeat(7,1fr);gap:0;margin-bottom:4px}
+.tt2 .body-row{display:grid;grid-template-columns:52px repeat(7,1fr);gap:0}
+.tt2 .day-strip{display:flex;flex-direction:column;align-items:center;padding:8px 0 12px;gap:4px}
+.tt2 .day-strip .ds-name{font-size:10px;font-weight:600;letter-spacing:1px;color:rgba(255,255,255,0.25)}
+.tt2 .day-strip .ds-num{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#e8e6f0;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);transition:all .2s}
+.tt2 .day-strip.today .ds-num{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 2px 12px rgba(167,139,250,0.3)}
+.tt2 .day-strip.today .ds-name{color:var(--accent)}
+
+.tt2 .time-col{display:flex;flex-direction:column}
+.tt2 .time-slot{height:52px;display:flex;align-items:flex-start;justify-content:flex-end;padding:2px 8px 0 0;font-size:10px;color:rgba(255,255,255,0.15);font-variant-numeric:tabular-nums}
+
+.tt2 .day-col{position:relative;border-left:1px solid rgba(255,255,255,0.03);min-height:0}
+.tt2 .day-col .hour-line{height:52px;border-bottom:1px solid rgba(255,255,255,0.025)}
+.tt2 .day-col.today-col .hour-line{background:rgba(167,139,250,0.01)}
+
+.tt2 .card{
+  position:absolute;left:3px;right:3px;border-radius:10px;padding:8px 10px;
+  cursor:pointer;transition:all .25s cubic-bezier(0.4,0,0.2,1);
+  backdrop-filter:blur(6px);z-index:2;overflow:hidden;
+}
+.tt2 .card:hover{transform:translateY(-2px) scale(1.02);z-index:5;box-shadow:0 6px 24px rgba(0,0,0,0.4)}
+.tt2 .card .c-emoji{font-size:16px;margin-bottom:3px}
+.tt2 .card .c-name{font-size:11px;font-weight:600;line-height:1.3}
+.tt2 .card .c-time{font-size:9px;opacity:0.55;margin-top:3px}
+.tt2 .card .c-tag{position:absolute;top:6px;right:6px;font-size:9px;padding:2px 6px;border-radius:4px;font-weight:500}
+
+.tt2 .card.cat-work{background:linear-gradient(135deg,rgba(96,165,250,0.2),rgba(59,130,246,0.12));border:1px solid rgba(96,165,250,0.2);color:#bfdbfe}
+.tt2 .card.cat-work .c-tag{background:rgba(96,165,250,0.2);color:#93c5fd}
+.tt2 .card.cat-study{background:linear-gradient(135deg,rgba(52,211,153,0.18),rgba(16,185,129,0.1));border:1px solid rgba(52,211,153,0.18);color:#a7f3d0}
+.tt2 .card.cat-study .c-tag{background:rgba(52,211,153,0.2);color:#6ee7b7}
+.tt2 .card.cat-life{background:linear-gradient(135deg,rgba(251,191,36,0.16),rgba(245,158,11,0.08));border:1px solid rgba(251,191,36,0.16);color:#fde68a}
+.tt2 .card.cat-life .c-tag{background:rgba(251,191,36,0.2);color:#fcd34d}
+
+.tt2 .card.done{opacity:0.3}.tt2 .card.done .c-name{text-decoration:line-through}
+
+/* =====================================================
+   DEMO 3: 侧栏适配课表 (Sidebar-Fit Timetable)
+   ===================================================== */
+.tt3{max-width:440px;margin:0 auto;background:rgba(16,14,28,0.88);backdrop-filter:blur(24px);border:1px solid rgba(255,255,255,0.07);border-radius:16px;overflow:hidden;box-shadow:-8px 0 40px rgba(0,0,0,0.3)}
+.tt3 .panel-header{display:flex;align-items:center;padding:14px 18px;gap:10px;border-bottom:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.015)}
+.tt3 .panel-title{font-size:15px;font-weight:700;color:#f0eef8}
+.tt3 .panel-title i{color:var(--accent);margin-right:6px}
+.tt3 .view-toggle{margin-left:auto;display:flex;gap:2px;padding:2px;background:rgba(255,255,255,0.03);border-radius:8px}
+.tt3 .vt-btn{padding:5px 10px;border-radius:6px;border:none;background:none;color:rgba(255,255,255,0.35);font-size:11px;font-weight:500;cursor:pointer;transition:all .2s}
+.tt3 .vt-btn.active{background:rgba(167,139,250,0.15);color:#c4b5fd}
+.tt3 .close-btn{width:30px;height:30px;border:1px solid rgba(255,255,255,0.06);border-radius:8px;background:none;color:rgba(255,255,255,0.35);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;transition:all .2s}
+.tt3 .close-btn:hover{color:#fff;background:rgba(255,255,255,0.06)}
+
+.tt3 .day-selector{display:flex;gap:0;padding:8px 12px;overflow-x:auto}
+.tt3 .day-chip{flex:1;min-width:0;padding:6px 0;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;border-radius:10px;transition:all .2s}
+.tt3 .day-chip:hover{background:rgba(255,255,255,0.03)}
+.tt3 .day-chip .dc-name{font-size:9px;font-weight:600;color:rgba(255,255,255,0.25);letter-spacing:0.5px}
+.tt3 .day-chip .dc-num{font-size:13px;font-weight:700;color:rgba(255,255,255,0.6)}
+.tt3 .day-chip .dc-dots{display:flex;gap:2px;margin-top:2px}
+.tt3 .day-chip .dc-dot{width:4px;height:4px;border-radius:50%}
+.tt3 .day-chip.today .dc-num{color:var(--accent)}
+.tt3 .day-chip.today .dc-name{color:var(--accent)}
+.tt3 .day-chip.sel{background:rgba(167,139,250,0.1)}
+.tt3 .day-chip.sel .dc-num{color:#fff}
+
+.tt3 .timetable-body{padding:0 12px 12px;max-height:600px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(167,139,250,0.12) transparent}
+.tt3 .timetable-body::-webkit-scrollbar{width:3px}
+.tt3 .timetable-body::-webkit-scrollbar-thumb{background:rgba(167,139,250,0.12);border-radius:2px}
+
+.tt3 .mini-grid{display:grid;grid-template-columns:42px 1fr;gap:0}
+.tt3 .mg-time{padding:4px 6px 4px 0;font-size:10px;color:rgba(255,255,255,0.15);text-align:right;font-variant-numeric:tabular-nums;height:44px;display:flex;align-items:flex-start;justify-content:flex-end}
+.tt3 .mg-slot{border-bottom:1px solid rgba(255,255,255,0.025);height:44px;position:relative}
+.tt3 .mg-slot:hover{background:rgba(255,255,255,0.015)}
+
+.tt3 .mg-block{
+  position:absolute;left:0;right:0;border-radius:8px;padding:6px 10px;
+  cursor:pointer;transition:all .2s;z-index:2;overflow:hidden;
+  display:flex;align-items:center;gap:8px;
+}
+.tt3 .mg-block:hover{transform:translateX(3px);box-shadow:0 2px 12px rgba(0,0,0,0.3)}
+.tt3 .mg-block .mb-color{width:3px;height:100%;border-radius:2px;position:absolute;left:0;top:0}
+.tt3 .mg-block .mb-info{padding-left:8px;flex:1;min-width:0}
+.tt3 .mg-block .mb-name{font-size:12px;font-weight:600;color:#ede9f6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tt3 .mg-block .mb-meta{font-size:10px;color:rgba(255,255,255,0.35);margin-top:1px}
+.tt3 .mg-block .mb-check{width:18px;height:18px;border-radius:50%;border:2px solid rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:8px;color:transparent;transition:all .2s;cursor:pointer}
+.tt3 .mg-block.done .mb-check{background:var(--accent);border-color:var(--accent);color:#fff}
+.tt3 .mg-block.done .mb-name{text-decoration:line-through;opacity:.4}
+
+.tt3 .mg-block.cat-work{background:rgba(96,165,250,0.08)}
+.tt3 .mg-block.cat-work .mb-color{background:var(--work)}
+.tt3 .mg-block.cat-study{background:rgba(52,211,153,0.06)}
+.tt3 .mg-block.cat-study .mb-color{background:var(--study)}
+.tt3 .mg-block.cat-life{background:rgba(251,191,36,0.06)}
+.tt3 .mg-block.cat-life .mb-color{background:var(--life)}
+
+.tt3 .habit-section{padding:10px 12px;border-top:1px solid rgba(255,255,255,0.05)}
+.tt3 .habit-label{font-size:10px;font-weight:600;color:rgba(255,255,255,0.25);letter-spacing:1.5px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.tt3 .habit-label i{color:var(--accent)}
+.tt3 .habit-chips{display:flex;gap:6px;flex-wrap:wrap}
+.tt3 .habit-chip{display:flex;align-items:center;gap:5px;padding:6px 10px;border-radius:8px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);cursor:pointer;transition:all .2s;font-size:11px;color:rgba(255,255,255,0.55)}
+.tt3 .habit-chip:hover{background:rgba(255,255,255,0.04)}
+.tt3 .habit-chip .hc-check{width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,255,255,0.12);display:flex;align-items:center;justify-content:center;font-size:7px;color:transparent;transition:all .25s}
+.tt3 .habit-chip.checked .hc-check{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 0 8px rgba(167,139,250,0.3)}
+.tt3 .habit-chip.checked{border-color:rgba(167,139,250,0.1);color:rgba(255,255,255,0.35)}
+
+.tt3 .panel-footer{padding:10px 18px;border-top:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between;font-size:11px;color:rgba(255,255,255,0.3);background:rgba(255,255,255,0.01)}
+.tt3 .pf-progress{flex:1;margin:0 12px}
+.tt3 .pf-bar{height:3px;background:rgba(255,255,255,0.04);border-radius:2px;overflow:hidden}
+.tt3 .pf-fill{height:100%;background:linear-gradient(90deg,var(--accent),#60a5fa);border-radius:2px}
+.tt3 .pf-streak{color:#c4b5fd;font-weight:600;padding:3px 8px;border-radius:12px;background:rgba(167,139,250,0.08)}
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <h1><i class="fas fa-calendar-week" style="margin-right:6px"></i>课表风格</h1>
+  <div class="tab active" onclick="sw('t1')">1 · 经典网格课表</div>
+  <div class="tab" onclick="sw('t2')">2 · 圆角卡片课表</div>
+  <div class="tab" onclick="sw('t3')">3 · 侧栏适配版</div>
+</div>
+
+<div class="main">
+
+<!-- DEMO 1 -->
+<div class="section active" id="t1">
+<div class="desc">
+  <b>方案 1 — 经典网格课表</b><br>
+  最接近大学课表的体验：左侧时间轴 + 顶部星期，任务像"课程块"一样按时间占位，不同分类用不同底色。<br>
+  红色当前时间线实时移动，一眼看到"现在该做什么"。<br>
+  <span class="tag tag-p">最直觉</span> 像排课表一样安排一周 &nbsp;
+  <span class="tag tag-p">时间冲突一目了然</span> &nbsp;
+  <span class="tag tag-w">全屏展示最佳</span>
+</div>
+<div class="tt1">
+  <div class="header">
+    <div class="title">本周课表</div>
+    <div class="week-label">第16周 · 4/14 - 4/20</div>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--work)"></span>工作</span>
+      <span><span class="dot" style="background:var(--study)"></span>学习</span>
+      <span><span class="dot" style="background:var(--life)"></span>生活</span>
+    </div>
+  </div>
+  <div class="grid" id="grid1"></div>
+</div>
+</div>
+
+<!-- DEMO 2 -->
+<div class="section" id="t2">
+<div class="desc">
+  <b>方案 2 — 圆角卡片课表</b><br>
+  更现代的视觉：任务块使用渐变底色 + 圆角卡片 + emoji 图标，hover 时轻微浮起。<br>
+  保留课表的时间网格结构，但用更柔和的视觉语言。<br>
+  <span class="tag tag-p">设计感更强</span> &nbsp;
+  <span class="tag tag-p">渐变色区分清晰</span> &nbsp;
+  <span class="tag tag-w">全屏展示最佳</span>
+</div>
+<div class="tt2">
+  <div class="header">
+    <div class="title">周规划</div>
+    <div class="week-range">4月14日 – 4月20日</div>
+    <div class="nav-btns">
+      <div class="nav-btn"><i class="fas fa-chevron-left"></i></div>
+      <div class="nav-btn" style="width:auto;padding:0 12px;color:var(--accent)">本周</div>
+      <div class="nav-btn"><i class="fas fa-chevron-right"></i></div>
+    </div>
+  </div>
+  <div class="grid" id="grid2"></div>
+</div>
+</div>
+
+<!-- DEMO 3 -->
+<div class="section" id="t3">
+<div class="desc">
+  <b>方案 3 — 侧栏适配版</b>（440px 面板内的课表体验）<br>
+  顶部日期选择条 + 下方单日课表时间轴 + 底部习惯打卡。适合直接集成到扩展侧栏。<br>
+  切换日期即可查看其他天的安排，结合日/周双视角。<br>
+  <span class="tag tag-p">完美适配 440px 侧栏</span> &nbsp;
+  <span class="tag tag-p">习惯+计划一体化</span> &nbsp;
+  <span class="tag tag-w">需逐天查看</span>
+</div>
+<div class="tt3" id="panel3"></div>
+</div>
+
+</div>
+
+<script>
+const DAYS_DATA=[
+  {d:'周一',n:'14',tasks:[
+    {name:'项目站会',t:'09:00',dur:30,cat:'work',icon:'💬'},
+    {name:'代码开发',t:'09:30',dur:150,cat:'work',icon:'💻'},
+    {name:'英语阅读',t:'20:00',dur:45,cat:'study',icon:'📖'}
+  ]},
+  {d:'周二',n:'15',today:true,tasks:[
+    {name:'需求评审',t:'10:00',dur:60,cat:'work',icon:'📋'},
+    {name:'PPT 制作',t:'14:00',dur:120,cat:'work',icon:'📊'},
+    {name:'冥想放松',t:'07:00',dur:15,cat:'life',icon:'🧘'},
+    {name:'算法练习',t:'20:30',dur:60,cat:'study',icon:'🧩'}
+  ]},
+  {d:'周三',n:'16',tasks:[
+    {name:'数据分析',t:'09:00',dur:120,cat:'work',icon:'📈'},
+    {name:'团队午餐',t:'12:00',dur:60,cat:'life',icon:'🍜'},
+    {name:'Python 课',t:'19:00',dur:90,cat:'study',icon:'🐍'}
+  ]},
+  {d:'周四',n:'17',tasks:[
+    {name:'1v1 沟通',t:'10:00',dur:45,cat:'work',icon:'🤝'},
+    {name:'报告撰写',t:'14:00',dur:120,cat:'work',icon:'✍️'},
+    {name:'跑步',t:'18:00',dur:40,cat:'life',icon:'🏃'}
+  ]},
+  {d:'周五',n:'18',tasks:[
+    {name:'周报总结',t:'15:00',dur:60,cat:'work',icon:'📝'},
+    {name:'读书会',t:'20:00',dur:90,cat:'study',icon:'📚'}
+  ]},
+  {d:'周六',n:'19',tasks:[
+    {name:'徒步',t:'09:00',dur:180,cat:'life',icon:'⛰️'},
+    {name:'摄影练习',t:'15:00',dur:90,cat:'life',icon:'📷'}
+  ]},
+  {d:'周日',n:'20',tasks:[
+    {name:'家务整理',t:'10:00',dur:60,cat:'life',icon:'🏠'},
+    {name:'本周复盘',t:'20:00',dur:30,cat:'work',icon:'🔄'},
+    {name:'英语听力',t:'21:00',dur:30,cat:'study',icon:'🎧'}
+  ]}
+];
+const HOURS=[7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22];
+const HABITS=[{n:'晨跑',icon:'🏃'},{n:'英语',icon:'📖'},{n:'冥想',icon:'🧘'},{n:'日记',icon:'📝'}];
+const HAB_CHK=[[0,1,0,1,1,0,0],[1,1,1,1,0,1,0],[0,1,0,0,1,0,0],[1,1,0,1,1,1,0]];
+
+function timeToRow(t){const[h,m]=t.split(':').map(Number);return(h-7)+1+1;}
+function durToSpan(d){return Math.max(d/60,0.25);}
+
+function sw(id){
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  const idx=['t1','t2','t3'].indexOf(id);
+  document.querySelectorAll('.tab')[idx].classList.add('active');
+}
+
+// DEMO 1
+(function(){
+  const g=document.getElementById('grid1');
+  let h='<div class="corner"><i class="fas fa-clock" style="opacity:0.4"></i></div>';
+  DAYS_DATA.forEach(d=>{
+    h+=`<div class="day-hd${d.today?' today':''}"><span class="dn">${d.d}</span><span class="dd">${d.n}</span></div>`;
+  });
+  HOURS.forEach((hr,ri)=>{
+    h+=`<div class="time-lb">${String(hr).padStart(2,'0')}:00</div>`;
+    DAYS_DATA.forEach((d,ci)=>{
+      const cls=d.today?' today-col':'';
+      let blocks='';
+      d.tasks.forEach(t=>{
+        const[th,tm]=t.t.split(':').map(Number);
+        if(th===hr){
+          const top=(tm/60)*48;
+          const height=Math.max((t.dur/60)*48-2,22);
+          const done=Math.random()>0.75;
+          blocks+=`<div class="block cat-${t.cat}${done?' done':''}" style="top:${top}px;height:${height}px">
+            <div class="b-name">${t.icon} ${t.name}</div>
+            ${height>30?`<div class="b-time">${t.t} · ${t.dur}min</div>`:''}
+          </div>`;
+        }
+      });
+      if(d.today && hr===12 && ri>0){
+        blocks+=`<div class="now-line" style="top:${(15/60)*48}px"><div class="now-dot"></div></div>`;
+      }
+      h+=`<div class="cell${cls}">${blocks}</div>`;
+    });
+  });
+  g.innerHTML=h;
+})();
+
+// DEMO 2
+(function(){
+  const g=document.getElementById('grid2');
+  let topRow='<div class="top-row"><div></div>';
+  DAYS_DATA.forEach(d=>{
+    topRow+=`<div class="day-strip${d.today?' today':''}"><span class="ds-name">${d.d}</span><span class="ds-num">${d.n}</span></div>`;
+  });
+  topRow+='</div>';
+  let bodyRow='<div class="body-row"><div class="time-col">';
+  HOURS.forEach(hr=>{bodyRow+=`<div class="time-slot">${String(hr).padStart(2,'0')}:00</div>`;});
+  bodyRow+='</div>';
+  DAYS_DATA.forEach(d=>{
+    let lines='';
+    HOURS.forEach(()=>{lines+=`<div class="hour-line"></div>`;});
+    let cards='';
+    d.tasks.forEach(t=>{
+      const[th,tm]=t.t.split(':').map(Number);
+      const top=((th-7)*52)+(tm/60*52);
+      const height=Math.max((t.dur/60)*52-3,24);
+      const done=Math.random()>0.8;
+      const catLabel=t.cat==='work'?'工作':t.cat==='study'?'学习':'生活';
+      cards+=`<div class="card cat-${t.cat}${done?' done':''}" style="top:${top}px;height:${height}px">
+        ${height>40?`<div class="c-emoji">${t.icon}</div>`:''}
+        <div class="c-name">${t.name}</div>
+        ${height>32?`<div class="c-time">${t.t} · ${t.dur}m</div>`:''}
+        <span class="c-tag">${catLabel}</span>
+      </div>`;
+    });
+    bodyRow+=`<div class="day-col${d.today?' today-col':''}">${lines}${cards}</div>`;
+  });
+  bodyRow+='</div>';
+  g.innerHTML=topRow+bodyRow;
+})();
+
+// DEMO 3
+(function(){
+  const p=document.getElementById('panel3');
+  let selDay=1;
+  function render(){
+    const d=DAYS_DATA[selDay];
+    const dayChips=DAYS_DATA.map((dd,i)=>{
+      const dots=dd.tasks.slice(0,3).map(t=>`<span class="dc-dot" style="background:var(--${t.cat})"></span>`).join('');
+      return `<div class="day-chip${dd.today?' today':''}${i===selDay?' sel':''}" onclick="window._selDay(${i})">
+        <span class="dc-name">${dd.d}</span>
+        <span class="dc-num">${dd.n}</span>
+        <span class="dc-dots">${dots}</span>
+      </div>`;
+    }).join('');
+
+    let slots='';
+    const dayHours=[7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22];
+    dayHours.forEach(hr=>{
+      let blocks='';
+      d.tasks.forEach(t=>{
+        const[th,tm]=t.t.split(':').map(Number);
+        if(th===hr){
+          const top=(tm/60)*44;
+          const height=Math.max((t.dur/60)*44-2,28);
+          const done=Math.random()>0.7;
+          const catColor=t.cat==='work'?'var(--work)':t.cat==='study'?'var(--study)':'var(--life)';
+          blocks+=`<div class="mg-block cat-${t.cat}${done?' done':''}" style="top:${top}px;height:${height}px">
+            <div class="mb-color" style="background:${catColor}"></div>
+            <div class="mb-info">
+              <div class="mb-name">${t.icon} ${t.name}</div>
+              <div class="mb-meta">${t.t} · ${t.dur}min</div>
+            </div>
+            <div class="mb-check"><i class="fas fa-check"></i></div>
+          </div>`;
+        }
+      });
+      slots+=`<div class="mg-time">${String(hr).padStart(2,'0')}:00</div><div class="mg-slot">${blocks}</div>`;
+    });
+
+    const habits=HABITS.map((h,i)=>{
+      const checked=HAB_CHK[i][selDay];
+      return `<div class="habit-chip${checked?' checked':''}">
+        <span class="hc-check"><i class="fas fa-check"></i></span>
+        ${h.icon} ${h.n}
+      </div>`;
+    }).join('');
+
+    const total=d.tasks.length+HABITS.length;
+    const done=d.tasks.filter(()=>Math.random()>0.6).length+HABITS.filter((_,i)=>HAB_CHK[i][selDay]).length;
+    const pct=total>0?Math.round(done/total*100):0;
+
+    p.innerHTML=`
+      <div class="panel-header">
+        <div class="panel-title"><i class="fas fa-calendar-check"></i>每日计划</div>
+        <div class="view-toggle">
+          <div class="vt-btn">日</div>
+          <div class="vt-btn active">周</div>
+        </div>
+        <div class="close-btn"><i class="fas fa-times"></i></div>
+      </div>
+      <div class="day-selector">${dayChips}</div>
+      <div class="timetable-body">
+        <div class="mini-grid">${slots}</div>
+      </div>
+      <div class="habit-section">
+        <div class="habit-label"><i class="fas fa-redo"></i> 习惯打卡</div>
+        <div class="habit-chips">${habits}</div>
+      </div>
+      <div class="panel-footer">
+        <span>完成 ${done}/${total}</span>
+        <div class="pf-progress"><div class="pf-bar"><div class="pf-fill" style="width:${pct}%"></div></div></div>
+        <span class="pf-streak"><i class="fas fa-fire" style="color:#f87171;margin-right:3px"></i>3天</span>
+      </div>`;
+  }
+  window._selDay=function(i){selDay=i;render();};
+  render();
+})();
+</script>
+</body>
+</html>

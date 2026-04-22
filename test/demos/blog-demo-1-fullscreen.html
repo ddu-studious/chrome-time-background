@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>写作空间 · 方案A · 全屏知识库</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a14; color: #e0e0e0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif; min-height: 100vh; }
+
+/* 模拟背景 */
+.bg-sim { position: fixed; inset: 0; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); z-index: 0; }
+.bg-sim::after { content: ''; position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%); font-size: 72px; font-weight: 900; color: rgba(255,255,255,.06); white-space: nowrap; content: '14:35:28'; letter-spacing: 8px; }
+
+/* 遮罩 */
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 10; }
+
+/* 面板 - 与常用信息一致 */
+.panel { position: fixed; top: 4vh; left: 4vw; right: 4vw; bottom: 4vh; background: linear-gradient(135deg, rgba(22,25,38,.97), rgba(18,20,32,.98)); border-radius: 16px; border: 1px solid rgba(255,255,255,.08); box-shadow: 0 16px 60px rgba(0,0,0,.5); z-index: 11; display: flex; flex-direction: column; overflow: hidden; }
+
+/* 头部 */
+.panel-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid rgba(255,255,255,.06); flex-shrink: 0; }
+.panel-title { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; }
+.panel-title i { color: #d4a843; }
+.header-right { display: flex; align-items: center; gap: 8px; }
+.search-box { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); border-radius: 8px; padding: 7px 12px 7px 32px; color: #ccc; font-size: 13px; width: 220px; outline: none; }
+.search-box:focus { border-color: rgba(212,168,67,.4); }
+.search-wrap { position: relative; }
+.search-wrap i { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #666; font-size: 13px; }
+.btn { border: none; background: transparent; color: #aaa; cursor: pointer; padding: 7px 10px; border-radius: 6px; font-size: 13px; transition: all .15s; display: inline-flex; align-items: center; gap: 5px; }
+.btn:hover { background: rgba(255,255,255,.08); color: #fff; }
+.btn-primary { background: #d4a843; color: #1a1a2e; font-weight: 600; }
+.btn-primary:hover { background: #e0b854; }
+.btn-close { font-size: 18px; padding: 4px 8px; }
+
+/* Tab 栏 */
+.tab-bar { display: flex; align-items: center; padding: 0 20px; border-bottom: 1px solid rgba(255,255,255,.06); flex-shrink: 0; }
+.tab { padding: 10px 16px; font-size: 13px; color: #888; cursor: pointer; border-bottom: 2px solid transparent; transition: all .15s; display: flex; align-items: center; gap: 6px; }
+.tab:hover { color: #ccc; }
+.tab.active { color: #d4a843; border-bottom-color: #d4a843; }
+.tab .count { font-size: 11px; background: rgba(212,168,67,.15); color: #d4a843; padding: 1px 6px; border-radius: 8px; }
+
+/* 分类筛选 */
+.filter-bar { display: flex; align-items: center; gap: 6px; padding: 10px 20px; border-bottom: 1px solid rgba(255,255,255,.04); flex-shrink: 0; }
+.cat-chip { padding: 4px 12px; border-radius: 4px; font-size: 12px; background: rgba(255,255,255,.04); color: #888; cursor: pointer; transition: all .15s; }
+.cat-chip:hover { background: rgba(255,255,255,.08); color: #ccc; }
+.cat-chip.active { background: #d4a843; color: #1a1a2e; font-weight: 600; }
+
+/* 主体 - 左右分栏 */
+.panel-body { flex: 1; display: flex; overflow: hidden; }
+
+/* 左侧文章列表 */
+.list-pane { width: 300px; border-right: 1px solid rgba(255,255,255,.06); display: flex; flex-direction: column; flex-shrink: 0; }
+
+.streak-bar { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,.04); }
+.streak-grid { display: flex; gap: 3px; flex-wrap: wrap; margin-bottom: 6px; }
+.streak-dot { width: 11px; height: 11px; border-radius: 2px; background: rgba(255,255,255,.06); }
+.streak-dot.on { background: #d4a843; }
+.streak-dot.today { outline: 1.5px solid #d4a843; outline-offset: 1px; }
+.streak-info { font-size: 12px; color: #888; }
+.streak-info .fire { color: #d4a843; font-weight: 600; }
+
+.post-list { flex: 1; overflow-y: auto; padding: 8px; }
+.post-card { padding: 10px 12px; margin-bottom: 6px; border-radius: 8px; cursor: pointer; border-left: 3px solid transparent; transition: all .15s; }
+.post-card:hover { background: rgba(255,255,255,.04); }
+.post-card.active { background: rgba(212,168,67,.08); border-left-color: #d4a843; }
+.post-card .pc-cat { font-size: 11px; color: #888; margin-bottom: 2px; }
+.post-card .pc-cat i { margin-right: 3px; }
+.post-card .pc-title { font-size: 14px; font-weight: 600; color: #eee; margin-bottom: 3px; }
+.post-card .pc-meta { font-size: 11px; color: #666; }
+.post-card .pc-preview { font-size: 12px; color: #777; margin-top: 4px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* 右侧内容区 */
+.content-pane { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.content-header { padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,.04); display: flex; align-items: flex-start; justify-content: space-between; flex-shrink: 0; }
+.content-title-input { background: none; border: none; color: #eee; font-size: 22px; font-weight: 800; width: 100%; outline: none; }
+.content-title-input::placeholder { color: #444; }
+.content-meta { display: flex; align-items: center; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+.content-meta select { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); color: #ccc; padding: 4px 8px; border-radius: 4px; font-size: 12px; outline: none; }
+.content-meta .tag-input { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); color: #ccc; padding: 4px 8px; border-radius: 4px; font-size: 12px; outline: none; flex: 1; min-width: 120px; }
+.wc-badge { font-size: 12px; color: #666; white-space: nowrap; }
+
+.editor-area { flex: 1; display: flex; overflow: hidden; }
+.editor-pane { flex: 1; display: flex; flex-direction: column; }
+.editor-pane textarea { flex: 1; background: rgba(0,0,0,.2); border: none; color: #d0d0d0; padding: 16px 20px; font-size: 14px; line-height: 1.9; font-family: 'SF Mono', 'Fira Code', Menlo, monospace; resize: none; outline: none; }
+.editor-pane textarea::placeholder { color: #444; }
+.preview-pane { flex: 1; overflow-y: auto; padding: 16px 20px; border-left: 1px solid rgba(255,255,255,.06); font-size: 15px; line-height: 1.9; color: #d0d0d0; }
+.preview-pane h2 { color: #eee; font-size: 1.3em; padding-bottom: .3em; border-bottom: 1px solid rgba(255,255,255,.08); margin: 1.2em 0 .5em; }
+.preview-pane blockquote { margin: 1em 0; padding: .5em 1em; border-left: 3px solid #d4a843; background: rgba(255,255,255,.03); color: #aaa; }
+.preview-pane strong { color: #eee; }
+.preview-pane p { margin-bottom: .8em; }
+
+.content-footer { padding: 10px 20px; border-top: 1px solid rgba(255,255,255,.04); display: flex; justify-content: flex-end; gap: 8px; flex-shrink: 0; }
+
+/* 方案信息 */
+.scheme-badge { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 100; background: rgba(212,168,67,.15); color: #d4a843; padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; backdrop-filter: blur(8px); border: 1px solid rgba(212,168,67,.2); }
+</style>
+</head>
+<body>
+<div class="scheme-badge">方案 A · 全屏知识库 — 与「常用信息」统一风格</div>
+<div class="bg-sim"></div>
+<div class="overlay"></div>
+<div class="panel">
+    <div class="panel-header">
+        <div class="panel-title"><i class="fas fa-pen-nib"></i> 写作空间</div>
+        <div class="header-right">
+            <div class="search-wrap">
+                <i class="fas fa-search"></i>
+                <input class="search-box" placeholder="搜索文章...">
+            </div>
+            <button class="btn btn-primary"><i class="fas fa-plus"></i> 新建</button>
+            <button class="btn btn-close"><i class="fas fa-times"></i></button>
+        </div>
+    </div>
+    <div class="tab-bar">
+        <div class="tab active"><i class="fas fa-th-large"></i> 卡片墙 <span class="count">8</span></div>
+        <div class="tab"><i class="fas fa-stream"></i> 时间线</div>
+        <div class="tab"><i class="fas fa-chart-pie"></i> 统计</div>
+    </div>
+    <div class="filter-bar">
+        <span class="cat-chip active">全部</span>
+        <span class="cat-chip">技术</span>
+        <span class="cat-chip">阅读</span>
+        <span class="cat-chip">思考</span>
+        <span class="cat-chip">随笔</span>
+        <span class="cat-chip">周报</span>
+        <span class="cat-chip">草稿箱</span>
+    </div>
+    <div class="panel-body">
+        <div class="list-pane">
+            <div class="streak-bar">
+                <div class="streak-grid">
+                    <span class="streak-dot on"></span><span class="streak-dot on"></span><span class="streak-dot"></span>
+                    <span class="streak-dot on"></span><span class="streak-dot on"></span><span class="streak-dot on"></span>
+                    <span class="streak-dot"></span><span class="streak-dot on"></span><span class="streak-dot on"></span>
+                    <span class="streak-dot"></span><span class="streak-dot"></span><span class="streak-dot on"></span>
+                    <span class="streak-dot on"></span><span class="streak-dot"></span><span class="streak-dot"></span>
+                    <span class="streak-dot on"></span><span class="streak-dot on"></span><span class="streak-dot on"></span>
+                    <span class="streak-dot"></span><span class="streak-dot on"></span><span class="streak-dot on"></span>
+                    <span class="streak-dot on"></span><span class="streak-dot"></span><span class="streak-dot"></span>
+                    <span class="streak-dot on"></span><span class="streak-dot on"></span><span class="streak-dot on"></span>
+                    <span class="streak-dot on today"></span>
+                </div>
+                <div class="streak-info"><span class="fire">🔥 连续 3 天</span> · 8 篇 · 3,200 字</div>
+            </div>
+            <div class="post-list">
+                <div class="post-card active">
+                    <div class="pc-cat" style="color:#FF9800"><i class="fas fa-lightbulb"></i> 思考</div>
+                    <div class="pc-title">搭建写作空间</div>
+                    <div class="pc-meta">今天 · 91 字</div>
+                    <div class="pc-preview">写作最大的敌人是开始，把写作空间集成到扩展中...</div>
+                </div>
+                <div class="post-card">
+                    <div class="pc-cat" style="color:#4CAF50"><i class="fas fa-book"></i> 阅读</div>
+                    <div class="pc-title">《原子习惯》读书笔记</div>
+                    <div class="pc-meta">昨天 · 520 字</div>
+                    <div class="pc-preview">习惯是自我提升的复利，每天进步1%一年后...</div>
+                </div>
+                <div class="post-card">
+                    <div class="pc-cat" style="color:#2196F3"><i class="fas fa-code"></i> 技术</div>
+                    <div class="pc-title">Chrome Extension MV3 踩坑记</div>
+                    <div class="pc-meta">3天前 · 1,280 字</div>
+                </div>
+                <div class="post-card">
+                    <div class="pc-cat" style="color:#9C27B0"><i class="fas fa-feather-alt"></i> 随笔</div>
+                    <div class="pc-title">周末散步的一些想法</div>
+                    <div class="pc-meta">5天前 · 340 字</div>
+                </div>
+                <div class="post-card">
+                    <div class="pc-cat" style="color:#00BCD4"><i class="fas fa-calendar-alt"></i> 周报</div>
+                    <div class="pc-title">第16周工作周报</div>
+                    <div class="pc-meta">6天前 · 680 字</div>
+                </div>
+            </div>
+        </div>
+        <div class="content-pane">
+            <div class="content-header">
+                <div style="flex:1">
+                    <input class="content-title-input" value="搭建写作空间" placeholder="输入标题...">
+                    <div class="content-meta">
+                        <select>
+                            <option>技术</option><option>阅读</option><option selected>思考</option>
+                            <option>随笔</option><option>周报</option><option>草稿箱</option>
+                        </select>
+                        <input class="tag-input" value="写作, 博客" placeholder="标签（逗号分隔）">
+                        <span class="wc-badge">91 字</span>
+                    </div>
+                </div>
+            </div>
+            <div class="editor-area">
+                <div class="editor-pane">
+                    <textarea placeholder="开始写作...&#10;支持 Markdown 语法">## 为什么要写博客
+
+看到一句话：
+
+> 写一个长期的价值博客会带来很多益处。
+
+深以为然。
+
+## 开始行动
+
+今天把写作空间集成到了 Chrome 扩展中，这样每次打开新标签页就能看到它。写作最大的敌人是**开始**，现在距离一步都没有了。</textarea>
+                </div>
+                <div class="preview-pane">
+                    <h2>为什么要写博客</h2>
+                    <p>看到一句话：</p>
+                    <blockquote>写一个长期的价值博客会带来很多益处。</blockquote>
+                    <p>深以为然。</p>
+                    <h2>开始行动</h2>
+                    <p>今天把写作空间集成到了 Chrome 扩展中，这样每次打开新标签页就能看到它。写作最大的敌人是<strong>开始</strong>，现在距离一步都没有了。</p>
+                </div>
+            </div>
+            <div class="content-footer">
+                <button class="btn"><i class="fas fa-eye"></i> 纯预览</button>
+                <button class="btn btn-primary"><i class="fas fa-save"></i> 保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

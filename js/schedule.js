@@ -10,12 +10,18 @@ class ScheduleManager {
         this._habitLog = {};
         this._settings = {};
         this._panelOpen = false;
+        this._viewMode = 'day'; // 'day' | 'week'
         this._currentDate = this._todayStr();
+        this._weekStart = null;
         this._panelEl = null;
         this._overlayEl = null;
         this._escHandler = null;
         this._initialized = false;
         this._currentTimeTick = null;
+        this._weekTooltip = null;
+        this._copyDayBuffer = null;
+        this._pasteMode = false;
+        this._lastCreatedId = null;
 
         this.CATEGORIES = [
             { id: 'work', name: '工作', color: '#60a5fa', icon: '💼' },
@@ -111,6 +117,77 @@ class ScheduleManager {
     _nowTimeStr() {
         const n = new Date();
         return `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`;
+    }
+    _getMonday(dateStr) {
+        const d = dateStr ? new Date(dateStr + 'T00:00:00') : new Date();
+        const day = d.getDay();
+        d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+        d.setHours(0, 0, 0, 0);
+        return d;
+    }
+    _getWeekDays() {
+        const days = [];
+        const m = new Date(this._weekStart);
+        const names = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+        for (let i = 0; i < 7; i++) {
+            days.push({ dateStr: this._dateToStr(m), dayName: names[i], dayNum: m.getDate(), isToday: this._dateToStr(m) === this._todayStr(), isWeekend: i >= 5 });
+            m.setDate(m.getDate() + 1);
+        }
+        return days;
+    }
+    _weekLabel() {
+        const m = new Date(this._weekStart);
+        const sun = new Date(m); sun.setDate(sun.getDate() + 6);
+        const y = m.getFullYear();
+        const oneJan = new Date(y, 0, 1);
+        const wn = Math.ceil(((m - oneJan) / 86400000 + oneJan.getDay() + 1) / 7);
+        return `第${wn}周 · ${m.getMonth() + 1}/${m.getDate()} – ${sun.getMonth() + 1}/${sun.getDate()}`;
+    }
+    _addMinutes(t, mins) {
+        const [h, m] = t.split(':').map(Number);
+        const total = h * 60 + m + mins;
+        return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+    }
+    _getDayEvents(dateStr) {
+        const events = [];
+        const dow = new Date(dateStr + 'T00:00:00').getDay();
+        const dn = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+        this._routines.forEach(r => {
+            if (!r.enabled) return;
+            let show = false;
+            if (r.frequency === 'daily') show = true;
+            else if (r.frequency === 'weekdays') show = dow >= 1 && dow <= 5;
+            else if (r.frequency === 'weekends') show = dow === 0 || dow === 6;
+            else if (r.frequency === 'custom' && Array.isArray(r.customDays)) show = r.customDays.includes(dn[dow]);
+            if (!show) return;
+            const cat = this._getCategory(r.category);
+            events.push({ type: 'routine', id: r.id, name: r.name, icon: r.icon || cat.icon, startTime: r.time || '09:00', duration: r.duration || 30, category: r.category, catColor: cat.color, completed: this._isRoutineChecked(r.id, dateStr) });
+        });
+        this._plans.filter(p => p.date === dateStr).forEach(p => {
+            const cat = this._getCategory(p.category);
+            events.push({ type: 'plan', id: p.id, name: p.name, icon: p.icon || cat.icon, startTime: p.startTime || '09:00', endTime: p.endTime, duration: p.duration || 60, category: p.category, catColor: cat.color, completed: !!p.completed, note: p.note });
+        });
+        return events;
+    }
+    _removeWeekTooltip() {
+        if (this._weekTooltip) { this._weekTooltip.remove(); this._weekTooltip = null; }
+    }
+    _showWeekTooltip(block) {
+        this._removeWeekTooltip();
+        const catObj = this._getCategory(block.dataset.tooltipCat);
+        const tip = document.createElement('div');
+        tip.className = 'wv-tooltip';
+        tip.innerHTML = `<div class="wv-tip-name">${block.dataset.tooltipName}</div><div class="wv-tip-time"><i class="fas fa-clock"></i> ${block.dataset.tooltipTime}</div><div class="wv-tip-meta"><span class="wv-tip-dur"><i class="fas fa-hourglass-half"></i> ${block.dataset.tooltipDur}</span><span class="wv-tip-cat" style="color:${catObj.color}"><i class="fas fa-circle" style="font-size:6px"></i> ${catObj.name}</span></div>`;
+        document.body.appendChild(tip);
+        this._weekTooltip = tip;
+        const rect = block.getBoundingClientRect();
+        const tr = tip.getBoundingClientRect();
+        let left = rect.right + 8, top = rect.top + (rect.height - tr.height) / 2;
+        if (left + tr.width > window.innerWidth - 12) left = rect.left - tr.width - 8;
+        top = Math.max(8, Math.min(top, window.innerHeight - tr.height - 8));
+        tip.style.left = left + 'px';
+        tip.style.top = top + 'px';
+        tip.classList.add('wv-tooltip-visible');
     }
 
     // ─── 习惯/例程 CRUD ───
@@ -347,10 +424,12 @@ class ScheduleManager {
         if (this._panelOpen) this.closePanel(); else this.openPanel();
     }
 
-    openPanel() {
+    openPanel(mode) {
         if (this._panelOpen) return;
         this._panelOpen = true;
+        this._viewMode = mode || 'day';
         this._currentDate = this._todayStr();
+        if (!this._weekStart) this._weekStart = this._getMonday();
         this._renderPanel();
         this._startCurrentTimeTick();
     }
@@ -358,6 +437,11 @@ class ScheduleManager {
     closePanel() {
         this._panelOpen = false;
         this._stopCurrentTimeTick();
+        this._removeWeekTooltip();
+        this._exitPasteMode();
+        document.querySelectorAll('.sch-form-overlay-fixed').forEach(el => el.remove());
+        document.querySelectorAll('.sch-ctx-fixed').forEach(el => el.remove());
+        if (this._weekNowTick) { clearInterval(this._weekNowTick); this._weekNowTick = null; }
         if (this._escHandler) {
             document.removeEventListener('keydown', this._escHandler);
             this._escHandler = null;
@@ -374,6 +458,18 @@ class ScheduleManager {
         }
         const dockBtn = document.getElementById('schedule-dock-btn');
         if (dockBtn) dockBtn.classList.remove('active');
+    }
+
+    _switchView(mode) {
+        if (mode === this._viewMode) return;
+        this._viewMode = mode;
+        if (mode === 'week' && !this._weekStart) {
+            this._weekStart = this._getMonday();
+        }
+        this._refreshPanel();
+        if (this._panelEl) {
+            this._panelEl.classList.toggle('sch-panel-wide', mode === 'week');
+        }
     }
 
     _startCurrentTimeTick() {
@@ -406,9 +502,10 @@ class ScheduleManager {
 
         const panel = document.createElement('div');
         panel.className = 'sch-panel';
+        if (this._viewMode === 'week') panel.classList.add('sch-panel-wide');
         this._panelEl = panel;
 
-        panel.innerHTML = this._buildPanelHTML();
+        panel.innerHTML = this._viewMode === 'week' ? this._buildWeekHTML() : this._buildPanelHTML();
         document.body.appendChild(overlay);
         document.body.appendChild(panel);
 
@@ -418,7 +515,7 @@ class ScheduleManager {
         });
 
         this._bindPanelEvents();
-        this._updateCurrentHighlight();
+        if (this._viewMode === 'day') this._updateCurrentHighlight();
 
         const dockBtn = document.getElementById('schedule-dock-btn');
         if (dockBtn) dockBtn.classList.add('active');
@@ -426,11 +523,13 @@ class ScheduleManager {
 
     _refreshPanel() {
         if (!this._panelEl || !this._panelOpen) return;
-        const scrollTop = this._panelEl.querySelector('.sch-panel-body')?.scrollTop || 0;
-        this._panelEl.innerHTML = this._buildPanelHTML();
-        this._updateCurrentHighlight();
-        const body = this._panelEl.querySelector('.sch-panel-body');
-        if (body) body.scrollTop = scrollTop;
+        const scrollEl = this._panelEl.querySelector(this._viewMode === 'week' ? '.wv-grid-wrap' : '.sch-panel-body');
+        const scrollTop = scrollEl?.scrollTop || 0;
+        this._panelEl.innerHTML = this._viewMode === 'week' ? this._buildWeekHTML() : this._buildPanelHTML();
+        this._bindPanelEvents();
+        if (this._viewMode === 'day') this._updateCurrentHighlight();
+        const newScrollEl = this._panelEl.querySelector(this._viewMode === 'week' ? '.wv-grid-wrap' : '.sch-panel-body');
+        if (newScrollEl) newScrollEl.scrollTop = scrollTop;
     }
 
     _buildPanelHTML() {
@@ -485,7 +584,11 @@ class ScheduleManager {
 
         return `
             <div class="sch-panel-header">
-                <div class="sch-panel-title"><i class="fas fa-calendar-check"></i> 每日计划</div>
+                <div class="sch-panel-title"><i class="fas fa-calendar-check"></i> 计划</div>
+                <div class="sch-view-tabs">
+                    <button class="sch-view-tab sch-view-tab-active" data-action="switch-day"><i class="fas fa-calendar-day"></i> 日</button>
+                    <button class="sch-view-tab" data-action="switch-week"><i class="fas fa-calendar-week"></i> 周</button>
+                </div>
                 <div class="sch-date-nav">
                     <button class="sch-nav-btn" data-action="prev-day" title="前一天"><i class="fas fa-chevron-left"></i></button>
                     <span class="sch-date-label${isToday ? ' sch-today' : ''}" data-action="goto-today" title="回到今天">
@@ -508,7 +611,10 @@ class ScheduleManager {
                 <div class="sch-section">
                     <div class="sch-section-label"><i class="fas fa-clock"></i> 灵活计划 · 今日安排</div>
                     ${planItems}
-                    <button class="sch-add-plan-btn" data-action="add-plan"><i class="fas fa-plus"></i> 添加计划</button>
+                    <div class="sch-plan-actions">
+                        <button class="sch-add-plan-btn" data-action="add-plan"><i class="fas fa-plus"></i> 添加计划</button>
+                        ${this._hasPrevDayPlans() ? `<button class="sch-copy-prev-btn" data-action="copy-prev-day"><i class="fas fa-copy"></i> 复制${this._prevDayLabel()}日程</button>` : ''}
+                    </div>
                 </div>
             </div>
             <div class="sch-panel-footer">
@@ -522,12 +628,99 @@ class ScheduleManager {
             </div>`;
     }
 
+    // ─── 周视图 HTML ───
+    _buildWeekHTML() {
+        const days = this._getWeekDays();
+        const HOURS = [];
+        for (let h = 6; h <= 23; h++) HOURS.push(h);
+        const PX = 72, MIN_H = 22;
+
+        const tabDay = `<button class="sch-view-tab" data-action="switch-day"><i class="fas fa-calendar-day"></i> 日</button>`;
+        const tabWeek = `<button class="sch-view-tab sch-view-tab-active" data-action="switch-week"><i class="fas fa-calendar-week"></i> 周</button>`;
+        const legend = this.CATEGORIES.map(c => `<span class="wv-legend-item"><span class="wv-legend-dot" style="background:${c.color}"></span>${c.name}</span>`).join('');
+
+        const pasteHint = this._pasteMode ? `<span class="wv-paste-hint"><i class="fas fa-paste"></i> 右键目标日期列头粘贴 · <button class="wv-paste-cancel" data-action="cancel-paste">取消</button></span>` : '';
+
+        let header = `<div class="sch-panel-header">
+            <div class="sch-panel-title"><i class="fas fa-calendar-check"></i> 计划</div>
+            <div class="sch-view-tabs">${tabDay}${tabWeek}</div>
+            <div class="wv-week-nav">
+                <button class="sch-nav-btn" data-action="prev-week"><i class="fas fa-chevron-left"></i></button>
+                <span class="wv-week-label">${this._escHtml(this._weekLabel())}</span>
+                <button class="sch-nav-btn" data-action="next-week"><i class="fas fa-chevron-right"></i></button>
+            </div>
+            <button class="sch-nav-btn" data-action="go-today-week" style="padding:0 10px;font-size:11px;font-weight:600;color:#a78bfa">本周</button>
+            <div class="wv-legend">${legend}</div>
+            <div class="sch-header-actions">
+                <button class="sch-header-btn" data-action="close" title="关闭"><i class="fas fa-times"></i></button>
+            </div>
+        </div>
+        <div class="wv-quick-bar">
+            <div class="wv-quick-input-wrap">
+                <i class="fas fa-bolt wv-quick-icon"></i>
+                <input type="text" class="wv-quick-input" id="wv-quick-input" placeholder="快捷添加：21 9:00 开会 / 周三 14:00-16:00 评审 / 9:00 晨会" autocomplete="off">
+            </div>
+            ${pasteHint}
+        </div>`;
+
+        let dayRow = '<div class="wv-day-row"><div class="wv-corner"><i class="fas fa-clock" style="opacity:0.3"></i></div>';
+        days.forEach(d => {
+            const isCopySrc = this._pasteMode && this._copyDayBuffer === d.dateStr;
+            const isPasteTarget = this._pasteMode && this._copyDayBuffer !== d.dateStr;
+            const hdCls = [
+                'wv-day-hd',
+                d.isToday ? 'wv-today' : '',
+                d.isWeekend ? 'wv-weekend' : '',
+                isCopySrc ? 'wv-copy-src' : '',
+                isPasteTarget ? 'wv-paste-target' : ''
+            ].filter(Boolean).join(' ');
+            dayRow += `<div class="${hdCls}" data-date="${d.dateStr}"><span class="wv-day-name">${d.dayName}</span><span class="wv-day-num">${d.dayNum}</span></div>`;
+        });
+        dayRow += '</div>';
+
+        let timeCol = '<div class="wv-time-col">';
+        HOURS.forEach(hr => { timeCol += `<div class="wv-time-label">${String(hr).padStart(2, '0')}:00</div>`; });
+        timeCol += '</div>';
+
+        let dayCols = '';
+        days.forEach(d => {
+            const evts = this._getDayEvents(d.dateStr);
+            let lines = '';
+            HOURS.forEach(hr => { lines += `<div class="wv-hour-line" data-date="${d.dateStr}" data-hour="${hr}"></div>`; });
+            let blocks = '';
+            evts.forEach(ev => {
+                const [sh, sm] = ev.startTime.split(':').map(Number);
+                const top = ((sh * 60 + sm) - HOURS[0] * 60) / 60 * PX;
+                const h = Math.max((ev.duration / 60) * PX, MIN_H);
+                const xs = ev.duration <= 15, med = ev.duration > 15 && ev.duration <= 40;
+                const sc = xs ? ' wv-block-xs' : (med ? ' wv-block-sm' : '');
+                const et = ev.endTime || this._addMinutes(ev.startTime, ev.duration);
+                const timeStr = `${ev.startTime} · ${ev.duration}m`;
+                const isNew = this._lastCreatedId === ev.id;
+                blocks += `<div class="wv-block wv-cat-${ev.category}${ev.completed ? ' wv-done' : ''}${sc}${isNew ? ' wv-block-new' : ''}" style="top:${top}px;height:${h}px" data-id="${ev.id}" data-type="${ev.type}" data-date="${d.dateStr}" data-tooltip-name="${this._escHtml(ev.name)}" data-tooltip-time="${ev.startTime} – ${et}" data-tooltip-dur="${ev.duration}min" data-tooltip-cat="${ev.category}"><span class="wv-block-name">${ev.icon} ${this._escHtml(ev.name)}</span><span class="wv-block-time">${timeStr}</span></div>`;
+            });
+            let nowLine = '';
+            if (d.isToday) {
+                const now = new Date(), nm = now.getHours() * 60 + now.getMinutes(), gs = HOURS[0] * 60;
+                if (nm >= gs) nowLine = `<div class="wv-now-line" style="top:${((nm - gs) / 60) * PX}px" data-now-line><div class="wv-now-dot"></div></div>`;
+            }
+            dayCols += `<div class="wv-day-col${d.isToday ? ' wv-today-col' : ''}${d.isWeekend ? ' wv-weekend-col' : ''}" data-date="${d.dateStr}">${lines}${blocks}${nowLine}</div>`;
+        });
+
+        return `${header}${dayRow}<div class="wv-grid-wrap"><div class="wv-body">${timeCol}${dayCols}</div></div>`;
+    }
+
     // ─── 事件绑定 ───
     _bindPanelEvents() {
         const panel = this._panelEl;
         if (!panel) return;
 
-        this._escHandler = (e) => { if (e.key === 'Escape') this.closePanel(); };
+        this._escHandler = (e) => {
+            if (e.key === 'Escape') {
+                if (this._pasteMode) { this._exitPasteMode(); this._refreshPanel(); return; }
+                this.closePanel();
+            }
+        };
         document.addEventListener('keydown', this._escHandler);
 
         panel.addEventListener('click', async (e) => {
@@ -535,6 +728,58 @@ class ScheduleManager {
             const action = target?.dataset.action;
 
             if (action === 'close') return this.closePanel();
+            // Tab switching
+            if (action === 'switch-day') return this._switchView('day');
+            if (action === 'switch-week') return this._switchView('week');
+            // Week view nav
+            if (action === 'prev-week') {
+                this._weekStart.setDate(this._weekStart.getDate() - 7);
+                return this._refreshPanel();
+            }
+            if (action === 'next-week') {
+                this._weekStart.setDate(this._weekStart.getDate() + 7);
+                return this._refreshPanel();
+            }
+            if (action === 'go-today-week') {
+                this._weekStart = this._getMonday();
+                return this._refreshPanel();
+            }
+            if (action === 'cancel-paste') {
+                this._exitPasteMode();
+                return this._refreshPanel();
+            }
+            // Week view block click → edit (plan) / toggle (routine)
+            const wvBlock = e.target.closest('.wv-block');
+            if (wvBlock && this._viewMode === 'week' && !e.target.closest('[data-action]')) {
+                const { id, type, date } = wvBlock.dataset;
+                if (type === 'routine') {
+                    await this.toggleRoutineCheck(id, date);
+                    return this._refreshPanel();
+                } else if (type === 'plan') {
+                    const plan = this._plans.find(p => p.id === id);
+                    if (plan) {
+                        this._currentDate = date;
+                        this._showPlanForm(plan);
+                    }
+                    return;
+                }
+            }
+            // Week view: click empty grid cell → create new plan
+            if (this._viewMode === 'week') {
+                const hourLine = e.target.closest('.wv-hour-line');
+                if (hourLine && !e.target.closest('.wv-block')) {
+                    const date = hourLine.dataset.date;
+                    const hour = parseInt(hourLine.dataset.hour);
+                    if (date && !isNaN(hour)) {
+                        this._currentDate = date;
+                        const startTime = `${String(hour).padStart(2, '0')}:00`;
+                        const endTime = `${String(Math.min(hour + 1, 23)).padStart(2, '0')}:00`;
+                        this._showPlanForm({ _preset: true, date, startTime, endTime });
+                    }
+                    return;
+                }
+            }
+            // Day view actions
             if (action === 'prev-day') {
                 this._currentDate = this._shiftDate(this._currentDate, -1);
                 return this._refreshPanel();
@@ -548,6 +793,11 @@ class ScheduleManager {
                 return this._refreshPanel();
             }
             if (action === 'add-plan') return this._showPlanForm();
+            if (action === 'copy-prev-day') {
+                const prevDate = this._shiftDate(this._currentDate, -1);
+                await this._copyDayPlans(prevDate, this._currentDate);
+                return this._refreshPanel();
+            }
             if (action === 'manage-routines') return this._showRoutineManager();
 
             if (action === 'routine-menu') {
@@ -575,13 +825,74 @@ class ScheduleManager {
                 return;
             }
         });
+
+        // Week view: tooltip, dblclick, contextmenu, paste-mode click
+        if (this._viewMode === 'week') {
+            panel.addEventListener('mouseover', e => {
+                const b = e.target.closest('.wv-block');
+                if (b) this._showWeekTooltip(b);
+            });
+            panel.addEventListener('mouseout', e => {
+                const b = e.target.closest('.wv-block');
+                if (b && !b.contains(e.relatedTarget)) this._removeWeekTooltip();
+            });
+            panel.addEventListener('dblclick', e => {
+                const b = e.target.closest('.wv-block') || e.target.closest('.wv-day-col');
+                const dateStr = b?.dataset?.date;
+                if (dateStr) {
+                    this._currentDate = dateStr;
+                    this._switchView('day');
+                }
+            });
+            // Right-click context menu on event blocks and day headers
+            panel.addEventListener('contextmenu', e => {
+                const block = e.target.closest('.wv-block');
+                if (block) {
+                    e.preventDefault();
+                    this._showWeekBlockMenu(block, e);
+                    return;
+                }
+                const dayHd = e.target.closest('.wv-day-hd');
+                if (dayHd && dayHd.dataset.date) {
+                    e.preventDefault();
+                    this._showWeekDayMenu(dayHd.dataset.date, e);
+                }
+            });
+            // Quick input handler
+            const quickInput = panel.querySelector('#wv-quick-input');
+            if (quickInput) {
+                quickInput.addEventListener('keydown', async (e) => {
+                    if (e.key === 'Enter') {
+                        const text = quickInput.value.trim();
+                        if (!text) return;
+                        const ok = await this._handleQuickInput(text);
+                        if (ok) {
+                            quickInput.value = '';
+                            setTimeout(() => { this._lastCreatedId = null; }, 2000);
+                        } else {
+                            quickInput.classList.add('wv-quick-error');
+                            setTimeout(() => quickInput.classList.remove('wv-quick-error'), 600);
+                        }
+                    }
+                    if (e.key === 'Escape') {
+                        e.stopPropagation();
+                        quickInput.value = '';
+                        quickInput.blur();
+                    }
+                });
+            }
+        }
     }
 
     // ─── 计划创建/编辑表单 ───
     _showPlanForm(editPlan) {
-        const isEdit = !!editPlan;
-        const existing = this._panelEl?.querySelector('.sch-form-overlay');
-        if (existing) existing.remove();
+        const isPreset = editPlan && editPlan._preset;
+        const isEdit = !!editPlan && !isPreset;
+        this._panelEl?.querySelectorAll('.sch-form-overlay').forEach(el => el.remove());
+        document.querySelectorAll('.sch-form-overlay-fixed').forEach(el => el.remove());
+
+        const presetStart = isPreset ? editPlan.startTime : null;
+        const presetEnd = isPreset ? editPlan.endTime : null;
 
         const catOptions = this.CATEGORIES.map(c =>
             `<option value="${c.id}"${(editPlan?.category || 'work') === c.id ? ' selected' : ''}>${c.icon} ${c.name}</option>`
@@ -594,20 +905,20 @@ class ScheduleManager {
                 <div class="sch-form-title">${isEdit ? '编辑计划' : '添加计划'}</div>
                 <div class="sch-form-row">
                     <label>名称</label>
-                    <input type="text" class="sch-input" id="sch-plan-name" placeholder="做什么..." value="${this._escHtml(editPlan?.name || '')}">
+                    <input type="text" class="sch-input" id="sch-plan-name" placeholder="做什么..." value="${this._escHtml(isEdit ? editPlan.name : '')}">
                 </div>
                 <div class="sch-form-row">
                     <label>图标</label>
-                    <input type="text" class="sch-input sch-input-sm" id="sch-plan-icon" placeholder="emoji" value="${editPlan?.icon || '📌'}" maxlength="4">
+                    <input type="text" class="sch-input sch-input-sm" id="sch-plan-icon" placeholder="emoji" value="${isEdit ? (editPlan.icon || '📌') : '📌'}" maxlength="4">
                 </div>
                 <div class="sch-form-row sch-form-row-inline">
                     <div>
                         <label>开始</label>
-                        <input type="time" class="sch-input" id="sch-plan-start" value="${editPlan?.startTime || this._suggestNextTime()}">
+                        <input type="time" class="sch-input" id="sch-plan-start" value="${isEdit ? editPlan.startTime : (presetStart || this._suggestNextTime())}">
                     </div>
                     <div>
                         <label>结束</label>
-                        <input type="time" class="sch-input" id="sch-plan-end" value="${editPlan?.endTime || this._suggestNextEndTime()}">
+                        <input type="time" class="sch-input" id="sch-plan-end" value="${isEdit ? editPlan.endTime : (presetEnd || this._suggestNextEndTime())}">
                     </div>
                 </div>
                 <div class="sch-form-row">
@@ -616,7 +927,7 @@ class ScheduleManager {
                 </div>
                 <div class="sch-form-row">
                     <label>备注</label>
-                    <input type="text" class="sch-input" id="sch-plan-note" placeholder="可选备注..." value="${this._escHtml(editPlan?.note || '')}">
+                    <input type="text" class="sch-input" id="sch-plan-note" placeholder="可选备注..." value="${this._escHtml(isEdit ? (editPlan.note || '') : '')}">
                 </div>
                 <div class="sch-form-actions">
                     <button class="sch-btn sch-btn-cancel" id="sch-form-cancel">取消</button>
@@ -625,16 +936,22 @@ class ScheduleManager {
                 </div>
             </div>`;
 
-        this._panelEl.appendChild(overlay);
+        if (this._viewMode === 'week') {
+            overlay.classList.add('sch-form-overlay-fixed');
+            document.body.appendChild(overlay);
+        } else {
+            this._panelEl.appendChild(overlay);
+        }
         overlay.querySelector('#sch-plan-name')?.focus();
 
-        overlay.querySelector('#sch-form-cancel').onclick = () => overlay.remove();
-        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+        const removeForm = () => { overlay.remove(); };
+        overlay.querySelector('#sch-form-cancel').onclick = removeForm;
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) removeForm(); });
 
         if (isEdit) {
             overlay.querySelector('#sch-form-delete').onclick = async () => {
                 await this.removePlan(editPlan.id);
-                overlay.remove();
+                removeForm();
                 this._refreshPanel();
             };
         }
@@ -656,9 +973,24 @@ class ScheduleManager {
             } else {
                 await this.addPlan(data);
             }
-            overlay.remove();
+            removeForm();
             this._refreshPanel();
         };
+    }
+
+    _hasPrevDayPlans() {
+        const prevDate = this._shiftDate(this._currentDate, -1);
+        return this._plans.some(p => p.date === prevDate);
+    }
+
+    _prevDayLabel() {
+        const prevDate = this._shiftDate(this._currentDate, -1);
+        if (prevDate === this._todayStr()) return '今天';
+        const d = new Date(prevDate + 'T00:00:00');
+        const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+        const yesterday = this._shiftDate(this._todayStr(), -1);
+        if (prevDate === yesterday) return '昨天';
+        return `${d.getMonth() + 1}/${d.getDate()}(${weekDays[d.getDay()]})`;
     }
 
     _suggestNextTime() {
@@ -869,6 +1201,194 @@ class ScheduleManager {
 
     _closeContextMenus() {
         this._panelEl?.querySelectorAll('.sch-ctx-menu').forEach(m => m.remove());
+        document.querySelectorAll('.sch-ctx-fixed').forEach(m => m.remove());
+    }
+
+    // ─── 周视图：事件块右键菜单 ───
+    _showWeekBlockMenu(block, ev) {
+        this._closeContextMenus();
+        this._removeWeekTooltip();
+        const { id, type, date } = block.dataset;
+
+        if (type === 'routine') {
+            const menu = this._createFixedMenu(ev, `
+                <div class="sch-ctx-item" data-ctx="toggle"><i class="fas fa-check-circle"></i> 打卡</div>`);
+            menu.addEventListener('click', async (e) => {
+                if (e.target.closest('[data-ctx="toggle"]')) {
+                    await this.toggleRoutineCheck(id, date);
+                    this._refreshPanel();
+                }
+                menu.remove();
+            });
+            return;
+        }
+
+        const plan = this._plans.find(p => p.id === id);
+        if (!plan) return;
+        const menu = this._createFixedMenu(ev, `
+            <div class="sch-ctx-item" data-ctx="edit"><i class="fas fa-pen"></i> 编辑</div>
+            <div class="sch-ctx-item" data-ctx="toggle"><i class="fas fa-${plan.completed ? 'undo' : 'check'}"></i> ${plan.completed ? '取消完成' : '标记完成'}</div>
+            <div class="sch-ctx-item sch-ctx-danger" data-ctx="delete"><i class="fas fa-trash-alt"></i> 删除</div>`);
+        menu.addEventListener('click', async (e) => {
+            const action = e.target.closest('[data-ctx]')?.dataset.ctx;
+            if (action === 'edit') { this._currentDate = date; this._showPlanForm(plan); }
+            if (action === 'toggle') { await this.togglePlanComplete(id); this._refreshPanel(); }
+            if (action === 'delete') { await this.removePlan(id); this._refreshPanel(); }
+            menu.remove();
+        });
+    }
+
+    // ─── 周视图：日列头右键菜单 ───
+    _showWeekDayMenu(dateStr, ev) {
+        this._closeContextMenus();
+        const plans = this.getPlansForDate(dateStr);
+        const d = new Date(dateStr + 'T00:00:00');
+        const label = `${d.getMonth() + 1}/${d.getDate()}`;
+        const hasCopy = !!this._copyDayBuffer;
+
+        let items = `<div class="sch-ctx-item" data-ctx="add"><i class="fas fa-plus"></i> 新建计划</div>`;
+        if (plans.length > 0) {
+            items += `<div class="sch-ctx-item" data-ctx="copy"><i class="fas fa-copy"></i> 复制 ${label} 的日程</div>`;
+        }
+        if (hasCopy) {
+            const srcD = new Date(this._copyDayBuffer + 'T00:00:00');
+            const srcLabel = `${srcD.getMonth() + 1}/${srcD.getDate()}`;
+            items += `<div class="sch-ctx-item" data-ctx="paste"><i class="fas fa-paste"></i> 粘贴 ${srcLabel} → ${label}</div>`;
+        }
+        if (plans.length > 0) {
+            items += `<div class="sch-ctx-item sch-ctx-danger" data-ctx="clear"><i class="fas fa-eraser"></i> 清空 ${label} 日程</div>`;
+        }
+
+        const menu = this._createFixedMenu(ev, items);
+        menu.addEventListener('click', async (e) => {
+            const action = e.target.closest('[data-ctx]')?.dataset.ctx;
+            if (action === 'add') { this._currentDate = dateStr; this._showPlanForm(); }
+            if (action === 'copy') { this._copyDayBuffer = dateStr; this._enterPasteMode(); }
+            if (action === 'paste') { await this._copyDayPlans(this._copyDayBuffer, dateStr); this._exitPasteMode(); this._refreshPanel(); }
+            if (action === 'clear') { await this._clearDayPlans(dateStr); this._refreshPanel(); }
+            menu.remove();
+        });
+    }
+
+    _createFixedMenu(ev, innerHtml) {
+        const menu = document.createElement('div');
+        menu.className = 'sch-ctx-menu sch-ctx-fixed';
+        menu.innerHTML = innerHtml;
+        document.body.appendChild(menu);
+
+        const mw = 180, mh = 200;
+        let left = ev.clientX, top = ev.clientY;
+        if (left + mw > window.innerWidth) left = window.innerWidth - mw - 8;
+        if (top + mh > window.innerHeight) top = window.innerHeight - mh - 8;
+        menu.style.left = left + 'px';
+        menu.style.top = top + 'px';
+
+        const close = (e) => { if (!menu.contains(e.target)) menu.remove(); };
+        setTimeout(() => document.addEventListener('click', close, { once: true }), 10);
+        return menu;
+    }
+
+    // ─── 复制日程 ───
+    async _copyDayPlans(sourceDate, targetDate) {
+        if (!sourceDate || !targetDate || sourceDate === targetDate) return;
+        const srcPlans = this._plans.filter(p => p.date === sourceDate);
+        if (srcPlans.length === 0) return;
+
+        for (const src of srcPlans) {
+            const copy = {
+                ...src,
+                id: this._genId('plan'),
+                date: targetDate,
+                completed: false,
+                createdAt: Date.now()
+            };
+            this._plans.push(copy);
+        }
+        await this._savePlans();
+    }
+
+    async _clearDayPlans(dateStr) {
+        this._plans = this._plans.filter(p => p.date !== dateStr);
+        await this._savePlans();
+    }
+
+    _enterPasteMode() {
+        this._pasteMode = true;
+        this._refreshPanel();
+    }
+
+    _exitPasteMode() {
+        this._pasteMode = false;
+        this._copyDayBuffer = null;
+    }
+
+    // ─── 快捷输入解析 ───
+    _parseQuickInput(text) {
+        if (!text || !text.trim()) return null;
+        text = text.trim();
+
+        const weekMap = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '日': 0, '天': 0 };
+
+        // Pattern: [日期] [周X] 时间[-时间] 名称
+        const m = text.match(/^(?:(\d{1,2})\s+)?(?:周([一二三四五六日天])\s+)?(\d{1,2}):(\d{2})(?:\s*[-–]\s*(\d{1,2}):(\d{2}))?\s+(.+)$/);
+        if (!m) return null;
+
+        const [, dayStr, weekDay, sh, sm, eh, em, name] = m;
+        let date;
+        const now = new Date();
+
+        if (dayStr) {
+            const day = parseInt(dayStr);
+            const d = new Date(now.getFullYear(), now.getMonth(), day);
+            if (d.getDate() !== day) return null;
+            date = this._dateToStr(d);
+        } else if (weekDay) {
+            const target = weekMap[weekDay];
+            if (target === undefined) return null;
+            const curr = now.getDay();
+            let diff = target - curr;
+            if (diff < 0) diff += 7;
+            const d = new Date(now);
+            d.setDate(d.getDate() + diff);
+            date = this._dateToStr(d);
+        } else {
+            date = this._currentDate || this._todayStr();
+        }
+
+        const startTime = `${String(parseInt(sh)).padStart(2, '0')}:${sm}`;
+        let endTime;
+        if (eh && em) {
+            endTime = `${String(parseInt(eh)).padStart(2, '0')}:${em}`;
+        } else {
+            const startH = parseInt(sh);
+            endTime = `${String(Math.min(startH + 1, 23)).padStart(2, '0')}:${sm}`;
+        }
+
+        return { date, startTime, endTime, name: name.trim() };
+    }
+
+    async _handleQuickInput(text) {
+        const parsed = this._parseQuickInput(text);
+        if (!parsed) return false;
+
+        const plan = await this.addPlan({
+            name: parsed.name,
+            date: parsed.date,
+            startTime: parsed.startTime,
+            endTime: parsed.endTime,
+            category: 'work'
+        });
+
+        if (plan) {
+            this._lastCreatedId = plan.id;
+            const targetMonday = this._getMonday(parsed.date);
+            if (targetMonday.getTime() !== this._weekStart.getTime()) {
+                this._weekStart = targetMonday;
+            }
+            this._refreshPanel();
+            return true;
+        }
+        return false;
     }
 }
 

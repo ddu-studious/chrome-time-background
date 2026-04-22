@@ -1,0 +1,391 @@
+/* ====================================================
+   WeekView — 课表网格样式（内嵌在 schedule panel 中）
+   前缀: wv-
+   ==================================================== */
+
+/* ─── Week nav (in header) ─── */
+.wv-week-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px;
+    background: rgba(255,255,255,0.025);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 8px;
+}
+.wv-week-label {
+    font-size: 11px;
+    color: rgba(255,255,255,0.45);
+    padding: 0 6px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+.wv-legend {
+    margin-left: auto;
+    display: flex;
+    gap: 10px;
+    font-size: 10px;
+    color: rgba(255,255,255,0.3);
+}
+.wv-legend-item {
+    display: flex; align-items: center; gap: 4px;
+}
+.wv-legend-dot {
+    width: 7px; height: 7px;
+    border-radius: 3px;
+}
+
+/* ─── Day header row (sticky) ─── */
+.wv-day-row {
+    display: grid;
+    grid-template-columns: 52px repeat(7, 1fr);
+    flex-shrink: 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    background: rgba(12,10,24,0.98);
+}
+.wv-corner {
+    display: flex; align-items: center; justify-content: center;
+    border-right: 1px solid rgba(255,255,255,0.05);
+    font-size: 10px;
+    color: rgba(255,255,255,0.2);
+}
+.wv-day-hd {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 1px;
+    padding: 7px 0;
+    border-right: 1px solid rgba(255,255,255,0.03);
+    transition: background .2s;
+}
+.wv-day-hd:last-child { border-right: none; }
+.wv-day-name {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    color: rgba(255,255,255,0.28);
+}
+.wv-day-num {
+    font-size: 14px;
+    font-weight: 700;
+    color: #e8e6f0;
+}
+.wv-day-hd.wv-today { background: rgba(167,139,250,0.06); }
+.wv-day-hd.wv-today .wv-day-name { color: #a78bfa; }
+.wv-day-hd.wv-today .wv-day-num { color: #a78bfa; }
+.wv-day-hd.wv-weekend .wv-day-name { color: rgba(251,191,36,0.35); }
+
+/* ─── Grid wrapper (scrollable) ─── */
+.wv-grid-wrap {
+    flex: 1;
+    overflow: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(167,139,250,0.12) transparent;
+}
+.wv-grid-wrap::-webkit-scrollbar { width: 4px; }
+.wv-grid-wrap::-webkit-scrollbar-thumb {
+    background: rgba(167,139,250,0.12);
+    border-radius: 2px;
+}
+
+/* ─── Body: time col + day columns ─── */
+.wv-body {
+    display: grid;
+    grid-template-columns: 52px repeat(7, 1fr);
+    min-width: 680px;
+}
+.wv-time-col {
+    border-right: 1px solid rgba(255,255,255,0.05);
+}
+.wv-time-label {
+    display: flex; align-items: flex-start;
+    justify-content: flex-end;
+    padding: 3px 8px 0 0;
+    height: 72px;
+    font-size: 10px;
+    color: rgba(255,255,255,0.16);
+    font-variant-numeric: tabular-nums;
+    user-select: none;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+
+/* Day columns */
+.wv-day-col {
+    position: relative;
+    border-right: 1px solid rgba(255,255,255,0.03);
+}
+.wv-day-col:last-child { border-right: none; }
+.wv-day-col.wv-today-col { background: rgba(167,139,250,0.012); }
+.wv-day-col.wv-weekend-col { background: rgba(251,191,36,0.006); }
+
+.wv-hour-line {
+    height: 72px;
+    border-bottom: 1px solid rgba(255,255,255,0.025);
+    cursor: pointer;
+    transition: background .12s;
+}
+.wv-hour-line:hover { background: rgba(255,255,255,0.015); }
+
+/* ─── Event blocks ─── */
+.wv-block {
+    position: absolute;
+    left: 2px; right: 2px;
+    border-radius: 8px;
+    padding: 5px 8px;
+    font-size: 11px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all .2s cubic-bezier(0.4,0,0.2,1);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    border: 1px solid transparent;
+    z-index: 3;
+    gap: 2px;
+}
+.wv-block:hover {
+    z-index: 10;
+    transform: scale(1.06);
+    box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+}
+.wv-block-name {
+    font-weight: 600;
+    color: #fff;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.wv-block-time {
+    font-size: 9px;
+    opacity: 0.6;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* xs: ≤20min — 单行紧凑 */
+.wv-block-xs {
+    flex-direction: row;
+    align-items: center;
+    padding: 1px 6px;
+    gap: 4px;
+    border-radius: 6px;
+}
+.wv-block-xs .wv-block-name {
+    font-size: 10px;
+    line-height: 1.1;
+}
+.wv-block-xs .wv-block-time {
+    font-size: 8px;
+    opacity: 0.5;
+    flex-shrink: 0;
+}
+/* xs hover: 展开显示完整信息 */
+.wv-block-xs:hover {
+    overflow: visible;
+    min-width: max-content;
+    z-index: 12;
+    padding: 3px 8px;
+    border-radius: 8px;
+}
+
+/* sm: 21-45min */
+.wv-block-sm {
+    padding: 3px 7px;
+    gap: 1px;
+}
+.wv-block-sm .wv-block-name { font-size: 10.5px; }
+.wv-block-sm .wv-block-time { font-size: 8.5px; }
+.wv-block-sm:hover {
+    overflow: visible;
+    z-index: 11;
+}
+
+.wv-done { opacity: 0.35; }
+.wv-done .wv-block-name { text-decoration: line-through; }
+
+/* ─── Category colors ─── */
+.wv-cat-work { background: rgba(96,165,250,0.18); border-color: rgba(96,165,250,0.22); }
+.wv-cat-work:hover { background: rgba(96,165,250,0.28); }
+.wv-cat-study { background: rgba(52,211,153,0.16); border-color: rgba(52,211,153,0.2); }
+.wv-cat-study:hover { background: rgba(52,211,153,0.26); }
+.wv-cat-life { background: rgba(251,191,36,0.14); border-color: rgba(251,191,36,0.18); }
+.wv-cat-life:hover { background: rgba(251,191,36,0.24); }
+
+/* ─── Now line ─── */
+.wv-now-line {
+    position: absolute;
+    left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent 0%, #f87171 10%, #f87171 90%, transparent 100%);
+    z-index: 5;
+    pointer-events: none;
+}
+.wv-now-dot {
+    position: absolute;
+    left: -5px; top: -4px;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: #f87171;
+    box-shadow: 0 0 8px rgba(248,113,113,0.5);
+}
+
+/* ─── Tooltip ─── */
+.wv-tooltip {
+    position: fixed;
+    z-index: 99999;
+    background: rgba(20,18,36,0.96);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    padding: 10px 14px;
+    min-width: 160px;
+    max-width: 260px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    opacity: 0;
+    transform: translateY(4px);
+    transition: all .15s ease;
+    pointer-events: none;
+}
+.wv-tooltip-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+.wv-tip-name { font-size: 13px; font-weight: 600; color: #f0eef8; margin-bottom: 6px; line-height: 1.4; }
+.wv-tip-time { font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 4px; display: flex; align-items: center; gap: 5px; }
+.wv-tip-time i { font-size: 9px; color: rgba(255,255,255,0.3); }
+.wv-tip-meta { display: flex; align-items: center; gap: 10px; font-size: 10px; color: rgba(255,255,255,0.35); }
+.wv-tip-meta i { font-size: 7px; }
+.wv-tip-dur { display: flex; align-items: center; gap: 4px; }
+.wv-tip-cat { display: flex; align-items: center; gap: 4px; }
+
+/* ─── Quick input bar ─── */
+.wv-quick-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    background: rgba(255,255,255,0.01);
+    flex-shrink: 0;
+}
+.wv-quick-input-wrap {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+.wv-quick-icon {
+    position: absolute;
+    left: 10px;
+    font-size: 10px;
+    color: rgba(167,139,250,0.4);
+    pointer-events: none;
+    z-index: 1;
+}
+.wv-quick-input {
+    width: 100%;
+    padding: 7px 12px 7px 30px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+    color: #e8e6f0;
+    font-size: 12px;
+    font-family: inherit;
+    outline: none;
+    transition: all .2s;
+}
+.wv-quick-input::placeholder {
+    color: rgba(255,255,255,0.18);
+    font-size: 11px;
+}
+.wv-quick-input:focus {
+    border-color: rgba(167,139,250,0.4);
+    background: rgba(167,139,250,0.03);
+    box-shadow: 0 0 0 2px rgba(167,139,250,0.06);
+}
+.wv-quick-input.wv-quick-error {
+    border-color: rgba(248,113,113,0.5);
+    animation: wvShake 0.3s ease;
+}
+@keyframes wvShake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-4px); }
+    75% { transform: translateX(4px); }
+}
+
+/* ─── Paste mode ─── */
+.wv-paste-hint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #a78bfa;
+    white-space: nowrap;
+    padding: 4px 10px;
+    background: rgba(167,139,250,0.08);
+    border: 1px solid rgba(167,139,250,0.15);
+    border-radius: 6px;
+    animation: wvPulse 2s ease infinite;
+}
+.wv-paste-hint i { font-size: 10px; }
+.wv-paste-cancel {
+    border: none;
+    background: rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.5);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    cursor: pointer;
+    transition: all .15s;
+}
+.wv-paste-cancel:hover { background: rgba(255,255,255,0.15); color: #fff; }
+
+@keyframes wvPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.wv-day-hd.wv-copy-src {
+    background: rgba(167,139,250,0.1);
+    box-shadow: inset 0 -2px 0 #a78bfa;
+}
+.wv-day-hd.wv-copy-src .wv-day-name { color: #a78bfa; }
+
+.wv-day-hd.wv-paste-target {
+    cursor: pointer;
+    border: 1px dashed rgba(167,139,250,0.3);
+    border-radius: 4px;
+    transition: all .2s;
+}
+.wv-day-hd.wv-paste-target:hover {
+    background: rgba(167,139,250,0.12);
+    border-color: rgba(167,139,250,0.5);
+}
+
+/* ─── New block highlight animation ─── */
+.wv-block-new {
+    animation: wvBlockFlash 1.5s ease;
+    box-shadow: 0 0 16px rgba(167,139,250,0.4);
+}
+@keyframes wvBlockFlash {
+    0% { box-shadow: 0 0 0 rgba(167,139,250,0); transform: scale(0.9); }
+    30% { box-shadow: 0 0 20px rgba(167,139,250,0.5); transform: scale(1.05); }
+    100% { box-shadow: 0 0 0 rgba(167,139,250,0); transform: scale(1); }
+}
+
+/* ─── Fixed context menu (appended to body) ─── */
+.sch-ctx-menu.sch-ctx-fixed {
+    position: fixed;
+    z-index: 100000;
+    background: rgba(20,18,36,0.96);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    padding: 5px;
+    min-width: 160px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    animation: schFadeIn 0.15s ease;
+}
+@keyframes schFadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }

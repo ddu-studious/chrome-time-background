@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>写作空间 · 方案 C · 底部抽屉</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  background: #0a0a14;
+  color: #e0e0e0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+  overflow: hidden;
+}
+
+/* 主界面模拟区 */
+.main-mock {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 72px 20px 24px;
+  background: linear-gradient(165deg, #12121c 0%, #0d1118 45%, #0a0d14 100%);
+}
+.main-mock::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 80% 50% at 50% 20%, rgba(212,168,67,.08), transparent 55%);
+  pointer-events: none;
+}
+
+.scheme-badge {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  background: rgba(212,168,67,.15);
+  color: #d4a843;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(212,168,67,.22);
+  white-space: nowrap;
+  max-width: calc(100% - 24px);
+  text-align: center;
+  line-height: 1.35;
+}
+
+.clock-wrap { position: relative; z-index: 2; text-align: center; }
+.clock-big {
+  font-size: clamp(42px, 10vw, 72px);
+  font-weight: 200;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  color: #f0f0f0;
+  text-shadow: 0 4px 24px rgba(0,0,0,.35);
+}
+.clock-big .sec { color: rgba(212,168,67,.95); font-weight: 300; }
+.date-line {
+  margin-top: 12px;
+  font-size: 15px;
+  color: rgba(255,255,255,.55);
+  letter-spacing: .04em;
+}
+.streak-row {
+  margin-top: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.08);
+  font-size: 14px;
+  color: #aaa;
+}
+.streak-row .fire { color: #d4a843; font-weight: 700; }
+.streak-dots { display: flex; gap: 4px; }
+.streak-dots span {
+  width: 8px; height: 8px; border-radius: 2px;
+  background: rgba(255,255,255,.12);
+}
+.streak-dots span.on { background: #d4a843; }
+.streak-dots span.today { box-shadow: 0 0 0 1px #d4a843; }
+
+.mock-hint {
+  margin-top: auto;
+  padding-top: 32px;
+  font-size: 12px;
+  color: rgba(255,255,255,.28);
+}
+
+/* 底部抽屉 */
+.drawer-host {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  height: var(--drawer-h, 62vh);
+  min-height: 40vh;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+.drawer-host.open { pointer-events: auto; }
+
+.drawer-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: linear-gradient(180deg, rgba(22,25,38,.98), rgba(18,20,32,.99));
+  border-radius: 16px 16px 0 0;
+  border-top: 1px solid rgba(255,255,255,.08);
+  box-shadow: 0 -8px 40px rgba(0,0,0,.4);
+  transform: translateY(100%);
+  transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: auto;
+}
+.drawer-host.open .drawer-panel { transform: translateY(0); }
+
+.drawer-dragzone {
+  flex-shrink: 0;
+  padding: 10px 0 6px;
+  cursor: grab;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  touch-action: none;
+}
+.drawer-dragzone:active { cursor: grabbing; }
+.drawer-handle {
+  width: 40px;
+  height: 4px;
+  border-radius: 4px;
+  background: rgba(255,255,255,.18);
+  box-shadow: 0 1px 0 rgba(0,0,0,.2);
+}
+
+.drawer-topbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 14px 12px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.drawer-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #eee;
+}
+.drawer-title .pen { font-size: 18px; }
+.tb-actions { display: flex; align-items: center; gap: 4px; }
+.tb-btn {
+  border: none;
+  background: rgba(255,255,255,.06);
+  color: #bbb;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: background .15s, color .15s;
+}
+.tb-btn:hover { background: rgba(255,255,255,.1); color: #fff; }
+.tb-btn.danger:hover { background: rgba(239,68,68,.2); color: #f87171; }
+
+.drawer-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 左：分类 80px */
+.cat-rail {
+  width: 80px;
+  flex-shrink: 0;
+  border-right: 1px solid rgba(255,255,255,.06);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 8px 6px;
+  gap: 4px;
+  overflow-y: auto;
+}
+.cat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 4px;
+  border-radius: 10px;
+  cursor: pointer;
+  color: #777;
+  font-size: 10px;
+  line-height: 1.2;
+  text-align: center;
+  transition: background .15s, color .15s;
+  border: 1px solid transparent;
+}
+.cat-item i { font-size: 16px; }
+.cat-item:hover { background: rgba(255,255,255,.05); color: #bbb; }
+.cat-item.active {
+  background: rgba(212,168,67,.12);
+  color: #d4a843;
+  border-color: rgba(212,168,67,.25);
+}
+
+/* 中：列表 220px */
+.list-rail {
+  width: 220px;
+  flex-shrink: 0;
+  border-right: 1px solid rgba(255,255,255,.06);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.list-rail-hd {
+  padding: 10px 12px 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: #555;
+}
+.post-scroll { flex: 1; overflow-y: auto; padding: 4px 8px 12px; }
+.post-card {
+  position: relative;
+  padding: 10px 10px 10px 12px;
+  margin-bottom: 6px;
+  border-radius: 10px;
+  cursor: pointer;
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.05);
+  transition: background .15s, border-color .15s;
+}
+.post-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--bar, #666);
+}
+.post-card:hover { background: rgba(255,255,255,.06); }
+.post-card.active {
+  background: rgba(212,168,67,.08);
+  border-color: rgba(212,168,67,.25);
+}
+.post-card .t { font-size: 13px; font-weight: 600; color: #e8e8e8; margin-bottom: 6px; line-height: 1.35; }
+.post-card .m { font-size: 11px; color: #666; display: flex; justify-content: space-between; gap: 8px; }
+
+/* 右：编辑 */
+.edit-rail {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.edit-head {
+  padding: 12px 16px 8px;
+  border-bottom: 1px solid rgba(255,255,255,.04);
+  flex-shrink: 0;
+}
+.title-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: #eee;
+  font-size: 18px;
+  font-weight: 700;
+  outline: none;
+}
+.title-input::placeholder { color: #444; }
+.meta-row {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.meta-row select, .meta-row .tag-inp {
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.08);
+  color: #ccc;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  outline: none;
+}
+.meta-row select:focus, .meta-row .tag-inp:focus { border-color: rgba(212,168,67,.35); }
+.tag-inp { flex: 1; min-width: 100px; }
+
+.split-editor {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.ed-left, .ed-right {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ed-left textarea {
+  flex: 1;
+  min-height: 120px;
+  background: rgba(0,0,0,.22);
+  border: none;
+  border-right: 1px solid rgba(255,255,255,.06);
+  color: #c8c8c8;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.75;
+  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  resize: none;
+  outline: none;
+}
+.ed-right {
+  overflow: hidden;
+}
+.preview-inner {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+  font-size: 14px;
+  line-height: 1.8;
+  color: #c8c8c8;
+}
+.preview-inner h2 {
+  color: #eee;
+  font-size: 1.15em;
+  margin-bottom: .6em;
+  padding-bottom: .35em;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.preview-inner p { margin-bottom: .75em; }
+.preview-inner blockquote {
+  margin: .8em 0;
+  padding: .5em .9em;
+  border-left: 3px solid #d4a843;
+  background: rgba(255,255,255,.03);
+  color: #9a9a9a;
+}
+.preview-inner strong { color: #eaeaea; }
+.preview-inner ul { margin: .5em 0 .5em 1.2em; }
+.preview-inner code { font-size: .92em; color: #d4a843; }
+
+.edit-foot {
+  flex-shrink: 0;
+  padding: 8px 16px 14px;
+  border-top: 1px solid rgba(255,255,255,.06);
+  display: flex;
+  justify-content: flex-end;
+}
+.btn-save {
+  border: none;
+  background: #d4a843;
+  color: #1a1a24;
+  font-weight: 600;
+  padding: 8px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-save:hover { background: #e0b854; }
+
+/* 收起后底部条 */
+.reopen-chip {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%) translateY(120px);
+  z-index: 45;
+  padding: 10px 20px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(212,168,67,.95), rgba(180,140,50,.98));
+  color: #1a1a24;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 8px 28px rgba(0,0,0,.35);
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+  opacity: 0;
+}
+.reopen-chip.visible {
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+  opacity: 1;
+}
+
+.empty-list {
+  padding: 24px 12px;
+  text-align: center;
+  font-size: 12px;
+  color: #555;
+}
+</style>
+</head>
+<body>
+
+<div class="scheme-badge">方案 C · 底部抽屉 — 保留时钟可见，底部大空间编辑</div>
+
+<div class="main-mock">
+  <div class="clock-wrap">
+    <div class="clock-big" id="clockDisplay">14<span class="sec">:35:28</span></div>
+    <div class="date-line">2026年4月21日 · 星期二</div>
+    <div class="streak-row">
+      <span>连续打卡</span>
+      <div class="streak-dots" aria-hidden="true">
+        <span class="on"></span><span class="on"></span><span class="on"></span><span></span><span></span><span></span><span></span>
+      </div>
+      <span class="fire">🔥 3 天</span>
+    </div>
+  </div>
+  <p class="mock-hint">上半区为时钟主界面示意 · 下方为写作抽屉</p>
+</div>
+
+<div class="drawer-host" id="drawerHost" style="--drawer-h: 62vh;">
+  <div class="drawer-panel" id="drawerPanel">
+    <div class="drawer-dragzone" id="dragZone" title="拖拽调整高度">
+      <div class="drawer-handle" id="dragHandle"></div>
+    </div>
+    <div class="drawer-topbar">
+      <div class="drawer-title"><span class="pen">🖊</span> 写作空间</div>
+      <div class="tb-actions">
+        <button type="button" class="tb-btn" id="btnCollapse" title="收起抽屉">收起 <span>▼</span></button>
+        <button type="button" class="tb-btn" id="btnFullscreen" title="拉至 90% 高度">全屏 <span>⬚</span></button>
+        <button type="button" class="tb-btn danger" id="btnClose" title="关闭">×</button>
+      </div>
+    </div>
+    <div class="drawer-body">
+      <nav class="cat-rail" id="catRail" aria-label="分类"></nav>
+      <div class="list-rail">
+        <div class="list-rail-hd">文章</div>
+        <div class="post-scroll" id="postList"></div>
+      </div>
+      <div class="edit-rail">
+        <div class="edit-head">
+          <input type="text" class="title-input" id="fieldTitle" placeholder="标题">
+          <div class="meta-row">
+            <select id="fieldCat"></select>
+            <input type="text" class="tag-inp" id="fieldTags" placeholder="标签，用逗号分隔">
+          </div>
+        </div>
+        <div class="split-editor">
+          <div class="ed-left">
+            <textarea id="fieldBody" placeholder="正文（Markdown 风格示意）"></textarea>
+          </div>
+          <div class="ed-right">
+            <div class="preview-inner" id="previewPane"></div>
+          </div>
+        </div>
+        <div class="edit-foot">
+          <button type="button" class="btn-save" id="btnSave"><i class="fas fa-check"></i> 保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<button type="button" class="reopen-chip" id="reopenChip">🖊 打开写作空间</button>
+
+<script>
+(function () {
+  var CATS = [
+    { id: 'tech', name: '技术', icon: 'fa-code', color: '#4fc3f7' },
+    { id: 'read', name: '阅读', icon: 'fa-book-open', color: '#81c784' },
+    { id: 'think', name: '思考', icon: 'fa-lightbulb', color: '#ffb74d' },
+    { id: 'essay', name: '随笔', icon: 'fa-feather', color: '#ba68c8' },
+    { id: 'weekly', name: '周报', icon: 'fa-calendar-week', color: '#d4a843' },
+    { id: 'draft', name: '草稿', icon: 'fa-file-lines', color: '#78909c' }
+  ];
+
+  var ARTICLES = [
+    {
+      id: 'a1',
+      cat: 'tech',
+      title: 'Rust 异步运行时笔记',
+      words: 1280,
+      date: '2026-04-18',
+      body: '## Future 与 Pin\n\n在 async Rust 中，`Future` 可能被 **移动**，而自引用结构需要 `Pin` 固定。\n\n```\nasync fn work() { ... }\n```\n\n> 先理解 poll 模型，再谈 executor。',
+      previewHtml: '<h2>Future 与 Pin</h2><p>在 async Rust 中，<code>Future</code> 可能被 <strong>移动</strong>，而自引用结构需要 <code>Pin</code> 固定。</p><blockquote>先理解 poll 模型，再谈 executor。</blockquote>'
+    },
+    {
+      id: 'a2',
+      cat: 'read',
+      title: '《深度工作》摘抄',
+      words: 856,
+      date: '2026-04-17',
+      body: '## 深度工作\n\n高质量产出 = 专注时间 × 认知强度。\n\n- 关闭非必要通知\n- 固定深度工作时段\n\n> 浮浅工作可以外包，深度不可替代。',
+      previewHtml: '<h2>深度工作</h2><p>高质量产出 = 专注时间 × 认知强度。</p><ul><li>关闭非必要通知</li><li>固定深度工作时段</li></ul><blockquote>浮浅工作可以外包，深度不可替代。</blockquote>'
+    },
+    {
+      id: 'a3',
+      cat: 'think',
+      title: '关于专注的随想',
+      words: 420,
+      date: '2026-04-15',
+      body: '注意力是最稀缺的货币。\n\n把 **今天最重要的一件事** 写在一块便签上，其余稍后。',
+      previewHtml: '<p>注意力是最稀缺的货币。</p><p>把 <strong>今天最重要的一件事</strong> 写在一块便签上，其余稍后。</p>'
+    },
+    {
+      id: 'a4',
+      cat: 'essay',
+      title: '周末散步',
+      words: 312,
+      date: '2026-04-14',
+      body: '雨后石板路反光，树影很长。\n\n什么也没想，只是走。',
+      previewHtml: '<p>雨后石板路反光，树影很长。</p><p>什么也没想，只是走。</p>'
+    },
+    {
+      id: 'a5',
+      cat: 'weekly',
+      title: '2026-W16 工作周报',
+      words: 2100,
+      date: '2026-04-20',
+      body: '## 本周完成\n\n- 需求评审与排期\n- 联调接口 3 个\n\n## 下周计划\n\n继续推进 **写作空间** 方案落地。',
+      previewHtml: '<h2>本周完成</h2><ul><li>需求评审与排期</li><li>联调接口 3 个</li></ul><h2>下周计划</h2><p>继续推进 <strong>写作空间</strong> 方案落地。</p>'
+    }
+  ];
+
+  var activeCat = 'tech';
+  var activeId = 'a1';
+
+  var drawerHost = document.getElementById('drawerHost');
+  var dragZone = document.getElementById('dragZone');
+  var catRail = document.getElementById('catRail');
+  var postList = document.getElementById('postList');
+  var fieldTitle = document.getElementById('fieldTitle');
+  var fieldCat = document.getElementById('fieldCat');
+  var fieldTags = document.getElementById('fieldTags');
+  var fieldBody = document.getElementById('fieldBody');
+  var previewPane = document.getElementById('previewPane');
+  var reopenChip = document.getElementById('reopenChip');
+
+  function catById(id) {
+    for (var i = 0; i < CATS.length; i++) {
+      if (CATS[i].id === id) return CATS[i];
+    }
+    return CATS[0];
+  }
+
+  function filteredArticles() {
+    return ARTICLES.filter(function (a) { return a.cat === activeCat; });
+  }
+
+  function renderCats() {
+    catRail.innerHTML = '';
+    CATS.forEach(function (c) {
+      var el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'cat-item' + (c.id === activeCat ? ' active' : '');
+      el.dataset.cat = c.id;
+      el.innerHTML = '<i class="fas ' + c.icon + '"></i><span>' + c.name + '</span>';
+      el.addEventListener('click', function () {
+        activeCat = c.id;
+        renderCats();
+        var list = filteredArticles();
+        if (list.length) activeId = list[0].id;
+        else activeId = null;
+        renderList();
+        loadActiveArticle();
+      });
+      catRail.appendChild(el);
+    });
+  }
+
+  function renderList() {
+    var list = filteredArticles();
+    postList.innerHTML = '';
+    if (!list.length) {
+      postList.innerHTML = '<div class="empty-list">该分类暂无文章</div>';
+      return;
+    }
+    list.forEach(function (a) {
+      var c = catById(a.cat);
+      var card = document.createElement('div');
+      card.className = 'post-card' + (a.id === activeId ? ' active' : '');
+      card.style.setProperty('--bar', c.color);
+      card.dataset.id = a.id;
+      card.innerHTML = '<div class="t">' + escapeHtml(a.title) + '</div><div class="m"><span>' + a.words + ' 字</span><span>' + a.date + '</span></div>';
+      card.addEventListener('click', function () {
+        activeId = a.id;
+        renderList();
+        loadActiveArticle();
+      });
+      postList.appendChild(card);
+    });
+  }
+
+  function escapeHtml(s) {
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function loadActiveArticle() {
+    var a = ARTICLES.filter(function (x) { return x.id === activeId; })[0];
+    if (!a) {
+      fieldTitle.value = '';
+      fieldBody.value = '';
+      previewPane.innerHTML = '<p style="color:#555;font-size:13px;">请选择一篇文章</p>';
+      return;
+    }
+    fieldTitle.value = a.title;
+    fieldBody.value = a.body;
+    fieldCat.value = a.cat;
+    fieldTags.value = tagPreset(a.cat);
+    previewPane.innerHTML = a.previewHtml;
+  }
+
+  function tagPreset(cat) {
+    var map = { tech: 'Rust, async', read: '读书笔记, 深度工作', think: '专注, 随笔', essay: '生活', weekly: '周报, 工作', draft: '' };
+    return map[cat] || '';
+  }
+
+  CATS.forEach(function (c) {
+    var opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = c.name;
+    fieldCat.appendChild(opt);
+  });
+
+  fieldCat.addEventListener('change', function () {
+    var a = ARTICLES.filter(function (x) { return x.id === activeId; })[0];
+    if (a) {
+      a.cat = fieldCat.value;
+      activeCat = a.cat;
+      renderCats();
+      renderList();
+    }
+  });
+
+  fieldBody.addEventListener('input', function () {
+    var a = ARTICLES.filter(function (x) { return x.id === activeId; })[0];
+    if (a) a.body = fieldBody.value;
+    previewPane.innerHTML = '<p style="color:#888;font-size:13px;">预览区示例为预置 HTML；编辑正文时此处可接 Markdown 渲染。</p>';
+  });
+
+  document.getElementById('btnSave').addEventListener('click', function () {
+    alert('（Demo）已保存：' + (fieldTitle.value || '未命名'));
+  });
+
+  /* 抽屉高度拖动 40%–90% */
+  var minVh = 40;
+  var maxVh = 90;
+  var dragging = false;
+  var dragStartY = 0;
+  var dragSessionVh = 62;
+
+  function setDrawerVh(vh) {
+    vh = Math.max(minVh, Math.min(maxVh, vh));
+    drawerHost.style.setProperty('--drawer-h', vh + 'vh');
+  }
+
+  function onPointerMove(e) {
+    if (!dragging) return;
+    var dy = e.clientY - dragStartY;
+    var deltaVh = -(dy / window.innerHeight) * 100;
+    setDrawerVh(dragSessionVh + deltaVh);
+  }
+
+  function onPointerUp(e) {
+    dragging = false;
+    try {
+      if (e && e.pointerId != null) dragZone.releasePointerCapture(e.pointerId);
+    } catch (err) { /* noop */ }
+    document.removeEventListener('pointermove', onPointerMove);
+    document.removeEventListener('pointerup', onPointerUp);
+  }
+
+  dragZone.addEventListener('pointerdown', function (e) {
+    if (e.button !== 0) return;
+    dragging = true;
+    dragStartY = e.clientY;
+    var m = drawerHost.style.getPropertyValue('--drawer-h').trim();
+    dragSessionVh = parseFloat(m) || 62;
+    try { dragZone.setPointerCapture(e.pointerId); } catch (err) { /* noop */ }
+    document.addEventListener('pointermove', onPointerMove);
+    document.addEventListener('pointerup', onPointerUp);
+    e.preventDefault();
+  });
+
+  document.getElementById('btnFullscreen').addEventListener('click', function () {
+    setDrawerVh(90);
+  });
+
+  function setDrawerOpen(open) {
+    if (open) {
+      drawerHost.classList.add('open');
+      reopenChip.classList.remove('visible');
+    } else {
+      drawerHost.classList.remove('open');
+      reopenChip.classList.add('visible');
+    }
+  }
+
+  document.getElementById('btnCollapse').addEventListener('click', function () {
+    setDrawerOpen(false);
+  });
+  document.getElementById('btnClose').addEventListener('click', function () {
+    setDrawerOpen(false);
+  });
+  reopenChip.addEventListener('click', function () {
+    setDrawerOpen(true);
+  });
+
+  /* 简单时钟跳动（仅秒） */
+  var base = { h: 14, m: 35, s: 28 };
+  function tick() {
+    base.s++;
+    if (base.s >= 60) { base.s = 0; base.m++; }
+    if (base.m >= 60) { base.m = 0; base.h++; }
+    if (base.h >= 24) base.h = 0;
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    document.getElementById('clockDisplay').innerHTML =
+      pad(base.h) + '<span class="sec">:' + pad(base.m) + ':' + pad(base.s) + '</span>';
+  }
+  setInterval(tick, 1000);
+
+  renderCats();
+  renderList();
+  loadActiveArticle();
+
+  requestAnimationFrame(function () {
+    requestAnimationFrame(function () {
+      drawerHost.classList.add('open');
+    });
+  });
+})();
+</script>
+</body>
+</html>

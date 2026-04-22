@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WeekView 集成测试</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="../../css/weekview.css">
+<style>
+body{background:#0a0a1e;margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;color:#e8e6f0}
+.test-bar{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:99999;display:flex;gap:8px;padding:8px 16px;background:rgba(30,28,50,0.95);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);border-radius:12px}
+.test-btn{padding:8px 16px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:#c4b5fd;cursor:pointer;font-size:12px;font-weight:600;transition:all .2s}
+.test-btn:hover{background:rgba(167,139,250,0.15)}
+</style>
+</head>
+<body>
+
+<div class="test-bar">
+    <button class="test-btn" onclick="wvm.open()">打开周课表</button>
+    <button class="test-btn" onclick="wvm.close()">关闭</button>
+    <button class="test-btn" onclick="addTestData()">添加更多测试数据</button>
+</div>
+
+<script>
+// Mock chrome.storage for testing
+window.chrome = { storage: { local: {
+    _data: {},
+    get(keys, cb) { const r = {}; keys.forEach(k => { if (this._data[k] !== undefined) r[k] = this._data[k]; }); cb(r); },
+    set(obj, cb) { Object.assign(this._data, obj); if (cb) cb(); }
+}}};
+
+// Mock ScheduleManager
+class MockScheduleManager {
+    constructor() {
+        this._initialized = true;
+        this._routines = [
+            { id: 'r1', name: '晨跑', icon: '🏃', time: '06:30', duration: 30, category: 'life', frequency: 'daily', enabled: true },
+            { id: 'r2', name: '英语阅读', icon: '📖', time: '07:30', duration: 45, category: 'study', frequency: 'weekdays', enabled: true },
+            { id: 'r3', name: '冥想', icon: '🧘', time: '07:00', duration: 10, category: 'life', frequency: 'daily', enabled: true },
+            { id: 'r4', name: '睡前总结', icon: '📝', time: '22:00', duration: 15, category: 'life', frequency: 'daily', enabled: true },
+        ];
+        this._plans = [];
+        this._habitLog = {};
+        this._settings = {};
+        this.CATEGORIES = [
+            { id: 'work', name: '工作', color: '#60a5fa', icon: '💼' },
+            { id: 'study', name: '学习', color: '#34d399', icon: '📚' },
+            { id: 'life', name: '生活', color: '#fbbf24', icon: '🏠' },
+        ];
+        this._generateTestPlans();
+    }
+
+    _generateTestPlans() {
+        const today = new Date();
+        const monday = new Date(today);
+        const day = monday.getDay();
+        monday.setDate(monday.getDate() - (day === 0 ? 6 : day - 1));
+
+        const templates = [
+            // Monday
+            [{name:'项目站会',icon:'💬',s:'09:00',e:'09:30',cat:'work'},{name:'代码开发',icon:'💻',s:'09:30',e:'12:00',cat:'work'},{name:'英语阅读',icon:'📖',s:'20:00',e:'20:45',cat:'study'}],
+            // Tuesday
+            [{name:'需求评审',icon:'📋',s:'10:00',e:'11:00',cat:'work'},{name:'PPT 制作',icon:'📊',s:'14:00',e:'16:00',cat:'work'},{name:'算法练习',icon:'🧩',s:'20:30',e:'21:30',cat:'study'}],
+            // Wednesday
+            [{name:'数据分析',icon:'📈',s:'09:00',e:'11:00',cat:'work'},{name:'团队午餐',icon:'🍜',s:'12:00',e:'13:00',cat:'life'},{name:'Python 课',icon:'🐍',s:'19:00',e:'20:30',cat:'study'}],
+            // Thursday
+            [{name:'1v1 沟通',icon:'🤝',s:'10:00',e:'10:45',cat:'work'},{name:'报告撰写',icon:'✍️',s:'14:00',e:'16:00',cat:'work'},{name:'跑步',icon:'🏃',s:'18:00',e:'18:40',cat:'life'}],
+            // Friday
+            [{name:'周报总结',icon:'📝',s:'15:00',e:'16:00',cat:'work'},{name:'快速同步',icon:'⚡',s:'09:30',e:'09:45',cat:'work'},{name:'读书会',icon:'📚',s:'20:00',e:'21:30',cat:'study'}],
+            // Saturday
+            [{name:'徒步',icon:'⛰️',s:'09:00',e:'12:00',cat:'life'},{name:'摄影练习',icon:'📷',s:'15:00',e:'16:30',cat:'life'}],
+            // Sunday
+            [{name:'家务整理',icon:'🏠',s:'10:00',e:'11:00',cat:'life'},{name:'本周复盘',icon:'🔄',s:'20:00',e:'20:30',cat:'work'},{name:'英语听力',icon:'🎧',s:'21:00',e:'21:30',cat:'study'}],
+        ];
+
+        templates.forEach((dayPlans, i) => {
+            const d = new Date(monday);
+            d.setDate(d.getDate() + i);
+            const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            dayPlans.forEach((p, j) => {
+                const [sh,sm] = p.s.split(':').map(Number);
+                const [eh,em] = p.e.split(':').map(Number);
+                const dur = (eh*60+em) - (sh*60+sm);
+                this._plans.push({
+                    id: `plan_${i}_${j}`,
+                    name: p.name,
+                    icon: p.icon,
+                    date: dateStr,
+                    startTime: p.s,
+                    endTime: p.e,
+                    duration: dur,
+                    category: p.cat,
+                    completed: Math.random() > 0.8,
+                    note: '',
+                    createdAt: Date.now()
+                });
+            });
+        });
+    }
+
+    _getCategory(id) { return this.CATEGORIES.find(c => c.id === id) || this.CATEGORIES[0]; }
+    _isRoutineChecked(rid, date) { return !!(this._habitLog[date]?.routines?.[rid]?.checked); }
+    async toggleRoutineCheck(rid, date) {
+        if (!this._habitLog[date]) this._habitLog[date] = { routines: {} };
+        const prev = this._habitLog[date].routines[rid];
+        this._habitLog[date].routines[rid] = { checked: !(prev?.checked) };
+        return this._habitLog[date].routines[rid].checked;
+    }
+    async togglePlanComplete(id) {
+        const p = this._plans.find(x => x.id === id);
+        if (p) p.completed = !p.completed;
+    }
+    openPanel() {}
+}
+
+window.scheduleManager = new MockScheduleManager();
+</script>
+<script src="../../js/weekview.js"></script>
+<script>
+const wvm = window.weekViewManager;
+wvm.open();
+
+function addTestData() {
+    const sm = window.scheduleManager;
+    const today = new Date();
+    const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    sm._plans.push({
+        id: 'plan_new_' + Date.now(),
+        name: '临时会议',
+        icon: '📞',
+        date: dateStr,
+        startTime: '11:00',
+        endTime: '11:15',
+        duration: 15,
+        category: 'work',
+        completed: false,
+        note: '',
+        createdAt: Date.now()
+    });
+    wvm._refresh();
+}
+</script>
+</body>
+</html>

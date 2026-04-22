@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>写作空间 · 方案 D · 双栏杂志</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --gold: #d4a843;
+  --left-bg: rgba(18, 20, 32, 0.95);
+  --right-bg: rgba(25, 28, 42, 0.95);
+  --split: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+body {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  color: #e8e8ec;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Noto Sans SC', sans-serif;
+}
+
+.bg-sim {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.35;
+  background: radial-gradient(ellipse 80% 50% at 50% 20%, rgba(212, 168, 67, 0.08), transparent);
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  z-index: 10;
+}
+
+.scheme-badge {
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gold);
+  background: rgba(212, 168, 67, 0.12);
+  border: 1px solid rgba(212, 168, 67, 0.28);
+  backdrop-filter: blur(10px);
+  white-space: nowrap;
+  max-width: calc(100vw - 24px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.panel {
+  position: fixed;
+  inset: 3vh 3vw;
+  z-index: 11;
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.2) inset;
+  overflow: hidden;
+  background: linear-gradient(165deg, rgba(22, 25, 38, 0.98), rgba(14, 16, 26, 0.99));
+  transition: inset 0.25s ease, border-radius 0.25s ease;
+}
+
+.panel.is-fullscreen {
+  inset: 0;
+  border-radius: 0;
+}
+
+.panel-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-bottom: var(--split);
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.panel-title .pen {
+  font-size: 1.15em;
+}
+
+.streak-mini {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.65);
+  margin-left: 8px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(212, 168, 67, 0.1);
+  border: 1px solid rgba(212, 168, 67, 0.2);
+}
+
+.streak-mini .fire {
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn {
+  border: none;
+  background: rgba(255, 255, 255, 0.06);
+  color: #ccc;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.btn-gold {
+  background: var(--gold);
+  color: #14141f;
+  font-weight: 600;
+}
+
+.btn-gold:hover {
+  background: #e4b84f;
+  color: #0a0a12;
+}
+
+.btn-close {
+  font-size: 18px;
+  padding: 6px 10px;
+}
+
+.panel-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.col-left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--left-bg);
+  border-right: var(--split);
+}
+
+.col-right {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--right-bg);
+}
+
+.cat-row {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.cat-chip {
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #9a9aaa;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s;
+}
+
+.cat-chip:hover {
+  color: #ddd;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.cat-chip.active {
+  color: #1a1a24;
+  background: var(--gold);
+  font-weight: 600;
+  border-color: rgba(212, 168, 67, 0.5);
+}
+
+.editor-stack {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 12px 14px 0;
+  gap: 10px;
+}
+
+.in-title {
+  width: 100%;
+  border: none;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 22px;
+  font-weight: 800;
+  color: #f2f2f6;
+  outline: none;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.in-title::placeholder {
+  color: #4a4a58;
+}
+
+.in-tags {
+  width: 100%;
+  border: none;
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #c8c8d4;
+  outline: none;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+}
+
+.in-tags::placeholder {
+  color: #555;
+}
+
+.md-editor {
+  flex: 1;
+  min-height: 160px;
+  width: 100%;
+  resize: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 14px;
+  font-size: 13.5px;
+  line-height: 1.75;
+  color: #d6d6e0;
+  background: rgba(0, 0, 0, 0.25);
+  font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace;
+  outline: none;
+}
+
+.md-editor:focus {
+  border-color: rgba(212, 168, 67, 0.35);
+  box-shadow: 0 0 0 1px rgba(212, 168, 67, 0.15);
+}
+
+.editor-footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  position: relative;
+}
+
+.list-toggle-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.list-toggle {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.2);
+  color: #ccc;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.list-toggle:hover {
+  border-color: rgba(212, 168, 67, 0.3);
+  color: #fff;
+}
+
+.list-toggle i.caret {
+  transition: transform 0.2s;
+  color: var(--gold);
+}
+
+.list-toggle.open i.caret {
+  transform: rotate(180deg);
+}
+
+.article-dropdown {
+  display: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
+  max-height: 220px;
+  overflow-y: auto;
+  background: rgba(16, 18, 30, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  z-index: 20;
+}
+
+.article-dropdown.open {
+  display: block;
+}
+
+.article-item {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.article-item:last-child {
+  border-bottom: none;
+}
+
+.article-item:hover {
+  background: rgba(212, 168, 67, 0.1);
+}
+
+.article-item .ai-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #eee;
+  margin-bottom: 4px;
+}
+
+.article-item .ai-meta {
+  font-size: 11px;
+  color: #777;
+}
+
+.preview-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px 32px 40px;
+}
+
+.preview-inner {
+  max-width: 42rem;
+  margin: 0 auto;
+}
+
+.preview-title {
+  font-size: clamp(1.75rem, 3.2vw, 2.25rem);
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: #f6f6fa;
+  margin-bottom: 16px;
+}
+
+.preview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.45);
+  margin-bottom: 28px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.preview-meta .meta-cat {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.preview-meta .meta-tags span {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(212, 168, 67, 0.12);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 12px;
+}
+
+.preview-body {
+  font-family: Georgia, 'Noto Serif SC', 'Songti SC', serif;
+  font-size: 17px;
+  line-height: 1.85;
+  color: rgba(235, 235, 242, 0.92);
+}
+
+.preview-body p {
+  margin: 0 0 1em;
+}
+
+.preview-body h2 {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+  font-size: 1.35em;
+  font-weight: 700;
+  color: #f0f0f5;
+  margin: 1.6em 0 0.65em;
+  padding-bottom: 0.4em;
+  border-bottom: 1px solid rgba(212, 168, 67, 0.35);
+}
+
+.preview-body blockquote {
+  margin: 1.1em 0;
+  padding: 0.65em 1em 0.65em 1.1em;
+  border-left: 4px solid var(--gold);
+  background: rgba(212, 168, 67, 0.06);
+  color: rgba(220, 220, 228, 0.88);
+  font-style: italic;
+}
+
+.preview-body strong {
+  color: #fff;
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  .panel-body {
+    flex-direction: column;
+  }
+  .col-left {
+    border-right: none;
+    border-bottom: var(--split);
+    max-height: 55vh;
+  }
+}
+</style>
+</head>
+<body>
+<div class="bg-sim"></div>
+<div class="scheme-badge">方案 D · 双栏杂志 — 左编辑右预览，专业写作工具感</div>
+<div class="overlay"></div>
+
+<div class="panel" id="panel">
+  <header class="panel-header">
+    <div class="panel-title">
+      <span class="pen" aria-hidden="true">🖊</span>
+      <span>写作空间</span>
+      <span class="streak-mini"><span class="fire">🔥3天</span> 8篇 · 3200字</span>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="btn" id="btnFs" title="全屏切换" aria-label="全屏">
+        <span>全屏</span><span aria-hidden="true">⬚</span>
+      </button>
+      <button type="button" class="btn btn-close" id="btnClose" title="关闭" aria-label="关闭"><i class="fas fa-times"></i></button>
+    </div>
+  </header>
+
+  <div class="panel-body">
+    <div class="col-left">
+      <div class="cat-row" id="catRow" role="tablist" aria-label="文章分类">
+        <button type="button" class="cat-chip active" data-cat="全部">全部</button>
+        <button type="button" class="cat-chip" data-cat="技术">技术</button>
+        <button type="button" class="cat-chip" data-cat="阅读">阅读</button>
+        <button type="button" class="cat-chip" data-cat="思考">思考</button>
+        <button type="button" class="cat-chip" data-cat="随笔">随笔</button>
+        <button type="button" class="cat-chip" data-cat="周报">周报</button>
+        <button type="button" class="cat-chip" data-cat="草稿">草稿</button>
+      </div>
+
+      <div class="editor-stack">
+        <input type="text" class="in-title" id="inTitle" placeholder="文章标题" autocomplete="off" />
+        <input type="text" class="in-tags" id="inTags" placeholder="标签：用逗号分隔，如 Chrome, MV3, 工程" autocomplete="off" />
+        <textarea class="md-editor" id="mdBody" placeholder="在此撰写 Markdown…"></textarea>
+      </div>
+
+      <div class="editor-footer">
+        <div class="list-toggle-wrap">
+          <button type="button" class="list-toggle" id="listToggle" aria-expanded="false" aria-controls="articleList">
+            <span><i class="fas fa-list-ul" style="margin-right:8px;color:var(--gold);"></i>文章列表</span>
+            <i class="fas fa-chevron-down caret" aria-hidden="true"></i>
+          </button>
+          <div class="article-dropdown" id="articleList" role="menu"></div>
+        </div>
+        <button type="button" class="btn btn-gold" id="btnSave"><i class="fas fa-save"></i> 保存</button>
+      </div>
+    </div>
+
+    <div class="col-right">
+      <div class="preview-scroll">
+        <article class="preview-inner">
+          <h1 class="preview-title" id="pvTitle">标题预览</h1>
+          <div class="preview-meta" id="pvMeta"></div>
+          <div class="preview-body" id="pvBody"></div>
+        </article>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var SAMPLE = {
+    title: '从 Chrome 扩展中学到的工程实践',
+    tags: 'Chrome, MV3, 工程',
+    category: '技术',
+    date: '2026-04-18',
+    body: [
+      '在维护「中国风景时钟」这类 Manifest V3 扩展时，**工程化**往往比单点技巧更重要：清晰的模块边界、可测试的数据层、以及可回滚的发布节奏。',
+      '',
+      '## 结构与边界',
+      '',
+      '把 UI、存储、后台任务分开，让 service worker 只做「编排」，业务逻辑落在纯函数里，后续替换实现或加单元测试会轻松很多。',
+      '',
+      '> 好的扩展不是功能堆叠，而是**在约束下做减法**：权限最小化、唤醒最小化、用户心智负担最小化。',
+      '',
+      '## 小结',
+      '',
+      '当你把扩展当作一个长期产品而不是一次性脚本时，双栏写作空间这类「编辑 + 预览」的界面，也会自然走向更专业的工具感。'
+    ].join('\n')
+  };
+
+  var ARTICLES = [
+    { id: '1', title: SAMPLE.title, cat: '技术', date: '2026-04-18', tags: SAMPLE.tags, body: SAMPLE.body },
+    { id: '2', title: '周报 · 第 15 周：节奏与复盘', cat: '周报', date: '2026-04-14', tags: '周报, 复盘', body: '## 本周焦点\n\n完成了 Dock 交互的一轮打磨，**节奏**比速度更重要。\n\n> 复盘不是为了自责，而是为了下一周更少的返工。\n\n## 下周\n\n继续推进写作空间的方案评审。' },
+    { id: '3', title: '读《程序员修炼之道》札记', cat: '阅读', date: '2026-04-10', tags: '阅读, 笔记', body: '## 触动我的一句话\n\n**谨慎编程**不是慢，而是对不确定性的尊重。\n\n## 行动项\n\n把「重复」识别为技术债，优先偿还。' },
+    { id: '4', title: '未命名草稿', cat: '草稿', date: '2026-04-08', tags: '', body: '在此继续你的灵感…' }
+  ];
+
+  var currentCat = '全部';
+  var listOpen = false;
+
+  var el = {
+    panel: document.getElementById('panel'),
+    inTitle: document.getElementById('inTitle'),
+    inTags: document.getElementById('inTags'),
+    mdBody: document.getElementById('mdBody'),
+    pvTitle: document.getElementById('pvTitle'),
+    pvMeta: document.getElementById('pvMeta'),
+    pvBody: document.getElementById('pvBody'),
+    listToggle: document.getElementById('listToggle'),
+    articleList: document.getElementById('articleList'),
+    btnFs: document.getElementById('btnFs'),
+    btnClose: document.getElementById('btnClose'),
+    btnSave: document.getElementById('btnSave'),
+    catRow: document.getElementById('catRow')
+  };
+
+  var previewDate = SAMPLE.date;
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  /** 转义后解析 **粗体**（演示用） */
+  function escapeAndBold(line) {
+    var parts = String(line).split(/(\*\*.+?\*\*)/g);
+    return parts
+      .map(function (p) {
+        if (/^\*\*.+\*\*$/.test(p)) {
+          return '<strong>' + escapeHtml(p.slice(2, -2)) + '</strong>';
+        }
+        return escapeHtml(p);
+      })
+      .join('');
+  }
+
+  /** 简易 Markdown → HTML（演示用） */
+  function simpleMdToHtml(md) {
+    var lines = String(md).split(/\r?\n/);
+    var html = '';
+    var inQuote = false;
+    var i;
+    for (i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (/^##\s+/.test(line)) {
+        if (inQuote) {
+          html += '</blockquote>';
+          inQuote = false;
+        }
+        html += '<h2>' + escapeAndBold(line.replace(/^##\s+/, '')) + '</h2>';
+      } else if (/^>\s?/.test(line)) {
+        if (!inQuote) {
+          html += '<blockquote>';
+          inQuote = true;
+        }
+        html += '<p>' + escapeAndBold(line.replace(/^>\s?/, '')) + '</p>';
+      } else if (line.trim() === '') {
+        if (inQuote) {
+          html += '</blockquote>';
+          inQuote = false;
+        }
+      } else {
+        if (inQuote) {
+          html += '</blockquote>';
+          inQuote = false;
+        }
+        html += '<p>' + escapeAndBold(line) + '</p>';
+      }
+    }
+    if (inQuote) html += '</blockquote>';
+    return html || '<p>（正文为空）</p>';
+  }
+
+  function getCategoryFromTagsOrDefault() {
+    var t = el.inTags.value.trim();
+    if (currentCat !== '全部') return currentCat;
+    return '随笔';
+  }
+
+  function renderMeta() {
+    var tagsStr = el.inTags.value.trim();
+    var parts = tagsStr ? tagsStr.split(/[,，]/).map(function (s) { return s.trim(); }).filter(Boolean) : [];
+    var cat = getCategoryFromTagsOrDefault();
+    var tagSpans = parts.map(function (t) {
+      return '<span>' + escapeHtml(t) + '</span>';
+    }).join('');
+    el.pvMeta.innerHTML =
+      '<span>' + escapeHtml(previewDate) + '</span>' +
+      '<span class="meta-cat">' + escapeHtml(cat) + '</span>' +
+      '<div class="meta-tags">' + tagSpans + '</div>';
+  }
+
+  function renderPreview() {
+    el.pvTitle.textContent = el.inTitle.value.trim() || '无标题';
+    renderMeta();
+    el.pvBody.innerHTML = simpleMdToHtml(el.mdBody.value);
+  }
+
+  function setForm(a) {
+    el.inTitle.value = a.title;
+    el.inTags.value = a.tags || '';
+    el.mdBody.value = a.body || '';
+    previewDate = a.date || previewDate;
+    if (a.cat) {
+      currentCat = a.cat;
+      syncCatChips();
+    }
+    renderPreview();
+  }
+
+  function filteredArticles() {
+    if (currentCat === '全部') return ARTICLES.slice();
+    return ARTICLES.filter(function (x) { return x.cat === currentCat; });
+  }
+
+  function renderArticleDropdown() {
+    var list = filteredArticles();
+    el.articleList.innerHTML = list.map(function (a) {
+      return (
+        '<div class="article-item" role="menuitem" data-id="' + escapeHtml(a.id) + '">' +
+        '<div class="ai-title">' + escapeHtml(a.title) + '</div>' +
+        '<div class="ai-meta">' + escapeHtml(a.date) + ' · ' + escapeHtml(a.cat) + '</div>' +
+        '</div>'
+      );
+    }).join('');
+  }
+
+  function syncCatChips() {
+    var chips = el.catRow.querySelectorAll('.cat-chip');
+    chips.forEach(function (c) {
+      c.classList.toggle('active', c.getAttribute('data-cat') === currentCat);
+    });
+  }
+
+  el.catRow.addEventListener('click', function (e) {
+    var btn = e.target.closest('.cat-chip');
+    if (!btn) return;
+    currentCat = btn.getAttribute('data-cat');
+    syncCatChips();
+    renderArticleDropdown();
+    renderPreview();
+  });
+
+  el.listToggle.addEventListener('click', function () {
+    listOpen = !listOpen;
+    el.listToggle.classList.toggle('open', listOpen);
+    el.articleList.classList.toggle('open', listOpen);
+    el.listToggle.setAttribute('aria-expanded', listOpen ? 'true' : 'false');
+    if (listOpen) renderArticleDropdown();
+  });
+
+  document.addEventListener('click', function (e) {
+    if (!listOpen) return;
+    if (e.target.closest('.list-toggle-wrap')) return;
+    listOpen = false;
+    el.listToggle.classList.remove('open');
+    el.articleList.classList.remove('open');
+    el.listToggle.setAttribute('aria-expanded', 'false');
+  });
+
+  el.articleList.addEventListener('click', function (e) {
+    var item = e.target.closest('.article-item');
+    if (!item) return;
+    var id = item.getAttribute('data-id');
+    var a = ARTICLES.find(function (x) { return x.id === id; });
+    if (a) setForm(a);
+  });
+
+  ['input', 'change'].forEach(function (ev) {
+    el.inTitle.addEventListener(ev, renderPreview);
+    el.inTags.addEventListener(ev, renderPreview);
+  });
+  el.mdBody.addEventListener('input', renderPreview);
+
+  el.btnFs.addEventListener('click', function () {
+    el.panel.classList.toggle('is-fullscreen');
+  });
+
+  el.btnClose.addEventListener('click', function () {
+    alert('Demo：关闭面板');
+  });
+
+  el.btnSave.addEventListener('click', function () {
+    renderPreview();
+    alert('已保存（演示）');
+  });
+
+  setForm(ARTICLES[0]);
+  renderArticleDropdown();
+})();
+</script>
+</body>
+</html>

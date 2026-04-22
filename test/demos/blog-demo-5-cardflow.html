@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>写作空间 · 方案 E · 卡片流</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  min-height: 100vh;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+  color: #e8e8ec;
+  background: #0c0e14;
+}
+
+.bg-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: radial-gradient(ellipse 120% 80% at 50% 20%, #1a1d2e 0%, #0c0e14 55%, #08090f 100%);
+}
+
+.clock-watermark {
+  position: fixed;
+  left: 50%;
+  top: 40%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  text-align: center;
+  pointer-events: none;
+  user-select: none;
+}
+
+.clock-watermark .time {
+  font-size: clamp(64px, 16vw, 140px);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.07);
+  line-height: 1.1;
+}
+
+.clock-watermark .date-line {
+  margin-top: 12px;
+  font-size: clamp(14px, 2.5vw, 22px);
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.05);
+  letter-spacing: 0.12em;
+}
+
+.scheme-badge {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  padding: 9px 20px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #d4a843;
+  background: rgba(212, 168, 67, 0.1);
+  border: 1px solid rgba(212, 168, 67, 0.28);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+  max-width: calc(100vw - 32px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Dock + 浮层锚点 */
+.dock-zone {
+  position: fixed;
+  z-index: 50;
+  right: 24px;
+  bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0;
+}
+
+.cardflow-anchor {
+  position: relative;
+  margin-bottom: 10px;
+  width: 380px;
+  max-height: 70vh;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(16px) scale(0.94);
+  transform-origin: 85% bottom;
+  transition:
+    opacity 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0.32s;
+  pointer-events: none;
+}
+
+.cardflow-anchor.open {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.cardflow-panel {
+  width: 100%;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(135deg, rgba(30, 33, 48, 0.97), rgba(22, 25, 38, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  position: relative;
+}
+
+/* 指向 Dock 的小三角 */
+.cardflow-arrow {
+  position: absolute;
+  left: auto;
+  right: 22px;
+  bottom: -9px;
+  width: 0;
+  height: 0;
+  border-left: 9px solid transparent;
+  border-right: 9px solid transparent;
+  border-top: 9px solid rgba(22, 25, 38, 0.98);
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.25));
+}
+
+/* 标题栏 */
+.cf-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.cf-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f0f0f4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cf-close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.65);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s;
+}
+
+.cf-close:hover {
+  background: rgba(212, 168, 67, 0.15);
+  color: #d4a843;
+}
+
+/* 打卡条 */
+.cf-streak {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 8px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.cf-streak .fire {
+  color: #d4a843;
+  font-weight: 600;
+}
+
+.heatmap-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.heatmap-row span {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.heatmap-row span.l1 { background: rgba(212, 168, 67, 0.25); }
+.heatmap-row span.l2 { background: rgba(212, 168, 67, 0.45); }
+.heatmap-row span.l3 { background: rgba(212, 168, 67, 0.65); }
+.heatmap-row span.l4 { background: #d4a843; }
+
+.cf-meta-stat {
+  margin-left: auto;
+  color: rgba(255, 255, 255, 0.45);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 工具栏 */
+.cf-toolbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.btn-ghost {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: #e0e0e8;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: border-color 0.2s, background 0.2s, color 0.2s;
+}
+
+.btn-ghost:hover {
+  border-color: rgba(212, 168, 67, 0.35);
+  color: #d4a843;
+}
+
+.select-wrap {
+  position: relative;
+}
+
+.select-wrap select {
+  appearance: none;
+  padding: 6px 28px 6px 10px;
+  font-size: 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: #e0e0e8;
+  cursor: pointer;
+  min-width: 100px;
+}
+
+.select-wrap::after {
+  content: '\f0d7';
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+  pointer-events: none;
+}
+
+.search-mini {
+  margin-left: auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.search-mini:hover {
+  border-color: rgba(212, 168, 67, 0.35);
+  color: #d4a843;
+}
+
+/* 卡片列表 */
+.cf-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.cf-scroll::-webkit-scrollbar { width: 6px; }
+.cf-scroll::-webkit-scrollbar-thumb {
+  background: rgba(212, 168, 67, 0.2);
+  border-radius: 3px;
+}
+
+.article-card {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 10px 12px 10px 0;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  transition: background 0.2s;
+}
+
+.article-card:last-of-type {
+  border-bottom: none;
+}
+
+.article-card:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.article-card.active {
+  background: rgba(212, 168, 67, 0.08);
+}
+
+.card-accent {
+  width: 4px;
+  flex-shrink: 0;
+  border-radius: 0 2px 2px 0;
+  margin-right: 10px;
+}
+
+.card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f2f2f6;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-summary {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-foot {
+  margin-top: 6px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 快写区 */
+.cf-quick {
+  flex-shrink: 0;
+  padding: 10px 12px 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.cf-quick textarea {
+  width: 100%;
+  min-height: 72px;
+  max-height: 120px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(10, 12, 20, 0.65);
+  color: #e8e8ec;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  font-family: inherit;
+}
+
+.cf-quick textarea::placeholder {
+  color: rgba(255, 255, 255, 0.28);
+}
+
+.cf-quick textarea:focus {
+  border-color: #d4a843;
+  box-shadow: 0 0 0 1px rgba(212, 168, 67, 0.25);
+}
+
+.quick-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.quick-row .select-wrap select {
+  min-width: 88px;
+}
+
+.tag-input {
+  flex: 1;
+  min-width: 80px;
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: #e0e0e8;
+  outline: none;
+}
+
+.tag-input:focus {
+  border-color: rgba(212, 168, 67, 0.45);
+}
+
+.btn-publish {
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #c99a35, #d4a843);
+  color: #1a1a1a;
+  cursor: pointer;
+  transition: filter 0.2s, transform 0.15s;
+}
+
+.btn-publish:hover {
+  filter: brightness(1.08);
+}
+
+.btn-publish:active {
+  transform: scale(0.98);
+}
+
+.cf-footer-link {
+  flex-shrink: 0;
+  padding: 6px 12px 10px;
+  text-align: center;
+  font-size: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.cf-footer-link a {
+  color: #d4a843;
+  text-decoration: none;
+  opacity: 0.9;
+  transition: opacity 0.2s;
+}
+
+.cf-footer-link a:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+/* Dock 按钮 */
+.dock-btn {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  border: 1px solid rgba(212, 168, 67, 0.35);
+  background: linear-gradient(145deg, rgba(40, 44, 58, 0.95), rgba(22, 25, 38, 0.98));
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  color: #d4a843;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+
+.dock-btn:hover {
+  transform: translateY(-2px);
+  border-color: rgba(212, 168, 67, 0.55);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+}
+
+.dock-btn.active {
+  border-color: #d4a843;
+  box-shadow: 0 0 0 2px rgba(212, 168, 67, 0.25);
+}
+
+.dock-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #e85d4c, #ff6b4a);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  border: 2px solid #12141c;
+}
+
+.hint-corner {
+  position: fixed;
+  bottom: 96px;
+  right: 24px;
+  z-index: 40;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.25);
+  pointer-events: none;
+  max-width: 200px;
+  text-align: right;
+  display: none;
+}
+
+@media (min-width: 480px) {
+  .hint-corner { display: block; }
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+</style>
+</head>
+<body>
+<div class="bg-layer" aria-hidden="true"></div>
+
+<div class="clock-watermark" aria-hidden="true">
+  <div class="time">14:35:28</div>
+  <div class="date-line">2026年4月21日 · 星期二</div>
+</div>
+
+<div class="scheme-badge">方案 E · 卡片流 — 轻量速记，碎片灵感随手写</div>
+
+<div class="dock-zone">
+  <div class="cardflow-anchor" id="cardflowAnchor" role="dialog" aria-label="写作空间" aria-hidden="true">
+    <div class="cardflow-panel">
+      <header class="cf-header">
+        <div class="cf-title"><span aria-hidden="true">🖊</span> 写作空间</div>
+        <button type="button" class="cf-close" id="cfClose" title="关闭" aria-label="关闭">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </header>
+
+      <div class="cf-streak">
+        <span class="fire"><i class="fa-solid fa-fire" aria-hidden="true"></i> 3天</span>
+        <span class="heatmap-row" id="heatmapRow" title="近14天写作热力"></span>
+        <span class="cf-meta-stat">8篇 · 3200字</span>
+      </div>
+
+      <div class="cf-toolbar">
+        <button type="button" class="btn-ghost" id="btnQuickWrite"><i class="fa-solid fa-plus"></i> 快写</button>
+        <div class="select-wrap">
+          <label for="filterCategory" class="visually-hidden">分类筛选</label>
+          <select id="filterCategory" aria-label="分类筛选">
+            <option value="all">全部分类</option>
+            <option value="essay">随笔</option>
+            <option value="tech">技术</option>
+            <option value="read">阅读</option>
+            <option value="diary">日记</option>
+            <option value="project">项目</option>
+          </select>
+        </div>
+        <button type="button" class="search-mini" title="搜索" aria-label="搜索"><i class="fa-solid fa-magnifying-glass"></i></button>
+      </div>
+
+      <div class="cf-scroll" id="cardList"></div>
+
+      <div class="cf-quick">
+        <label for="quickInput" class="visually-hidden">快写内容</label>
+        <textarea id="quickInput" placeholder="想到什么写什么..." rows="3"></textarea>
+        <div class="quick-row">
+          <div class="select-wrap">
+            <select id="quickCategory" aria-label="快写分类">
+              <option value="essay">随笔</option>
+              <option value="tech">技术</option>
+              <option value="read">阅读</option>
+              <option value="diary">日记</option>
+              <option value="project">项目</option>
+            </select>
+          </div>
+          <input type="text" class="tag-input" id="tagInput" placeholder="标签，空格分隔" autocomplete="off">
+          <button type="button" class="btn-publish" id="btnPublish">发布</button>
+        </div>
+      </div>
+
+      <div class="cf-footer-link">
+        <a href="#">打开完整编辑器 →</a>
+      </div>
+    </div>
+    <div class="cardflow-arrow" aria-hidden="true"></div>
+  </div>
+
+  <button type="button" class="dock-btn" id="dockBtn" aria-expanded="false" aria-controls="cardflowAnchor" title="写作空间">
+    <i class="fa-solid fa-pen-nib" aria-hidden="true"></i>
+    <span class="dock-badge" aria-hidden="true">🔥3</span>
+  </button>
+</div>
+
+<p class="hint-corner">点击右下角 Dock 展开卡片流</p>
+
+<script>
+(function () {
+  var CATEGORY_META = {
+    essay: { label: '随笔', color: '#d4a843' },
+    tech: { label: '技术', color: '#5b8cff' },
+    read: { label: '阅读', color: '#4ec9a0' },
+    diary: { label: '日记', color: '#c792ea' },
+    project: { label: '项目', color: '#ff8b5c' }
+  };
+
+  var ARTICLES = [
+    {
+      id: '1',
+      category: 'essay',
+      title: '地铁上的一句念头',
+      summary: '耳机里的白噪音和窗外掠过的灯，突然想记下这一刻的安静。',
+      date: '04-20',
+      words: 420
+    },
+    {
+      id: '2',
+      category: 'tech',
+      title: 'Chrome 扩展 MV3 迁移笔记',
+      summary: 'Service Worker 生命周期与 storage 迁移，几条踩坑与对策。',
+      date: '04-19',
+      words: 1280
+    },
+    {
+      id: '3',
+      category: 'read',
+      title: '《深度工作》摘录',
+      summary: '批量处理浅层任务，为深度工作留出连续时间块。',
+      date: '04-18',
+      words: 560
+    },
+    {
+      id: '4',
+      category: 'diary',
+      title: '周二 · 小雨',
+      summary: '咖啡凉了才喝，但心情反而更清楚一点。',
+      date: '04-17',
+      words: 310
+    },
+    {
+      id: '5',
+      category: 'project',
+      title: '写作空间 PRD 草案',
+      summary: '卡片流 + 快写区：轻量入口与完整编辑器的衔接说明。',
+      date: '04-16',
+      words: 630
+    }
+  ];
+
+  var heatmapRow = document.getElementById('heatmapRow');
+  var levels = ['', 'l1', 'l2', 'l3', 'l4'];
+  for (var i = 0; i < 14; i++) {
+    var sp = document.createElement('span');
+    var lv = (i + 3) % 5;
+    if (lv > 0) sp.className = levels[lv];
+    heatmapRow.appendChild(sp);
+  }
+
+  var cardList = document.getElementById('cardList');
+  var filterCategory = document.getElementById('filterCategory');
+  var anchor = document.getElementById('cardflowAnchor');
+  var dockBtn = document.getElementById('dockBtn');
+  var cfClose = document.getElementById('cfClose');
+  var quickInput = document.getElementById('quickInput');
+  var activeId = ARTICLES[0].id;
+
+  function renderCards(filter) {
+    cardList.innerHTML = '';
+    ARTICLES.forEach(function (a) {
+      if (filter !== 'all' && a.category !== filter) return;
+      var meta = CATEGORY_META[a.category];
+      var card = document.createElement('article');
+      card.className = 'article-card' + (a.id === activeId ? ' active' : '');
+      card.dataset.id = a.id;
+      card.setAttribute('role', 'button');
+      card.setAttribute('tabindex', '0');
+
+      var accent = document.createElement('div');
+      accent.className = 'card-accent';
+      accent.style.background = meta.color;
+
+      var body = document.createElement('div');
+      body.className = 'card-body';
+      body.innerHTML =
+        '<div class="card-title"></div>' +
+        '<p class="card-summary"></p>' +
+        '<div class="card-foot"><span>' +
+        a.date +
+        '</span><span>' +
+        a.words +
+        ' 字</span></div>';
+      body.querySelector('.card-title').textContent = a.title;
+      body.querySelector('.card-summary').textContent = a.summary;
+
+      card.appendChild(accent);
+      card.appendChild(body);
+      cardList.appendChild(card);
+
+      card.addEventListener('click', function () {
+        activeId = a.id;
+        renderCards(filterCategory.value);
+      });
+      card.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          activeId = a.id;
+          renderCards(filterCategory.value);
+        }
+      });
+    });
+  }
+
+  function setOpen(open) {
+    if (open) {
+      anchor.classList.add('open');
+      dockBtn.classList.add('active');
+      dockBtn.setAttribute('aria-expanded', 'true');
+      anchor.setAttribute('aria-hidden', 'false');
+    } else {
+      anchor.classList.remove('open');
+      dockBtn.classList.remove('active');
+      dockBtn.setAttribute('aria-expanded', 'false');
+      anchor.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  function togglePanel() {
+    setOpen(!anchor.classList.contains('open'));
+  }
+
+  dockBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    togglePanel();
+  });
+  cfClose.addEventListener('click', function () {
+    setOpen(false);
+  });
+
+  filterCategory.addEventListener('change', function () {
+    var f = filterCategory.value;
+    var visible = ARTICLES.filter(function (a) {
+      return f === 'all' || a.category === f;
+    });
+    if (visible.length && !visible.some(function (a) { return a.id === activeId; })) {
+      activeId = visible[0].id;
+    }
+    renderCards(f);
+  });
+
+  document.getElementById('btnQuickWrite').addEventListener('click', function () {
+    quickInput.focus();
+  });
+
+  document.getElementById('btnPublish').addEventListener('click', function () {
+    if (quickInput.value.trim()) {
+      quickInput.value = '';
+    }
+  });
+
+  document.addEventListener('click', function (e) {
+    if (!anchor.classList.contains('open')) return;
+    if (anchor.contains(e.target) || dockBtn.contains(e.target)) return;
+    setOpen(false);
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && anchor.classList.contains('open')) setOpen(false);
+  });
+
+  renderCards('all');
+})();
+</script>
+</body>
+</html>

@@ -1420,8 +1420,8 @@ class KnowledgeWall {
 
         const onMove = (e) => {
             if (!isResizing) return;
-            const newW = Math.max(360, startW + (e.clientX - startX));
-            const newH = Math.max(300, startH + (e.clientY - startY));
+            const newW = Math.max(600, startW + (e.clientX - startX));
+            const newH = Math.max(500, startH + (e.clientY - startY));
             dialog.style.width = newW + 'px';
             dialog.style.maxWidth = 'none';
             dialog.style.height = newH + 'px';

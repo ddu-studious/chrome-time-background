@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>合并面板测试 — 日/周 Tab</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="../../css/schedule.css">
+<link rel="stylesheet" href="../../css/weekview.css">
+<style>
+body{background:#0a0a1e;margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;color:#e8e6f0}
+.test-bar{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:99999;display:flex;gap:8px;padding:8px 16px;background:rgba(30,28,50,0.95);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);border-radius:12px}
+.test-btn{padding:8px 16px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:#c4b5fd;cursor:pointer;font-size:12px;font-weight:600;transition:all .2s}
+.test-btn:hover{background:rgba(167,139,250,0.15)}
+</style>
+</head>
+<body>
+<div class="test-bar">
+    <button class="test-btn" onclick="sm.toggle()">打开计划面板 (日视图)</button>
+    <button class="test-btn" onclick="sm.openPanel('week')">直接打开周视图</button>
+</div>
+<script>
+window.chrome={storage:{local:{_d:{},get(k,c){const r={};k.forEach(x=>{if(this._d[x]!==undefined)r[x]=this._d[x]});c(r)},set(o,c){Object.assign(this._d,o);if(c)c()}}}};
+</script>
+<script src="../../js/schedule.js"></script>
+<script>
+const sm=window.scheduleManager;
+(async()=>{
+    await sm.init();
+    // inject test plans
+    const today=new Date();
+    const mon=new Date(today);
+    const day=mon.getDay();
+    mon.setDate(mon.getDate()-(day===0?6:day-1));
+    const templates=[
+        [{name:'项目站会',icon:'💬',s:'09:00',e:'09:30',cat:'work'},{name:'代码开发',icon:'💻',s:'09:30',e:'12:00',cat:'work'},{name:'英语阅读',icon:'📖',s:'20:00',e:'20:45',cat:'study'}],
+        [{name:'需求评审',icon:'📋',s:'10:00',e:'11:00',cat:'work'},{name:'PPT 制作',icon:'📊',s:'14:00',e:'16:00',cat:'work'},{name:'算法练习',icon:'🧩',s:'20:30',e:'21:30',cat:'study'}],
+        [{name:'数据分析',icon:'📈',s:'09:00',e:'11:00',cat:'work'},{name:'团队午餐',icon:'🍜',s:'12:00',e:'13:00',cat:'life'},{name:'Python 课',icon:'🐍',s:'19:00',e:'20:30',cat:'study'}],
+        [{name:'1v1 沟通',icon:'🤝',s:'10:00',e:'10:45',cat:'work'},{name:'报告撰写',icon:'✍️',s:'14:00',e:'16:00',cat:'work'},{name:'跑步',icon:'🏃',s:'18:00',e:'18:40',cat:'life'}],
+        [{name:'周报总结',icon:'📝',s:'15:00',e:'16:00',cat:'work'},{name:'快速同步',icon:'⚡',s:'09:30',e:'09:45',cat:'work'},{name:'读书会',icon:'📚',s:'20:00',e:'21:30',cat:'study'}],
+        [{name:'徒步',icon:'⛰️',s:'09:00',e:'12:00',cat:'life'},{name:'摄影练习',icon:'📷',s:'15:00',e:'16:30',cat:'life'}],
+        [{name:'家务整理',icon:'🏠',s:'10:00',e:'11:00',cat:'life'},{name:'本周复盘',icon:'🔄',s:'20:00',e:'20:30',cat:'work'},{name:'英语听力',icon:'🎧',s:'21:00',e:'21:30',cat:'study'}]
+    ];
+    templates.forEach((dp,i)=>{
+        const d=new Date(mon);d.setDate(d.getDate()+i);
+        const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        dp.forEach((p,j)=>{
+            const[sh,smin]=p.s.split(':').map(Number),[eh,emin]=p.e.split(':').map(Number);
+            sm._plans.push({id:`p_${i}_${j}`,name:p.name,icon:p.icon,date:ds,startTime:p.s,endTime:p.e,duration:(eh*60+emin)-(sh*60+smin),category:p.cat,completed:Math.random()>0.85,note:'',createdAt:Date.now()});
+        });
+    });
+    sm.toggle();
+})();
+</script>
+</body>
+</html>

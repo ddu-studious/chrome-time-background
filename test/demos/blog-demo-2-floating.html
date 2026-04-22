@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>写作空间 · 方案B · 居中悬浮卡片</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  min-height: 100vh;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+  color: #e0e0e0;
+  background: #0a0a14;
+}
+
+/* 深色渐变背景 */
+.bg-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+}
+
+/* 模拟时钟背景字 */
+.clock-watermark {
+  position: fixed;
+  left: 50%;
+  top: 42%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  font-size: clamp(72px, 18vw, 160px);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.06);
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+}
+
+/* 顶部方案标识 */
+.scheme-badge {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #d4a843;
+  background: rgba(212, 168, 67, 0.12);
+  border: 1px solid rgba(212, 168, 67, 0.25);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+}
+
+/* 淡毛玻璃遮罩 */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  background: rgba(8, 10, 20, 0.35);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* 悬浮窗 */
+.float-window {
+  --w: 700px;
+  --h: 550px;
+  position: fixed;
+  z-index: 10;
+  width: var(--w);
+  height: var(--h);
+  left: calc(50% - var(--w) / 2);
+  top: calc(50% - var(--h) / 2);
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(135deg, rgba(35, 38, 50, 0.97), rgba(26, 28, 38, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  box-shadow: 0 16px 60px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  transform: scale(0.95);
+  opacity: 0;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.35s ease;
+}
+.float-window.open {
+  transform: scale(1);
+  opacity: 1;
+}
+.float-window.minimized {
+  height: auto;
+}
+.float-window.minimized .win-body {
+  display: none;
+}
+.float-window.minimized .resize-handle {
+  display: none;
+}
+
+/* 标题栏 */
+.win-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  cursor: grab;
+  background: rgba(0, 0, 0, 0.15);
+}
+.win-header:active {
+  cursor: grabbing;
+}
+.win-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #eee;
+}
+.win-title .pen {
+  font-size: 18px;
+}
+.header-btns {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #aaa;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+.icon-btn.close:hover {
+  background: rgba(220, 80, 80, 0.25);
+  color: #ffaaa8;
+}
+
+/* 主体 */
+.win-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 14px 12px;
+}
+
+.streak-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0 8px;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.streak-grid {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+  max-width: 200px;
+}
+.streak-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.streak-dot.on {
+  background: #d4a843;
+}
+.streak-dot.today {
+  outline: 1.5px solid #d4a843;
+  outline-offset: 1px;
+}
+.streak-meta {
+  font-size: 12px;
+  color: #888;
+  white-space: nowrap;
+}
+.streak-meta .fire {
+  color: #d4a843;
+  font-weight: 600;
+}
+
+.title-input {
+  margin-top: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.22);
+  color: #eee;
+  font-size: 16px;
+  font-weight: 700;
+  outline: none;
+}
+.title-input::placeholder {
+  color: #555;
+}
+.title-input:focus {
+  border-color: rgba(212, 168, 67, 0.45);
+}
+
+.meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.cat-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.cat-chip {
+  padding: 4px 11px;
+  border-radius: 6px;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #999;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s;
+}
+.cat-chip:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: #ccc;
+}
+.cat-chip.active {
+  background: rgba(212, 168, 67, 0.2);
+  color: #d4a843;
+  border-color: rgba(212, 168, 67, 0.35);
+  font-weight: 600;
+}
+.tag-input {
+  flex: 1;
+  min-width: 140px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.2);
+  color: #ccc;
+  font-size: 12px;
+  outline: none;
+}
+.tag-input:focus {
+  border-color: rgba(212, 168, 67, 0.35);
+}
+
+.split {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  margin-top: 10px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.editor-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: rgba(0, 0, 0, 0.18);
+}
+.editor-wrap label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #666;
+  padding: 6px 10px 0;
+}
+#mdEditor {
+  flex: 1;
+  width: 100%;
+  min-height: 180px;
+  padding: 8px 10px 10px;
+  border: none;
+  background: transparent;
+  color: #c8c8c8;
+  font-size: 13px;
+  line-height: 1.75;
+  font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace;
+  resize: none;
+  outline: none;
+}
+.preview-wrap {
+  flex: 1;
+  min-width: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+  display: flex;
+  flex-direction: column;
+}
+.preview-wrap label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #666;
+  padding: 6px 10px 0;
+}
+.preview-pane {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px 12px;
+  font-size: 13px;
+  line-height: 1.75;
+  color: #d0d0d0;
+}
+.preview-pane h2 {
+  color: #eee;
+  font-size: 1.15em;
+  margin: 0 0 0.5em;
+  padding-bottom: 0.35em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.preview-pane blockquote {
+  margin: 0.75em 0;
+  padding: 0.5em 0.85em;
+  border-left: 3px solid #d4a843;
+  background: rgba(255, 255, 255, 0.04);
+  color: #aaa;
+}
+.preview-pane strong {
+  color: #eee;
+}
+.preview-pane p {
+  margin: 0 0 0.65em;
+}
+.preview-pane ol {
+  margin: 0.5em 0 0.75em 1.2em;
+  padding: 0;
+}
+.preview-pane li {
+  margin-bottom: 0.35em;
+}
+.preview-pane hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 0.85em 0;
+}
+
+.footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+}
+.recent-wrap {
+  position: relative;
+}
+.recent-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.2);
+  color: #bbb;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.recent-btn:hover {
+  border-color: rgba(212, 168, 67, 0.35);
+  color: #d4a843;
+}
+.recent-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  min-width: 220px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: 10px;
+  background: rgba(22, 24, 32, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  display: none;
+  z-index: 20;
+}
+.recent-menu.open {
+  display: block;
+}
+.recent-item {
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #ccc;
+  cursor: pointer;
+}
+.recent-item:hover {
+  background: rgba(212, 168, 67, 0.12);
+  color: #d4a843;
+}
+.recent-item small {
+  display: block;
+  color: #666;
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.footer-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.word-count {
+  font-size: 12px;
+  color: #777;
+  font-variant-numeric: tabular-nums;
+}
+.word-count em {
+  color: #d4a843;
+  font-style: normal;
+  font-weight: 600;
+}
+.btn-save {
+  padding: 7px 16px;
+  border: none;
+  border-radius: 8px;
+  background: #d4a843;
+  color: #1a1a2e;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s, transform 0.1s;
+}
+.btn-save:hover {
+  background: #e0b854;
+}
+.btn-save:active {
+  transform: scale(0.98);
+}
+
+/* 缩放手柄 */
+.resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  z-index: 15;
+}
+.resize-handle::after {
+  content: '';
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 0 10px 10px;
+  border-color: transparent transparent rgba(212, 168, 67, 0.45) transparent;
+}
+</style>
+</head>
+<body>
+<div class="scheme-badge">方案 B · 居中悬浮卡片 — 可拖拽移动，灵活不遮挡</div>
+<div class="bg-layer"></div>
+<div class="clock-watermark" aria-hidden="true">14:35:28</div>
+<div class="overlay"></div>
+
+<div class="float-window open" id="floatWin">
+  <div class="win-header" id="dragHandle">
+    <div class="win-title"><span class="pen" aria-hidden="true">🖊</span> 写作空间</div>
+    <div class="header-btns">
+      <button type="button" class="icon-btn" id="btnMin" title="最小化" aria-label="最小化"><i class="fas fa-minus"></i></button>
+      <button type="button" class="icon-btn close" id="btnClose" title="关闭" aria-label="关闭"><i class="fas fa-times"></i></button>
+    </div>
+  </div>
+  <div class="win-body">
+    <div class="streak-row">
+      <div class="streak-grid" id="streakGrid" aria-hidden="true"></div>
+      <div class="streak-meta"><span class="fire">🔥 连续 3 天</span> · 8 篇 · 3,200 字</div>
+    </div>
+    <input type="text" class="title-input" id="titleInput" value="周末复盘：用一块时间表找回节奏" placeholder="文章标题">
+    <div class="meta-row">
+      <div class="cat-chips" id="catChips">
+        <button type="button" class="cat-chip" data-cat="note">随笔</button>
+        <button type="button" class="cat-chip active" data-cat="review">复盘</button>
+        <button type="button" class="cat-chip" data-cat="tech">技术</button>
+        <button type="button" class="cat-chip" data-cat="read">读书笔记</button>
+      </div>
+      <input type="text" class="tag-input" id="tagInput" value="时间管理, 习惯, 复盘" placeholder="标签，用逗号分隔">
+    </div>
+    <div class="split">
+      <div class="editor-wrap">
+        <label for="mdEditor">Markdown</label>
+        <textarea id="mdEditor" spellcheck="false"></textarea>
+      </div>
+      <div class="preview-wrap">
+        <label>预览</label>
+        <div class="preview-pane" id="previewPane">
+          <h2>周末复盘：用一块时间表找回节奏</h2>
+          <blockquote>
+            <p><strong>摘录</strong>：时间不是被填满的，而是被选择的。</p>
+          </blockquote>
+          <p>本周我尝试把「固定锚点」写进日历：晨间 30 分钟阅读、晚间整理任务。几天后，焦虑感明显下降——<strong>不是因为做得更多，而是因为知道下一步该做什么</strong>。</p>
+          <p><strong>三个小发现</strong></p>
+          <ol>
+            <li><strong>批量处理</strong>邮件比随时回复更省心力</li>
+            <li>散步时不带手机，灵感反而更多</li>
+            <li>把「想做的事」先写成一行，比空想更高效</li>
+          </ol>
+          <hr>
+          <p>写得一般，但很真实。下周继续。</p>
+        </div>
+      </div>
+    </div>
+    <div class="footer-row">
+      <div class="recent-wrap">
+        <button type="button" class="recent-btn" id="recentBtn">最近文章 <i class="fas fa-caret-down"></i></button>
+        <div class="recent-menu" id="recentMenu">
+          <div class="recent-item">Vue 3 组合式 API 踩坑笔记 <small>技术 · 2 天前</small></div>
+          <div class="recent-item">《深度工作》第三章摘要 <small>读书笔记 · 上周</small></div>
+          <div class="recent-item">晨间日记模板 v2 <small>随笔 · 本月</small></div>
+        </div>
+      </div>
+      <div class="footer-right">
+        <span class="word-count" id="wordCount">约 <em id="wcNum">0</em> 字</span>
+        <button type="button" class="btn-save" id="btnSave"><i class="fas fa-save"></i> 保存</button>
+      </div>
+    </div>
+  </div>
+  <div class="resize-handle" id="resizeHandle" title="拖拽缩放"></div>
+</div>
+
+<script>
+(function () {
+  var SAMPLE = '# 周末复盘：用一块时间表找回节奏\n\n' +
+    '> **摘录**：时间不是被填满的，而是被选择的。\n\n' +
+    '本周我尝试把「固定锚点」写进日历：晨间 30 分钟阅读、晚间整理任务。几天后，焦虑感明显下降——**不是因为做得更多，而是因为知道下一步该做什么**。\n\n' +
+    '## 三个小发现\n\n' +
+    '1. **批量处理**邮件比随时回复更省心力  \n' +
+    '2. 散步时不带手机，灵感反而更多  \n' +
+    '3. 把「想做的事」先写成一行，比空想更高效\n\n' +
+    '---\n\n' +
+    '写得一般，但很真实。下周继续。\n';
+
+  var floatWin = document.getElementById('floatWin');
+  var dragHandle = document.getElementById('dragHandle');
+  var resizeHandle = document.getElementById('resizeHandle');
+  var mdEditor = document.getElementById('mdEditor');
+  var wcNum = document.getElementById('wcNum');
+  var btnMin = document.getElementById('btnMin');
+  var btnClose = document.getElementById('btnClose');
+  var recentBtn = document.getElementById('recentBtn');
+  var recentMenu = document.getElementById('recentMenu');
+  var catChips = document.getElementById('catChips');
+
+  mdEditor.value = SAMPLE;
+
+  function countChars() {
+    var t = mdEditor.value || '';
+    var n = t.replace(/\s/g, '').length;
+    wcNum.textContent = n.toLocaleString('zh-CN');
+  }
+  countChars();
+  mdEditor.addEventListener('input', countChars);
+
+  /* 连续打卡热力图：14 个小方块 */
+  var streakGrid = document.getElementById('streakGrid');
+  for (var i = 0; i < 14; i++) {
+    var d = document.createElement('span');
+    d.className = 'streak-dot';
+    if (i >= 11) d.classList.add('on');
+    if (i === 13) d.classList.add('today');
+    streakGrid.appendChild(d);
+  }
+
+  /* 拖拽移动（标题栏，避开按钮） */
+  var drag = { active: false, sx: 0, sy: 0, sl: 0, st: 0 };
+  function pinWindowPixels() {
+    var r = floatWin.getBoundingClientRect();
+    floatWin.style.left = r.left + 'px';
+    floatWin.style.top = r.top + 'px';
+    floatWin.style.width = r.width + 'px';
+    floatWin.style.height = r.height + 'px';
+  }
+  dragHandle.addEventListener('mousedown', function (e) {
+    if (e.target.closest('button')) return;
+    pinWindowPixels();
+    drag.active = true;
+    var r = floatWin.getBoundingClientRect();
+    drag.sx = e.clientX;
+    drag.sy = e.clientY;
+    drag.sl = r.left;
+    drag.st = r.top;
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', function (e) {
+    if (!drag.active) return;
+    floatWin.style.left = drag.sl + (e.clientX - drag.sx) + 'px';
+    floatWin.style.top = drag.st + (e.clientY - drag.sy) + 'px';
+  });
+  document.addEventListener('mouseup', function () {
+    drag.active = false;
+  });
+
+  /* 右下角缩放 */
+  var MIN_W = 500;
+  var MIN_H = 400;
+  var rz = { active: false, x: 0, y: 0, w: 0, h: 0 };
+  resizeHandle.addEventListener('mousedown', function (e) {
+    pinWindowPixels();
+    rz.active = true;
+    rz.x = e.clientX;
+    rz.y = e.clientY;
+    rz.w = floatWin.offsetWidth;
+    rz.h = floatWin.offsetHeight;
+    e.preventDefault();
+    e.stopPropagation();
+  });
+  document.addEventListener('mousemove', function (e) {
+    if (!rz.active) return;
+    var dw = e.clientX - rz.x;
+    var dh = e.clientY - rz.y;
+    var nw = Math.max(MIN_W, rz.w + dw);
+    var nh = Math.max(MIN_H, rz.h + dh);
+    floatWin.style.width = nw + 'px';
+    floatWin.style.height = nh + 'px';
+  });
+  document.addEventListener('mouseup', function () {
+    rz.active = false;
+  });
+
+  /* 分类切换 */
+  catChips.addEventListener('click', function (e) {
+    var btn = e.target.closest('.cat-chip');
+    if (!btn) return;
+    catChips.querySelectorAll('.cat-chip').forEach(function (b) {
+      b.classList.remove('active');
+    });
+    btn.classList.add('active');
+  });
+
+  /* 最小化 */
+  btnMin.addEventListener('click', function () {
+    floatWin.classList.toggle('minimized');
+    btnMin.querySelector('i').className = floatWin.classList.contains('minimized')
+      ? 'fas fa-window-maximize'
+      : 'fas fa-minus';
+  });
+
+  btnClose.addEventListener('click', function () {
+    floatWin.classList.remove('open');
+    setTimeout(function () {
+      floatWin.classList.add('open');
+    }, 400);
+  });
+
+  /* 最近文章下拉 */
+  recentBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    recentMenu.classList.toggle('open');
+  });
+  document.addEventListener('click', function () {
+    recentMenu.classList.remove('open');
+  });
+  recentMenu.addEventListener('click', function (e) {
+    e.stopPropagation();
+  });
+
+  var btnSave = document.getElementById('btnSave');
+  btnSave.addEventListener('click', function () {
+    var orig = btnSave.innerHTML;
+    btnSave.innerHTML = '<i class="fas fa-check"></i> 已保存';
+    setTimeout(function () {
+      btnSave.innerHTML = orig;
+    }, 1200);
+  });
+})();
+</script>
+</body>
+</html>
