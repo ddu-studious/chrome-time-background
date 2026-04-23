@@ -646,15 +646,18 @@ importScripts('background-provider.js');
             console.log('系统资源监控已禁用（用户设置）');
         }
 
-        // 工作日志每日提醒
+        // 工作日志智能提醒（多时间点检查）
         if (perfSettings?.enableWorklog !== false && perfSettings?.worklogReminderEnabled !== false) {
+            await chrome.alarms.create('worklog-smart-check', {
+                periodInMinutes: 30
+            });
             const wlTime = perfSettings?.worklogReminderTime || '18:00';
             const [wlHour, wlMinute] = wlTime.split(':').map(Number);
             await chrome.alarms.create('worklog-reminder', {
                 when: getNextDailyTime(wlHour, wlMinute),
                 periodInMinutes: 24 * 60
             });
-            console.log(`已设置工作日志提醒: ${wlHour}:${String(wlMinute).padStart(2, '0')}`);
+            console.log(`已设置工作日志智能提醒（每30分钟检查）+ 每日提醒 ${wlHour}:${String(wlMinute).padStart(2, '0')}`);
         } else {
             console.log('工作日志提醒已禁用（用户设置）');
         }
@@ -907,7 +910,7 @@ importScripts('background-provider.js');
     }
 
     /**
-     * 工作日志每日提醒
+     * 工作日志每日提醒（下班时）
      */
     async function sendWorklogReminder() {
         try {
@@ -939,6 +942,75 @@ importScripts('background-provider.js');
             });
         } catch (error) {
             console.error('工作日志提醒失败:', error);
+        }
+    }
+
+    /**
+     * 工作日志智能检查（工作时段内定期检查工时是否达标）
+     * 规则：9:00 上班，每到整点检查已工作小时数 vs 已记录工时
+     * - 12:00 若 <1h 工时 → 提醒
+     * - 15:00 若 <3h 工时 → 提醒
+     * - 17:00 若 <6h 工时 → 提醒
+     * 每天每个时段最多提醒一次，用 storage 记录已提醒标记
+     */
+    async function checkWorklogProgress() {
+        try {
+            const { settings } = await chrome.storage.sync.get('settings');
+            if (settings?.enableWorklog === false || settings?.worklogReminderEnabled === false) return;
+
+            const now = new Date();
+            const hour = now.getHours();
+            const day = now.getDay();
+
+            if (day === 0 || day === 6) return;
+            if (hour < 9 || hour >= 18) return;
+
+            const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+            const checkpoints = [
+                { hour: 12, expectMinutes: 60,  label: '上午' },
+                { hour: 15, expectMinutes: 180, label: '下午' },
+                { hour: 17, expectMinutes: 360, label: '今天' },
+            ];
+
+            const current = checkpoints.find(cp => hour >= cp.hour && hour < cp.hour + 1);
+            if (!current) return;
+
+            const storageKey = `worklog_reminded_${todayStr}`;
+            const reminded = (await chrome.storage.local.get(storageKey))[storageKey] || {};
+            if (reminded[current.hour]) return;
+
+            const { worklogEntries } = await chrome.storage.local.get('worklogEntries');
+            const todayEntries = Array.isArray(worklogEntries) ? worklogEntries.filter(e => e.date === todayStr) : [];
+            const totalMinutes = todayEntries.reduce((sum, e) => sum + (e.duration || 0), 0);
+
+            if (totalMinutes >= current.expectMinutes) return;
+
+            const h = Math.floor(totalMinutes / 60);
+            const m = totalMinutes % 60;
+            const logged = h > 0 ? `${h}小时${m > 0 ? m + '分钟' : ''}` : (m > 0 ? `${m}分钟` : '0');
+            const expectH = Math.floor(current.expectMinutes / 60);
+
+            let message;
+            if (totalMinutes === 0) {
+                message = `${current.label}还没有更新工作日志，抽空记录一下`;
+            } else {
+                message = `${current.label}已记录 ${logged}，建议至少 ${expectH} 小时`;
+            }
+
+            await chrome.notifications.create(`worklog-smart-${current.hour}`, {
+                type: 'basic',
+                iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+                title: '📋 工作日志',
+                message,
+                priority: 0
+            });
+
+            reminded[current.hour] = true;
+            await chrome.storage.local.set({ [storageKey]: reminded });
+
+        } catch (error) {
+            console.error('工作日志智能检查失败:', error);
         }
     }
 
@@ -1540,6 +1612,9 @@ importScripts('background-provider.js');
                 await sendWorklogReminder();
                 logExtEvent('alarm', 'worklog-reminder', { durationMs: Date.now() - _alarmStart });
                 break;
+            case 'worklog-smart-check':
+                await checkWorklogProgress();
+                break;
             default:
                 if (alarm.name.startsWith('task-reminder-')) {
                     const taskId = alarm.name.replace('task-reminder-', '');
@@ -1621,7 +1696,7 @@ importScripts('background-provider.js');
         }
 
         // 工作日志提醒 - 打开新标签页并展开日志面板
-        if (notificationId === 'worklog-reminder') {
+        if (notificationId === 'worklog-reminder' || notificationId.startsWith('worklog-smart-')) {
             await chrome.tabs.create({ url: 'chrome://newtab/' });
             await chrome.storage.local.set({ pendingAction: 'openWorklogPanel' });
             await chrome.notifications.clear(notificationId);

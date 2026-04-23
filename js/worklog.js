@@ -15,6 +15,23 @@ class WorkLogManager {
         this._overlayEl = null;
         this._escHandler = null;
         this._initialized = false;
+        this._viewMode = 'list'; // 'list' | 'quadrant'
+
+        this.QUADRANTS = [
+            { key: 'q1', label: '紧急且重要', hint: '立即做', icon: '🔴', urgency: true, importance: true },
+            { key: 'q2', label: '重要不紧急', hint: '计划做', icon: '🟡', urgency: false, importance: true },
+            { key: 'q3', label: '紧急不重要', hint: '快速处理', icon: '🔵', urgency: true, importance: false },
+            { key: 'q4', label: '不紧急不重要', hint: '可推后', icon: '⚪', urgency: false, importance: false },
+        ];
+
+        this.QUICK_DURATIONS = [
+            { label: '5m', minutes: 5 },
+            { label: '10m', minutes: 10 },
+            { label: '15m', minutes: 15 },
+            { label: '30m', minutes: 30 },
+            { label: '1h', minutes: 60 },
+            { label: '2h', minutes: 120 },
+        ];
 
         this.PROJECT_COLORS = [
             { name: '绿色', hex: '#4CAF50' },
@@ -193,6 +210,9 @@ class WorkLogManager {
             endTime: data.endTime || '',
             tags: Array.isArray(data.tags) ? data.tags : [],
             memoId: data.memoId || null,
+            urgency: !!data.urgency,
+            importance: !!data.importance,
+            subItems: Array.isArray(data.subItems) ? data.subItems : [],
             createdAt: Date.now(),
             updatedAt: Date.now()
         };
@@ -215,12 +235,14 @@ class WorkLogManager {
     }
 
     // ─── 计时器 ───
-    async startTimer(projectId, description, memoId) {
+    async startTimer(projectId, description, memoId, urgency, importance) {
         if (this._timer) await this.stopTimer();
         this._timer = {
             projectId: projectId || 'proj_default',
             description: description || '',
             memoId: memoId || null,
+            urgency: !!urgency,
+            importance: !!importance,
             startedAt: Date.now()
         };
         await this._saveTimer();
@@ -242,7 +264,9 @@ class WorkLogManager {
             date: startDateStr,
             duration: Math.max(1, elapsed),
             startTime: `${String(startDate.getHours()).padStart(2, '0')}:${String(startDate.getMinutes()).padStart(2, '0')}`,
-            endTime: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+            endTime: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`,
+            urgency: this._timer.urgency || false,
+            importance: this._timer.importance || false,
         });
         this._timer = null;
         this._clearTimerTick();
@@ -298,6 +322,66 @@ class WorkLogManager {
         if (dockBtn) {
             dockBtn.classList.toggle('wl-timing', running);
         }
+    }
+
+    // ─── 子条目管理 ───
+    async addSubItem(entryId, text) {
+        const entry = this._entries.find(e => e.id === entryId);
+        if (!entry) return null;
+        if (!Array.isArray(entry.subItems)) entry.subItems = [];
+        const item = { id: this._genId('si'), text: (text || '').trim(), createdAt: Date.now() };
+        entry.subItems.push(item);
+        entry.updatedAt = Date.now();
+        await this._saveEntries();
+        return item;
+    }
+
+    async removeSubItem(entryId, subItemId) {
+        const entry = this._entries.find(e => e.id === entryId);
+        if (!entry || !Array.isArray(entry.subItems)) return;
+        entry.subItems = entry.subItems.filter(si => si.id !== subItemId);
+        entry.updatedAt = Date.now();
+        await this._saveEntries();
+    }
+
+    // ─── 四象限 ───
+    _getQuadrant(entry) {
+        if (entry.urgency && entry.importance) return 'q1';
+        if (!entry.urgency && entry.importance) return 'q2';
+        if (entry.urgency && !entry.importance) return 'q3';
+        return 'q4';
+    }
+
+    getQuadrantEntries(dateStr) {
+        const entries = this._getEntriesForDate(dateStr);
+        const result = { q1: [], q2: [], q3: [], q4: [] };
+        entries.forEach(e => {
+            result[this._getQuadrant(e)].push(e);
+        });
+        Object.values(result).forEach(arr => arr.sort((a, b) => b.createdAt - a.createdAt));
+        return result;
+    }
+
+    _getQuadrantRecommendation(dateStr) {
+        const qe = this.getQuadrantEntries(dateStr);
+        const incomplete = (arr) => arr.filter(e => e.duration <= 0 || !e.description);
+        if (qe.q1.length > 0) return { quadrant: 'q1', message: `有 ${qe.q1.length} 项紧急且重要的工作，优先处理` };
+        if (qe.q2.length > 0) return { quadrant: 'q2', message: `${qe.q2.length} 项重要工作等待你安排时间` };
+        if (qe.q3.length > 0) return { quadrant: 'q3', message: `${qe.q3.length} 项紧急事务，快速处理` };
+        return null;
+    }
+
+    // ─── 工时目标检查（供 background.js 调用） ───
+    getTodayProgress() {
+        const summary = this.getDailySummary(this._todayStr());
+        const targetMinutes = 8 * 60;
+        return {
+            logged: summary.totalMinutes,
+            target: targetMinutes,
+            remaining: Math.max(0, targetMinutes - summary.totalMinutes),
+            percentage: Math.min(100, Math.round((summary.totalMinutes / targetMinutes) * 100)),
+            count: summary.count
+        };
     }
 
     // ─── 统计 ───
@@ -437,9 +521,15 @@ class WorkLogManager {
     _buildPanelHTML() {
         const isToday = this._currentDate === this._todayStr();
         const summary = this.getDailySummary(this._currentDate);
+        const progress = this.getTodayProgress();
         const projects = this.getActiveProjects();
+        const timerProjId = this._timer?.projectId || '';
         const projectOptions = projects.map(p =>
-            `<option value="${p.id}" style="color:${p.color}">${p.name}</option>`
+            `<option value="${p.id}" ${p.id === timerProjId ? 'selected' : ''} style="color:${p.color}">${p.name}</option>`
+        ).join('');
+
+        const quickDurBtns = this.QUICK_DURATIONS.map(d =>
+            `<button class="wl-quick-dur-btn" data-minutes="${d.minutes}" title="快速添加 ${d.label}">${d.label}</button>`
         ).join('');
 
         return `
@@ -465,31 +555,60 @@ class WorkLogManager {
             </div>
 
             <div class="wl-quick-entry">
-                <input type="text" class="wl-input wl-desc-input" placeholder="做了什么..."
-                       value="${this._timer ? this._escHtml(this._timer.description) : ''}">
-                <select class="wl-input wl-project-select">
-                    ${projectOptions}
-                </select>
-                <button class="wl-task-link-btn${this._timer?.memoId ? ' wl-task-linked' : ''}" title="关联任务" data-memo-id="${this._timer?.memoId || ''}">
-                    <i class="fas fa-link"></i>
-                </button>
-                <div class="wl-timer-display">00:00</div>
-                <button class="wl-timer-btn" title="开始计时">
-                    <i class="fas fa-play"></i>
-                </button>
-                <button class="wl-manual-btn" title="手动录入" data-action="manual-entry">
-                    <i class="fas fa-plus"></i>
-                </button>
+                <div class="wl-quick-row-top">
+                    <input type="text" class="wl-input wl-desc-input" placeholder="今天要做什么..."
+                           value="${this._timer ? this._escHtml(this._timer.description) : ''}">
+                    <select class="wl-input wl-project-select">
+                        ${projectOptions}
+                    </select>
+                    <button class="wl-task-link-btn${this._timer?.memoId ? ' wl-task-linked' : ''}" title="关联任务" data-memo-id="${this._timer?.memoId || ''}">
+                        <i class="fas fa-link"></i>
+                    </button>
+                    <div class="wl-timer-display">00:00</div>
+                    <button class="wl-timer-btn" title="开始计时">
+                        <i class="fas fa-play"></i>
+                    </button>
+                    <button class="wl-manual-btn" title="手动录入" data-action="manual-entry">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+                <div class="wl-quick-row-bottom">
+                    <div class="wl-priority-toggles">
+                        <button class="wl-pri-toggle wl-pri-urgent${this._timer?.urgency ? ' wl-pri-active' : ''}" data-pri="urgency" title="紧急">
+                            <i class="fas fa-bolt"></i> 紧急
+                        </button>
+                        <button class="wl-pri-toggle wl-pri-important${this._timer?.importance ? ' wl-pri-active' : ''}" data-pri="importance" title="重要">
+                            <i class="fas fa-star"></i> 重要
+                        </button>
+                    </div>
+                    <div class="wl-quick-durations">
+                        ${quickDurBtns}
+                    </div>
+                </div>
             </div>
 
             <div class="wl-summary-bar">
-                <span class="wl-summary-time">
-                    <i class="fas fa-clock"></i>
-                    今日工时：<strong>${this._formatDuration(summary.totalMinutes)}</strong>
-                </span>
-                <span class="wl-summary-count">
-                    共 <strong>${summary.count}</strong> 条记录
-                </span>
+                <div class="wl-summary-left">
+                    <span class="wl-summary-time">
+                        <i class="fas fa-clock"></i>
+                        今日工时：<strong>${this._formatDuration(summary.totalMinutes)}</strong>
+                    </span>
+                    <div class="wl-progress-bar">
+                        <div class="wl-progress-fill${progress.percentage >= 100 ? ' wl-progress-done' : ''}" style="width:${progress.percentage}%"></div>
+                    </div>
+                    <span class="wl-progress-text">${progress.percentage}%</span>
+                </div>
+                <div class="wl-summary-right">
+                    <span class="wl-summary-count">共 <strong>${summary.count}</strong> 条</span>
+                    <div class="wl-view-toggle">
+                        <button class="wl-view-btn${this._viewMode === 'list' ? ' wl-view-active' : ''}" data-view="list" title="列表视图">
+                            <i class="fas fa-list"></i>
+                        </button>
+                        <button class="wl-view-btn${this._viewMode === 'quadrant' ? ' wl-view-active' : ''}" data-view="quadrant" title="四象限视图">
+                            <i class="fas fa-th-large"></i>
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <div class="wl-entries-container" id="wl-entries-container"></div>
@@ -515,14 +634,19 @@ class WorkLogManager {
         const container = this._panelEl?.querySelector('#wl-entries-container');
         if (!container) return;
 
+        if (this._viewMode === 'quadrant') {
+            this._renderQuadrantView(container);
+            return;
+        }
+
         const summary = this.getDailySummary(this._currentDate);
 
         if (summary.count === 0) {
             container.innerHTML = `
                 <div class="wl-empty">
                     <i class="fas fa-coffee"></i>
-                    <p>${this._currentDate === this._todayStr() ? '今天还没有工作记录' : '当天没有工作记录'}</p>
-                    <p class="wl-empty-hint">输入描述，开始计时或手动添加</p>
+                    <p>${this._currentDate === this._todayStr() ? '今天还没有记录工作日志' : '当天没有工作记录'}</p>
+                    <p class="wl-empty-hint">记录今天的工作优先级，输入描述后开始计时或选择快捷时长</p>
                 </div>
             `;
             return;
@@ -551,42 +675,158 @@ class WorkLogManager {
             `;
 
             entries.forEach(entry => {
-                const memoTitle = entry.memoId ? this._getMemoTitle(entry.memoId) : null;
-                html += `
-                    <div class="wl-entry" data-entry-id="${entry.id}">
-                        <div class="wl-entry-main">
-                            <span class="wl-entry-desc">${this._escHtml(entry.description) || '<em>无描述</em>'}</span>
-                            <span class="wl-entry-duration">${this._formatDuration(entry.duration)}</span>
-                        </div>
-                        <div class="wl-entry-meta">
-                            ${entry.startTime ? `<span class="wl-entry-time">${entry.startTime}${entry.endTime ? ' → ' + entry.endTime : ''}</span>` : ''}
-                            ${memoTitle ? `<span class="wl-entry-task-badge" title="关联任务: ${this._escHtml(memoTitle)}"><i class="fas fa-tasks"></i> ${this._escHtml(memoTitle)}</span>` : ''}
-                        </div>
-                        <div class="wl-entry-actions">
-                            <button class="wl-entry-btn" data-action="edit-entry" data-id="${entry.id}" title="编辑">
-                                <i class="fas fa-pen"></i>
-                            </button>
-                            <button class="wl-entry-btn wl-entry-del" data-action="delete-entry" data-id="${entry.id}" title="删除">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </div>
-                    </div>
-                `;
+                html += this._renderEntryHTML(entry);
             });
 
             html += '</div></div>';
         });
 
         container.innerHTML = html;
+        this._bindEntrySubItemEvents(container);
+    }
+
+    _renderEntryHTML(entry) {
+        const memoTitle = entry.memoId ? this._getMemoTitle(entry.memoId) : null;
+        const quadrant = this._getQuadrant(entry);
+        const qDef = this.QUADRANTS.find(q => q.key === quadrant);
+        const hasPriority = entry.urgency || entry.importance;
+        const subItems = Array.isArray(entry.subItems) ? entry.subItems : [];
+
+        const subItemsHtml = `
+            <div class="wl-sub-items" data-entry-id="${entry.id}">
+                ${subItems.map(si => `
+                    <div class="wl-sub-item" data-si-id="${si.id}">
+                        <span class="wl-si-bullet">→</span>
+                        <span class="wl-si-text">${this._escHtml(si.text)}</span>
+                        <button class="wl-si-del" data-action="del-sub-item" data-entry-id="${entry.id}" data-si-id="${si.id}" title="删除">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `).join('')}
+                <div class="wl-si-add-row">
+                    <input type="text" class="wl-si-input" data-entry-id="${entry.id}" placeholder="+ 添加详情..." >
+                </div>
+            </div>
+        `;
+
+        return `
+            <div class="wl-entry wl-entry-${quadrant}" data-entry-id="${entry.id}">
+                <div class="wl-entry-main">
+                    <div class="wl-entry-left">
+                        <button class="wl-epri-btn wl-epri-urgent${entry.urgency ? ' wl-epri-on' : ''}" data-action="toggle-urgency" data-id="${entry.id}" title="${entry.urgency ? '取消紧急' : '标记紧急'}">
+                            <i class="fas fa-bolt"></i>
+                        </button>
+                        <button class="wl-epri-btn wl-epri-important${entry.importance ? ' wl-epri-on' : ''}" data-action="toggle-importance" data-id="${entry.id}" title="${entry.importance ? '取消重要' : '标记重要'}">
+                            <i class="fas fa-star"></i>
+                        </button>
+                        <span class="wl-entry-desc">${this._escHtml(entry.description) || '<em>无描述</em>'}</span>
+                    </div>
+                    <span class="wl-entry-duration wl-dur-editable" data-action="edit-duration" data-id="${entry.id}" title="点击修改时长">${this._formatDuration(entry.duration)}</span>
+                </div>
+                <div class="wl-entry-meta">
+                    ${entry.startTime ? `<span class="wl-entry-time">${entry.startTime}${entry.endTime ? ' → ' + entry.endTime : ''}</span>` : ''}
+                    ${memoTitle ? `<span class="wl-entry-task-badge" title="关联任务: ${this._escHtml(memoTitle)}"><i class="fas fa-tasks"></i> ${this._escHtml(memoTitle)}</span>` : ''}
+                    ${hasPriority ? `<span class="wl-entry-quadrant-badge wl-qb-${quadrant}">${qDef.icon} ${qDef.hint}</span>` : ''}
+                </div>
+                ${subItemsHtml}
+                <div class="wl-entry-actions">
+                    <button class="wl-entry-btn" data-action="edit-entry" data-id="${entry.id}" title="编辑">
+                        <i class="fas fa-pen"></i>
+                    </button>
+                    <button class="wl-entry-btn wl-entry-del" data-action="delete-entry" data-id="${entry.id}" title="删除">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    _renderQuadrantView(container) {
+        const qEntries = this.getQuadrantEntries(this._currentDate);
+        const totalCount = Object.values(qEntries).reduce((s, arr) => s + arr.length, 0);
+
+        if (totalCount === 0) {
+            container.innerHTML = `
+                <div class="wl-empty">
+                    <i class="fas fa-th-large"></i>
+                    <p>还没有设置工作优先级</p>
+                    <p class="wl-empty-hint">添加工作日志时，标记「紧急」和「重要」来规划四象限</p>
+                </div>
+            `;
+            return;
+        }
+
+        const recommendation = this._getQuadrantRecommendation(this._currentDate);
+
+        let html = '';
+        if (recommendation) {
+            html += `<div class="wl-q-recommend"><i class="fas fa-lightbulb"></i> ${recommendation.message}</div>`;
+        }
+
+        html += '<div class="wl-quadrant-grid">';
+        this.QUADRANTS.forEach(q => {
+            const entries = qEntries[q.key];
+            const totalMin = entries.reduce((s, e) => s + (e.duration || 0), 0);
+            html += `
+                <div class="wl-q-cell wl-q-${q.key}">
+                    <div class="wl-q-header">
+                        <span class="wl-q-icon">${q.icon}</span>
+                        <span class="wl-q-label">${q.label}</span>
+                        <span class="wl-q-hint">${q.hint}</span>
+                        ${totalMin > 0 ? `<span class="wl-q-total">${this._formatDuration(totalMin)}</span>` : ''}
+                    </div>
+                    <div class="wl-q-entries">
+                        ${entries.length === 0 ? '<div class="wl-q-empty">—</div>' : entries.map(entry => `
+                            <div class="wl-q-entry" data-entry-id="${entry.id}">
+                                <span class="wl-q-entry-desc">${this._escHtml(entry.description) || '<em>无描述</em>'}</span>
+                                <span class="wl-q-entry-dur">${this._formatDuration(entry.duration)}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+
+        container.innerHTML = html;
+    }
+
+    _bindEntrySubItemEvents(container) {
+        container.querySelectorAll('.wl-si-input').forEach(input => {
+            input.addEventListener('keydown', async (e) => {
+                if (e.key === 'Enter' && input.value.trim()) {
+                    const entryId = input.dataset.entryId;
+                    await this.addSubItem(entryId, input.value.trim());
+                    input.value = '';
+                    this._refreshPanel();
+                }
+            });
+        });
+
+        container.querySelectorAll('[data-action="del-sub-item"]').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await this.removeSubItem(btn.dataset.entryId, btn.dataset.siId);
+                this._refreshPanel();
+            });
+        });
     }
 
     _refreshPanel() {
         if (!this._panelOpen || !this._panelEl) return;
         const summary = this.getDailySummary(this._currentDate);
+        const progress = this.getTodayProgress();
         const summaryTime = this._panelEl.querySelector('.wl-summary-time strong');
         const summaryCount = this._panelEl.querySelector('.wl-summary-count strong');
         if (summaryTime) summaryTime.textContent = this._formatDuration(summary.totalMinutes);
         if (summaryCount) summaryCount.textContent = summary.count;
+        const progressFill = this._panelEl.querySelector('.wl-progress-fill');
+        if (progressFill) {
+            progressFill.style.width = `${progress.percentage}%`;
+            progressFill.classList.toggle('wl-progress-done', progress.percentage >= 100);
+        }
+        const progressText = this._panelEl.querySelector('.wl-progress-text');
+        if (progressText) progressText.textContent = `${progress.percentage}%`;
         this._renderDayView();
     }
 
@@ -631,6 +871,25 @@ class WorkLogManager {
                         this._refreshPanel();
                     }
                     break;
+                case 'toggle-urgency': {
+                    const entry = this._entries.find(en => en.id === btn.dataset.id);
+                    if (entry) {
+                        await this.updateEntry(btn.dataset.id, { urgency: !entry.urgency });
+                        this._refreshPanel();
+                    }
+                    break;
+                }
+                case 'toggle-importance': {
+                    const entry = this._entries.find(en => en.id === btn.dataset.id);
+                    if (entry) {
+                        await this.updateEntry(btn.dataset.id, { importance: !entry.importance });
+                        this._refreshPanel();
+                    }
+                    break;
+                }
+                case 'edit-duration':
+                    this._showDurationPopover(btn, btn.dataset.id);
+                    break;
                 case 'week-report':
                     this._showWeekReport();
                     break;
@@ -638,6 +897,57 @@ class WorkLogManager {
                     this._showProjectManager();
                     break;
             }
+        });
+
+        // 优先级切换按钮（计时中实时同步到 timer 持久化）
+        panel.querySelectorAll('.wl-pri-toggle').forEach(btn => {
+            btn.addEventListener('click', () => {
+                btn.classList.toggle('wl-pri-active');
+                if (this._timer) {
+                    this._timer.urgency = panel.querySelector('.wl-pri-toggle[data-pri="urgency"]')?.classList.contains('wl-pri-active') || false;
+                    this._timer.importance = panel.querySelector('.wl-pri-toggle[data-pri="importance"]')?.classList.contains('wl-pri-active') || false;
+                    this._saveTimer();
+                }
+            });
+        });
+
+        // 快捷时长按钮
+        panel.querySelectorAll('.wl-quick-dur-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const desc = panel.querySelector('.wl-desc-input')?.value?.trim() || '';
+                const projId = panel.querySelector('.wl-project-select')?.value || 'proj_default';
+                const memoId = panel.querySelector('.wl-task-link-btn')?.dataset?.memoId || null;
+                const urgency = panel.querySelector('.wl-pri-toggle[data-pri="urgency"]')?.classList.contains('wl-pri-active') || false;
+                const importance = panel.querySelector('.wl-pri-toggle[data-pri="importance"]')?.classList.contains('wl-pri-active') || false;
+                const minutes = parseInt(btn.dataset.minutes);
+                if (minutes > 0) {
+                    await this.addEntry({
+                        description: desc,
+                        projectId: projId,
+                        memoId,
+                        duration: minutes,
+                        date: this._currentDate,
+                        urgency,
+                        importance
+                    });
+                    const descInput = panel.querySelector('.wl-desc-input');
+                    if (descInput) descInput.value = '';
+                    this._resetPriorityToggles();
+                    this._refreshPanel();
+                }
+            });
+        });
+
+        // 视图切换
+        panel.querySelectorAll('.wl-view-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const view = btn.dataset.view;
+                if (view === this._viewMode) return;
+                this._viewMode = view;
+                panel.querySelectorAll('.wl-view-btn').forEach(b => b.classList.remove('wl-view-active'));
+                btn.classList.add('wl-view-active');
+                this._renderDayView();
+            });
         });
 
         const taskLinkBtn = panel.querySelector('.wl-task-link-btn');
@@ -663,16 +973,21 @@ class WorkLogManager {
                     if (descInput && descInput.value.trim()) {
                         this._timer.description = descInput.value.trim();
                     }
+                    this._timer.urgency = panel.querySelector('.wl-pri-toggle[data-pri="urgency"]')?.classList.contains('wl-pri-active') || false;
+                    this._timer.importance = panel.querySelector('.wl-pri-toggle[data-pri="importance"]')?.classList.contains('wl-pri-active') || false;
                     await this.stopTimer();
                     if (descInput) descInput.value = '';
                     const linkBtn = panel.querySelector('.wl-task-link-btn');
                     if (linkBtn) { linkBtn.dataset.memoId = ''; linkBtn.classList.remove('wl-task-linked'); linkBtn.title = '关联任务'; }
+                    this._resetPriorityToggles();
                     this._refreshPanel();
                 } else {
                     const desc = panel.querySelector('.wl-desc-input')?.value?.trim() || '';
                     const projId = panel.querySelector('.wl-project-select')?.value || 'proj_default';
                     const memoId = panel.querySelector('.wl-task-link-btn')?.dataset?.memoId || null;
-                    this.startTimer(projId, desc, memoId);
+                    const urgency = panel.querySelector('.wl-pri-toggle[data-pri="urgency"]')?.classList.contains('wl-pri-active') || false;
+                    const importance = panel.querySelector('.wl-pri-toggle[data-pri="importance"]')?.classList.contains('wl-pri-active') || false;
+                    this.startTimer(projId, desc, memoId, urgency, importance);
                 }
             });
         }
@@ -685,7 +1000,9 @@ class WorkLogManager {
                     if (desc) {
                         const projId = panel.querySelector('.wl-project-select')?.value || 'proj_default';
                         const memoId = panel.querySelector('.wl-task-link-btn')?.dataset?.memoId || null;
-                        this.startTimer(projId, desc, memoId);
+                        const urgency = panel.querySelector('.wl-pri-toggle[data-pri="urgency"]')?.classList.contains('wl-pri-active') || false;
+                        const importance = panel.querySelector('.wl-pri-toggle[data-pri="importance"]')?.classList.contains('wl-pri-active') || false;
+                        this.startTimer(projId, desc, memoId, urgency, importance);
                     }
                 }
             });
@@ -696,6 +1013,90 @@ class WorkLogManager {
             if (e.key === 'Escape' && this._panelOpen) this.closePanel();
         };
         document.addEventListener('keydown', this._escHandler);
+    }
+
+    _showDurationPopover(anchor, entryId) {
+        const existing = this._panelEl?.querySelector('.wl-dur-popover');
+        if (existing) existing.remove();
+
+        const entry = this._entries.find(e => e.id === entryId);
+        if (!entry) return;
+
+        const h = Math.floor(entry.duration / 60);
+        const m = entry.duration % 60;
+
+        const pop = document.createElement('div');
+        pop.className = 'wl-dur-popover';
+        pop.innerHTML = `
+            <div class="wl-durp-title">修改时长</div>
+            <div class="wl-durp-inputs">
+                <input type="number" class="wl-input wl-durp-h" min="0" max="23" value="${h}" placeholder="时">
+                <span>h</span>
+                <input type="number" class="wl-input wl-durp-m" min="0" max="59" value="${m}" placeholder="分">
+                <span>m</span>
+            </div>
+            <div class="wl-durp-quick">
+                ${this.QUICK_DURATIONS.map(d =>
+                    `<button class="wl-durp-qbtn${entry.duration === d.minutes ? ' wl-durp-cur' : ''}" data-min="${d.minutes}">${d.label}</button>`
+                ).join('')}
+            </div>
+            <div class="wl-durp-actions">
+                <button class="wl-btn wl-btn-cancel wl-durp-close">取消</button>
+                <button class="wl-btn wl-btn-save wl-durp-save">确定</button>
+            </div>
+        `;
+
+        const rect = anchor.getBoundingClientRect();
+        const panelRect = this._panelEl.getBoundingClientRect();
+        pop.style.position = 'absolute';
+        pop.style.top = `${rect.bottom - panelRect.top + 4}px`;
+        pop.style.right = `${panelRect.right - rect.right}px`;
+
+        this._panelEl.appendChild(pop);
+        requestAnimationFrame(() => pop.classList.add('wl-durp-visible'));
+
+        pop.querySelectorAll('.wl-durp-qbtn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const dur = parseInt(btn.dataset.min);
+                await this.updateEntry(entryId, { duration: dur });
+                pop.remove();
+                this._refreshPanel();
+            });
+        });
+
+        pop.querySelector('.wl-durp-save').addEventListener('click', async () => {
+            const hours = parseInt(pop.querySelector('.wl-durp-h').value) || 0;
+            const mins = parseInt(pop.querySelector('.wl-durp-m').value) || 0;
+            const dur = hours * 60 + mins;
+            if (dur > 0) {
+                await this.updateEntry(entryId, { duration: dur });
+            }
+            pop.remove();
+            this._refreshPanel();
+        });
+
+        pop.querySelector('.wl-durp-close').addEventListener('click', () => pop.remove());
+
+        const dismiss = (e) => {
+            if (!pop.contains(e.target) && e.target !== anchor && !anchor.contains(e.target)) {
+                pop.remove();
+                document.removeEventListener('mousedown', dismiss);
+            }
+        };
+        setTimeout(() => document.addEventListener('mousedown', dismiss), 0);
+    }
+
+    _resetPriorityToggles() {
+        this._panelEl?.querySelectorAll('.wl-pri-toggle').forEach(btn => {
+            btn.classList.remove('wl-pri-active');
+        });
+    }
+
+    _getQuickEntryPriority() {
+        return {
+            urgency: this._panelEl?.querySelector('.wl-pri-toggle[data-pri="urgency"]')?.classList.contains('wl-pri-active') || false,
+            importance: this._panelEl?.querySelector('.wl-pri-toggle[data-pri="importance"]')?.classList.contains('wl-pri-active') || false,
+        };
     }
 
     _updateDateNav() {
@@ -730,7 +1131,7 @@ class WorkLogManager {
                 <div class="wl-form-title">${isEdit ? '编辑记录' : '添加工时记录'}</div>
                 <div class="wl-form-group">
                     <label>做了什么</label>
-                    <input type="text" class="wl-input" id="wl-form-desc" value="${this._escHtml(editEntry?.description || '')}" placeholder="活动描述..." autofocus>
+                    <input type="text" class="wl-input" id="wl-form-desc" value="${this._escHtml(editEntry?.description || '')}" placeholder="工作内容描述..." autofocus>
                 </div>
                 <div class="wl-form-row">
                     <div class="wl-form-group" style="flex:1">
@@ -764,6 +1165,18 @@ class WorkLogManager {
                         <input type="date" class="wl-input" id="wl-form-date" value="${editEntry?.date || this._currentDate}">
                     </div>
                 </div>
+                <div class="wl-form-group">
+                    <label>优先级</label>
+                    <div class="wl-form-priority">
+                        <button type="button" class="wl-fpri-btn wl-fpri-urgent${editEntry?.urgency ? ' wl-fpri-active' : ''}" id="wl-form-urgent">
+                            <i class="fas fa-bolt"></i> 紧急
+                        </button>
+                        <button type="button" class="wl-fpri-btn wl-fpri-important${editEntry?.importance ? ' wl-fpri-active' : ''}" id="wl-form-important">
+                            <i class="fas fa-star"></i> 重要
+                        </button>
+                        <span class="wl-fpri-hint" id="wl-form-pri-hint">${this._getPriorityHint(editEntry?.urgency, editEntry?.importance)}</span>
+                    </div>
+                </div>
                 <div class="wl-form-actions">
                     <button class="wl-btn wl-btn-cancel" id="wl-form-cancel">取消</button>
                     <button class="wl-btn wl-btn-save" id="wl-form-save">${isEdit ? '保存' : '添加'}</button>
@@ -777,6 +1190,22 @@ class WorkLogManager {
         overlay.querySelector('#wl-form-cancel').addEventListener('click', () => {
             overlay.classList.remove('wl-form-visible');
             setTimeout(() => overlay.remove(), 200);
+        });
+
+        const updatePriHint = () => {
+            const u = overlay.querySelector('#wl-form-urgent').classList.contains('wl-fpri-active');
+            const i = overlay.querySelector('#wl-form-important').classList.contains('wl-fpri-active');
+            const hint = overlay.querySelector('#wl-form-pri-hint');
+            if (hint) hint.textContent = this._getPriorityHint(u, i);
+        };
+
+        overlay.querySelector('#wl-form-urgent').addEventListener('click', (e) => {
+            e.currentTarget.classList.toggle('wl-fpri-active');
+            updatePriHint();
+        });
+        overlay.querySelector('#wl-form-important').addEventListener('click', (e) => {
+            e.currentTarget.classList.toggle('wl-fpri-active');
+            updatePriHint();
         });
 
         const taskBtn = overlay.querySelector('#wl-form-task-btn');
@@ -804,6 +1233,8 @@ class WorkLogManager {
             const date = overlay.querySelector('#wl-form-date').value;
             const duration = hours * 60 + minutes;
             const memoId = overlay.querySelector('#wl-form-memo-id')?.value || null;
+            const urgency = overlay.querySelector('#wl-form-urgent').classList.contains('wl-fpri-active');
+            const importance = overlay.querySelector('#wl-form-important').classList.contains('wl-fpri-active');
 
             if (duration <= 0) {
                 overlay.querySelector('#wl-form-hours').classList.add('wl-input-error');
@@ -811,9 +1242,9 @@ class WorkLogManager {
             }
 
             if (isEdit) {
-                await this.updateEntry(editEntry.id, { description: desc, projectId: projId, duration, date, memoId });
+                await this.updateEntry(editEntry.id, { description: desc, projectId: projId, duration, date, memoId, urgency, importance });
             } else {
-                await this.addEntry({ description: desc, projectId: projId, duration, date, memoId });
+                await this.addEntry({ description: desc, projectId: projId, duration, date, memoId, urgency, importance });
             }
 
             overlay.classList.remove('wl-form-visible');
@@ -824,6 +1255,13 @@ class WorkLogManager {
         overlay.querySelector('#wl-form-desc').addEventListener('keydown', (e) => {
             if (e.key === 'Enter') overlay.querySelector('#wl-form-save').click();
         });
+    }
+
+    _getPriorityHint(urgency, importance) {
+        if (urgency && importance) return '🔴 紧急且重要 — 立即做';
+        if (importance) return '🟡 重要不紧急 — 计划做';
+        if (urgency) return '🔵 紧急不重要 — 快速处理';
+        return '';
     }
 
     _showEditEntryForm(entryId) {
