@@ -190,6 +190,162 @@ class BlogManager {
                 }
             });
         });
+
+        this._enhanceImages(container);
+    }
+
+    _enhanceImages(container) {
+        container.querySelectorAll('img').forEach(img => {
+            if (img.closest('.blog-img-resizable')) return;
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'blog-img-resizable';
+            img.parentNode.insertBefore(wrapper, img);
+            wrapper.appendChild(img);
+
+            if (img.style.width) {
+                wrapper.style.width = img.style.width;
+            }
+
+            const handle = document.createElement('div');
+            handle.className = 'blog-img-resize-handle';
+            wrapper.appendChild(handle);
+
+            const toolbar = document.createElement('div');
+            toolbar.className = 'blog-img-toolbar';
+            toolbar.innerHTML = `
+                <button type="button" data-size="25">25%</button>
+                <button type="button" data-size="50">50%</button>
+                <button type="button" data-size="75">75%</button>
+                <button type="button" data-size="100">100%</button>
+                <input type="text" class="blog-img-width-input" placeholder="宽度">
+                <span class="blog-img-size-label">px</span>
+            `;
+            wrapper.appendChild(toolbar);
+
+            img.addEventListener('click', (e) => {
+                e.stopPropagation();
+                container.querySelectorAll('.blog-img-resizable.active').forEach(w => {
+                    if (w !== wrapper) w.classList.remove('active');
+                });
+                wrapper.classList.toggle('active');
+                if (wrapper.classList.contains('active')) {
+                    const input = toolbar.querySelector('.blog-img-width-input');
+                    input.value = Math.round(img.offsetWidth);
+                }
+            });
+
+            toolbar.querySelectorAll('button[data-size]').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const pct = parseInt(btn.dataset.size);
+                    const containerWidth = container.offsetWidth;
+                    const newWidth = Math.round(containerWidth * pct / 100);
+                    img.style.width = newWidth + 'px';
+                    img.style.height = 'auto';
+                    wrapper.style.width = newWidth + 'px';
+                    toolbar.querySelector('.blog-img-width-input').value = newWidth;
+                    toolbar.querySelectorAll('button[data-size]').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    this._syncImageSizeToEditor(img);
+                });
+            });
+
+            const widthInput = toolbar.querySelector('.blog-img-width-input');
+            widthInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const val = parseInt(widthInput.value);
+                    if (val > 0) {
+                        img.style.width = val + 'px';
+                        img.style.height = 'auto';
+                        wrapper.style.width = val + 'px';
+                        toolbar.querySelectorAll('button[data-size]').forEach(b => b.classList.remove('active'));
+                        this._syncImageSizeToEditor(img);
+                    }
+                }
+            });
+            widthInput.addEventListener('click', (e) => e.stopPropagation());
+
+            this._bindImageDragResize(wrapper, img, handle, toolbar, container);
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.blog-img-resizable')) {
+                container.querySelectorAll('.blog-img-resizable.active').forEach(w => {
+                    w.classList.remove('active');
+                });
+            }
+        }, { once: false });
+    }
+
+    _bindImageDragResize(wrapper, img, handle, toolbar, container) {
+        let dragging = false, startX = 0, startWidth = 0;
+
+        const onPointerDown = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dragging = true;
+            startX = e.clientX;
+            startWidth = img.offsetWidth;
+            wrapper.classList.add('active');
+            document.addEventListener('pointermove', onPointerMove);
+            document.addEventListener('pointerup', onPointerUp);
+        };
+
+        const onPointerMove = (e) => {
+            if (!dragging) return;
+            const dx = e.clientX - startX;
+            const maxWidth = container.offsetWidth;
+            const newWidth = Math.max(60, Math.min(maxWidth, startWidth + dx));
+            img.style.width = newWidth + 'px';
+            img.style.height = 'auto';
+            wrapper.style.width = newWidth + 'px';
+            toolbar.querySelector('.blog-img-width-input').value = Math.round(newWidth);
+            toolbar.querySelectorAll('button[data-size]').forEach(b => b.classList.remove('active'));
+        };
+
+        const onPointerUp = () => {
+            if (!dragging) return;
+            dragging = false;
+            document.removeEventListener('pointermove', onPointerMove);
+            document.removeEventListener('pointerup', onPointerUp);
+            this._syncImageSizeToEditor(img);
+        };
+
+        handle.addEventListener('pointerdown', onPointerDown);
+    }
+
+    _syncImageSizeToEditor(img) {
+        const bodyEl = this._drawerEl?.querySelector('#blog-ed-body');
+        if (!bodyEl) return;
+
+        const src = img.getAttribute('src');
+        const width = Math.round(img.offsetWidth);
+        if (!src || !width) return;
+
+        const escapedSrc = src.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+        const htmlImgRegex = new RegExp(
+            `<img\\s[^>]*src=["']${escapedSrc}["'][^>]*/?>`,
+            'g'
+        );
+        const mdImgRegex = new RegExp(
+            `!\\[([^\\]]*)\\]\\(${escapedSrc}\\)`,
+            'g'
+        );
+
+        let text = bodyEl.value;
+        const newTag = `<img src="${src}" alt="${img.alt || ''}" width="${width}" style="width:${width}px">`;
+
+        if (htmlImgRegex.test(text)) {
+            text = text.replace(htmlImgRegex, newTag);
+        } else if (mdImgRegex.test(text)) {
+            text = text.replace(mdImgRegex, newTag);
+        }
+
+        bodyEl.value = text;
+        bodyEl.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
     _renderMarkdown(text) {
@@ -206,6 +362,8 @@ class BlogManager {
         } else if (typeof marked !== 'undefined') {
             rendered = marked.parse(text);
         }
+
+        rendered = this._renderHighlightColors(rendered);
 
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = rendered;
@@ -750,6 +908,16 @@ class BlogManager {
 
         this._enhanceRenderedHtml(container.querySelector('.blog-article-body'));
 
+        const detailView = container.querySelector('.blog-detail-view');
+        if (detailView) {
+            let dblClickTimer = null;
+            detailView.addEventListener('dblclick', (e) => {
+                if (e.target.closest('.blog-detail-actions') || e.target.closest('.blog-detail-back') || e.target.closest('a') || e.target.closest('button')) return;
+                this._switchView('editor');
+            });
+            detailView.classList.add('blog-detail-dblclick-hint');
+        }
+
         container.querySelector('[data-action="back"]')?.addEventListener('click', () => this._switchView('list'));
         container.querySelector('[data-action="edit"]')?.addEventListener('click', () => this._switchView('editor'));
         container.querySelector('[data-action="copy-all"]')?.addEventListener('click', (e) => {
@@ -809,7 +977,7 @@ class BlogManager {
                 <div class="blog-editor-split">
                     <div class="blog-editor-left">
                         <textarea class="blog-editor-textarea" id="blog-ed-body"
-                                  placeholder="开始写作...\n\n支持 Markdown 语法">${this._esc(content)}</textarea>
+                                  placeholder="开始写作...\n\n支持 Markdown 语法\n选中文字弹出格式菜单\n输入 / 唤起插入菜单\n支持粘贴图片自动上传">${this._esc(content)}</textarea>
                     </div>
                     <div class="blog-editor-right">
                         <div class="blog-article-body" id="blog-ed-preview">${previewHtml || '<p style="color:#bbb">预览区</p>'}</div>
@@ -859,6 +1027,8 @@ class BlogManager {
             }
         });
 
+        this._bindEditorEnhancements(container);
+
         setTimeout(() => {
             const titleInput = container.querySelector('#blog-ed-title');
             if (titleInput && !titleInput.value) titleInput.focus();
@@ -867,10 +1037,13 @@ class BlogManager {
     }
 
     _saveFromEditor() {
+        if (this._currentView !== 'editor') return;
         const el = this._drawerEl;
         if (!el) return;
+        const bodyEl = el.querySelector('#blog-ed-body');
+        if (!bodyEl) return;
         const title = el.querySelector('#blog-ed-title')?.value.trim() || '无标题';
-        const content = el.querySelector('#blog-ed-body')?.value || '';
+        const content = bodyEl.value || '';
         const category = el.querySelector('#blog-ed-cat')?.value || 'essay';
         const tagsStr = el.querySelector('#blog-ed-tags')?.value || '';
         const tags = tagsStr.split(/[,，]/).map(t => t.trim()).filter(Boolean);
@@ -884,6 +1057,838 @@ class BlogManager {
         this._switchView('detail', this._editingPost.id);
         this._renderSidebar();
         this._renderTopbarStats();
+    }
+
+    // ─── 悬浮格式菜单 + / 命令菜单 ───
+
+    _bindEditorEnhancements(container) {
+        const bodyEl = container.querySelector('#blog-ed-body');
+        if (!bodyEl) return;
+
+        this._floatMenu = null;
+        this._colorPicker = null;
+        this._fontSizePicker = null;
+        this._slashMenu = null;
+        this._slashStart = -1;
+        this._slashActiveIdx = 0;
+
+        const editorLeft = bodyEl.closest('.blog-editor-left');
+        const menuHost = editorLeft || container;
+
+        this._createFloatingMenu(menuHost, bodyEl);
+        this._createSlashMenu(menuHost, bodyEl);
+        this._bindSelectionFloat(bodyEl);
+        this._bindSlashCommand(bodyEl);
+        this._bindShortcuts(bodyEl);
+        this._bindImagePaste(bodyEl);
+    }
+
+    // ── 悬浮格式菜单（选中文字时出现） ──
+
+    _createFloatingMenu(host, textarea) {
+        const menu = document.createElement('div');
+        menu.className = 'blog-float-menu';
+        menu.innerHTML = `
+            <button type="button" class="bfm-btn" data-md="bold" title="粗体"><i class="fas fa-bold"></i></button>
+            <button type="button" class="bfm-btn" data-md="italic" title="斜体"><i class="fas fa-italic"></i></button>
+            <button type="button" class="bfm-btn" data-md="strikethrough" title="删除线"><i class="fas fa-strikethrough"></i></button>
+            <button type="button" class="bfm-btn" data-md="underline" title="下划线"><i class="fas fa-underline"></i></button>
+            <span class="bfm-sep"></span>
+            <button type="button" class="bfm-btn" data-md="link" title="链接"><i class="fas fa-link"></i></button>
+            <button type="button" class="bfm-btn" data-md="code" title="代码"><i class="fas fa-code"></i></button>
+            <button type="button" class="bfm-btn bfm-highlight-btn" data-md="highlight" title="高亮（点击展开颜色）">
+                <i class="fas fa-highlighter"></i>
+                <span class="bfm-highlight-dot" style="background:#FFEB3B"></span>
+            </button>
+            <span class="bfm-sep"></span>
+            <button type="button" class="bfm-btn bfm-fontsize-btn" data-md="fontsize" title="字体大小">
+                <i class="fas fa-text-height"></i>
+            </button>
+        `;
+        host.appendChild(menu);
+        this._floatMenu = menu;
+
+        this.HIGHLIGHT_COLORS = [
+            { name: '黄色', color: '#FFEB3B', mdTag: '==' },
+            { name: '绿色', color: '#A5D6A7', mdTag: '=g=' },
+            { name: '蓝色', color: '#90CAF9', mdTag: '=b=' },
+            { name: '粉色', color: '#F48FB1', mdTag: '=p=' },
+            { name: '橙色', color: '#FFCC80', mdTag: '=o=' },
+            { name: '紫色', color: '#CE93D8', mdTag: '=v=' },
+        ];
+        this._selectedHighlightIdx = 0;
+
+        this.FONT_SIZES = [
+            { label: '小', size: 'small', css: '0.85em' },
+            { label: '正常', size: 'normal', css: '1em' },
+            { label: '大', size: 'large', css: '1.2em' },
+            { label: '特大', size: 'xlarge', css: '1.5em' },
+            { label: '超大', size: 'xxlarge', css: '2em' },
+        ];
+
+        const colorPicker = document.createElement('div');
+        colorPicker.className = 'bfm-color-picker';
+        colorPicker.innerHTML = this.HIGHLIGHT_COLORS.map((c, i) =>
+            `<button type="button" class="bfm-color-dot ${i === 0 ? 'active' : ''}" data-cidx="${i}" style="background:${c.color}" title="${c.name}"></button>`
+        ).join('');
+        host.appendChild(colorPicker);
+        this._colorPicker = colorPicker;
+
+        const fontSizePicker = document.createElement('div');
+        fontSizePicker.className = 'bfm-fontsize-picker';
+        fontSizePicker.innerHTML = this.FONT_SIZES.map(f =>
+            `<button type="button" class="bfm-fontsize-opt" data-size="${f.size}" style="font-size:${f.css}">${f.label}</button>`
+        ).join('');
+        host.appendChild(fontSizePicker);
+        this._fontSizePicker = fontSizePicker;
+
+        menu.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            const btn = e.target.closest('.bfm-btn');
+            if (!btn) return;
+            const md = btn.dataset.md;
+
+            if (md === 'highlight') {
+                this._toggleColorPicker();
+                return;
+            }
+            if (md === 'fontsize') {
+                this._toggleFontSizePicker();
+                return;
+            }
+
+            this._hideColorPicker();
+            this._hideFontSizePicker();
+            this._insertMarkdown(textarea, md);
+            this._hideFloatMenu();
+        });
+
+        colorPicker.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            const dot = e.target.closest('.bfm-color-dot');
+            if (!dot) return;
+            const idx = parseInt(dot.dataset.cidx);
+            this._selectedHighlightIdx = idx;
+            colorPicker.querySelectorAll('.bfm-color-dot').forEach((d, i) => d.classList.toggle('active', i === idx));
+            menu.querySelector('.bfm-highlight-dot').style.background = this.HIGHLIGHT_COLORS[idx].color;
+            this._insertHighlight(textarea, idx);
+            this._hideColorPicker();
+            this._hideFloatMenu();
+        });
+
+        fontSizePicker.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            const opt = e.target.closest('.bfm-fontsize-opt');
+            if (!opt) return;
+            const size = opt.dataset.size;
+            this._insertFontSize(textarea, size);
+            this._hideFontSizePicker();
+            this._hideFloatMenu();
+        });
+    }
+
+    _toggleColorPicker() {
+        if (this._colorPicker.classList.contains('visible')) {
+            this._hideColorPicker();
+        } else {
+            this._hideFontSizePicker();
+            const menuRect = this._floatMenu.getBoundingClientRect();
+            const highlightBtn = this._floatMenu.querySelector('.bfm-highlight-btn');
+            const btnRect = highlightBtn.getBoundingClientRect();
+            const parent = this._floatMenu.parentElement;
+            const parentRect = parent.getBoundingClientRect();
+            this._colorPicker.style.left = (btnRect.left - parentRect.left + btnRect.width / 2 - 80) + 'px';
+            this._colorPicker.style.top = (menuRect.top - parentRect.top - 40) + 'px';
+            this._colorPicker.classList.add('visible');
+        }
+    }
+
+    _hideColorPicker() {
+        this._colorPicker?.classList.remove('visible');
+    }
+
+    _toggleFontSizePicker() {
+        if (this._fontSizePicker.classList.contains('visible')) {
+            this._hideFontSizePicker();
+        } else {
+            this._hideColorPicker();
+            const menuRect = this._floatMenu.getBoundingClientRect();
+            const fsBtn = this._floatMenu.querySelector('.bfm-fontsize-btn');
+            const btnRect = fsBtn.getBoundingClientRect();
+            const parent = this._floatMenu.parentElement;
+            const parentRect = parent.getBoundingClientRect();
+            this._fontSizePicker.style.left = (btnRect.left - parentRect.left + btnRect.width / 2 - 60) + 'px';
+            this._fontSizePicker.style.top = (menuRect.top - parentRect.top - 44) + 'px';
+            this._fontSizePicker.classList.add('visible');
+        }
+    }
+
+    _hideFontSizePicker() {
+        this._fontSizePicker?.classList.remove('visible');
+    }
+
+    _insertHighlight(textarea, colorIdx) {
+        const c = this.HIGHLIGHT_COLORS[colorIdx];
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const text = textarea.value;
+        const selected = text.substring(start, end) || '高亮文字';
+        const tag = c.mdTag;
+        const newText = text.substring(0, start) + tag + selected + tag + text.substring(end);
+        textarea.value = newText;
+        textarea.focus();
+        const selectStart = start + tag.length;
+        textarea.setSelectionRange(selected === '高亮文字' ? selectStart : selectStart + selected.length, selectStart + selected.length);
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    _insertFontSize(textarea, size) {
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const text = textarea.value;
+        const selected = text.substring(start, end) || '文字';
+        const sizeMap = { small: '0.85em', normal: '1em', large: '1.2em', xlarge: '1.5em', xxlarge: '2em' };
+        const cssSize = sizeMap[size] || '1em';
+        if (size === 'normal') {
+            const newText = text.substring(0, start) + selected + text.substring(end);
+            textarea.value = newText;
+            textarea.focus();
+            textarea.setSelectionRange(start, start + selected.length);
+        } else {
+            const wrapped = `<span style="font-size:${cssSize}">${selected}</span>`;
+            const newText = text.substring(0, start) + wrapped + text.substring(end);
+            textarea.value = newText;
+            textarea.focus();
+            const cursorPos = start + wrapped.length;
+            textarea.setSelectionRange(cursorPos, cursorPos);
+        }
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    _bindSelectionFloat(textarea) {
+        let checkTimer = null;
+
+        const check = () => {
+            const { selectionStart, selectionEnd } = textarea;
+            if (selectionStart === selectionEnd || !textarea.matches(':focus')) {
+                this._hideFloatMenu();
+                return;
+            }
+            this._showFloatMenu(textarea);
+        };
+
+        textarea.addEventListener('mouseup', () => {
+            clearTimeout(checkTimer);
+            checkTimer = setTimeout(check, 80);
+        });
+
+        textarea.addEventListener('keyup', (e) => {
+            if (e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Home' || e.key === 'End')) {
+                clearTimeout(checkTimer);
+                checkTimer = setTimeout(check, 80);
+            }
+        });
+
+        textarea.addEventListener('blur', () => {
+            setTimeout(() => {
+                if (!this._floatMenu?.matches(':hover')) {
+                    this._hideFloatMenu();
+                }
+            }, 150);
+        });
+    }
+
+    _showFloatMenu(textarea) {
+        if (!this._floatMenu) return;
+        const pos = this._getCaretCoords(textarea);
+        if (!pos) return;
+
+        const menu = this._floatMenu;
+        menu.classList.add('visible');
+
+        requestAnimationFrame(() => {
+            const mw = menu.offsetWidth;
+            const mh = menu.offsetHeight;
+            let left = pos.x - mw / 2;
+            let top = pos.y - mh - 8;
+
+            const parent = textarea.closest('.blog-editor-left') || textarea.parentElement;
+            const parentRect = parent.getBoundingClientRect();
+
+            left = Math.max(4, Math.min(left, parentRect.width - mw - 4));
+            if (top < 0) top = pos.y + pos.lineHeight + 4;
+
+            menu.style.left = left + 'px';
+            menu.style.top = top + 'px';
+        });
+    }
+
+    _hideFloatMenu() {
+        this._floatMenu?.classList.remove('visible');
+        this._hideColorPicker();
+        this._hideFontSizePicker();
+    }
+
+    _getCaretCoords(textarea) {
+        const { selectionStart, selectionEnd, value } = textarea;
+        if (selectionStart === selectionEnd) return null;
+
+        const mirror = document.createElement('div');
+        const cs = getComputedStyle(textarea);
+        const props = ['fontFamily','fontSize','fontWeight','letterSpacing','lineHeight',
+                       'paddingTop','paddingRight','paddingBottom','paddingLeft',
+                       'borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth',
+                       'whiteSpace','wordWrap','overflowWrap','tabSize','textIndent'];
+        props.forEach(p => { mirror.style[p] = cs[p]; });
+        mirror.style.position = 'absolute';
+        mirror.style.visibility = 'hidden';
+        mirror.style.whiteSpace = 'pre-wrap';
+        mirror.style.wordWrap = 'break-word';
+        mirror.style.width = cs.width;
+        mirror.style.overflow = 'hidden';
+        document.body.appendChild(mirror);
+
+        const textBefore = value.substring(0, selectionStart);
+        const selectedText = value.substring(selectionStart, selectionEnd);
+
+        const beforeNode = document.createTextNode(textBefore);
+        const span = document.createElement('span');
+        span.textContent = selectedText || '.';
+        mirror.appendChild(beforeNode);
+        mirror.appendChild(span);
+
+        const taRect = textarea.getBoundingClientRect();
+        const spanRect = span.getBoundingClientRect();
+        const mirrorRect = mirror.getBoundingClientRect();
+
+        const lineHeight = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.2;
+        const x = spanRect.left - mirrorRect.left + spanRect.width / 2;
+        const y = spanRect.top - mirrorRect.top - textarea.scrollTop;
+
+        document.body.removeChild(mirror);
+
+        return { x, y, lineHeight };
+    }
+
+    // ── / 斜杠命令菜单 ──
+
+    _createSlashMenu(host, textarea) {
+        const menu = document.createElement('div');
+        menu.className = 'blog-slash-menu';
+        menu.innerHTML = '';
+        host.appendChild(menu);
+        this._slashMenu = menu;
+
+        menu.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            const item = e.target.closest('.bsm-item');
+            if (!item) return;
+            this._execSlashCommand(textarea, item.dataset.cmd);
+        });
+    }
+
+    _getSlashCommands() {
+        return [
+            { section: '基础', items: [
+                { cmd: 'h1',    icon: 'H1', iconClass: '', label: '一级标题' },
+                { cmd: 'h2',    icon: 'H2', iconClass: '', label: '二级标题' },
+                { cmd: 'h3',    icon: 'H3', iconClass: '', label: '三级标题' },
+                { cmd: 'olist', icon: '', iconClass: 'fas fa-list-ol', label: '有序列表' },
+                { cmd: 'list',  icon: '', iconClass: 'fas fa-list-ul', label: '无序列表' },
+                { cmd: 'codeblock', icon: '{ }', iconClass: '', label: '代码块' },
+                { cmd: 'quote', icon: '', iconClass: 'fas fa-quote-left', label: '引用' },
+                { cmd: 'hr',    icon: '', iconClass: 'fas fa-minus', label: '分隔线' },
+                { cmd: 'link',  icon: '', iconClass: 'fas fa-link', label: '链接' },
+            ]},
+            { section: '常用', items: [
+                { cmd: 'task',  icon: '', iconClass: 'fas fa-check-square', label: '任务' },
+                { cmd: 'image', icon: '', iconClass: 'fas fa-image', label: '图片（输入URL）' },
+                { cmd: 'upload', icon: '', iconClass: 'fas fa-upload', label: '上传图片' },
+                { cmd: 'browse-images', icon: '', iconClass: 'fas fa-folder-open', label: '从图库选图' },
+                { cmd: 'table', icon: '', iconClass: 'fas fa-table', label: '表格' },
+                { cmd: 'mermaid', icon: '', iconClass: 'fas fa-project-diagram', label: '流程图' },
+            ]},
+        ];
+    }
+
+    _bindSlashCommand(textarea) {
+        textarea.addEventListener('input', () => {
+            const { value, selectionStart } = textarea;
+            const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1;
+            const lineText = value.substring(lineStart, selectionStart);
+
+            const slashMatch = lineText.match(/\/([^\s/]*)$/);
+            if (slashMatch) {
+                this._slashStart = selectionStart - slashMatch[0].length;
+                this._showSlashMenu(textarea, slashMatch[1]);
+            } else {
+                this._hideSlashMenu();
+            }
+        });
+
+        textarea.addEventListener('keydown', (e) => {
+            if (!this._slashMenu?.classList.contains('visible')) return;
+            const visibleItems = this._slashMenu.querySelectorAll('.bsm-item:not(.bsm-hidden)');
+            if (!visibleItems.length) return;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                this._slashActiveIdx = Math.min(this._slashActiveIdx + 1, visibleItems.length - 1);
+                this._highlightSlashItem(visibleItems);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                this._slashActiveIdx = Math.max(this._slashActiveIdx - 1, 0);
+                this._highlightSlashItem(visibleItems);
+            } else if (e.key === 'Enter' || e.key === 'Tab') {
+                e.preventDefault();
+                const active = visibleItems[this._slashActiveIdx];
+                if (active) this._execSlashCommand(textarea, active.dataset.cmd);
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                this._hideSlashMenu();
+            }
+        });
+
+        textarea.addEventListener('blur', () => {
+            setTimeout(() => {
+                if (!this._slashMenu?.matches(':hover')) {
+                    this._hideSlashMenu();
+                }
+            }, 150);
+        });
+    }
+
+    _showSlashMenu(textarea, filter) {
+        if (!this._slashMenu) return;
+        const commands = this._getSlashCommands();
+        const keyword = (filter || '').toLowerCase();
+
+        let html = '';
+        let totalVisible = 0;
+        commands.forEach(section => {
+            const filtered = section.items.filter(it =>
+                it.label.toLowerCase().includes(keyword) ||
+                it.cmd.toLowerCase().includes(keyword)
+            );
+            if (filtered.length === 0) return;
+            html += `<div class="bsm-section-label">${section.section}</div>`;
+            filtered.forEach(it => {
+                const iconHtml = it.iconClass
+                    ? `<i class="${it.iconClass}"></i>`
+                    : `<span class="bsm-icon-text">${it.icon}</span>`;
+                html += `<div class="bsm-item" data-cmd="${it.cmd}">${iconHtml}<span>${it.label}</span></div>`;
+                totalVisible++;
+            });
+        });
+
+        if (totalVisible === 0) {
+            this._hideSlashMenu();
+            return;
+        }
+
+        this._slashMenu.innerHTML = html;
+        this._slashActiveIdx = 0;
+        this._highlightSlashItem(this._slashMenu.querySelectorAll('.bsm-item'));
+
+        const pos = this._getSlashMenuPos(textarea);
+        this._slashMenu.style.left = pos.x + 'px';
+        this._slashMenu.style.top = pos.y + 'px';
+        this._slashMenu.classList.add('visible');
+    }
+
+    _hideSlashMenu() {
+        this._slashMenu?.classList.remove('visible');
+        this._slashStart = -1;
+    }
+
+    _highlightSlashItem(items) {
+        items.forEach((el, i) => {
+            el.classList.toggle('active', i === this._slashActiveIdx);
+            if (i === this._slashActiveIdx) el.scrollIntoView({ block: 'nearest' });
+        });
+    }
+
+    _getSlashMenuPos(textarea) {
+        const { value, selectionStart } = textarea;
+        const mirror = document.createElement('div');
+        const cs = getComputedStyle(textarea);
+        ['fontFamily','fontSize','fontWeight','letterSpacing','lineHeight',
+         'paddingTop','paddingRight','paddingBottom','paddingLeft',
+         'borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth',
+         'whiteSpace','wordWrap','overflowWrap','tabSize','textIndent',
+         'width'].forEach(p => { mirror.style[p] = cs[p]; });
+        mirror.style.position = 'absolute';
+        mirror.style.visibility = 'hidden';
+        mirror.style.whiteSpace = 'pre-wrap';
+        mirror.style.wordWrap = 'break-word';
+        mirror.style.overflow = 'hidden';
+        document.body.appendChild(mirror);
+
+        const textBefore = value.substring(0, selectionStart);
+        const span = document.createElement('span');
+        span.textContent = '.';
+        mirror.appendChild(document.createTextNode(textBefore));
+        mirror.appendChild(span);
+
+        const mirrorRect = mirror.getBoundingClientRect();
+        const spanRect = span.getBoundingClientRect();
+        const lineHeight = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.2;
+        const x = spanRect.left - mirrorRect.left;
+        const y = spanRect.top - mirrorRect.top - textarea.scrollTop + lineHeight + 4;
+
+        document.body.removeChild(mirror);
+        return { x: Math.max(8, x), y };
+    }
+
+    _execSlashCommand(textarea, cmd) {
+        const { value } = textarea;
+        const end = textarea.selectionStart;
+        textarea.value = value.substring(0, this._slashStart) + value.substring(end);
+        textarea.selectionStart = textarea.selectionEnd = this._slashStart;
+        this._hideSlashMenu();
+
+        if (cmd === 'upload') {
+            this._triggerImageUpload(textarea);
+        } else if (cmd === 'browse-images') {
+            this._openImageBrowser(textarea);
+        } else if (cmd === 'h1') {
+            this._insertMarkdown(textarea, 'heading1');
+        } else if (cmd === 'h2') {
+            this._insertMarkdown(textarea, 'heading2');
+        } else if (cmd === 'h3') {
+            this._insertMarkdown(textarea, 'heading3');
+        } else if (cmd === 'mermaid') {
+            this._insertMarkdown(textarea, 'mermaid');
+        } else {
+            this._insertMarkdown(textarea, cmd);
+        }
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    // ── 键盘快捷键 ──
+
+    _bindShortcuts(bodyEl) {
+        bodyEl.addEventListener('keydown', (e) => {
+            if (this._slashMenu?.classList.contains('visible')) return;
+            const ctrl = e.ctrlKey || e.metaKey;
+            if (!ctrl) return;
+            let action = null;
+            if (e.key === 'b' && !e.shiftKey) action = 'bold';
+            else if (e.key === 'i' && !e.shiftKey) action = 'italic';
+            else if (e.key === 'u' && !e.shiftKey) action = 'underline';
+            else if (e.key === 'k' && !e.shiftKey) action = 'link';
+            else if (e.key === 'e' && !e.shiftKey) action = 'code';
+            else if (e.key === 'x' && e.shiftKey) action = 'strikethrough';
+            else if (e.key === 'b' && e.shiftKey) action = 'quote';
+            else if (e.key === 'k' && e.shiftKey) action = 'codeblock';
+            if (action) {
+                e.preventDefault();
+                this._insertMarkdown(bodyEl, action);
+            }
+        });
+
+        bodyEl.addEventListener('keydown', (e) => {
+            if (this._slashMenu?.classList.contains('visible')) return;
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                this._handleTab(bodyEl, e.shiftKey);
+            }
+        });
+    }
+
+    _insertMarkdown(textarea, action) {
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const text = textarea.value;
+        const selected = text.substring(start, end);
+
+        const insertions = {
+            bold:          { before: '**', after: '**', placeholder: '粗体文字' },
+            italic:        { before: '*', after: '*', placeholder: '斜体文字' },
+            underline:     { before: '<u>', after: '</u>', placeholder: '下划线文字' },
+            strikethrough: { before: '~~', after: '~~', placeholder: '删除线文字' },
+            highlight:     { before: '==', after: '==', placeholder: '高亮文字' },
+            heading:       { before: '## ', after: '', placeholder: '标题', lineStart: true },
+            heading1:      { before: '# ', after: '', placeholder: '一级标题', lineStart: true },
+            heading2:      { before: '## ', after: '', placeholder: '二级标题', lineStart: true },
+            heading3:      { before: '### ', after: '', placeholder: '三级标题', lineStart: true },
+            list:          { before: '- ', after: '', placeholder: '列表项', lineStart: true },
+            olist:         { before: '1. ', after: '', placeholder: '列表项', lineStart: true },
+            code:          { before: '`', after: '`', placeholder: 'code' },
+            codeblock:     { before: '```\n', after: '\n```', placeholder: '// 代码块', lineStart: true },
+            quote:         { before: '> ', after: '', placeholder: '引用文字', lineStart: true },
+            hr:            { before: '\n---\n', after: '', placeholder: '', lineStart: true, noSelect: true },
+            link:          { before: '[', after: '](url)', placeholder: '链接文字' },
+            image:         { before: '![', after: '](图片地址)', placeholder: '图片描述' },
+            task:          { before: '- [ ] ', after: '', placeholder: '任务项', lineStart: true },
+            table:         { before: '', after: '', placeholder: '| 列1 | 列2 | 列3 |\n| --- | --- | --- |\n| 内容 | 内容 | 内容 |', lineStart: true, block: true },
+            mermaid:       { before: '```mermaid\n', after: '\n```', placeholder: 'graph TD\n    A[开始] --> B{判断}\n    B -->|是| C[结果1]\n    B -->|否| D[结果2]', lineStart: true },
+        };
+
+        const ins = insertions[action];
+        if (!ins) return;
+
+        let newText, cursorPos, selectStart;
+
+        if (ins.block) {
+            const content = selected || ins.placeholder;
+            const lineStart = text.lastIndexOf('\n', start - 1) + 1;
+            const needNewline = lineStart < start ? '\n' : '';
+            newText = text.substring(0, start) + needNewline + content + text.substring(end);
+            selectStart = start + needNewline.length;
+            cursorPos = selectStart + content.length;
+        } else if (ins.noSelect) {
+            newText = text.substring(0, start) + ins.before + text.substring(end);
+            cursorPos = start + ins.before.length;
+            selectStart = cursorPos;
+        } else if (ins.lineStart && start === end) {
+            const lineStart = text.lastIndexOf('\n', start - 1) + 1;
+            newText = text.substring(0, lineStart) + ins.before + (selected || ins.placeholder) + ins.after + text.substring(end);
+            selectStart = lineStart + ins.before.length;
+            cursorPos = selectStart + (selected || ins.placeholder).length;
+        } else {
+            newText = text.substring(0, start) + ins.before + (selected || ins.placeholder) + ins.after + text.substring(end);
+            selectStart = start + ins.before.length;
+            cursorPos = selectStart + (selected || ins.placeholder).length;
+        }
+
+        textarea.value = newText;
+        textarea.focus();
+        textarea.setSelectionRange(selected ? cursorPos : selectStart, cursorPos);
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    _handleTab(textarea, isShift) {
+        const { selectionStart, selectionEnd, value } = textarea;
+        const firstLineStart = value.lastIndexOf('\n', selectionStart - 1) + 1;
+        const lastLineEnd = value.indexOf('\n', selectionEnd);
+        const endPos = lastLineEnd === -1 ? value.length : lastLineEnd;
+        const block = value.substring(firstLineStart, endPos);
+        const lines = block.split('\n');
+
+        const processed = lines.map(line => {
+            if (isShift) {
+                return line.startsWith('    ') ? line.substring(4) : (line.startsWith('\t') ? line.substring(1) : line);
+            }
+            return '    ' + line;
+        });
+
+        const newBlock = processed.join('\n');
+        textarea.value = value.substring(0, firstLineStart) + newBlock + value.substring(endPos);
+        const diff = newBlock.length - block.length;
+        textarea.setSelectionRange(
+            Math.max(firstLineStart, selectionStart + (isShift ? -Math.min(4, lines[0].match(/^( {1,4}|\t)/)?.[0].length || 0) : 4)),
+            selectionEnd + diff
+        );
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    // ─── 图片粘贴上传 ───
+
+    _bindImagePaste(textarea) {
+        textarea.addEventListener('paste', async (e) => {
+            const items = Array.from(e.clipboardData?.items || []);
+            const imageItem = items.find(item => item.type.startsWith('image/'));
+            if (!imageItem) return;
+
+            e.preventDefault();
+            const file = imageItem.getAsFile();
+            if (!file) return;
+
+            const placeholder = `![上传中...](uploading_${Date.now()})`;
+            const start = textarea.selectionStart;
+            const text = textarea.value;
+            textarea.value = text.substring(0, start) + placeholder + text.substring(textarea.selectionEnd);
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+
+            const result = await this._uploadImage(file);
+            if (result) {
+                const mdImg = `![${result.name}](${result.url})`;
+                textarea.value = textarea.value.replace(placeholder, mdImg);
+            } else {
+                textarea.value = textarea.value.replace(placeholder, '![上传失败]()');
+            }
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+    }
+
+    _triggerImageUpload(textarea) {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.multiple = true;
+        input.addEventListener('change', async () => {
+            for (const file of input.files) {
+                const placeholder = `![上传中...](uploading_${Date.now()})`;
+                const start = textarea.selectionStart;
+                const text = textarea.value;
+                textarea.value = text.substring(0, start) + '\n' + placeholder + '\n' + text.substring(textarea.selectionEnd);
+                textarea.selectionStart = textarea.selectionEnd = start + placeholder.length + 2;
+                textarea.dispatchEvent(new Event('input', { bubbles: true }));
+
+                const result = await this._uploadImage(file);
+                if (result) {
+                    textarea.value = textarea.value.replace(placeholder, `![${result.name}](${result.url})`);
+                } else {
+                    textarea.value = textarea.value.replace(placeholder, '![上传失败]()');
+                }
+                textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        });
+        input.click();
+    }
+
+    async _uploadImage(file) {
+        const IMGVAULT_API = 'https://www.meczyc6.info/imgvault';
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const resp = await fetch(`${IMGVAULT_API}/api/v1/images/upload`, {
+                method: 'POST',
+                body: formData
+            });
+            if (!resp.ok) return null;
+            const result = await resp.json();
+            if (result.code === 200 && result.data) {
+                const imgId = result.data.id;
+                return {
+                    name: result.data.originalName || file.name,
+                    url: `${IMGVAULT_API}/api/v1/images/${imgId}/download`
+                };
+            }
+            return null;
+        } catch (err) {
+            console.error('[Blog] 图片上传失败:', err);
+            return null;
+        }
+    }
+
+    // ─── 图库浏览器 — 从 ImgVault 拉取已上传图片 ───
+
+    async _openImageBrowser(textarea) {
+        const IMGVAULT_API = 'https://www.meczyc6.info/imgvault';
+        const overlay = document.createElement('div');
+        overlay.className = 'blog-imgbrowser-overlay';
+        overlay.innerHTML = `
+            <div class="blog-imgbrowser-modal">
+                <div class="blog-imgbrowser-header">
+                    <h3><i class="fas fa-images"></i> 图库</h3>
+                    <div class="blog-imgbrowser-actions">
+                        <button type="button" class="blog-imgbrowser-upload-btn"><i class="fas fa-upload"></i> 上传新图</button>
+                        <button type="button" class="blog-imgbrowser-close"><i class="fas fa-times"></i></button>
+                    </div>
+                </div>
+                <div class="blog-imgbrowser-grid" id="blog-imgbrowser-grid">
+                    <div class="blog-imgbrowser-loading"><i class="fas fa-spinner fa-spin"></i> 加载中...</div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        requestAnimationFrame(() => overlay.classList.add('visible'));
+
+        overlay.querySelector('.blog-imgbrowser-close').addEventListener('click', () => {
+            overlay.classList.remove('visible');
+            setTimeout(() => overlay.remove(), 250);
+        });
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                overlay.classList.remove('visible');
+                setTimeout(() => overlay.remove(), 250);
+            }
+        });
+
+        overlay.querySelector('.blog-imgbrowser-upload-btn').addEventListener('click', () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.multiple = true;
+            input.addEventListener('change', async () => {
+                for (const file of input.files) {
+                    const result = await this._uploadImage(file);
+                    if (result) {
+                        this._refreshImageGrid(overlay, textarea, IMGVAULT_API);
+                    }
+                }
+            });
+            input.click();
+        });
+
+        try {
+            const resp = await fetch(`${IMGVAULT_API}/api/v1/images?page=1&size=50&sortBy=createdAt&sortDirection=desc`);
+            if (!resp.ok) throw new Error('Failed to load');
+            const result = await resp.json();
+            if (result.code === 200 && result.data?.content) {
+                this._renderImageGrid(overlay, result.data.content, textarea, IMGVAULT_API);
+            } else {
+                throw new Error('Invalid response');
+            }
+        } catch (err) {
+            const grid = overlay.querySelector('#blog-imgbrowser-grid');
+            grid.innerHTML = `<div class="blog-imgbrowser-empty"><i class="fas fa-exclamation-circle"></i> 加载失败，请稍后重试</div>`;
+        }
+    }
+
+    _renderImageGrid(overlay, images, textarea, apiBase) {
+        const grid = overlay.querySelector('#blog-imgbrowser-grid');
+        if (!images.length) {
+            grid.innerHTML = `<div class="blog-imgbrowser-empty"><i class="fas fa-image"></i> 暂无图片，点击上方按钮上传</div>`;
+            return;
+        }
+        grid.innerHTML = images.map(img => {
+            const thumbUrl = `${apiBase}/api/v1/images/${img.id}/download`;
+            const name = img.originalName || img.fileName || 'image';
+            return `<div class="blog-imgbrowser-item" data-url="${thumbUrl}" data-name="${this._escHtml(name)}">
+                <div class="blog-imgbrowser-thumb" style="background-image:url('${thumbUrl}')"></div>
+                <div class="blog-imgbrowser-name" title="${this._escHtml(name)}">${this._esc(name)}</div>
+            </div>`;
+        }).join('');
+
+        grid.querySelectorAll('.blog-imgbrowser-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const url = item.dataset.url;
+                const name = item.dataset.name;
+                const mdImg = `![${name}](${url})`;
+                const start = textarea.selectionStart;
+                const text = textarea.value;
+                textarea.value = text.substring(0, start) + '\n' + mdImg + '\n' + text.substring(textarea.selectionEnd);
+                textarea.selectionStart = textarea.selectionEnd = start + mdImg.length + 2;
+                textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                textarea.focus();
+                overlay.classList.remove('visible');
+                setTimeout(() => overlay.remove(), 250);
+            });
+        });
+    }
+
+    async _refreshImageGrid(overlay, textarea, apiBase) {
+        try {
+            const resp = await fetch(`${apiBase}/api/v1/images?page=1&size=50&sortBy=createdAt&sortDirection=desc`);
+            if (!resp.ok) return;
+            const result = await resp.json();
+            if (result.code === 200 && result.data?.content) {
+                this._renderImageGrid(overlay, result.data.content, textarea, apiBase);
+            }
+        } catch (_) {}
+    }
+
+    // ─── Markdown 渲染增强：多色高亮 ───
+
+    _renderHighlightColors(html) {
+        const colorMap = {
+            '==':  { bg: '#FFEB3B', fg: '#333' },
+            '=g=': { bg: '#A5D6A7', fg: '#1B5E20' },
+            '=b=': { bg: '#90CAF9', fg: '#0D47A1' },
+            '=p=': { bg: '#F48FB1', fg: '#880E4F' },
+            '=o=': { bg: '#FFCC80', fg: '#E65100' },
+            '=v=': { bg: '#CE93D8', fg: '#4A148C' },
+        };
+        let result = html;
+        for (const [tag, colors] of Object.entries(colorMap)) {
+            const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(escaped + '([^=]+?)' + escaped, 'g');
+            result = result.replace(regex, `<mark style="background:${colors.bg};color:${colors.fg};padding:1px 4px;border-radius:2px">$1</mark>`);
+        }
+        return result;
     }
 }
 

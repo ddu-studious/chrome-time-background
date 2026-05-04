@@ -336,6 +336,23 @@ async function initApp() {
         document.getElementById('blog-dock-btn')?.classList.add('hidden');
     }
 
+    // v3.16.0: 初始化 Cursor Bridge Agent 面板
+    try {
+        if (window.CursorBridgeClient) {
+            window.cursorBridge = new window.CursorBridgeClient();
+            await window.cursorBridge.init();
+            const agentDockBtn = document.getElementById('agent-dock-btn');
+            if (agentDockBtn) {
+                agentDockBtn.addEventListener('click', () => {
+                    window.cursorBridge.toggle();
+                });
+            }
+            console.log('Cursor Bridge Agent 面板初始化完成');
+        }
+    } catch (error) {
+        console.error('Cursor Bridge 初始化失败:', error);
+    }
+
     // v3.0.0: 初始化系统监控
     if (sm.getSetting('enableSystemMonitor') !== false) {
         try {

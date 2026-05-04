@@ -53,7 +53,9 @@
     "*://*.bilibili.com/*",
     "*://api.bilibili.com/*",
     "*://s.search.bilibili.com/*",
-    "*://*.mashibing.com/*"
+    "*://*.mashibing.com/*",
+    "http://127.0.0.1:19840/*",
+    "http://localhost:19840/*"
   ],
   "chrome_url_overrides": {
     "newtab": "index.html"

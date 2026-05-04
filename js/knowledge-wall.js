@@ -335,6 +335,11 @@ class KnowledgeWall {
         list.sort((a, b) => {
             if (a.pinned && !b.pinned) return -1;
             if (!a.pinned && b.pinned) return 1;
+            if (a.pinned && b.pinned) {
+                const orderA = typeof a.pinOrder === 'number' ? a.pinOrder : Infinity;
+                const orderB = typeof b.pinOrder === 'number' ? b.pinOrder : Infinity;
+                if (orderA !== orderB) return orderA - orderB;
+            }
             return (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt);
         });
         this.filteredCards = list;
@@ -542,8 +547,8 @@ class KnowledgeWall {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     const action = btn.dataset.action;
-                    if (action === 'edit') this.showEditor(cardId);
-                    else if (action === 'delete') this.deleteCard(cardId);
+                    if (action === 'edit') this._requireUnlock(cardId, () => this.showEditor(cardId));
+                    else if (action === 'delete') this._requireUnlock(cardId, () => this.deleteCard(cardId));
                     else if (action === 'pin') this.togglePin(cardId);
                     else if (action === 'copy') this.copyContent(cardId);
                 });
@@ -597,9 +602,13 @@ class KnowledgeWall {
             });
             el.addEventListener('dragover', (e) => {
                 e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-                if (this._dragCardId && this._dragCardId !== cardId) {
+                const fromCard = this.cards.find(c => c.id === this._dragCardId);
+                const toCard = this.cards.find(c => c.id === cardId);
+                if (fromCard && toCard && !!fromCard.pinned === !!toCard.pinned && this._dragCardId !== cardId) {
+                    e.dataTransfer.dropEffect = 'move';
                     el.classList.add('kw-drag-over');
+                } else {
+                    e.dataTransfer.dropEffect = 'none';
                 }
             });
             el.addEventListener('dragleave', () => {
@@ -609,17 +618,37 @@ class KnowledgeWall {
                 e.preventDefault();
                 el.classList.remove('kw-drag-over');
                 if (!this._dragCardId || this._dragCardId === cardId) return;
+                const fromCard = this.cards.find(c => c.id === this._dragCardId);
+                const toCard = this.cards.find(c => c.id === cardId);
+                if (fromCard && toCard && !!fromCard.pinned !== !!toCard.pinned) return;
                 this._reorderCard(this._dragCardId, cardId);
             });
         });
     }
 
     _reorderCard(fromId, toId) {
-        const fromIdx = this.cards.findIndex(c => c.id === fromId);
-        const toIdx = this.cards.findIndex(c => c.id === toId);
-        if (fromIdx < 0 || toIdx < 0) return;
-        const [card] = this.cards.splice(fromIdx, 1);
-        this.cards.splice(toIdx, 0, card);
+        const fromCard = this.cards.find(c => c.id === fromId);
+        const toCard = this.cards.find(c => c.id === toId);
+        if (!fromCard || !toCard) return;
+
+        if (fromCard.pinned && toCard.pinned) {
+            const pinnedSorted = this.cards
+                .filter(c => c.pinned)
+                .sort((a, b) => (typeof a.pinOrder === 'number' ? a.pinOrder : Infinity) - (typeof b.pinOrder === 'number' ? b.pinOrder : Infinity));
+            const fromPinIdx = pinnedSorted.findIndex(c => c.id === fromId);
+            const toPinIdx = pinnedSorted.findIndex(c => c.id === toId);
+            if (fromPinIdx < 0 || toPinIdx < 0) return;
+            pinnedSorted.splice(fromPinIdx, 1);
+            pinnedSorted.splice(toPinIdx, 0, fromCard);
+            pinnedSorted.forEach((c, i) => { c.pinOrder = i; });
+        } else {
+            const fromIdx = this.cards.findIndex(c => c.id === fromId);
+            const toIdx = this.cards.findIndex(c => c.id === toId);
+            if (fromIdx < 0 || toIdx < 0) return;
+            const [card] = this.cards.splice(fromIdx, 1);
+            this.cards.splice(toIdx, 0, card);
+        }
+
         this.saveData();
         this.applyFilter();
         this.render();
@@ -627,7 +656,7 @@ class KnowledgeWall {
 
     // ===================== 密码对话框 =====================
 
-    _showPasswordDialog(cardId) {
+    _showPasswordDialog(cardId, onUnlocked) {
         const existing = document.getElementById('kw-pw-dialog');
         if (existing) existing.remove();
 
@@ -685,7 +714,11 @@ class KnowledgeWall {
                 card.viewCount = (card.viewCount || 0) + 1;
                 await this.saveData();
                 closeDialog();
-                this.render();
+                if (typeof onUnlocked === 'function') {
+                    onUnlocked();
+                } else {
+                    this.render();
+                }
             } else {
                 this._failedAttempts[cardId] = (this._failedAttempts[cardId] || 0) + 1;
                 const attempts = this._failedAttempts[cardId];
@@ -707,6 +740,22 @@ class KnowledgeWall {
         dialog.querySelector('#kw-pw-confirm').addEventListener('click', tryUnlock);
         input.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryUnlock(); });
         setTimeout(() => input.focus(), 100);
+    }
+
+    _requireUnlock(cardId, action) {
+        const card = this.cards.find(c => c.id === cardId);
+        if (!card || !card.isProtected || !card.passwordHash) {
+            action();
+            return;
+        }
+        if (this._isCardUnlocked(cardId)) {
+            action();
+            return;
+        }
+        this._showPasswordDialog(cardId, () => {
+            this.render();
+            action();
+        });
     }
 
     // ===================== CRUD =====================
@@ -737,9 +786,29 @@ class KnowledgeWall {
         if (!card) return;
         card.pinned = !card.pinned;
         card.updatedAt = Date.now();
+        if (card.pinned) {
+            const maxOrder = this.cards
+                .filter(c => c.pinned && c.id !== id)
+                .reduce((max, c) => Math.max(max, typeof c.pinOrder === 'number' ? c.pinOrder : -1), -1);
+            card.pinOrder = maxOrder + 1;
+        } else {
+            delete card.pinOrder;
+            this._reindexPinOrder();
+        }
         await this.saveData();
         this.applyFilter();
         this.render();
+    }
+
+    _reindexPinOrder() {
+        this.cards
+            .filter(c => c.pinned)
+            .sort((a, b) => {
+                const oa = typeof a.pinOrder === 'number' ? a.pinOrder : Infinity;
+                const ob = typeof b.pinOrder === 'number' ? b.pinOrder : Infinity;
+                return oa - ob;
+            })
+            .forEach((c, i) => { c.pinOrder = i; });
     }
 
     async copyContent(id) {
