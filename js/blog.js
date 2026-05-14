@@ -24,6 +24,7 @@ class BlogManager {
             { id: 'think',   name: '思考', icon: 'fa-lightbulb',   color: '#FF9800' },
             { id: 'essay',   name: '随笔', icon: 'fa-feather-alt', color: '#9C27B0' },
             { id: 'weekly',  name: '周报', icon: 'fa-calendar-alt',color: '#00BCD4' },
+            { id: 'agent',   name: 'Agent', icon: 'fa-robot',      color: '#7C3AED' },
             { id: 'draft',   name: '草稿箱',icon: 'fa-box-open',   color: '#9E9E9E' },
         ];
 
@@ -223,16 +224,28 @@ class BlogManager {
             `;
             wrapper.appendChild(toolbar);
 
+            let clickTimer = null;
             img.addEventListener('click', (e) => {
                 e.stopPropagation();
-                container.querySelectorAll('.blog-img-resizable.active').forEach(w => {
-                    if (w !== wrapper) w.classList.remove('active');
-                });
-                wrapper.classList.toggle('active');
-                if (wrapper.classList.contains('active')) {
-                    const input = toolbar.querySelector('.blog-img-width-input');
-                    input.value = Math.round(img.offsetWidth);
-                }
+                if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; return; }
+                clickTimer = setTimeout(() => {
+                    clickTimer = null;
+                    container.querySelectorAll('.blog-img-resizable.active').forEach(w => {
+                        if (w !== wrapper) w.classList.remove('active');
+                    });
+                    wrapper.classList.toggle('active');
+                    if (wrapper.classList.contains('active')) {
+                        const input = toolbar.querySelector('.blog-img-width-input');
+                        input.value = Math.round(img.offsetWidth);
+                    }
+                }, 250);
+            });
+
+            img.addEventListener('dblclick', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
+                this._showImageLightbox(img.src, container);
             });
 
             toolbar.querySelectorAll('button[data-size]').forEach(btn => {
@@ -277,6 +290,93 @@ class BlogManager {
                 });
             }
         }, { once: false });
+    }
+
+    _showImageLightbox(src, container) {
+        const allImgs = container ? Array.from(container.querySelectorAll('img')).map(i => i.src) : [src];
+        let currentIdx = allImgs.indexOf(src);
+        if (currentIdx < 0) currentIdx = 0;
+
+        const overlay = document.createElement('div');
+        overlay.className = 'blog-lightbox';
+        overlay.innerHTML = `
+            <div class="blog-lightbox-backdrop"></div>
+            <div class="blog-lightbox-content">
+                <img class="blog-lightbox-img" src="${src}" alt="">
+                ${allImgs.length > 1 ? `
+                    <button class="blog-lightbox-nav blog-lightbox-prev" title="上一张"><i class="fas fa-chevron-left"></i></button>
+                    <button class="blog-lightbox-nav blog-lightbox-next" title="下一张"><i class="fas fa-chevron-right"></i></button>
+                    <div class="blog-lightbox-counter">${currentIdx + 1} / ${allImgs.length}</div>
+                ` : ''}
+                <div class="blog-lightbox-toolbar">
+                    <button class="blog-lightbox-btn" data-act="zoom-in" title="放大"><i class="fas fa-search-plus"></i></button>
+                    <button class="blog-lightbox-btn" data-act="zoom-out" title="缩小"><i class="fas fa-search-minus"></i></button>
+                    <button class="blog-lightbox-btn" data-act="reset" title="重置"><i class="fas fa-expand"></i></button>
+                    <button class="blog-lightbox-btn" data-act="close" title="关闭"><i class="fas fa-times"></i></button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        requestAnimationFrame(() => overlay.classList.add('blog-lightbox-visible'));
+
+        const imgEl = overlay.querySelector('.blog-lightbox-img');
+        const counter = overlay.querySelector('.blog-lightbox-counter');
+        let scale = 1;
+
+        const updateImg = () => {
+            imgEl.src = allImgs[currentIdx];
+            imgEl.style.transform = `scale(${scale})`;
+            if (counter) counter.textContent = `${currentIdx + 1} / ${allImgs.length}`;
+        };
+
+        const close = () => {
+            overlay.classList.remove('blog-lightbox-visible');
+            setTimeout(() => overlay.remove(), 250);
+        };
+
+        overlay.querySelector('.blog-lightbox-backdrop').addEventListener('click', close);
+        overlay.querySelector('[data-act="close"]')?.addEventListener('click', close);
+
+        overlay.querySelector('[data-act="zoom-in"]')?.addEventListener('click', () => {
+            scale = Math.min(5, scale * 1.3);
+            imgEl.style.transform = `scale(${scale})`;
+        });
+        overlay.querySelector('[data-act="zoom-out"]')?.addEventListener('click', () => {
+            scale = Math.max(0.2, scale / 1.3);
+            imgEl.style.transform = `scale(${scale})`;
+        });
+        overlay.querySelector('[data-act="reset"]')?.addEventListener('click', () => {
+            scale = 1;
+            imgEl.style.transform = `scale(1)`;
+        });
+
+        overlay.querySelector('.blog-lightbox-prev')?.addEventListener('click', () => {
+            currentIdx = (currentIdx - 1 + allImgs.length) % allImgs.length;
+            scale = 1;
+            updateImg();
+        });
+        overlay.querySelector('.blog-lightbox-next')?.addEventListener('click', () => {
+            currentIdx = (currentIdx + 1) % allImgs.length;
+            scale = 1;
+            updateImg();
+        });
+
+        overlay.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') close();
+            if (e.key === 'ArrowLeft') { currentIdx = (currentIdx - 1 + allImgs.length) % allImgs.length; scale = 1; updateImg(); }
+            if (e.key === 'ArrowRight') { currentIdx = (currentIdx + 1) % allImgs.length; scale = 1; updateImg(); }
+            if (e.key === '+' || e.key === '=') { scale = Math.min(5, scale * 1.3); imgEl.style.transform = `scale(${scale})`; }
+            if (e.key === '-') { scale = Math.max(0.2, scale / 1.3); imgEl.style.transform = `scale(${scale})`; }
+        });
+        overlay.tabIndex = 0;
+        overlay.focus();
+
+        imgEl.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            if (e.deltaY < 0) scale = Math.min(5, scale * 1.1);
+            else scale = Math.max(0.2, scale / 1.1);
+            imgEl.style.transform = `scale(${scale})`;
+        });
     }
 
     _bindImageDragResize(wrapper, img, handle, toolbar, container) {
@@ -356,11 +456,13 @@ class BlogManager {
             return this._buildJsonViewer(jsonObj, text);
         }
 
-        let rendered = text;
+        let processed = this._escapeBackslashesOutsideCode(text);
+
+        let rendered = processed;
         if (window.MarkdownRenderer && typeof window.MarkdownRenderer.render === 'function') {
-            rendered = window.MarkdownRenderer.render(text);
+            rendered = window.MarkdownRenderer.render(processed);
         } else if (typeof marked !== 'undefined') {
-            rendered = marked.parse(text);
+            rendered = marked.parse(processed);
         }
 
         rendered = this._renderHighlightColors(rendered);
@@ -379,6 +481,21 @@ class BlogManager {
         });
 
         return tempDiv.innerHTML;
+    }
+
+    /**
+     * 保护代码块外的反斜杠不被 marked 当作转义符吃掉。
+     * 策略：将文本按代码块（```...```）分段，仅对非代码块段中的
+     * 孤立反斜杠 `\` 替换为 `\\`，让 marked 渲染后保留一个 `\`。
+     */
+    _escapeBackslashesOutsideCode(text) {
+        if (!text || !text.includes('\\')) return text;
+
+        const parts = text.split(/(```[\s\S]*?```|`[^`\n]+`)/g);
+        return parts.map((part, i) => {
+            if (i % 2 === 1) return part;
+            return part.replace(/\\(?!\\)/g, '\\\\');
+        }).join('');
     }
 
     _getCategoryById(id) {
@@ -862,6 +979,103 @@ class BlogManager {
         }
     }
 
+    // ─── 从 Markdown 源码提取标题 ───
+    _extractHeadings(markdown) {
+        if (!markdown) return [];
+        const lines = markdown.split('\n');
+        const headings = [];
+        let inCodeBlock = false;
+        lines.forEach((line, idx) => {
+            if (line.trim().startsWith('```')) { inCodeBlock = !inCodeBlock; return; }
+            if (inCodeBlock) return;
+            const match = line.match(/^(#{2,4})\s+(.+)/);
+            if (match) {
+                const text = match[2].replace(/[*_`~\[\]]/g, '').trim();
+                headings.push({
+                    level: match[1].length,
+                    text,
+                    id: 'toc-h-' + idx,
+                });
+            }
+        });
+        return headings;
+    }
+
+    // ─── 将 heading ID 注入渲染后的 HTML ───
+    _injectHeadingIds(articleEl, headings) {
+        const hEls = articleEl.querySelectorAll('h2, h3, h4');
+        let hIdx = 0;
+        hEls.forEach(el => {
+            if (hIdx < headings.length) {
+                el.id = headings[hIdx].id;
+                hIdx++;
+            }
+        });
+    }
+
+    // ─── 构建 TOC 侧边栏 HTML ───
+    _buildTocHtml(headings) {
+        if (!headings.length) return '';
+        const items = headings.map(h =>
+            `<a class="blog-toc-item blog-toc-h${h.level}" href="#${h.id}" data-target="${h.id}">${this._esc(h.text)}</a>`
+        ).join('');
+        return `
+            <nav class="blog-toc-sidebar">
+                <div class="blog-toc-title">目录</div>
+                <div class="blog-toc-list">${items}</div>
+                <div class="blog-toc-progress"><div class="blog-toc-progress-bar"></div></div>
+            </nav>`;
+    }
+
+    // ─── 绑定 TOC 交互：点击跳转 + 滚动高亮 ───
+    _bindTocInteraction(container) {
+        const tocEl = container.querySelector('.blog-toc-sidebar');
+        const scrollHost = container.querySelector('.blog-detail-view');
+        if (!tocEl || !scrollHost) return;
+
+        const tocItems = tocEl.querySelectorAll('.blog-toc-item');
+        const progressBar = tocEl.querySelector('.blog-toc-progress-bar');
+        if (!tocItems.length) return;
+
+        tocItems.forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                const targetId = item.dataset.target;
+                const target = scrollHost.querySelector('#' + targetId);
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+
+        const updateActiveHeading = () => {
+            const scrollTop = scrollHost.scrollTop;
+            const scrollHeight = scrollHost.scrollHeight - scrollHost.clientHeight;
+            if (progressBar && scrollHeight > 0) {
+                progressBar.style.width = Math.min(100, (scrollTop / scrollHeight) * 100) + '%';
+            }
+
+            let activeId = '';
+            const headingEls = scrollHost.querySelectorAll('h2[id], h3[id], h4[id]');
+            for (const el of headingEls) {
+                if (el.offsetTop - scrollHost.offsetTop <= scrollTop + 60) {
+                    activeId = el.id;
+                } else {
+                    break;
+                }
+            }
+
+            tocItems.forEach(item => {
+                const isActive = item.dataset.target === activeId;
+                item.classList.toggle('active', isActive);
+                if (isActive) item.scrollIntoView({ block: 'nearest' });
+            });
+        };
+
+        scrollHost.addEventListener('scroll', updateActiveHeading, { passive: true });
+        updateActiveHeading();
+    }
+
     // ─── 详情视图 — Jiayuan 排版 ───
     _renderDetailView(container) {
         const post = this._editingPost;
@@ -871,48 +1085,59 @@ class BlogManager {
         const tags = (post.tags || []).map(t => `<span class="blog-detail-tag">#${t}</span>`).join('');
 
         const rendered = this._renderMarkdown(post.content || '');
+        const headings = this._extractHeadings(post.content || '');
+        const hasToc = headings.length >= 2;
 
         container.innerHTML = `
-            <div class="blog-detail-view">
-                <button type="button" class="blog-detail-back" data-action="back">
-                    <i class="fas fa-arrow-left"></i> 返回列表
-                </button>
-                <h1 class="blog-detail-h1">${this._esc(post.title)}</h1>
-                <div class="blog-detail-meta">
-                    <span class="blog-detail-meta-cat" style="color:${cat.color}">
-                        <i class="fas ${cat.icon}"></i> ${cat.name}
-                    </span>
-                    <span>·</span>
-                    <time>${this._formatDateTime(post.createdAt)}</time>
-                    ${post.updatedAt !== post.createdAt ? `<span>· 更新于 ${this._formatDateTime(post.updatedAt)}</span>` : ''}
-                    <span>· ${post.wordCount || 0} 字</span>
+            <div class="blog-detail-wrapper${hasToc ? ' has-toc' : ''}">
+                <div class="blog-detail-view">
+                    <button type="button" class="blog-detail-back" data-action="back">
+                        <i class="fas fa-arrow-left"></i> 返回列表
+                    </button>
+                    <h1 class="blog-detail-h1">${this._esc(post.title)}</h1>
+                    <div class="blog-detail-meta">
+                        <span class="blog-detail-meta-cat" style="color:${cat.color}">
+                            <i class="fas ${cat.icon}"></i> ${cat.name}
+                        </span>
+                        <span>·</span>
+                        <time>${this._formatDateTime(post.createdAt)}</time>
+                        ${post.updatedAt !== post.createdAt ? `<span>· 更新于 ${this._formatDateTime(post.updatedAt)}</span>` : ''}
+                        <span>· ${post.wordCount || 0} 字</span>
+                    </div>
+                    ${tags ? `<div class="blog-detail-tags">${tags}</div>` : ''}
+                    <div class="blog-detail-actions">
+                        <button type="button" class="blog-detail-act-btn" data-action="edit">
+                            <i class="fas fa-edit"></i> 编辑
+                        </button>
+                        <button type="button" class="blog-detail-act-btn" data-action="copy-all">
+                            <i class="fas fa-copy"></i> 复制全文
+                        </button>
+                        <button type="button" class="blog-detail-act-btn" data-action="pin">
+                            <i class="fas fa-thumbtack"></i> ${post.pinned ? '取消置顶' : '置顶'}
+                        </button>
+                        <button type="button" class="blog-detail-act-btn danger" data-action="delete">
+                            <i class="fas fa-trash-alt"></i> 删除
+                        </button>
+                    </div>
+                    <div class="blog-article-body">${rendered}</div>
                 </div>
-                ${tags ? `<div class="blog-detail-tags">${tags}</div>` : ''}
-                <div class="blog-detail-actions">
-                    <button type="button" class="blog-detail-act-btn" data-action="edit">
-                        <i class="fas fa-edit"></i> 编辑
-                    </button>
-                    <button type="button" class="blog-detail-act-btn" data-action="copy-all">
-                        <i class="fas fa-copy"></i> 复制全文
-                    </button>
-                    <button type="button" class="blog-detail-act-btn" data-action="pin">
-                        <i class="fas fa-thumbtack"></i> ${post.pinned ? '取消置顶' : '置顶'}
-                    </button>
-                    <button type="button" class="blog-detail-act-btn danger" data-action="delete">
-                        <i class="fas fa-trash-alt"></i> 删除
-                    </button>
-                </div>
-                <div class="blog-article-body">${rendered}</div>
+                ${hasToc ? this._buildTocHtml(headings) : ''}
             </div>
         `;
 
-        this._enhanceRenderedHtml(container.querySelector('.blog-article-body'));
+        const articleBody = container.querySelector('.blog-article-body');
+        this._enhanceRenderedHtml(articleBody);
+
+        if (hasToc) {
+            this._injectHeadingIds(articleBody, headings);
+            this._bindTocInteraction(container);
+        }
 
         const detailView = container.querySelector('.blog-detail-view');
         if (detailView) {
-            let dblClickTimer = null;
             detailView.addEventListener('dblclick', (e) => {
                 if (e.target.closest('.blog-detail-actions') || e.target.closest('.blog-detail-back') || e.target.closest('a') || e.target.closest('button')) return;
+                if (e.target.closest('.blog-img-resizable') || e.target.tagName === 'IMG') return;
                 this._switchView('editor');
             });
             detailView.classList.add('blog-detail-dblclick-hint');

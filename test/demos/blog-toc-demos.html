@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>写作空间 — Markdown 目录提取 Demo</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+    background: #111;
+    color: #f0f0f0;
+    min-height: 100vh;
+}
+
+.demo-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(17,17,17,.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255,255,255,.06);
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.demo-header h1 {
+    font-size: 18px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.demo-tabs {
+    display: flex;
+    gap: 4px;
+}
+
+.demo-tab {
+    padding: 6px 16px;
+    border: none;
+    background: rgba(255,255,255,.06);
+    color: #999;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all .15s;
+    font-family: inherit;
+}
+.demo-tab:hover { background: rgba(255,255,255,.12); color: #ddd; }
+.demo-tab.active { background: #d4a843; color: #1a1a1a; font-weight: 600; }
+
+.demo-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 32px;
+}
+
+.demo-panel {
+    display: none;
+}
+.demo-panel.active {
+    display: block;
+}
+
+.demo-desc {
+    margin-bottom: 24px;
+    padding: 16px 20px;
+    background: rgba(255,255,255,.04);
+    border-radius: 10px;
+    border-left: 3px solid #d4a843;
+}
+.demo-desc h2 {
+    font-size: 16px;
+    margin-bottom: 6px;
+    color: #d4a843;
+}
+.demo-desc p {
+    font-size: 13px;
+    color: #999;
+    line-height: 1.6;
+}
+
+/* ===== 模拟写作空间布局 ===== */
+.mock-blog-layout {
+    display: flex;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,.06);
+    height: 600px;
+}
+
+.mock-sidebar {
+    width: 240px;
+    flex-shrink: 0;
+    background: #1a1a1a;
+    border-right: 1px solid rgba(255,255,255,.04);
+    display: flex;
+    flex-direction: column;
+}
+
+.mock-sidebar-brand {
+    padding: 20px;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 20px;
+    font-weight: 700;
+    border-bottom: 1px solid rgba(255,255,255,.04);
+}
+
+.mock-content {
+    flex: 1;
+    background: #fafaf9;
+    display: flex;
+    min-width: 0;
+    position: relative;
+}
+
+.mock-article {
+    flex: 1;
+    overflow-y: auto;
+    padding: 32px 36px;
+    color: #333;
+}
+
+.mock-article h1 {
+    font-family: Georgia, 'Noto Serif SC', serif;
+    font-size: 26px;
+    color: #222;
+    margin-bottom: 8px;
+}
+
+.mock-article .meta {
+    font-size: 13px;
+    color: #999;
+    margin-bottom: 24px;
+}
+
+.mock-article h2 {
+    font-size: 1.3em;
+    color: #222;
+    margin: 1.6em 0 .6em;
+    padding-bottom: .3em;
+    border-bottom: 1px solid #eee;
+    font-family: Georgia, 'Noto Serif SC', serif;
+}
+
+.mock-article h3 {
+    font-size: 1.1em;
+    color: #333;
+    margin: 1.3em 0 .5em;
+    font-family: Georgia, 'Noto Serif SC', serif;
+}
+
+.mock-article h4 {
+    font-size: 1em;
+    color: #444;
+    margin: 1em 0 .4em;
+}
+
+.mock-article p {
+    font-size: 15px;
+    line-height: 1.85;
+    color: #444;
+    margin-bottom: 1em;
+    font-family: Georgia, 'Noto Serif SC', serif;
+}
+
+.mock-article code {
+    font-family: 'SF Mono', Menlo, monospace;
+    font-size: .88em;
+    background: #f3f3f0;
+    padding: .15em .4em;
+    border-radius: 3px;
+    color: #c62828;
+}
+
+.mock-article blockquote {
+    margin: 1em 0;
+    padding: 10px 16px;
+    border-left: 3px solid #ddd;
+    background: #f8f8f6;
+    color: #666;
+    font-style: italic;
+}
+
+.mock-article ul, .mock-article ol {
+    margin: .8em 0;
+    padding-left: 1.5em;
+    font-size: 15px;
+    color: #444;
+    line-height: 1.8;
+}
+
+/* ========================================
+   DEMO 1 — 侧边栏固定目录（Notion 风格）
+   ======================================== */
+.toc-sidebar-fixed {
+    width: 220px;
+    flex-shrink: 0;
+    border-left: 1px solid #eee;
+    background: #f5f5f2;
+    overflow-y: auto;
+    padding: 20px 0;
+}
+
+.toc-sidebar-fixed .toc-label {
+    padding: 0 16px 10px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: #999;
+    font-weight: 600;
+}
+
+.toc-sidebar-fixed .toc-list {
+    list-style: none;
+}
+
+.toc-sidebar-fixed .toc-item {
+    display: block;
+    padding: 5px 16px 5px 16px;
+    font-size: 13px;
+    color: #666;
+    cursor: pointer;
+    transition: all .12s;
+    border-left: 2px solid transparent;
+    text-decoration: none;
+    line-height: 1.4;
+}
+
+.toc-sidebar-fixed .toc-item:hover {
+    color: #333;
+    background: rgba(0,0,0,.03);
+}
+
+.toc-sidebar-fixed .toc-item.active {
+    color: #222;
+    font-weight: 600;
+    border-left-color: #d4a843;
+    background: rgba(212,168,67,.06);
+}
+
+.toc-sidebar-fixed .toc-item.level-3 { padding-left: 28px; font-size: 12px; }
+.toc-sidebar-fixed .toc-item.level-4 { padding-left: 40px; font-size: 11px; color: #888; }
+
+.toc-sidebar-fixed .toc-progress {
+    margin: 12px 16px 0;
+    height: 2px;
+    background: #e0e0e0;
+    border-radius: 1px;
+    overflow: hidden;
+}
+
+.toc-sidebar-fixed .toc-progress-bar {
+    height: 100%;
+    background: #d4a843;
+    width: 0%;
+    transition: width .2s;
+    border-radius: 1px;
+}
+
+/* ========================================
+   DEMO 2 — 浮动迷你地图（VS Code Minimap 风格）
+   ======================================== */
+.toc-minimap {
+    position: absolute;
+    right: 16px;
+    top: 16px;
+    width: 180px;
+    background: rgba(255,255,255,.95);
+    border-radius: 10px;
+    border: 1px solid #e8e8e5;
+    box-shadow: 0 4px 20px rgba(0,0,0,.08);
+    z-index: 10;
+    overflow: hidden;
+    transition: all .2s;
+}
+
+.toc-minimap.collapsed {
+    width: 36px;
+    border-radius: 18px;
+}
+
+.toc-minimap .toc-minimap-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-bottom: 1px solid #eee;
+    font-size: 11px;
+    color: #888;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    cursor: pointer;
+}
+
+.toc-minimap.collapsed .toc-minimap-header {
+    padding: 8px;
+    justify-content: center;
+    border-bottom: none;
+}
+
+.toc-minimap.collapsed .toc-minimap-label,
+.toc-minimap.collapsed .toc-minimap-body { display: none; }
+
+.toc-minimap .toc-minimap-body {
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 6px 0;
+}
+
+.toc-minimap .toc-minimap-body::-webkit-scrollbar { width: 3px; }
+.toc-minimap .toc-minimap-body::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
+
+.toc-minimap .toc-mm-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    font-size: 12px;
+    color: #666;
+    cursor: pointer;
+    transition: all .1s;
+    text-decoration: none;
+    line-height: 1.3;
+}
+
+.toc-minimap .toc-mm-item:hover { background: #f5f5f2; color: #333; }
+.toc-minimap .toc-mm-item.active { color: #b8860b; font-weight: 600; }
+
+.toc-minimap .toc-mm-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #ddd;
+    flex-shrink: 0;
+}
+.toc-minimap .toc-mm-item.active .toc-mm-dot { background: #d4a843; }
+.toc-minimap .toc-mm-item.level-3 { padding-left: 23px; }
+.toc-minimap .toc-mm-item.level-3 .toc-mm-dot { width: 4px; height: 4px; }
+.toc-minimap .toc-mm-item.level-4 { padding-left: 32px; font-size: 11px; }
+.toc-minimap .toc-mm-item.level-4 .toc-mm-dot { width: 3px; height: 3px; }
+
+/* ========================================
+   DEMO 3 — 顶部面包屑导航条
+   ======================================== */
+.toc-breadcrumb-bar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: rgba(250,250,249,.95);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid #eee;
+    padding: 8px 36px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #999;
+    min-height: 34px;
+}
+
+.toc-breadcrumb-bar .bc-icon {
+    color: #bbb;
+    font-size: 11px;
+}
+
+.toc-breadcrumb-bar .bc-sep {
+    color: #ccc;
+    font-size: 10px;
+}
+
+.toc-breadcrumb-bar .bc-crumb {
+    color: #666;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: all .1s;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.toc-breadcrumb-bar .bc-crumb:hover { background: #eee; color: #333; }
+.toc-breadcrumb-bar .bc-crumb.current { color: #222; font-weight: 600; }
+
+.toc-breadcrumb-bar .bc-dropdown-trigger {
+    position: relative;
+}
+
+.toc-breadcrumb-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 4px;
+    background: #fff;
+    border: 1px solid #e8e8e5;
+    border-radius: 8px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.1);
+    min-width: 200px;
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 6px;
+    z-index: 20;
+    display: none;
+}
+
+.toc-breadcrumb-dropdown.visible { display: block; }
+
+.toc-breadcrumb-dropdown .bcd-item {
+    padding: 6px 10px;
+    font-size: 13px;
+    color: #444;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background .1s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.toc-breadcrumb-dropdown .bcd-item:hover { background: #f5f5f2; }
+.toc-breadcrumb-dropdown .bcd-item.active { background: rgba(212,168,67,.1); color: #b8860b; font-weight: 500; }
+.toc-breadcrumb-dropdown .bcd-item.level-3 { padding-left: 22px; font-size: 12px; }
+.toc-breadcrumb-dropdown .bcd-item.level-4 { padding-left: 34px; font-size: 11px; color: #888; }
+
+/* ========================================
+   DEMO 4 — 左侧竖线指示器（Gitbook 风格）
+   ======================================== */
+.toc-vertical-indicator {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 28px;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 0;
+}
+
+.toc-vi-track {
+    width: 2px;
+    flex: 1;
+    background: #e8e8e5;
+    border-radius: 1px;
+    position: relative;
+}
+
+.toc-vi-thumb {
+    position: absolute;
+    width: 2px;
+    background: #d4a843;
+    border-radius: 1px;
+    transition: top .15s, height .15s;
+    left: 0;
+}
+
+.toc-vi-dots {
+    position: absolute;
+    left: -3px;
+    right: -3px;
+    top: 0;
+    bottom: 0;
+}
+
+.toc-vi-dot {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #e0e0e0;
+    border: 2px solid #f5f5f2;
+    cursor: pointer;
+    transition: all .15s;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.toc-vi-dot:hover { background: #bbb; transform: translateX(-50%) scale(1.3); }
+.toc-vi-dot.active { background: #d4a843; border-color: #fff; }
+.toc-vi-dot.level-3 { width: 6px; height: 6px; }
+
+.toc-vi-tooltip {
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: #1a1a1a;
+    color: #f0f0f0;
+    padding: 4px 10px;
+    border-radius: 5px;
+    font-size: 12px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .12s;
+    z-index: 20;
+}
+
+.toc-vi-dot:hover .toc-vi-tooltip { opacity: 1; }
+
+.demo4-article { padding-left: 36px !important; }
+
+/* ========================================
+   DEMO 5 — 底部抽屉式目录（移动端优先）
+   ======================================== */
+.toc-drawer-trigger {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: #222;
+    color: #d4a843;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 16px rgba(0,0,0,.2);
+    z-index: 50;
+    transition: all .2s;
+}
+.toc-drawer-trigger:hover { transform: scale(1.08); background: #333; }
+.toc-drawer-trigger .td-badge {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    background: #d4a843;
+    color: #1a1a1a;
+    font-size: 10px;
+    font-weight: 700;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.toc-drawer-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,.3);
+    z-index: 40;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s;
+}
+.toc-drawer-overlay.visible { opacity: 1; pointer-events: auto; }
+
+.toc-bottom-drawer {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: 60%;
+    background: #fff;
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -8px 40px rgba(0,0,0,.12);
+    transform: translateY(100%);
+    transition: transform .3s cubic-bezier(.22,1,.36,1);
+    z-index: 45;
+    display: flex;
+    flex-direction: column;
+}
+.toc-bottom-drawer.open { transform: translateY(0); }
+
+.toc-bd-handle {
+    padding: 10px 0 6px;
+    display: flex;
+    justify-content: center;
+    cursor: grab;
+}
+.toc-bd-handle span {
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: #ddd;
+}
+
+.toc-bd-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 20px 12px;
+    border-bottom: 1px solid #eee;
+}
+
+.toc-bd-header h3 {
+    font-size: 15px;
+    color: #222;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.toc-bd-header h3 i { color: #d4a843; font-size: 14px; }
+
+.toc-bd-close {
+    border: none;
+    background: none;
+    color: #999;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 4px;
+}
+
+.toc-bd-search {
+    margin: 10px 20px;
+    display: flex;
+    align-items: center;
+    background: #f5f5f2;
+    border-radius: 8px;
+    padding: 0 10px;
+}
+.toc-bd-search i { color: #999; font-size: 13px; }
+.toc-bd-search input {
+    flex: 1;
+    border: none;
+    background: none;
+    padding: 8px;
+    font-size: 13px;
+    outline: none;
+    color: #333;
+    font-family: inherit;
+}
+
+.toc-bd-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 12px 20px;
+    list-style: none;
+}
+
+.toc-bd-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background .12s;
+    font-size: 14px;
+    color: #444;
+}
+.toc-bd-item:hover { background: #f5f5f2; }
+.toc-bd-item.active { background: rgba(212,168,67,.08); color: #b8860b; font-weight: 600; }
+
+.toc-bd-item .bd-num {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    background: #f0f0ed;
+    color: #999;
+    font-size: 11px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.toc-bd-item.active .bd-num { background: rgba(212,168,67,.15); color: #d4a843; }
+
+.toc-bd-item.level-3 { padding-left: 28px; font-size: 13px; }
+.toc-bd-item.level-3 .bd-num { width: 20px; height: 20px; font-size: 10px; }
+.toc-bd-item.level-4 { padding-left: 44px; font-size: 12px; color: #888; }
+
+/* 模拟滚动条 */
+.mock-article::-webkit-scrollbar { width: 5px; }
+.mock-article::-webkit-scrollbar-track { background: transparent; }
+.mock-article::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="demo-header">
+    <h1><i class="fas fa-list-ul" style="color:#d4a843"></i> 写作空间 — 目录导航 Demo</h1>
+    <div class="demo-tabs">
+        <button class="demo-tab active" data-demo="1">方案一</button>
+        <button class="demo-tab" data-demo="2">方案二</button>
+        <button class="demo-tab" data-demo="3">方案三</button>
+        <button class="demo-tab" data-demo="4">方案四</button>
+        <button class="demo-tab" data-demo="5">方案五</button>
+    </div>
+</div>
+
+<div class="demo-container">
+
+<!-- ===== DEMO 1: 侧边栏固定目录 ===== -->
+<div class="demo-panel active" id="demo-1">
+    <div class="demo-desc">
+        <h2>方案一 — 侧边栏固定目录（Notion 风格）</h2>
+        <p>在文章详情右侧增加一个固定的目录面板。自动提取 ## 和 ### 标题，支持点击跳转、滚动高亮当前章节，底部有阅读进度条。适合长文阅读，目录始终可见。</p>
+    </div>
+    <div class="mock-blog-layout">
+        <div class="mock-sidebar">
+            <div class="mock-sidebar-brand">写作空间</div>
+        </div>
+        <div class="mock-content">
+            <div class="mock-article" id="article-1"></div>
+            <div class="toc-sidebar-fixed" id="toc-1">
+                <div class="toc-label"><i class="fas fa-list-ul"></i> 目录</div>
+                <ul class="toc-list" id="toc-list-1"></ul>
+                <div class="toc-progress"><div class="toc-progress-bar" id="toc-progress-1"></div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== DEMO 2: 浮动迷你地图 ===== -->
+<div class="demo-panel" id="demo-2">
+    <div class="demo-desc">
+        <h2>方案二 — 浮动迷你地图（VS Code 风格）</h2>
+        <p>在文章右上角浮动一个可折叠的目录卡片。不占据固定空间，点击展开后显示完整目录。圆点标记当前位置，可以一键折叠为小图标。适合不想浪费侧边空间的场景。</p>
+    </div>
+    <div class="mock-blog-layout">
+        <div class="mock-sidebar">
+            <div class="mock-sidebar-brand">写作空间</div>
+        </div>
+        <div class="mock-content">
+            <div class="mock-article" id="article-2" style="padding-right: 36px;"></div>
+            <div class="toc-minimap" id="toc-2">
+                <div class="toc-minimap-header" id="toc-2-toggle">
+                    <span class="toc-minimap-label">目录</span>
+                    <i class="fas fa-chevron-up" style="font-size:10px;color:#bbb"></i>
+                </div>
+                <div class="toc-minimap-body" id="toc-list-2"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== DEMO 3: 顶部面包屑导航 ===== -->
+<div class="demo-panel" id="demo-3">
+    <div class="demo-desc">
+        <h2>方案三 — 顶部面包屑导航条</h2>
+        <p>在文章详情顶部增加一条面包屑，实时显示当前所在章节。点击可以展开完整目录下拉菜单。不占用侧边空间，保持阅读区最大化，适合宽屏和窄屏。</p>
+    </div>
+    <div class="mock-blog-layout">
+        <div class="mock-sidebar">
+            <div class="mock-sidebar-brand">写作空间</div>
+        </div>
+        <div class="mock-content">
+            <div style="flex:1; display:flex; flex-direction:column; min-width:0;">
+                <div class="toc-breadcrumb-bar" id="toc-3">
+                    <i class="fas fa-file-alt bc-icon"></i>
+                    <span class="bc-crumb" id="bc-title-3">Agent 技术方案调研</span>
+                    <i class="fas fa-chevron-right bc-sep"></i>
+                    <div class="bc-dropdown-trigger">
+                        <span class="bc-crumb current" id="bc-current-3">概述</span>
+                        <div class="toc-breadcrumb-dropdown" id="bc-dropdown-3"></div>
+                    </div>
+                </div>
+                <div class="mock-article" id="article-3"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== DEMO 4: 竖线指示器 ===== -->
+<div class="demo-panel" id="demo-4">
+    <div class="demo-desc">
+        <h2>方案四 — 左侧竖线指示器（Gitbook 风格）</h2>
+        <p>在文章左侧增加一条极简的竖线 + 圆点指示器。圆点对应各章节位置，悬停显示标题。滚动时高亮当前位置，黄色区间标记当前可见范围。不占额外空间，极简优雅。</p>
+    </div>
+    <div class="mock-blog-layout">
+        <div class="mock-sidebar">
+            <div class="mock-sidebar-brand">写作空间</div>
+        </div>
+        <div class="mock-content">
+            <div style="flex:1; position:relative; display:flex; min-width:0;">
+                <div class="toc-vertical-indicator" id="toc-4">
+                    <div class="toc-vi-track">
+                        <div class="toc-vi-thumb" id="toc-vi-thumb-4"></div>
+                        <div class="toc-vi-dots" id="toc-vi-dots-4"></div>
+                    </div>
+                </div>
+                <div class="mock-article demo4-article" id="article-4"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== DEMO 5: 底部抽屉式目录 ===== -->
+<div class="demo-panel" id="demo-5">
+    <div class="demo-desc">
+        <h2>方案五 — 底部抽屉式目录（移动端优先）</h2>
+        <p>文章右下角浮动一个目录按钮，点击弹出底部抽屉。支持目录搜索和编号显示。点击跳转后自动收起。适合移动端和窄屏场景，不干扰正文阅读。</p>
+    </div>
+    <div class="mock-blog-layout" style="position:relative;">
+        <div class="mock-sidebar">
+            <div class="mock-sidebar-brand">写作空间</div>
+        </div>
+        <div class="mock-content" style="position:relative;">
+            <div class="mock-article" id="article-5"></div>
+            <button class="toc-drawer-trigger" id="toc-5-trigger">
+                <i class="fas fa-list-ul"></i>
+                <span class="td-badge" id="toc-5-badge">0</span>
+            </button>
+            <div class="toc-drawer-overlay" id="toc-5-overlay"></div>
+            <div class="toc-bottom-drawer" id="toc-5-drawer">
+                <div class="toc-bd-handle"><span></span></div>
+                <div class="toc-bd-header">
+                    <h3><i class="fas fa-list-ul"></i> 文章目录</h3>
+                    <button class="toc-bd-close" id="toc-5-close">&times;</button>
+                </div>
+                <div class="toc-bd-search">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="搜索章节..." id="toc-5-search">
+                </div>
+                <ul class="toc-bd-list" id="toc-list-5"></ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+<script>
+const SAMPLE_MARKDOWN = `# Agent 技术方案调研与架构设计
+
+## 概述
+
+随着大语言模型（LLM）技术的快速发展，AI Agent 已成为软件开发领域的热门话题。本文将从技术选型、架构设计、实现方案三个维度进行深入分析。
+
+AI Agent 的核心价值在于将自然语言理解与自动化执行相结合，让用户能够通过对话的方式完成复杂的工作流程。
+
+## 技术选型分析
+
+### 主流 Agent 框架对比
+
+目前市场上主流的 Agent 框架包括 LangChain、CrewAI、AutoGen 等。每个框架都有其独特的设计理念和适用场景。
+
+LangChain 提供了最完善的工具链生态，社区活跃度最高。CrewAI 专注于多 Agent 协作场景，适合复杂的团队工作流。AutoGen 由微软开发，在代码生成和对话管理方面有独特优势。
+
+### LLM 模型选择
+
+模型选择是 Agent 系统的基础决策。当前主要的选择包括：
+
+- **Claude 系列**：推理能力强，长上下文支持好，适合复杂任务分析
+- **GPT-4 系列**：通用性最强，API 生态最完善
+- **DeepSeek 系列**：性价比高，中文理解能力出色
+- **开源模型**：Llama、Qwen 等，适合私有化部署
+
+### 向量数据库选择
+
+Agent 系统通常需要配合向量数据库实现 RAG（检索增强生成）。主流选择包括 Pinecone、Weaviate、Chroma 和 Milvus。
+
+## 架构设计
+
+### 整体架构
+
+系统采用微服务架构，核心模块包括：
+
+1. **Gateway 网关层**：负责请求路由和负载均衡
+2. **Agent 引擎层**：核心推理和任务调度
+3. **工具层**：各类外部工具的抽象和适配
+4. **记忆层**：短期记忆和长期记忆管理
+5. **监控层**：全链路追踪和性能监控
+
+### 任务调度策略
+
+Agent 的任务调度是整个系统的关键。我们设计了三级调度策略：
+
+**一级调度（意图识别）**：通过 LLM 分析用户意图，判断任务类型和优先级。
+
+**二级调度（Agent 分配）**：根据任务类型选择最合适的 Agent 或 Agent 组合。
+
+**三级调度（工具调用）**：Agent 根据推理结果选择和调用具体的工具。
+
+### 记忆系统设计
+
+记忆系统分为三层：
+
+- **工作记忆**：当前对话上下文，存储在内存中
+- **短期记忆**：最近的交互历史，使用 Redis 缓存
+- **长期记忆**：重要知识和经验，存入向量数据库
+
+## 实现方案
+
+### 核心代码结构
+
+整个项目采用 TypeScript 开发，使用 \`Hono\` 框架构建 HTTP 服务。核心目录结构如下：
+
+\`\`\`
+src/
+├── agents/         # Agent 定义
+├── tools/          # 工具集合
+├── memory/         # 记忆管理
+├── routes/         # API 路由
+└── services/       # 业务逻辑
+\`\`\`
+
+### 安全性考量
+
+安全是 Agent 系统的重中之重。主要考虑以下几个方面：
+
+- **输入验证**：防止 Prompt 注入攻击
+- **权限控制**：细粒度的 Agent 权限管理
+- **审计日志**：所有操作的完整追踪
+- **沙箱执行**：工具调用在隔离环境中执行
+
+### 性能优化
+
+针对 Agent 系统的性能瓶颈，我们采用了以下优化策略：
+
+1. 流式响应：使用 SSE 推送实时结果
+2. 并行调用：无依赖的工具调用并行执行
+3. 缓存策略：对确定性查询结果进行缓存
+4. 模型降级：非关键路径使用轻量模型
+
+## 部署与运维
+
+### 容器化部署
+
+使用 Docker Compose 进行本地开发，Kubernetes 用于生产环境。关键配置包括资源限制、健康检查和自动扩缩容。
+
+### 监控告警
+
+集成 OpenTelemetry 进行全链路追踪，Grafana 展示实时仪表盘，PagerDuty 用于告警通知。
+
+## 总结与展望
+
+Agent 技术仍在快速演进中。未来的重点方向包括多模态交互、更高效的推理框架、以及 Agent 间的协作标准化。
+
+> 技术选型没有银弹，需要根据实际业务场景权衡取舍。最重要的是建立一套可演进的架构，能够快速适应技术变化。`;
+
+function extractHeadings(markdown) {
+    const lines = markdown.split('\n');
+    const headings = [];
+    let inCodeBlock = false;
+    lines.forEach((line, idx) => {
+        if (line.trim().startsWith('```')) { inCodeBlock = !inCodeBlock; return; }
+        if (inCodeBlock) return;
+        const match = line.match(/^(#{2,4})\s+(.+)/);
+        if (match) {
+            headings.push({
+                level: match[1].length,
+                text: match[2].trim(),
+                id: 'heading-' + idx,
+                lineIndex: idx,
+            });
+        }
+    });
+    return headings;
+}
+
+function renderArticle(containerId, addIds) {
+    const container = document.getElementById(containerId);
+    let html = SAMPLE_MARKDOWN;
+    let headingIdx = 0;
+    const headings = extractHeadings(SAMPLE_MARKDOWN);
+
+    html = html.replace(/^#{1,4}\s+.+$/gm, (match) => {
+        const m = match.match(/^(#{1,4})\s+(.+)/);
+        if (!m) return match;
+        const level = m[1].length;
+        const text = m[2];
+        const tag = `h${level}`;
+        const id = addIds && headingIdx < headings.length ? headings[headingIdx].id : '';
+        headingIdx++;
+        return `<${tag} ${id ? 'id="'+id+'"' : ''}>${text}</${tag}>`;
+    });
+
+    html = html.replace(/```[\s\S]*?```/g, (m) => {
+        const code = m.replace(/^```\w*\n?/, '').replace(/\n?```$/, '');
+        return `<pre><code>${code.replace(/</g,'&lt;')}</code></pre>`;
+    });
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/^>\s?(.+)$/gm, '<blockquote>$1</blockquote>');
+    html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+    html = html.replace(/^(\d+)\.\s(.+)$/gm, '<li>$2</li>');
+    html = html.replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`);
+    html = html.replace(/^(?!<[hupblo]|<\/|$)(.+)$/gm, '<p>$1</p>');
+
+    container.innerHTML = `
+        <h1>Agent 技术方案调研与架构设计</h1>
+        <div class="meta"><i class="fas fa-code" style="color:#2196F3"></i> 技术 · 2026-05-10 · 2860 字</div>
+        ${html}
+    `;
+
+    return headings;
+}
+
+// ===== DEMO 1: Sidebar TOC =====
+function initDemo1() {
+    const headings = renderArticle('article-1', true);
+    const list = document.getElementById('toc-list-1');
+    list.innerHTML = headings.map(h =>
+        `<li class="toc-item level-${h.level}" data-target="${h.id}">${h.text}</li>`
+    ).join('');
+
+    const article = document.getElementById('article-1');
+    const items = list.querySelectorAll('.toc-item');
+    const progressBar = document.getElementById('toc-progress-1');
+
+    items.forEach(item => {
+        item.addEventListener('click', () => {
+            const target = document.getElementById(item.dataset.target);
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    });
+
+    article.addEventListener('scroll', () => {
+        const scrollTop = article.scrollTop;
+        const scrollHeight = article.scrollHeight - article.clientHeight;
+        progressBar.style.width = Math.round((scrollTop / scrollHeight) * 100) + '%';
+
+        let activeIdx = 0;
+        headings.forEach((h, i) => {
+            const el = document.getElementById(h.id);
+            if (el && el.offsetTop - 80 <= scrollTop) activeIdx = i;
+        });
+        items.forEach((item, i) => item.classList.toggle('active', i === activeIdx));
+    });
+}
+
+// ===== DEMO 2: Minimap =====
+function initDemo2() {
+    const headings = renderArticle('article-2', true);
+    const list = document.getElementById('toc-list-2');
+    list.innerHTML = headings.map(h =>
+        `<a class="toc-mm-item level-${h.level}" data-target="${h.id}">
+            <span class="toc-mm-dot"></span>${h.text}
+        </a>`
+    ).join('');
+
+    const minimap = document.getElementById('toc-2');
+    document.getElementById('toc-2-toggle').addEventListener('click', () => {
+        minimap.classList.toggle('collapsed');
+    });
+
+    const article = document.getElementById('article-2');
+    const items = list.querySelectorAll('.toc-mm-item');
+    items.forEach(item => {
+        item.addEventListener('click', (e) => {
+            e.preventDefault();
+            const target = document.getElementById(item.dataset.target);
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    });
+
+    article.addEventListener('scroll', () => {
+        const scrollTop = article.scrollTop;
+        let activeIdx = 0;
+        headings.forEach((h, i) => {
+            const el = document.getElementById(h.id);
+            if (el && el.offsetTop - 80 <= scrollTop) activeIdx = i;
+        });
+        items.forEach((item, i) => item.classList.toggle('active', i === activeIdx));
+    });
+}
+
+// ===== DEMO 3: Breadcrumb =====
+function initDemo3() {
+    const headings = renderArticle('article-3', true);
+    const dropdown = document.getElementById('bc-dropdown-3');
+    dropdown.innerHTML = headings.map(h =>
+        `<div class="bcd-item level-${h.level}" data-target="${h.id}">${h.text}</div>`
+    ).join('');
+
+    const currentCrumb = document.getElementById('bc-current-3');
+    const article = document.getElementById('article-3');
+
+    currentCrumb.addEventListener('click', () => dropdown.classList.toggle('visible'));
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.bc-dropdown-trigger')) dropdown.classList.remove('visible');
+    });
+
+    dropdown.querySelectorAll('.bcd-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const target = document.getElementById(item.dataset.target);
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            dropdown.classList.remove('visible');
+        });
+    });
+
+    article.addEventListener('scroll', () => {
+        const scrollTop = article.scrollTop;
+        let activeIdx = 0;
+        headings.forEach((h, i) => {
+            const el = document.getElementById(h.id);
+            if (el && el.offsetTop - 80 <= scrollTop) activeIdx = i;
+        });
+        currentCrumb.textContent = headings[activeIdx]?.text || '概述';
+        dropdown.querySelectorAll('.bcd-item').forEach((item, i) =>
+            item.classList.toggle('active', i === activeIdx)
+        );
+    });
+}
+
+// ===== DEMO 4: Vertical Indicator =====
+function initDemo4() {
+    const headings = renderArticle('article-4', true);
+    const dotsContainer = document.getElementById('toc-vi-dots-4');
+    const thumb = document.getElementById('toc-vi-thumb-4');
+    const article = document.getElementById('article-4');
+
+    const dots = headings.map((h, i) => {
+        const dot = document.createElement('div');
+        dot.className = `toc-vi-dot level-${h.level}`;
+        dot.innerHTML = `<div class="toc-vi-tooltip">${h.text}</div>`;
+        dot.addEventListener('click', () => {
+            const target = document.getElementById(h.id);
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+        dotsContainer.appendChild(dot);
+        return dot;
+    });
+
+    function updatePositions() {
+        const scrollTop = article.scrollTop;
+        const scrollHeight = article.scrollHeight;
+        const clientHeight = article.clientHeight;
+        const trackHeight = dotsContainer.clientHeight;
+
+        headings.forEach((h, i) => {
+            const el = document.getElementById(h.id);
+            if (el) {
+                const pct = el.offsetTop / scrollHeight;
+                dots[i].style.top = (pct * trackHeight) + 'px';
+            }
+        });
+
+        const viewStart = scrollTop / scrollHeight;
+        const viewEnd = (scrollTop + clientHeight) / scrollHeight;
+        thumb.style.top = (viewStart * trackHeight) + 'px';
+        thumb.style.height = ((viewEnd - viewStart) * trackHeight) + 'px';
+
+        let activeIdx = 0;
+        headings.forEach((h, i) => {
+            const el = document.getElementById(h.id);
+            if (el && el.offsetTop - 80 <= scrollTop) activeIdx = i;
+        });
+        dots.forEach((dot, i) => dot.classList.toggle('active', i === activeIdx));
+    }
+
+    article.addEventListener('scroll', updatePositions);
+    setTimeout(updatePositions, 100);
+}
+
+// ===== DEMO 5: Bottom Drawer =====
+function initDemo5() {
+    const headings = renderArticle('article-5', true);
+    const list = document.getElementById('toc-list-5');
+    const badge = document.getElementById('toc-5-badge');
+    badge.textContent = headings.length;
+
+    let num = 0;
+    list.innerHTML = headings.map(h => {
+        num++;
+        return `<li class="toc-bd-item level-${h.level}" data-target="${h.id}">
+            <span class="bd-num">${num}</span>
+            <span>${h.text}</span>
+        </li>`;
+    }).join('');
+
+    const drawer = document.getElementById('toc-5-drawer');
+    const overlay = document.getElementById('toc-5-overlay');
+    const trigger = document.getElementById('toc-5-trigger');
+    const closeBtn = document.getElementById('toc-5-close');
+    const search = document.getElementById('toc-5-search');
+    const article = document.getElementById('article-5');
+
+    function openDrawer() { drawer.classList.add('open'); overlay.classList.add('visible'); }
+    function closeDrawer() { drawer.classList.remove('open'); overlay.classList.remove('visible'); search.value = ''; filterItems(''); }
+
+    trigger.addEventListener('click', openDrawer);
+    closeBtn.addEventListener('click', closeDrawer);
+    overlay.addEventListener('click', closeDrawer);
+
+    function filterItems(q) {
+        const lower = q.toLowerCase();
+        list.querySelectorAll('.toc-bd-item').forEach(item => {
+            const text = item.textContent.toLowerCase();
+            item.style.display = text.includes(lower) ? '' : 'none';
+        });
+    }
+    search.addEventListener('input', (e) => filterItems(e.target.value));
+
+    list.querySelectorAll('.toc-bd-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const target = document.getElementById(item.dataset.target);
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            closeDrawer();
+        });
+    });
+
+    article.addEventListener('scroll', () => {
+        const scrollTop = article.scrollTop;
+        let activeIdx = 0;
+        headings.forEach((h, i) => {
+            const el = document.getElementById(h.id);
+            if (el && el.offsetTop - 80 <= scrollTop) activeIdx = i;
+        });
+        list.querySelectorAll('.toc-bd-item').forEach((item, i) =>
+            item.classList.toggle('active', i === activeIdx)
+        );
+    });
+}
+
+// ===== Tab 切换 =====
+document.querySelectorAll('.demo-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.demo-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.demo-panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('demo-' + tab.dataset.demo).classList.add('active');
+    });
+});
+
+// ===== 初始化所有 Demo =====
+initDemo1();
+initDemo2();
+initDemo3();
+initDemo4();
+initDemo5();
+</script>
+
+</body>
+</html>

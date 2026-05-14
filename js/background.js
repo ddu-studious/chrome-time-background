@@ -442,6 +442,34 @@ importScripts('background-provider.js');
         { type: 'health', text: '🎵 听一首喜欢的歌吧！音乐能有效缓解压力，提升创造力。' },
     ];
 
+    const POETRY_DB = [
+        { title: '静夜思', author: '李白', dynasty: '唐', lines: ['床前明月光，疑是地上霜。', '举头望明月，低头思故乡。'] },
+        { title: '春晓', author: '孟浩然', dynasty: '唐', lines: ['春眠不觉晓，处处闻啼鸟。', '夜来风雨声，花落知多少。'] },
+        { title: '登鹳雀楼', author: '王之涣', dynasty: '唐', lines: ['白日依山尽，黄河入海流。', '欲穷千里目，更上一层楼。'] },
+        { title: '望庐山瀑布', author: '李白', dynasty: '唐', lines: ['日照香炉生紫烟，遥看瀑布挂前川。', '飞流直下三千尺，疑是银河落九天。'] },
+        { title: '出塞', author: '王昌龄', dynasty: '唐', lines: ['秦时明月汉时关，万里长征人未还。', '但使龙城飞将在，不教胡马度阴山。'] },
+        { title: '江雪', author: '柳宗元', dynasty: '唐', lines: ['千山鸟飞绝，万径人踪灭。', '孤舟蓑笠翁，独钓寒江雪。'] },
+        { title: '悯农', author: '李绅', dynasty: '唐', lines: ['锄禾日当午，汗滴禾下土。', '谁知盘中餐，粒粒皆辛苦。'] },
+        { title: '相思', author: '王维', dynasty: '唐', lines: ['红豆生南国，春来发几枝。', '愿君多采撷，此物最相思。'] },
+        { title: '送元二使安西', author: '王维', dynasty: '唐', lines: ['渭城朝雨浥轻尘，客舍青青柳色新。', '劝君更尽一杯酒，西出阳关无故人。'] },
+        { title: '枫桥夜泊', author: '张继', dynasty: '唐', lines: ['月落乌啼霜满天，江枫渔火对愁眠。', '姑苏城外寒山寺，夜半钟声到客船。'] },
+        { title: '回乡偶书', author: '贺知章', dynasty: '唐', lines: ['少小离家老大回，乡音无改鬓毛衰。', '儿童相见不相识，笑问客从何处来。'] },
+        { title: '望天门山', author: '李白', dynasty: '唐', lines: ['天门中断楚江开，碧水东流至此回。', '两岸青山相对出，孤帆一片日边来。'] },
+        { title: '九月九日忆山东兄弟', author: '王维', dynasty: '唐', lines: ['独在异乡为异客，每逢佳节倍思亲。', '遥知兄弟登高处，遍插茱萸少一人。'] },
+        { title: '绝句', author: '杜甫', dynasty: '唐', lines: ['两个黄鹂鸣翠柳，一行白鹭上青天。', '窗含西岭千秋雪，门泊东吴万里船。'] },
+        { title: '早发白帝城', author: '李白', dynasty: '唐', lines: ['朝辞白帝彩云间，千里江陵一日还。', '两岸猿声啼不住，轻舟已过万重山。'] },
+        { title: '凉州词', author: '王翰', dynasty: '唐', lines: ['葡萄美酒夜光杯，欲饮琵琶马上催。', '醉卧沙场君莫笑，古来征战几人回？'] },
+        { title: '题西林壁', author: '苏轼', dynasty: '宋', lines: ['横看成岭侧成峰，远近高低各不同。', '不识庐山真面目，只缘身在此山中。'] },
+        { title: '饮湖上初晴后雨', author: '苏轼', dynasty: '宋', lines: ['水光潋滟晴方好，山色空蒙雨亦奇。', '欲把西湖比西子，淡妆浓抹总相宜。'] },
+        { title: '游山西村', author: '陆游', dynasty: '宋', lines: ['莫笑农家腊酒浑，丰年留客足鸡豚。', '山重水复疑无路，柳暗花明又一村。'] },
+        { title: '示儿', author: '陆游', dynasty: '宋', lines: ['死去元知万事空，但悲不见九州同。', '王师北定中原日，家祭无忘告乃翁。'] },
+        { title: '元日', author: '王安石', dynasty: '宋', lines: ['爆竹声中一岁除，春风送暖入屠苏。', '千门万户曈曈日，总把新桃换旧符。'] },
+        { title: '泊船瓜洲', author: '王安石', dynasty: '宋', lines: ['京口瓜洲一水间，钟山只隔数重山。', '春风又绿江南岸，明月何时照我还？'] },
+        { title: '夏日绝句', author: '李清照', dynasty: '宋', lines: ['生当作人杰，死亦为鬼雄。', '至今思项羽，不肯过江东。'] },
+        { title: '己亥杂诗', author: '龚自珍', dynasty: '清', lines: ['九州生气恃风雷，万马齐喑究可哀。', '我劝天公重抖擞，不拘一格降人才。'] },
+        { title: '竹石', author: '郑燮', dynasty: '清', lines: ['咬定青山不放松，立根原在破岩中。', '千磨万击还坚劲，任尔东西南北风。'] },
+    ];
+
     function getRandomWarmTip(type) {
         const pool = type ? WARM_QUOTES.filter(q => q.type === type) : WARM_QUOTES;
         return pool[Math.floor(Math.random() * pool.length)];
@@ -2336,6 +2364,11 @@ importScripts('background-provider.js');
             return false;
         }
 
+        if (message.action === 'get_poetry_list') {
+            sendResponse({ ok: true, data: POETRY_DB });
+            return false;
+        }
+
         // ========== v3.0.0: 登录状态检查 ==========
 
         if (message.action === 'check_netease_login') {
@@ -2371,6 +2404,53 @@ importScripts('background-provider.js');
             });
             sendResponse({ ok: true });
             return false;
+        }
+
+        // ========== v0.3: Cursor Bridge Native Messaging ==========
+        if (message.action === 'bridge_native') {
+            const NATIVE_HOST = 'com.cursor.bridge';
+            (async () => {
+                try {
+                    const nativeAction = message.nativeAction;
+                    if (!nativeAction) {
+                        sendResponse({ ok: false, error: 'Missing nativeAction' });
+                        return;
+                    }
+                    const port = chrome.runtime.connectNative(NATIVE_HOST);
+                    let responded = false;
+
+                    const timeout = setTimeout(() => {
+                        if (!responded) {
+                            responded = true;
+                            port.disconnect();
+                            sendResponse({ ok: false, error: 'Native messaging timeout (15s)' });
+                        }
+                    }, 15000);
+
+                    port.onMessage.addListener((response) => {
+                        if (!responded) {
+                            responded = true;
+                            clearTimeout(timeout);
+                            port.disconnect();
+                            sendResponse({ ok: true, data: response });
+                        }
+                    });
+
+                    port.onDisconnect.addListener(() => {
+                        if (!responded) {
+                            responded = true;
+                            clearTimeout(timeout);
+                            const lastError = chrome.runtime.lastError?.message || 'Native host disconnected';
+                            sendResponse({ ok: false, error: lastError, nativeNotInstalled: lastError.includes('not found') });
+                        }
+                    });
+
+                    port.postMessage({ action: nativeAction });
+                } catch (e) {
+                    sendResponse({ ok: false, error: e.message });
+                }
+            })();
+            return true;
         }
 
         return false;

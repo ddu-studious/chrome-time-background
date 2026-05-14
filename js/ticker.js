@@ -198,6 +198,54 @@ class TechTicker {
         tickerMain.addEventListener('mouseenter', () => { this.isPaused = true; });
         tickerMain.addEventListener('mouseleave', () => { this.isPaused = false; });
         
+        // 整个 ticker 区域的 hover 管理：离开时延迟隐藏悬浮面板
+        const techTicker = document.getElementById('tech-ticker');
+        if (techTicker) {
+            // 记录最新鼠标坐标（用于离开后判断是否真的在面板上）
+            document.addEventListener('mousemove', (e) => {
+                this._lastMouseX = e.clientX;
+                this._lastMouseY = e.clientY;
+            }, { passive: true });
+
+            techTicker.addEventListener('mouseenter', () => {
+                clearTimeout(this._kwPanelHideTimer);
+                clearTimeout(this._srcPanelHideTimer);
+            });
+
+            techTicker.addEventListener('mouseleave', (e) => {
+                const relatedTarget = e.relatedTarget;
+                const kwPanel = document.getElementById('keyword-alert-panel');
+                const srcPanel = document.getElementById('ticker-sources-panel');
+
+                // 若 relatedTarget 直接命中面板，直接取消隐藏
+                if (relatedTarget && (kwPanel?.contains(relatedTarget) || srcPanel?.contains(relatedTarget))) return;
+
+                // 延迟后再次确认：鼠标是否真的在面板内
+                const checkAndHide = (isKw) => {
+                    const panel = isKw ? kwPanel : srcPanel;
+                    if (!panel) return;
+                    const x = this._lastMouseX ?? -1;
+                    const y = this._lastMouseY ?? -1;
+                    const r = panel.getBoundingClientRect();
+                    const mouseOverPanel = x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+                    // 同时检查鼠标是否在 ticker 上
+                    const tr = techTicker.getBoundingClientRect();
+                    const mouseOverTicker = x >= tr.left && x <= tr.right && y >= tr.top && y <= tr.bottom;
+                    if (!mouseOverPanel && !mouseOverTicker) {
+                        if (isKw && this._keywordPanelVisible) this.toggleKeywordPanel(false);
+                        if (!isKw && this._sourcesPanelVisible) this.toggleSourcesPanel(false);
+                    }
+                };
+
+                if (this._keywordPanelVisible) {
+                    this._kwPanelHideTimer = setTimeout(() => checkAndHide(true), 500);
+                }
+                if (this._sourcesPanelVisible) {
+                    this._srcPanelHideTimer = setTimeout(() => checkAndHide(false), 500);
+                }
+            });
+        }
+        
         // 下层迷你滚动栏点击跳转
         const miniTrack = document.getElementById('ticker-mini-track');
         if (miniTrack) {
@@ -698,7 +746,7 @@ class TechTicker {
                 const metricHtml = item.metric ? `<span class="ticker-mini-metric">${item.metric}</span>` : '';
                 const sep = i < this.tickerItems.length - 1 ? '<span class="ticker-mini-sep"></span>' : '';
                 const matchedClass = this.keywordMatches.has(item.title) ? ' keyword-matched' : '';
-                return `<span class="ticker-mini-item${matchedClass}" data-url="${item.url || ''}" title="${item.title}">
+                return `<span class="ticker-mini-item${matchedClass}" data-url="${item.url || ''}" data-index="${i}" title="${item.title}">
                     <span class="ticker-mini-icon">${item.icon}</span>
                     ${matchedClass ? '🔔 ' : ''}${this.truncate(item.title, 30)}
                     ${metricHtml}
@@ -714,6 +762,8 @@ class TechTicker {
         const itemCount = this.tickerItems.length;
         const duration = Math.max(20, itemCount * 3);
         track.style.animationDuration = `${duration}s`;
+        
+        this.bindMiniItemHover();
     }
     
     // ========= 一键转任务 =========
@@ -1079,13 +1129,8 @@ class TechTicker {
             </div>
         `;
         
-        // 插入到 ticker 区域之后
-        const ticker = document.getElementById('tech-ticker');
-        if (ticker) {
-            ticker.parentNode.insertBefore(panel, ticker.nextSibling);
-        } else {
-            document.body.appendChild(panel);
-        }
+        // 悬浮面板插入 body
+        document.body.appendChild(panel);
         
         // 绑定面板事件
         this.bindKeywordPanelEvents(panel);
@@ -1204,6 +1249,25 @@ class TechTicker {
                 this.toggleKeywordPanel(false);
             }
         });
+        
+        // 鼠标离开面板区域 + ticker 区域时自动隐藏（坐标二次确认）
+        panel.addEventListener('mouseleave', () => {
+            this._kwPanelHideTimer = setTimeout(() => {
+                const x = this._lastMouseX ?? -1;
+                const y = this._lastMouseY ?? -1;
+                const r = panel.getBoundingClientRect();
+                const mouseOverPanel = x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+                const ticker = document.getElementById('tech-ticker');
+                const tr = ticker?.getBoundingClientRect();
+                const mouseOverTicker = tr && x >= tr.left && x <= tr.right && y >= tr.top && y <= tr.bottom;
+                if (!mouseOverPanel && !mouseOverTicker) {
+                    if (this._keywordPanelVisible) this.toggleKeywordPanel(false);
+                }
+            }, 400);
+        });
+        panel.addEventListener('mouseenter', () => {
+            clearTimeout(this._kwPanelHideTimer);
+        });
     }
     
     /**
@@ -1318,11 +1382,13 @@ class TechTicker {
         const show = force !== undefined ? force : !this._keywordPanelVisible;
         
         if (show) {
+            this._positionFloatingPanel(panel);
             panel.classList.add('open');
         } else {
             panel.classList.remove('open');
         }
         this._keywordPanelVisible = show;
+        this._syncPanelOpenClass();
         
         // 打开时延迟聚焦输入框（等过渡动画完成）
         if (show) {
@@ -1330,6 +1396,30 @@ class TechTicker {
                 document.getElementById('kap-keyword-input')?.focus();
             }, 200);
         }
+    }
+    
+    /**
+     * 根据面板开关状态同步 ticker-main 的 panel-open class（保持控制按钮可见）
+     */
+    _syncPanelOpenClass() {
+        const tickerMain = document.getElementById('ticker-main');
+        if (!tickerMain) return;
+        const anyOpen = this._keywordPanelVisible || this._sourcesPanelVisible;
+        tickerMain.classList.toggle('panel-open', anyOpen);
+    }
+    
+    /**
+     * 根据 ticker 位置动态定位悬浮面板（贴在 ticker 底部右对齐）
+     */
+    _positionFloatingPanel(panel) {
+        const ticker = document.getElementById('tech-ticker');
+        if (!ticker) return;
+        
+        const rect = ticker.getBoundingClientRect();
+        const top = rect.bottom + 8;
+        // 确保面板不超出视口底部（留 20px 安全距离）
+        panel.style.top = `${Math.min(top, window.innerHeight - 20)}px`;
+        panel.style.right = '16px';
     }
     
     // ========= 数据源管理面板 =========
@@ -1401,12 +1491,8 @@ class TechTicker {
             </div>
         `;
         
-        const ticker = document.getElementById('tech-ticker');
-        if (ticker) {
-            ticker.parentNode.insertBefore(panel, ticker.nextSibling);
-        } else {
-            document.body.appendChild(panel);
-        }
+        // 悬浮面板插入 body
+        document.body.appendChild(panel);
         
         this._bindSourcesPanelEvents(panel);
         
@@ -1478,6 +1564,25 @@ class TechTicker {
                 this.toggleSourcesPanel(false);
             }
         });
+        
+        // 鼠标离开面板区域 + ticker 区域时自动隐藏（坐标二次确认）
+        panel.addEventListener('mouseleave', () => {
+            this._srcPanelHideTimer = setTimeout(() => {
+                const x = this._lastMouseX ?? -1;
+                const y = this._lastMouseY ?? -1;
+                const r = panel.getBoundingClientRect();
+                const mouseOverPanel = x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+                const ticker = document.getElementById('tech-ticker');
+                const tr = ticker?.getBoundingClientRect();
+                const mouseOverTicker = tr && x >= tr.left && x <= tr.right && y >= tr.top && y <= tr.bottom;
+                if (!mouseOverPanel && !mouseOverTicker) {
+                    if (this._sourcesPanelVisible) this.toggleSourcesPanel(false);
+                }
+            }, 400);
+        });
+        panel.addEventListener('mouseenter', () => {
+            clearTimeout(this._srcPanelHideTimer);
+        });
     }
     
     _updateCategoryCheckbox(categoryEl) {
@@ -1520,11 +1625,13 @@ class TechTicker {
         if (show) {
             if (this._keywordPanelVisible) this.toggleKeywordPanel(false);
             this._syncSourcesPanelCheckboxes();
+            this._positionFloatingPanel(panel);
             panel.classList.add('open');
         } else {
             panel.classList.remove('open');
         }
         this._sourcesPanelVisible = show;
+        this._syncPanelOpenClass();
     }
     
     updateKeywordBtnState() {
@@ -1576,6 +1683,112 @@ class TechTicker {
         
         // 30 秒后停止检查
         setTimeout(() => clearInterval(checkInterval), 30000);
+    }
+    
+    // ========= 热榜悬停预览卡片 =========
+    
+    initPreviewCard() {
+        if (this._previewCard) return;
+        
+        this._previewCard = document.createElement('div');
+        this._previewCard.className = 'ticker-preview-card';
+        this._previewCard.style.display = 'none';
+        document.body.appendChild(this._previewCard);
+        
+        this._previewCard.addEventListener('mouseenter', () => {
+            clearTimeout(this._previewHideTimer);
+        });
+        this._previewCard.addEventListener('mouseleave', () => {
+            this._previewHideTimer = setTimeout(() => this.hidePreviewCard(), 150);
+        });
+        this._previewCard.addEventListener('click', () => {
+            const url = this._previewCard.dataset.url;
+            if (url) window.open(url, '_blank');
+        });
+    }
+    
+    bindMiniItemHover() {
+        this.initPreviewCard();
+        
+        const track = document.getElementById('ticker-mini-track');
+        if (!track) return;
+        
+        let hoverTimer = null;
+        
+        track.querySelectorAll('.ticker-mini-item').forEach(el => {
+            el.addEventListener('mouseenter', () => {
+                clearTimeout(hoverTimer);
+                clearTimeout(this._previewHideTimer);
+                hoverTimer = setTimeout(() => {
+                    const idx = parseInt(el.dataset.index);
+                    if (!isNaN(idx)) this.showPreviewCard(idx, el);
+                }, 350);
+            });
+            el.addEventListener('mouseleave', () => {
+                clearTimeout(hoverTimer);
+                this._previewHideTimer = setTimeout(() => this.hidePreviewCardIfNotHovered(), 200);
+            });
+        });
+    }
+    
+    showPreviewCard(itemIndex, anchorEl) {
+        const item = this.tickerItems[itemIndex];
+        if (!item || !this._previewCard) return;
+        
+        const sourceCfg = TICKER_SOURCE_REGISTRY[item.type];
+        const sourceName = sourceCfg?.name || item.type;
+        const sourceIcon = sourceCfg?.icon || item.icon || '';
+        
+        const domain = item.url ? this.extractDomain(item.url) : '';
+        const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : '';
+        
+        const metricColor = {
+            stars: '#f1c40f', score: '#ff6600', upvotes: '#ff4500', reactions: '#3b49df',
+            'weibo-hot': '#ff3d00', 'bilibili-hot': '#00a1d6', 'zhihu-hot': '#0066ff'
+        }[item.metricType] || '#a78bfa';
+        
+        this._previewCard.dataset.url = item.url || '';
+        this._previewCard.innerHTML = `
+            <div class="tpc-header">
+                ${faviconUrl ? `<img class="tpc-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">` : ''}
+                <span class="tpc-source">${sourceIcon} ${this.escapeHtml(sourceName)}</span>
+                ${item.metric ? `<span class="tpc-metric" style="color:${metricColor}">${this.escapeHtml(String(item.metric))}</span>` : ''}
+            </div>
+            <div class="tpc-title">${this.escapeHtml(item.title)}</div>
+            ${item.desc ? `<div class="tpc-desc">${this.escapeHtml(item.desc)}</div>` : ''}
+            ${domain ? `<div class="tpc-domain"><i class="fas fa-link"></i> ${this.escapeHtml(domain)}</div>` : ''}
+            <div class="tpc-footer">
+                <span class="tpc-action">点击查看详情 →</span>
+            </div>
+        `;
+        
+        this._previewCard.style.display = 'block';
+        
+        const rect = anchorEl.getBoundingClientRect();
+        const cardW = this._previewCard.offsetWidth || 280;
+        const cardH = this._previewCard.offsetHeight || 120;
+        
+        let left = rect.left + rect.width / 2 - cardW / 2;
+        if (left < 8) left = 8;
+        if (left + cardW > window.innerWidth - 8) left = window.innerWidth - cardW - 8;
+        
+        let top = rect.top - cardH - 10;
+        if (top < 8) top = rect.bottom + 10;
+        
+        this._previewCard.style.left = `${left}px`;
+        this._previewCard.style.top = `${top}px`;
+    }
+    
+    hidePreviewCard() {
+        if (this._previewCard) {
+            this._previewCard.style.display = 'none';
+        }
+    }
+    
+    hidePreviewCardIfNotHovered() {
+        if (this._previewCard && !this._previewCard.matches(':hover')) {
+            this.hidePreviewCard();
+        }
     }
     
     /**

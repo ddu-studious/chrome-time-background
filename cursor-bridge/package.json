@@ -1,23 +1,32 @@
 {
   "name": "cursor-bridge",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Local bridge service exposing Cursor SDK agents via HTTP/SSE",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
+    "predev": "node scripts/check-arch.js",
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
+    "prestart": "node scripts/check-arch.js",
     "start": "node dist/index.js",
-    "postinstall": "node scripts/rebuild-native.js"
+    "bridge:start": "bash start.sh",
+    "bridge:stop": "bash stop.sh",
+    "bridge:status": "bash stop.sh --status",
+    "bridge:fg": "bash start.sh --fg",
+    "postinstall": "node scripts/rebuild-native.js --force",
+    "rebuild-native": "node scripts/rebuild-native.js --force"
   },
   "dependencies": {
     "@cursor/sdk": "latest",
-    "fastify": "^5.0.0",
-    "@fastify/cors": "^10.0.0"
+    "@fastify/cors": "^10.0.0",
+    "better-sqlite3": "^12.9.0",
+    "fastify": "^5.0.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.0.0",
     "tsx": "^4.0.0",
-    "typescript": "^5.6.0",
-    "@types/node": "^22.0.0"
+    "typescript": "^5.6.0"
   }
 }

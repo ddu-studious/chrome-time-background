@@ -101,11 +101,12 @@ class MemoManager {
         
         // 初始化状态
         this.initialized = false;
+        this._lastKnownCount = 0;
+        this._loadFailed = false;
+        this._userInitiatedSave = false;
 
-        // 侧边栏折叠态交互
-        this._sidebarAutoExpanded = false;
-        this._sidebarAutoCollapseTimer = null;
-        this._sidebarCollapseUIBound = false;
+        // 浮层面板状态
+        this._panelOpen = false;
     }
 
     /**
@@ -138,28 +139,10 @@ class MemoManager {
                 console.warn('每日重复任务更新失败:', e);
             }
             
-            // 渲染到侧边栏（新的双栏布局）
-            try {
-                this.renderSidebarContent();
-                console.log('侧边栏内容渲染完成');
-            } catch (renderError) {
-                console.error('侧边栏渲染失败，尝试降级渲染:', renderError);
-                this.renderFallbackUI();
-            }
-            
-            // 恢复侧边栏折叠状态
-            try {
-                await this.restoreSidebarState();
-            } catch (e) {
-                console.warn('恢复侧边栏状态失败:', e);
-            }
+            // 浮层模式：预创建 panel DOM 并渲染内容（隐藏状态），打开时直接显示
+            this._panelOpen = false;
+            this._ensurePanelDOM();
 
-            // 折叠态：左侧抽出按钮 + 靠近自动展开/远离自动收起
-            try {
-                this.ensureSidebarCollapseUI();
-            } catch (e) {
-                console.warn('折叠UI初始化失败:', e);
-            }
             
             // 初始化键盘快捷键
             try {
@@ -3378,6 +3361,8 @@ class MemoManager {
                 if (!confirm(`确定要永久删除 ${completedCount} 个已完成的任务吗？\n\n此操作不可撤销！`)) return;
                 
                 this.memos = this.memos.filter(m => !m.completed);
+                this._userInitiatedSave = true;
+                this._lastKnownCount = this.memos.length;
                 await this.saveMemos();
                 
                 this.showToast(`已删除 ${completedCount} 个任务`);
@@ -3665,11 +3650,12 @@ class MemoManager {
             }
             
             if (mode === 'replace') {
-                // 覆盖模式
                 this.memos = data.memos.map(memo => this.normalizeMemo(memo));
                 if (data.categories) this.categories = data.categories;
                 if (data.tags) this.tags = data.tags;
-                
+
+                this._userInitiatedSave = true;
+                this._lastKnownCount = this.memos.length;
                 await Promise.all([
                     this.saveMemos(),
                     this.saveCategories(),
@@ -8619,6 +8605,8 @@ class MemoManager {
 
         const task = this.memos[index];
         this.memos.splice(index, 1);
+        this._userInitiatedSave = true;
+        this._lastKnownCount = this.memos.length;
         await this.saveMemos();
 
         if (typeof activityLogger !== 'undefined') {
@@ -8669,187 +8657,123 @@ class MemoManager {
     }
     
     /**
-     * 切换侧边栏显示/隐藏
+     * 切换任务面板浮层显示/隐藏
      */
-    toggleSidebar() {
-        const sidebar = document.getElementById('task-sidebar');
-        if (sidebar) {
-            sidebar.classList.toggle('collapsed');
-            const isCollapsed = sidebar.classList.contains('collapsed');
-            
-            // 更新右下角按钮图标
-            const toggleBtn = document.getElementById('memo-toggle-btn');
-            if (toggleBtn) {
-                const icon = toggleBtn.querySelector('i');
-                if (icon) {
-                    icon.className = isCollapsed ? 'fas fa-tasks' : 'fas fa-chevron-left';
-                }
-            }
-            
-            // 保存状态
-            chrome.storage.local.set({ sidebarCollapsed: isCollapsed });
+    toggle() {
+        this.toggleSidebar();
+    }
 
-            // 同步折叠态 UI（抽出按钮/热区）
-            this.updateSidebarCollapseUI();
+    toggleSidebar() {
+        if (this._panelOpen) {
+            this.closePanel();
+        } else {
+            this.openPanel();
         }
+    }
+
+    /**
+     * 确保面板 DOM 存在（初始化 + 首次打开共用）
+     */
+    _ensurePanelDOM() {
+        // overlay
+        let overlay = document.getElementById('task-panel-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'task-panel-overlay';
+            overlay.className = 'task-panel-overlay';
+            overlay.addEventListener('click', () => this.closePanel());
+            document.body.appendChild(overlay);
+        }
+
+        // panel
+        let panel = document.getElementById('task-sidebar');
+        if (!panel) {
+            panel = document.createElement('aside');
+            panel.id = 'task-sidebar';
+            panel.className = 'task-sidebar';
+            panel.innerHTML = `
+                <div class="sidebar-header">
+                    <h2 class="sidebar-title">
+                        <i class="fas fa-tasks"></i>
+                        <span>任务</span>
+                    </h2>
+                    <div class="sidebar-header-actions">
+                        <a href="tasks.html" class="sidebar-manage-btn" id="sidebar-manage-btn" title="任务管理面板">
+                            <i class="fas fa-external-link-alt"></i>
+                        </a>
+                        <button class="sidebar-collapse-btn" id="sidebar-collapse-btn" title="关闭面板">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="sidebar-content" id="sidebar-content"></div>
+            `;
+            document.body.appendChild(panel);
+
+            panel.querySelector('#sidebar-collapse-btn')
+                ?.addEventListener('click', () => this.closePanel());
+
+            this.renderSidebarContent();
+        }
+    }
+
+    /**
+     * 打开任务面板浮层
+     */
+    openPanel() {
+        if (this._panelOpen) return;
+        this._panelOpen = true;
+
+        this._ensurePanelDOM();
+
+        const overlay = document.getElementById('task-panel-overlay');
+        const panel = document.getElementById('task-sidebar');
+
+        // 动画入场
+        requestAnimationFrame(() => {
+            if (overlay) overlay.classList.add('visible');
+            if (panel) panel.classList.add('open');
+        });
+
+        // dock 按钮激活
+        const dockBtn = document.getElementById('memo-toggle-btn');
+        if (dockBtn) dockBtn.classList.add('active');
+
+        // ESC 关闭
+        this._escHandler = (e) => {
+            if (e.key === 'Escape') this.closePanel();
+        };
+        document.addEventListener('keydown', this._escHandler);
+    }
+
+    /**
+     * 关闭任务面板浮层（不销毁 DOM，保留状态）
+     */
+    closePanel() {
+        this._panelOpen = false;
+
+        const overlay = document.getElementById('task-panel-overlay');
+        const panel = document.getElementById('task-sidebar');
+
+        if (overlay) overlay.classList.remove('visible');
+        if (panel) panel.classList.remove('open');
+
+        // 移除 ESC 监听
+        if (this._escHandler) {
+            document.removeEventListener('keydown', this._escHandler);
+            this._escHandler = null;
+        }
+
+        // dock 按钮取消激活
+        const dockBtn = document.getElementById('memo-toggle-btn');
+        if (dockBtn) dockBtn.classList.remove('active');
     }
     
     /**
-     * 恢复侧边栏状态
+     * 恢复侧边栏状态（浮层模式下无需恢复，面板默认关闭）
      */
     async restoreSidebarState() {
-        try {
-            const result = await chrome.storage.local.get('sidebarCollapsed');
-            if (result.sidebarCollapsed) {
-                const sidebar = document.getElementById('task-sidebar');
-                if (sidebar) {
-                    sidebar.classList.add('collapsed');
-                }
-                // 更新按钮图标
-                const toggleBtn = document.getElementById('memo-toggle-btn');
-                if (toggleBtn) {
-                    const icon = toggleBtn.querySelector('i');
-                    if (icon) {
-                        icon.className = 'fas fa-tasks';
-                    }
-                }
-            }
-            // 无论是否折叠，都同步一次折叠态 UI
-            this.updateSidebarCollapseUI();
-        } catch (e) {
-            console.log('恢复侧边栏状态失败', e);
-        }
-    }
-
-    /**
-     * 创建/绑定：折叠态抽出按钮 + 左侧热区自动展开
-     */
-    ensureSidebarCollapseUI() {
-        if (this._sidebarCollapseUIBound) return;
-        this._sidebarCollapseUIBound = true;
-
-        // 左侧热区（透明，用于 hover 自动展开）
-        let hotzone = document.getElementById('sidebar-edge-hotzone');
-        if (!hotzone) {
-            hotzone = document.createElement('div');
-            hotzone.id = 'sidebar-edge-hotzone';
-            hotzone.className = 'sidebar-edge-hotzone';
-            document.body.appendChild(hotzone);
-        }
-
-        // 左侧抽出“编辑/展开”按钮
-        let expandBtn = document.getElementById('sidebar-expand-btn');
-        if (!expandBtn) {
-            expandBtn = document.createElement('button');
-            expandBtn.id = 'sidebar-expand-btn';
-            expandBtn.className = 'sidebar-expand-btn';
-            expandBtn.title = '展开任务面板 / 新建任务';
-            expandBtn.innerHTML = '<i class="fas fa-pen-to-square"></i>';
-            document.body.appendChild(expandBtn);
-        }
-
-        const sidebar = document.getElementById('task-sidebar');
-
-        const clearAutoCollapseTimer = () => {
-            if (this._sidebarAutoCollapseTimer) {
-                clearTimeout(this._sidebarAutoCollapseTimer);
-                this._sidebarAutoCollapseTimer = null;
-            }
-        };
-
-        const scheduleAutoCollapse = () => {
-            clearAutoCollapseTimer();
-            this._sidebarAutoCollapseTimer = setTimeout(() => {
-                if (!this._sidebarAutoExpanded) return;
-                // 仍在侧边栏附近则不收起
-                const hoveringSidebar = sidebar && sidebar.matches(':hover');
-                const hoveringHotzone = hotzone && hotzone.matches(':hover');
-                if (hoveringSidebar || hoveringHotzone) return;
-
-                // 自动展开的才自动收起；用户手动展开不干预
-                const isCollapsed = sidebar?.classList.contains('collapsed');
-                if (!isCollapsed) {
-                    sidebar?.classList.add('collapsed');
-                    chrome.storage.local.set({ sidebarCollapsed: true });
-                    this.updateSidebarCollapseUI();
-                }
-                this._sidebarAutoExpanded = false;
-            }, 900);
-        };
-
-        // 热区靠近自动展开（只在折叠态生效）
-        hotzone.addEventListener('mouseenter', () => {
-            const isCollapsed = sidebar?.classList.contains('collapsed');
-            if (!isCollapsed) return;
-
-            sidebar?.classList.remove('collapsed');
-            // 这是“自动展开”，不写入永久存储；离开后会自动收起
-            this._sidebarAutoExpanded = true;
-            this.updateSidebarCollapseUI();
-            clearAutoCollapseTimer();
-        });
-
-        hotzone.addEventListener('mouseleave', () => {
-            if (!this._sidebarAutoExpanded) return;
-            scheduleAutoCollapse();
-        });
-
-        // 侧边栏区域：进入取消收起、离开触发收起（仅自动展开场景）
-        if (sidebar) {
-            sidebar.addEventListener('mouseenter', () => {
-                clearAutoCollapseTimer();
-            });
-            sidebar.addEventListener('mouseleave', () => {
-                if (!this._sidebarAutoExpanded) return;
-                scheduleAutoCollapse();
-            });
-        }
-
-        // 抽出按钮：点击后“固定展开”并直接进入新建（编辑入口）
-        expandBtn.addEventListener('click', () => {
-            const isCollapsed = sidebar?.classList.contains('collapsed');
-            if (isCollapsed) {
-                sidebar?.classList.remove('collapsed');
-            }
-            // 用户手动展开：写入存储并关闭自动收起逻辑
-            this._sidebarAutoExpanded = false;
-            chrome.storage.local.set({ sidebarCollapsed: false });
-            this.updateSidebarCollapseUI();
-
-            if (typeof this.showSidebarForm === 'function') {
-                this.showSidebarForm();
-            }
-        });
-
-        // 兜底：全局委托，确保右上折叠按钮点击一定能触发（避免意外覆盖）
-        document.addEventListener('click', (e) => {
-            const btn = e.target?.closest?.('#sidebar-collapse-btn');
-            if (!btn) return;
-            e.preventDefault();
-            this.toggleSidebar();
-        }, true);
-
-        // 初次同步
-        this.updateSidebarCollapseUI();
-    }
-
-    /**
-     * 根据侧边栏状态刷新抽出按钮/热区显隐
-     */
-    updateSidebarCollapseUI() {
-        const sidebar = document.getElementById('task-sidebar');
-        const hotzone = document.getElementById('sidebar-edge-hotzone');
-        const expandBtn = document.getElementById('sidebar-expand-btn');
-        if (!sidebar || !hotzone || !expandBtn) return;
-
-        const isCollapsed = sidebar.classList.contains('collapsed');
-        if (isCollapsed) {
-            hotzone.classList.add('active');
-            expandBtn.classList.add('visible');
-        } else {
-            hotzone.classList.remove('active');
-            expandBtn.classList.remove('visible');
-        }
+        // 浮层模式：面板默认关闭，不再持久化折叠状态
     }
 
     /**
@@ -8858,36 +8782,35 @@ class MemoManager {
      */
     async loadMemos() {
         try {
-            // 优先从 local storage 加载（支持大数据量）
-            const localResult = await new Promise(resolve => {
-                chrome.storage.local.get('memos', result => resolve(result));
+            const localResult = await new Promise((resolve, reject) => {
+                chrome.storage.local.get('memos', result => {
+                    if (chrome.runtime.lastError) {
+                        reject(new Error(chrome.runtime.lastError.message));
+                        return;
+                    }
+                    resolve(result);
+                });
             });
             
             let memosData = [];
             
             if (Array.isArray(localResult.memos) && localResult.memos.length > 0) {
-                // 使用 local storage 的数据
                 memosData = localResult.memos;
                 console.log('从 local storage 加载备忘录');
             } else {
-                // 降级：尝试从旧的 settings 加载（兼容旧版本）
                 const settings = window.settingsManager?.settings;
                 if (settings && Array.isArray(settings.memos)) {
                     memosData = settings.memos;
                     console.log('从 settings 加载备忘录（旧版本兼容）');
-                    // 迁移到 local storage
                     await chrome.storage.local.set({ memos: memosData });
                 }
             }
             
-            // 验证每个备忘录对象的结构（统一使用 normalizeMemo，确保新字段不丢失）
             this.memos = memosData.map(memo => {
                 const normalized = this.normalizeMemo(memo);
-                // 兼容旧版标签字段
                 if (!normalized.tagIds.length && Array.isArray(memo.tags)) {
                     normalized.tagIds = memo.tags;
                 }
-                // v1.6.0 兼容旧版进度格式 { current, total }
                 if (memo.progress !== undefined && memo.progress !== null) {
                     if (typeof memo.progress === 'object' && memo.progress.total) {
                         normalized.progress = Math.round((memo.progress.current / memo.progress.total) * 100);
@@ -8896,10 +8819,15 @@ class MemoManager {
                 return normalized;
             });
             
+            this._lastKnownCount = this.memos.length;
             console.log('备忘录加载成功，数量:', this.memos.length);
         } catch (error) {
             console.error('加载备忘录失败', error);
-            this.memos = [];
+            // 加载失败时不覆盖已有数据，仅在首次加载（无数据）时设为空数组
+            if (!this.memos || this.memos.length === 0) {
+                this.memos = [];
+            }
+            this._loadFailed = true;
         }
     }
 
@@ -8909,7 +8837,6 @@ class MemoManager {
      * 因为 storage.sync 有 8KB/item 的限制，带图片的数据会超出
      */
     async saveMemos() {
-        // 防抖：避免频繁保存导致的性能问题
         if (this._saveDebounceTimer) {
             clearTimeout(this._saveDebounceTimer);
         }
@@ -8917,31 +8844,42 @@ class MemoManager {
         return new Promise((resolve, reject) => {
             this._saveDebounceTimer = setTimeout(async () => {
                 try {
-                    // 检查存储配额
+                    // 加载失败后禁止保存，防止空数据覆盖
+                    if (this._loadFailed) {
+                        console.warn('[数据保护] 数据加载失败后禁止保存，防止覆盖');
+                        resolve(false);
+                        return;
+                    }
+
+                    // 空数据覆盖保护：非用户操作（如初始化阶段）不允许空数组覆盖已有数据
+                    if (this.memos.length === 0 && this._lastKnownCount > 0 && !this._userInitiatedSave) {
+                        console.warn(`[数据保护] 阻止空数据覆盖 storage（之前有 ${this._lastKnownCount} 条记录）`);
+                        resolve(false);
+                        return;
+                    }
+                    this._userInitiatedSave = false;
+
                     const quotaCheck = await this.checkStorageQuota();
                     if (!quotaCheck.safe) {
                         console.warn('存储空间警告:', quotaCheck.message);
                         
-                        // 如果超过警告阈值，尝试压缩图片数据
                         if (quotaCheck.percent >= 90) {
                             console.log('尝试压缩图片数据以释放空间...');
                             await this.compressStoredImages();
                         }
                         
-                        // 如果仍然超过 95%，显示警告
                         if (quotaCheck.percent >= 95) {
                             this.showToast('存储空间即将用尽，请删除一些旧任务或图片', 5000);
                         }
                     }
                     
-                    // 只保存到 local 存储（最大 10MB）
                     await chrome.storage.local.set({ memos: this.memos });
+                    this._lastKnownCount = this.memos.length;
                     
-                    // 通知 background.js 更新任务提醒（使用 try-catch 避免阻塞）
                     try {
                         chrome.runtime.sendMessage({ action: 'setupTaskReminder' });
                     } catch (e) {
-                        // 忽略消息发送失败（background 可能未激活）
+                        // 忽略消息发送失败
                     }
                     
                     console.log('备忘录保存成功');
@@ -8949,16 +8887,14 @@ class MemoManager {
                 } catch (error) {
                     console.error('保存备忘录失败', error);
                     
-                    // 处理配额超限错误
                     if (error.message && error.message.includes('QUOTA_BYTES')) {
                         this.showToast('存储空间已满，请删除一些任务或图片后重试', 5000);
-                        // 尝试自动清理
                         await this.emergencyCleanup();
                     }
                     
                     reject(error);
                 }
-            }, 100); // 100ms 防抖
+            }, 100);
         });
     }
     
@@ -9471,6 +9407,13 @@ class MemoManager {
             listbox.style.left = rect.left + 'px';
             listbox.style.top = (rect.bottom + 4) + 'px';
             listbox.style.minWidth = rect.width + 'px';
+            const panel = container.closest('.task-sidebar');
+            if (panel) {
+                const pr = panel.getBoundingClientRect();
+                const maxBot = pr.bottom - 8;
+                const availH = maxBot - (rect.bottom + 4);
+                listbox.style.maxHeight = Math.max(availH, 80) + 'px';
+            }
         };
         
         const renderList = (filterText = '') => {
@@ -9700,6 +9643,8 @@ class MemoManager {
         if (index === -1) return false;
         
         this.memos.splice(index, 1);
+        this._userInitiatedSave = true;
+        this._lastKnownCount = this.memos.length;
         await this.saveMemos();
         
         // 重新渲染列表
@@ -11132,6 +11077,8 @@ class MemoManager {
         if (index === -1) return;
         
         this.memos.splice(index, 1);
+        this._userInitiatedSave = true;
+        this._lastKnownCount = this.memos.length;
         await this.saveMemos();
         this.renderPanelTaskList();
     }

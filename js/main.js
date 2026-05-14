@@ -1,3 +1,27 @@
+// ==================== Chrome 148 书签栏 Bug 修复 ====================
+(function hideBookmarkBar() {
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.inset = '0';
+    const mo = new MutationObserver((mutations) => {
+        for (const m of mutations) {
+            for (const node of m.addedNodes) {
+                if (node.nodeType !== 1) continue;
+                const tag = node.tagName?.toLowerCase();
+                if (tag === 'iframe' || tag === 'div') {
+                    const id = (node.id || '').toLowerCase();
+                    const cls = (node.className || '').toLowerCase();
+                    if (id.includes('bookmark') || cls.includes('bookmark') ||
+                        id.includes('ntp') || cls.includes('ntp')) {
+                        node.style.cssText = 'display:none!important;height:0!important;visibility:hidden!important;';
+                    }
+                }
+            }
+        }
+    });
+    mo.observe(document.documentElement, { childList: true, subtree: true });
+})();
+
 // ==================== 背景系统（v3.16.0 多源 + 视频 + 定时切换）====================
 
 let backgroundImages = [];
@@ -219,29 +243,6 @@ async function initApp() {
         console.log('音乐播放器已禁用（性能设置）');
     }
 
-    // 初始化学习中心
-    if (sm.getSetting('enableStudyCenter') !== false) {
-        try {
-            if (window.studyCenter && typeof window.studyCenter.init === 'function') {
-                window.studyCenter.init();
-            }
-            const studyDockBtn = document.getElementById('study-dock-btn');
-            if (studyDockBtn) {
-                studyDockBtn.addEventListener('click', () => {
-                    if (window.studyCenter) {
-                        window.studyCenter.toggle();
-                        studyDockBtn.classList.toggle('sc-active', window.studyCenter._panelOpen);
-                    }
-                });
-            }
-            console.log('学习中心初始化完成');
-        } catch (error) {
-            console.error('学习中心初始化失败:', error);
-        }
-    } else {
-        console.log('学习中心已禁用（性能设置）');
-        document.getElementById('study-dock-btn')?.classList.add('hidden');
-    }
 
     // v3.6.0: 初始化哔哩哔哩控制器
     if (sm.getSetting('enableBilibili') !== false) {
@@ -366,13 +367,13 @@ async function initApp() {
         document.getElementById('sys-monitor-toggle')?.classList.add('hidden');
     }
 
-    // v3.0.0: 初始化温情提示
+    // v3.0.0: 初始化诗词电台
     if (sm.getSetting('enableWarmTip') !== false) {
         try {
-            initWarmTip();
-            console.log('温情提示初始化完成');
+            initPoetryRadio();
+            console.log('诗词电台初始化完成');
         } catch (error) {
-            console.error('温情提示初始化失败:', error);
+            console.error('诗词电台初始化失败:', error);
         }
     } else {
         console.log('温情提示已禁用（性能设置）');
@@ -597,38 +598,236 @@ function initSystemMonitor() {
     function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 }
 
-// ===================== v3.0.0: 温情提示 =====================
+// ===================== v3.0.0: 诗词电台 =====================
 
-function initWarmTip() {
-    const bar = document.getElementById('warm-tip-bar');
-    const text = document.getElementById('warm-tip-text');
-    const refresh = document.getElementById('warm-tip-refresh');
-    if (!bar || !text) return;
+function initPoetryRadio() {
+    const bar = document.getElementById('poetry-radio');
+    if (!bar) return;
 
-    async function loadTip() {
+    const state = {
+        poems: [],
+        favorites: [],
+        currentIndex: 0,
+        playing: false,
+        mode: 'sequential',
+        speed: 1,
+        utterance: null,
+        autoPlayTimer: null,
+    };
+
+    const els = {
+        text: document.getElementById('pr-text'),
+        author: document.getElementById('pr-author'),
+        icon: document.getElementById('pr-icon'),
+        playBtn: document.getElementById('pr-play'),
+        prevBtn: document.getElementById('pr-prev'),
+        nextBtn: document.getElementById('pr-next'),
+        favBtn: document.getElementById('pr-fav'),
+        speedSel: document.getElementById('pr-speed'),
+        modeBtn: document.getElementById('pr-mode'),
+    };
+
+    async function loadPoems() {
         try {
             const resp = await new Promise(resolve => {
-                chrome.runtime.sendMessage({ action: 'get_warm_tip' }, resolve);
+                chrome.runtime.sendMessage({ action: 'get_poetry_list' }, resolve);
             });
-            if (resp?.ok && resp.data) {
-                text.textContent = resp.data;
-                const icons = { quote: '💡', method: '📐', joke: '😄', fable: '📖', health: '💚' };
-                const icon = bar.querySelector('.warm-tip-icon');
-                if (icon && resp.raw?.type) icon.textContent = icons[resp.raw.type] || '💡';
-                bar.style.display = 'flex';
+            if (resp?.ok && Array.isArray(resp.data)) {
+                state.poems = resp.data;
+            }
+        } catch { /* ignore */ }
+
+        if (state.poems.length === 0) {
+            if (els.text) els.text.textContent = '诗词加载中…';
+            return;
+        }
+
+        try {
+            const storage = chrome?.storage?.local;
+            if (storage) {
+                const r = await storage.get(['poetry_favorites', 'poetry_index', 'poetry_mode', 'poetry_speed']);
+                state.favorites = r.poetry_favorites || [];
+                state.currentIndex = r.poetry_index || 0;
+                state.mode = r.poetry_mode || 'sequential';
+                state.speed = r.poetry_speed || 1;
+            }
+        } catch { /* ignore */ }
+
+        if (state.currentIndex >= state.poems.length) state.currentIndex = 0;
+        if (els.speedSel) els.speedSel.value = String(state.speed);
+        updateModeIcon();
+        renderCurrent();
+        bar.style.display = '';
+    }
+
+    function renderCurrent() {
+        const poem = state.poems[state.currentIndex];
+        if (!poem) return;
+
+        const fullText = poem.lines.join(' ');
+        if (els.text) els.text.textContent = fullText;
+        if (els.author) els.author.textContent = `—— ${poem.dynasty}·${poem.author}《${poem.title}》`;
+        if (els.icon) els.icon.textContent = '📜';
+        updateFavIcon();
+    }
+
+    function play() {
+        stop();
+        const poem = state.poems[state.currentIndex];
+        if (!poem || !('speechSynthesis' in window)) return;
+
+        const fullText = `${poem.title}。${poem.author}。${poem.lines.join('。')}`;
+        state.utterance = new SpeechSynthesisUtterance(fullText);
+        state.utterance.lang = 'zh-CN';
+        state.utterance.rate = state.speed;
+        state.utterance.pitch = 1;
+
+        const voices = speechSynthesis.getVoices();
+        const zhVoice = voices.find(v => v.lang.startsWith('zh') && v.name.includes('female'))
+            || voices.find(v => v.lang.startsWith('zh'));
+        if (zhVoice) state.utterance.voice = zhVoice;
+
+        state.utterance.onend = () => {
+            if (state.playing) {
+                state.autoPlayTimer = setTimeout(() => nextPoem(true), 1500);
+            }
+        };
+
+        state.utterance.onerror = () => {
+            state.playing = false;
+            updatePlayIcon();
+        };
+
+        speechSynthesis.speak(state.utterance);
+        state.playing = true;
+        updatePlayIcon();
+    }
+
+    function stop() {
+        clearTimeout(state.autoPlayTimer);
+        if (speechSynthesis.speaking) speechSynthesis.cancel();
+        state.utterance = null;
+    }
+
+    function togglePlay() {
+        if (state.playing) {
+            state.playing = false;
+            stop();
+        } else {
+            play();
+        }
+        updatePlayIcon();
+    }
+
+    function nextPoem(autoAdvance) {
+        if (state.mode === 'random') {
+            state.currentIndex = Math.floor(Math.random() * state.poems.length);
+        } else {
+            state.currentIndex = (state.currentIndex + 1) % state.poems.length;
+        }
+        renderCurrent();
+        saveState();
+        if (state.playing || autoAdvance) play();
+    }
+
+    function prevPoem() {
+        if (state.mode === 'random') {
+            state.currentIndex = Math.floor(Math.random() * state.poems.length);
+        } else {
+            state.currentIndex = (state.currentIndex - 1 + state.poems.length) % state.poems.length;
+        }
+        renderCurrent();
+        saveState();
+        if (state.playing) play();
+    }
+
+    function toggleFav() {
+        const poem = state.poems[state.currentIndex];
+        if (!poem) return;
+        const key = `${poem.title}-${poem.author}`;
+        const idx = state.favorites.indexOf(key);
+        if (idx >= 0) {
+            state.favorites.splice(idx, 1);
+        } else {
+            state.favorites.push(key);
+        }
+        updateFavIcon();
+        saveState();
+    }
+
+    function toggleMode() {
+        const modes = ['sequential', 'random', 'single'];
+        const i = modes.indexOf(state.mode);
+        state.mode = modes[(i + 1) % modes.length];
+        updateModeIcon();
+        saveState();
+    }
+
+    function updatePlayIcon() {
+        if (!els.playBtn) return;
+        const icon = els.playBtn.querySelector('i');
+        if (icon) {
+            icon.className = state.playing ? 'fas fa-pause' : 'fas fa-play';
+        }
+        els.playBtn.classList.toggle('active', state.playing);
+    }
+
+    function updateFavIcon() {
+        if (!els.favBtn) return;
+        const poem = state.poems[state.currentIndex];
+        if (!poem) return;
+        const key = `${poem.title}-${poem.author}`;
+        const isFav = state.favorites.includes(key);
+        const icon = els.favBtn.querySelector('i');
+        if (icon) icon.className = isFav ? 'fas fa-heart' : 'far fa-heart';
+        els.favBtn.classList.toggle('active', isFav);
+    }
+
+    function updateModeIcon() {
+        if (!els.modeBtn) return;
+        const iconMap = { sequential: 'fa-list-ol', random: 'fa-random', single: 'fa-redo' };
+        const titleMap = { sequential: '顺序播放', random: '随机播放', single: '单曲循环' };
+        const icon = els.modeBtn.querySelector('i');
+        if (icon) icon.className = `fas ${iconMap[state.mode] || 'fa-list-ol'}`;
+        els.modeBtn.title = titleMap[state.mode] || '播放模式';
+    }
+
+    function saveState() {
+        try {
+            const storage = chrome?.storage?.local;
+            if (storage) {
+                storage.set({
+                    poetry_favorites: state.favorites,
+                    poetry_index: state.currentIndex,
+                    poetry_mode: state.mode,
+                    poetry_speed: state.speed,
+                });
             }
         } catch { /* ignore */ }
     }
 
-    refresh?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        refresh.style.transform = 'rotate(360deg)';
-        setTimeout(() => { refresh.style.transform = ''; }, 500);
-        loadTip();
+    els.playBtn?.addEventListener('click', (e) => { e.stopPropagation(); togglePlay(); });
+    els.nextBtn?.addEventListener('click', (e) => { e.stopPropagation(); nextPoem(false); });
+    els.prevBtn?.addEventListener('click', (e) => { e.stopPropagation(); prevPoem(); });
+    els.favBtn?.addEventListener('click', (e) => { e.stopPropagation(); toggleFav(); });
+    els.modeBtn?.addEventListener('click', (e) => { e.stopPropagation(); toggleMode(); });
+
+    els.speedSel?.addEventListener('change', (e) => {
+        state.speed = parseFloat(e.target.value) || 1;
+        saveState();
+        if (state.playing) play();
     });
 
-    loadTip();
-    setInterval(loadTip, 5 * 60 * 1000);
+    if ('speechSynthesis' in window) {
+        speechSynthesis.onvoiceschanged = () => {};
+    }
+
+    loadPoems();
+    setInterval(() => {
+        if (!state.playing && state.poems.length > 0) {
+            nextPoem(false);
+        }
+    }, 5 * 60 * 1000);
 }
 
 // ===================== Zen Mode — 极简模式 =====================
@@ -751,15 +950,6 @@ async function setupKeyboardShortcuts() {
 
     // v3.3.0: dock-bar 中知识墙按钮由 knowledge-wall.js 自行绑定
     
-    // 侧边栏折叠按钮
-    const collapseBtn = document.getElementById('sidebar-collapse-btn');
-    if (collapseBtn) {
-        collapseBtn.addEventListener('click', () => {
-            if (window.memoManager && typeof window.memoManager.toggleSidebar === 'function') {
-                window.memoManager.toggleSidebar();
-            }
-        });
-    }
 
     // 处理来自 background 的 pendingAction
     try {

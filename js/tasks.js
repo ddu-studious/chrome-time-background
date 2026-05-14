@@ -49,18 +49,25 @@ class TaskManager {
 
     async loadData() {
         try {
-            // 注意：memos 存储在 local，而 categories/tags 存储在 sync（与 memo.js 保持一致）
             const [memosResult, categoriesResult, tagsResult] = await Promise.all([
-                new Promise(resolve => chrome.storage.local.get('memos', resolve)),
-                new Promise(resolve => chrome.storage.sync.get('memosCategories', resolve)),
-                new Promise(resolve => chrome.storage.sync.get('memosTags', resolve))
+                new Promise((resolve, reject) => chrome.storage.local.get('memos', r => {
+                    if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return; }
+                    resolve(r);
+                })),
+                new Promise((resolve, reject) => chrome.storage.sync.get('memosCategories', r => {
+                    if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return; }
+                    resolve(r);
+                })),
+                new Promise((resolve, reject) => chrome.storage.sync.get('memosTags', r => {
+                    if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return; }
+                    resolve(r);
+                }))
             ]);
 
             const memosData = Array.isArray(memosResult.memos) ? memosResult.memos : [];
             this.categories = Array.isArray(categoriesResult.memosCategories) ? categoriesResult.memosCategories : [];
             this.tags = Array.isArray(tagsResult.memosTags) ? tagsResult.memosTags : [];
 
-            // 规范化数据
             // ⚠️ 重要：添加新字段时必须在此处声明默认值，否则任务管理页数据丢失！
             // 同时需要更新 js/memo.js 中的 normalizeMemo 方法
             this.memos = memosData.map(memo => ({
@@ -94,7 +101,9 @@ class TaskManager {
             console.log(`加载了 ${this.memos.length} 个任务`);
         } catch (error) {
             console.error('加载数据失败:', error);
-            this.memos = [];
+            if (!this.memos || this.memos.length === 0) {
+                this.memos = [];
+            }
         }
     }
 

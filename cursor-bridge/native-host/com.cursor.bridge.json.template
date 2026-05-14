@@ -1,0 +1,9 @@
+{
+  "name": "com.cursor.bridge",
+  "description": "Cursor Bridge — manages local cursor-bridge service for Chrome extension",
+  "path": "{{HOST_PATH}}",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://{{EXTENSION_ID}}/"
+  ]
+}

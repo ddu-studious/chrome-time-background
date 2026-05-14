@@ -413,7 +413,7 @@ class WeatherService {
             // 确保天气区域可见
             this.showWeatherArea();
 
-            // 更新当前天气
+            // 更新当前天气（右上角摘要）
             this.weatherContainer.innerHTML = `
                 <div class="current-weather">
                     <span class="weather-icon">${this.getWeatherIcon(weatherData.current.icon)}</span>
@@ -501,6 +501,45 @@ class WeatherService {
             if (!isVisible && this.hourlyData && this.hourlyData.length > 0) {
                 this.renderHourlyChart();
             }
+        });
+
+        this._bindWrapperHoverKeepAlive();
+    }
+
+    _bindWrapperHoverKeepAlive() {
+        const wrapper = this.weatherWrapper;
+        if (!wrapper) return;
+        const trigger = wrapper.querySelector('.weather-container');
+        if (!trigger) return;
+
+        let enterTimer = null;
+        let leaveTimer = null;
+
+        const showDetail = () => {
+            if (leaveTimer) { clearTimeout(leaveTimer); leaveTimer = null; }
+            wrapper.classList.add('weather-hover');
+        };
+        const hideDetail = () => {
+            if (enterTimer) { clearTimeout(enterTimer); enterTimer = null; }
+            leaveTimer = setTimeout(() => {
+                wrapper.classList.remove('weather-hover');
+                leaveTimer = null;
+            }, 300);
+        };
+
+        trigger.addEventListener('mouseenter', () => {
+            if (leaveTimer) { clearTimeout(leaveTimer); leaveTimer = null; }
+            enterTimer = setTimeout(showDetail, 1000);
+        });
+        trigger.addEventListener('mouseleave', () => {
+            if (enterTimer) { clearTimeout(enterTimer); enterTimer = null; }
+            if (!wrapper.classList.contains('weather-hover')) return;
+            hideDetail();
+        });
+
+        wrapper.addEventListener('mouseleave', hideDetail);
+        wrapper.querySelector('.weather-detail')?.addEventListener('mouseenter', () => {
+            if (leaveTimer) { clearTimeout(leaveTimer); leaveTimer = null; }
         });
     }
 
@@ -590,7 +629,7 @@ class HourlyTemperatureChart {
         this.data = hourlyData;
         this.ws = weatherService; // 用于 formatTemp
         this.hoveredIndex = -1;
-        this.padding = { top: 30, right: 20, bottom: 44, left: 42 };
+        this.padding = { top: 30, right: 40, bottom: 44, left: 42 };
         this.dpr = window.devicePixelRatio || 1;
         
         this.initCanvas();
@@ -665,6 +704,29 @@ class HourlyTemperatureChart {
         return this.plotArea.y + this.plotArea.h * (1 - (temp - min) / range);
     }
 
+    /* ---- 当前时间在数据中的插值索引（小数） ---- */
+    getCurrentTimeIndex() {
+        const now = Date.now();
+        for (let i = 0; i < this.data.length - 1; i++) {
+            const t0 = new Date(this.data[i].fxTime).getTime();
+            const t1 = new Date(this.data[i + 1].fxTime).getTime();
+            if (now >= t0 && now <= t1) {
+                return i + (now - t0) / (t1 - t0);
+            }
+        }
+        return -1;
+    }
+
+    getInterpolatedTemp(idx) {
+        const i = Math.floor(idx);
+        const frac = idx - i;
+        if (i < 0 || i >= this.data.length) return null;
+        const t0 = parseInt(this.data[i].temp);
+        if (i + 1 >= this.data.length) return t0;
+        const t1 = parseInt(this.data[i + 1].temp);
+        return t0 + (t1 - t0) * frac;
+    }
+
     /* ---- 绘制 ---- */
     draw() {
         const ctx = this.ctx;
@@ -675,6 +737,7 @@ class HourlyTemperatureChart {
         this.drawGrid();
         this.drawAreaFill();
         this.drawLine();
+        this.drawCurrentTimeMark();
         this.drawPoints();
         this.drawXLabels();
         this.drawYLabels();
@@ -760,6 +823,91 @@ class HourlyTemperatureChart {
                 ctx.stroke();
             }
         });
+    }
+
+    drawCurrentTimeMark() {
+        const idx = this.getCurrentTimeIndex();
+        if (idx < 0) return;
+
+        const ctx = this.ctx;
+        const pa = this.plotArea;
+        const temp = this.getInterpolatedTemp(idx);
+        if (temp === null) return;
+
+        const step = pa.w / Math.max(this.data.length - 1, 1);
+        const x = pa.x + idx * step;
+        const y = this.getPixelY(temp);
+
+        // 竖向虚线
+        ctx.save();
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = 'rgba(255, 180, 80, 0.4)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, pa.y);
+        ctx.lineTo(x, pa.y + pa.h);
+        ctx.stroke();
+        ctx.restore();
+
+        // 当前温度圆点（橙色脉冲）
+        ctx.beginPath();
+        ctx.arc(x, y, 12, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 180, 80, 0.12)';
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(x, y, 6, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 180, 80, 0.3)';
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffb450';
+        ctx.fill();
+
+        // 温度标签
+        const formatted = this.ws ? this.ws.formatTemp(Math.round(temp), false) : `${Math.round(temp)}°`;
+        ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, sans-serif';
+        const tw = ctx.measureText(formatted).width;
+        const labelX = Math.min(Math.max(x - tw / 2, pa.x), pa.x + pa.w - tw);
+        const labelY = y - 18;
+
+        ctx.fillStyle = 'rgba(40, 30, 10, 0.75)';
+        const lpad = 5, lh = 16, lr = 4;
+        const rx = labelX - lpad, ry = labelY - lh / 2 - 1, rw = tw + lpad * 2;
+        ctx.beginPath();
+        if (ctx.roundRect) {
+            ctx.roundRect(rx, ry, rw, lh, lr);
+        } else {
+            ctx.moveTo(rx + lr, ry);
+            ctx.lineTo(rx + rw - lr, ry);
+            ctx.arcTo(rx + rw, ry, rx + rw, ry + lr, lr);
+            ctx.lineTo(rx + rw, ry + lh - lr);
+            ctx.arcTo(rx + rw, ry + lh, rx + rw - lr, ry + lh, lr);
+            ctx.lineTo(rx + lr, ry + lh);
+            ctx.arcTo(rx, ry + lh, rx, ry + lh - lr, lr);
+            ctx.lineTo(rx, ry + lr);
+            ctx.arcTo(rx, ry, rx + lr, ry, lr);
+            ctx.closePath();
+        }
+        ctx.fill();
+
+        ctx.fillStyle = '#ffb450';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(formatted, labelX, labelY);
+
+        // "现在" 标签
+        const now = new Date();
+        const nowLabel = `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`;
+        ctx.font = '9px -apple-system, BlinkMacSystemFont, sans-serif';
+        const nlw = ctx.measureText(nowLabel).width;
+        const nlX = Math.min(Math.max(x - nlw / 2, pa.x), pa.x + pa.w - nlw);
+
+        ctx.fillStyle = 'rgba(255, 180, 80, 0.7)';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText(nowLabel, nlX, pa.y + pa.h + 3);
     }
 
     drawXLabels() {

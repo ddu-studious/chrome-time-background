@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>新标签页 - 中国风景时钟</title>
+    <style>
+        html { overflow: hidden; height: 100%; }
+        body { position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; overflow: hidden; margin: 0; padding: 0; background-size: cover; background-position: center; background-repeat: no-repeat; }
+    </style>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/schedule.css">
     <link rel="stylesheet" href="css/weekview.css">
@@ -13,42 +17,8 @@
 <body>
     <!-- 视频背景层（v3.16.0 多源背景支持） -->
     <video id="background-video" autoplay muted loop playsinline></video>
-    <!-- 主布局容器 -->
+    <!-- 主布局容器（单栏） -->
     <div class="main-layout">
-        <!-- 左侧：任务面板（常驻） -->
-        <aside class="task-sidebar" id="task-sidebar">
-            <div class="sidebar-header">
-                <h2 class="sidebar-title">
-                    <i class="fas fa-tasks"></i>
-                    <span>任务</span>
-                </h2>
-                <div class="sidebar-header-actions">
-                    <a href="tasks.html" class="sidebar-manage-btn" id="sidebar-manage-btn" title="任务管理面板">
-                        <i class="fas fa-external-link-alt"></i>
-                    </a>
-                    <button class="sidebar-collapse-btn" id="sidebar-collapse-btn" title="折叠面板">
-                        <i class="fas fa-chevron-left"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="sidebar-content" id="sidebar-content">
-                <!-- 初始骨架屏，数据加载后替换 -->
-                <div class="sidebar-skeleton">
-                    <div class="skeleton-toolbar">
-                        <div class="skeleton-search"></div>
-                        <div class="skeleton-btn"></div>
-                    </div>
-                    <div class="skeleton-filter"></div>
-                    <div class="skeleton-list">
-                        <div class="skeleton-item"></div>
-                        <div class="skeleton-item"></div>
-                        <div class="skeleton-item"></div>
-                    </div>
-                </div>
-            </div>
-        </aside>
-        
-        <!-- 右侧：时间和天气 -->
         <main class="main-content">
             <!-- 吸顶容器：热榜 + 任务提醒条，滚动时固定在顶部 -->
             <div class="ticker-sticky-wrapper">
@@ -96,6 +66,34 @@
                     </div>
                 </div>
             </div>
+            <!-- 天气模块（右上角固定，hover 向下展开详情） -->
+            <div class="weather-wrapper" id="weather-float">
+                <div class="weather-container" id="weather">
+                    <div class="current-weather">
+                        <span class="weather-icon">🌤</span>
+                        <span class="weather-temp">23°C</span>
+                        <span class="weather-desc">晴朗</span>
+                        <span class="weather-city">北京市</span>
+                    </div>
+                </div>
+                <div class="weather-detail">
+                    <div class="weather-detail-card">
+                        <div class="forecast-container" id="forecast"></div>
+                        <div class="hourly-chart-wrapper collapsed" id="hourly-chart-container">
+                            <div class="hourly-chart-header">
+                                <span class="hourly-chart-title">
+                                    <i class="fas fa-temperature-half"></i>
+                                    24小时温度趋势
+                                </span>
+                                <button class="hourly-chart-toggle-btn" id="hourly-chart-toggle" title="展开温度曲线">
+                                    <i class="fas fa-chevron-down"></i>
+                                </button>
+                            </div>
+                            <div class="hourly-chart-body" id="hourly-chart"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <div class="time-wrapper">
                 <div class="time-container">
                     <div class="time" id="time">00:00:00</div>
@@ -122,35 +120,9 @@
                     <div class="reading-reco-body" id="reading-reco-body"></div>
                 </div>
             </div>
-            <div class="weather-wrapper">
-                <div class="weather-container" id="weather">
-                    <div class="current-weather">
-                        <span class="weather-icon">🌤</span>
-                        <span class="weather-temp">23°C</span>
-                        <span class="weather-desc">晴朗</span>
-                        <span class="weather-city">北京市</span>
-                    </div>
-                </div>
-                <div class="forecast-container" id="forecast">
-                    <!-- 天气预报将在这里显示 -->
-                </div>
-                <!-- 逐小时温度曲线图（v3.3.0 默认收起） -->
-                <div class="hourly-chart-wrapper collapsed" id="hourly-chart-container" style="display: none;">
-                    <div class="hourly-chart-header">
-                        <span class="hourly-chart-title">
-                            <i class="fas fa-temperature-half"></i>
-                            24小时温度趋势
-                        </span>
-                        <button class="hourly-chart-toggle-btn" id="hourly-chart-toggle" title="展开温度曲线">
-                            <i class="fas fa-chevron-down"></i>
-                        </button>
-                    </div>
-                    <div class="hourly-chart-body" id="hourly-chart"></div>
-                </div>
-            </div>
         </main>
     </div>
-    
+
     <!-- 紧急任务浮动提醒气泡 -->
     <div class="urgent-bubble" id="urgent-bubble" style="display:none;">
         <!-- 悬浮简易摘要条（收缩状态时显示） -->
@@ -231,11 +203,29 @@
         </div>
     </div>
 
-    <!-- v3.0.0: 温情提示浮动条 -->
-    <div class="warm-tip-bar" id="warm-tip-bar">
-        <span class="warm-tip-icon">💡</span>
-        <span class="warm-tip-text" id="warm-tip-text"></span>
-        <button class="warm-tip-refresh" id="warm-tip-refresh" title="换一条"><i class="fas fa-sync-alt"></i></button>
+    <!-- v3.0.0: 诗词电台 + 温情提示（迷你播放器） -->
+    <div class="poetry-radio" id="poetry-radio">
+        <div class="pr-display">
+            <span class="pr-icon" id="pr-icon">📜</span>
+            <div class="pr-text-wrap">
+                <span class="pr-text" id="pr-text"></span>
+                <span class="pr-author" id="pr-author"></span>
+            </div>
+        </div>
+        <div class="pr-controls">
+            <button class="pr-btn" id="pr-prev" title="上一首"><i class="fas fa-step-backward"></i></button>
+            <button class="pr-btn pr-btn-play" id="pr-play" title="播放/暂停"><i class="fas fa-play"></i></button>
+            <button class="pr-btn" id="pr-next" title="下一首"><i class="fas fa-step-forward"></i></button>
+            <button class="pr-btn pr-btn-fav" id="pr-fav" title="收藏"><i class="far fa-heart"></i></button>
+            <select class="pr-speed" id="pr-speed" title="朗读速度">
+                <option value="0.7">0.7x</option>
+                <option value="0.85">0.85x</option>
+                <option value="1" selected>1x</option>
+                <option value="1.2">1.2x</option>
+                <option value="1.5">1.5x</option>
+            </select>
+            <button class="pr-btn pr-btn-mode" id="pr-mode" title="切换模式"><i class="fas fa-random"></i></button>
+        </div>
     </div>
 
     <!-- 底部信息 -->
@@ -261,9 +251,6 @@
             <i class="fas fa-brain"></i>
         </button>
         <div class="dock-divider" aria-hidden="true"></div>
-        <button class="dock-btn" id="study-dock-btn" title="学习中心">
-            <i class="fas fa-graduation-cap"></i>
-        </button>
         <div class="dock-divider" aria-hidden="true"></div>
         <button class="dock-btn" id="bili-dock-btn" title="哔哩哔哩">
             <i class="fab fa-bilibili"></i>
@@ -319,13 +306,14 @@
     <script src="js/adaptive-overlay.js"></script>
     <script src="js/music-controller.js"></script>
     <script src="js/bilibili-controller.js"></script>
-    <script src="js/study-center.js"></script>
     <script src="js/worklog.js"></script>
     <script src="js/blog.js"></script>
     <script src="js/schedule.js"></script>
     <script src="js/weekview.js"></script>
     <link rel="stylesheet" href="css/cursor-bridge.css">
+    <link rel="stylesheet" href="css/whitebox-observability.css">
     <script src="js/cursor-bridge.js"></script>
+    <script src="js/whitebox-observability.js"></script>
     <script src="js/main.js"></script>
   </body>
 </html>

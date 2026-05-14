@@ -29,6 +29,10 @@ export const config = {
   apiKey: process.env.CURSOR_API_KEY || '',
   maxAgents: parseInt(process.env.BRIDGE_MAX_AGENTS || '10', 10),
   defaultModel: process.env.BRIDGE_DEFAULT_MODEL || 'composer-2',
+  logLevel: (process.env.BRIDGE_LOG_LEVEL || 'info') as 'debug' | 'info' | 'warn' | 'error',
+  logFile: process.env.BRIDGE_LOG_FILE || '',
+  cdpPort: parseInt(process.env.CDP_PORT || '9222', 10),
+  multiUser: process.env.BRIDGE_MULTI_USER === 'true',
 };
 
 export function validateConfig() {

@@ -344,6 +344,16 @@ class WorkLogManager {
         await this._saveEntries();
     }
 
+    async updateSubItem(entryId, subItemId, newText) {
+        const entry = this._entries.find(e => e.id === entryId);
+        if (!entry || !Array.isArray(entry.subItems)) return;
+        const si = entry.subItems.find(s => s.id === subItemId);
+        if (!si) return;
+        si.text = (newText || '').trim();
+        entry.updatedAt = Date.now();
+        await this._saveEntries();
+    }
+
     // ─── 四象限 ───
     _getQuadrant(entry) {
         if (entry.urgency && entry.importance) return 'q1';
@@ -697,7 +707,8 @@ class WorkLogManager {
                 ${subItems.map(si => `
                     <div class="wl-sub-item" data-si-id="${si.id}">
                         <span class="wl-si-bullet">→</span>
-                        <span class="wl-si-text">${this._escHtml(si.text)}</span>
+                        <span class="wl-si-text" data-action="edit-sub-item" data-entry-id="${entry.id}" data-si-id="${si.id}">${this._escHtml(si.text)}</span>
+                        <input type="text" class="wl-si-edit-input" data-entry-id="${entry.id}" data-si-id="${si.id}" value="${this._escHtml(si.text)}">
                         <button class="wl-si-del" data-action="del-sub-item" data-entry-id="${entry.id}" data-si-id="${si.id}" title="删除">
                             <i class="fas fa-times"></i>
                         </button>
@@ -809,6 +820,46 @@ class WorkLogManager {
                 await this.removeSubItem(btn.dataset.entryId, btn.dataset.siId);
                 this._refreshPanel();
             });
+        });
+
+        container.querySelectorAll('[data-action="edit-sub-item"]').forEach(span => {
+            span.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const row = span.closest('.wl-sub-item');
+                if (row.classList.contains('wl-si-editing')) return;
+                row.classList.add('wl-si-editing');
+                const input = row.querySelector('.wl-si-edit-input');
+                if (input) {
+                    input.value = span.textContent;
+                    input.focus();
+                    input.select();
+                }
+            });
+        });
+
+        container.querySelectorAll('.wl-si-edit-input').forEach(input => {
+            const commitEdit = async () => {
+                const row = input.closest('.wl-sub-item');
+                if (!row.classList.contains('wl-si-editing')) return;
+                const newText = input.value.trim();
+                const entryId = input.dataset.entryId;
+                const siId = input.dataset.siId;
+                if (newText) {
+                    await this.updateSubItem(entryId, siId, newText);
+                } else {
+                    await this.removeSubItem(entryId, siId);
+                }
+                this._refreshPanel();
+            };
+
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); commitEdit(); }
+                if (e.key === 'Escape') {
+                    const row = input.closest('.wl-sub-item');
+                    row.classList.remove('wl-si-editing');
+                }
+            });
+            input.addEventListener('blur', () => commitEdit());
         });
     }
 

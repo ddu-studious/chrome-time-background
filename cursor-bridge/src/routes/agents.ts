@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { Cursor } from '@cursor/sdk';
 import { config } from '../config.js';
 import { agentPool } from '../services/agent-pool.js';
+import { sendAgentMessage, getAgentMessages, getAgentMessagesSent, markAgentMessageRead } from '../services/database.js';
 
 export async function agentRoutes(fastify: FastifyInstance) {
   fastify.get('/agents', async () => {
@@ -103,6 +104,92 @@ export async function agentRoutes(fastify: FastifyInstance) {
       }
     }
   );
+
+  // ─── Agent 间消息通信 ───
+
+  fastify.post<{ Params: { id: string }; Body: { fromAgent: string; content: string; type?: string } }>(
+    '/agents/:id/message',
+    async (request, reply) => {
+      const { id } = request.params;
+      const { fromAgent, content, type } = request.body || {};
+      if (!fromAgent || !content) {
+        return reply.code(400).send({ error: 'fromAgent and content are required' });
+      }
+      const msg = sendAgentMessage(fromAgent, id, content, type || 'reference');
+      return reply.code(201).send(msg);
+    }
+  );
+
+  fastify.get<{ Params: { id: string }; Querystring: { direction?: string; limit?: string } }>(
+    '/agents/:id/messages',
+    async (request) => {
+      const { id } = request.params;
+      const dir = request.query.direction || 'received';
+      const limit = parseInt(request.query.limit || '50', 10);
+      const messages = dir === 'sent'
+        ? getAgentMessagesSent(id, limit)
+        : getAgentMessages(id, limit);
+      return { messages };
+    }
+  );
+
+  fastify.post<{ Params: { id: string; msgId: string } }>(
+    '/agents/:id/messages/:msgId/read',
+    async (request) => {
+      markAgentMessageRead(parseInt(request.params.msgId, 10));
+      return { status: 'ok' };
+    }
+  );
+
+  // ─── Human-in-the-Loop Approval Gate ───
+
+  fastify.post<{ Params: { id: string }; Body: { enabled: boolean } }>(
+    '/agents/:id/approval',
+    async (request, reply) => {
+      try {
+        agentPool.setApprovalEnabled(request.params.id, request.body?.enabled ?? false);
+        return { status: 'ok', enabled: request.body?.enabled };
+      } catch (err: any) {
+        return reply.code(404).send({ error: err.message });
+      }
+    }
+  );
+
+  fastify.get('/approvals', async () => {
+    return { approvals: agentPool.getPendingApprovals() };
+  });
+
+  fastify.get<{ Params: { id: string } }>(
+    '/agents/:id/approvals',
+    async (request) => {
+      return { approvals: agentPool.getPendingApprovals(request.params.id) };
+    }
+  );
+
+  fastify.post<{
+    Params: { id: string; approvalId: string };
+    Body: { approved: boolean; message?: string };
+  }>(
+    '/agents/:id/approvals/:approvalId/resolve',
+    async (request, reply) => {
+      const { approved, message } = request.body || {};
+      if (typeof approved !== 'boolean') {
+        return reply.code(400).send({ error: 'approved (boolean) is required' });
+      }
+      const resolved = agentPool.resolveApproval(
+        request.params.id, request.params.approvalId, approved, message
+      );
+      if (!resolved) return reply.code(404).send({ error: 'Approval not found or already resolved' });
+      return { status: 'ok' };
+    }
+  );
+
+  // ─── Emergency Stop All ───
+
+  fastify.post('/agents/emergency-stop', async () => {
+    const stopped = await agentPool.emergencyStopAll();
+    return { status: 'ok', stoppedCount: stopped };
+  });
 
   fastify.get('/models', async (_request, reply) => {
     try {

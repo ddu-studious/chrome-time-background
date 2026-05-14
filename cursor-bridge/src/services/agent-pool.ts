@@ -3,9 +3,26 @@ import type { SDKAgent, SDKMessage, Run } from '@cursor/sdk';
 import { config } from '../config.js';
 import type { BridgeAgent, CreateAgentOpts, AgentPublicInfo, RunRecord } from '../types.js';
 import type { ServerResponse } from 'node:http';
+import {
+  createConversation, updateConversationStatus, addMessage, recordTokenUsage,
+} from './database.js';
+import { recordTrace } from './trace-service.js';
 
 function randomId(): string {
   return Math.random().toString(36).slice(2, 10);
+}
+
+interface ApprovalRequest {
+  id: string;
+  runId: string;
+  agentId: string;
+  type: 'tool_call' | 'milestone' | 'dangerous_action';
+  description: string;
+  details?: Record<string, unknown>;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: number;
+  resolvedAt?: number;
+  resolver?: (approved: boolean, message?: string) => void;
 }
 
 interface InternalAgent extends BridgeAgent {
@@ -13,6 +30,10 @@ interface InternalAgent extends BridgeAgent {
   sseClients: Set<ServerResponse>;
   currentRun?: Run;
   lastActivityAt: number;
+  conversationId: string;
+  textBuffer: string;
+  approvalEnabled: boolean;
+  pendingApprovals: Map<string, ApprovalRequest>;
 }
 
 export class AgentPool {
@@ -62,6 +83,7 @@ export class AgentPool {
     });
 
     const id = `agent_${Date.now()}_${randomId()}`;
+    const convId = `conv_${Date.now()}_${randomId()}`;
     const now = Date.now();
     const agent: InternalAgent = {
       id,
@@ -75,9 +97,26 @@ export class AgentPool {
       runHistory: [],
       sdkAgent,
       sseClients: new Set(),
+      conversationId: convId,
+      textBuffer: '',
+      approvalEnabled: false,
+      pendingApprovals: new Map(),
     };
 
     this.agents.set(id, agent);
+    console.log(`[AgentPool] Agent created: ${id} name="${opts.name}" model=${model} cwd="${opts.cwd}"`);
+
+    try {
+      createConversation(convId, {
+        agentName: opts.name,
+        model,
+        cwd: opts.cwd,
+        description: opts.description,
+      });
+    } catch (e) {
+      console.warn(`[AgentPool] Failed to persist conversation for ${id}:`, e);
+    }
+
     return this.toPublicInfo(agent);
   }
 
@@ -97,8 +136,11 @@ export class AgentPool {
 
     agent.status = 'running';
     agent.lastActivityAt = Date.now();
+    agent.textBuffer = '';
     const runId = `run_${Date.now()}_${randomId()}`;
     agent.currentRunId = runId;
+    this.broadcast(agent, 'agent_status', { status: 'running' });
+    console.log(`[AgentPool] Agent ${agentId} (${agent.name}) → running, runId=${runId}, prompt="${prompt.substring(0, 80)}..."`);
 
     const record: RunRecord = {
       id: runId,
@@ -107,6 +149,12 @@ export class AgentPool {
       startedAt: Date.now(),
     };
     agent.runHistory.push(record);
+
+    try {
+      addMessage(agent.conversationId, 'user', prompt.substring(0, 10000), undefined, runId);
+    } catch (e) {
+      console.warn(`[AgentPool] Failed to persist user message for ${agentId}:`, e);
+    }
 
     this.processRun(agent, prompt, record).catch(err => {
       console.error(`[AgentPool] Run error for ${agentId}:`, err.message);
@@ -128,15 +176,44 @@ export class AgentPool {
       record.status = result.status === 'error' ? 'error' : 'finished';
       record.finishedAt = Date.now();
       record.resultSummary = result.result?.slice(0, 500);
-      agent.status = result.status === 'error' ? 'error' : 'idle';
+      const finalStatus = result.status === 'error' ? 'error' : 'idle';
+      agent.status = finalStatus;
       agent.currentRunId = undefined;
       agent.currentRun = undefined;
       agent.lastActivityAt = Date.now();
+
+      const durationSec = result.durationMs ? (result.durationMs / 1000).toFixed(1) : '?';
+      console.log(`[AgentPool] Agent ${agent.id} (${agent.name}) → ${finalStatus}, duration=${durationSec}s, resultLen=${result.result?.length || 0}`);
+
+      this.persistRunResult(agent, record);
+
+      const inputTokens = (result as any).inputTokens || (result as any).usage?.input_tokens || 0;
+      const outputTokens = (result as any).outputTokens || (result as any).usage?.output_tokens || 0;
+      if (inputTokens || outputTokens) {
+        try {
+          recordTokenUsage({
+            agentId: agent.id,
+            conversationId: agent.conversationId,
+            runId: record.id,
+            model: agent.model,
+            inputTokens,
+            outputTokens,
+            durationMs: result.durationMs,
+          });
+        } catch (e) {
+          console.warn(`[AgentPool] Failed to record token usage for ${agent.id}:`, e);
+        }
+      }
+
+      this.broadcast(agent, 'agent_status', { status: finalStatus });
+
       this.broadcast(agent, 'status', {
         status: record.status,
         runId: record.id,
         result: result.result,
         durationMs: result.durationMs,
+        inputTokens,
+        outputTokens,
       });
     } catch (err: any) {
       record.status = 'error';
@@ -144,8 +221,31 @@ export class AgentPool {
       agent.status = 'error';
       agent.currentRunId = undefined;
       agent.currentRun = undefined;
+      console.error(`[AgentPool] Agent ${agent.id} (${agent.name}) → error: ${err.message}`);
+
+      try {
+        const errText = `[Error] ${err.message}`;
+        addMessage(agent.conversationId, 'assistant', errText, 'error', record.id);
+        updateConversationStatus(agent.conversationId, 'error');
+      } catch { /* best effort */ }
+
+      this.broadcast(agent, 'agent_status', { status: 'error' });
       this.broadcast(agent, 'error', { message: err.message, runId: record.id });
     }
+  }
+
+  private persistRunResult(agent: InternalAgent, record: RunRecord) {
+    try {
+      const text = agent.textBuffer.trim();
+      if (text) {
+        addMessage(agent.conversationId, 'assistant', text.substring(0, 50000), 'text', record.id);
+      }
+      const convStatus = record.status === 'finished' ? 'completed' : record.status;
+      updateConversationStatus(agent.conversationId, convStatus);
+    } catch (e) {
+      console.warn(`[AgentPool] Failed to persist run result for ${agent.id}:`, e);
+    }
+    agent.textBuffer = '';
   }
 
   private handleStreamEvent(agent: InternalAgent, event: SDKMessage, runId: string) {
@@ -153,12 +253,17 @@ export class AgentPool {
       case 'assistant':
         for (const block of event.message.content) {
           if (block.type === 'text') {
+            agent.textBuffer += block.text;
             this.broadcast(agent, 'text', { content: block.text, runId });
           } else if (block.type === 'tool_use') {
             this.broadcast(agent, 'tool_call', {
               tool: block.name,
               callId: block.id,
               runId,
+            });
+            this.persistTrace(agent, runId, 'tool_call', `Tool call: ${block.name}`, {
+              toolName: block.name,
+              toolInput: block.input as Record<string, unknown> | undefined,
             });
           }
         }
@@ -170,9 +275,17 @@ export class AgentPool {
           status: event.status,
           runId,
         });
+        if (event.status === 'completed' || event.status === 'error') {
+          this.persistTrace(agent, runId, 'tool_result', `Tool result: ${event.name} (${event.status})`, {
+            toolName: event.name,
+          });
+        }
         break;
       case 'thinking':
         this.broadcast(agent, 'thinking', { text: event.text, runId });
+        this.persistTrace(agent, runId, 'thinking', event.text || '', {
+          reasoning: event.text,
+        });
         break;
       case 'status':
         this.broadcast(agent, 'agent_status', {
@@ -188,6 +301,29 @@ export class AgentPool {
           runId,
         });
         break;
+    }
+  }
+
+  private persistTrace(
+    agent: InternalAgent,
+    runId: string,
+    type: 'thinking' | 'tool_call' | 'tool_result' | 'system',
+    content: string,
+    metadata: Record<string, unknown> = {},
+  ) {
+    try {
+      recordTrace({
+        taskAnalysisId: '',
+        agentId: agent.id,
+        roleId: '',
+        runId,
+        type,
+        phase: '',
+        content: content.substring(0, 50000),
+        metadata: metadata as any,
+      });
+    } catch (e) {
+      console.warn(`[AgentPool] Failed to persist trace for ${agent.id}:`, e);
     }
   }
 
@@ -208,6 +344,15 @@ export class AgentPool {
       lastRun.status = 'cancelled';
       lastRun.finishedAt = Date.now();
     }
+
+    try {
+      if (agent.textBuffer.trim()) {
+        addMessage(agent.conversationId, 'assistant', agent.textBuffer.trim().substring(0, 50000), 'text', lastRun?.id);
+      }
+      updateConversationStatus(agent.conversationId, 'cancelled');
+      agent.textBuffer = '';
+    } catch { /* best effort */ }
+
     this.broadcast(agent, 'status', { status: 'cancelled' });
   }
 
@@ -221,6 +366,10 @@ export class AgentPool {
 
     try {
       agent.sdkAgent.close();
+    } catch { /* best effort */ }
+
+    try {
+      updateConversationStatus(agent.conversationId, 'disposed');
     } catch { /* best effort */ }
 
     agent.status = 'disposed';
@@ -263,6 +412,7 @@ export class AgentPool {
     }
 
     agent.status = 'running';
+    agent.textBuffer = '';
     const runId = `run_${Date.now()}_${randomId()}`;
     agent.currentRunId = runId;
 
@@ -274,11 +424,84 @@ export class AgentPool {
     };
     agent.runHistory.push(record);
 
+    try {
+      addMessage(agent.conversationId, 'user', prompt.substring(0, 10000), undefined, runId);
+    } catch (e) {
+      console.warn(`[AgentPool] Failed to persist resume message for ${agentId}:`, e);
+    }
+
     this.processRun(agent, prompt, record).catch(err => {
       console.error(`[AgentPool] Resume error for ${agentId}:`, err.message);
     });
 
     return runId;
+  }
+
+  // ─── Human-in-the-Loop: Approval Gate ───
+
+  setApprovalEnabled(agentId: string, enabled: boolean) {
+    const agent = this.agents.get(agentId);
+    if (!agent) throw new Error('Agent not found');
+    agent.approvalEnabled = enabled;
+  }
+
+  getPendingApprovals(agentId?: string): ApprovalRequest[] {
+    const results: ApprovalRequest[] = [];
+    const targets = agentId
+      ? [this.agents.get(agentId)].filter(Boolean) as InternalAgent[]
+      : Array.from(this.agents.values());
+
+    for (const agent of targets) {
+      for (const req of agent.pendingApprovals.values()) {
+        if (req.status === 'pending') {
+          results.push({ ...req, resolver: undefined });
+        }
+      }
+    }
+    return results;
+  }
+
+  resolveApproval(agentId: string, approvalId: string, approved: boolean, message?: string): boolean {
+    const agent = this.agents.get(agentId);
+    if (!agent) return false;
+    const req = agent.pendingApprovals.get(approvalId);
+    if (!req || req.status !== 'pending') return false;
+
+    req.status = approved ? 'approved' : 'rejected';
+    req.resolvedAt = Date.now();
+    if (req.resolver) req.resolver(approved, message);
+
+    this.broadcast(agent, 'approval_resolved', {
+      approvalId,
+      approved,
+      message,
+    });
+
+    agent.pendingApprovals.delete(approvalId);
+    return true;
+  }
+
+  // ─── Emergency Stop All ───
+
+  async emergencyStopAll(): Promise<number> {
+    let stopped = 0;
+    for (const [id, agent] of this.agents) {
+      if (agent.status === 'running') {
+        try {
+          await this.cancel(id);
+          stopped++;
+        } catch { /* best effort */ }
+      }
+      for (const [, req] of agent.pendingApprovals) {
+        if (req.status === 'pending') {
+          req.status = 'rejected';
+          req.resolvedAt = Date.now();
+          if (req.resolver) req.resolver(false, 'Emergency stop');
+        }
+      }
+      agent.pendingApprovals.clear();
+    }
+    return stopped;
   }
 
   addSSEClient(agentId: string, res: ServerResponse): boolean {
@@ -317,6 +540,7 @@ export class AgentPool {
       currentRunId: agent.currentRunId,
       createdAt: agent.createdAt,
       runCount: agent.runHistory.length,
+      conversationId: agent.conversationId,
     };
   }
 }

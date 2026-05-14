@@ -542,8 +542,8 @@
                     </div>
                     <div class="sp-field">
                         <div class="sp-field-info">
-                            <span class="sp-field-label">温情提示</span>
-                            <span class="sp-field-hint">每2小时推送名言/健康小贴士</span>
+                            <span class="sp-field-label">诗词电台</span>
+                            <span class="sp-field-hint">底部迷你播放器，连续朗读古诗词</span>
                         </div>
                         <label class="sp-toggle">
                             <input type="checkbox" name="enableWarmTip" id="set-enableWarmTip">
@@ -668,8 +668,31 @@
                         <ul>
                             <li><strong>资源监控</strong> — CPU、内存、磁盘实时占用率</li>
                             <li><strong>活动日志</strong> — 扩展网络请求、任务操作等活动记录</li>
-                            <li><strong>温情提示</strong> — 定期推送名言金句和健康小贴士</li>
+                            <li><strong>诗词电台</strong> — 底部迷你播放器，连续朗读古诗词</li>
                             <li><strong>省电模式</strong> — 按需关闭功能，降低资源占用</li>
+                        </ul>
+                    </div>
+                    <div class="sp-guide-card">
+                        <div class="sp-guide-card-icon"><i class="fas fa-robot"></i></div>
+                        <h4>Agent 矩阵 <span style="background:rgba(99,102,241,0.3);padding:1px 6px;border-radius:4px;font-size:11px;font-weight:normal;margin-left:4px">NEW</span></h4>
+                        <ul>
+                            <li><strong>多 Agent 并行</strong> — 同时运行多个 AI Agent（代码审查、功能实现、测试编写等）</li>
+                            <li><strong>矩阵卡片视图</strong> — 每个 Agent 独立卡片，实时 SSE 输出流，支持 Markdown 渲染</li>
+                            <li><strong>多模型支持</strong> — Claude / GPT / Grok / Gemini / Composer 多模型自由切换</li>
+                            <li><strong>@引用协作</strong> — 在 prompt 中使用 @agent-name 引用其他 Agent 的输出结果</li>
+                            <li><strong>对话历史</strong> — 所有对话自动持久化到 SQLite，支持按项目/时间筛选和一键恢复</li>
+                            <li><strong>结果保存</strong> — Agent 输出一键保存为备忘录或博客草稿</li>
+                        </ul>
+                    </div>
+                    <div class="sp-guide-card">
+                        <div class="sp-guide-card-icon"><i class="fas fa-terminal"></i></div>
+                        <h4>Cursor Bridge 连接</h4>
+                        <ul>
+                            <li><strong>本地桥接</strong> — 通过 Native Messaging 连接本地 cursor-bridge 服务</li>
+                            <li><strong>一键部署</strong> — 设置页可一键安装/卸载 Native Host 组件</li>
+                            <li><strong>自动重连</strong> — 服务断开后自动检测并重新连接</li>
+                            <li><strong>项目管理</strong> — 按项目管理 Agent 和对话，支持多项目切换</li>
+                            <li><strong>命令面板</strong> — 按 ⌘L 快速创建 Agent，支持模板和对话式创建</li>
                         </ul>
                     </div>
                 </div>

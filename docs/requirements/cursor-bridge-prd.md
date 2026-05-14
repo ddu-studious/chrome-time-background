@@ -5,7 +5,7 @@
 **项目代号**: cursor-bridge  
 **版本**: v0.1 (原型验证)  
 **日期**: 2026-05-03  
-**状态**: v0.1 完成 ✅ → v0.2 Chrome 扩展集成 ✅ (2026-05-04)
+**状态**: v0.1 完成 ✅ → v0.2 Chrome 扩展集成 ✅ (2026-05-04) → v0.3 Native Messaging 自动化 ✅ (2026-05-04)
 
 ---
 
@@ -118,13 +118,32 @@ Cursor Bridge 是一个本地 Node.js 桥接服务，将 Cursor SDK (`@cursor/sd
 - `index.html` — Dock 栏添加 Agent 按钮 + 引入 CSS/JS
 - `js/main.js` — 初始化 CursorBridge 客户端
 
-### 3.3 v0.3 — Native Messaging 自动化
+### 3.3 v0.3 — Native Messaging 自动化 ✅ 2026-05-04
 
-| 功能 | 描述 |
-|------|------|
-| 自动启动 bridge | Chrome 扩展通过 Native Messaging 启动本地服务 |
-| 服务生命周期 | 随扩展启动/停止，优雅退出 |
-| 配置管理 | API Key 安全存储、端口配置 |
+| 功能 | 描述 | 状态 |
+|------|------|------|
+| Native Messaging Host | Node.js 脚本，接收 Chrome 的 start/stop/status/ping 命令 | ✅ |
+| 安装/卸载脚本 | install.sh / uninstall.sh，一键注册 Host manifest | ✅ |
+| 自动启动 bridge | 打开新标签页时，若 bridge 未运行则自动通过 Native Messaging 启动 | ✅ |
+| 手动启停按钮 | Agent 面板 footer 中的启动/停止按钮 | ✅ |
+| PID 文件管理 | bridge 服务写入 .bridge.pid，Host 通过 PID 管理进程 | ✅ |
+| Service Worker 集成 | background.js 添加 bridge_native 消息处理器 | ✅ |
+| 依赖自动安装 | Host 启动时检测 node_modules，缺失则自动 npm install | ✅ |
+| nativeMessaging 权限 | manifest.json 添加 nativeMessaging 权限 | ✅ |
+
+**新增文件**:
+- `cursor-bridge/native-host/bridge-host.js` — Native Messaging Host 入口
+- `cursor-bridge/native-host/com.cursor.bridge.json.template` — Host manifest 模板
+- `cursor-bridge/native-host/install.sh` — 安装脚本 (macOS/Linux)
+- `cursor-bridge/native-host/uninstall.sh` — 卸载脚本
+
+**修改文件**:
+- `manifest.json` — 添加 `nativeMessaging` 权限
+- `js/background.js` — 添加 `bridge_native` 消息转发
+- `js/cursor-bridge.js` — 添加 Native Messaging API、自动启动、启停按钮
+- `css/cursor-bridge.css` — footer 控制按钮样式
+- `cursor-bridge/src/index.ts` — PID 文件写入/清理
+- `cursor-bridge/src/routes/health.ts` — 返回 PID 和 v0.3.0 版本号
 
 ### 3.4 v1.0 — 完整矩阵视图
 
@@ -544,3 +563,13 @@ class CursorBridgeClient {
 - [x] 支持同时运行 3+ Agent（并发压测通过） ✅ 2026-05-03
 - [x] Agent 销毁后资源正确释放 ✅ 2026-05-03
 - [x] 超时/错误场景下 Agent 状态正确转移 ✅ 2026-05-03
+
+### 10.2 验收标准 (v0.3)
+
+- [x] `./install.sh <extension-id>` 成功注册 Native Messaging Host ✅ 2026-05-04
+- [x] Chrome 扩展通过 Native Messaging 发送 `status` 命令并收到响应 ✅ 2026-05-04
+- [x] 点击"启动服务"按钮后 bridge 自动启动并连接成功 ✅ 2026-05-04
+- [x] 点击"停止"按钮后 bridge 进程正确退出 ✅ 2026-05-04
+- [x] 打开新标签页时，若 bridge 未运行则自动启动（可配置） ✅ 2026-05-04
+- [x] PID 文件正确写入/清理 ✅ 2026-05-04
+- [x] 卸载脚本正确清理 manifest 和停止服务 ✅ 2026-05-04
