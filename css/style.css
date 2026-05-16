@@ -19517,3 +19517,210 @@ body:not(.zen-mode) .dock-bar {
     justify-content: flex-end;
     flex-shrink: 0;
 }
+
+/* ─── 复制前一天任务弹窗 ─── */
+.wl-copy-dialog {
+    width: min(620px, 92%);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+}
+.wl-copy-summary {
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    margin-bottom: 12px;
+}
+.wl-copy-route {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.85);
+    font-weight: 500;
+}
+.wl-copy-route i {
+    color: rgba(167, 139, 250, 0.8);
+    font-size: 12px;
+}
+.wl-copy-from { color: rgba(255, 255, 255, 0.55); }
+.wl-copy-to { color: rgba(167, 139, 250, 0.95); }
+.wl-copy-hint {
+    text-align: center;
+    margin-top: 6px;
+    font-size: 11.5px;
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.wl-copy-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 2px 10px;
+    flex-wrap: wrap;
+}
+.wl-copy-toolbtn {
+    padding: 4px 10px;
+    font-size: 11.5px;
+    color: rgba(255, 255, 255, 0.55);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.wl-copy-toolbtn:hover {
+    background: rgba(255, 255, 255, 0.10);
+    color: rgba(255, 255, 255, 0.85);
+}
+.wl-copy-subitems-toggle {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    color: rgba(255, 255, 255, 0.55);
+    cursor: pointer;
+    user-select: none;
+}
+.wl-copy-subitems-toggle input { accent-color: rgba(167, 139, 250, 0.95); }
+
+.wl-copy-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 2px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 50vh;
+}
+.wl-copy-list::-webkit-scrollbar { width: 4px; }
+.wl-copy-list::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 2px; }
+
+.wl-copy-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+.wl-copy-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.10);
+}
+.wl-copy-item-dup {
+    opacity: 0.55;
+}
+.wl-copy-check {
+    margin-top: 3px;
+    flex-shrink: 0;
+    accent-color: rgba(167, 139, 250, 0.95);
+    cursor: pointer;
+}
+.wl-copy-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: 6px;
+    flex-shrink: 0;
+}
+.wl-copy-desc {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+}
+.wl-copy-text {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.88);
+    word-break: break-word;
+}
+.wl-copy-text em {
+    color: rgba(255, 255, 255, 0.35);
+    font-style: italic;
+}
+.wl-copy-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+}
+.wl-copy-proj {
+    padding: 1px 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+}
+.wl-copy-dur { color: rgba(167, 139, 250, 0.85); }
+.wl-copy-quad { color: rgba(255, 255, 255, 0.55); }
+.wl-copy-dup-tag {
+    padding: 1px 6px;
+    background: rgba(255, 152, 0, 0.15);
+    color: rgba(255, 152, 0, 0.9);
+    border-radius: 4px;
+}
+
+.wl-copy-empty {
+    padding: 40px 20px;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.35);
+}
+.wl-copy-empty i {
+    font-size: 28px;
+    margin-bottom: 12px;
+    opacity: 0.5;
+    display: block;
+}
+.wl-copy-empty p { font-size: 13px; margin: 0; }
+
+/* 空状态快速复制引导按钮 */
+.wl-empty-action {
+    margin-top: 16px;
+    padding: 8px 16px;
+    background: rgba(167, 139, 250, 0.15);
+    border: 1px solid rgba(167, 139, 250, 0.25);
+    color: rgba(167, 139, 250, 0.95);
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 12.5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+}
+.wl-empty-action:hover {
+    background: rgba(167, 139, 250, 0.22);
+    border-color: rgba(167, 139, 250, 0.35);
+    transform: translateY(-1px);
+}
+
+/* Toast 提示 */
+.wl-toast {
+    position: absolute;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%) translateY(8px);
+    padding: 10px 18px;
+    background: rgba(20, 20, 28, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 10px;
+    font-size: 12.5px;
+    color: rgba(255, 255, 255, 0.92);
+    opacity: 0;
+    pointer-events: none;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    transition: opacity 0.25s, transform 0.25s;
+    z-index: 10;
+}
+.wl-toast.wl-toast-visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}

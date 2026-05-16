@@ -234,6 +234,98 @@ class WorkLogManager {
         await this._saveEntries();
     }
 
+    /**
+     * 批量复制源日期的工时条目到目标日期。
+     * - 默认跳过 (description + projectId) 已在目标日期存在的条目，避免重复
+     * - startTime/endTime 不复制（避免时间误导），duration/优先级/子条目/任务关联全部保留
+     * @param {string} fromDate  源日期 YYYY-MM-DD
+     * @param {string} toDate    目标日期 YYYY-MM-DD
+     * @param {Object} [options]
+     * @param {boolean} [options.skipDuplicates=true]  跳过描述+项目相同的条目
+     * @param {boolean} [options.copySubItems=true]    是否复制子条目
+     * @returns {Promise<{copied:number, skipped:number, total:number, entries:Array}>}
+     */
+    async copyEntriesFromDate(fromDate, toDate, options = {}) {
+        const { skipDuplicates = true, copySubItems = true } = options;
+        const sourceEntries = this._getEntriesForDate(fromDate);
+        if (sourceEntries.length === 0) {
+            return { copied: 0, skipped: 0, total: 0, entries: [] };
+        }
+
+        const existingKeys = new Set(
+            this._getEntriesForDate(toDate).map(e => `${e.projectId}::${(e.description || '').trim()}`)
+        );
+
+        const now = Date.now();
+        const created = [];
+        let skipped = 0;
+
+        sourceEntries
+            .sort((a, b) => a.createdAt - b.createdAt)
+            .forEach((src, idx) => {
+                const key = `${src.projectId}::${(src.description || '').trim()}`;
+                if (skipDuplicates && existingKeys.has(key)) {
+                    skipped++;
+                    return;
+                }
+                existingKeys.add(key);
+
+                const subItems = copySubItems && Array.isArray(src.subItems)
+                    ? src.subItems.map((si, i) => ({
+                        id: this._genId('si'),
+                        text: si.text || '',
+                        createdAt: now + i
+                    }))
+                    : [];
+
+                created.push({
+                    id: this._genId('te'),
+                    projectId: src.projectId || 'proj_default',
+                    description: src.description || '',
+                    date: toDate,
+                    duration: Math.max(0, Math.round(src.duration || 0)),
+                    startTime: '',
+                    endTime: '',
+                    tags: Array.isArray(src.tags) ? [...src.tags] : [],
+                    memoId: src.memoId || null,
+                    urgency: !!src.urgency,
+                    importance: !!src.importance,
+                    subItems,
+                    createdAt: now + idx,
+                    updatedAt: now + idx
+                });
+            });
+
+        if (created.length > 0) {
+            this._entries.push(...created);
+            await this._saveEntries();
+        }
+
+        return {
+            copied: created.length,
+            skipped,
+            total: sourceEntries.length,
+            entries: created
+        };
+    }
+
+    /**
+     * 找到 dateStr 之前最近一天「有工时记录」的日期。
+     * @param {string} dateStr
+     * @param {number} [maxLookback=30]  最多回看天数，默认 30 天
+     * @returns {string|null}
+     */
+    findPreviousEntryDate(dateStr, maxLookback = 30) {
+        let cursor = this._shiftDate(dateStr, -1);
+        for (let i = 0; i < maxLookback; i++) {
+            if (this._getEntriesForDate(cursor).length > 0) {
+                return cursor;
+            }
+            cursor = this._shiftDate(cursor, -1);
+        }
+        return null;
+    }
+
     // ─── 计时器 ───
     async startTimer(projectId, description, memoId, urgency, importance) {
         if (this._timer) await this.stopTimer();
@@ -624,6 +716,9 @@ class WorkLogManager {
             <div class="wl-entries-container" id="wl-entries-container"></div>
 
             <div class="wl-panel-footer">
+                <button class="wl-footer-btn" data-action="copy-prev-day" title="复制前一天的任务到当前日期">
+                    <i class="fas fa-copy"></i> 复制前日
+                </button>
                 <button class="wl-footer-btn" data-action="week-report" title="周报回顾">
                     <i class="fas fa-calendar-week"></i> 周报
                 </button>
@@ -652,11 +747,19 @@ class WorkLogManager {
         const summary = this.getDailySummary(this._currentDate);
 
         if (summary.count === 0) {
+            const prevDate = this.findPreviousEntryDate(this._currentDate);
+            const prevCount = prevDate ? this._getEntriesForDate(prevDate).length : 0;
             container.innerHTML = `
                 <div class="wl-empty">
                     <i class="fas fa-coffee"></i>
                     <p>${this._currentDate === this._todayStr() ? '今天还没有记录工作日志' : '当天没有工作记录'}</p>
                     <p class="wl-empty-hint">记录今天的工作优先级，输入描述后开始计时或选择快捷时长</p>
+                    ${prevDate ? `
+                        <button class="wl-empty-action" data-action="copy-prev-day">
+                            <i class="fas fa-copy"></i>
+                            一键复制 ${this._formatDate(prevDate)} 的 ${prevCount} 条任务
+                        </button>
+                    ` : ''}
                 </div>
             `;
             return;
@@ -946,6 +1049,9 @@ class WorkLogManager {
                     break;
                 case 'manage-projects':
                     this._showProjectManager();
+                    break;
+                case 'copy-prev-day':
+                    this._showCopyPrevDayDialog();
                     break;
             }
         });
@@ -1399,6 +1505,252 @@ class WorkLogManager {
                 ta.remove();
             }
         });
+    }
+
+    // ─── 复制前一天任务 ───
+    _showCopyPrevDayDialog(sourceDateOverride) {
+        const existing = this._panelEl?.querySelector('.wl-form-overlay');
+        if (existing) existing.remove();
+
+        const targetDate = this._currentDate;
+        const sourceDate = sourceDateOverride || this.findPreviousEntryDate(targetDate);
+
+        const overlay = document.createElement('div');
+        overlay.className = 'wl-form-overlay';
+
+        if (!sourceDate) {
+            overlay.innerHTML = `
+                <div class="wl-form wl-copy-dialog">
+                    <div class="wl-form-title">
+                        <i class="fas fa-copy"></i> 复制前一天任务
+                    </div>
+                    <div class="wl-copy-empty">
+                        <i class="fas fa-inbox"></i>
+                        <p>最近 30 天内没有可复制的工作记录</p>
+                    </div>
+                    <div class="wl-form-actions">
+                        <button class="wl-btn wl-btn-cancel" data-copy-action="close">关闭</button>
+                    </div>
+                </div>
+            `;
+            this._panelEl.appendChild(overlay);
+            requestAnimationFrame(() => overlay.classList.add('wl-form-visible'));
+            overlay.querySelector('[data-copy-action="close"]').addEventListener('click', () => {
+                overlay.classList.remove('wl-form-visible');
+                setTimeout(() => overlay.remove(), 200);
+            });
+            return;
+        }
+
+        const sourceEntries = this._getEntriesForDate(sourceDate)
+            .slice()
+            .sort((a, b) => a.createdAt - b.createdAt);
+        const targetEntries = this._getEntriesForDate(targetDate);
+        const targetKeys = new Set(
+            targetEntries.map(e => `${e.projectId}::${(e.description || '').trim()}`)
+        );
+
+        const sourceLabel = this._formatDate(sourceDate);
+        const targetLabel = this._formatDate(targetDate);
+
+        const itemsHtml = sourceEntries.map(entry => {
+            const proj = this._getProject(entry.projectId);
+            const key = `${entry.projectId}::${(entry.description || '').trim()}`;
+            const dup = targetKeys.has(key);
+            const quadrant = this._getQuadrant(entry);
+            const qDef = this.QUADRANTS.find(q => q.key === quadrant);
+            const hasPriority = entry.urgency || entry.importance;
+            return `
+                <label class="wl-copy-item${dup ? ' wl-copy-item-dup' : ''}" data-entry-id="${entry.id}">
+                    <input type="checkbox" class="wl-copy-check" data-entry-id="${entry.id}" ${dup ? '' : 'checked'}>
+                    <span class="wl-copy-dot" style="background:${proj.color}"></span>
+                    <span class="wl-copy-desc">
+                        <span class="wl-copy-text">${this._escHtml(entry.description) || '<em>无描述</em>'}</span>
+                        <span class="wl-copy-meta">
+                            <span class="wl-copy-proj">${this._escHtml(proj.name)}</span>
+                            <span class="wl-copy-dur">${this._formatDuration(entry.duration)}</span>
+                            ${hasPriority ? `<span class="wl-copy-quad">${qDef.icon} ${qDef.hint}</span>` : ''}
+                            ${dup ? '<span class="wl-copy-dup-tag">已存在</span>' : ''}
+                        </span>
+                    </span>
+                </label>
+            `;
+        }).join('');
+
+        const dupCount = sourceEntries.filter(e =>
+            targetKeys.has(`${e.projectId}::${(e.description || '').trim()}`)
+        ).length;
+
+        overlay.innerHTML = `
+            <div class="wl-form wl-copy-dialog">
+                <div class="wl-form-title">
+                    <i class="fas fa-copy"></i> 复制任务到 ${targetLabel}
+                </div>
+                <div class="wl-copy-summary">
+                    <div class="wl-copy-route">
+                        <span class="wl-copy-from">${sourceLabel}</span>
+                        <i class="fas fa-arrow-right"></i>
+                        <span class="wl-copy-to">${targetLabel}</span>
+                    </div>
+                    <div class="wl-copy-hint">
+                        共 ${sourceEntries.length} 条记录${dupCount > 0 ? `，其中 ${dupCount} 条已存在（默认跳过）` : ''}
+                    </div>
+                </div>
+                <div class="wl-copy-toolbar">
+                    <button type="button" class="wl-copy-toolbtn" data-copy-action="select-all">全选</button>
+                    <button type="button" class="wl-copy-toolbtn" data-copy-action="select-none">全不选</button>
+                    <button type="button" class="wl-copy-toolbtn" data-copy-action="select-new">仅选新增</button>
+                    <label class="wl-copy-subitems-toggle">
+                        <input type="checkbox" id="wl-copy-subitems" checked>
+                        <span>包含子条目</span>
+                    </label>
+                </div>
+                <div class="wl-copy-list">${itemsHtml}</div>
+                <div class="wl-form-actions">
+                    <button class="wl-btn wl-btn-cancel" data-copy-action="close">取消</button>
+                    <button class="wl-btn wl-btn-save" data-copy-action="confirm">
+                        <i class="fas fa-copy"></i> 复制选中项
+                    </button>
+                </div>
+            </div>
+        `;
+
+        this._panelEl.appendChild(overlay);
+        requestAnimationFrame(() => overlay.classList.add('wl-form-visible'));
+
+        const close = () => {
+            overlay.classList.remove('wl-form-visible');
+            setTimeout(() => overlay.remove(), 200);
+        };
+
+        overlay.addEventListener('click', async (e) => {
+            const target = e.target.closest('[data-copy-action]');
+            if (!target) return;
+            const action = target.dataset.copyAction;
+
+            if (action === 'close') {
+                close();
+                return;
+            }
+
+            if (action === 'select-all') {
+                overlay.querySelectorAll('.wl-copy-check').forEach(cb => { cb.checked = true; });
+                return;
+            }
+
+            if (action === 'select-none') {
+                overlay.querySelectorAll('.wl-copy-check').forEach(cb => { cb.checked = false; });
+                return;
+            }
+
+            if (action === 'select-new') {
+                overlay.querySelectorAll('.wl-copy-item').forEach(item => {
+                    const cb = item.querySelector('.wl-copy-check');
+                    if (cb) cb.checked = !item.classList.contains('wl-copy-item-dup');
+                });
+                return;
+            }
+
+            if (action === 'confirm') {
+                const checkedIds = Array.from(overlay.querySelectorAll('.wl-copy-check'))
+                    .filter(cb => cb.checked)
+                    .map(cb => cb.dataset.entryId);
+                if (checkedIds.length === 0) {
+                    close();
+                    return;
+                }
+                const copySubItems = overlay.querySelector('#wl-copy-subitems')?.checked !== false;
+                target.disabled = true;
+                target.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 复制中...';
+
+                const selectedSet = new Set(checkedIds);
+                const result = await this._copySelectedEntries(
+                    sourceDate,
+                    targetDate,
+                    selectedSet,
+                    { copySubItems }
+                );
+
+                close();
+                this._refreshPanel();
+                this._toast(`已复制 ${result.copied} 条任务到 ${targetLabel}${result.skipped > 0 ? `（跳过 ${result.skipped} 条重复项）` : ''}`);
+            }
+        });
+    }
+
+    /**
+     * 内部方法：复制源日期中选中 ID 集合的条目到目标日期。
+     */
+    async _copySelectedEntries(fromDate, toDate, selectedIdSet, options = {}) {
+        const { copySubItems = true } = options;
+        const sourceEntries = this._getEntriesForDate(fromDate)
+            .filter(e => selectedIdSet.has(e.id))
+            .sort((a, b) => a.createdAt - b.createdAt);
+
+        if (sourceEntries.length === 0) return { copied: 0, skipped: 0 };
+
+        const existingKeys = new Set(
+            this._getEntriesForDate(toDate).map(e => `${e.projectId}::${(e.description || '').trim()}`)
+        );
+
+        const now = Date.now();
+        const created = [];
+        let skipped = 0;
+
+        sourceEntries.forEach((src, idx) => {
+            const key = `${src.projectId}::${(src.description || '').trim()}`;
+            if (existingKeys.has(key)) {
+                skipped++;
+                return;
+            }
+            existingKeys.add(key);
+
+            const subItems = copySubItems && Array.isArray(src.subItems)
+                ? src.subItems.map((si, i) => ({
+                    id: this._genId('si'),
+                    text: si.text || '',
+                    createdAt: now + i
+                }))
+                : [];
+
+            created.push({
+                id: this._genId('te'),
+                projectId: src.projectId || 'proj_default',
+                description: src.description || '',
+                date: toDate,
+                duration: Math.max(0, Math.round(src.duration || 0)),
+                startTime: '',
+                endTime: '',
+                tags: Array.isArray(src.tags) ? [...src.tags] : [],
+                memoId: src.memoId || null,
+                urgency: !!src.urgency,
+                importance: !!src.importance,
+                subItems,
+                createdAt: now + idx,
+                updatedAt: now + idx
+            });
+        });
+
+        if (created.length > 0) {
+            this._entries.push(...created);
+            await this._saveEntries();
+        }
+
+        return { copied: created.length, skipped };
+    }
+
+    _toast(message) {
+        const existing = this._panelEl?.querySelector('.wl-toast');
+        if (existing) existing.remove();
+        const toast = document.createElement('div');
+        toast.className = 'wl-toast';
+        toast.textContent = message;
+        this._panelEl?.appendChild(toast);
+        requestAnimationFrame(() => toast.classList.add('wl-toast-visible'));
+        setTimeout(() => {
+            toast.classList.remove('wl-toast-visible');
+            setTimeout(() => toast.remove(), 300);
+        }, 2400);
     }
 
     // ─── 项目管理 ───
