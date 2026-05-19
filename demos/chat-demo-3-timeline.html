@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo 3 - 时间线对话（GitHub Discussion 风格）</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a14; color: #c8c8d0; font-family: -apple-system, 'SF Pro', sans-serif; display: flex; justify-content: center; padding: 20px; min-height: 100vh; }
+.chat-container { width: 100%; max-width: 720px; display: flex; flex-direction: column; height: 90vh; }
+.chat-header { padding: 20px 24px; border-bottom: 1px solid rgba(255,255,255,.06); }
+.chat-header h2 { font-size: 18px; font-weight: 700; color: #f0f0f5; margin-bottom: 4px; }
+.chat-header p { font-size: 12px; color: rgba(255,255,255,.35); }
+.chat-body { flex: 1; overflow-y: auto; padding: 0 24px; position: relative; }
+.timeline { position: relative; padding: 20px 0 20px 40px; }
+.timeline::before { content: ''; position: absolute; left: 16px; top: 0; bottom: 0; width: 2px; background: linear-gradient(to bottom, rgba(99,102,241,.4), rgba(99,102,241,.05)); }
+.tl-item { position: relative; margin-bottom: 24px; animation: fadeIn .4s ease; }
+.tl-dot { position: absolute; left: -32px; top: 4px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #1e1e2e; z-index: 1; }
+.tl-dot.active { box-shadow: 0 0 8px rgba(99,102,241,.5); }
+.tl-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.tl-avatar { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; }
+.tl-name { font-size: 13px; font-weight: 600; color: #e0e0e8; }
+.tl-tag { font-size: 10px; padding: 1px 6px; border-radius: 4px; }
+.tl-time { font-size: 10px; color: rgba(255,255,255,.25); margin-left: auto; }
+.tl-body {
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 10px;
+  padding: 14px 18px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: rgba(255,255,255,.65);
+}
+.tl-body p { margin: 4px 0; }
+.tl-body strong { color: #c4b5fd; }
+.tl-body code { background: rgba(139,92,246,.12); padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+.tl-body pre { background: rgba(0,0,0,.35); border-radius: 6px; padding: 10px; margin: 8px 0; font-size: 12px; overflow-x: auto; }
+.tl-body ul { padding-left: 16px; margin: 4px 0; }
+.tl-body li { margin: 2px 0; }
+.tl-reactions { display: flex; gap: 6px; margin-top: 8px; }
+.tl-reaction { padding: 2px 8px; border-radius: 12px; font-size: 11px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06); cursor: pointer; transition: all .2s; }
+.tl-reaction:hover { background: rgba(99,102,241,.1); border-color: rgba(99,102,241,.2); }
+.tl-typing .tl-body { border-color: rgba(99,102,241,.2); background: rgba(99,102,241,.03); }
+.typing-bar { display: flex; align-items: center; gap: 6px; font-size: 12px; color: rgba(255,255,255,.35); }
+.typing-bar .dots span { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: #6366f1; margin: 0 1px; animation: blink .8s infinite; }
+.typing-bar .dots span:nth-child(2) { animation-delay: .2s; }
+.typing-bar .dots span:nth-child(3) { animation-delay: .4s; }
+@keyframes blink { 0%,100% { opacity:.2; } 50% { opacity:1; } }
+@keyframes fadeIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+.round-divider { display: flex; align-items: center; gap: 12px; margin: 20px 0; font-size: 11px; color: rgba(255,255,255,.2); }
+.round-divider::before, .round-divider::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,.06); }
+.chat-footer { padding: 16px 24px; border-top: 1px solid rgba(255,255,255,.06); display: flex; gap: 8px; }
+.chat-footer input { flex: 1; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 8px; padding: 10px 16px; color: #c8c8d0; font-size: 13px; outline: none; }
+.chat-footer button { padding: 8px 18px; background: #6366f1; border: none; border-radius: 8px; color: #fff; font-size: 13px; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="chat-container">
+  <div class="chat-header">
+    <h2>Demo 3 — 时间线对话</h2>
+    <p>开发一个贪吃蛇小游戏 · 4 位参与者 · 第 1 轮</p>
+  </div>
+  <div class="chat-body">
+    <div class="timeline">
+      <div class="round-divider">第 1 轮讨论</div>
+
+      <div class="tl-item">
+        <div class="tl-dot" style="background:#6366f1"></div>
+        <div class="tl-header">
+          <div class="tl-avatar" style="background:#6366f1">产</div>
+          <span class="tl-name">产品经理</span>
+          <span class="tl-tag" style="background:rgba(99,102,241,.12);color:#818cf8">需求</span>
+          <span class="tl-time">20.7s</span>
+        </div>
+        <div class="tl-body">
+          <p><strong>核心功能 MVP：</strong></p>
+          <ul>
+            <li>经典贪吃蛇玩法，WASD / 方向键控制</li>
+            <li>10×10 最小网格，食物随机生成</li>
+            <li>分数实时显示，游戏结束显示最终分数</li>
+            <li>一键重新开始</li>
+          </ul>
+          <p>用户故事：作为玩家，我想在浏览器里直接玩贪吃蛇，不需要下载安装。</p>
+        </div>
+        <div class="tl-reactions">
+          <span class="tl-reaction">👍 3</span>
+          <span class="tl-reaction">💡 1</span>
+        </div>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-dot" style="background:#8b5cf6"></div>
+        <div class="tl-header">
+          <div class="tl-avatar" style="background:#8b5cf6">架</div>
+          <span class="tl-name">架构师</span>
+          <span class="tl-tag" style="background:rgba(139,92,246,.12);color:#a78bfa">架构</span>
+          <span class="tl-time">21.1s</span>
+        </div>
+        <div class="tl-body">
+          <p><strong>技术选型：</strong>纯 TypeScript + Canvas API</p>
+          <pre>SnakeEngine (pure logic)
+  ├── Grid: 管理网格坐标
+  ├── Snake: 蛇的状态 & 移动
+  └── Food: 食物生成逻辑
+
+CanvasRenderer (rendering)
+  └── draw(state) → Canvas 2D
+
+GameController (orchestrator)
+  ├── 绑定键盘事件
+  ├── 管理游戏循环
+  └── 处理 UI 交互</pre>
+          <p>测试策略：引擎层 100% 单元测试覆盖</p>
+        </div>
+        <div class="tl-reactions">
+          <span class="tl-reaction">🏗️ 2</span>
+        </div>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-dot" style="background:#ec4899"></div>
+        <div class="tl-header">
+          <div class="tl-avatar" style="background:#ec4899">开</div>
+          <span class="tl-name">一线开发</span>
+          <span class="tl-tag" style="background:rgba(236,72,153,.12);color:#f472b6">实现</span>
+          <span class="tl-time">18.3s</span>
+        </div>
+        <div class="tl-body">
+          <p>架构清晰，开始编码。以下是核心引擎：</p>
+          <pre>class SnakeEngine {
+  constructor(width, height) {
+    this.grid = { width, height };
+    this.snake = [{ x: 5, y: 5 }, { x: 4, y: 5 }];
+    this.direction = 'Right';
+    this.food = this.spawnFood();
+    this.score = 0;
+    this.gameOver = false;
+  }
+
+  tick() {
+    if (this.gameOver) return;
+    const head = { ...this.snake[0] };
+    // move, check collision, check food...
+  }
+}</pre>
+        </div>
+      </div>
+
+      <div class="tl-item tl-typing">
+        <div class="tl-dot active" style="background:#14b8a6"></div>
+        <div class="tl-header">
+          <div class="tl-avatar" style="background:#14b8a6">技</div>
+          <span class="tl-name">技术负责人</span>
+        </div>
+        <div class="tl-body">
+          <div class="typing-bar">
+            <div class="dots"><span></span><span></span><span></span></div>
+            正在总结讨论要点…
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="chat-footer">
+    <input type="text" placeholder="加入讨论…">
+    <button>发送</button>
+  </div>
+</div>
+</body>
+</html>

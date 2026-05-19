@@ -24,12 +24,19 @@
  */
 
 import type { FastifyInstance } from 'fastify';
+
+const log = {
+  info: (msg: string, data?: any) => console.log(`[multi-role-routes] ${msg}`, data ?? ''),
+  error: (msg: string, err?: any) => console.error(`[multi-role-routes] ✖ ${msg}`, err?.message || err || ''),
+};
+
 import {
   analyzeTask,
   approveTask,
   getTaskAnalysis,
   createDiscussion,
   runDiscussionRound,
+  streamDiscussionRound,
   concludeDiscussion,
   getDiscussion,
   createExecutionSquad,
@@ -41,6 +48,18 @@ import {
   generateProjectReport,
   ENTERPRISE_ROLES,
   getRoleById,
+  resolveModelForRole,
+  setRoleModelOverride,
+  removeRoleModelOverride,
+  getRoleModelOverrides,
+  setModelTierDefault,
+  getModelTierDefaults,
+  getAvailableModels,
+  getModelRecommendation,
+  createProgressItems,
+  updateProgressItem,
+  getProgressSummary,
+  parseReferences,
 } from '../services/multi-role-engine.js';
 import { getDb } from '../services/database.js';
 
@@ -49,23 +68,114 @@ export async function multiRoleRoutes(app: FastifyInstance) {
   // ─── Enterprise Roles ───
 
   app.get('/roles', async () => {
-    return { roles: ENTERPRISE_ROLES.map(({ skill, ...r }) => r) };
+    const overrides = getRoleModelOverrides();
+    return {
+      roles: ENTERPRISE_ROLES.map(({ skill, ...r }) => ({
+        ...r,
+        resolvedModel: resolveModelForRole(getRoleById(r.id)!),
+        modelOverride: overrides[r.id] || null,
+      })),
+    };
   });
 
   app.get('/roles/:id', async (req) => {
     const { id } = req.params as { id: string };
     const role = getRoleById(id);
     if (!role) return { error: 'Role not found' };
-    return role;
+    const overrides = getRoleModelOverrides();
+    return {
+      ...role,
+      resolvedModel: resolveModelForRole(role),
+      modelOverride: overrides[id] || null,
+    };
+  });
+
+  // ─── Model Configuration ───
+
+  app.get('/models/config', async () => {
+    const overrides = getRoleModelOverrides();
+    const tierDefaults = getModelTierDefaults();
+    return {
+      tierDefaults,
+      roleOverrides: overrides,
+      roles: ENTERPRISE_ROLES.map((r) => ({
+        id: r.id,
+        name: r.name,
+        modelTier: r.modelTier,
+        defaultModel: r.defaultModel || null,
+        resolvedModel: resolveModelForRole(r),
+        userOverride: overrides[r.id] || null,
+      })),
+    };
+  });
+
+  app.put('/models/config', async (req) => {
+    const body = req.body as {
+      roleOverrides?: Record<string, string | null>;
+      tierDefaults?: Record<string, string>;
+      autoAssign?: boolean;
+    };
+
+    if (body.roleOverrides) {
+      for (const [roleId, model] of Object.entries(body.roleOverrides)) {
+        if (model === null || model === '') {
+          removeRoleModelOverride(roleId);
+        } else {
+          setRoleModelOverride(roleId, model);
+        }
+      }
+    }
+
+    if (body.tierDefaults) {
+      for (const [tier, model] of Object.entries(body.tierDefaults)) {
+        if (['fast', 'balanced', 'powerful'].includes(tier)) {
+          setModelTierDefault(tier as any, model);
+        }
+      }
+    }
+
+    const overrides = getRoleModelOverrides();
+    return {
+      success: true,
+      roleOverrides: overrides,
+      tierDefaults: getModelTierDefaults(),
+    };
+  });
+
+  app.get('/models/available', async () => {
+    return { models: getAvailableModels() };
+  });
+
+  app.post('/models/recommend', async (req) => {
+    const { roleId, complexity, taskType } = req.body as {
+      roleId: string;
+      complexity: 1 | 2 | 3 | 4 | 5;
+      taskType?: string;
+    };
+    if (!roleId || !complexity) return { error: 'roleId and complexity are required' };
+    return getModelRecommendation(roleId, complexity, taskType);
   });
 
   // ─── Task Analysis ───
 
-  app.post('/tasks/analyze', async (req) => {
-    const { requirement, projectId } = req.body as { requirement: string; projectId?: string };
+  app.post('/tasks/analyze', async (req, reply) => {
+    const { requirement, projectId, modelOverrides } = req.body as {
+      requirement: string;
+      projectId?: string;
+      modelOverrides?: Record<string, string>;
+    };
     if (!requirement) return { error: 'requirement is required' };
-    const analysis = await analyzeTask(requirement, projectId);
-    return analysis;
+    log.info(`POST /tasks/analyze: "${requirement.slice(0, 80)}"`);
+    try {
+      const analysis = await analyzeTask(requirement, projectId, modelOverrides);
+      log.info(`POST /tasks/analyze 完成: id=${analysis.id.slice(0, 8)}, roles=${analysis.recommendedRoles.length}`);
+      return analysis;
+    } catch (err: any) {
+      log.error('POST /tasks/analyze 失败', err);
+      app.log.error(err, 'tasks/analyze failed');
+      reply.status(500);
+      return { error: err.message || 'Analysis failed' };
+    }
   });
 
   app.get('/tasks/:id', async (req) => {
@@ -116,7 +226,9 @@ export async function multiRoleRoutes(app: FastifyInstance) {
     if (!topic || !phase || !roleIds?.length) {
       return { error: 'topic, phase, and roleIds are required' };
     }
+    log.info(`POST /tasks/${id.slice(0, 8)}/discussions: roles=[${roleIds.join(',')}]`);
     const discussion = await createDiscussion(id, topic, phase, roleIds, maxRounds);
+    log.info(`讨论已创建: ${discussion.id.slice(0, 8)}`);
     return discussion;
   });
 
@@ -136,20 +248,61 @@ export async function multiRoleRoutes(app: FastifyInstance) {
 
   app.post('/discussions/:id/round', async (req) => {
     const { id } = req.params as { id: string };
+    log.info(`POST /discussions/${id.slice(0, 8)}/round`);
     try {
       const round = await runDiscussionRound(id);
+      log.info(`讨论轮次完成: round=${round.roundNumber}, messages=${round.messages.length}`);
       return round;
     } catch (e: any) {
+      log.error(`讨论轮次失败: ${id.slice(0, 8)}`, e);
       return { error: e.message };
     }
   });
 
+  app.post('/discussions/:id/round/stream', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    log.info(`POST /discussions/${id.slice(0, 8)}/round/stream [SSE]`);
+
+    reply.hijack();
+
+    const raw = reply.raw;
+    raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+      'Access-Control-Allow-Origin': '*',
+    });
+
+    const sendSSE = (event: string, data: any) => {
+      raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    try {
+      for await (const ev of streamDiscussionRound(id)) {
+        if (ev.type === 'error') {
+          sendSSE('error', { message: ev.content });
+          break;
+        }
+        sendSSE(ev.type, ev);
+      }
+    } catch (e: any) {
+      log.error(`流式讨论轮次失败: ${id.slice(0, 8)}`, e);
+      sendSSE('error', { message: e.message });
+    }
+
+    raw.end();
+  });
+
   app.post('/discussions/:id/conclude', async (req) => {
     const { id } = req.params as { id: string };
+    log.info(`POST /discussions/${id.slice(0, 8)}/conclude`);
     try {
       const conclusion = await concludeDiscussion(id);
+      log.info(`讨论总结完成: decisions=${conclusion.decisions?.length || 0}, actionItems=${conclusion.actionItems?.length || 0}`);
       return conclusion;
     } catch (e: any) {
+      log.error(`讨论总结失败: ${id.slice(0, 8)}`, e);
       return { error: e.message };
     }
   });
@@ -234,5 +387,46 @@ export async function multiRoleRoutes(app: FastifyInstance) {
     } catch (e: any) {
       return { error: e.message };
     }
+  });
+
+  // ─── Progress Tracking (TodoWrite-style) ───
+
+  app.get('/tasks/:id/progress', async (req) => {
+    const { id } = req.params as { id: string };
+    return getProgressSummary(id);
+  });
+
+  app.post('/tasks/:id/progress', async (req) => {
+    const { id } = req.params as { id: string };
+    const { items } = req.body as {
+      items: { title: string; assignedTo: string; phase: string; order: number }[];
+    };
+    if (!items?.length) return { error: 'items array is required' };
+
+    const created = createProgressItems(
+      id,
+      items.map((i) => ({ ...i, taskAnalysisId: id, status: 'pending' as const })),
+    );
+    return { success: true, items: created };
+  });
+
+  app.patch('/progress/:itemId', async (req) => {
+    const { itemId } = req.params as { itemId: string };
+    const updates = req.body as {
+      status?: 'pending' | 'in_progress' | 'completed' | 'failed' | 'blocked';
+      output?: string;
+    };
+    const ok = updateProgressItem(itemId, updates);
+    return ok ? { success: true } : { error: 'Progress item not found' };
+  });
+
+  // ─── Agent References ───
+
+  app.post('/discussions/:id/references', async (req) => {
+    const { id } = req.params as { id: string };
+    const { content } = req.body as { content: string };
+    if (!content) return { error: 'content is required' };
+    const refs = parseReferences(content, id);
+    return { references: refs, count: refs.length };
   });
 }

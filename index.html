@@ -12,6 +12,8 @@
     <link rel="stylesheet" href="css/schedule.css">
     <link rel="stylesheet" href="css/weekview.css">
     <link rel="stylesheet" href="css/blog.css">
+    <link rel="stylesheet" href="css/snake-game.css">
+    <link rel="stylesheet" href="css/tetris-game.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
@@ -268,6 +270,14 @@
             <i class="fas fa-pen-nib"></i>
         </button>
         <div class="dock-divider" aria-hidden="true"></div>
+        <button class="dock-btn" id="snake-dock-btn" title="贪吃蛇">
+            <i class="fas fa-gamepad"></i>
+        </button>
+        <div class="dock-divider" aria-hidden="true"></div>
+        <button class="dock-btn" id="tetris-dock-btn" title="俄罗斯方块">
+            <i class="fas fa-th"></i>
+        </button>
+        <div class="dock-divider" aria-hidden="true"></div>
         <button class="dock-btn" id="agent-dock-btn" title="Agent 矩阵">
             <i class="fas fa-robot"></i>
             <span class="cb-dock-indicator disconnected"></span>
@@ -280,6 +290,45 @@
         <button class="dock-btn" id="memo-toggle-btn" title="任务面板">
             <i class="fas fa-tasks"></i>
         </button>
+    </div>
+
+    <div class="snake-game-panel" id="snake-game-panel">
+        <div class="snake-game-header">
+            <span class="snake-game-title"><i class="fas fa-gamepad"></i> 贪吃蛇</span>
+            <button class="snake-game-close" id="snake-game-close" aria-label="关闭">×</button>
+        </div>
+        <canvas id="snake-game-canvas" class="snake-game-canvas" width="300" height="300"></canvas>
+        <div class="snake-game-footer">
+            <div class="snake-game-meta">
+                <span>得分：<strong id="snake-game-score">0</strong></span>
+                <span id="snake-game-status">已重置，点击“开始”启动</span>
+            </div>
+            <div class="snake-game-actions">
+                <button class="snake-game-btn" id="snake-game-toggle">开始</button>
+                <button class="snake-game-btn secondary" id="snake-game-restart">重新开始</button>
+            </div>
+        </div>
+        <div class="snake-game-hint">方向键 / WASD 控制移动，空格键暂停或继续。</div>
+    </div>
+
+    <div class="tetris-game-panel" id="tetris-game-panel">
+        <div class="tetris-game-header">
+            <span class="tetris-game-title"><i class="fas fa-th"></i> 俄罗斯方块</span>
+            <button class="tetris-game-close" id="tetris-game-close" aria-label="关闭">×</button>
+        </div>
+        <canvas id="tetris-game-canvas" class="tetris-game-canvas" width="300" height="600" data-logical-width="300" data-logical-height="600"></canvas>
+        <div class="tetris-game-footer">
+            <div class="tetris-game-meta">
+                <span>得分：<strong id="tetris-game-score">0</strong></span>
+                <span>消除行数：<strong id="tetris-game-lines">0</strong></span>
+                <span id="tetris-game-status">已重置，点击“开始”启动</span>
+            </div>
+            <div class="tetris-game-actions">
+                <button class="tetris-game-btn" id="tetris-game-toggle">开始</button>
+                <button class="tetris-game-btn secondary" id="tetris-game-restart">重新开始</button>
+            </div>
+        </div>
+        <div class="tetris-game-hint">← → / A D 平移，↑ / K / X 旋转，↓ / S 软降，C / End 硬降，空格暂停。</div>
     </div>
 
     <script src="vendor/marked.min.js"></script>
@@ -308,12 +357,16 @@
     <script src="js/bilibili-controller.js"></script>
     <script src="js/worklog.js"></script>
     <script src="js/blog.js"></script>
+    <script src="js/writing-assistant.js"></script>
     <script src="js/schedule.js"></script>
     <script src="js/weekview.js"></script>
     <link rel="stylesheet" href="css/cursor-bridge.css">
     <link rel="stylesheet" href="css/whitebox-observability.css">
     <script src="js/cursor-bridge.js"></script>
     <script src="js/whitebox-observability.js"></script>
+    <script src="js/snake-game.js"></script>
+    <script src="js/tetris-effect-tiers.js"></script>
+    <script src="js/tetris-game.js"></script>
     <script src="js/main.js"></script>
   </body>
 </html>

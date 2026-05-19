@@ -124,14 +124,12 @@
             name: 'Grok', tab: 'Grok', iconClass: 'icon-grok', iconText: 'X',
             models: [
                 { id: 'grok-4.3', name: 'Grok 4.3', desc: '最新版本', level: 'high', levelLabel: '高级' },
-                { id: 'grok-4-20', name: 'Grok 4-20', desc: '深度思考', level: 'extra-high', levelLabel: '极高' },
             ]
         },
         {
             name: 'Composer', tab: 'Composer', iconClass: 'icon-composer', iconText: '★',
             models: [
                 { id: 'composer-2', name: 'Composer 2', desc: 'Cursor 专属多文件编辑', level: 'high', levelLabel: '高级' },
-                { id: 'composer-2-fast', name: 'Composer 2 Fast', desc: '快速草稿', level: 'fast', levelLabel: '快速' },
             ]
         },
         {
@@ -242,10 +240,13 @@
         // ─── API Layer ───
 
         async _api(path, opts = {}) {
-            const res = await fetch(this.baseUrl + path, {
-                headers: { 'Content-Type': 'application/json' },
-                ...opts,
-            });
+            const fetchOpts = { ...opts };
+            const method = (fetchOpts.method || 'GET').toUpperCase();
+            if ((method === 'POST' || method === 'PUT' || method === 'PATCH') && !fetchOpts.body) {
+                fetchOpts.body = '{}';
+            }
+            fetchOpts.headers = { 'Content-Type': 'application/json', ...(fetchOpts.headers || {}) };
+            const res = await fetch(this.baseUrl + path, fetchOpts);
             if (res.status === 204) return null;
             if (!res.ok) {
                 const body = await res.json().catch(() => ({}));
@@ -999,6 +1000,12 @@
                                 <div class="cb-collab-step-title"><span class="cb-collab-step-num">1</span> 输入需求</div>
                                 <p class="cb-collab-hint">描述你想完成的任务，系统将自动分析并分配给 10 个企业角色协同完成。</p>
                                 <textarea id="cb-collab-requirement" rows="5" placeholder="例如：开发一个任务提醒功能，支持定时提醒和重复任务&#10;&#10;提示：描述越详细，分析越精准。可包含技术栈、功能点、约束条件等。"></textarea>
+                                <div class="cb-collab-model-picker" id="cb-collab-model-picker">
+                                    <label class="cb-collab-model-picker-label"><i class="fas fa-microchip"></i> 协作模型</label>
+                                    <select id="cb-collab-global-model" class="cb-collab-global-model-select">
+                                        <option value="">自动分配（推荐）</option>
+                                    </select>
+                                </div>
                                 <div class="cb-collab-actions">
                                     <button class="cb-btn cb-btn-primary" id="cb-collab-analyze"><i class="fas fa-brain"></i> 智能分析</button>
                                 </div>
@@ -3352,6 +3359,45 @@
         // ═══════════ 多角色协作 ═══════════
 
         _collabState = { taskId: null, discussionId: null, step: 'input' };
+        _collabRoleMap = {};
+        _collabAvailableModels = [];
+        _collabRolesPromise = null;
+
+        _loadCollabRoles() {
+            if (this._collabRolesPromise) return this._collabRolesPromise;
+            this._collabRolesPromise = (async () => {
+                try {
+                    const [rolesData, modelsData] = await Promise.all([
+                        this._api('/roles'),
+                        this._api('/models/available'),
+                    ]);
+                    if (rolesData?.roles) {
+                        for (const r of rolesData.roles) {
+                            this._collabRoleMap[r.id] = r;
+                        }
+                    }
+                    if (modelsData?.models) {
+                        this._collabAvailableModels = modelsData.models;
+                    }
+                } catch {
+                    this._collabRolesPromise = null;
+                }
+            })();
+            return this._collabRolesPromise;
+        }
+
+        _getRoleInfo(roleId) {
+            const role = this._collabRoleMap[roleId];
+            return {
+                id: roleId,
+                name: role?.name || roleId,
+                icon: role?.icon || '👤',
+                nameEn: role?.nameEn || roleId,
+                modelTier: role?.modelTier || 'balanced',
+                resolvedModel: role?.resolvedModel || '',
+                modelOverride: role?.modelOverride || null,
+            };
+        }
 
         _showCollabModal() {
             if (!this.connected) { this._showToast('cursor-bridge 服务未连接', 'error'); return; }
@@ -3360,7 +3406,26 @@
             modal.classList.add('open');
             this._collabGoToStep('input');
             this._collabState = { taskId: null, discussionId: null, step: 'input' };
+            this._loadCollabRoles().then(() => this._populateCollabModelPicker());
             this._bindCollabEvents();
+        }
+
+        _populateCollabModelPicker() {
+            const sel = this._panelEl?.querySelector('#cb-collab-global-model');
+            if (!sel) return;
+            const existing = sel.querySelectorAll('option:not(:first-child)');
+            existing.forEach(o => o.remove());
+
+            const allModels = this.models?.length ? this.models : [];
+            const collabModels = this._collabAvailableModels || [];
+            const combined = collabModels.length ? collabModels : allModels;
+
+            for (const m of combined) {
+                const opt = document.createElement('option');
+                opt.value = m.id;
+                opt.textContent = m.label || m.name || m.id;
+                sel.appendChild(opt);
+            }
         }
 
         _hideCollabModal() {
@@ -3408,15 +3473,29 @@
             const requirement = this._panelEl?.querySelector('#cb-collab-requirement')?.value?.trim();
             if (!requirement) { this._showToast('请输入需求描述', 'warning'); return; }
 
+            const globalModel = this._panelEl?.querySelector('#cb-collab-global-model')?.value || '';
+            this._collabState.globalModel = globalModel || null;
+
             const btn = this._panelEl?.querySelector('#cb-collab-analyze');
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 分析中…';
 
             try {
-                const data = await this._api('/tasks/analyze', {
-                    method: 'POST',
-                    body: JSON.stringify({ requirement }),
-                });
+                const analyzeBody = { requirement };
+                if (globalModel) {
+                    const overrides = {};
+                    for (const r of Object.values(this._collabRoleMap)) {
+                        overrides[r.id] = globalModel;
+                    }
+                    analyzeBody.modelOverrides = overrides;
+                }
+                const [data] = await Promise.all([
+                    this._api('/tasks/analyze', {
+                        method: 'POST',
+                        body: JSON.stringify(analyzeBody),
+                    }),
+                    this._loadCollabRoles(),
+                ]);
                 if (data.error) throw new Error(data.error);
                 this._collabState.taskId = data.id;
                 this._renderCollabAnalysis(data);
@@ -3437,23 +3516,44 @@
             const plan = data.executionPlan || {};
             const phases = plan.phases || [];
 
+            const enrichedRoles = roles.map(r => {
+                const info = this._getRoleInfo(r.roleId || r.id);
+                return { ...r, ...info, reason: r.reason, priority: r.priority, phase: r.phase };
+            });
+
+            const modelOptions = this._collabAvailableModels.map(m =>
+                `<option value="${m.id}">${m.label}</option>`
+            ).join('');
+
             container.innerHTML = `
                 <div class="cb-collab-card">
                     <div class="cb-collab-card-title"><i class="fas fa-clipboard-check"></i> 需求摘要</div>
                     <div class="cb-collab-summary-grid">
                         <div class="cb-collab-kv"><span>类型</span><strong>${summary.type || '-'}</strong></div>
-                        <div class="cb-collab-kv"><span>规模</span><strong>${summary.scale || '-'}</strong></div>
-                        <div class="cb-collab-kv"><span>复杂度</span><strong>${summary.complexity || '-'}</strong></div>
+                        <div class="cb-collab-kv"><span>规模</span><strong>${summary.scope || summary.scale || '-'}</strong></div>
+                        <div class="cb-collab-kv"><span>复杂度</span><strong>${summary.estimatedComplexity || summary.complexity || '-'}</strong></div>
                         <div class="cb-collab-kv"><span>技术栈</span><strong>${(summary.techStack || []).join(', ') || '-'}</strong></div>
                     </div>
                 </div>
                 <div class="cb-collab-card">
-                    <div class="cb-collab-card-title"><i class="fas fa-user-group"></i> 推荐角色 (${roles.length}人)</div>
-                    <div class="cb-collab-roles">${roles.map(r => `
-                        <span class="cb-collab-role-chip">
-                            <span class="cb-collab-role-icon">${r.icon || '👤'}</span>
-                            ${r.name || r.id}
+                    <div class="cb-collab-card-title"><i class="fas fa-user-group"></i> 推荐角色 (${enrichedRoles.length}人)</div>
+                    <div class="cb-collab-roles">${enrichedRoles.map(r => `
+                        <span class="cb-collab-role-chip" title="${r.reason || ''}">
+                            <span class="cb-collab-role-icon">${r.icon}</span>
+                            ${r.name}
                         </span>
+                    `).join('')}</div>
+                </div>
+                <div class="cb-collab-card">
+                    <div class="cb-collab-card-title"><i class="fas fa-microchip"></i> 模型配置</div>
+                    <div class="cb-collab-model-config">${enrichedRoles.map(r => `
+                        <div class="cb-collab-model-row" data-role-id="${r.id}">
+                            <span class="cb-collab-model-label">${r.icon} ${r.name}</span>
+                            <select class="cb-collab-model-select" data-role-id="${r.id}">
+                                <option value="">自动 (${r.modelTier})</option>
+                                ${modelOptions}
+                            </select>
+                        </div>
                     `).join('')}</div>
                 </div>
                 ${phases.length ? `
@@ -3471,6 +3571,32 @@
                 </div>
                 ` : ''}
             `;
+
+            enrichedRoles.forEach(r => {
+                const sel = container.querySelector(`.cb-collab-model-select[data-role-id="${r.id}"]`);
+                if (sel) {
+                    const currentModel = r.modelOverride || r.resolvedModel;
+                    if (currentModel) sel.value = currentModel;
+                    sel.addEventListener('change', () => this._onCollabModelChange(r.id, sel.value));
+                }
+            });
+        }
+
+        async _onCollabModelChange(roleId, model) {
+            try {
+                await this._api('/models/config', {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        roleOverrides: { [roleId]: model || null },
+                    }),
+                });
+                if (this._collabRoleMap[roleId]) {
+                    this._collabRoleMap[roleId].modelOverride = model || null;
+                    this._collabRoleMap[roleId].resolvedModel = model || this._collabRoleMap[roleId].resolvedModel;
+                }
+            } catch (err) {
+                this._showToast(`模型设置失败: ${err.message}`, 'error');
+            }
         }
 
         async _collabApprove() {
@@ -3484,7 +3610,7 @@
             try {
                 await this._api(`/tasks/${taskId}/approve`, { method: 'PATCH', body: '{}' });
                 const taskData = await this._api(`/tasks/${taskId}`);
-                const roles = (taskData?.recommendedRoles || []).map(r => r.id).filter(Boolean);
+                const roles = (taskData?.recommendedRoles || []).map(r => r.roleId || r.id).filter(Boolean);
                 const disc = await this._api(`/tasks/${taskId}/discussions`, {
                     method: 'POST',
                     body: JSON.stringify({
@@ -3496,7 +3622,9 @@
                 });
                 if (disc.error) throw new Error(disc.error);
                 this._collabState.discussionId = disc.id;
+                this._collabState.topic = taskData?.originalRequirement?.slice(0, 100) || '协作讨论';
 
+                this._collabMessages = [];
                 this._renderCollabDiscussion([]);
                 this._showToast('已批准，开始团队讨论', 'success');
                 this._collabGoToStep('discussion');
@@ -3510,6 +3638,8 @@
             }
         }
 
+        _collabMessages = [];
+
         _renderCollabDiscussion(messages) {
             const container = this._panelEl?.querySelector('#cb-collab-discussion');
             if (!container) return;
@@ -3517,16 +3647,76 @@
                 container.innerHTML = '<div class="cb-collab-disc-empty"><i class="fas fa-comments"></i><p>讨论即将开始…</p></div>';
                 return;
             }
-            container.innerHTML = messages.map(m => `
-                <div class="cb-collab-msg">
-                    <div class="cb-collab-msg-header">
-                        <span class="cb-collab-msg-role">${m.roleIcon || '👤'} ${m.roleName || m.roleId || '角色'}</span>
-                        <span class="cb-collab-msg-round">第${m.round || '?'}轮</span>
+            container.innerHTML = messages.map(m => {
+                const info = this._getRoleInfo(m.roleId);
+                const isTyping = m._typing;
+                const isStreaming = m._streaming && !m._typing;
+                const streamAttr = (isStreaming || isTyping) ? ` data-stream-role="${m.roleId}-${m.round}"` : '';
+                const roundLabel = m.round ? `第${m.round}轮` : '';
+                let contentHtml;
+                if (isTyping) {
+                    contentHtml = '<span class="cb-typing-dots"><span></span><span></span><span></span></span>';
+                } else if (isStreaming && m.content) {
+                    contentHtml = this._formatDiscussionContent(m.content) + '<span class="cb-stream-cursor"></span>';
+                } else {
+                    contentHtml = this._formatDiscussionContent(m.content || '');
+                }
+                return `
+                <div class="cb-collab-msg${isTyping ? ' cb-collab-msg-typing' : ''}${isStreaming ? ' cb-collab-msg-streaming' : ''}"${streamAttr}>
+                    <div class="cb-collab-msg-avatar" style="background:${info.color || '#6366f1'}">${(info.icon || '🤖').replace(/<[^>]+>/g, '').trim().slice(0, 2)}</div>
+                    <div class="cb-collab-msg-body">
+                        <div class="cb-collab-msg-header">
+                            <span class="cb-collab-msg-role">${info.name}</span>
+                            <span class="cb-collab-msg-meta">${roundLabel}${m.elapsed ? ` · ${(m.elapsed / 1000).toFixed(1)}s` : ''}</span>
+                        </div>
+                        <div class="cb-collab-msg-content">${contentHtml}</div>
                     </div>
-                    <div class="cb-collab-msg-content">${(m.content || '').replace(/\n/g, '<br>')}</div>
                 </div>
-            `).join('');
+            `; }).join('');
             container.scrollTop = container.scrollHeight;
+        }
+
+        _formatDiscussionContent(raw) {
+            let html = raw.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre class="cb-disc-code"><code>$2</code></pre>');
+            html = html.replace(/`([^`]+)`/g, '<code class="cb-disc-inline-code">$1</code>');
+            html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/^### (.+)$/gm, '<div class="cb-disc-h3">$1</div>');
+            html = html.replace(/^## (.+)$/gm, '<div class="cb-disc-h2">$1</div>');
+            html = html.replace(/^[-*] (.+)$/gm, '<div class="cb-disc-li">$1</div>');
+            html = html.replace(/^\d+\. (.+)$/gm, '<div class="cb-disc-li cb-disc-ol">$1</div>');
+            html = html.replace(/\n/g, '<br>');
+            return html;
+        }
+
+        _appendTypingIndicator(roleId, roleName, round) {
+            this._collabMessages.push({ roleId, round, content: '', _typing: true, _streaming: true });
+            this._renderCollabDiscussion(this._collabMessages);
+        }
+
+        _appendStreamToken(roleId, round, token) {
+            const idx = this._collabMessages.findIndex(m => m.roleId === roleId && m.round === round && m._streaming);
+            if (idx >= 0) {
+                this._collabMessages[idx].content += token;
+                this._collabMessages[idx]._typing = false;
+                const msgEl = this._panelEl?.querySelector(`[data-stream-role="${roleId}-${round}"] .cb-collab-msg-content`);
+                if (msgEl) {
+                    msgEl.innerHTML = this._formatDiscussionContent(this._collabMessages[idx].content) + '<span class="cb-stream-cursor"></span>';
+                    msgEl.closest('.cb-collab-msg')?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                } else {
+                    this._renderCollabDiscussion(this._collabMessages);
+                }
+            }
+        }
+
+        _replaceTypingWithContent(roleId, round, content, elapsed) {
+            const idx = this._collabMessages.findIndex(m => m.roleId === roleId && m.round === round && (m._typing || m._streaming));
+            if (idx >= 0) {
+                this._collabMessages[idx] = { roleId, round, content, elapsed, _typing: false, _streaming: false };
+            } else {
+                this._collabMessages.push({ roleId, round, content, elapsed, _typing: false, _streaming: false });
+            }
+            this._renderCollabDiscussion(this._collabMessages);
         }
 
         async _collabNextRound() {
@@ -3534,23 +3724,77 @@
             if (!discId) { this._showToast('无讨论 ID', 'error'); return; }
 
             const btn = this._panelEl?.querySelector('#cb-collab-next-round');
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 讨论中…';
+            const concludeBtn = this._panelEl?.querySelector('#cb-collab-conclude');
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 讨论中…'; }
+            if (concludeBtn) concludeBtn.disabled = true;
 
             try {
-                const round = await this._api(`/discussions/${discId}/round`, { method: 'POST' });
-                if (round.error) throw new Error(round.error);
-                const disc = await this._api(`/discussions/${discId}`);
-                this._renderCollabDiscussion(disc?.messages || []);
-                if (disc?.status === 'concluded' || disc?.current_round >= disc?.max_rounds) {
-                    btn.style.display = 'none';
-                    this._showToast('讨论轮次已完成，可点击"总结决策"', 'info');
+                const res = await fetch(`${BRIDGE_URL}/discussions/${discId}/round/stream`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                });
+
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    throw new Error(errData.error || `HTTP ${res.status}`);
+                }
+
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let currentEvent = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+
+                    for (const line of lines) {
+                        if (line.startsWith('event: ')) {
+                            currentEvent = line.slice(7).trim();
+                            continue;
+                        }
+                        if (!line.startsWith('data: ')) continue;
+
+                        try {
+                            const data = JSON.parse(line.slice(6));
+
+                            if (currentEvent === 'error') {
+                                this._showToast(`讨论错误: ${data.message}`, 'error');
+                                break;
+                            }
+
+                            if (currentEvent === 'role_start') {
+                                this._appendTypingIndicator(data.roleId, data.roleName, data.roundNumber);
+                            }
+
+                            if (currentEvent === 'role_token') {
+                                this._appendStreamToken(data.roleId, data.roundNumber, data.content);
+                            }
+
+                            if (currentEvent === 'role_done') {
+                                this._replaceTypingWithContent(data.roleId, data.roundNumber, data.content, data.elapsed);
+                            }
+
+                            if (currentEvent === 'round_done') {
+                                if (data.concluded) {
+                                    if (btn) btn.style.display = 'none';
+                                    this._showToast('讨论轮次已完成，可点击"总结决策"', 'info');
+                                }
+                            }
+                        } catch { /* skip malformed SSE */ }
+                        currentEvent = '';
+                    }
                 }
             } catch (err) {
                 this._showToast(`讨论轮次失败: ${err.message}`, 'error');
             } finally {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-forward"></i> 下一轮讨论';
+                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-forward"></i> 下一轮讨论'; }
+                if (concludeBtn) concludeBtn.disabled = false;
             }
         }
 
@@ -3587,6 +3831,8 @@
             const summary = conclusion?.summary || conclusion?.content || '讨论已完成';
             const actionItems = conclusion?.actionItems || [];
             const decisions = conclusion?.decisions || [];
+            this._collabState.actionItems = actionItems;
+            this._collabState.conclusion = conclusion;
 
             container.innerHTML = `
                 <div class="cb-collab-card">
@@ -3597,19 +3843,39 @@
                 <div class="cb-collab-card">
                     <div class="cb-collab-card-title"><i class="fas fa-gavel"></i> 关键决策</div>
                     <ul class="cb-collab-decision-list">${decisions.map(d => `
-                        <li><strong>${d.topic || d.title || ''}</strong>: ${d.resolution || d.content || ''}</li>
+                        <li>
+                            <strong>${d.topic || d.title || ''}</strong>:
+                            ${d.decision || d.resolution || d.content || ''}
+                            ${d.reason ? `<span class="cb-collab-decision-reason">（${d.reason}）</span>` : ''}
+                        </li>
                     `).join('')}</ul>
                 </div>
                 ` : ''}
                 ${actionItems.length ? `
                 <div class="cb-collab-card">
-                    <div class="cb-collab-card-title"><i class="fas fa-list-check"></i> 行动项</div>
-                    <ul class="cb-collab-action-list">${actionItems.map(a => `
-                        <li>
-                            <span class="cb-collab-action-owner">${a.assignee || a.owner || '待分配'}</span>
-                            ${a.title || a.description || a.content || ''}
+                    <div class="cb-collab-card-title"><i class="fas fa-list-check"></i> 行动项 (${actionItems.length})</div>
+                    <ul class="cb-collab-action-list">${actionItems.map((a, i) => `
+                        <li data-idx="${i}">
+                            <span class="cb-collab-action-owner">${a.assignedTo || a.assignee || a.owner || 'developer'}</span>
+                            ${a.description || a.title || a.content || ''}
+                            ${a.priority ? `<span class="cb-collab-action-priority">${a.priority}</span>` : ''}
+                            <span class="cb-collab-action-status" id="cb-action-status-${i}"></span>
                         </li>
                     `).join('')}</ul>
+                </div>
+                <div class="cb-collab-exec-actions">
+                    <div class="cb-collab-dir-row">
+                        <label class="cb-collab-dir-label"><i class="fas fa-folder"></i> 输出目录</label>
+                        <input type="text" id="cb-collab-output-dir" class="cb-collab-dir-field" placeholder="可选，如 /path/to/project">
+                    </div>
+                    <div class="cb-collab-exec-btns">
+                        <button class="cb-btn cb-btn-primary" id="cb-collab-execute-all">
+                            <i class="fas fa-play"></i> 执行全部行动项
+                        </button>
+                        <button class="cb-btn cb-btn-purple" id="cb-collab-save-writing">
+                            <i class="fas fa-feather-alt"></i> 保存到写作空间
+                        </button>
+                    </div>
                 </div>
                 ` : ''}
                 ${report ? `
@@ -3618,7 +3884,178 @@
                     <div class="cb-collab-report-text">${JSON.stringify(report.metrics || {}, null, 2).replace(/\n/g, '<br>')}</div>
                 </div>
                 ` : ''}
+                <div class="cb-collab-exec-output" id="cb-collab-exec-output" style="display:none">
+                    <div class="cb-collab-card">
+                        <div class="cb-collab-card-title"><i class="fas fa-terminal"></i> 执行输出</div>
+                        <div class="cb-collab-exec-log" id="cb-collab-exec-log"></div>
+                    </div>
+                </div>
             `;
+
+            container.querySelector('#cb-collab-execute-all')?.addEventListener('click', () => this._collabExecuteAll());
+            container.querySelector('#cb-collab-save-writing')?.addEventListener('click', () => this._collabSaveToWriting());
+        }
+
+        async _collabExecuteAll() {
+            const taskId = this._collabState.taskId;
+            const actionItems = this._collabState.actionItems || [];
+            if (!taskId || !actionItems.length) { this._showToast('无可执行的行动项', 'error'); return; }
+
+            const outputDir = this._panelEl?.querySelector('#cb-collab-output-dir')?.value?.trim() || '';
+            const btn = this._panelEl?.querySelector('#cb-collab-execute-all');
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 创建执行队列…'; }
+
+            const outputArea = this._panelEl?.querySelector('#cb-collab-exec-output');
+            const logEl = this._panelEl?.querySelector('#cb-collab-exec-log');
+            if (outputArea) outputArea.style.display = 'block';
+
+            const appendLog = (html) => {
+                if (!logEl) return;
+                logEl.innerHTML += html;
+                logEl.scrollTop = logEl.scrollHeight;
+            };
+
+            try {
+                const dirNote = outputDir ? `\n\n## 项目输出目录\n${outputDir}` : '';
+                const tasks = actionItems.map((a, i) => ({
+                    title: a.description || a.title || a.content || `任务 ${i + 1}`,
+                    description: (a.description || a.content || '') + dirNote,
+                    assignedTo: a.assignedTo || a.assignee || 'developer',
+                    input: JSON.stringify({ ...(this._collabState.conclusion || {}), outputDir }),
+                    expectedOutput: '完成的代码实现',
+                    priority: a.priority || 'P1',
+                    order: i,
+                }));
+
+                appendLog('<div class="cb-exec-log-line cb-exec-info">📦 创建执行队列…</div>');
+                const squad = await this._api(`/tasks/${taskId}/squads`, {
+                    method: 'POST',
+                    body: JSON.stringify({ tasks }),
+                });
+                if (squad.error) throw new Error(squad.error);
+
+                this._collabState.squadId = squad.id;
+                appendLog(`<div class="cb-exec-log-line cb-exec-success">✅ 队列已创建: ${squad.tasks.length} 个任务</div>`);
+                if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 执行中…';
+
+                for (let i = 0; i < squad.tasks.length; i++) {
+                    const t = squad.tasks[i];
+                    const statusEl = this._panelEl?.querySelector(`#cb-action-status-${i}`);
+                    if (statusEl) statusEl.innerHTML = '<i class="fas fa-spinner fa-spin" style="color:#a78bfa"></i>';
+
+                    appendLog(`<div class="cb-exec-log-line cb-exec-info">⚙️ [${i + 1}/${squad.tasks.length}] 执行: ${t.title}</div>`);
+
+                    try {
+                        const result = await this._api(`/squads/${squad.id}/execute/${t.id}`, { method: 'POST' });
+                        if (result.error) throw new Error(result.error);
+
+                        if (statusEl) statusEl.innerHTML = '<i class="fas fa-check-circle" style="color:#4ade80"></i>';
+                        const preview = (result.output || '').slice(0, 300).replace(/</g, '&lt;');
+                        appendLog(`<div class="cb-exec-log-line cb-exec-success">✅ 完成: ${t.title}</div>`);
+                        appendLog(`<pre class="cb-exec-output-pre">${preview}${result.output?.length > 300 ? '\n...' : ''}</pre>`);
+                    } catch (err) {
+                        if (statusEl) statusEl.innerHTML = '<i class="fas fa-times-circle" style="color:#f87171"></i>';
+                        appendLog(`<div class="cb-exec-log-line cb-exec-error">❌ 失败: ${t.title} — ${err.message}</div>`);
+                    }
+                }
+
+                appendLog('<div class="cb-exec-log-line cb-exec-success">🎉 所有任务执行完毕</div>');
+            } catch (err) {
+                appendLog(`<div class="cb-exec-log-line cb-exec-error">❌ 执行失败: ${err.message}</div>`);
+                this._showToast(`执行失败: ${err.message}`, 'error');
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-play"></i> 执行全部行动项'; }
+            }
+        }
+
+        async _collabSaveToWriting() {
+            const state = this._collabState;
+            const conclusion = state.conclusion;
+            if (!conclusion) { this._showToast('无讨论结论可保存', 'warning'); return; }
+
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
+            const timeStr = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            const topic = state.topic || '多角色协作讨论';
+            const title = `${topic} — ${dateStr} ${timeStr}`;
+
+            const sections = [];
+            sections.push(`> **主题**: ${topic}`);
+            sections.push(`> **时间**: ${dateStr} ${timeStr}`);
+            sections.push('');
+
+            if (conclusion.summary) {
+                sections.push('## 讨论总结', '', conclusion.summary, '');
+            }
+
+            const decisions = conclusion.decisions || [];
+            if (decisions.length) {
+                sections.push('## 关键决策', '');
+                decisions.forEach((d, i) => {
+                    sections.push(`### ${i + 1}. ${d.topic || d.title || ''}`);
+                    sections.push(`**决策**: ${d.decision || d.resolution || d.content || ''}`);
+                    if (d.reason) sections.push(`**原因**: ${d.reason}`);
+                    sections.push('');
+                });
+            }
+
+            const actions = conclusion.actionItems || state.actionItems || [];
+            if (actions.length) {
+                sections.push('## 行动项', '');
+                actions.forEach((a, i) => {
+                    const owner = a.assignedTo || a.assignee || 'developer';
+                    const prio = a.priority ? ` [${a.priority}]` : '';
+                    sections.push(`${i + 1}. **${owner}**${prio}: ${a.description || a.title || a.content || ''}`);
+                });
+                sections.push('');
+            }
+
+            if (this._collabMessages.length) {
+                sections.push('## 讨论记录', '');
+                this._collabMessages.filter(m => !m._typing && m.content).forEach(m => {
+                    const info = this._getRoleInfo(m.roleId);
+                    sections.push(`### ${info.name} (第${m.round}轮)`);
+                    sections.push(m.content);
+                    sections.push('');
+                });
+            }
+
+            const execLog = this._panelEl?.querySelector('#cb-collab-exec-log')?.textContent?.trim();
+            if (execLog) {
+                sections.push('## 执行输出', '', execLog, '');
+            }
+
+            const content = sections.join('\n');
+
+            try {
+                if (window.blogManager) {
+                    window.blogManager.createPost({
+                        title,
+                        content,
+                        category: 'agent',
+                        tags: ['multi-role', 'collaboration', 'discussion'],
+                    });
+                    this._showToast(`已保存到写作空间: "${title.slice(0, 30)}…"`, 'success');
+                } else {
+                    const result = await new Promise(r => chrome.storage?.local?.get('blogPosts', r));
+                    const posts = result?.blogPosts || [];
+                    posts.unshift({
+                        id: 'post_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+                        title,
+                        content,
+                        category: 'agent',
+                        tags: ['multi-role', 'collaboration', 'discussion'],
+                        createdAt: Date.now(),
+                        updatedAt: Date.now(),
+                        wordCount: content.length,
+                        pinned: false,
+                    });
+                    await new Promise(r => chrome.storage?.local?.set({ blogPosts: posts }, r));
+                    this._showToast(`已保存到写作空间: "${title.slice(0, 30)}…"`, 'success');
+                }
+            } catch (err) {
+                this._showToast(`保存失败: ${err.message}`, 'error');
+            }
         }
 
         _showToast(msg, type = 'info') {

@@ -13,14 +13,23 @@ import { projectRoutes } from './routes/projects.js';
 import { conversationRoutes } from './routes/conversations.js';
 import { workflowRoutes } from './routes/workflows.js';
 import { traceRoutes } from './routes/traces.js';
-import { multiRoleRoutes } from './routes/multi-role.js';
-import { a2aRoutes } from './routes/a2a.js';
 import { memoryRoutes } from './routes/memory.js';
 import { authRoutes } from './routes/auth.js';
 import { agentPool } from './services/agent-pool.js';
 import { closeDb } from './services/database.js';
-import { initMultiRoleTables } from './services/multi-role-engine.js';
 import { registerAuthHook } from './services/auth-middleware.js';
+
+// ─── Isolated Feature Modules ───
+import { writingRoutes, initWritingTables } from './modules/writing/index.js';
+import {
+  multiRoleRoutes,
+  a2aRoutes,
+  agentRegistryRoutes,
+  collaborationRoutes,
+  initMultiRoleTables,
+  initAgentRegistry,
+  initCollaborationTables,
+} from './modules/multi-role/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PID_FILE = resolve(__dirname, '..', '.bridge.pid');
@@ -63,7 +72,27 @@ function buildLoggerOpts() {
   return opts;
 }
 
-const fastify = Fastify({ logger: buildLoggerOpts() as any });
+const QUIET_ROUTES = new Set(['/health', '/approvals']);
+
+const fastify = Fastify({
+  logger: buildLoggerOpts() as any,
+  disableRequestLogging: true,
+});
+
+fastify.addHook('onRequest', async (req) => {
+  if (!QUIET_ROUTES.has(req.url)) {
+    req.log.info({ method: req.method, url: req.url }, 'incoming request');
+  }
+});
+
+fastify.addHook('onResponse', async (req, reply) => {
+  if (!QUIET_ROUTES.has(req.url)) {
+    req.log.info(
+      { method: req.method, url: req.url, statusCode: reply.statusCode, responseTime: Math.round(reply.elapsedTime) },
+      'request completed',
+    );
+  }
+});
 
 await fastify.register(cors, {
   origin: [
@@ -85,12 +114,23 @@ await fastify.register(projectRoutes);
 await fastify.register(conversationRoutes);
 await fastify.register(workflowRoutes);
 await fastify.register(traceRoutes);
-await fastify.register(multiRoleRoutes);
-await fastify.register(a2aRoutes);
 await fastify.register(memoryRoutes);
 await fastify.register(authRoutes);
 
+// ─── Module: Multi-Role Collaboration ───
+await fastify.register(multiRoleRoutes);
+await fastify.register(a2aRoutes);
+await fastify.register(agentRegistryRoutes);
+await fastify.register(collaborationRoutes);
+
+// ─── Module: Writing AI ───
+await fastify.register(writingRoutes);
+
+// ─── Init Tables ───
 initMultiRoleTables();
+initAgentRegistry();
+initCollaborationTables();
+initWritingTables();
 
 const shutdown = async () => {
   console.log('\n[cursor-bridge] Shutting down...');

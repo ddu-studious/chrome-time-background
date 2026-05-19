@@ -34,6 +34,7 @@ interface InternalAgent extends BridgeAgent {
   textBuffer: string;
   approvalEnabled: boolean;
   pendingApprovals: Map<string, ApprovalRequest>;
+  systemPrompt?: string;
 }
 
 export class AgentPool {
@@ -101,6 +102,7 @@ export class AgentPool {
       textBuffer: '',
       approvalEnabled: false,
       pendingApprovals: new Map(),
+      systemPrompt: opts.systemPrompt,
     };
 
     this.agents.set(id, agent);
@@ -479,6 +481,106 @@ export class AgentPool {
 
     agent.pendingApprovals.delete(approvalId);
     return true;
+  }
+
+  // ─── Convenience methods for multi-role engine ───
+
+  async createAgent(opts: { name: string; model?: string; systemPrompt?: string }): Promise<string> {
+    const info = await this.create({
+      name: opts.name,
+      model: opts.model,
+      cwd: process.cwd(),
+      description: opts.systemPrompt?.slice(0, 200),
+      systemPrompt: opts.systemPrompt,
+    });
+    return info.id;
+  }
+
+  async sendPrompt(agentId: string, prompt: string): Promise<string> {
+    const agent = this.agents.get(agentId);
+    if (!agent) throw new Error('Agent not found');
+    if (agent.status === 'running') throw new Error('Agent is currently running a task');
+    if (agent.status === 'disposed') throw new Error('Agent has been disposed');
+
+    agent.status = 'running';
+    agent.lastActivityAt = Date.now();
+    agent.textBuffer = '';
+
+    try {
+      const fullPrompt = agent.systemPrompt
+        ? `${agent.systemPrompt}\n\n---\n\n${prompt}`
+        : prompt;
+
+      const run = await agent.sdkAgent.send(fullPrompt);
+      agent.currentRun = run;
+
+      for await (const event of run.stream()) {
+        if (event.type === 'assistant') {
+          for (const block of event.message.content) {
+            if (block.type === 'text') {
+              agent.textBuffer += block.text;
+            }
+          }
+        }
+      }
+
+      await run.wait();
+      const result = agent.textBuffer.trim();
+      agent.status = 'idle';
+      agent.currentRun = undefined;
+      agent.lastActivityAt = Date.now();
+      agent.textBuffer = '';
+      return result;
+    } catch (err: any) {
+      agent.status = 'error';
+      agent.currentRun = undefined;
+      agent.textBuffer = '';
+      throw err;
+    }
+  }
+
+  async *sendPromptStream(agentId: string, prompt: string): AsyncGenerator<{ type: 'token' | 'done' | 'error'; content?: string }> {
+    const agent = this.agents.get(agentId);
+    if (!agent) { yield { type: 'error', content: 'Agent not found' }; return; }
+    if (agent.status === 'running') { yield { type: 'error', content: 'Agent is currently running' }; return; }
+    if (agent.status === 'disposed') { yield { type: 'error', content: 'Agent has been disposed' }; return; }
+
+    agent.status = 'running';
+    agent.lastActivityAt = Date.now();
+    agent.textBuffer = '';
+
+    try {
+      const fullPrompt = agent.systemPrompt
+        ? `${agent.systemPrompt}\n\n---\n\n${prompt}`
+        : prompt;
+
+      const run = await agent.sdkAgent.send(fullPrompt);
+      agent.currentRun = run;
+
+      for await (const event of run.stream()) {
+        if (event.type === 'assistant') {
+          for (const block of event.message.content) {
+            if (block.type === 'text') {
+              agent.textBuffer += block.text;
+              yield { type: 'token', content: block.text };
+            }
+          }
+        }
+      }
+
+      await run.wait();
+      const result = agent.textBuffer.trim();
+      agent.status = 'idle';
+      agent.currentRun = undefined;
+      agent.lastActivityAt = Date.now();
+      agent.textBuffer = '';
+      yield { type: 'done', content: result };
+    } catch (err: any) {
+      agent.status = 'error';
+      agent.currentRun = undefined;
+      agent.textBuffer = '';
+      yield { type: 'error', content: err.message };
+    }
   }
 
   // ─── Emergency Stop All ───

@@ -6,6 +6,8 @@
  * Integrated with Phase 4.5 whitebox traces for full observability.
  */
 
+export type ModelTier = 'fast' | 'balanced' | 'powerful';
+
 export interface EnterpriseRole {
   id: string;
   name: string;
@@ -14,6 +16,8 @@ export interface EnterpriseRole {
   description: string;
   phase: ('discussion' | 'execution' | 'qa' | 'deployment')[];
   skill: RoleSkill;
+  defaultModel?: string;
+  modelTier: ModelTier;
 }
 
 export interface RoleSkill {
@@ -36,6 +40,7 @@ export const ENTERPRISE_ROLES: EnterpriseRole[] = [
     icon: '📊',
     description: '市场分析、用户需求收集、ROI 评估',
     phase: ['discussion'],
+    modelTier: 'balanced',
     skill: {
       role: '运营分析师',
       goal: '从市场和用户角度评估需求的商业价值',
@@ -59,6 +64,7 @@ export const ENTERPRISE_ROLES: EnterpriseRole[] = [
     icon: '📈',
     description: '业务流程梳理、业务规则定义',
     phase: ['discussion'],
+    modelTier: 'balanced',
     skill: {
       role: '业务分析师',
       goal: '梳理业务流程，定义完整的业务规则',
@@ -82,6 +88,7 @@ export const ENTERPRISE_ROLES: EnterpriseRole[] = [
     icon: '📋',
     description: '需求拆解、PRD 编写、优先级排序',
     phase: ['discussion'],
+    modelTier: 'balanced',
     skill: {
       role: '产品经理',
       goal: '将需求转化为可执行的产品方案',
@@ -105,6 +112,7 @@ export const ENTERPRISE_ROLES: EnterpriseRole[] = [
     icon: '📅',
     description: '执行计划、进度管理、风险评估',
     phase: ['discussion', 'execution'],
+    modelTier: 'balanced',
     skill: {
       role: '项目经理（执行负责人）',
       goal: '制定执行计划并协调团队按时交付',
@@ -129,6 +137,7 @@ export const ENTERPRISE_ROLES: EnterpriseRole[] = [
     icon: '🏗️',
     description: '技术方案、架构设计、技术选型',
     phase: ['discussion', 'execution'],
+    modelTier: 'powerful',
     skill: {
       role: '技术架构师',
       goal: '设计可靠、可扩展的技术方案',
@@ -153,6 +162,7 @@ export const ENTERPRISE_ROLES: EnterpriseRole[] = [
     icon: '👨‍💻',
     description: '核心模块设计、代码审查、技术指导',
     phase: ['execution'],
+    modelTier: 'powerful',
     skill: {
       role: '资深开发工程师',
       goal: '负责核心模块的设计和实现，指导初级开发',
@@ -177,6 +187,7 @@ export const ENTERPRISE_ROLES: EnterpriseRole[] = [
     icon: '💻',
     description: '功能实现、单元测试、Bug 修复',
     phase: ['execution'],
+    modelTier: 'balanced',
     skill: {
       role: '开发工程师',
       goal: '按照设计方案实现具体功能',
@@ -201,6 +212,7 @@ export const ENTERPRISE_ROLES: EnterpriseRole[] = [
     icon: '🧪',
     description: '测试用例、Bug 报告、回归测试',
     phase: ['qa'],
+    modelTier: 'balanced',
     skill: {
       role: 'QA 测试工程师',
       goal: '确保产品质量，发现并报告所有缺陷',
@@ -225,6 +237,7 @@ export const ENTERPRISE_ROLES: EnterpriseRole[] = [
     icon: '🚀',
     description: '部署方案、监控、上线检查',
     phase: ['deployment'],
+    modelTier: 'fast',
     skill: {
       role: '运维工程师',
       goal: '确保安全、稳定的部署和运行',
@@ -249,6 +262,7 @@ export const ENTERPRISE_ROLES: EnterpriseRole[] = [
     icon: '🎯',
     description: '全局协调、技术决策仲裁、质量把关',
     phase: ['discussion', 'execution', 'qa', 'deployment'],
+    modelTier: 'powerful',
     skill: {
       role: '技术负责人（全局协调者）',
       goal: '全局把控技术方向和质量，协调团队高效交付',
@@ -268,12 +282,173 @@ export const ENTERPRISE_ROLES: EnterpriseRole[] = [
   },
 ];
 
+const ROLE_ALIASES: Record<string, string> = {
+  'product-manager': 'product',
+  'pm': 'product',
+  'productmanager': 'product',
+  'developer': 'senior-dev',
+  'dev': 'senior-dev',
+  'frontend': 'senior-dev',
+  'backend': 'senior-dev',
+  'fullstack': 'senior-dev',
+  'designer': 'ui-designer',
+  'ui': 'ui-designer',
+  'ux': 'ui-designer',
+  'tester': 'qa',
+  'test': 'qa',
+  'quality': 'qa',
+  'devops': 'ops-engineer',
+  'ops': 'ops-engineer',
+  'infra': 'ops-engineer',
+  'lead': 'tech-lead',
+  'techlead': 'tech-lead',
+  'arch': 'architect',
+  'security': 'security-engineer',
+  'sec': 'security-engineer',
+  'biz': 'business',
+  'operation': 'operations',
+  'project': 'project-manager',
+};
+
 export function getRoleById(id: string): EnterpriseRole | undefined {
-  return ENTERPRISE_ROLES.find((r) => r.id === id);
+  const direct = ENTERPRISE_ROLES.find((r) => r.id === id);
+  if (direct) return direct;
+  const normalized = id.toLowerCase().replace(/[\s_]/g, '-');
+  const aliasTarget = ROLE_ALIASES[normalized];
+  if (aliasTarget) return ENTERPRISE_ROLES.find((r) => r.id === aliasTarget);
+  const fuzzy = ENTERPRISE_ROLES.find((r) =>
+    r.id.includes(normalized) || normalized.includes(r.id) ||
+    r.nameEn.toLowerCase().replace(/\s+/g, '-') === normalized
+  );
+  return fuzzy;
 }
 
 export function getRolesByPhase(phase: string): EnterpriseRole[] {
   return ENTERPRISE_ROLES.filter((r) => r.phase.includes(phase as any));
+}
+
+// ─── Model Routing Strategy ───
+
+const MODEL_TIER_DEFAULTS: Record<ModelTier, string> = {
+  fast: 'composer-2',
+  balanced: 'claude-sonnet-4-6',
+  powerful: 'claude-opus-4-6',
+};
+
+const AVAILABLE_MODELS = [
+  { id: 'composer-2', tier: 'fast' as ModelTier, label: 'Composer 2', latencyMs: 800, costPer1k: 0.002 },
+  { id: 'gemini-3-flash', tier: 'fast' as ModelTier, label: 'Gemini 3 Flash', latencyMs: 600, costPer1k: 0.001 },
+  { id: 'gpt-5.4-mini', tier: 'fast' as ModelTier, label: 'GPT 5.4 Mini', latencyMs: 700, costPer1k: 0.002 },
+  { id: 'claude-haiku-4-5', tier: 'fast' as ModelTier, label: 'Claude Haiku 4.5', latencyMs: 500, costPer1k: 0.001 },
+  { id: 'claude-sonnet-4-6', tier: 'balanced' as ModelTier, label: 'Claude Sonnet 4.6', latencyMs: 2000, costPer1k: 0.012 },
+  { id: 'gpt-5.4', tier: 'balanced' as ModelTier, label: 'GPT 5.4', latencyMs: 1800, costPer1k: 0.01 },
+  { id: 'gemini-3.1-pro', tier: 'balanced' as ModelTier, label: 'Gemini 3.1 Pro', latencyMs: 2000, costPer1k: 0.01 },
+  { id: 'claude-opus-4-6', tier: 'powerful' as ModelTier, label: 'Claude Opus 4.6', latencyMs: 5000, costPer1k: 0.06 },
+  { id: 'claude-opus-4-7', tier: 'powerful' as ModelTier, label: 'Claude Opus 4.7', latencyMs: 5000, costPer1k: 0.06 },
+  { id: 'gpt-5.3-codex', tier: 'powerful' as ModelTier, label: 'GPT 5.3 Codex', latencyMs: 3500, costPer1k: 0.04 },
+  { id: 'grok-4.3', tier: 'balanced' as ModelTier, label: 'Grok 4.3', latencyMs: 2500, costPer1k: 0.015 },
+];
+
+export function getAvailableModels() {
+  return AVAILABLE_MODELS;
+}
+
+const TASK_TYPE_ROUTING: Record<string, { preferredTier: ModelTier; upgradeRoles?: string[] }> = {
+  'architecture': { preferredTier: 'powerful', upgradeRoles: ['architect', 'tech-lead'] },
+  'code-review': { preferredTier: 'balanced' },
+  'bug-fix': { preferredTier: 'fast' },
+  'feature': { preferredTier: 'balanced', upgradeRoles: ['architect'] },
+  'refactor': { preferredTier: 'balanced' },
+  'testing': { preferredTier: 'fast' },
+  'documentation': { preferredTier: 'fast' },
+  'security': { preferredTier: 'powerful', upgradeRoles: ['security'] },
+  'performance': { preferredTier: 'balanced', upgradeRoles: ['devops'] },
+};
+
+const roleModelOverrides = new Map<string, string>();
+
+export function resolveModelForRole(
+  role: EnterpriseRole,
+  taskComplexity?: 1 | 2 | 3 | 4 | 5,
+  autoAssign = true,
+  taskType?: string,
+): string {
+  const userOverride = roleModelOverrides.get(role.id);
+  if (userOverride) return userOverride;
+
+  if (role.defaultModel) return role.defaultModel;
+
+  if (!autoAssign) return MODEL_TIER_DEFAULTS.balanced;
+
+  let tier = role.modelTier;
+
+  if (taskType && TASK_TYPE_ROUTING[taskType]) {
+    const routing = TASK_TYPE_ROUTING[taskType];
+    if (routing.upgradeRoles?.includes(role.id)) {
+      tier = routing.preferredTier;
+    } else if (compareTier(routing.preferredTier, tier) > 0) {
+      tier = routing.preferredTier;
+    }
+  }
+
+  if (taskComplexity && taskComplexity >= 4 && tier === 'fast') {
+    tier = 'balanced';
+  }
+  if (taskComplexity && taskComplexity >= 4 && tier === 'balanced'
+      && (role.id === 'architect' || role.id === 'tech-lead')) {
+    tier = 'powerful';
+  }
+
+  return MODEL_TIER_DEFAULTS[tier];
+}
+
+function compareTier(a: ModelTier, b: ModelTier): number {
+  const order: Record<ModelTier, number> = { fast: 0, balanced: 1, powerful: 2 };
+  return order[a] - order[b];
+}
+
+export function getModelRecommendation(
+  roleId: string,
+  taskComplexity: 1 | 2 | 3 | 4 | 5,
+  taskType?: string,
+): { recommended: string; alternatives: typeof AVAILABLE_MODELS; reason: string } {
+  const role = getRoleById(roleId);
+  if (!role) {
+    return { recommended: MODEL_TIER_DEFAULTS.balanced, alternatives: AVAILABLE_MODELS, reason: 'Unknown role' };
+  }
+
+  const recommended = resolveModelForRole(role, taskComplexity, true, taskType);
+  const reasons: string[] = [];
+
+  if (taskComplexity >= 4) reasons.push(`High complexity (${taskComplexity}/5)`);
+  if (taskType) reasons.push(`Task type: ${taskType}`);
+  reasons.push(`Role tier: ${role.modelTier}`);
+
+  return {
+    recommended,
+    alternatives: AVAILABLE_MODELS,
+    reason: reasons.join(', '),
+  };
+}
+
+export function setRoleModelOverride(roleId: string, model: string) {
+  roleModelOverrides.set(roleId, model);
+}
+
+export function removeRoleModelOverride(roleId: string) {
+  roleModelOverrides.delete(roleId);
+}
+
+export function getRoleModelOverrides(): Record<string, string> {
+  return Object.fromEntries(roleModelOverrides);
+}
+
+export function setModelTierDefault(tier: ModelTier, model: string) {
+  MODEL_TIER_DEFAULTS[tier] = model;
+}
+
+export function getModelTierDefaults(): Record<ModelTier, string> {
+  return { ...MODEL_TIER_DEFAULTS };
 }
 
 export function buildRoleSystemPrompt(role: EnterpriseRole, context: {

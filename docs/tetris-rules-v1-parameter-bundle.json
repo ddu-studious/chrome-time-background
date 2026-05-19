@@ -1,0 +1,191 @@
+{
+  "$comment": "首版规则参数包：供 Core 加载或与手册对照；不改运行时即为文档化单一事实来源（SSOT）。坐标约定：dx 向右为正，dy 向下为正（与 MATRICES / piece.x,y 一致）。",
+  "schemaVersion": "tetris-rules-params/1.0.0",
+  "reviewStatus": "architecture-draft",
+  "recommendedProfileForMVP": "guideline_subset_v1",
+  "profiles": {
+    "classic_subset_v1": {
+      "label": "经典子集（街机/NES 体感近似，非竞技合规声明）",
+      "rng": { "generator": "7bag", "bagSize": 7 },
+      "rotationModel": {
+        "system": "fixedMatrices",
+        "wallKickPolicy": "genericOffsets",
+        "genericKickOffsets": [
+          [0, 0],
+          [-1, 0],
+          [1, 0],
+          [0, -1],
+          [0, 1],
+          [-1, -1],
+          [1, -1],
+          [-2, 0],
+          [2, 0]
+        ],
+        "pieceSpecificKickTables": null,
+        "notes": "与当前 tetris-game.js 简化踢墙意向一致；不区分 JLSTZ / I。"
+      },
+      "locking": {
+        "lockDelayMs": 0,
+        "interpretation": "zeroMeansInstantLockOnGravityStep",
+        "lockResetLimit": 0,
+        "resetLockDelayOn": []
+      },
+      "movement": {
+        "softDropGravityMultiplier": 20,
+        "softDropAlternateSemantics": null,
+        "hardDropLocksInstantly": true,
+        "notes": "倍率仅在 Core 引入重力累积模型后生效；当前逐步 softDrop 可实现为「每次输入下移一格」，需在宿主/CORE 对齐语义。"
+      },
+      "timingBase": {
+        "ticksPerSecond": 60,
+        "gravityDriver": "accumulatorMsOrTicks"
+      },
+      "speedCurve": {
+        "mode": "levelBasedDropIntervalMs",
+        "levelFormulaRef": "NES_STYLE_APPROX",
+        "levels": [
+          { "levelStart": 0, "dropIntervalMs": 800 },
+          { "levelStart": 1, "dropIntervalMs": 720 },
+          { "levelStart": 2, "dropIntervalMs": 630 },
+          { "levelStart": 3, "dropIntervalMs": 550 },
+          { "levelStart": 4, "dropIntervalMs": 470 },
+          { "levelStart": 5, "dropIntervalMs": 380 },
+          { "levelStart": 6, "dropIntervalMs": 300 },
+          { "levelStart": 7, "dropIntervalMs": 220 },
+          { "levelStart": 8, "dropIntervalMs": 150 },
+          { "levelStart": 9, "dropIntervalMs": 110 },
+          { "levelStart": 10, "dropIntervalMs": 80 },
+          { "levelStart": 13, "dropIntervalMs": 50 },
+          { "levelStart": 15, "dropIntervalMs": 40 },
+          { "levelStart": 18, "dropIntervalMs": 30 },
+          { "levelStart": 28, "dropIntervalMs": 20 }
+        ],
+        "notes": "近似表格；产品体感评审后可替换为分段线性或 Guideline 帧表。"
+      },
+      "scoringRef": {
+        "lineClearPointsByCount": [0, 100, 300, 500, 800],
+        "levelUpEveryLines": 10
+      }
+    },
+    "guideline_subset_v1": {
+      "label": "现代 Guideline 子集（踢墙/延迟/曲线对齐意图；不含 Hold/幽灵等）",
+      "rng": { "generator": "7bag", "bagSize": 7 },
+      "rotationModel": {
+        "system": "SRS_like",
+        "wallKickPolicy": "pieceSpecificTables",
+        "coordinateConvention": "dxRightPositive_dyDownPositive",
+        "genericKickOffsets": null,
+        "pieceSpecificKickTables": {
+          "JLSTZ": {
+            "rotateCwSteps": [
+              {
+                "from": 0,
+                "to": 1,
+                "tests": [[0, 0], [-1, 0], [-1, 1], [0, -2], [-1, -2]]
+              },
+              {
+                "from": 1,
+                "to": 2,
+                "tests": [[0, 0], [1, 0], [1, -1], [0, 2], [1, 2]]
+              },
+              {
+                "from": 2,
+                "to": 3,
+                "tests": [[0, 0], [1, 0], [1, 1], [0, -2], [1, -2]]
+              },
+              {
+                "from": 3,
+                "to": 0,
+                "tests": [[0, 0], [-1, 0], [-1, -1], [0, 2], [-1, 2]]
+              }
+            ]
+          },
+          "I": {
+            "rotateCwSteps": [
+              {
+                "from": 0,
+                "to": 1,
+                "tests": [[0, 0], [-2, 0], [1, 0], [-2, -1], [1, 2]]
+              },
+              {
+                "from": 1,
+                "to": 2,
+                "tests": [[0, 0], [-1, 0], [2, 0], [-1, 2], [2, -1]]
+              },
+              {
+                "from": 2,
+                "to": 3,
+                "tests": [[0, 0], [2, 0], [-1, 0], [2, 1], [-1, -2]]
+              },
+              {
+                "from": 3,
+                "to": 0,
+                "tests": [[0, 0], [1, 0], [-2, 0], [1, -2], [-2, 1]]
+              }
+            ]
+          },
+          "O": {
+            "rotateCwSteps": [],
+            "notes": "O 旋转不改变占位；可实现为 no-op。"
+          }
+        },
+        "counterClockwiseRule": "deriveFromCwOrMirrorTransitions",
+        "notes": "CCW 测试序列应与 CW 互逆配对实现；此处 JSON 仅列 CW 权威序列以减少重复。"
+      },
+      "locking": {
+        "lockDelayMs": 500,
+        "interpretation": "standardDelayTimerResetsOnQualifiedMoves",
+        "lockResetLimit": 15,
+        "resetLockDelayOn": ["horizontalMove", "softDropStep", "rotateSuccess"],
+        "notes": "extendedPlacementLockResetLimit 对标 Guideline 常见 15 步重置上限（实现须在 Core 落地）。"
+      },
+      "movement": {
+        "softDropGravityMultiplier": 20,
+        "hardDropLocksInstantly": true
+      },
+      "timingBase": {
+        "ticksPerSecond": 60,
+        "gravityDriver": "accumulatorMsOrTicks"
+      },
+      "speedCurve": {
+        "mode": "levelBasedDropIntervalFramesAt60fps",
+        "levels": [
+          { "levelStart": 1, "dropIntervalFrames": 48 },
+          { "levelStart": 2, "dropIntervalFrames": 43 },
+          { "levelStart": 3, "dropIntervalFrames": 38 },
+          { "levelStart": 4, "dropIntervalFrames": 33 },
+          { "levelStart": 5, "dropIntervalFrames": 28 },
+          { "levelStart": 6, "dropIntervalFrames": 23 },
+          { "levelStart": 7, "dropIntervalFrames": 18 },
+          { "levelStart": 8, "dropIntervalFrames": 13 },
+          { "levelStart": 9, "dropIntervalFrames": 8 },
+          { "levelStart": 10, "dropIntervalFrames": 6 },
+          { "levelStart": 11, "dropIntervalFrames": 5 },
+          { "levelStart": 12, "dropIntervalFrames": 5 },
+          { "levelStart": 13, "dropIntervalFrames": 5 },
+          { "levelStart": 14, "dropIntervalFrames": 4 },
+          { "levelStart": 15, "dropIntervalFrames": 4 },
+          { "levelStart": 16, "dropIntervalFrames": 3 },
+          { "levelStart": 17, "dropIntervalFrames": 3 },
+          { "levelStart": 18, "dropIntervalFrames": 3 },
+          { "levelStart": 19, "dropIntervalFrames": 3 },
+          { "levelStart": 20, "dropIntervalFrames": 2 },
+          { "levelStart": 29, "dropIntervalFrames": 1 }
+        ],
+        "conversionNote": "宿主可用 frames/60*1000 转 ms；Core 建议内部用整数帧避免漂移。"
+      },
+      "scoringRef": {
+        "lineClearPointsByCount": [0, 100, 300, 500, 800],
+        "levelUpEveryLines": 10,
+        "notes": "若日后对齐 Guideline 评分扩展，勿破坏 schemaVersion——新增 scoringProfileId。"
+      }
+    }
+  },
+  "migrationHints": {
+    "fromCurrentCodebase": [
+      "将 TetrisGameManager.baseIntervalMs 与 Core tick 触发改为读取 profile.speedCurve",
+      "rotateCW 由 generic KICKS 迁移为 profile.rotationModel.pieceSpecificKickTables",
+      "拆分 softDrop「逐格锁块」与「重力加速」语义以避免 lockDelay 与输入语义打架"
+    ]
+  }
+}

@@ -3384,9 +3384,9 @@
 }
 
 .cb-collab-content {
-    width: 680px;
-    max-width: 92vw;
-    max-height: 85vh;
+    width: 1000px;
+    max-width: 95vw;
+    max-height: 90vh;
     background: #1a1a2e;
     border: 1px solid rgba(255, 255, 255, .08);
     border-radius: 16px;
@@ -3485,6 +3485,44 @@
     color: rgba(255, 255, 255, .25);
 }
 
+.cb-collab-model-picker {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+}
+.cb-collab-model-picker-label {
+    font-size: 12px;
+    color: rgba(255,255,255,.5);
+    white-space: nowrap;
+}
+.cb-collab-model-picker-label i {
+    margin-right: 4px;
+    font-size: 11px;
+}
+.cb-collab-global-model-select {
+    flex: 1;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 6px;
+    color: #e2e8f0;
+    font-size: 12px;
+    padding: 6px 10px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color .15s;
+}
+.cb-collab-global-model-select:hover {
+    border-color: rgba(124,58,237,.4);
+}
+.cb-collab-global-model-select:focus {
+    border-color: rgba(124,58,237,.6);
+    box-shadow: 0 0 0 2px rgba(124,58,237,.15);
+}
+.cb-collab-global-model-select option {
+    background: #1e1e2e;
+    color: #e2e8f0;
+}
 .cb-collab-actions {
     display: flex;
     justify-content: flex-end;
@@ -3589,10 +3627,57 @@
     line-height: 1.4;
 }
 
+/* --- 模型配置 --- */
+
+.cb-collab-model-config {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.cb-collab-model-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, .02);
+    border-radius: 6px;
+}
+.cb-collab-model-label {
+    font-size: 12px;
+    color: #c4b5fd;
+    white-space: nowrap;
+    min-width: 80px;
+}
+.cb-collab-model-select {
+    flex: 1;
+    max-width: 200px;
+    background: rgba(255, 255, 255, .06);
+    border: 1px solid rgba(255, 255, 255, .1);
+    border-radius: 5px;
+    color: #e2e8f0;
+    font-size: 11px;
+    padding: 4px 6px;
+    outline: none;
+    cursor: pointer;
+    appearance: auto;
+}
+.cb-collab-model-select:hover {
+    border-color: rgba(167, 139, 250, .4);
+}
+.cb-collab-model-select:focus {
+    border-color: #a78bfa;
+    box-shadow: 0 0 0 2px rgba(167, 139, 250, .15);
+}
+.cb-collab-model-select option {
+    background: #1e1b2e;
+    color: #e2e8f0;
+}
+
 /* --- 讨论消息 --- */
 
 .cb-collab-discussion {
-    max-height: 400px;
+    max-height: 60vh;
     overflow-y: auto;
 }
 
@@ -3608,11 +3693,39 @@
 }
 
 .cb-collab-msg {
-    background: rgba(255, 255, 255, .03);
-    border: 1px solid rgba(255, 255, 255, .06);
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+    animation: cb-msg-slide-in .3s ease-out;
+}
+@keyframes cb-msg-slide-in {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.cb-collab-msg-avatar {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
     border-radius: 10px;
-    padding: 12px 14px;
-    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0,0,0,.3);
+}
+.cb-collab-msg-body {
+    flex: 1;
+    min-width: 0;
+    background: rgba(255, 255, 255, .05);
+    border: 1px solid rgba(255, 255, 255, .08);
+    border-radius: 2px 12px 12px 12px;
+    padding: 12px 16px;
+}
+.cb-collab-msg-typing .cb-collab-msg-body {
+    background: rgba(139, 92, 246, .08);
+    border-color: rgba(139, 92, 246, .2);
 }
 .cb-collab-msg-header {
     display: flex;
@@ -3625,7 +3738,7 @@
     font-weight: 600;
     color: #a78bfa;
 }
-.cb-collab-msg-round {
+.cb-collab-msg-meta {
     font-size: 10px;
     color: rgba(255, 255, 255, .3);
     background: rgba(255, 255, 255, .05);
@@ -3634,8 +3747,48 @@
 }
 .cb-collab-msg-content {
     font-size: 13px;
-    color: rgba(255, 255, 255, .7);
-    line-height: 1.6;
+    color: rgba(255, 255, 255, .75);
+    line-height: 1.7;
+    word-break: break-word;
+}
+.cb-collab-msg-content .cb-disc-h2 { font-size: 15px; font-weight: 700; color: #c4b5fd; margin: 10px 0 4px; }
+.cb-collab-msg-content .cb-disc-h3 { font-size: 14px; font-weight: 600; color: #ddd6fe; margin: 8px 0 4px; }
+.cb-collab-msg-content .cb-disc-li { padding-left: 16px; position: relative; }
+.cb-collab-msg-content .cb-disc-li::before { content: '•'; position: absolute; left: 4px; color: #a78bfa; }
+.cb-collab-msg-content .cb-disc-ol::before { content: counter(li) '.'; counter-increment: li; }
+.cb-collab-msg-content .cb-disc-code {
+    background: rgba(0,0,0,.3);
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin: 6px 0;
+    font-size: 12px;
+    overflow-x: auto;
+}
+.cb-collab-msg-content .cb-disc-inline-code {
+    background: rgba(139, 92, 246, .15);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+.cb-typing-dots {
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+    padding: 4px 0;
+}
+.cb-typing-dots span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #a78bfa;
+    animation: cb-dot-bounce .6s ease-in-out infinite;
+}
+.cb-typing-dots span:nth-child(2) { animation-delay: .15s; }
+.cb-typing-dots span:nth-child(3) { animation-delay: .3s; }
+@keyframes cb-dot-bounce {
+    0%, 80%, 100% { opacity: .3; transform: scale(.8); }
+    40% { opacity: 1; transform: scale(1.1); }
 }
 
 /* --- 报告 --- */
@@ -3671,6 +3824,52 @@
     font-size: 11px;
     color: #a78bfa;
     margin-right: 6px;
+}
+.cb-collab-action-priority {
+    display: inline-block;
+    padding: 1px 6px;
+    background: rgba(239, 68, 68, .15);
+    border-radius: 4px;
+    font-size: 10px;
+    color: #f87171;
+    margin-left: 6px;
+    font-weight: 600;
+}
+.cb-collab-decision-reason {
+    color: rgba(255, 255, 255, .35);
+    font-size: 12px;
+}
+.cb-collab-action-status {
+    float: right;
+}
+.cb-collab-exec-actions {
+    padding: 12px 0;
+    display: flex;
+    gap: 8px;
+}
+.cb-collab-exec-log {
+    max-height: 300px;
+    overflow-y: auto;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    line-height: 1.6;
+}
+.cb-exec-log-line {
+    padding: 3px 0;
+}
+.cb-exec-info { color: rgba(255,255,255,.6); }
+.cb-exec-success { color: #4ade80; }
+.cb-exec-error { color: #f87171; }
+.cb-exec-output-pre {
+    background: rgba(0,0,0,.3);
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin: 4px 0 8px;
+    color: rgba(255,255,255,.55);
+    font-size: 11px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
 }
 
 /* --- 底部进度条 --- */
@@ -3710,6 +3909,70 @@
 }
 .cb-collab-prog-line.active {
     background: linear-gradient(90deg, #6366f1, #a855f7);
+}
+
+/* --- 协作面板：流式打字光标 --- */
+.cb-stream-cursor {
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    background: #a78bfa;
+    margin-left: 1px;
+    vertical-align: text-bottom;
+    animation: cb-blink-cursor 0.8s steps(2) infinite;
+}
+@keyframes cb-blink-cursor {
+    0% { opacity: 1; }
+    50% { opacity: 0; }
+    100% { opacity: 1; }
+}
+.cb-collab-msg-streaming {
+    border-left: 2px solid rgba(167, 139, 250, 0.4);
+}
+
+/* --- 协作面板：输出目录行 --- */
+.cb-collab-dir-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 10px;
+}
+.cb-collab-dir-label {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.cb-collab-dir-field {
+    flex: 1;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    background: rgba(99, 102, 241, 0.06);
+    color: #e0e0ff;
+    font-size: 12px;
+    transition: border-color .2s, box-shadow .2s;
+    outline: none;
+}
+.cb-collab-dir-field:focus {
+    border-color: rgba(99, 102, 241, 0.6);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.12);
+}
+.cb-collab-dir-field::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+}
+.cb-collab-exec-btns {
+    display: flex;
+    gap: 8px;
+}
+.cb-btn-purple {
+    background: rgba(168, 85, 247, 0.2);
+    border: 1px solid rgba(168, 85, 247, 0.4);
+}
+.cb-btn-purple:hover {
+    background: rgba(168, 85, 247, 0.35);
 }
 
 /* --- 极简模式隐藏 --- */

@@ -57,7 +57,7 @@ const AGENT_CARD = {
     canDelegate: r.skill.canDelegate,
   })),
   supportedModels: [
-    'claude-sonnet-4-20250514',
+    'claude-sonnet-4-6',
     'claude-opus-4-20250514',
     'gpt-4o',
     'gemini-2.5-pro',

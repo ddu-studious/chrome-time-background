@@ -13,12 +13,28 @@
 
 import { randomUUID } from 'node:crypto';
 import { getDb } from './database.js';
+
+const log = {
+  info: (msg: string, data?: any) => console.log(`[multi-role] ${msg}`, data ? JSON.stringify(data, null, 0).slice(0, 500) : ''),
+  warn: (msg: string, data?: any) => console.warn(`[multi-role] ⚠ ${msg}`, data ? JSON.stringify(data, null, 0).slice(0, 500) : ''),
+  error: (msg: string, err?: any) => console.error(`[multi-role] ✖ ${msg}`, err?.message || err || ''),
+  debug: (msg: string, data?: any) => console.log(`[multi-role] 🔍 ${msg}`, data ? JSON.stringify(data, null, 0).slice(0, 300) : ''),
+};
 import {
   ENTERPRISE_ROLES,
   getRoleById,
   getRolesByPhase,
   buildRoleSystemPrompt,
+  resolveModelForRole,
+  setRoleModelOverride,
+  removeRoleModelOverride,
+  getRoleModelOverrides,
+  setModelTierDefault,
+  getModelTierDefaults,
+  getAvailableModels,
+  getModelRecommendation,
   type EnterpriseRole,
+  type ModelTier,
 } from './enterprise-roles.js';
 import { agentPool } from './agent-pool.js';
 import {
@@ -309,6 +325,8 @@ export function initMultiRoleTables() {
     CREATE INDEX IF NOT EXISTS idx_qa_task ON qa_sessions(task_analysis_id);
     CREATE INDEX IF NOT EXISTS idx_report_task ON project_reports(task_analysis_id);
   `);
+
+  initProgressTable();
 }
 
 // ─── 5.1 Task Analyzer ───
@@ -341,17 +359,32 @@ const TASK_ANALYZER_PROMPT = `你是一个智能项目分析器。根据用户�
 - medium: operations + product + project-manager + architect + senior-dev + developer + qa + tech-lead (8 人)
 - large/epic: 全部 10 个角色`;
 
-export async function analyzeTask(requirement: string, projectId?: string): Promise<TaskAnalysis> {
+export async function analyzeTask(requirement: string, projectId?: string, modelOverrides?: Record<string, string>): Promise<TaskAnalysis> {
   const id = randomUUID();
   const now = Date.now();
+  log.info(`📋 开始分析任务 [${id.slice(0, 8)}]`, { requirement: requirement.slice(0, 100), projectId });
+
+  if (modelOverrides) {
+    for (const [roleId, model] of Object.entries(modelOverrides)) {
+      setRoleModelOverride(roleId, model);
+    }
+    log.debug('模型覆盖配置', modelOverrides);
+  }
+
+  const techLeadRole = getRoleById('tech-lead')!;
+  const analyzerModel = resolveModelForRole(techLeadRole, 3);
+  log.info(`🤖 使用模型 ${analyzerModel} 进行任务分析`);
 
   const agentId = await agentPool.createAgent({
     name: 'task-analyzer',
-    model: 'claude-sonnet-4-20250514',
+    model: analyzerModel,
     systemPrompt: TASK_ANALYZER_PROMPT,
   });
+  log.debug(`Agent 已创建: ${agentId}`);
 
+  const t0 = Date.now();
   const result = await agentPool.sendPrompt(agentId, requirement);
+  log.info(`✅ 分析完成 (${Date.now() - t0}ms)`, { resultLen: result.length });
   await agentPool.dispose(agentId);
 
   let parsed: any;
@@ -431,6 +464,7 @@ export function approveTask(taskId: string, modifications?: Partial<Pick<TaskAna
 export async function createDiscussion(taskAnalysisId: string, topic: string, phase: string, roleIds: string[], maxRounds = 3): Promise<Discussion> {
   const id = randomUUID();
   const now = Date.now();
+  log.info(`💬 创建讨论 [${id.slice(0, 8)}]`, { taskAnalysisId: taskAnalysisId.slice(0, 8), topic: topic.slice(0, 80), phase, roles: roleIds, maxRounds });
 
   const participants = roleIds.map((roleId) => ({ roleId, joinedAt: now, messageCount: 0 }));
 
@@ -481,10 +515,13 @@ export async function runDiscussionRound(discussionId: string): Promise<Discussi
     r.messages.map((m) => `[${getRoleById(m.roleId)?.name || m.roleId}]: ${m.content.slice(0, 200)}`)
   );
 
+  log.info(`🔄 讨论轮次 ${roundNumber}/${discussion.maxRounds} 开始, 参与者: ${discussion.participants.map(p => p.roleId).join(', ')}`);
+
   for (const participant of discussion.participants) {
     const role = getRoleById(participant.roleId);
-    if (!role) continue;
+    if (!role) { log.warn(`角色 ${participant.roleId} 未找到，跳过`); continue; }
 
+    log.debug(`  → ${role.name} (${role.nameEn}) 开始发言...`);
     const systemPrompt = buildRoleSystemPrompt(role, {
       topic: discussion.topic,
       otherParticipants: discussion.participants
@@ -494,9 +531,10 @@ export async function runDiscussionRound(discussionId: string): Promise<Discussi
       previousMessages: previousMessagesForContext,
     });
 
+    const roleModel = resolveModelForRole(role);
     const agentId = await agentPool.createAgent({
       name: `${role.nameEn}-${discussionId.slice(0, 8)}`,
-      model: 'claude-sonnet-4-20250514',
+      model: roleModel,
       systemPrompt,
     });
 
@@ -504,14 +542,17 @@ export async function runDiscussionRound(discussionId: string): Promise<Discussi
       ? `请针对以下议题发表你的专业意见：\n\n${discussion.topic}`
       : `基于前面各位的发言，请从你的角色视角补充、回应或提出新观点。`;
 
+    const t0 = Date.now();
     const content = await agentPool.sendPrompt(agentId, prompt);
     await agentPool.dispose(agentId);
+    log.info(`  ✅ ${role.name} 发言完成 (${Date.now() - t0}ms, ${content.length}字)`);
 
+    const refs = parseReferences(content, discussionId);
     const msg: DiscussionMessage = {
       id: randomUUID(),
       roleId: participant.roleId,
       content,
-      references: [],
+      references: refs.map((r) => r.messageId),
       timestamp: Date.now(),
       type: 'opinion',
     };
@@ -520,6 +561,7 @@ export async function runDiscussionRound(discussionId: string): Promise<Discussi
     traceOpinion(ctx, `role-${participant.roleId}`, participant.roleId, content.slice(0, 500));
     participant.messageCount++;
   }
+  log.info(`🔄 讨论轮次 ${roundNumber} 完成, 共 ${messages.length} 条发言`);
 
   const round: DiscussionRound = { roundNumber, messages };
   discussion.rounds.push(round);
@@ -542,10 +584,114 @@ export async function runDiscussionRound(discussionId: string): Promise<Discussi
   return round;
 }
 
-export async function concludeDiscussion(discussionId: string): Promise<DiscussionConclusion> {
+export async function* streamDiscussionRound(discussionId: string): AsyncGenerator<{
+  type: 'role_start' | 'role_token' | 'role_done' | 'round_done' | 'error';
+  roleId?: string;
+  roleName?: string;
+  content?: string;
+  roundNumber?: number;
+  messageCount?: number;
+  elapsed?: number;
+  concluded?: boolean;
+}> {
   const db = getDb();
   const row: any = db.prepare('SELECT * FROM discussions WHERE id = ?').get(discussionId);
-  if (!row) throw new Error(`Discussion ${discussionId} not found`);
+  if (!row) { yield { type: 'error', content: `Discussion ${discussionId} not found` }; return; }
+
+  const discussion: Discussion = {
+    ...row,
+    participants: JSON.parse(row.participants),
+    rounds: JSON.parse(row.rounds),
+    conclusion: row.conclusion ? JSON.parse(row.conclusion) : undefined,
+  };
+
+  if (discussion.status !== 'active') { yield { type: 'error', content: 'Discussion is not active' }; return; }
+  if (discussion.currentRound >= discussion.maxRounds) { yield { type: 'error', content: 'Max rounds reached' }; return; }
+
+  const roundNumber = discussion.currentRound + 1;
+  const messages: DiscussionMessage[] = [];
+  const ctx = { taskAnalysisId: discussion.taskAnalysisId, phase: discussion.phase };
+
+  const previousMessagesForContext = discussion.rounds.flatMap((r) =>
+    r.messages.map((m) => `[${getRoleById(m.roleId)?.name || m.roleId}]: ${m.content.slice(0, 200)}`)
+  );
+
+  log.info(`🔄 [流式] 讨论轮次 ${roundNumber}/${discussion.maxRounds} 开始`);
+
+  for (const participant of discussion.participants) {
+    const role = getRoleById(participant.roleId);
+    if (!role) continue;
+
+    yield { type: 'role_start', roleId: participant.roleId, roleName: role.name, roundNumber };
+
+    const systemPrompt = buildRoleSystemPrompt(role, {
+      topic: discussion.topic,
+      otherParticipants: discussion.participants
+        .filter((p) => p.roleId !== participant.roleId)
+        .map((p) => getRoleById(p.roleId)?.name || p.roleId),
+      round: roundNumber,
+      previousMessages: previousMessagesForContext,
+    });
+
+    const roleModel = resolveModelForRole(role);
+    const agentId = await agentPool.createAgent({ name: `${role.nameEn}-${discussionId.slice(0, 8)}`, model: roleModel, systemPrompt });
+
+    const prompt = roundNumber === 1
+      ? `请针对以下议题发表你的专业意见：\n\n${discussion.topic}`
+      : `基于前面各位的发言，请从你的角色视角补充、回应或提出新观点。`;
+
+    const t0 = Date.now();
+    let fullContent = '';
+
+    for await (const chunk of agentPool.sendPromptStream(agentId, prompt)) {
+      if (chunk.type === 'token' && chunk.content) {
+        fullContent += chunk.content;
+        yield { type: 'role_token', roleId: participant.roleId, roleName: role.name, content: chunk.content, roundNumber };
+      } else if (chunk.type === 'error') {
+        log.error(`角色 ${role.name} 流式出错: ${chunk.content}`);
+        break;
+      }
+    }
+
+    await agentPool.dispose(agentId);
+    const elapsed = Date.now() - t0;
+
+    const refs = parseReferences(fullContent, discussionId);
+    const msg: DiscussionMessage = {
+      id: randomUUID(),
+      roleId: participant.roleId,
+      content: fullContent,
+      references: refs.map((r) => r.messageId),
+      timestamp: Date.now(),
+      type: 'opinion',
+    };
+    messages.push(msg);
+    participant.messageCount++;
+
+    traceOpinion(ctx, `role-${participant.roleId}`, participant.roleId, fullContent.slice(0, 500));
+
+    yield { type: 'role_done', roleId: participant.roleId, roleName: role.name, content: fullContent, roundNumber, elapsed };
+  }
+
+  const round: DiscussionRound = { roundNumber, messages };
+  discussion.rounds.push(round);
+  discussion.currentRound = roundNumber;
+
+  const concluded = roundNumber >= discussion.maxRounds;
+  if (concluded) discussion.status = 'concluded';
+
+  db.prepare(`UPDATE discussions SET rounds = ?, current_round = ?, status = ?, participants = ? WHERE id = ?`).run(
+    JSON.stringify(discussion.rounds), discussion.currentRound, discussion.status, JSON.stringify(discussion.participants), discussionId,
+  );
+
+  yield { type: 'round_done', roundNumber, messageCount: messages.length, concluded };
+}
+
+export async function concludeDiscussion(discussionId: string): Promise<DiscussionConclusion> {
+  log.info(`📝 开始总结讨论 [${discussionId.slice(0, 8)}]`);
+  const db = getDb();
+  const row: any = db.prepare('SELECT * FROM discussions WHERE id = ?').get(discussionId);
+  if (!row) { log.error(`讨论 ${discussionId} 未找到`); throw new Error(`Discussion ${discussionId} not found`); }
 
   const discussion = {
     ...row,
@@ -569,9 +715,11 @@ ${allMessages.join('\n\n---\n\n')}
   "dissents": [{ "roleId": "有异议的角色", "point": "异议点", "resolution": "处理方式" }]
 }`;
 
+  const techLeadRole = getRoleById('tech-lead')!;
+  const concludeModel = resolveModelForRole(techLeadRole);
   const agentId = await agentPool.createAgent({
     name: `tech-lead-conclude-${discussionId.slice(0, 8)}`,
-    model: 'claude-sonnet-4-20250514',
+    model: concludeModel,
     systemPrompt: '你是技术负责人，负责总结团队讨论并做出最终决策。输出 JSON 格式。',
   });
 
@@ -658,22 +806,36 @@ export async function executeTask(squadId: string, taskId: string): Promise<stri
   const task = tasks.find((t) => t.id === taskId);
   if (!task) throw new Error(`Task ${taskId} not found`);
 
-  const role = getRoleById(task.assignedTo);
-  if (!role) throw new Error(`Role ${task.assignedTo} not found`);
+  let role = getRoleById(task.assignedTo);
+  if (!role && task.assignedTo.includes('+')) {
+    const candidates = task.assignedTo.split('+');
+    for (const c of candidates) {
+      role = getRoleById(c.trim());
+      if (role) break;
+    }
+  }
+  if (!role) {
+    log.warn(`角色 "${task.assignedTo}" 未找到，降级使用 senior-dev`);
+    role = getRoleById('senior-dev')!;
+  }
 
   task.status = 'in_progress';
   task.startedAt = Date.now();
+  log.info(`⚙️ 执行任务 [${taskId.slice(0, 8)}]: ${task.title}, 分配给 ${role.name} (原始: ${task.assignedTo})`);
 
   const systemPrompt = buildRoleSystemPrompt(role, { topic: task.description });
+  const execModel = resolveModelForRole(role);
   const agentId = await agentPool.createAgent({
     name: `${role.nameEn}-exec-${taskId.slice(0, 8)}`,
-    model: 'claude-sonnet-4-20250514',
+    model: execModel,
     systemPrompt,
   });
 
   const prompt = `## 任务\n${task.title}\n\n## 描述\n${task.description}\n\n## 输入\n${task.input}\n\n## 期望输出\n${task.expectedOutput}\n\n请完成该任务。`;
+  const t0 = Date.now();
   const output = await agentPool.sendPrompt(agentId, prompt);
   await agentPool.dispose(agentId);
+  log.info(`  ✅ 任务执行完成 (${Date.now() - t0}ms, ${output.length}字)`);
 
   task.actualOutput = output;
   task.status = task.reviewerId ? 'in_review' : 'completed';
@@ -747,9 +909,10 @@ export async function runQARound(sessionId: string): Promise<QARound> {
   const ctx = { taskAnalysisId: session.taskAnalysisId, phase: 'qa' };
 
   const qaRole = getRoleById('qa')!;
+  const qaModel = resolveModelForRole(qaRole);
   const agentId = await agentPool.createAgent({
     name: `qa-round-${roundNumber}`,
-    model: 'claude-sonnet-4-20250514',
+    model: qaModel,
     systemPrompt: buildRoleSystemPrompt(qaRole, { topic: '执行测试用例' }),
   });
 
@@ -929,6 +1092,179 @@ export function generateProjectReport(taskAnalysisId: string): ProjectReport {
   return report;
 }
 
+// ─── 5.7 Progress Tracking (TodoWrite-style) ───
+
+export interface ProgressItem {
+  id: string;
+  taskAnalysisId: string;
+  title: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'blocked';
+  assignedTo: string;
+  phase: string;
+  order: number;
+  output?: string;
+  startedAt?: number;
+  completedAt?: number;
+  createdAt: number;
+}
+
+export function initProgressTable() {
+  const db = getDb();
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS task_progress (
+      id TEXT PRIMARY KEY,
+      task_analysis_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      assigned_to TEXT NOT NULL,
+      phase TEXT NOT NULL,
+      item_order INTEGER NOT NULL,
+      output TEXT,
+      started_at INTEGER,
+      completed_at INTEGER,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_progress_task ON task_progress(task_analysis_id);
+  `);
+}
+
+export function createProgressItems(taskAnalysisId: string, items: Omit<ProgressItem, 'id' | 'createdAt'>[]): ProgressItem[] {
+  const db = getDb();
+  const now = Date.now();
+  const stmt = db.prepare(`
+    INSERT INTO task_progress (id, task_analysis_id, title, status, assigned_to, phase, item_order, output, started_at, completed_at, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const result: ProgressItem[] = [];
+  for (const item of items) {
+    const id = randomUUID();
+    stmt.run(id, taskAnalysisId, item.title, item.status, item.assignedTo, item.phase, item.order, item.output || null, item.startedAt || null, item.completedAt || null, now);
+    result.push({ ...item, id, createdAt: now });
+  }
+  return result;
+}
+
+export function updateProgressItem(itemId: string, updates: Partial<Pick<ProgressItem, 'status' | 'output' | 'startedAt' | 'completedAt'>>): boolean {
+  const db = getDb();
+  const sets: string[] = [];
+  const vals: any[] = [];
+
+  if (updates.status !== undefined) {
+    sets.push('status = ?');
+    vals.push(updates.status);
+    if (updates.status === 'in_progress' && !updates.startedAt) {
+      sets.push('started_at = ?');
+      vals.push(Date.now());
+    }
+    if ((updates.status === 'completed' || updates.status === 'failed') && !updates.completedAt) {
+      sets.push('completed_at = ?');
+      vals.push(Date.now());
+    }
+  }
+  if (updates.output !== undefined) { sets.push('output = ?'); vals.push(updates.output); }
+  if (updates.startedAt !== undefined) { sets.push('started_at = ?'); vals.push(updates.startedAt); }
+  if (updates.completedAt !== undefined) { sets.push('completed_at = ?'); vals.push(updates.completedAt); }
+
+  if (sets.length === 0) return false;
+  vals.push(itemId);
+  const res = db.prepare(`UPDATE task_progress SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
+  return res.changes > 0;
+}
+
+export function getProgressItems(taskAnalysisId: string): ProgressItem[] {
+  const db = getDb();
+  const rows: any[] = db.prepare(
+    'SELECT * FROM task_progress WHERE task_analysis_id = ? ORDER BY item_order ASC'
+  ).all(taskAnalysisId);
+  return rows.map((r) => ({
+    id: r.id,
+    taskAnalysisId: r.task_analysis_id,
+    title: r.title,
+    status: r.status,
+    assignedTo: r.assigned_to,
+    phase: r.phase,
+    order: r.item_order,
+    output: r.output,
+    startedAt: r.started_at,
+    completedAt: r.completed_at,
+    createdAt: r.created_at,
+  }));
+}
+
+export function getProgressSummary(taskAnalysisId: string): {
+  total: number;
+  completed: number;
+  inProgress: number;
+  pending: number;
+  failed: number;
+  blocked: number;
+  percent: number;
+  items: ProgressItem[];
+} {
+  const items = getProgressItems(taskAnalysisId);
+  const total = items.length;
+  const completed = items.filter((i) => i.status === 'completed').length;
+  const inProgress = items.filter((i) => i.status === 'in_progress').length;
+  const pending = items.filter((i) => i.status === 'pending').length;
+  const failed = items.filter((i) => i.status === 'failed').length;
+  const blocked = items.filter((i) => i.status === 'blocked').length;
+  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+  return { total, completed, inProgress, pending, failed, blocked, percent, items };
+}
+
+// ─── 5.8 Agent References (@agent-name) ───
+
+export interface AgentReference {
+  roleId: string;
+  roleName: string;
+  messageId: string;
+  contentSnippet: string;
+}
+
+export function parseReferences(content: string, discussionId: string): AgentReference[] {
+  const refPattern = /@(\S+)/g;
+  const refs: AgentReference[] = [];
+  let match;
+
+  while ((match = refPattern.exec(content)) !== null) {
+    const refName = match[1];
+    const role = ENTERPRISE_ROLES.find(
+      (r) => r.id === refName || r.name === refName || r.nameEn.toLowerCase() === refName.toLowerCase()
+    );
+    if (!role) continue;
+
+    const db = getDb();
+    const row: any = db.prepare('SELECT rounds FROM discussions WHERE id = ?').get(discussionId);
+    if (!row) continue;
+
+    const rounds: DiscussionRound[] = JSON.parse(row.rounds);
+    const lastMsg = rounds
+      .flatMap((r) => r.messages)
+      .filter((m) => m.roleId === role.id)
+      .pop();
+
+    if (lastMsg) {
+      refs.push({
+        roleId: role.id,
+        roleName: role.name,
+        messageId: lastMsg.id,
+        contentSnippet: lastMsg.content.slice(0, 200),
+      });
+    }
+  }
+
+  return refs;
+}
+
+export function buildReferenceContext(references: AgentReference[]): string {
+  if (references.length === 0) return '';
+  const lines = references.map((r) =>
+    `[@${r.roleName}] 的发言: "${r.contentSnippet}..."`
+  );
+  return `\n## 引用的发言\n${lines.join('\n')}`;
+}
+
 // ─── Query Helpers ───
 
 export function getTaskAnalysis(id: string): TaskAnalysis | null {
@@ -995,4 +1331,9 @@ export function getQASession(id: string): QASession | null {
   };
 }
 
-export { ENTERPRISE_ROLES, getRoleById, getRolesByPhase };
+export {
+  ENTERPRISE_ROLES, getRoleById, getRolesByPhase,
+  resolveModelForRole, setRoleModelOverride, removeRoleModelOverride,
+  getRoleModelOverrides, setModelTierDefault, getModelTierDefaults,
+  getAvailableModels, getModelRecommendation,
+};

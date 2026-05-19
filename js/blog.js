@@ -456,7 +456,8 @@ class BlogManager {
             return this._buildJsonViewer(jsonObj, text);
         }
 
-        let processed = this._escapeBackslashesOutsideCode(text);
+        let processed = this._preprocessParagraphs(text);
+        processed = this._escapeBackslashesOutsideCode(processed);
 
         let rendered = processed;
         if (window.MarkdownRenderer && typeof window.MarkdownRenderer.render === 'function') {
@@ -481,6 +482,21 @@ class BlogManager {
         });
 
         return tempDiv.innerHTML;
+    }
+
+    /**
+     * 预处理段落：将中文写作中常见的单换行+首行缩进格式转换为 markdown 双换行，
+     * 确保渲染为独立的 <p> 标签而非 <br>。
+     * 规则：如果一行以全角空格、Tab或多个半角空格开头（且不在代码块中），
+     * 视为新段落开头，前面插入额外空行。
+     */
+    _preprocessParagraphs(text) {
+        if (!text) return text;
+        const parts = text.split(/(```[\s\S]*?```)/g);
+        return parts.map((part, i) => {
+            if (i % 2 === 1) return part;
+            return part.replace(/\n([　\t]|  +)/g, '\n\n$1');
+        }).join('');
     }
 
     /**
@@ -1201,6 +1217,26 @@ class BlogManager {
                 </div>
                 <div class="blog-editor-split">
                     <div class="blog-editor-left">
+                        <div class="writing-ai-toolbar" id="writing-ai-toolbar">
+                            <button class="writing-ai-btn writing-ai-selection-btn" data-ai-action="rewrite" title="选中文本后点击改写">
+                                <i class="fas fa-sync-alt"></i> <span>改写</span>
+                            </button>
+                            <button class="writing-ai-btn writing-ai-selection-btn" data-ai-action="summarize" title="选中文本后点击摘要">
+                                <i class="fas fa-compress-alt"></i> <span>摘要</span>
+                            </button>
+                            <button class="writing-ai-btn writing-ai-selection-btn" data-ai-action="expand" title="选中文本后点击扩写">
+                                <i class="fas fa-expand-alt"></i> <span>扩写</span>
+                            </button>
+                            <span class="writing-ai-hint" id="writing-ai-selection-hint">（选中文本激活）</span>
+                            <div class="writing-ai-divider"></div>
+                            <button class="writing-ai-btn writing-ai-toggle" id="writing-ai-toggle" title="AI 补全开关">
+                                <i class="fas fa-magic"></i> <span>AI</span>
+                            </button>
+                            <button class="writing-ai-btn" id="writing-ai-settings-btn" title="写作 AI 设置">
+                                <i class="fas fa-cog"></i>
+                            </button>
+                            <span class="writing-ai-status" id="writing-ai-status"></span>
+                        </div>
                         <textarea class="blog-editor-textarea" id="blog-ed-body"
                                   placeholder="开始写作...\n\n支持 Markdown 语法\n选中文字弹出格式菜单\n输入 / 唤起插入菜单\n支持粘贴图片自动上传">${this._esc(content)}</textarea>
                     </div>
@@ -1815,6 +1851,8 @@ class BlogManager {
         bodyEl.addEventListener('keydown', (e) => {
             if (this._slashMenu?.classList.contains('visible')) return;
             if (e.key === 'Tab') {
+                const ghostContainer = bodyEl.parentElement?.querySelector('.writing-ghost-container');
+                if (ghostContainer && ghostContainer.style.display !== 'none') return;
                 e.preventDefault();
                 this._handleTab(bodyEl, e.shiftKey);
             }

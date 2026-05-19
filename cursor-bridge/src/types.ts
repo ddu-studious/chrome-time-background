@@ -5,6 +5,7 @@ export interface CreateAgentOpts {
   model?: string;
   cwd: string;
   description?: string;
+  systemPrompt?: string;
 }
 
 export interface BridgeAgent {
