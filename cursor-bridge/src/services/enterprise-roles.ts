@@ -330,27 +330,63 @@ export function getRolesByPhase(phase: string): EnterpriseRole[] {
 // ─── Model Routing Strategy ───
 
 const MODEL_TIER_DEFAULTS: Record<ModelTier, string> = {
-  fast: 'composer-2',
+  fast: 'composer-2.5',
   balanced: 'claude-sonnet-4-6',
-  powerful: 'claude-opus-4-6',
+  powerful: 'claude-opus-4-7',
 };
 
-const AVAILABLE_MODELS = [
-  { id: 'composer-2', tier: 'fast' as ModelTier, label: 'Composer 2', latencyMs: 800, costPer1k: 0.002 },
-  { id: 'gemini-3-flash', tier: 'fast' as ModelTier, label: 'Gemini 3 Flash', latencyMs: 600, costPer1k: 0.001 },
-  { id: 'gpt-5.4-mini', tier: 'fast' as ModelTier, label: 'GPT 5.4 Mini', latencyMs: 700, costPer1k: 0.002 },
-  { id: 'claude-haiku-4-5', tier: 'fast' as ModelTier, label: 'Claude Haiku 4.5', latencyMs: 500, costPer1k: 0.001 },
-  { id: 'claude-sonnet-4-6', tier: 'balanced' as ModelTier, label: 'Claude Sonnet 4.6', latencyMs: 2000, costPer1k: 0.012 },
-  { id: 'gpt-5.4', tier: 'balanced' as ModelTier, label: 'GPT 5.4', latencyMs: 1800, costPer1k: 0.01 },
-  { id: 'gemini-3.1-pro', tier: 'balanced' as ModelTier, label: 'Gemini 3.1 Pro', latencyMs: 2000, costPer1k: 0.01 },
-  { id: 'claude-opus-4-6', tier: 'powerful' as ModelTier, label: 'Claude Opus 4.6', latencyMs: 5000, costPer1k: 0.06 },
-  { id: 'claude-opus-4-7', tier: 'powerful' as ModelTier, label: 'Claude Opus 4.7', latencyMs: 5000, costPer1k: 0.06 },
-  { id: 'gpt-5.3-codex', tier: 'powerful' as ModelTier, label: 'GPT 5.3 Codex', latencyMs: 3500, costPer1k: 0.04 },
-  { id: 'grok-4.3', tier: 'balanced' as ModelTier, label: 'Grok 4.3', latencyMs: 2500, costPer1k: 0.015 },
-];
+const MODEL_METADATA: Record<string, { tier: ModelTier; latencyMs: number; costPer1k: number }> = {
+  'composer-2.5': { tier: 'fast', latencyMs: 600, costPer1k: 0.002 },
+  'composer-2': { tier: 'fast', latencyMs: 800, costPer1k: 0.002 },
+  'gemini-3-flash': { tier: 'fast', latencyMs: 600, costPer1k: 0.001 },
+  'gemini-3.1-pro': { tier: 'balanced', latencyMs: 2000, costPer1k: 0.01 },
+  'gpt-5.4-mini': { tier: 'fast', latencyMs: 700, costPer1k: 0.002 },
+  'gpt-5.4-nano': { tier: 'fast', latencyMs: 400, costPer1k: 0.001 },
+  'claude-haiku-4-5': { tier: 'fast', latencyMs: 500, costPer1k: 0.001 },
+  'claude-sonnet-4-6': { tier: 'balanced', latencyMs: 2000, costPer1k: 0.012 },
+  'gpt-5.4': { tier: 'balanced', latencyMs: 1800, costPer1k: 0.01 },
+  'gpt-5.3-codex': { tier: 'balanced', latencyMs: 2000, costPer1k: 0.012 },
+  'gpt-5.5': { tier: 'powerful', latencyMs: 3000, costPer1k: 0.04 },
+  'claude-opus-4-7': { tier: 'powerful', latencyMs: 5000, costPer1k: 0.06 },
+  'claude-opus-4-6': { tier: 'powerful', latencyMs: 5000, costPer1k: 0.06 },
+  'grok-4.3': { tier: 'balanced', latencyMs: 2500, costPer1k: 0.01 },
+  'kimi-k2.5': { tier: 'fast', latencyMs: 1000, costPer1k: 0.003 },
+};
+
+function _inferTier(id: string): ModelTier {
+  if (/opus|max|5\.5$/.test(id)) return 'powerful';
+  if (/mini|nano|haiku|flash/.test(id)) return 'fast';
+  return 'balanced';
+}
+
+let _cachedModels: { id: string; tier: ModelTier; label: string; latencyMs: number; costPer1k: number }[] | null = null;
+let _cacheTimestamp = 0;
+const CACHE_TTL_MS = 5 * 60 * 1000;
+
+export function updateAvailableModelsFromApi(apiModels: { id: string; displayName?: string }[]) {
+  _cachedModels = apiModels
+    .filter(m => m.id !== 'default')
+    .map(m => {
+      const meta = MODEL_METADATA[m.id];
+      const tier = meta?.tier ?? _inferTier(m.id);
+      return {
+        id: m.id,
+        tier,
+        label: m.displayName || m.id,
+        latencyMs: meta?.latencyMs ?? 2000,
+        costPer1k: meta?.costPer1k ?? 0.01,
+      };
+    });
+  _cacheTimestamp = Date.now();
+}
 
 export function getAvailableModels() {
-  return AVAILABLE_MODELS;
+  if (_cachedModels && (Date.now() - _cacheTimestamp) < CACHE_TTL_MS) {
+    return _cachedModels;
+  }
+  return Object.entries(MODEL_METADATA).map(([id, meta]) => ({
+    id, tier: meta.tier, label: id, latencyMs: meta.latencyMs, costPer1k: meta.costPer1k,
+  }));
 }
 
 const TASK_TYPE_ROUTING: Record<string, { preferredTier: ModelTier; upgradeRoles?: string[] }> = {

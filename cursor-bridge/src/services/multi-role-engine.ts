@@ -412,13 +412,31 @@ export async function analyzeTask(requirement: string, projectId?: string, model
     };
   }
 
+  const normalizeRoleId = (rid: string): string => {
+    const role = getRoleById(rid);
+    return role ? role.id : rid;
+  };
+
+  const normalizedRoles = (parsed.recommendedRoles || []).map((r: any) => ({
+    ...r,
+    roleId: normalizeRoleId(r.roleId || r.id || ''),
+  }));
+
+  const normalizedPlan = parsed.executionPlan || {};
+  if (normalizedPlan.phases) {
+    normalizedPlan.phases = normalizedPlan.phases.map((p: any) => ({
+      ...p,
+      roles: (p.roles || []).map((rid: string) => normalizeRoleId(rid)),
+    }));
+  }
+
   const analysis: TaskAnalysis = {
     id,
     projectId,
     originalRequirement: requirement,
     summary: parsed.summary,
-    recommendedRoles: parsed.recommendedRoles,
-    executionPlan: parsed.executionPlan,
+    recommendedRoles: normalizedRoles,
+    executionPlan: normalizedPlan,
     status: 'draft',
     createdAt: now,
   };

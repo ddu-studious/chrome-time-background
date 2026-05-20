@@ -3,6 +3,7 @@ import { Cursor } from '@cursor/sdk';
 import { config } from '../config.js';
 import { agentPool } from '../services/agent-pool.js';
 import { sendAgentMessage, getAgentMessages, getAgentMessagesSent, markAgentMessageRead } from '../services/database.js';
+import { updateAvailableModelsFromApi } from '../services/enterprise-roles.js';
 
 export async function agentRoutes(fastify: FastifyInstance) {
   fastify.get('/agents', async () => {
@@ -194,6 +195,9 @@ export async function agentRoutes(fastify: FastifyInstance) {
   fastify.get('/models', async (_request, reply) => {
     try {
       const models = await Cursor.models.list({ apiKey: config.apiKey });
+      if (Array.isArray(models)) {
+        updateAvailableModelsFromApi(models as { id: string; displayName?: string }[]);
+      }
       return { models };
     } catch (err: any) {
       return reply.code(500).send({ error: err.message });

@@ -1,522 +1,330 @@
-{"level":30,"time":1779097411484,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-5","method":"GET","url":"/models","statusCode":200,"responseTime":6785,"msg":"request completed"}
-{"level":30,"time":1779098059293,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-2k","method":"GET","url":"/writing/config","msg":"incoming request"}
-{"level":30,"time":1779098059294,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-2k","method":"GET","url":"/writing/config","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779098059565,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-2m","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779098059565,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-2m","method":"GET","url":"/agents","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779098059567,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-2n","method":"GET","url":"/models","msg":"incoming request"}
-{"level":30,"time":1779098061161,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-2n","method":"GET","url":"/models","statusCode":200,"responseTime":1594,"msg":"request completed"}
-{"level":30,"time":1779098068979,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-2o","method":"POST","url":"/writing/complete","msg":"incoming request"}
-{"level":30,"time":1779098069937,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-2o","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":958,"msg":"request completed"}
-{"level":30,"time":1779098071095,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-2p","method":"POST","url":"/writing/complete","msg":"incoming request"}
-{"level":30,"time":1779098071690,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-2p","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":595,"msg":"request completed"}
-{"level":30,"time":1779098076707,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-2s","method":"POST","url":"/writing/feedback","msg":"incoming request"}
-{"level":30,"time":1779098076710,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-2s","method":"POST","url":"/writing/feedback","statusCode":200,"responseTime":3,"msg":"request completed"}
-{"level":30,"time":1779098077283,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-2t","method":"POST","url":"/writing/feedback","msg":"incoming request"}
-{"level":30,"time":1779098077284,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-2t","method":"POST","url":"/writing/feedback","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779098077479,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-2u","method":"POST","url":"/writing/complete","msg":"incoming request"}
-{"level":30,"time":1779098078187,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-2u","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":708,"msg":"request completed"}
-{"level":30,"time":1779098078423,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-2v","method":"POST","url":"/writing/feedback","msg":"incoming request"}
-{"level":30,"time":1779098078425,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-2v","method":"POST","url":"/writing/feedback","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779098078788,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-2w","method":"POST","url":"/writing/feedback","msg":"incoming request"}
-{"level":30,"time":1779098078789,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-2w","method":"POST","url":"/writing/feedback","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779098079140,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-2x","method":"POST","url":"/writing/feedback","msg":"incoming request"}
-{"level":30,"time":1779098079142,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-2x","method":"POST","url":"/writing/feedback","statusCode":200,"responseTime":2,"msg":"request completed"}
-{"level":30,"time":1779098080167,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-2y","method":"POST","url":"/writing/feedback","msg":"incoming request"}
-{"level":30,"time":1779098080169,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-2y","method":"POST","url":"/writing/feedback","statusCode":200,"responseTime":3,"msg":"request completed"}
-{"level":30,"time":1779098080473,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-2z","method":"POST","url":"/writing/feedback","msg":"incoming request"}
-{"level":30,"time":1779098080475,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-2z","method":"POST","url":"/writing/feedback","statusCode":200,"responseTime":2,"msg":"request completed"}
-{"level":30,"time":1779098106284,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-34","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779098106285,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-34","method":"GET","url":"/agents","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779098107617,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-35","method":"GET","url":"/roles","msg":"incoming request"}
-{"level":30,"time":1779098107619,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-35","method":"GET","url":"/roles","statusCode":200,"responseTime":2,"msg":"request completed"}
-{"level":30,"time":1779098107620,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-36","method":"GET","url":"/models/available","msg":"incoming request"}
-{"level":30,"time":1779098107620,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-36","method":"GET","url":"/models/available","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779098151016,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3b","method":"GET","url":"/writing/config","msg":"incoming request"}
-{"level":30,"time":1779098151016,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3b","method":"GET","url":"/writing/config","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779098151120,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3d","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779098151120,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3d","method":"GET","url":"/agents","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779098151121,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3e","method":"GET","url":"/models","msg":"incoming request"}
-{"level":30,"time":1779098154677,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3e","method":"GET","url":"/models","statusCode":200,"responseTime":3556,"msg":"request completed"}
-{"level":30,"time":1779098155273,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3f","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779098155274,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3f","method":"GET","url":"/agents","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779098157131,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3g","method":"GET","url":"/roles","msg":"incoming request"}
-{"level":30,"time":1779098157132,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3g","method":"GET","url":"/roles","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779098157132,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3h","method":"GET","url":"/models/available","msg":"incoming request"}
-{"level":30,"time":1779098157132,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3h","method":"GET","url":"/models/available","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779098166084,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3i","method":"GET","url":"/writing/config","msg":"incoming request"}
-{"level":30,"time":1779098166085,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3i","method":"GET","url":"/writing/config","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779098166147,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3k","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779098166147,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3k","method":"GET","url":"/agents","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779098166148,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3l","method":"GET","url":"/models","msg":"incoming request"}
-{"level":30,"time":1779098166901,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3m","method":"GET","url":"/writing/config","msg":"incoming request"}
-{"level":30,"time":1779098166902,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3m","method":"GET","url":"/writing/config","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779098166962,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3o","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779098166963,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3o","method":"GET","url":"/agents","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779098166964,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3p","method":"GET","url":"/models","msg":"incoming request"}
-{"level":30,"time":1779098168638,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3p","method":"GET","url":"/models","statusCode":200,"responseTime":1673,"msg":"request completed"}
-{"level":30,"time":1779098170116,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3q","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779098170117,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3q","method":"GET","url":"/agents","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779098172547,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3r","method":"GET","url":"/roles","msg":"incoming request"}
-{"level":30,"time":1779098172548,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3r","method":"GET","url":"/roles","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779098172549,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3s","method":"GET","url":"/models/available","msg":"incoming request"}
-{"level":30,"time":1779098172549,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3s","method":"GET","url":"/models/available","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779098182768,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3t","method":"POST","url":"/tasks/analyze","msg":"incoming request"}
-[multi-role-routes] POST /tasks/analyze: "开发一个贪吃蛇小游戏" 
-[multi-role] 📋 开始分析任务 [58aa60e4] {"requirement":"开发一个贪吃蛇小游戏"}
-[multi-role] 🔍 模型覆盖配置 {"operations":"composer-2","business":"composer-2","product":"composer-2","project-manager":"composer-2","architect":"composer-2","senior-dev":"composer-2","developer":"composer-2","qa":"composer-2","devops":"composer-2","tech-lead":"composer-2"}
-[multi-role] 🤖 使用模型 composer-2 进行任务分析 
-[AgentPool] Agent created: agent_1779098184464_le4069s4 name="task-analyzer" model=composer-2 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
-[multi-role] 🔍 Agent 已创建: agent_1779098184464_le4069s4 
-[multi-role] ✅ 分析完成 (18846ms) {"resultLen":1369}
-[multi-role-routes] POST /tasks/analyze 完成: id=58aa60e4, roles=4 
-{"level":30,"time":1779098203313,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-3t","method":"POST","url":"/tasks/analyze","statusCode":200,"responseTime":20545,"msg":"request completed"}
-{"level":30,"time":1779098218493,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-40","method":"PUT","url":"/models/config","msg":"incoming request"}
-{"level":30,"time":1779098218494,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-40","method":"PUT","url":"/models/config","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779098220270,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-41","method":"PUT","url":"/models/config","msg":"incoming request"}
-{"level":30,"time":1779098220270,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-41","method":"PUT","url":"/models/config","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779098224765,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-42","method":"PUT","url":"/models/config","msg":"incoming request"}
-{"level":30,"time":1779098224765,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-42","method":"PUT","url":"/models/config","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779098227881,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-43","method":"PUT","url":"/models/config","msg":"incoming request"}
-{"level":30,"time":1779098227881,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-43","method":"PUT","url":"/models/config","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779098234633,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-46","method":"PATCH","url":"/tasks/58aa60e4-7684-46c6-87e3-fc5d57243f1a/approve","msg":"incoming request"}
-{"level":30,"time":1779098234636,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-46","method":"PATCH","url":"/tasks/58aa60e4-7684-46c6-87e3-fc5d57243f1a/approve","statusCode":200,"responseTime":4,"msg":"request completed"}
-{"level":30,"time":1779098234638,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-47","method":"GET","url":"/tasks/58aa60e4-7684-46c6-87e3-fc5d57243f1a","msg":"incoming request"}
-{"level":30,"time":1779098234639,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-47","method":"GET","url":"/tasks/58aa60e4-7684-46c6-87e3-fc5d57243f1a","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779098234640,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-48","method":"POST","url":"/tasks/58aa60e4-7684-46c6-87e3-fc5d57243f1a/discussions","msg":"incoming request"}
-[multi-role-routes] POST /tasks/58aa60e4/discussions: roles=[product,architect,developer,tech-lead] 
-[multi-role] 💬 创建讨论 [7d4cd51c] {"taskAnalysisId":"58aa60e4","topic":"开发一个贪吃蛇小游戏","phase":"discussion","roles":["product","architect","developer","tech-lead"],"maxRounds":3}
-[multi-role-routes] 讨论已创建: 7d4cd51c 
-{"level":30,"time":1779098234642,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-48","method":"POST","url":"/tasks/58aa60e4-7684-46c6-87e3-fc5d57243f1a/discussions","statusCode":200,"responseTime":2,"msg":"request completed"}
-{"level":30,"time":1779098234643,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-49","method":"POST","url":"/discussions/7d4cd51c-8eec-4062-a22e-6cf59522f343/round","msg":"incoming request"}
-[multi-role-routes] POST /discussions/7d4cd51c/round 
-[multi-role] 🔄 讨论轮次 NaN/undefined 开始, 参与者: product, architect, developer, tech-lead 
-[multi-role] 🔍   → 产品经理 (Product Manager) 开始发言... 
-[AgentPool] Agent created: agent_1779098234646_3e0yumu7 name="Product Manager-7d4cd51c" model=composer-2 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
-[multi-role]   ✅ 产品经理 发言完成 (20719ms, 3503字) 
-[multi-role] 🔍   → 架构师 (Architect) 开始发言... 
-[AgentPool] Agent created: agent_1779098255369_tzst0ern name="Architect-7d4cd51c" model=composer-2 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
-[multi-role]   ✅ 架构师 发言完成 (21129ms, 3806字) 
-[multi-role] 🔍   → 一线开发 (Developer) 开始发言... 
-[AgentPool] Agent created: agent_1779098276499_9l3may2p name="Developer-7d4cd51c" model=gpt-5.3-codex cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
-[multi-role]   ✅ 一线开发 发言完成 (32292ms, 5861字) 
-[multi-role] 🔍   → 技术负责人 (Tech Lead) 开始发言... 
-[AgentPool] Agent created: agent_1779098308793_9h0ym65a name="Tech Lead-7d4cd51c" model=composer-2 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
-[multi-role]   ✅ 技术负责人 发言完成 (14905ms, 2169字) 
-[multi-role] 🔄 讨论轮次 NaN 完成, 共 4 条发言 
-[multi-role-routes] 讨论轮次完成: round=NaN, messages=4 
-{"level":30,"time":1779098323700,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-49","method":"POST","url":"/discussions/7d4cd51c-8eec-4062-a22e-6cf59522f343/round","statusCode":200,"responseTime":89056,"msg":"request completed"}
-{"level":30,"time":1779098323704,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-4m","method":"GET","url":"/discussions/7d4cd51c-8eec-4062-a22e-6cf59522f343","msg":"incoming request"}
-{"level":30,"time":1779098323704,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-4m","method":"GET","url":"/discussions/7d4cd51c-8eec-4062-a22e-6cf59522f343","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779098554473,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-59","method":"POST","url":"/discussions/7d4cd51c-8eec-4062-a22e-6cf59522f343/conclude","msg":"incoming request"}
-[multi-role-routes] POST /discussions/7d4cd51c/conclude 
-[multi-role] 📝 开始总结讨论 [7d4cd51c] 
-[AgentPool] Agent created: agent_1779098554477_ry0mst0u name="tech-lead-conclude-7d4cd51c" model=composer-2 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
-[multi-role-routes] 讨论总结完成: decisions=4, actionItems=6 
-{"level":30,"time":1779098567603,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-59","method":"POST","url":"/discussions/7d4cd51c-8eec-4062-a22e-6cf59522f343/conclude","statusCode":200,"responseTime":13130,"msg":"request completed"}
-{"level":30,"time":1779098567604,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-5c","method":"POST","url":"/tasks/58aa60e4-7684-46c6-87e3-fc5d57243f1a/report/generate","msg":"incoming request"}
-{"level":30,"time":1779098567605,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-5c","method":"POST","url":"/tasks/58aa60e4-7684-46c6-87e3-fc5d57243f1a/report/generate","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779099141455,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-63","method":"GET","url":"/writing/config","msg":"incoming request"}
-{"level":30,"time":1779099141456,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-63","method":"GET","url":"/writing/config","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779099141826,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-65","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779099141826,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-65","method":"GET","url":"/agents","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779099141828,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-66","method":"GET","url":"/models","msg":"incoming request"}
-{"level":30,"time":1779099393717,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-73","method":"GET","url":"/writing/config","msg":"incoming request"}
-{"level":30,"time":1779099393717,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-73","method":"GET","url":"/writing/config","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779099393860,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-75","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779099393860,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-75","method":"GET","url":"/agents","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779099393861,"pid":50137,"hostname":"MacBook-Pro-23.local","reqId":"req-76","method":"GET","url":"/models","msg":"incoming request"}
+[cursor-bridge] 日志文件: /Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge/logs/bridge.log
+
+  cursor-bridge v1.0.0
+  Listening on http://127.0.0.1:19840
+  PID: 96418
+  Agents: 0/10
+
+{"level":30,"time":1779242813696,"pid":96418,"hostname":"MacBook-Pro-23.local","msg":"Server listening at http://127.0.0.1:19840"}
+{"level":30,"time":1779242827797,"pid":96418,"hostname":"MacBook-Pro-23.local","reqId":"req-4","method":"GET","url":"/agents","msg":"incoming request"}
+{"level":30,"time":1779242827798,"pid":96418,"hostname":"MacBook-Pro-23.local","reqId":"req-4","method":"GET","url":"/agents","statusCode":200,"responseTime":0,"msg":"request completed"}
+{"level":30,"time":1779242827800,"pid":96418,"hostname":"MacBook-Pro-23.local","reqId":"req-5","method":"GET","url":"/models","msg":"incoming request"}
+{"level":30,"time":1779242831534,"pid":96418,"hostname":"MacBook-Pro-23.local","reqId":"req-5","method":"GET","url":"/models","statusCode":200,"responseTime":3734,"msg":"request completed"}
+{"level":30,"time":1779242871559,"pid":96418,"hostname":"MacBook-Pro-23.local","reqId":"req-6","method":"GET","url":"/models","msg":"incoming request"}
+{"level":30,"time":1779242873203,"pid":96418,"hostname":"MacBook-Pro-23.local","reqId":"req-6","method":"GET","url":"/models","statusCode":200,"responseTime":1644,"msg":"request completed"}
+{"level":30,"time":1779242888390,"pid":96418,"hostname":"MacBook-Pro-23.local","reqId":"req-9","method":"GET","url":"/models","msg":"incoming request"}
+{"level":30,"time":1779242890064,"pid":96418,"hostname":"MacBook-Pro-23.local","reqId":"req-9","method":"GET","url":"/models","statusCode":200,"responseTime":1674,"msg":"request completed"}
+{"level":30,"time":1779242993101,"pid":96418,"hostname":"MacBook-Pro-23.local","reqId":"req-m","method":"GET","url":"/collab/models/available","msg":"incoming request"}
+{"level":30,"time":1779242993101,"pid":96418,"hostname":"MacBook-Pro-23.local","reqId":"req-m","method":"GET","url":"/collab/models/available","statusCode":404,"responseTime":0,"msg":"request completed"}
 
 [cursor-bridge] Shutting down...
-{"level":30,"time":1779099411713,"pid":90221,"hostname":"MacBook-Pro-23.local","msg":"Server listening at http://127.0.0.1:19840"}
-{"level":30,"time":1779099761776,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-1b","method":"GET","url":"/writing/config","msg":"incoming request"}
-{"level":30,"time":1779099761777,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-1b","method":"GET","url":"/writing/config","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779099762077,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-1d","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779099762078,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-1d","method":"GET","url":"/agents","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779099762079,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-1e","method":"GET","url":"/models","msg":"incoming request"}
-{"level":30,"time":1779100763106,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-4d","method":"GET","url":"/writing/config","msg":"incoming request"}
-{"level":30,"time":1779100763106,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-4d","method":"GET","url":"/writing/config","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779100763480,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-4f","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779100763480,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-4f","method":"GET","url":"/agents","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779100763482,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-4g","method":"GET","url":"/models","msg":"incoming request"}
-{"level":30,"time":1779100769538,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-4g","method":"GET","url":"/models","statusCode":200,"responseTime":6057,"msg":"request completed"}
-{"level":30,"time":1779100813873,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-4l","method":"POST","url":"/writing/complete","msg":"incoming request"}
-{"level":30,"time":1779100814710,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-4m","method":"POST","url":"/writing/complete","msg":"incoming request"}
-{"level":30,"time":1779100815554,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-4m","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":844,"msg":"request completed"}
-{"level":30,"time":1779100816843,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-4n","method":"POST","url":"/writing/feedback","msg":"incoming request"}
-{"level":30,"time":1779100816844,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-4n","method":"POST","url":"/writing/feedback","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779100816870,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-4o","method":"POST","url":"/writing/complete","msg":"incoming request"}
-{"level":30,"time":1779100817615,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-4o","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":745,"msg":"request completed"}
-{"level":30,"time":1779100818084,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-4p","method":"POST","url":"/writing/feedback","msg":"incoming request"}
-{"level":30,"time":1779100818085,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-4p","method":"POST","url":"/writing/feedback","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779100929510,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-56","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779100929510,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-56","method":"GET","url":"/agents","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779100931252,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-57","method":"GET","url":"/roles","msg":"incoming request"}
-{"level":30,"time":1779100931254,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-57","method":"GET","url":"/roles","statusCode":200,"responseTime":2,"msg":"request completed"}
-{"level":30,"time":1779100931254,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-58","method":"GET","url":"/models/available","msg":"incoming request"}
-{"level":30,"time":1779100931255,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-58","method":"GET","url":"/models/available","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779100942756,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-5b","method":"POST","url":"/tasks/analyze","msg":"incoming request"}
-{"level":30,"time":1779100960701,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-5b","method":"POST","url":"/tasks/analyze","statusCode":200,"responseTime":17945,"msg":"request completed"}
-{"level":30,"time":1779100965265,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-5e","method":"PUT","url":"/models/config","msg":"incoming request"}
-{"level":30,"time":1779100965265,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-5e","method":"PUT","url":"/models/config","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779100966944,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-5f","method":"PUT","url":"/models/config","msg":"incoming request"}
-{"level":30,"time":1779100966945,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-5f","method":"PUT","url":"/models/config","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779100968544,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-5g","method":"PUT","url":"/models/config","msg":"incoming request"}
-{"level":30,"time":1779100968545,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-5g","method":"PUT","url":"/models/config","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779100970852,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-5h","method":"PUT","url":"/models/config","msg":"incoming request"}
-{"level":30,"time":1779100970852,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-5h","method":"PUT","url":"/models/config","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779100973489,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-5k","method":"PUT","url":"/models/config","msg":"incoming request"}
-{"level":30,"time":1779100973490,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-5k","method":"PUT","url":"/models/config","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779100978119,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-5l","method":"PATCH","url":"/tasks/8a150530-e56a-4fd3-9ffb-060762d061a9/approve","msg":"incoming request"}
-{"level":30,"time":1779100978121,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-5l","method":"PATCH","url":"/tasks/8a150530-e56a-4fd3-9ffb-060762d061a9/approve","statusCode":200,"responseTime":2,"msg":"request completed"}
-{"level":30,"time":1779100978134,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-5m","method":"GET","url":"/tasks/8a150530-e56a-4fd3-9ffb-060762d061a9","msg":"incoming request"}
-{"level":30,"time":1779100978136,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-5m","method":"GET","url":"/tasks/8a150530-e56a-4fd3-9ffb-060762d061a9","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779100978137,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-5n","method":"POST","url":"/tasks/8a150530-e56a-4fd3-9ffb-060762d061a9/discussions","msg":"incoming request"}
-{"level":30,"time":1779100978139,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-5n","method":"POST","url":"/tasks/8a150530-e56a-4fd3-9ffb-060762d061a9/discussions","statusCode":200,"responseTime":2,"msg":"request completed"}
-{"level":30,"time":1779100978141,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-5o","method":"POST","url":"/discussions/b40b721b-847b-4a4d-97ec-bd2ac30e13ea/round/stream","msg":"incoming request"}
-{"level":30,"time":1779100978142,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-5o","method":"POST","url":"/discussions/b40b721b-847b-4a4d-97ec-bd2ac30e13ea/round/stream","statusCode":400,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779101107255,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-67","method":"POST","url":"/writing/rewrite","msg":"incoming request"}
-{"level":30,"time":1779101108587,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-67","method":"POST","url":"/writing/rewrite","statusCode":200,"responseTime":1332,"msg":"request completed"}
-{"level":30,"time":1779101109092,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-68","method":"POST","url":"/writing/complete","msg":"incoming request"}
-{"level":30,"time":1779101109095,"pid":90221,"hostname":"MacBook-Pro-23.local","reqId":"req-68","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":3,"msg":"request completed"}
-{"level":30,"time":1779101811720,"pid":34965,"hostname":"MacBook-Pro-23.local","msg":"Server listening at http://127.0.0.1:19840"}
-{"level":30,"time":1779101824765,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2","method":"POST","url":"/discussions/test-id-1234/round/stream","msg":"incoming request"}
-{"level":30,"time":1779101824767,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2","method":"POST","url":"/discussions/test-id-1234/round/stream","statusCode":200,"responseTime":2,"msg":"request completed"}
-{"level":30,"time":1779101831757,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-3","method":"POST","url":"/writing/complete","msg":"incoming request"}
-{"level":30,"time":1779101831758,"pid":34965,"hostname":"MacBook-Pro-23.local","qwenConfigured":true,"msg":"[writing] POST /writing/complete"}
-{"level":30,"time":1779101831758,"pid":34965,"hostname":"MacBook-Pro-23.local","textLen":4,"cursor":4,"msg":"[writing] 🔍 补全请求"}
-{"level":30,"time":1779101831758,"pid":34965,"hostname":"MacBook-Pro-23.local","model":"qwen-turbo-latest","msg":"[writing] 📝 开始流式 complete"}
-{"level":30,"time":1779101832204,"pid":34965,"hostname":"MacBook-Pro-23.local","elapsed":"446ms","chars":25,"tokens":7,"model":"qwen-turbo-latest","msg":"[writing] ✅ 流式 complete 完成"}
-{"level":30,"time":1779101832204,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-3","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":447,"msg":"request completed"}
-{"level":30,"time":1779102334988,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-10","method":"GET","url":"/writing/config","msg":"incoming request"}
-{"level":30,"time":1779102334988,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-10","method":"GET","url":"/writing/config","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779102335248,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-12","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779102335249,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-12","method":"GET","url":"/agents","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779102335250,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-13","method":"GET","url":"/models","msg":"incoming request"}
-{"level":30,"time":1779102342405,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-13","method":"GET","url":"/models","statusCode":200,"responseTime":7156,"msg":"request completed"}
-{"level":30,"time":1779102345010,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-14","method":"POST","url":"/writing/complete","msg":"incoming request"}
-{"level":30,"time":1779102345010,"pid":34965,"hostname":"MacBook-Pro-23.local","qwenConfigured":true,"msg":"[writing] POST /writing/complete"}
-{"level":30,"time":1779102345010,"pid":34965,"hostname":"MacBook-Pro-23.local","textLen":592,"cursor":412,"trigger":"typing","msg":"[writing] 🔍 补全请求"}
-{"level":30,"time":1779102345011,"pid":34965,"hostname":"MacBook-Pro-23.local","model":"qwen-turbo-latest","msg":"[writing] 📝 开始流式 complete"}
-{"level":30,"time":1779102346351,"pid":34965,"hostname":"MacBook-Pro-23.local","elapsed":"1340ms","chars":102,"tokens":19,"model":"qwen-turbo-latest","msg":"[writing] ✅ 流式 complete 完成"}
-{"level":30,"time":1779102346351,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-14","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":1341,"msg":"request completed"}
-{"level":30,"time":1779102347617,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-15","method":"POST","url":"/writing/complete","msg":"incoming request"}
-{"level":30,"time":1779102347617,"pid":34965,"hostname":"MacBook-Pro-23.local","qwenConfigured":true,"msg":"[writing] POST /writing/complete"}
-{"level":30,"time":1779102347617,"pid":34965,"hostname":"MacBook-Pro-23.local","textLen":593,"cursor":227,"trigger":"typing","msg":"[writing] 🔍 补全请求"}
-{"level":30,"time":1779102347617,"pid":34965,"hostname":"MacBook-Pro-23.local","model":"qwen-turbo-latest","msg":"[writing] 📝 开始流式 complete"}
-{"level":30,"time":1779102348262,"pid":34965,"hostname":"MacBook-Pro-23.local","elapsed":"645ms","chars":91,"tokens":16,"model":"qwen-turbo-latest","msg":"[writing] ✅ 流式 complete 完成"}
-{"level":30,"time":1779102348263,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-15","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":646,"msg":"request completed"}
-{"level":30,"time":1779102351330,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-16","method":"POST","url":"/writing/complete","msg":"incoming request"}
-{"level":30,"time":1779102351331,"pid":34965,"hostname":"MacBook-Pro-23.local","qwenConfigured":true,"msg":"[writing] POST /writing/complete"}
-{"level":30,"time":1779102351331,"pid":34965,"hostname":"MacBook-Pro-23.local","textLen":597,"cursor":5,"trigger":"typing","msg":"[writing] 🔍 补全请求"}
-{"level":30,"time":1779102351331,"pid":34965,"hostname":"MacBook-Pro-23.local","model":"qwen-turbo-latest","msg":"[writing] 📝 开始流式 complete"}
-{"level":30,"time":1779102351799,"pid":34965,"hostname":"MacBook-Pro-23.local","elapsed":"468ms","chars":29,"tokens":7,"model":"qwen-turbo-latest","msg":"[writing] ✅ 流式 complete 完成"}
-{"level":30,"time":1779102351800,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-16","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":470,"msg":"request completed"}
-{"level":30,"time":1779102433618,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1j","method":"POST","url":"/writing/complete","msg":"incoming request"}
-{"level":30,"time":1779102433619,"pid":34965,"hostname":"MacBook-Pro-23.local","qwenConfigured":true,"msg":"[writing] POST /writing/complete"}
-{"level":30,"time":1779102433619,"pid":34965,"hostname":"MacBook-Pro-23.local","textLen":598,"cursor":417,"trigger":"typing","msg":"[writing] 🔍 补全请求"}
-{"level":30,"time":1779102433619,"pid":34965,"hostname":"MacBook-Pro-23.local","model":"qwen-turbo-latest","msg":"[writing] 📝 开始流式 complete"}
-{"level":30,"time":1779102434558,"pid":34965,"hostname":"MacBook-Pro-23.local","elapsed":"939ms","chars":92,"tokens":17,"model":"qwen-turbo-latest","msg":"[writing] ✅ 流式 complete 完成"}
-{"level":30,"time":1779102434559,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1j","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":941,"msg":"request completed"}
-{"level":30,"time":1779102436437,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1k","method":"POST","url":"/writing/complete","msg":"incoming request"}
-{"level":30,"time":1779102436437,"pid":34965,"hostname":"MacBook-Pro-23.local","qwenConfigured":true,"msg":"[writing] POST /writing/complete"}
-{"level":30,"time":1779102436437,"pid":34965,"hostname":"MacBook-Pro-23.local","textLen":602,"cursor":421,"trigger":"typing","msg":"[writing] 🔍 补全请求"}
-{"level":30,"time":1779102436437,"pid":34965,"hostname":"MacBook-Pro-23.local","model":"qwen-turbo-latest","msg":"[writing] 📝 开始流式 complete"}
-{"level":30,"time":1779102437115,"pid":34965,"hostname":"MacBook-Pro-23.local","elapsed":"678ms","chars":82,"tokens":16,"model":"qwen-turbo-latest","msg":"[writing] ✅ 流式 complete 完成"}
-{"level":30,"time":1779102437116,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1k","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":679,"msg":"request completed"}
-{"level":30,"time":1779102437780,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1l","method":"POST","url":"/writing/feedback","msg":"incoming request"}
-{"level":30,"time":1779102437783,"pid":34965,"hostname":"MacBook-Pro-23.local","msg":"[writing] 反馈: complete ✅ 已接受"}
-{"level":30,"time":1779102437784,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1l","method":"POST","url":"/writing/feedback","statusCode":200,"responseTime":3,"msg":"request completed"}
-{"level":30,"time":1779102438010,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1m","method":"POST","url":"/writing/complete","msg":"incoming request"}
-{"level":30,"time":1779102438012,"pid":34965,"hostname":"MacBook-Pro-23.local","qwenConfigured":true,"msg":"[writing] POST /writing/complete"}
-{"level":30,"time":1779102438012,"pid":34965,"hostname":"MacBook-Pro-23.local","textLen":684,"cursor":503,"trigger":"pause","msg":"[writing] 🔍 补全请求"}
-{"level":30,"time":1779102438012,"pid":34965,"hostname":"MacBook-Pro-23.local","model":"qwen-turbo-latest","msg":"[writing] 📝 开始流式 complete"}
-{"level":30,"time":1779102438886,"pid":34965,"hostname":"MacBook-Pro-23.local","elapsed":"874ms","chars":87,"tokens":16,"model":"qwen-turbo-latest","msg":"[writing] ✅ 流式 complete 完成"}
-{"level":30,"time":1779102438887,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1m","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":877,"msg":"request completed"}
-{"level":30,"time":1779102439086,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1n","method":"POST","url":"/writing/feedback","msg":"incoming request"}
-{"level":30,"time":1779102439087,"pid":34965,"hostname":"MacBook-Pro-23.local","msg":"[writing] 反馈: complete ✅ 已接受"}
-{"level":30,"time":1779102439087,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1n","method":"POST","url":"/writing/feedback","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779102442038,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1o","method":"POST","url":"/writing/complete","msg":"incoming request"}
-{"level":30,"time":1779102442039,"pid":34965,"hostname":"MacBook-Pro-23.local","qwenConfigured":true,"msg":"[writing] POST /writing/complete"}
-{"level":30,"time":1779102442039,"pid":34965,"hostname":"MacBook-Pro-23.local","textLen":772,"cursor":591,"trigger":"typing","msg":"[writing] 🔍 补全请求"}
-{"level":30,"time":1779102442039,"pid":34965,"hostname":"MacBook-Pro-23.local","model":"qwen-turbo-latest","msg":"[writing] 📝 开始流式 complete"}
-{"level":30,"time":1779102442547,"pid":34965,"hostname":"MacBook-Pro-23.local","elapsed":"508ms","chars":73,"tokens":13,"model":"qwen-turbo-latest","msg":"[writing] ✅ 流式 complete 完成"}
-{"level":30,"time":1779102442547,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1o","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":509,"msg":"request completed"}
-{"level":30,"time":1779102448552,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1r","method":"POST","url":"/writing/complete","msg":"incoming request"}
-{"level":30,"time":1779102448552,"pid":34965,"hostname":"MacBook-Pro-23.local","qwenConfigured":true,"msg":"[writing] POST /writing/complete"}
-{"level":30,"time":1779102448552,"pid":34965,"hostname":"MacBook-Pro-23.local","textLen":773,"cursor":231,"trigger":"typing","msg":"[writing] 🔍 补全请求"}
-{"level":30,"time":1779102448552,"pid":34965,"hostname":"MacBook-Pro-23.local","model":"qwen-turbo-latest","msg":"[writing] 📝 开始流式 complete"}
-{"level":30,"time":1779102449267,"pid":34965,"hostname":"MacBook-Pro-23.local","elapsed":"715ms","chars":80,"tokens":15,"model":"qwen-turbo-latest","msg":"[writing] ✅ 流式 complete 完成"}
-{"level":30,"time":1779102449267,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1r","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":716,"msg":"request completed"}
-{"level":30,"time":1779102624924,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-26","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779102624925,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-26","method":"GET","url":"/agents","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779102626666,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-27","method":"GET","url":"/roles","msg":"incoming request"}
-{"level":30,"time":1779102626668,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-27","method":"GET","url":"/roles","statusCode":200,"responseTime":2,"msg":"request completed"}
-{"level":30,"time":1779102626668,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-28","method":"GET","url":"/models/available","msg":"incoming request"}
-{"level":30,"time":1779102626669,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-28","method":"GET","url":"/models/available","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779102637033,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2b","method":"POST","url":"/tasks/analyze","msg":"incoming request"}
-{"level":30,"time":1779102655934,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2b","method":"POST","url":"/tasks/analyze","statusCode":200,"responseTime":18900,"msg":"request completed"}
-{"level":30,"time":1779102666254,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2g","method":"PUT","url":"/models/config","msg":"incoming request"}
-{"level":30,"time":1779102666254,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2g","method":"PUT","url":"/models/config","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779102668028,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2h","method":"PUT","url":"/models/config","msg":"incoming request"}
-{"level":30,"time":1779102668028,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2h","method":"PUT","url":"/models/config","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779102670035,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2i","method":"PUT","url":"/models/config","msg":"incoming request"}
-{"level":30,"time":1779102670035,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2i","method":"PUT","url":"/models/config","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779102671528,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2j","method":"PUT","url":"/models/config","msg":"incoming request"}
-{"level":30,"time":1779102671529,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2j","method":"PUT","url":"/models/config","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779102673258,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2m","method":"PATCH","url":"/tasks/49dc9bed-1eb1-40b9-a64f-a769082b3cd5/approve","msg":"incoming request"}
-{"level":30,"time":1779102673260,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2m","method":"PATCH","url":"/tasks/49dc9bed-1eb1-40b9-a64f-a769082b3cd5/approve","statusCode":200,"responseTime":2,"msg":"request completed"}
-{"level":30,"time":1779102673272,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2n","method":"GET","url":"/tasks/49dc9bed-1eb1-40b9-a64f-a769082b3cd5","msg":"incoming request"}
-{"level":30,"time":1779102673273,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2n","method":"GET","url":"/tasks/49dc9bed-1eb1-40b9-a64f-a769082b3cd5","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779102673275,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2o","method":"POST","url":"/tasks/49dc9bed-1eb1-40b9-a64f-a769082b3cd5/discussions","msg":"incoming request"}
-{"level":30,"time":1779102673279,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2o","method":"POST","url":"/tasks/49dc9bed-1eb1-40b9-a64f-a769082b3cd5/discussions","statusCode":200,"responseTime":3,"msg":"request completed"}
-{"level":30,"time":1779102673281,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2p","method":"POST","url":"/discussions/6a841965-f44c-4422-8ece-732ad323bdec/round/stream","msg":"incoming request"}
-{"level":30,"time":1779102903650,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2p","method":"POST","url":"/discussions/6a841965-f44c-4422-8ece-732ad323bdec/round/stream","statusCode":200,"responseTime":230368,"msg":"request completed"}
-{"level":30,"time":1779102918457,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-3i","method":"POST","url":"/discussions/6a841965-f44c-4422-8ece-732ad323bdec/conclude","msg":"incoming request"}
-{"level":30,"time":1779102930945,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-3i","method":"POST","url":"/discussions/6a841965-f44c-4422-8ece-732ad323bdec/conclude","statusCode":200,"responseTime":12488,"msg":"request completed"}
-{"level":30,"time":1779102930947,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-3l","method":"POST","url":"/tasks/49dc9bed-1eb1-40b9-a64f-a769082b3cd5/report/generate","msg":"incoming request"}
-{"level":30,"time":1779102930948,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-3l","method":"POST","url":"/tasks/49dc9bed-1eb1-40b9-a64f-a769082b3cd5/report/generate","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779102940189,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-3m","method":"POST","url":"/tasks/49dc9bed-1eb1-40b9-a64f-a769082b3cd5/squads","msg":"incoming request"}
-{"level":30,"time":1779102940192,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-3m","method":"POST","url":"/tasks/49dc9bed-1eb1-40b9-a64f-a769082b3cd5/squads","statusCode":200,"responseTime":3,"msg":"request completed"}
-{"level":30,"time":1779102940196,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-3n","method":"POST","url":"/squads/2060ac72-633a-4a7d-94cc-a3ed36b32051/execute/6aa6ee7b-0b5b-4d66-a31c-f97c6d87822d","msg":"incoming request"}
-{"level":30,"time":1779102940198,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-3n","method":"POST","url":"/squads/2060ac72-633a-4a7d-94cc-a3ed36b32051/execute/6aa6ee7b-0b5b-4d66-a31c-f97c6d87822d","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779102940200,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-3o","method":"POST","url":"/squads/2060ac72-633a-4a7d-94cc-a3ed36b32051/execute/dc101a4e-47e5-4a27-a919-9daa9ac16164","msg":"incoming request"}
-{"level":30,"time":1779102968855,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-3o","method":"POST","url":"/squads/2060ac72-633a-4a7d-94cc-a3ed36b32051/execute/dc101a4e-47e5-4a27-a919-9daa9ac16164","statusCode":200,"responseTime":28655,"msg":"request completed"}
-{"level":30,"time":1779102968867,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-3t","method":"POST","url":"/squads/2060ac72-633a-4a7d-94cc-a3ed36b32051/execute/98953d15-752e-4558-843b-159a4524afae","msg":"incoming request"}
-{"level":30,"time":1779102968867,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-3t","method":"POST","url":"/squads/2060ac72-633a-4a7d-94cc-a3ed36b32051/execute/98953d15-752e-4558-843b-159a4524afae","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779102968874,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-3u","method":"POST","url":"/squads/2060ac72-633a-4a7d-94cc-a3ed36b32051/execute/e731ee1b-3731-4e6f-a386-f8ce9a50f208","msg":"incoming request"}
-{"level":30,"time":1779103069060,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-3u","method":"POST","url":"/squads/2060ac72-633a-4a7d-94cc-a3ed36b32051/execute/e731ee1b-3731-4e6f-a386-f8ce9a50f208","statusCode":200,"responseTime":100186,"msg":"request completed"}
-{"level":30,"time":1779103069062,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-49","method":"POST","url":"/squads/2060ac72-633a-4a7d-94cc-a3ed36b32051/execute/d6004daa-277c-44a9-bcee-adf0af3cd2f3","msg":"incoming request"}
-{"level":30,"time":1779103069063,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-49","method":"POST","url":"/squads/2060ac72-633a-4a7d-94cc-a3ed36b32051/execute/d6004daa-277c-44a9-bcee-adf0af3cd2f3","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779103069064,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-4a","method":"POST","url":"/squads/2060ac72-633a-4a7d-94cc-a3ed36b32051/execute/30f1bc2f-2861-4136-ae0a-e51d72743cbd","msg":"incoming request"}
-{"level":30,"time":1779103069065,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-4a","method":"POST","url":"/squads/2060ac72-633a-4a7d-94cc-a3ed36b32051/execute/30f1bc2f-2861-4136-ae0a-e51d72743cbd","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779103069066,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-4b","method":"POST","url":"/squads/2060ac72-633a-4a7d-94cc-a3ed36b32051/execute/82434ef9-f794-4ba1-92f0-066ec3ffb0e8","msg":"incoming request"}
-{"level":30,"time":1779103069067,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-4b","method":"POST","url":"/squads/2060ac72-633a-4a7d-94cc-a3ed36b32051/execute/82434ef9-f794-4ba1-92f0-066ec3ffb0e8","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779109188519,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-ju","method":"GET","url":"/writing/config","msg":"incoming request"}
-{"level":30,"time":1779109188520,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-ju","method":"GET","url":"/writing/config","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779109188796,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-jw","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779109188796,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-jw","method":"GET","url":"/agents","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779109188803,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-jx","method":"GET","url":"/models","msg":"incoming request"}
-{"level":30,"time":1779109190739,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-jx","method":"GET","url":"/models","statusCode":200,"responseTime":1936,"msg":"request completed"}
-{"level":30,"time":1779109210561,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-k0","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779109210561,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-k0","method":"GET","url":"/agents","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779109659163,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-kx","method":"GET","url":"/writing/config","msg":"incoming request"}
-{"level":30,"time":1779109659164,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-kx","method":"GET","url":"/writing/config","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779109659404,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-kz","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779109659404,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-kz","method":"GET","url":"/agents","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779109659406,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-l0","method":"GET","url":"/models","msg":"incoming request"}
-{"level":30,"time":1779109661259,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-l0","method":"GET","url":"/models","statusCode":200,"responseTime":1853,"msg":"request completed"}
-{"level":30,"time":1779109885106,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-l9","method":"GET","url":"/writing/config","msg":"incoming request"}
-{"level":30,"time":1779109885107,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-l9","method":"GET","url":"/writing/config","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779109885351,"pid":34965美丽？P“：I                   ：》65,"hostname":"MacBook-Pro-23.local","reqId":"req-lb","method":"GET","url":"/agents","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779109885353,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-lc","method":"GET","url":"/models","msg":"incoming request"}
-{"level":30,"time":1779110418435,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-lv","method":"GET","url":"/writing/config","msg":"incoming request"}
-{"level":30,"time":1779110418435,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-lv","method":"GET","url":"/writing/config","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779110418853,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-lx","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779110418853,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-lx","method":"GET","url":"/agents","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779110418859,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-ly","method":"GET","url":"/models","msg":"incoming request"}
-{"level":30,"time":1779110420723,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-ly","method":"GET","url":"/models","statusCode":200,"responseTime":1864,"msg":"request completed"}
-{"level":30,"time":1779110439137,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-m1","method":"POST","url":"/writing/complete","msg":"incoming request"}
-{"level":30,"time":1779110439139,"pid":34965,"hostname":"MacBook-Pro-23.local","qwenConfigured":true,"msg":"[writing] POST /writing/complete"}
-{"level":30,"time":1779110439139,"pid":34965,"hostname":"MacBook-Pro-23.local","textLen":772,"cursor":231,"trigger":"typing","msg":"[writing] 🔍 补全请求"}
-{"level":30,"time":1779110439139,"pid":34965,"hostname":"MacBook-Pro-23.local","model":"qwen-turbo-latest","msg":"[writing] 📝 开始流式 complete"}
-{"level":30,"time":1779110439755,"pid":34965,"hostname":"MacBook-Pro-23.local","elapsed":"616ms","chars":80,"tokens":15,"model":"qwen-turbo-latest","msg":"[writing] ✅ 流式 complete 完成"}
-{"level":30,"time":1779110439756,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-m1","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":619,"msg":"request completed"}
-{"level":30,"time":1779110444914,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-m2","method":"POST","url":"/writing/feedback","msg":"incoming request"}
-{"level":30,"time":1779110444915,"pid":34965,"hostname":"MacBook-Pro-23.local","msg":"[writing] 反馈: complete ✅ 已接受"}
-{"level":30,"time":1779110444916,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-m2","method":"POST","url":"/writing/feedback","statusCode":200,"responseTime":2,"msg":"request completed"}
-{"level":30,"time":1779110445138,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-m3","method":"POST","url":"/writing/complete","msg":"incoming request"}
-{"level":30,"time":1779110445138,"pid":34965,"hostname":"MacBook-Pro-23.local","qwenConfigured":true,"msg":"[writing] POST /writing/complete"}
-{"level":30,"time":1779110445138,"pid":34965,"hostname":"MacBook-Pro-23.local","textLen":852,"cursor":311,"trigger":"pause","msg":"[writing] 🔍 补全请求"}
-{"level":30,"time":1779110445139,"pid":34965,"hostname":"MacBook-Pro-23.local","model":"qwen-turbo-latest","msg":"[writing] 📝 开始流式 complete"}
-{"level":30,"time":1779110445677,"pid":34965,"hostname":"MacBook-Pro-23.local","elapsed":"538ms","chars":75,"tokens":14,"model":"qwen-turbo-latest","msg":"[writing] ✅ 流式 complete 完成"}
-{"level":30,"time":1779110445678,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-m3","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":540,"msg":"request completed"}
-{"level":30,"time":1779110464796,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-m6","method":"POST","url":"/writing/feedback","msg":"incoming request"}
-{"level":30,"time":1779110464796,"pid":34965,"hostname":"MacBook-Pro-23.local","msg":"[writing] 反馈: complete ❌ 已拒绝"}
-{"level":30,"time":1779110464798,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-m6","method":"POST","url":"/writing/feedback","statusCode":200,"responseTime":2,"msg":"request completed"}
-{"level":30,"time":1779110465602,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-m7","method":"POST","url":"/writing/complete","msg":"incoming request"}
-{"level":30,"time":1779110465603,"pid":34965,"hostname":"MacBook-Pro-23.local","qwenConfigured":true,"msg":"[writing] POST /writing/complete"}
-{"level":30,"time":1779110465603,"pid":34965,"hostname":"MacBook-Pro-23.local","textLen":853,"cursor":853,"trigger":"typing","msg":"[writing] 🔍 补全请求"}
-{"level":30,"time":1779110465603,"pid":34965,"hostname":"MacBook-Pro-23.local","model":"qwen-turbo-latest","msg":"[writing] 📝 开始流式 complete"}
-{"level":30,"time":1779110466321,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-ma","method":"POST","url":"/writing/complete","msg":"incoming request"}
-{"level":30,"time":1779110466321,"pid":34965,"hostname":"MacBook-Pro-23.local","qwenConfigured":true,"msg":"[writing] POST /writing/complete"}
-{"level":30,"time":1779110466322,"pid":34965,"hostname":"MacBook-Pro-23.local","textLen":852,"cursor":852,"trigger":"sentence_end","msg":"[writing] 🔍 补全请求"}
-{"level":30,"time":1779110466322,"pid":34965,"hostname":"MacBook-Pro-23.local","model":"qwen-turbo-latest","msg":"[writing] 📝 开始流式 complete"}
-{"level":30,"time":1779110466360,"pid":34965,"hostname":"MacBook-Pro-23.local","elapsed":"757ms","chars":96,"tokens":17,"model":"qwen-turbo-latest","msg":"[writing] ✅ 流式 complete 完成"}
-{"level":30,"time":1779110467611,"pid":34965,"hostname":"MacBook-Pro-23.local","elapsed":"1289ms","chars":96,"tokens":17,"model":"qwen-turbo-latest","msg":"[writing] ✅ 流式 complete 完成"}
-{"level":30,"time":1779110467611,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-ma","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":1290,"msg":"request completed"}
-{"level":30,"time":1779110488848,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-md","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779110488849,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-md","method":"GET","url":"/agents","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779110490451,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-me","method":"GET","url":"/roles","msg":"incoming request"}
-{"level":30,"time":1779110490452,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-me","method":"GET","url":"/roles","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779110490453,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-mf","method":"GET","url":"/models/available","msg":"incoming request"}
-{"level":30,"time":1779110490453,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-mf","method":"GET","url":"/models/available","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779115670831,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-o8","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779115670832,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-o8","method":"GET","url":"/agents","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779115684232,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-ob","method":"POST","url":"/tasks/analyze","msg":"incoming request"}
-{"level":30,"time":1779115696346,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-ob","method":"POST","url":"/tasks/analyze","statusCode":200,"responseTime":12114,"msg":"request completed"}
-{"level":30,"time":1779115749660,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-ok","method":"PATCH","url":"/tasks/56e74e70-67f1-493b-ac0f-1754b3055683/approve","msg":"incoming request"}
-{"level":30,"time":1779115749660,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-ok","method":"PATCH","url":"/tasks/56e74e70-67f1-493b-ac0f-1754b3055683/approve","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779115749675,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-ol","method":"GET","url":"/tasks/56e74e70-67f1-493b-ac0f-1754b3055683","msg":"incoming request"}
-{"level":30,"time":1779115749675,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-ol","method":"GET","url":"/tasks/56e74e70-67f1-493b-ac0f-1754b3055683","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779115749677,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-om","method":"POST","url":"/tasks/56e74e70-67f1-493b-ac0f-1754b3055683/discussions","msg":"incoming request"}
-{"level":30,"time":1779115749678,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-om","method":"POST","url":"/tasks/56e74e70-67f1-493b-ac0f-1754b3055683/discussions","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779115749681,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-on","method":"POST","url":"/discussions/b6f7c221-792d-496c-9d19-75cca135038b/round/stream","msg":"incoming request"}
-{"level":30,"time":1779115952374,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-on","method":"POST","url":"/discussions/b6f7c221-792d-496c-9d19-75cca135038b/round/stream","statusCode":200,"responseTime":202693,"msg":"request completed"}
-{"level":30,"time":1779115992936,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-pk","method":"POST","url":"/discussions/b6f7c221-792d-496c-9d19-75cca135038b/conclude","msg":"incoming request"}
-{"level":30,"time":1779116012564,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-pk","method":"POST","url":"/discussions/b6f7c221-792d-496c-9d19-75cca135038b/conclude","statusCode":200,"responseTime":19628,"msg":"request completed"}
-{"level":30,"time":1779116012567,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-pp","method":"POST","url":"/tasks/56e74e70-67f1-493b-ac0f-1754b3055683/report/generate","msg":"incoming request"}
-{"level":30,"time":1779116012568,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-pp","method":"POST","url":"/tasks/56e74e70-67f1-493b-ac0f-1754b3055683/report/generate","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779116138225,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-q4","method":"POST","url":"/tasks/56e74e70-67f1-493b-ac0f-1754b3055683/squads","msg":"incoming request"}
-{"level":30,"time":1779116138229,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-q4","method":"POST","url":"/tasks/56e74e70-67f1-493b-ac0f-1754b3055683/squads","statusCode":200,"responseTime":4,"msg":"request completed"}
-{"level":30,"time":1779116138257,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-q5","method":"POST","url":"/squads/31cb66d7-d293-410a-a718-e28d7aa879ae/execute/751855e2-a83f-4568-9db4-e5175ef8dab9","msg":"incoming request"}
-{"level":30,"time":1779116138258,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-q5","method":"POST","url":"/squads/31cb66d7-d293-410a-a718-e28d7aa879ae/execute/751855e2-a83f-4568-9db4-e5175ef8dab9","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779116138260,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-q6","method":"POST","url":"/squads/31cb66d7-d293-410a-a718-e28d7aa879ae/execute/4c0cd463-4728-4297-be05-463df351db20","msg":"incoming request"}
-{"level":30,"time":1779116161958,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-q6","method":"POST","url":"/squads/31cb66d7-d293-410a-a718-e28d7aa879ae/execute/4c0cd463-4728-4297-be05-463df351db20","statusCode":200,"responseTime":23698,"msg":"request completed"}
-{"level":30,"time":1779116161970,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-q9","method":"POST","url":"/squads/31cb66d7-d293-410a-a718-e28d7aa879ae/execute/3d46f28e-c54f-4f2d-b5af-2f45ba70e818","msg":"incoming request"}
-{"level":30,"time":1779116182257,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-qe","method":"GET","url":"/writing/config","msg":"incoming request"}
-{"level":30,"time":1779116182257,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-qe","method":"GET","url":"/writing/config","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779116182398,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-qg","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779116182399,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-qg","method":"GET","url":"/agents","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779116182403,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-qh","method":"GET","url":"/models","msg":"incoming request"}
-{"level":30,"time":1779116182407,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-qi","method":"GET","url":"/agents/agent_1779116161970_awvb7pcp/stream","msg":"incoming request"}
-{"level":30,"time":1779116184326,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-qh","method":"GET","url":"/models","statusCode":200,"responseTime":1923,"msg":"request completed"}
-{"level":30,"time":1779116210818,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-qi","method":"GET","url":"/agents/agent_1779116161970_awvb7pcp/stream","statusCode":200,"responseTime":28410,"msg":"request completed"}
-{"level":30,"time":1779116275614,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-qv","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779116275615,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-qv","method":"GET","url":"/agents","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779116276990,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-qw","method":"GET","url":"/roles","msg":"incoming request"}
-{"level":30,"time":1779116276991,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-qw","method":"GET","url":"/roles","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779116276991,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-qx","method":"GET","url":"/models/available","msg":"incoming request"}
-{"level":30,"time":1779116276991,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-qx","method":"GET","url":"/models/available","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779116297698,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-r0","method":"POST","url":"/tasks/analyze","msg":"incoming request"}
-{"level":30,"time":1779116308891,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-r0","method":"POST","url":"/tasks/analyze","statusCode":200,"responseTime":11193,"msg":"request completed"}
-{"level":30,"time":1779116318427,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-r3","method":"PATCH","url":"/tasks/e1daefe8-cb3b-4c33-8298-3d3d74f54b38/approve","msg":"incoming request"}
-{"level":30,"time":1779116318429,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-r3","method":"PATCH","url":"/tasks/e1daefe8-cb3b-4c33-8298-3d3d74f54b38/approve","statusCode":200,"responseTime":2,"msg":"request completed"}
-{"level":30,"time":1779116318442,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-r4","method":"GET","url":"/tasks/e1daefe8-cb3b-4c33-8298-3d3d74f54b38","msg":"incoming request"}
-{"level":30,"time":1779116318443,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-r4","method":"GET","url":"/tasks/e1daefe8-cb3b-4c33-8298-3d3d74f54b38","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779116318445,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-r5","method":"POST","url":"/tasks/e1daefe8-cb3b-4c33-8298-3d3d74f54b38/discussions","msg":"incoming request"}
-{"level":30,"time":1779116318447,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-r5","method":"POST","url":"/tasks/e1daefe8-cb3b-4c33-8298-3d3d74f54b38/discussions","statusCode":200,"responseTime":2,"msg":"request completed"}
-{"level":30,"time":1779116318449,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-r6","method":"POST","url":"/discussions/00fca978-eef0-4432-9505-06680bd1784c/round/stream","msg":"incoming request"}
-{"level":30,"time":1779116485245,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-r6","method":"POST","url":"/discussions/00fca978-eef0-4432-9505-06680bd1784c/round/stream","statusCode":200,"responseTime":166795,"msg":"request completed"}
-{"level":30,"time":1779116717615,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-s3","method":"POST","url":"/discussions/00fca978-eef0-4432-9505-06680bd1784c/conclude","msg":"incoming request"}
-{"level":30,"time":1779116741814,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-s3","method":"POST","url":"/discussions/00fca978-eef0-4432-9505-06680bd1784c/conclude","statusCode":200,"responseTime":24198,"msg":"request completed"}
-{"level":30,"time":1779116741816,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-s8","method":"POST","url":"/tasks/e1daefe8-cb3b-4c33-8298-3d3d74f54b38/report/generate","msg":"incoming request"}
-{"level":30,"time":1779116741817,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-s8","method":"POST","url":"/tasks/e1daefe8-cb3b-4c33-8298-3d3d74f54b38/report/generate","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779116761200,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-sb","method":"POST","url":"/tasks/e1daefe8-cb3b-4c33-8298-3d3d74f54b38/squads","msg":"incoming request"}
-{"level":30,"time":1779116761206,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-sb","method":"POST","url":"/tasks/e1daefe8-cb3b-4c33-8298-3d3d74f54b38/squads","statusCode":200,"responseTime":5,"msg":"request completed"}
-{"level":30,"time":1779116761209,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-sc","method":"POST","url":"/squads/8cb6379a-309b-4d62-a1e9-8d9a375cbecf/execute/b1789f9f-27a6-4c42-9ea7-7f191d0e7c6f","msg":"incoming request"}
-{"level":30,"time":1779116761210,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-sc","method":"POST","url":"/squads/8cb6379a-309b-4d62-a1e9-8d9a375cbecf/execute/b1789f9f-27a6-4c42-9ea7-7f191d0e7c6f","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779116761212,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-sd","method":"POST","url":"/squads/8cb6379a-309b-4d62-a1e9-8d9a375cbecf/execute/842c390b-89f6-4e6a-9f45-257fdbf76a5f","msg":"incoming request"}
-{"level":30,"time":1779116761213,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-sd","method":"POST","url":"/squads/8cb6379a-309b-4d62-a1e9-8d9a375cbecf/execute/842c390b-89f6-4e6a-9f45-257fdbf76a5f","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779116761214,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-se","method":"POST","url":"/squads/8cb6379a-309b-4d62-a1e9-8d9a375cbecf/execute/1e55a00d-2eee-4948-b4c6-aa02ce84c31e","msg":"incoming request"}
-{"level":30,"time":1779116766958,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-sf","method":"GET","url":"/writing/config","msg":"incoming request"}
-{"level":30,"time":1779116766959,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-sf","method":"GET","url":"/writing/config","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779116767145,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-sh","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779116767146,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-sh","method":"GET","url":"/agents","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779116767150,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-si","method":"GET","url":"/models","msg":"incoming request"}
-{"level":30,"time":1779116767151,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-sj","method":"GET","url":"/agents/agent_1779116761215_r0wrid9p/stream","msg":"incoming request"}
-{"level":30,"time":1779116769043,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-si","method":"GET","url":"/models","statusCode":200,"responseTime":1893,"msg":"request completed"}
-{"level":30,"time":1779116807760,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-su","method":"GET","url":"/writing/config","msg":"incoming request"}
-{"level":30,"time":1779116807760,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-su","method":"GET","url":"/writing/config","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779116807841,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-sw","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779116807841,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-sw","method":"GET","url":"/agents","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779116807846,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-sx","method":"GET","url":"/models","msg":"incoming request"}
-{"level":30,"time":1779116807847,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-sy","method":"GET","url":"/agents/agent_1779116761215_r0wrid9p/stream","msg":"incoming request"}
-{"level":30,"time":1779116809516,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-sx","method":"GET","url":"/models","statusCode":200,"responseTime":1671,"msg":"request completed"}
-{"level":30,"time":1779116847747,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-t9","method":"GET","url":"/writing/config","msg":"incoming request"}
-{"level":30,"time":1779116847747,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-t9","method":"GET","url":"/writing/config","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779116847853,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-tb","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779116847854,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-tb","method":"GET","url":"/agents","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779116847856,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-tc","method":"GET","url":"/models","msg":"incoming request"}
-{"level":30,"time":1779116847857,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-td","method":"GET","url":"/agents/agent_1779116761215_r0wrid9p/stream","msg":"incoming request"}
-{"level":30,"time":1779116847990,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-sy","method":"GET","url":"/agents/agent_1779116761215_r0wrid9p/stream","statusCode":200,"responseTime":40142,"msg":"request completed"}
-{"level":30,"time":1779116847990,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-td","method":"GET","url":"/agents/agent_1779116761215_r0wrid9p/stream","statusCode":200,"responseTime":133,"msg":"request completed"}
-{"level":30,"time":1779116847990,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-se","method":"POST","url":"/squads/8cb6379a-309b-4d62-a1e9-8d9a375cbecf/execute/1e55a00d-2eee-4948-b4c6-aa02ce84c31e","statusCode":200,"responseTime":86776,"msg":"request completed"}
-{"level":30,"time":1779116848001,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-te","method":"POST","url":"/squads/8cb6379a-309b-4d62-a1e9-8d9a375cbecf/execute/d20cd846-21a6-4bb8-86a1-cf56f317006d","msg":"incoming request"}
-{"level":30,"time":1779116848002,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-te","method":"POST","url":"/squads/8cb6379a-309b-4d62-a1e9-8d9a375cbecf/execute/d20cd846-21a6-4bb8-86a1-cf56f317006d","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779116848005,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-tf","method":"POST","url":"/squads/8cb6379a-309b-4d62-a1e9-8d9a375cbecf/execute/fc9b575a-3940-4aa8-bc2b-fcfe1e91d086","msg":"incoming request"}
-{"level":30,"time":1779116848006,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-tf","method":"POST","url":"/squads/8cb6379a-309b-4d62-a1e9-8d9a375cbecf/execute/fc9b575a-3940-4aa8-bc2b-fcfe1e91d086","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779116848009,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-tg","method":"POST","url":"/squads/8cb6379a-309b-4d62-a1e9-8d9a375cbecf/execute/09cee5f9-4db7-49f4-babe-fd576138bbcd","msg":"incoming request"}
-{"level":30,"time":1779116848009,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-tg","method":"POST","url":"/squads/8cb6379a-309b-4d62-a1e9-8d9a375cbecf/execute/09cee5f9-4db7-49f4-babe-fd576138bbcd","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779116848012,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-th","method":"POST","url":"/squads/8cb6379a-309b-4d62-a1e9-8d9a375cbecf/execute/0914ed36-81a4-4f63-81c2-ea442802224e","msg":"incoming request"}
-{"level":30,"time":1779116848013,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-th","method":"POST","url":"/squads/8cb6379a-309b-4d62-a1e9-8d9a375cbecf/execute/0914ed36-81a4-4f63-81c2-ea442802224e","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779116848015,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-ti","method":"POST","url":"/squads/8cb6379a-309b-4d62-a1e9-8d9a375cbecf/execute/4e4dfc5c-67a5-4437-808c-15db218d309b","msg":"incoming request"}
-{"level":30,"time":1779116848016,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-ti","method":"POST","url":"/squads/8cb6379a-309b-4d62-a1e9-8d9a375cbecf/execute/4e4dfc5c-67a5-4437-808c-15db218d309b","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779116849512,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-tc","method":"GET","url":"/models","statusCode":200,"responseTime":1655,"msg":"request completed"}
-{"level":30,"time":1779116953835,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-uf","method":"GET","url":"/writing/config","msg":"incoming request"}
-{"level":30,"time":1779116953835,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-uf","method":"GET","url":"/writing/config","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779116959906,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-uk","method":"OPTIONS","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779116959906,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-uk","method":"OPTIONS","url":"/agents","statusCode":204,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779116959906,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-ul","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779116959906,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-ul","method":"GET","url":"/agents","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779116959908,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-um","method":"OPTIONS","url":"/models","msg":"incoming request"}
-{"level":30,"time":1779116959909,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-um","method":"OPTIONS","url":"/models","statusCode":204,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779116959909,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-un","method":"GET","url":"/models","msg":"incoming request"}
-{"level":30,"time":1779116961586,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-un","method":"GET","url":"/models","statusCode":200,"responseTime":1677,"msg":"request completed"}
-{"level":30,"time":1779116969344,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-uo","method":"OPTIONS","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779116969345,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-uo","method":"OPTIONS","url":"/agents","statusCode":204,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779116969345,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-up","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779116969345,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-up","method":"GET","url":"/agents","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779145900958,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1o1","method":"GET","url":"/writing/config","msg":"incoming request"}
-{"level":30,"time":1779145900958,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1o1","method":"GET","url":"/writing/config","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779145901154,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1o3","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779145901154,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1o3","method":"GET","url":"/agents","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779145901156,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1o4","method":"GET","url":"/models","msg":"incoming request"}
-{"level":30,"time":1779145902952,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1o4","method":"GET","url":"/models","statusCode":200,"responseTime":1796,"msg":"request completed"}
-{"level":30,"time":1779146237489,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1q4","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779146237489,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1q4","method":"GET","url":"/agents","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779146239856,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1q5","method":"GET","url":"/roles","msg":"incoming request"}
-{"level":30,"time":1779146239857,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1q5","method":"GET","url":"/roles","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779146239857,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1q6","method":"GET","url":"/models/available","msg":"incoming request"}
-{"level":30,"time":1779146239857,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1q6","method":"GET","url":"/models/available","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779146265823,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1qb","method":"POST","url":"/tasks/analyze","msg":"incoming request"}
-{"level":30,"time":1779146290027,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1qb","method":"POST","url":"/tasks/analyze","statusCode":200,"responseTime":24205,"msg":"request completed"}
-{"level":30,"time":1779146362251,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1qu","method":"PATCH","url":"/tasks/ecfea59e-40c6-4d1f-8fe0-9bc51b832a7a/approve","msg":"incoming request"}
-{"level":30,"time":1779146362253,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1qu","method":"PATCH","url":"/tasks/ecfea59e-40c6-4d1f-8fe0-9bc51b832a7a/approve","statusCode":200,"responseTime":2,"msg":"request completed"}
-{"level":30,"time":1779146362258,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1qv","method":"GET","url":"/tasks/ecfea59e-40c6-4d1f-8fe0-9bc51b832a7a","msg":"incoming request"}
-{"level":30,"time":1779146362258,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1qv","method":"GET","url":"/tasks/ecfea59e-40c6-4d1f-8fe0-9bc51b832a7a","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779146362260,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1qw","method":"POST","url":"/tasks/ecfea59e-40c6-4d1f-8fe0-9bc51b832a7a/discussions","msg":"incoming request"}
-{"level":30,"time":1779146362261,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1qw","method":"POST","url":"/tasks/ecfea59e-40c6-4d1f-8fe0-9bc51b832a7a/discussions","statusCode":200,"responseTime":2,"msg":"request completed"}
-{"level":30,"time":1779146362263,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1qx","method":"POST","url":"/discussions/99323291-0267-4d17-88f1-5f530c44f902/round/stream","msg":"incoming request"}
-{"level":30,"time":1779146425771,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1qx","method":"POST","url":"/discussions/99323291-0267-4d17-88f1-5f530c44f902/round/stream","statusCode":200,"responseTime":63508,"msg":"request completed"}
-{"level":30,"time":1779146499057,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1s1","method":"POST","url":"/discussions/99323291-0267-4d17-88f1-5f530c44f902/conclude","msg":"incoming request"}
-{"level":30,"time":1779146519196,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1s1","method":"POST","url":"/discussions/99323291-0267-4d17-88f1-5f530c44f902/conclude","statusCode":200,"responseTime":20140,"msg":"request completed"}
-{"level":30,"time":1779146519198,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1s6","method":"POST","url":"/tasks/ecfea59e-40c6-4d1f-8fe0-9bc51b832a7a/report/generate","msg":"incoming request"}
-{"level":30,"time":1779146519200,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1s6","method":"POST","url":"/tasks/ecfea59e-40c6-4d1f-8fe0-9bc51b832a7a/report/generate","statusCode":200,"responseTime":2,"msg":"request completed"}
-{"level":30,"time":1779146528073,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1s7","method":"POST","url":"/tasks/ecfea59e-40c6-4d1f-8fe0-9bc51b832a7a/squads","msg":"incoming request"}
-{"level":30,"time":1779146528078,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1s7","method":"POST","url":"/tasks/ecfea59e-40c6-4d1f-8fe0-9bc51b832a7a/squads","statusCode":200,"responseTime":5,"msg":"request completed"}
-{"level":30,"time":1779146528081,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1s8","method":"POST","url":"/squads/958285ba-7ef4-4b16-a787-dd3e8754f8c6/execute/dc301814-bd6a-4fe9-92cb-4286b7949323","msg":"incoming request"}
-{"level":30,"time":1779146528082,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1s8","method":"POST","url":"/squads/958285ba-7ef4-4b16-a787-dd3e8754f8c6/execute/dc301814-bd6a-4fe9-92cb-4286b7949323","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779146528084,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1s9","method":"POST","url":"/squads/958285ba-7ef4-4b16-a787-dd3e8754f8c6/execute/30ee4972-8ad3-4a68-b3a3-4c739e2c30e2","msg":"incoming request"}
-{"level":30,"time":1779146528085,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1s9","method":"POST","url":"/squads/958285ba-7ef4-4b16-a787-dd3e8754f8c6/execute/30ee4972-8ad3-4a68-b3a3-4c739e2c30e2","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779146528087,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1sa","method":"POST","url":"/squads/958285ba-7ef4-4b16-a787-dd3e8754f8c6/execute/b5acbee4-32b0-4540-96e4-440145080096","msg":"incoming request"}
-{"level":30,"time":1779146562871,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1sa","method":"POST","url":"/squads/958285ba-7ef4-4b16-a787-dd3e8754f8c6/execute/b5acbee4-32b0-4540-96e4-440145080096","statusCode":200,"responseTime":34784,"msg":"request completed"}
-{"level":30,"time":1779146562875,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1so","method":"POST","url":"/squads/958285ba-7ef4-4b16-a787-dd3e8754f8c6/execute/2dee93aa-0f3d-4990-a374-5d143fca8847","msg":"incoming request"}
-{"level":30,"time":1779146563717,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1sr","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779146563717,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1sr","method":"GET","url":"/agents","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779146563723,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1ss","method":"GET","url":"/agents/agent_1779146562877_3a4zkqfm/stream","msg":"incoming request"}
-{"level":30,"time":1779146612648,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1ss","method":"GET","url":"/agents/agent_1779146562877_3a4zkqfm/stream","statusCode":200,"responseTime":48924,"msg":"request completed"}
-{"level":30,"time":1779146612648,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1so","method":"POST","url":"/squads/958285ba-7ef4-4b16-a787-dd3e8754f8c6/execute/2dee93aa-0f3d-4990-a374-5d143fca8847","statusCode":200,"responseTime":49773,"msg":"request completed"}
-{"level":30,"time":1779146612658,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1t8","method":"POST","url":"/squads/958285ba-7ef4-4b16-a787-dd3e8754f8c6/execute/b4c9c85f-af8e-4333-bb74-a66211a05a12","msg":"incoming request"}
-{"level":30,"time":1779146640939,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1t8","method":"POST","url":"/squads/958285ba-7ef4-4b16-a787-dd3e8754f8c6/execute/b4c9c85f-af8e-4333-bb74-a66211a05a12","statusCode":200,"responseTime":28281,"msg":"request completed"}
-{"level":30,"time":1779146640957,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1tj","method":"POST","url":"/squads/958285ba-7ef4-4b16-a787-dd3e8754f8c6/execute/c58c6dc7-e254-4243-a15d-ef71a12e18cf","msg":"incoming request"}
-{"level":30,"time":1779146665059,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1tj","method":"POST","url":"/squads/958285ba-7ef4-4b16-a787-dd3e8754f8c6/execute/c58c6dc7-e254-4243-a15d-ef71a12e18cf","statusCode":200,"responseTime":24103,"msg":"request completed"}
-{"level":30,"time":1779146665095,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1tp","method":"POST","url":"/squads/958285ba-7ef4-4b16-a787-dd3e8754f8c6/execute/32d46f0a-dbaa-4d11-b47a-d7606fdc6009","msg":"incoming request"}
-{"level":30,"time":1779146665096,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-1tp","method":"POST","url":"/squads/958285ba-7ef4-4b16-a787-dd3e8754f8c6/execute/32d46f0a-dbaa-4d11-b47a-d7606fdc6009","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779154873696,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-27r","method":"GET","url":"/writing/config","msg":"incoming request"}
-{"level":30,"time":1779154873697,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-27r","method":"GET","url":"/writing/config","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779154873881,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-27t","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779154873882,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-27t","method":"GET","url":"/agents","statusCode":200,"responseTime":1,"msg":"request completed"}
-{"level":30,"time":1779154873887,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-27u","method":"GET","url":"/models","msg":"incoming request"}
-{"level":30,"time":1779154875779,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-27u","method":"GET","url":"/models","statusCode":200,"responseTime":1891,"msg":"request completed"}
-{"level":30,"time":1779157723326,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2el","method":"GET","url":"/writing/config","msg":"incoming request"}
-{"level":30,"time":1779157723326,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2el","method":"GET","url":"/writing/config","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779157723453,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2en","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779157723453,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2en","method":"GET","url":"/agents","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779157723454,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2eo","method":"GET","url":"/models","msg":"incoming request"}
-{"level":30,"time":1779157725238,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2eo","method":"GET","url":"/models","statusCode":200,"responseTime":1784,"msg":"request completed"}
-{"level":30,"time":1779157885031,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2g4","method":"GET","url":"/writing/config","msg":"incoming request"}
-{"level":30,"time":1779157885031,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2g4","method":"GET","url":"/writing/config","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779157885139,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2g6","method":"GET","url":"/agents","msg":"incoming request"}
-{"level":30,"time":1779157885139,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2g6","method":"GET","url":"/agents","statusCode":200,"responseTime":0,"msg":"request completed"}
-{"level":30,"time":1779157885141,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2g7","method":"GET","url":"/models","msg":"incoming request"}
-{"level":30,"time":1779157886829,"pid":34965,"hostname":"MacBook-Pro-23.local","reqId":"req-2g7","method":"GET","url":"/models","statusCode":200,"responseTime":1688,"msg":"request completed"}
+[cursor-bridge] 日志文件: /Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge/logs/bridge.log
+
+  cursor-bridge v1.0.0
+  Listening on http://127.0.0.1:19840
+  PID: 1403
+  Agents: 0/10
+
+{"level":30,"time":1779243078714,"pid":1403,"hostname":"MacBook-Pro-23.local","msg":"Server listening at http://127.0.0.1:19840"}
+{"level":30,"time":1779243087425,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-2","method":"GET","url":"/models","msg":"incoming request"}
+{"level":30,"time":1779243091361,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-2","method":"GET","url":"/models","statusCode":200,"responseTime":3935,"msg":"request completed"}
+{"level":30,"time":1779243097853,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-3","method":"GET","url":"/collab/models/available","msg":"incoming request"}
+{"level":30,"time":1779243097854,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-3","method":"GET","url":"/collab/models/available","statusCode":404,"responseTime":0,"msg":"request completed"}
+{"level":30,"time":1779243101965,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-4","method":"GET","url":"/collab/models/available","msg":"incoming request"}
+{"level":30,"time":1779243101965,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-4","method":"GET","url":"/collab/models/available","statusCode":404,"responseTime":0,"msg":"request completed"}
+{"level":30,"time":1779243123673,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-5","method":"GET","url":"/models/available","msg":"incoming request"}
+{"level":30,"time":1779243123673,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-5","method":"GET","url":"/models/available","statusCode":200,"responseTime":1,"msg":"request completed"}
+{"level":30,"time":1779243159253,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-8","method":"GET","url":"/writing/config","msg":"incoming request"}
+{"level":30,"time":1779243159254,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-8","method":"GET","url":"/writing/config","statusCode":200,"responseTime":1,"msg":"request completed"}
+{"level":30,"time":1779243165304,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-b","method":"OPTIONS","url":"/agents","msg":"incoming request"}
+{"level":30,"time":1779243165304,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-b","method":"OPTIONS","url":"/agents","statusCode":204,"responseTime":0,"msg":"request completed"}
+{"level":30,"time":1779243165305,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-c","method":"GET","url":"/agents","msg":"incoming request"}
+{"level":30,"time":1779243165305,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-c","method":"GET","url":"/agents","statusCode":200,"responseTime":0,"msg":"request completed"}
+{"level":30,"time":1779243165307,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-d","method":"OPTIONS","url":"/models","msg":"incoming request"}
+{"level":30,"time":1779243165307,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-d","method":"OPTIONS","url":"/models","statusCode":204,"responseTime":0,"msg":"request completed"}
+{"level":30,"time":1779243165308,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-e","method":"GET","url":"/models","msg":"incoming request"}
+{"level":30,"time":1779243166969,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-e","method":"GET","url":"/models","statusCode":200,"responseTime":1662,"msg":"request completed"}
+{"level":30,"time":1779243207543,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-n","method":"GET","url":"/ui","msg":"incoming request"}
+{"level":30,"time":1779243207543,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-n","method":"GET","url":"/ui","statusCode":404,"responseTime":0,"msg":"request completed"}
+{"level":30,"time":1779243218035,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-o","method":"GET","url":"/models","msg":"incoming request"}
+{"level":30,"time":1779243219689,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-o","method":"GET","url":"/models","statusCode":200,"responseTime":1654,"msg":"request completed"}
+{"level":30,"time":1779243219715,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-p","method":"GET","url":"/models/available","msg":"incoming request"}
+{"level":30,"time":1779243219715,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-p","method":"GET","url":"/models/available","statusCode":200,"responseTime":0,"msg":"request completed"}
+{"level":30,"time":1779244874783,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-2a","method":"GET","url":"/writing/config","msg":"incoming request"}
+{"level":30,"time":1779244874784,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-2a","method":"GET","url":"/writing/config","statusCode":200,"responseTime":1,"msg":"request completed"}
+{"level":30,"time":1779244875052,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-2c","method":"GET","url":"/agents","msg":"incoming request"}
+{"level":30,"time":1779244875053,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-2c","method":"GET","url":"/agents","statusCode":200,"responseTime":1,"msg":"request completed"}
+{"level":30,"time":1779244875055,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-2d","method":"GET","url":"/models","msg":"incoming request"}
+{"level":30,"time":1779247791375,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-52","method":"GET","url":"/writing/config","msg":"incoming request"}
+{"level":30,"time":1779247791375,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-52","method":"GET","url":"/writing/config","statusCode":200,"responseTime":0,"msg":"request completed"}
+{"level":30,"time":1779247791541,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-54","method":"GET","url":"/agents","msg":"incoming request"}
+{"level":30,"time":1779247791541,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-54","method":"GET","url":"/agents","statusCode":200,"responseTime":0,"msg":"request completed"}
+{"level":30,"time":1779247791543,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-55","method":"GET","url":"/models","msg":"incoming request"}
+{"level":30,"time":1779247928676,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-5c","method":"GET","url":"/writing/config","msg":"incoming request"}
+{"level":30,"time":1779247928677,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-5c","method":"GET","url":"/writing/config","statusCode":200,"responseTime":0,"msg":"request completed"}
+{"level":30,"time":1779247928773,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-5e","method":"GET","url":"/agents","msg":"incoming request"}
+{"level":30,"time":1779247928774,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-5e","method":"GET","url":"/agents","statusCode":200,"responseTime":1,"msg":"request completed"}
+{"level":30,"time":1779247928777,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-5f","method":"GET","url":"/models","msg":"incoming request"}
+{"level":30,"time":1779247930367,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-5f","method":"GET","url":"/models","statusCode":200,"responseTime":1590,"msg":"request completed"}
+{"level":30,"time":1779252661024,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-am","method":"GET","url":"/agents","msg":"incoming request"}
+{"level":30,"time":1779252661024,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-am","method":"GET","url":"/agents","statusCode":200,"responseTime":0,"msg":"request completed"}
+{"level":30,"time":1779252670973,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-ap","method":"GET","url":"/roles","msg":"incoming request"}
+{"level":30,"time":1779252670974,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-ap","method":"GET","url":"/roles","statusCode":200,"responseTime":1,"msg":"request completed"}
+{"level":30,"time":1779252670974,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-aq","method":"GET","url":"/models/available","msg":"incoming request"}
+{"level":30,"time":1779252670975,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-aq","method":"GET","url":"/models/available","statusCode":200,"responseTime":1,"msg":"request completed"}
+{"level":30,"time":1779252693445,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-at","method":"POST","url":"/tasks/analyze","msg":"incoming request"}
+[multi-role-routes] POST /tasks/analyze: "开发一个 3D 俄罗斯方块小游戏。" 
+[multi-role] 📋 开始分析任务 [ce0e198a] {"requirement":"开发一个 3D 俄罗斯方块小游戏。"}
+[multi-role] 🔍 模型覆盖配置 {"operations":"composer-2.5","business":"composer-2.5","product":"composer-2.5","project-manager":"composer-2.5","architect":"composer-2.5","senior-dev":"composer-2.5","developer":"composer-2.5","qa":"composer-2.5","devops":"composer-2.5","tech-lead":"composer-2.5"}
+[multi-role] 🤖 使用模型 composer-2.5 进行任务分析 
+[AgentPool] Agent created: agent_1779252695330_qj1basid name="task-analyzer" model=composer-2.5 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
+[multi-role] 🔍 Agent 已创建: agent_1779252695330_qj1basid 
+[multi-role] ✅ 分析完成 (16581ms) {"resultLen":3603}
+[multi-role-routes] POST /tasks/analyze 完成: id=ce0e198a, roles=10 
+{"level":30,"time":1779252711917,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-at","method":"POST","url":"/tasks/analyze","statusCode":200,"responseTime":18472,"msg":"request completed"}
+{"level":30,"time":1779252748745,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-b2","method":"PUT","url":"/models/config","msg":"incoming request"}
+{"level":30,"time":1779252748746,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-b2","method":"PUT","url":"/models/config","statusCode":200,"responseTime":1,"msg":"request completed"}
+{"level":30,"time":1779252750914,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-b3","method":"PUT","url":"/models/config","msg":"incoming request"}
+{"level":30,"time":1779252750914,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-b3","method":"PUT","url":"/models/config","statusCode":200,"responseTime":0,"msg":"request completed"}
+{"level":30,"time":1779252753345,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-b4","method":"PUT","url":"/models/config","msg":"incoming request"}
+{"level":30,"time":1779252753345,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-b4","method":"PUT","url":"/models/config","statusCode":200,"responseTime":0,"msg":"request completed"}
+{"level":30,"time":1779252756654,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-b5","method":"PUT","url":"/models/config","msg":"incoming request"}
+{"level":30,"time":1779252756655,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-b5","method":"PUT","url":"/models/config","statusCode":200,"responseTime":0,"msg":"request completed"}
+{"level":30,"time":1779252759145,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-b8","method":"PUT","url":"/models/config","msg":"incoming request"}
+{"level":30,"time":1779252759145,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-b8","method":"PUT","url":"/models/config","statusCode":200,"responseTime":0,"msg":"request completed"}
+{"level":30,"time":1779252761051,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-b9","method":"PUT","url":"/models/config","msg":"incoming request"}
+{"level":30,"time":1779252761051,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-b9","method":"PUT","url":"/models/config","statusCode":200,"responseTime":0,"msg":"request completed"}
+{"level":30,"time":1779252763139,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-ba","method":"PUT","url":"/models/config","msg":"incoming request"}
+{"level":30,"time":1779252763140,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-ba","method":"PUT","url":"/models/config","statusCode":200,"responseTime":0,"msg":"request completed"}
+{"level":30,"time":1779252765474,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-bb","method":"PUT","url":"/models/config","msg":"incoming request"}
+{"level":30,"time":1779252765475,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-bb","method":"PUT","url":"/models/config","statusCode":200,"responseTime":1,"msg":"request completed"}
+{"level":30,"time":1779252768872,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-bc","method":"PUT","url":"/models/config","msg":"incoming request"}
+{"level":30,"time":1779252768872,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-bc","method":"PUT","url":"/models/config","statusCode":200,"responseTime":0,"msg":"request completed"}
+{"level":30,"time":1779252774690,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-bf","method":"PATCH","url":"/tasks/ce0e198a-48d9-408d-b858-5e981f6dcc90/approve","msg":"incoming request"}
+{"level":30,"time":1779252774692,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-bf","method":"PATCH","url":"/tasks/ce0e198a-48d9-408d-b858-5e981f6dcc90/approve","statusCode":200,"responseTime":2,"msg":"request completed"}
+{"level":30,"time":1779252774695,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-bg","method":"GET","url":"/tasks/ce0e198a-48d9-408d-b858-5e981f6dcc90","msg":"incoming request"}
+{"level":30,"time":1779252774696,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-bg","method":"GET","url":"/tasks/ce0e198a-48d9-408d-b858-5e981f6dcc90","statusCode":200,"responseTime":1,"msg":"request completed"}
+{"level":30,"time":1779252774698,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-bh","method":"POST","url":"/tasks/ce0e198a-48d9-408d-b858-5e981f6dcc90/discussions","msg":"incoming request"}
+[multi-role-routes] POST /tasks/ce0e198a/discussions: roles=[product,architect,project-manager,operations,tech-lead,senior-dev,developer,qa,devops,business] 
+[multi-role] 💬 创建讨论 [4116ce88] {"taskAnalysisId":"ce0e198a","topic":"开发一个 3D 俄罗斯方块小游戏。","phase":"discussion","roles":["product","architect","project-manager","operations","tech-lead","senior-dev","developer","qa","devops","business"],"maxRounds":3}
+[multi-role-routes] 讨论已创建: 4116ce88 
+{"level":30,"time":1779252774702,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-bh","method":"POST","url":"/tasks/ce0e198a-48d9-408d-b858-5e981f6dcc90/discussions","statusCode":200,"responseTime":4,"msg":"request completed"}
+{"level":30,"time":1779252774704,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-bi","method":"POST","url":"/discussions/4116ce88-1bf5-41de-8989-6c14ff2b4863/round/stream","msg":"incoming request"}
+[multi-role-routes] POST /discussions/4116ce88/round/stream [SSE] 
+[multi-role] 🔄 [流式] 讨论轮次 NaN/undefined 开始 
+[AgentPool] Agent created: agent_1779252774707_kif2hu81 name="Product Manager-4116ce88" model=composer-2.5 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
+[AgentPool] Agent created: agent_1779252796178_fe1de3v1 name="Architect-4116ce88" model=composer-2.5 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
+[AgentPool] Agent created: agent_1779252814110_hp4ibqkc name="Project Manager-4116ce88" model=composer-2.5 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
+[AgentPool] Agent created: agent_1779252833085_p62iqalv name="Operations-4116ce88" model=composer-2.5 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
+[AgentPool] Agent created: agent_1779252880397_l94ej6x3 name="Tech Lead-4116ce88" model=composer-2.5 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
+[AgentPool] Agent created: agent_1779252899614_hq50cowx name="Senior Developer-4116ce88" model=composer-2.5 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
+[AgentPool] Agent created: agent_1779252924989_rx84n1uy name="Developer-4116ce88" model=composer-2.5 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
+[AgentPool] Agent created: agent_1779252955279_m994mri9 name="QA Engineer-4116ce88" model=composer-2.5 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
+[AgentPool] Agent created: agent_1779252980272_gdr819sy name="DevOps Engineer-4116ce88" model=composer-2.5 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
+[AgentPool] Agent created: agent_1779253014034_esyrabrv name="Business Analyst-4116ce88" model=composer-2.5 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
+{"level":30,"time":1779253038407,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-bi","method":"POST","url":"/discussions/4116ce88-1bf5-41de-8989-6c14ff2b4863/round/stream","statusCode":200,"responseTime":263703,"msg":"request completed"}
+{"level":30,"time":1779253160254,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-cv","method":"POST","url":"/discussions/4116ce88-1bf5-41de-8989-6c14ff2b4863/conclude","msg":"incoming request"}
+[multi-role-routes] POST /discussions/4116ce88/conclude 
+[multi-role] 📝 开始总结讨论 [4116ce88] 
+[AgentPool] Agent created: agent_1779253160258_dld0qtau name="tech-lead-conclude-4116ce88" model=composer-2.5 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
+[multi-role-routes] 讨论总结完成: decisions=14, actionItems=14 
+{"level":30,"time":1779253184357,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-cv","method":"POST","url":"/discussions/4116ce88-1bf5-41de-8989-6c14ff2b4863/conclude","statusCode":200,"responseTime":24104,"msg":"request completed"}
+{"level":30,"time":1779253184362,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-d0","method":"POST","url":"/tasks/ce0e198a-48d9-408d-b858-5e981f6dcc90/report/generate","msg":"incoming request"}
+{"level":30,"time":1779253184364,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-d0","method":"POST","url":"/tasks/ce0e198a-48d9-408d-b858-5e981f6dcc90/report/generate","statusCode":200,"responseTime":2,"msg":"request completed"}
+{"level":30,"time":1779253264000,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-db","method":"GET","url":"/writing/config","msg":"incoming request"}
+{"level":30,"time":1779253264000,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-db","method":"GET","url":"/writing/config","statusCode":200,"responseTime":0,"msg":"request completed"}
+{"level":30,"time":1779253264530,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-dd","method":"GET","url":"/agents","msg":"incoming request"}
+{"level":30,"time":1779253264531,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-dd","method":"GET","url":"/agents","statusCode":200,"responseTime":1,"msg":"request completed"}
+{"level":30,"time":1779253264533,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-de","method":"GET","url":"/models","msg":"incoming request"}
+{"level":30,"time":1779253266393,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-de","method":"GET","url":"/models","statusCode":200,"responseTime":1860,"msg":"request completed"}
+{"level":30,"time":1779253287232,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-dl","method":"POST","url":"/tasks/ce0e198a-48d9-408d-b858-5e981f6dcc90/squads","msg":"incoming request"}
+{"level":30,"time":1779253287245,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-dl","method":"POST","url":"/tasks/ce0e198a-48d9-408d-b858-5e981f6dcc90/squads","statusCode":200,"responseTime":13,"msg":"request completed"}
+{"level":30,"time":1779253287248,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-dm","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/0812af10-e077-41dc-a44b-e5e2c02cd7ed","msg":"incoming request"}
+[multi-role] ⚙️ 执行任务 [0812af10]: 输出 ADR《技术选型与架构设计 v1》：明确 2.5D 边界、模块接口、Three.js 本地 bundle 方案, 分配给 架构师 (原始: architect) 
+[AgentPool] Agent created: agent_1779253287251_zkffn3lj name="Architect-exec-0812af10" model=composer-2.5 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
+[multi-role]   ✅ 任务执行完成 (47920ms, 2637字) 
+{"level":30,"time":1779253335174,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-dm","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/0812af10-e077-41dc-a44b-e5e2c02cd7ed","statusCode":200,"responseTime":47926,"msg":"request completed"}
+{"level":30,"time":1779253335181,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-dz","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/efcb455a-eca5-44ae-b705-7b66d72d0de5","msg":"incoming request"}
+[multi-role] ⚙️ 执行任务 [efcb455a]: 修订 PRD v1.1：将 MVP 玩法语义对齐 2.5D（10×20 单层消行），真 3D 井移入 Phase 2 backlog，补充计分规则细则, 分配给 产品经理 (原始: product-manager) 
+[AgentPool] Agent created: agent_1779253335182_p4ofjszx name="Product Manager-exec-efcb455a" model=composer-2.5 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
+[multi-role]   ✅ 任务执行完成 (63138ms, 1741字) 
+{"level":30,"time":1779253398324,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-dz","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/efcb455a-eca5-44ae-b705-7b66d72d0de5","statusCode":200,"responseTime":63142,"msg":"request completed"}
+{"level":30,"time":1779253398335,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-e8","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/11034dd1-76ec-41f2-aaa3-1e0409825159","msg":"incoming request"}
+[multi-role] ⚠ 角色 "frontend-dev" 未找到，降级使用 senior-dev 
+[multi-role] ⚙️ 执行任务 [11034dd1]: PR-1：提交 `tetris-3d-voxel-mapper.js` + `test/tetris-3d-voxel-mapper.test.js`, 分配给 资深开发 (原始: frontend-dev) 
+[AgentPool] Agent created: agent_1779253398337_stk26qxe name="Senior Developer-exec-11034dd1" model=composer-2.5 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
+[multi-role]   ✅ 任务执行完成 (48361ms, 3063字) 
+{"level":30,"time":1779253446700,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-e8","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/11034dd1-76ec-41f2-aaa3-1e0409825159","statusCode":200,"responseTime":48365,"msg":"request completed"}
+{"level":30,"time":1779253446708,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-ed","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/7f8dc3eb-cd75-4950-ab8c-be99c7c7a77d","msg":"incoming request"}
+[multi-role] ⚙️ 执行任务 [7f8dc3eb]: PR-2：实现 `Tetris3DRenderer`（InstancedMesh + WebGL Probe + Canvas fallback）, 分配给 资深开发 (原始: senior-dev) 
+[AgentPool] Agent created: agent_1779253446709_jf3khh0r name="Senior Developer-exec-7f8dc3eb" model=composer-2.5 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
+[multi-role]   ✅ 任务执行完成 (82707ms, 3729字) 
+{"level":30,"time":1779253529419,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-ed","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/7f8dc3eb-cd75-4950-ab8c-be99c7c7a77d","statusCode":200,"responseTime":82711,"msg":"request completed"}
+{"level":30,"time":1779253529465,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-em","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/5dfe60d7-acb8-4952-ba73-908550f0e265","msg":"incoming request"}
+[multi-role] ⚠ 角色 "frontend-dev" 未找到，降级使用 senior-dev 
+[multi-role] ⚙️ 执行任务 [5dfe60d7]: PR-3：`Tetris3DGameManager` + HTML/CSS + `dock-manager` 注册独立入口, 分配给 资深开发 (原始: frontend-dev) 
+[AgentPool] Agent created: agent_1779253529467_gjlpgo8l name="Senior Developer-exec-5dfe60d7" model=composer-2.5 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
+[multi-role]   ✅ 任务执行完成 (89032ms, 3120字) 
+{"level":30,"time":1779253618502,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-em","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/5dfe60d7-acb8-4952-ba73-908550f0e265","statusCode":200,"responseTime":89037,"msg":"request completed"}
+{"level":30,"time":1779253618522,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-er","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/7df10ec3-f7b0-45d9-b520-6fc9c539a64d","msg":"incoming request"}
+[multi-role] ⚙️ 执行任务 [7df10ec3]: W1 末交付 Three.js 2.5D 最小 demo（固定视角 + 单方块）供渲染层模板, 分配给 架构师 (原始: architect) 
+[AgentPool] Agent created: agent_1779253618525_qlyip34c name="Architect-exec-7df10ec3" model=composer-2.5 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
+[multi-role]   ✅ 任务执行完成 (67627ms, 3425字) 
+{"level":30,"time":1779253686155,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-er","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/7df10ec3-f7b0-45d9-b520-6fc9c539a64d","statusCode":200,"responseTime":67633,"msg":"request completed"}
+{"level":30,"time":1779253686159,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-f0","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/18785c20-d7fe-414d-8e1c-25f8648a86ad","msg":"incoming request"}
+[multi-role] ⚙️ 执行任务 [18785c20]: D3 前输出核心逻辑 + 2.5D 映射测试用例清单（含 TC-E-02 快速连按、TC-B-01 顶线临界、WebGL 降级）, 分配给 测试 (原始: qa) 
+[AgentPool] Agent created: agent_1779253686161_k0f07l5l name="QA Engineer-exec-18785c20" model=composer-2.5 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
+[multi-role]   ✅ 任务执行完成 (44394ms, 12643字) 
+{"level":30,"time":1779253730558,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-f0","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/18785c20-d7fe-414d-8e1c-25f8648a86ad","statusCode":200,"responseTime":44399,"msg":"request completed"}
+{"level":30,"time":1779253730582,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-fd","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/8f9780f1-bbc0-44e4-934b-a46a3344d2be","msg":"incoming request"}
+[multi-role] ⚙️ 执行任务 [8f9780f1]: CI 门禁：`node --test test/tetris-game-core.test.js test/tetris-3d-voxel-mapper.test.js` + `package.sh` 打 zip + 包体/CSP 扫描, 分配给 运维 (原始: devops) 
+[AgentPool] Agent created: agent_1779253730585_ytyr9gtc name="DevOps Engineer-exec-8f9780f1" model=composer-2.5 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
+[multi-role]   ✅ 任务执行完成 (126212ms, 4679字) 
+{"level":30,"time":1779253856798,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-fd","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/8f9780f1-bbc0-44e4-934b-a46a3344d2be","statusCode":200,"responseTime":126216,"msg":"request completed"}
+{"level":30,"time":1779253856813,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-fy","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/22e4c36a-34fd-4afb-82fc-37e49374eba5","msg":"incoming request"}
+[multi-role] ⚙️ 执行任务 [22e4c36a]: 确认真实 MAU/留存基线，输出定制化 ROI 测算表, 分配给 运营 (原始: operations) 
+[AgentPool] Agent created: agent_1779253856814_febhpnvk name="Operations-exec-22e4c36a" model=composer-2.5 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
+[multi-role]   ✅ 任务执行完成 (41246ms, 6995字) 
+{"level":30,"time":1779253898062,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-fy","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/22e4c36a-34fd-4afb-82fc-37e49374eba5","statusCode":200,"responseTime":41250,"msg":"request completed"}
+{"level":30,"time":1779253898067,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-g5","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/0c53889b-bdaa-468b-9823-783d6556eb64","msg":"incoming request"}
+[multi-role] ⚙️ 执行任务 [0c53889b]: 输出业务规则表 v1（BR-GAME/BR-SCORE/BR-VALID 编号），签字后作为 UAT 依据, 分配给 业务 (原始: business-analyst) 
+[AgentPool] Agent created: agent_1779253898069_aqe95i94 name="Business Analyst-exec-0c53889b" model=composer-2.5 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
+[multi-role]   ✅ 任务执行完成 (43752ms, 2406字) 
+{"level":30,"time":1779253941823,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-g5","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/0c53889b-bdaa-468b-9823-783d6556eb64","statusCode":200,"responseTime":43756,"msg":"request completed"}
+{"level":30,"time":1779253941851,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-gi","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/b6f91b19-d78f-4c5a-bc99-84d151b9fba0","msg":"incoming request"}
+[multi-role] ⚠ 角色 "frontend-dev" 未找到，降级使用 senior-dev 
+[multi-role] ⚙️ 执行任务 [b6f91b19]: PR-4：消行动画（渲染层插值）、可选音效、埋点（开局/完局/时长/Probe 结果）, 分配给 资深开发 (原始: frontend-dev) 
+[AgentPool] Agent created: agent_1779253941854_m91po6oh name="Senior Developer-exec-b6f91b19" model=composer-2.5 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
+[multi-role]   ✅ 任务执行完成 (135863ms, 4526字) 
+{"level":30,"time":1779254077721,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-gi","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/b6f91b19-d78f-4c5a-bc99-84d151b9fba0","statusCode":200,"responseTime":135869,"msg":"request completed"}
+{"level":30,"time":1779254077746,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-gz","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/23c7fcd2-d20f-4908-a523-ff2604f7cebc","msg":"incoming request"}
+[multi-role] ⚙️ 执行任务 [23c7fcd2]: D5 中期 Demo + 范围审查；D13 Go/No-Go 评审, 分配给 项目经理 (原始: project-manager) 
+[AgentPool] Agent created: agent_1779254077748_2xmrw976 name="Project Manager-exec-23c7fcd2" model=composer-2.5 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
+[multi-role]   ✅ 任务执行完成 (38358ms, 9599字) 
+{"level":30,"time":1779254116110,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-gz","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/23c7fcd2-d20f-4908-a523-ff2604f7cebc","statusCode":200,"responseTime":38364,"msg":"request completed"}
+{"level":30,"time":1779254116134,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-h0","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/2f039738-4c45-43c0-bb2d-02d9c354d852","msg":"incoming request"}
+[multi-role] ⚙️ 执行任务 [2f039738]: 演练回滚剧本 L0/L2，归档上一稳定版 zip 与 git tag, 分配给 运维 (原始: devops) 
+[AgentPool] Agent created: agent_1779254116138_d4dlfkd7 name="DevOps Engineer-exec-2f039738" model=composer-2.5 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
+[multi-role]   ✅ 任务执行完成 (112378ms, 3379字) 
+{"level":30,"time":1779254228520,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-h0","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/2f039738-4c45-43c0-bb2d-02d9c354d852","statusCode":200,"responseTime":112385,"msg":"request completed"}
+{"level":30,"time":1779254228695,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-h9","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/9c1041fd-0a88-440d-823d-26476b2e3beb","msg":"incoming request"}
+[multi-role] ⚙️ 执行任务 [9c1041fd]: 创建 tech-debt issue：guideline SRS 旋转 + 真 3D 多层玩法 Phase 2 预研, 分配给 资深开发 (原始: senior-dev) 
+[AgentPool] Agent created: agent_1779254228697_gy2wzdjj name="Senior Developer-exec-9c1041fd" model=composer-2.5 cwd="/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/cursor-bridge"
+[multi-role]   ✅ 任务执行完成 (89661ms, 3452字) 
+{"level":30,"time":1779254318360,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-h9","method":"POST","url":"/squads/2ecb099e-14e3-4bae-ba0e-d119636e6deb/execute/9c1041fd-0a88-440d-823d-26476b2e3beb","statusCode":200,"responseTime":89664,"msg":"request completed"}
+{"level":30,"time":1779254574380,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-i4","method":"GET","url":"/writing/config","msg":"incoming request"}
+{"level":30,"time":1779254574381,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-i4","method":"GET","url":"/writing/config","statusCode":200,"responseTime":1,"msg":"request completed"}
+{"level":30,"time":1779254574789,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-i6","method":"GET","url":"/agents","msg":"incoming request"}
+{"level":30,"time":1779254574790,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-i6","method":"GET","url":"/agents","statusCode":200,"responseTime":1,"msg":"request completed"}
+{"level":30,"time":1779254574791,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-i7","method":"GET","url":"/models","msg":"incoming request"}
+{"level":30,"time":1779254576658,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-i7","method":"GET","url":"/models","statusCode":200,"responseTime":1867,"msg":"request completed"}
+{"level":30,"time":1779254960554,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-k4","method":"GET","url":"/writing/config","msg":"incoming request"}
+{"level":30,"time":1779254960554,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-k4","method":"GET","url":"/writing/config","statusCode":200,"responseTime":0,"msg":"request completed"}
+{"level":30,"time":1779254960702,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-k6","method":"GET","url":"/agents","msg":"incoming request"}
+{"level":30,"time":1779254960702,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-k6","method":"GET","url":"/agents","statusCode":200,"responseTime":0,"msg":"request completed"}
+{"level":30,"time":1779254960703,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-k7","method":"GET","url":"/models","msg":"incoming request"}
+{"level":30,"time":1779254962608,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-k7","method":"GET","url":"/models","statusCode":200,"responseTime":1905,"msg":"request completed"}
+{"level":30,"time":1779259490293,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-y8","method":"POST","url":"/writing/complete","msg":"incoming request"}
+{"level":30,"time":1779259490296,"pid":1403,"hostname":"MacBook-Pro-23.local","qwenConfigured":true,"msg":"[writing] POST /writing/complete"}
+{"level":30,"time":1779259490296,"pid":1403,"hostname":"MacBook-Pro-23.local","textLen":774,"cursor":774,"trigger":"typing","msg":"[writing] 🔍 补全请求"}
+{"level":30,"time":1779259490296,"pid":1403,"hostname":"MacBook-Pro-23.local","model":"qwen-turbo-latest","msg":"[writing] 📝 开始流式 complete"}
+{"level":30,"time":1779259491950,"pid":1403,"hostname":"MacBook-Pro-23.local","elapsed":"1654ms","chars":86,"tokens":16,"model":"qwen-turbo-latest","msg":"[writing] ✅ 流式 complete 完成"}
+{"level":30,"time":1779259491950,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-y8","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":1658,"msg":"request completed"}
+{"level":30,"time":1779259497182,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-yb","method":"POST","url":"/writing/feedback","msg":"incoming request"}
+{"level":30,"time":1779259497182,"pid":1403,"hostname":"MacBook-Pro-23.local","msg":"[writing] 反馈: complete ❌ 已拒绝"}
+{"level":30,"time":1779259497182,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-yb","method":"POST","url":"/writing/feedback","statusCode":200,"responseTime":1,"msg":"request completed"}
+{"level":30,"time":1779259497295,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-yc","method":"POST","url":"/writing/complete","msg":"incoming request"}
+{"level":30,"time":1779259497295,"pid":1403,"hostname":"MacBook-Pro-23.local","qwenConfigured":true,"msg":"[writing] POST /writing/complete"}
+{"level":30,"time":1779259497295,"pid":1403,"hostname":"MacBook-Pro-23.local","textLen":774,"cursor":774,"trigger":"pause","msg":"[writing] 🔍 补全请求"}
+{"level":30,"time":1779259497296,"pid":1403,"hostname":"MacBook-Pro-23.local","model":"qwen-turbo-latest","msg":"[writing] 📝 开始流式 complete"}
+{"level":30,"time":1779259497296,"pid":1403,"hostname":"MacBook-Pro-23.local","elapsed":"1ms","chars":86,"tokens":1,"model":"qwen-turbo-latest","msg":"[writing] ✅ 流式 complete 完成"}
+{"level":30,"time":1779259497297,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-yc","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":2,"msg":"request completed"}
+{"level":30,"time":1779259503401,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-yd","method":"POST","url":"/writing/feedback","msg":"incoming request"}
+{"level":30,"time":1779259503402,"pid":1403,"hostname":"MacBook-Pro-23.local","msg":"[writing] 反馈: complete ✅ 已接受"}
+{"level":30,"time":1779259503403,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-yd","method":"POST","url":"/writing/feedback","statusCode":200,"responseTime":2,"msg":"request completed"}
+{"level":30,"time":1779259508591,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-ye","method":"POST","url":"/writing/complete","msg":"incoming request"}
+{"level":30,"time":1779259508592,"pid":1403,"hostname":"MacBook-Pro-23.local","qwenConfigured":true,"msg":"[writing] POST /writing/complete"}
+{"level":30,"time":1779259508592,"pid":1403,"hostname":"MacBook-Pro-23.local","textLen":864,"cursor":864,"trigger":"typing","msg":"[writing] 🔍 补全请求"}
+{"level":30,"time":1779259508592,"pid":1403,"hostname":"MacBook-Pro-23.local","model":"qwen-turbo-latest","msg":"[writing] 📝 开始流式 complete"}
+{"level":30,"time":1779259509298,"pid":1403,"hostname":"MacBook-Pro-23.local","elapsed":"706ms","chars":97,"tokens":17,"model":"qwen-turbo-latest","msg":"[writing] ✅ 流式 complete 完成"}
+{"level":30,"time":1779259509299,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-ye","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":708,"msg":"request completed"}
+{"level":30,"time":1779259509997,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-yf","method":"POST","url":"/writing/feedback","msg":"incoming request"}
+{"level":30,"time":1779259509998,"pid":1403,"hostname":"MacBook-Pro-23.local","msg":"[writing] 反馈: complete ✅ 已接受"}
+{"level":30,"time":1779259509998,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-yf","method":"POST","url":"/writing/feedback","statusCode":200,"responseTime":1,"msg":"request completed"}
+{"level":30,"time":1779259510092,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-yg","method":"POST","url":"/writing/complete","msg":"incoming request"}
+{"level":30,"time":1779259510092,"pid":1403,"hostname":"MacBook-Pro-23.local","qwenConfigured":true,"msg":"[writing] POST /writing/complete"}
+{"level":30,"time":1779259510092,"pid":1403,"hostname":"MacBook-Pro-23.local","textLen":961,"cursor":961,"trigger":"pause","msg":"[writing] 🔍 补全请求"}
+{"level":30,"time":1779259510092,"pid":1403,"hostname":"MacBook-Pro-23.local","model":"qwen-turbo-latest","msg":"[writing] 📝 开始流式 complete"}
+{"level":30,"time":1779259510717,"pid":1403,"hostname":"MacBook-Pro-23.local","elapsed":"625ms","chars":77,"tokens":14,"model":"qwen-turbo-latest","msg":"[writing] ✅ 流式 complete 完成"}
+{"level":30,"time":1779259510718,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-yg","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":626,"msg":"request completed"}
+{"level":30,"time":1779259513295,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-yj","method":"POST","url":"/writing/feedback","msg":"incoming request"}
+{"level":30,"time":1779259513296,"pid":1403,"hostname":"MacBook-Pro-23.local","msg":"[writing] 反馈: complete ✅ 已接受"}
+{"level":30,"time":1779259513297,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-yj","method":"POST","url":"/writing/feedback","statusCode":200,"responseTime":2,"msg":"request completed"}
+{"level":30,"time":1779259518877,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-yk","method":"POST","url":"/writing/complete","msg":"incoming request"}
+{"level":30,"time":1779259518878,"pid":1403,"hostname":"MacBook-Pro-23.local","qwenConfigured":true,"msg":"[writing] POST /writing/complete"}
+{"level":30,"time":1779259518878,"pid":1403,"hostname":"MacBook-Pro-23.local","textLen":1039,"cursor":1039,"trigger":"typing","msg":"[writing] 🔍 补全请求"}
+{"level":30,"time":1779259518878,"pid":1403,"hostname":"MacBook-Pro-23.local","model":"qwen-turbo-latest","msg":"[writing] 📝 开始流式 complete"}
+{"level":30,"time":1779259519599,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-yl","method":"POST","url":"/writing/feedback","msg":"incoming request"}
+{"level":30,"time":1779259519600,"pid":1403,"hostname":"MacBook-Pro-23.local","msg":"[writing] 反馈: complete ✅ 已接受"}
+{"level":30,"time":1779259519600,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-yl","method":"POST","url":"/writing/feedback","statusCode":200,"responseTime":1,"msg":"request completed"}
+{"level":30,"time":1779259519631,"pid":1403,"hostname":"MacBook-Pro-23.local","elapsed":"753ms","chars":99,"tokens":18,"model":"qwen-turbo-latest","msg":"[writing] ✅ 流式 complete 完成"}
+{"level":30,"time":1779259519632,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-yk","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":755,"msg":"request completed"}
+{"level":30,"time":1779259520393,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-ym","method":"POST","url":"/writing/feedback","msg":"incoming request"}
+{"level":30,"time":1779259520394,"pid":1403,"hostname":"MacBook-Pro-23.local","msg":"[writing] 反馈: complete ✅ 已接受"}
+{"level":30,"time":1779259520395,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-ym","method":"POST","url":"/writing/feedback","statusCode":200,"responseTime":2,"msg":"request completed"}
+{"level":30,"time":1779259520878,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-yn","method":"POST","url":"/writing/complete","msg":"incoming request"}
+{"level":30,"time":1779259520878,"pid":1403,"hostname":"MacBook-Pro-23.local","qwenConfigured":true,"msg":"[writing] POST /writing/complete"}
+{"level":30,"time":1779259520878,"pid":1403,"hostname":"MacBook-Pro-23.local","textLen":1133,"cursor":1133,"trigger":"pause","msg":"[writing] 🔍 补全请求"}
+{"level":30,"time":1779259520878,"pid":1403,"hostname":"MacBook-Pro-23.local","model":"qwen-turbo-latest","msg":"[writing] 📝 开始流式 complete"}
+{"level":30,"time":1779259522461,"pid":1403,"hostname":"MacBook-Pro-23.local","elapsed":"1583ms","chars":78,"tokens":15,"model":"qwen-turbo-latest","msg":"[writing] ✅ 流式 complete 完成"}
+{"level":30,"time":1779259522462,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-yn","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":1584,"msg":"request completed"}
+{"level":30,"time":1779259528162,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-ys","method":"POST","url":"/writing/feedback","msg":"incoming request"}
+{"level":30,"time":1779259528162,"pid":1403,"hostname":"MacBook-Pro-23.local","msg":"[writing] 反馈: complete ❌ 已拒绝"}
+{"level":30,"time":1779259528162,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-ys","method":"POST","url":"/writing/feedback","statusCode":200,"responseTime":1,"msg":"request completed"}
+{"level":30,"time":1779259534794,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-yt","method":"POST","url":"/writing/complete","msg":"incoming request"}
+{"level":30,"time":1779259534795,"pid":1403,"hostname":"MacBook-Pro-23.local","qwenConfigured":true,"msg":"[writing] POST /writing/complete"}
+{"level":30,"time":1779259534795,"pid":1403,"hostname":"MacBook-Pro-23.local","textLen":1129,"cursor":598,"trigger":"typing","msg":"[writing] 🔍 补全请求"}
+{"level":30,"time":1779259534795,"pid":1403,"hostname":"MacBook-Pro-23.local","model":"qwen-turbo-latest","msg":"[writing] 📝 开始流式 complete"}
+{"level":30,"time":1779259535530,"pid":1403,"hostname":"MacBook-Pro-23.local","elapsed":"735ms","chars":55,"tokens":12,"model":"qwen-turbo-latest","msg":"[writing] ✅ 流式 complete 完成"}
+{"level":30,"time":1779259535531,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-yt","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":736,"msg":"request completed"}
+{"level":30,"time":1779259543266,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-yw","method":"POST","url":"/writing/complete","msg":"incoming request"}
+{"level":30,"time":1779259543267,"pid":1403,"hostname":"MacBook-Pro-23.local","qwenConfigured":true,"msg":"[writing] POST /writing/complete"}
+{"level":30,"time":1779259543267,"pid":1403,"hostname":"MacBook-Pro-23.local","textLen":1125,"cursor":237,"trigger":"typing","msg":"[writing] 🔍 补全请求"}
+{"level":30,"time":1779259543267,"pid":1403,"hostname":"MacBook-Pro-23.local","model":"qwen-turbo-latest","msg":"[writing] 📝 开始流式 complete"}
+{"level":30,"time":1779259543783,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-yx","method":"POST","url":"/writing/complete","msg":"incoming request"}
+{"level":30,"time":1779259543784,"pid":1403,"hostname":"MacBook-Pro-23.local","qwenConfigured":true,"msg":"[writing] POST /writing/complete"}
+{"level":30,"time":1779259543784,"pid":1403,"hostname":"MacBook-Pro-23.local","textLen":1124,"cursor":236,"trigger":"typing","msg":"[writing] 🔍 补全请求"}
+{"level":30,"time":1779259543784,"pid":1403,"hostname":"MacBook-Pro-23.local","model":"qwen-turbo-latest","msg":"[writing] 📝 开始流式 complete"}
+{"level":30,"time":1779259543899,"pid":1403,"hostname":"MacBook-Pro-23.local","elapsed":"632ms","chars":86,"tokens":15,"model":"qwen-turbo-latest","msg":"[writing] ✅ 流式 complete 完成"}
+{"level":30,"time":1779259544825,"pid":1403,"hostname":"MacBook-Pro-23.local","elapsed":"1041ms","chars":79,"tokens":15,"model":"qwen-turbo-latest","msg":"[writing] ✅ 流式 complete 完成"}
+{"level":30,"time":1779259544825,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-yx","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":1042,"msg":"request completed"}
+{"level":30,"time":1779259547368,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-yy","method":"POST","url":"/writing/complete","msg":"incoming request"}
+{"level":30,"time":1779259547369,"pid":1403,"hostname":"MacBook-Pro-23.local","qwenConfigured":true,"msg":"[writing] POST /writing/complete"}
+{"level":30,"time":1779259547369,"pid":1403,"hostname":"MacBook-Pro-23.local","textLen":1122,"cursor":591,"trigger":"typing","msg":"[writing] 🔍 补全请求"}
+{"level":30,"time":1779259547369,"pid":1403,"hostname":"MacBook-Pro-23.local","model":"qwen-turbo-latest","msg":"[writing] 📝 开始流式 complete"}
+{"level":30,"time":1779259548031,"pid":1403,"hostname":"MacBook-Pro-23.local","elapsed":"662ms","chars":77,"tokens":14,"model":"qwen-turbo-latest","msg":"[writing] ✅ 流式 complete 完成"}
+{"level":30,"time":1779259548032,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-yy","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":663,"msg":"request completed"}
+{"level":30,"time":1779259549201,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-yz","method":"POST","url":"/writing/complete","msg":"incoming request"}
+{"level":30,"time":1779259549201,"pid":1403,"hostname":"MacBook-Pro-23.local","qwenConfigured":true,"msg":"[writing] POST /writing/complete"}
+{"level":30,"time":1779259549201,"pid":1403,"hostname":"MacBook-Pro-23.local","textLen":1123,"cursor":592,"trigger":"typing","msg":"[writing] 🔍 补全请求"}
+{"level":30,"time":1779259549201,"pid":1403,"hostname":"MacBook-Pro-23.local","model":"qwen-turbo-latest","msg":"[writing] 📝 开始流式 complete"}
+{"level":30,"time":1779259549777,"pid":1403,"hostname":"MacBook-Pro-23.local","elapsed":"576ms","chars":80,"tokens":14,"model":"qwen-turbo-latest","msg":"[writing] ✅ 流式 complete 完成"}
+{"level":30,"time":1779259549778,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-yz","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":577,"msg":"request completed"}
+{"level":30,"time":1779259552703,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-z0","method":"POST","url":"/writing/complete","msg":"incoming request"}
+{"level":30,"time":1779259552704,"pid":1403,"hostname":"MacBook-Pro-23.local","qwenConfigured":true,"msg":"[writing] POST /writing/complete"}
+{"level":30,"time":1779259552704,"pid":1403,"hostname":"MacBook-Pro-23.local","textLen":1121,"cursor":3,"trigger":"typing","msg":"[writing] 🔍 补全请求"}
+{"level":30,"time":1779259552704,"pid":1403,"hostname":"MacBook-Pro-23.local","model":"qwen-turbo-latest","msg":"[writing] 📝 开始流式 complete"}
+{"level":30,"time":1779259553030,"pid":1403,"hostname":"MacBook-Pro-23.local","elapsed":"326ms","chars":29,"tokens":7,"model":"qwen-turbo-latest","msg":"[writing] ✅ 流式 complete 完成"}
+{"level":30,"time":1779259553031,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-z0","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":328,"msg":"request completed"}
+{"level":30,"time":1779259554590,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-z1","method":"POST","url":"/writing/complete","msg":"incoming request"}
+{"level":30,"time":1779259554590,"pid":1403,"hostname":"MacBook-Pro-23.local","qwenConfigured":true,"msg":"[writing] POST /writing/complete"}
+{"level":30,"time":1779259554590,"pid":1403,"hostname":"MacBook-Pro-23.local","textLen":1122,"cursor":4,"trigger":"typing","msg":"[writing] 🔍 补全请求"}
+{"level":30,"time":1779259554590,"pid":1403,"hostname":"MacBook-Pro-23.local","model":"qwen-turbo-latest","msg":"[writing] 📝 开始流式 complete"}
+{"level":30,"time":1779259554974,"pid":1403,"hostname":"MacBook-Pro-23.local","elapsed":"384ms","chars":37,"tokens":9,"model":"qwen-turbo-latest","msg":"[writing] ✅ 流式 complete 完成"}
+{"level":30,"time":1779259554974,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-z1","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":384,"msg":"request completed"}
+{"level":30,"time":1779259556365,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-z2","method":"POST","url":"/writing/complete","msg":"incoming request"}
+{"level":30,"time":1779259556366,"pid":1403,"hostname":"MacBook-Pro-23.local","qwenConfigured":true,"msg":"[writing] POST /writing/complete"}
+{"level":30,"time":1779259556366,"pid":1403,"hostname":"MacBook-Pro-23.local","textLen":1121,"cursor":3,"trigger":"typing","msg":"[writing] 🔍 补全请求"}
+{"level":30,"time":1779259556366,"pid":1403,"hostname":"MacBook-Pro-23.local","model":"qwen-turbo-latest","msg":"[writing] 📝 开始流式 complete"}
+{"level":30,"time":1779259556367,"pid":1403,"hostname":"MacBook-Pro-23.local","elapsed":"1ms","chars":29,"tokens":1,"model":"qwen-turbo-latest","msg":"[writing] ✅ 流式 complete 完成"}
+{"level":30,"time":1779259556367,"pid":1403,"hostname":"MacBook-Pro-23.local","reqId":"req-z2","method":"POST","url":"/writing/complete","statusCode":200,"responseTime":2,"msg":"request completed"}

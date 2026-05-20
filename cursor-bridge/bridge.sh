@@ -14,6 +14,45 @@ NC='\033[0m'
 
 mkdir -p "$LOG_DIR"
 
+resolve_node() {
+  local candidates=(
+    "/opt/homebrew/bin/node"
+    "$HOME/.nvm/versions/node/$(ls "$HOME/.nvm/versions/node/" 2>/dev/null | sort -V | tail -1)/bin/node"
+    "/usr/local/bin/node"
+  )
+  for candidate in "${candidates[@]}"; do
+    if [ -x "$candidate" ] 2>/dev/null; then
+      local arch
+      arch=$("$candidate" -e "process.stdout.write(process.arch)" 2>/dev/null || echo "")
+      if [ "$arch" = "arm64" ] && [ "$(uname -m)" = "arm64" ]; then
+        echo "$candidate"
+        return 0
+      fi
+      if [ "$arch" = "x64" ] && [ "$(uname -m)" = "x86_64" ]; then
+        echo "$candidate"
+        return 0
+      fi
+    fi
+  done
+  local fallback
+  fallback=$(which node 2>/dev/null || echo "")
+  if [ -n "$fallback" ]; then
+    echo "$fallback"
+    return 0
+  fi
+  echo ""
+  return 1
+}
+
+BRIDGE_NODE="$(resolve_node)"
+if [ -z "$BRIDGE_NODE" ]; then
+  echo -e "${RED}[✗] No suitable Node.js found. Install Node.js first.${NC}"
+  exit 1
+fi
+BRIDGE_NODE_DIR="$(dirname "$BRIDGE_NODE")"
+BRIDGE_NPX="$BRIDGE_NODE_DIR/npx"
+BRIDGE_NPM="$BRIDGE_NODE_DIR/npm"
+
 print_banner() {
   echo -e "${CYAN}"
   echo "  ╔═══════════════════════════════════╗"
@@ -35,9 +74,13 @@ is_running() {
 }
 
 check_deps() {
+  local node_arch
+  node_arch=$("$BRIDGE_NODE" -e "process.stdout.write(process.arch)")
+  echo -e "${CYAN}[i] Using Node: $BRIDGE_NODE ($node_arch, $("$BRIDGE_NODE" -e "process.stdout.write(process.version)"))${NC}"
+
   if [ ! -d "$SCRIPT_DIR/node_modules" ]; then
     echo -e "${YELLOW}[!] node_modules not found. Running npm install...${NC}"
-    cd "$SCRIPT_DIR" && npm install
+    cd "$SCRIPT_DIR" && "$BRIDGE_NPM" install
   fi
 
   if [ ! -f "$SCRIPT_DIR/.env" ] && [ -z "${CURSOR_API_KEY:-}" ]; then
@@ -63,7 +106,7 @@ do_start() {
 
   echo -e "${GREEN}[→] Starting cursor-bridge (dev mode)...${NC}"
   cd "$SCRIPT_DIR"
-  npx tsx src/index.ts >> "$LOG_FILE" 2>&1 &
+  "$BRIDGE_NPX" tsx src/index.ts >> "$LOG_FILE" 2>&1 &
   local pid=$!
   echo "$pid" > "$PID_FILE"
 
@@ -99,7 +142,7 @@ do_start_fg() {
   echo -e "${GREEN}[→] Starting cursor-bridge (foreground)...${NC}"
   echo -e "  Press Ctrl+C to stop\n"
   cd "$SCRIPT_DIR"
-  exec npx tsx src/index.ts
+  exec "$BRIDGE_NPX" tsx src/index.ts
 }
 
 do_stop() {
