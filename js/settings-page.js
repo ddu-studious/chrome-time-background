@@ -263,8 +263,24 @@
         document.body.classList.remove('sp-has-bg');
     }
 
+    function bindGuideEvents() {
+        document.querySelectorAll('.sp-guide-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.sp-guide-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.sp-guide-panel').forEach(p => p.classList.remove('active'));
+                tab.classList.add('active');
+                const panel = document.getElementById('sp-gtab-' + tab.dataset.gtab);
+                if (panel) panel.classList.add('active');
+            });
+        });
+        document.querySelectorAll('.sp-guide-ic').forEach(card => {
+            card.addEventListener('click', () => card.classList.toggle('open'));
+        });
+    }
+
     loadSettings().then(() => {
         bindEvents();
+        bindGuideEvents();
         loadBgProviderSettings().then(bindBgProviderEvents);
     });
 })();

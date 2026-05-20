@@ -261,7 +261,8 @@ export async function multiRoleRoutes(app: FastifyInstance) {
 
   app.post('/discussions/:id/round/stream', async (req, reply) => {
     const { id } = req.params as { id: string };
-    log.info(`POST /discussions/${id.slice(0, 8)}/round/stream [SSE]`);
+    const { context } = (req.body || {}) as { context?: string };
+    log.info(`POST /discussions/${id.slice(0, 8)}/round/stream [SSE]${context ? ' +context' : ''}`);
 
     reply.hijack();
 
@@ -279,7 +280,7 @@ export async function multiRoleRoutes(app: FastifyInstance) {
     };
 
     try {
-      for await (const ev of streamDiscussionRound(id)) {
+      for await (const ev of streamDiscussionRound(id, context)) {
         if (ev.type === 'error') {
           sendSSE('error', { message: ev.content });
           break;

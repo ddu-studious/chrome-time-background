@@ -22,11 +22,13 @@ body {
     color: var(--sp-text);
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
 }
 
 .sp-layout {
     display: flex;
     min-height: 100vh;
+    overflow-x: hidden;
 }
 
 /* ====== Sidebar ====== */
@@ -281,99 +283,134 @@ body {
     transform: translateX(20px);
 }
 
-/* ====== Guide ====== */
-
-.sp-guide-quick {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 16px;
-    margin-bottom: 28px;
+/* ====== Guide — Tabs ====== */
+.sp-guide-tabs {
+    display: flex; gap: 4px; margin-bottom: 20px;
+    background: var(--sp-card-bg); border: 1px solid var(--sp-border);
+    border-radius: var(--sp-radius); padding: 4px;
 }
-
-.sp-guide-step {
-    background: var(--sp-card-bg);
-    border: 1px solid var(--sp-border);
-    border-radius: var(--sp-radius);
-    padding: 20px;
-    text-align: center;
-    box-shadow: var(--sp-shadow);
+.sp-guide-tab {
+    flex: 1; padding: 8px 12px; border: none; border-radius: 6px;
+    background: transparent; color: var(--sp-text-secondary);
+    font-size: 12px; font-weight: 500; cursor: pointer; transition: all .2s;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
 }
+.sp-guide-tab:hover { background: var(--sp-hover); color: var(--sp-text); }
+.sp-guide-tab.active { background: var(--sp-accent); color: #fff; }
+.sp-guide-panel { display: none; }
+.sp-guide-panel.active { display: block; }
 
-.sp-step-num {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: var(--sp-accent);
-    color: #fff;
-    font-size: 14px;
-    font-weight: 700;
-    margin-bottom: 10px;
+/* ====== Guide — Timeline (快速上手) ====== */
+.sp-guide-tl { position: relative; padding-left: 48px; }
+.sp-guide-tl::before {
+    content: ''; position: absolute; left: 18px; top: 0; bottom: 0; width: 2px;
+    background: linear-gradient(to bottom, rgba(99,102,241,.4), rgba(99,102,241,.05));
 }
-
-.sp-guide-step h4 {
-    font-size: 14px;
-    font-weight: 600;
-    margin-bottom: 6px;
+.sp-guide-tl-item {
+    position: relative; padding: 16px 20px;
+    background: var(--sp-card-bg); border: 1px solid var(--sp-border);
+    border-radius: var(--sp-radius); margin-bottom: 16px;
+    box-shadow: var(--sp-shadow); transition: all .25s;
 }
+.sp-guide-tl-item:hover { border-color: rgba(99,102,241,.2); background: rgba(99,102,241,.02); }
+.sp-guide-tl-item::before {
+    content: ''; position: absolute; left: -38px; top: 20px;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--sp-accent); border: 3px solid var(--sp-bg, #0a0c14); z-index: 1;
+}
+.sp-guide-tl-item.done::before { background: #22c55e; }
+.sp-guide-tl-num {
+    position: absolute; left: -58px; top: 16px;
+    width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+    border-radius: 50%; background: rgba(99,102,241,.12);
+    color: var(--sp-accent); font-size: 11px; font-weight: 700;
+}
+.sp-guide-tl-item h4 { font-size: 14px; font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+.sp-guide-tl-item p { font-size: 13px; color: var(--sp-text-secondary); line-height: 1.65; }
+.sp-guide-tl-item ul { list-style: none; padding: 0; margin-top: 8px; }
+.sp-guide-tl-item li {
+    font-size: 13px; color: var(--sp-text-secondary);
+    padding: 3px 0 3px 16px; position: relative;
+}
+.sp-guide-tl-item li::before { content: '›'; position: absolute; left: 0; color: var(--sp-accent); font-weight: bold; }
+.sp-guide-tag {
+    padding: 1px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;
+}
+.sp-guide-tag-core { background: rgba(99,102,241,.12); color: #818cf8; }
+.sp-guide-tag-rec { background: rgba(234,179,8,.12); color: #eab308; }
+.sp-guide-tag-eff { background: rgba(34,197,94,.12); color: #22c55e; }
+.sp-guide-tag-new { background: rgba(236,72,153,.12); color: #ec4899; }
 
-.sp-guide-step p {
-    font-size: 12px;
+/* ====== Guide — Interactive Cards (功能总览) ====== */
+.sp-guide-ic-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px;
+}
+.sp-guide-ic {
+    background: var(--sp-card-bg); border: 1px solid var(--sp-border);
+    border-radius: var(--sp-radius); overflow: hidden; cursor: pointer;
+    transition: all .3s cubic-bezier(.4,0,.2,1); box-shadow: var(--sp-shadow);
+}
+.sp-guide-ic:hover { border-color: rgba(99,102,241,.2); transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,.2); }
+.sp-guide-ic-banner { height: 3px; background: linear-gradient(90deg, var(--ic-color, #6366f1), transparent); }
+.sp-guide-ic-body { padding: 20px; }
+.sp-guide-ic-icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; margin-bottom: 12px;
+}
+.sp-guide-ic h4 { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.sp-guide-ic p { font-size: 12px; color: var(--sp-text-secondary); line-height: 1.6; }
+.sp-guide-ic-expand { max-height: 0; overflow: hidden; transition: max-height .35s cubic-bezier(.4,0,.2,1); }
+.sp-guide-ic.open .sp-guide-ic-expand { max-height: 250px; }
+.sp-guide-ic-detail { padding: 0 20px 16px; }
+.sp-guide-ic-detail ul { list-style: none; padding: 0; }
+.sp-guide-ic-detail li {
+    font-size: 12px; color: var(--sp-text-secondary);
+    padding: 3px 0 3px 14px; position: relative;
+}
+.sp-guide-ic-detail li::before { content: '•'; position: absolute; left: 0; color: var(--ic-color, #6366f1); }
+.sp-guide-ic-toggle {
+    display: block; text-align: center; padding: 6px;
+    font-size: 10px; color: var(--sp-text-secondary); border-top: 1px solid var(--sp-border);
+    transition: transform .2s;
+}
+.sp-guide-ic.open .sp-guide-ic-toggle i { transform: rotate(180deg); }
+
+/* ====== Guide — Keyboard Table ====== */
+.sp-guide-kb-table {
+    width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px;
+}
+.sp-guide-kb-table th {
+    text-align: left; padding: 10px 14px;
+    background: var(--sp-card-bg); color: var(--sp-text-secondary);
+    font-weight: 500; border-bottom: 1px solid var(--sp-border);
+}
+.sp-guide-kb-table td {
+    padding: 10px 14px; border-bottom: 1px solid var(--sp-border);
     color: var(--sp-text-secondary);
-    line-height: 1.5;
+}
+.sp-guide-kb-table tr:hover td { background: rgba(99,102,241,.02); }
+.sp-guide-kb-table kbd {
+    background: rgba(255,255,255,.06); padding: 2px 6px; border-radius: 4px;
+    font-size: 12px; font-family: monospace;
 }
 
-.sp-guide-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 16px;
+/* ====== Guide — Advanced Blocks ====== */
+.sp-guide-adv-block {
+    background: var(--sp-card-bg); border: 1px solid var(--sp-border);
+    border-radius: var(--sp-radius); padding: 14px 16px; margin-bottom: 12px;
+    font-size: 13px; line-height: 1.65; color: var(--sp-text-secondary);
 }
-
-.sp-guide-card {
-    background: var(--sp-card-bg);
-    border: 1px solid var(--sp-border);
-    border-radius: var(--sp-radius);
-    padding: 20px;
-    box-shadow: var(--sp-shadow);
+.sp-guide-adv-block code {
+    background: rgba(99,102,241,.1); padding: 1px 5px; border-radius: 3px; font-size: 12px;
 }
-
-.sp-guide-card-icon {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
-    background: var(--sp-accent-light);
-    color: var(--sp-accent);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-    margin-bottom: 12px;
+.sp-guide-adv-label {
+    display: inline-block; padding: 1px 6px; border-radius: 3px;
+    font-size: 10px; font-weight: 600; margin-right: 6px;
 }
-
-.sp-guide-card h4 {
-    font-size: 14px;
-    font-weight: 600;
-    margin-bottom: 10px;
-}
-
-.sp-guide-card ul {
-    list-style: none;
-    padding: 0;
-}
-
-.sp-guide-card li {
-    font-size: 12px;
-    color: var(--sp-text-secondary);
-    padding: 4px 0;
-    line-height: 1.5;
-}
-
-.sp-guide-card li strong {
-    color: var(--sp-text);
-    font-weight: 500;
-}
+.sp-guide-adv-info { background: rgba(59,130,246,.12); color: #3b82f6; }
+.sp-guide-adv-tip { background: rgba(34,197,94,.12); color: #22c55e; }
+.sp-guide-adv-warn { background: rgba(234,179,8,.12); color: #eab308; }
 
 kbd {
     display: inline-block;
@@ -564,6 +601,6 @@ body.sp-has-bg .sp-field {
 @media (max-width: 768px) {
     .sp-sidebar { display: none; }
     .sp-main { margin-left: 0; padding: 20px; }
-    .sp-guide-quick { grid-template-columns: 1fr; }
-    .sp-guide-grid { grid-template-columns: 1fr; }
+    .sp-guide-tabs { flex-wrap: wrap; }
+    .sp-guide-ic-grid { grid-template-columns: 1fr; }
 }

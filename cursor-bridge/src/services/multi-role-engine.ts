@@ -602,7 +602,7 @@ export async function runDiscussionRound(discussionId: string): Promise<Discussi
   return round;
 }
 
-export async function* streamDiscussionRound(discussionId: string): AsyncGenerator<{
+export async function* streamDiscussionRound(discussionId: string, extraContext?: string): AsyncGenerator<{
   type: 'role_start' | 'role_token' | 'role_done' | 'round_done' | 'error';
   roleId?: string;
   roleName?: string;
@@ -654,9 +654,14 @@ export async function* streamDiscussionRound(discussionId: string): AsyncGenerat
     const roleModel = resolveModelForRole(role);
     const agentId = await agentPool.createAgent({ name: `${role.nameEn}-${discussionId.slice(0, 8)}`, model: roleModel, systemPrompt });
 
-    const prompt = roundNumber === 1
-      ? `请针对以下议题发表你的专业意见：\n\n${discussion.topic}`
-      : `基于前面各位的发言，请从你的角色视角补充、回应或提出新观点。`;
+    let prompt: string;
+    if (roundNumber === 1) {
+      prompt = `请针对以下议题发表你的专业意见：\n\n${discussion.topic}`;
+    } else if (extraContext) {
+      prompt = `⚠️ 用户对之前的讨论结果进行了重新对齐调整：\n\n"${extraContext}"\n\n请基于这个新的调整方向，结合前面的讨论内容，从你的角色视角重新审视并给出修正后的意见。`;
+    } else {
+      prompt = `基于前面各位的发言，请从你的角色视角补充、回应或提出新观点。`;
+    }
 
     const t0 = Date.now();
     let fullContent = '';

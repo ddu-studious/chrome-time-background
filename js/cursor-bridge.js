@@ -1027,7 +1027,19 @@
                             </div>
                             <div class="cb-collab-step" id="cb-collab-step-discussion">
                                 <div class="cb-collab-step-title"><span class="cb-collab-step-num">3</span> 团队讨论</div>
-                                <div class="cb-collab-discussion" id="cb-collab-discussion"></div>
+                                <div class="cb-disc-toolbar" id="cb-disc-toolbar">
+                                    <div class="cb-disc-filters" id="cb-disc-filters"></div>
+                                    <div class="cb-disc-view-switcher">
+                                        <button class="cb-disc-view-btn active" data-view="timeline"><i class="fas fa-stream"></i> 时间线</button>
+                                        <button class="cb-disc-view-btn" data-view="summary"><i class="fas fa-file-lines"></i> 总结</button>
+                                    </div>
+                                </div>
+                                <div class="cb-collab-discussion cb-disc-timeline-wrap" id="cb-collab-discussion"></div>
+                                <div class="cb-disc-summary-view" id="cb-disc-summary" style="display:none"></div>
+                                <div class="cb-realign-input-wrap" id="cb-realign-input-wrap" style="display:none">
+                                    <div class="cb-realign-label"><i class="fas fa-bullseye"></i> 对齐调整说明</div>
+                                    <textarea id="cb-realign-input" rows="3" placeholder="描述需要调整的内容，例如：API 接口不要用 REST，改用 GraphQL..."></textarea>
+                                </div>
                                 <div class="cb-collab-actions">
                                     <button class="cb-btn cb-btn-primary" id="cb-collab-next-round"><i class="fas fa-forward"></i> 下一轮讨论</button>
                                     <button class="cb-btn cb-btn-secondary" id="cb-collab-conclude"><i class="fas fa-gavel"></i> 总结决策</button>
@@ -1037,6 +1049,7 @@
                                 <div class="cb-collab-step-title"><span class="cb-collab-step-num">4</span> 结果报告</div>
                                 <div class="cb-collab-report" id="cb-collab-report"></div>
                                 <div class="cb-collab-actions">
+                                    <button class="cb-btn cb-btn-warning" id="cb-collab-back-discussion"><i class="fas fa-rotate-left"></i> 返回讨论 · 重新对齐</button>
                                     <button class="cb-btn cb-btn-secondary" id="cb-collab-new-task"><i class="fas fa-plus"></i> 新任务</button>
                                 </div>
                             </div>
@@ -3396,6 +3409,8 @@
         }
 
         _getRoleInfo(roleId) {
+            if (roleId === '_user') return { id: '_user', name: '你', icon: '👤', nameEn: 'User', color: '#22c55e', modelTier: 'balanced', resolvedModel: '', modelOverride: null };
+            if (roleId === '_system') return { id: '_system', name: '系统', icon: '⚙️', nameEn: 'System', color: '#6b7280', modelTier: 'balanced', resolvedModel: '', modelOverride: null };
             const role = this._collabRoleMap[roleId];
             return {
                 id: roleId,
@@ -3458,23 +3473,91 @@
                 this._collabState = { taskId: null, discussionId: null, step: 'input' };
                 this._collabGoToStep('input');
             });
+
+            modal.querySelector('#cb-collab-back-discussion')?.addEventListener('click', () => this._collabBackToDiscussion());
+
+            modal.querySelectorAll('.cb-collab-prog-dot').forEach(dot => {
+                dot.addEventListener('click', () => {
+                    const targetStep = dot.dataset.step;
+                    const steps = ['input', 'analysis', 'discussion', 'report'];
+                    const targetIdx = steps.indexOf(targetStep);
+                    const maxReached = this._collabState._maxStepReached || 0;
+                    if (targetIdx <= maxReached) {
+                        this._collabGoToStep(targetStep, true);
+                    }
+                });
+            });
+
+            modal.querySelectorAll('.cb-disc-view-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    modal.querySelectorAll('.cb-disc-view-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    this._discActiveView = btn.dataset.view;
+                    const disc = modal.querySelector('#cb-collab-discussion');
+                    const summ = modal.querySelector('#cb-disc-summary');
+                    if (btn.dataset.view === 'summary') {
+                        if (disc) disc.style.display = 'none';
+                        if (summ) { summ.style.display = ''; this._renderDiscSummary(); }
+                    } else {
+                        if (disc) disc.style.display = '';
+                        if (summ) summ.style.display = 'none';
+                    }
+                });
+            });
         }
 
-        _collabGoToStep(step) {
+        _renderDiscSummary() {
+            const container = this._panelEl?.querySelector('#cb-disc-summary');
+            if (!container) return;
+            const msgs = this._collabMessages.filter(m => !m._typing && !m._separator && !m.roleId?.startsWith('_') && m.content);
+            if (!msgs.length) { container.innerHTML = '<p style="color:rgba(255,255,255,.35);font-size:12px">暂无讨论内容</p>'; return; }
+            const byRole = {};
+            msgs.forEach(m => {
+                if (!byRole[m.roleId]) byRole[m.roleId] = [];
+                byRole[m.roleId].push(m);
+            });
+            let html = '<h4>讨论总结</h4>';
+            for (const [rid, rmsgs] of Object.entries(byRole)) {
+                const info = this._getRoleInfo(rid);
+                const color = info.color || '#6366f1';
+                html += `<div class="cb-disc-summary-section">
+                    <h5 style="color:${color}"><i class="fas fa-user" style="font-size:10px"></i> ${info.name}（${rmsgs.length} 条发言）</h5>
+                    <ul>${rmsgs.map(m => `<li><strong>第${m.round}轮：</strong>${m.content.slice(0, 120)}${m.content.length > 120 ? '…' : ''}</li>`).join('')}</ul>
+                </div>`;
+            }
+            html += `<div class="cb-disc-summary-actions">
+                <button class="cb-btn cb-btn-secondary" id="cb-disc-copy-all"><i class="fas fa-copy"></i> 复制全文</button>
+            </div>`;
+            container.innerHTML = html;
+            container.querySelector('#cb-disc-copy-all')?.addEventListener('click', () => {
+                const text = msgs.map(m => `${this._getRoleInfo(m.roleId).name}(第${m.round}轮):\n${m.content}`).join('\n\n');
+                navigator.clipboard.writeText(text).then(() => this._showToast('已复制到剪贴板', 'success'));
+            });
+        }
+
+        _collabGoToStep(step, isBrowsing) {
             this._collabState.step = step;
+            const steps = ['input', 'analysis', 'discussion', 'report'];
+            const curIdx = steps.indexOf(step);
+
+            if (!isBrowsing) {
+                const prev = this._collabState._maxStepReached || 0;
+                if (curIdx > prev) this._collabState._maxStepReached = curIdx;
+            }
+            const maxReached = this._collabState._maxStepReached || 0;
+
             const modal = this._panelEl?.querySelector('#cb-collab-modal');
             if (!modal) return;
             modal.querySelectorAll('.cb-collab-step').forEach(el => el.classList.remove('active'));
             modal.querySelector(`#cb-collab-step-${step}`)?.classList.add('active');
-            const steps = ['input', 'analysis', 'discussion', 'report'];
             modal.querySelectorAll('.cb-collab-prog-dot').forEach(dot => {
                 const idx = steps.indexOf(dot.dataset.step);
-                const curIdx = steps.indexOf(step);
-                dot.classList.toggle('active', idx <= curIdx);
+                dot.classList.toggle('active', idx <= maxReached);
                 dot.classList.toggle('current', idx === curIdx);
+                dot.classList.toggle('clickable', idx <= maxReached);
             });
             modal.querySelectorAll('.cb-collab-prog-line').forEach((line, i) => {
-                line.classList.toggle('active', i < steps.indexOf(step));
+                line.classList.toggle('active', i < maxReached);
             });
         }
 
@@ -3619,6 +3702,7 @@
             try {
                 await this._api(`/tasks/${taskId}/approve`, { method: 'PATCH', body: '{}' });
                 const taskData = await this._api(`/tasks/${taskId}`);
+                this._collabState._cachedTaskData = taskData;
                 const roles = (taskData?.recommendedRoles || []).map(r => r.roleId || r.id).filter(Boolean);
                 const disc = await this._api(`/tasks/${taskId}/discussions`, {
                     method: 'POST',
@@ -3649,6 +3733,9 @@
 
         _collabMessages = [];
 
+        _discActiveFilter = 'all';
+        _discActiveView = 'timeline';
+
         _renderCollabDiscussion(messages) {
             const container = this._panelEl?.querySelector('#cb-collab-discussion');
             if (!container) return;
@@ -3656,12 +3743,25 @@
                 container.innerHTML = '<div class="cb-collab-disc-empty"><i class="fas fa-comments"></i><p>讨论即将开始…</p></div>';
                 return;
             }
-            container.innerHTML = messages.map(m => {
+            this._updateDiscFilters(messages);
+            const filter = this._discActiveFilter;
+            let lastRound = 0;
+            const frags = [];
+            messages.forEach((m, idx) => {
+                if (m._separator) {
+                    frags.push(`<div class="cb-disc-realign-div"><i class="fas fa-rotate-left"></i> ${m.content.replace(/\n/g, '<br>')}</div>`);
+                    return;
+                }
+                if (m.round && m.round !== lastRound) {
+                    frags.push(`<div class="cb-disc-round-div">第 ${m.round} 轮讨论</div>`);
+                    lastRound = m.round;
+                }
                 const info = this._getRoleInfo(m.roleId);
+                const color = info.color || '#6366f1';
                 const isTyping = m._typing;
                 const isStreaming = m._streaming && !m._typing;
                 const streamAttr = (isStreaming || isTyping) ? ` data-stream-role="${m.roleId}-${m.round}"` : '';
-                const roundLabel = m.round ? `第${m.round}轮` : '';
+                const hidden = (filter !== 'all' && m.roleId !== filter) ? ' cb-disc-hidden' : '';
                 let contentHtml;
                 if (isTyping) {
                     contentHtml = '<span class="cb-typing-dots"><span></span><span></span><span></span></span>';
@@ -3670,19 +3770,97 @@
                 } else {
                     contentHtml = this._formatDiscussionContent(m.content || '');
                 }
-                return `
-                <div class="cb-collab-msg${isTyping ? ' cb-collab-msg-typing' : ''}${isStreaming ? ' cb-collab-msg-streaming' : ''}"${streamAttr}>
-                    <div class="cb-collab-msg-avatar" style="background:${info.color || '#6366f1'}">${(info.icon || '🤖').replace(/<[^>]+>/g, '').trim().slice(0, 2)}</div>
-                    <div class="cb-collab-msg-body">
-                        <div class="cb-collab-msg-header">
-                            <span class="cb-collab-msg-role">${info.name}</span>
-                            <span class="cb-collab-msg-meta">${roundLabel}${m.elapsed ? ` · ${(m.elapsed / 1000).toFixed(1)}s` : ''}</span>
-                        </div>
-                        <div class="cb-collab-msg-content">${contentHtml}</div>
+                const avatar = (info.icon || '🤖').replace(/<[^>]+>/g, '').trim().slice(0, 2);
+                const elapsedStr = m.elapsed ? ` · ${(m.elapsed / 1000).toFixed(1)}s` : '';
+                const dotActive = isTyping || isStreaming ? ' active' : '';
+                frags.push(`
+                <div class="cb-collab-msg${isTyping ? ' cb-collab-msg-typing' : ''}${isStreaming ? ' cb-collab-msg-streaming' : ''}${hidden}" data-role="${m.roleId}"${streamAttr} data-msg-idx="${idx}">
+                    <div class="cb-disc-dot${dotActive}" style="background:${color}"></div>
+                    <div class="cb-collab-msg-header">
+                        <div class="cb-collab-msg-avatar" style="background:${color}">${avatar}</div>
+                        <span class="cb-collab-msg-role">${info.name}</span>
+                        <span class="cb-disc-tag" style="background:${color}22;color:${color}">${info.nameEn || m.roleId}</span>
+                        <span class="cb-collab-msg-meta">${m.round ? `第${m.round}轮` : ''}${elapsedStr}</span>
                     </div>
-                </div>
-            `; }).join('');
+                    <div class="cb-collab-msg-body">
+                        <button class="cb-disc-edit-btn" data-idx="${idx}"><i class="fas fa-pen"></i></button>
+                        <div class="cb-collab-msg-content">${contentHtml}</div>
+                        <div class="cb-disc-edit-actions" data-idx="${idx}">
+                            <button class="cb-disc-save-btn" data-idx="${idx}"><i class="fas fa-check"></i> 保存</button>
+                            <button class="cb-disc-cancel-btn" data-idx="${idx}">取消</button>
+                        </div>
+                    </div>
+                </div>`);
+            });
+            container.innerHTML = frags.join('');
+            this._bindDiscEditEvents(container);
             container.scrollTop = container.scrollHeight;
+        }
+
+        _updateDiscFilters(messages) {
+            const bar = this._panelEl?.querySelector('#cb-disc-filters');
+            if (!bar) return;
+            const roles = [...new Set(messages.filter(m => !m._separator && !m.roleId?.startsWith('_')).map(m => m.roleId))];
+            const filter = this._discActiveFilter;
+            let html = `<button class="cb-disc-filter-btn${filter === 'all' ? ' active' : ''}" data-filter="all">全部</button>`;
+            roles.forEach(rid => {
+                const info = this._getRoleInfo(rid);
+                const c = info.color || '#6366f1';
+                const av = (info.icon || '🤖').replace(/<[^>]+>/g, '').trim().slice(0, 1);
+                html += `<button class="cb-disc-filter-btn${filter === rid ? ' active' : ''}" data-filter="${rid}">
+                    <span class="cb-filter-av" style="background:${c}">${av}</span>${info.name}</button>`;
+            });
+            bar.innerHTML = html;
+            bar.querySelectorAll('.cb-disc-filter-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    this._discActiveFilter = btn.dataset.filter;
+                    this._renderCollabDiscussion(this._collabMessages);
+                });
+            });
+        }
+
+        _bindDiscEditEvents(container) {
+            container.querySelectorAll('.cb-disc-edit-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const idx = +btn.dataset.idx;
+                    const msgEl = container.querySelector(`[data-msg-idx="${idx}"]`);
+                    if (!msgEl) return;
+                    const contentEl = msgEl.querySelector('.cb-collab-msg-content');
+                    const actionsEl = msgEl.querySelector('.cb-disc-edit-actions');
+                    contentEl.contentEditable = true;
+                    contentEl.focus();
+                    actionsEl.classList.add('show');
+                    btn.style.display = 'none';
+                });
+            });
+            container.querySelectorAll('.cb-disc-save-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const idx = +btn.dataset.idx;
+                    const msgEl = container.querySelector(`[data-msg-idx="${idx}"]`);
+                    if (!msgEl) return;
+                    const contentEl = msgEl.querySelector('.cb-collab-msg-content');
+                    this._collabMessages[idx].content = contentEl.innerText;
+                    this._collabMessages[idx]._edited = true;
+                    contentEl.contentEditable = false;
+                    msgEl.querySelector('.cb-disc-edit-actions').classList.remove('show');
+                    msgEl.querySelector('.cb-disc-edit-btn').style.display = '';
+                });
+            });
+            container.querySelectorAll('.cb-disc-cancel-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const idx = +btn.dataset.idx;
+                    const msgEl = container.querySelector(`[data-msg-idx="${idx}"]`);
+                    if (!msgEl) return;
+                    const contentEl = msgEl.querySelector('.cb-collab-msg-content');
+                    contentEl.innerHTML = this._formatDiscussionContent(this._collabMessages[idx].content || '');
+                    contentEl.contentEditable = false;
+                    msgEl.querySelector('.cb-disc-edit-actions').classList.remove('show');
+                    msgEl.querySelector('.cb-disc-edit-btn').style.display = '';
+                });
+            });
         }
 
         _formatDiscussionContent(raw) {
@@ -3699,25 +3877,37 @@
         }
 
         _appendTypingIndicator(roleId, roleName, round) {
+            const idx = this._collabMessages.length;
             this._collabMessages.push({ roleId, round, content: '', _typing: true, _streaming: true });
             const container = this._panelEl?.querySelector('#cb-collab-discussion');
             if (!container) return;
             const emptyEl = container.querySelector('.cb-collab-disc-empty');
             if (emptyEl) emptyEl.remove();
             const info = this._getRoleInfo(roleId);
+            const color = info.color || '#6366f1';
+            const avatar = (info.icon || '🤖').replace(/<[^>]+>/g, '').trim().slice(0, 2);
             const roundLabel = round ? `第${round}轮` : '';
-            const msgHtml = `
-                <div class="cb-collab-msg cb-collab-msg-typing cb-collab-msg-streaming" data-stream-role="${roleId}-${round}">
-                    <div class="cb-collab-msg-avatar" style="background:${info.color || '#6366f1'}">${(info.icon || '🤖').replace(/<[^>]+>/g, '').trim().slice(0, 2)}</div>
+            const lastMsg = this._collabMessages[idx - 1];
+            let prefix = '';
+            if (!lastMsg || lastMsg.round !== round) {
+                prefix = `<div class="cb-disc-round-div">第 ${round} 轮讨论</div>`;
+            }
+            const hidden = (this._discActiveFilter !== 'all' && roleId !== this._discActiveFilter) ? ' cb-disc-hidden' : '';
+            const msgHtml = `${prefix}
+                <div class="cb-collab-msg cb-collab-msg-typing cb-collab-msg-streaming${hidden}" data-role="${roleId}" data-stream-role="${roleId}-${round}" data-msg-idx="${idx}">
+                    <div class="cb-disc-dot active" style="background:${color}"></div>
+                    <div class="cb-collab-msg-header">
+                        <div class="cb-collab-msg-avatar" style="background:${color}">${avatar}</div>
+                        <span class="cb-collab-msg-role">${info.name}</span>
+                        <span class="cb-disc-tag" style="background:${color}22;color:${color}">${info.nameEn || roleId}</span>
+                        <span class="cb-collab-msg-meta">${roundLabel}</span>
+                    </div>
                     <div class="cb-collab-msg-body">
-                        <div class="cb-collab-msg-header">
-                            <span class="cb-collab-msg-role">${info.name}</span>
-                            <span class="cb-collab-msg-meta">${roundLabel}</span>
-                        </div>
                         <div class="cb-collab-msg-content"><span class="cb-typing-dots"><span></span><span></span><span></span></span></div>
                     </div>
                 </div>`;
             container.insertAdjacentHTML('beforeend', msgHtml);
+            this._updateDiscFilters(this._collabMessages);
             container.scrollTop = container.scrollHeight;
         }
 
@@ -3749,6 +3939,8 @@
             if (wrapper) {
                 wrapper.classList.remove('cb-collab-msg-typing', 'cb-collab-msg-streaming');
                 wrapper.removeAttribute('data-stream-role');
+                const dot = wrapper.querySelector('.cb-disc-dot');
+                if (dot) dot.classList.remove('active');
                 const meta = wrapper.querySelector('.cb-collab-msg-meta');
                 const roundLabel = round ? `第${round}轮` : '';
                 if (meta) meta.textContent = `${roundLabel}${elapsed ? ` · ${(elapsed / 1000).toFixed(1)}s` : ''}`;
@@ -3763,16 +3955,36 @@
             const discId = this._collabState.discussionId;
             if (!discId) { this._showToast('无讨论 ID', 'error'); return; }
 
+            let realignNote = '';
+            if (this._collabState._isRealigning) {
+                const ta = this._panelEl?.querySelector('#cb-realign-input');
+                realignNote = ta?.value?.trim() || '';
+                if (realignNote) {
+                    const userMsg = {
+                        id: `user-${Date.now()}`,
+                        roleId: '_user',
+                        content: `**对齐调整**: ${realignNote}`,
+                        round: 0,
+                    };
+                    this._collabMessages.push(userMsg);
+                    this._renderCollabDiscussion(this._collabMessages);
+                }
+                const wrapEl = this._panelEl?.querySelector('#cb-realign-input-wrap');
+                if (wrapEl) wrapEl.style.display = 'none';
+                this._collabState._isRealigning = false;
+            }
+
             const btn = this._panelEl?.querySelector('#cb-collab-next-round');
             const concludeBtn = this._panelEl?.querySelector('#cb-collab-conclude');
             if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 讨论中…'; }
             if (concludeBtn) concludeBtn.disabled = true;
 
             try {
+                const bodyPayload = realignNote ? { context: realignNote } : {};
                 const res = await fetch(`${BRIDGE_URL}/discussions/${discId}/round/stream`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({}),
+                    body: JSON.stringify(bodyPayload),
                 });
 
                 if (!res.ok) {
@@ -4008,6 +4220,74 @@
                 this._showToast(`执行失败: ${err.message}`, 'error');
             } finally {
                 if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-play"></i> 执行全部行动项'; }
+            }
+        }
+
+        async _collabBackToDiscussion() {
+            const taskId = this._collabState.taskId;
+            if (!taskId) { this._showToast('无法返回讨论：任务不存在', 'error'); return; }
+
+            this._collabState.conclusion = null;
+            this._collabState.actionItems = null;
+            this._collabState.squadId = null;
+
+            const reportEl = this._panelEl?.querySelector('#cb-collab-report');
+            if (reportEl) reportEl.innerHTML = '';
+
+            const prevMessages = (this._collabMessages || []).filter(m => !m._typing && m.content);
+            const prevSummary = prevMessages.length
+                ? prevMessages.map(m => {
+                    const info = this._getRoleInfo(m.roleId);
+                    return `[${info.name}](第${m.round}轮): ${m.content.slice(0, 200)}`;
+                  }).join('\n')
+                : '';
+
+            const taskData = this._collabState._cachedTaskData;
+            const roles = taskData?.rolesInvolved || taskData?.roles || [];
+            const baseTopic = this._collabState.topic || '协作讨论';
+            const realignRound = (this._collabState._realignCount || 0) + 1;
+            this._collabState._realignCount = realignRound;
+
+            try {
+                const newTopic = prevSummary
+                    ? `${baseTopic}\n\n---\n以下是前一轮讨论的要点，请在此基础上继续讨论（第 ${realignRound} 次重新对齐）：\n${prevSummary}`
+                    : `${baseTopic} (第 ${realignRound} 次重新对齐)`;
+
+                const disc = await this._api(`/tasks/${taskId}/discussions`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        topic: newTopic,
+                        phase: 'discussion',
+                        roleIds: roles.length ? roles : ['product', 'architect', 'tech-lead'],
+                        maxRounds: 3,
+                    }),
+                });
+                if (disc.error) throw new Error(disc.error);
+                this._collabState.discussionId = disc.id;
+
+                const separator = {
+                    id: `sep-${Date.now()}`,
+                    roleId: '_system',
+                    content: `── 第 ${realignRound} 次重新对齐 ──\n前一轮讨论已保留，开始新一轮讨论。请在下方点击「下一轮讨论」输入对齐信息。`,
+                    round: 0,
+                    _separator: true,
+                };
+                this._collabMessages.push(separator);
+                this._renderCollabDiscussion(this._collabMessages);
+
+                this._collabGoToStep('discussion');
+
+                const wrapEl = this._panelEl?.querySelector('#cb-realign-input-wrap');
+                if (wrapEl) {
+                    wrapEl.style.display = '';
+                    const ta = wrapEl.querySelector('#cb-realign-input');
+                    if (ta) { ta.value = ''; ta.focus(); }
+                }
+                this._collabState._isRealigning = true;
+
+                this._showToast('已返回讨论，请输入对齐调整说明后点击「下一轮讨论」', 'success');
+            } catch (err) {
+                this._showToast(`返回讨论失败: ${err.message}`, 'error');
             }
         }
 
