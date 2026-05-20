@@ -101,45 +101,49 @@
         },
     ];
 
-    const MODEL_FAMILIES = [
-        {
-            name: 'Claude', tab: 'Claude', iconClass: 'icon-claude', iconText: 'C',
-            models: [
-                { id: 'claude-opus-4-7', name: 'Claude Opus 4.7', desc: '最强推理能力', level: 'max', levelLabel: 'MAX' },
-                { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', desc: '平衡性能与速度', level: 'high', levelLabel: '高级' },
-                { id: 'claude-sonnet-4-5', name: 'Claude Sonnet 4.5', desc: '上代旗舰', level: 'medium', levelLabel: '标准' },
-                { id: 'claude-haiku-4-5', name: 'Claude Haiku 4.5', desc: '极速响应', level: 'fast', levelLabel: '快速' },
-            ]
-        },
-        {
-            name: 'GPT', tab: 'GPT', iconClass: 'icon-gpt', iconText: 'G',
-            models: [
-                { id: 'gpt-5.5', name: 'GPT-5.5', desc: '最新旗舰模型', level: 'max', levelLabel: 'MAX' },
-                { id: 'gpt-5.4', name: 'GPT-5.4', desc: '高级推理', level: 'high', levelLabel: '高级' },
-                { id: 'gpt-5.4-mini', name: 'GPT-5.4 Mini', desc: '快速响应', level: 'fast', levelLabel: '快速' },
-                { id: 'gpt-5.3-codex', name: 'GPT-5.3 Codex', desc: '代码专精', level: 'high', levelLabel: '代码' },
-            ]
-        },
-        {
-            name: 'Grok', tab: 'Grok', iconClass: 'icon-grok', iconText: 'X',
-            models: [
-                { id: 'grok-4.3', name: 'Grok 4.3', desc: '最新版本', level: 'high', levelLabel: '高级' },
-            ]
-        },
-        {
-            name: 'Composer', tab: 'Composer', iconClass: 'icon-composer', iconText: '★',
-            models: [
-                { id: 'composer-2', name: 'Composer 2', desc: 'Cursor 专属多文件编辑', level: 'high', levelLabel: '高级' },
-            ]
-        },
-        {
-            name: 'Gemini', tab: 'Gemini', iconClass: 'icon-gemini', iconText: '◆',
-            models: [
-                { id: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro', desc: 'Google 旗舰模型', level: 'high', levelLabel: '高级' },
-                { id: 'gemini-3-flash', name: 'Gemini 3 Flash', desc: '快速推理', level: 'fast', levelLabel: '快速' },
-            ]
-        },
+    const MODEL_FAMILY_META = [
+        { name: 'Claude', tab: 'Claude', iconClass: 'icon-claude', iconText: 'C', prefix: 'claude-', color: '#ef4444' },
+        { name: 'GPT', tab: 'GPT', iconClass: 'icon-gpt', iconText: 'G', prefix: 'gpt-', color: '#10a37f' },
+        { name: 'Grok', tab: 'Grok', iconClass: 'icon-grok', iconText: 'X', prefix: 'grok-', color: '#1d9bf0' },
+        { name: 'Composer', tab: 'Composer', iconClass: 'icon-composer', iconText: '★', prefix: 'composer-', color: '#fbbf24' },
+        { name: 'Gemini', tab: 'Gemini', iconClass: 'icon-gemini', iconText: '◆', prefix: 'gemini-', color: '#4285f4' },
+        { name: 'Kimi', tab: 'Kimi', iconClass: 'icon-kimi', iconText: 'K', prefix: 'kimi-', color: '#6366f1' },
+        { name: 'Other', tab: 'Other', iconClass: 'icon-other', iconText: '…', prefix: null, color: '#9ca3af' },
     ];
+
+    function _inferModelLevel(id) {
+        if (/opus|max|5\.5$/.test(id)) return { level: 'max', levelLabel: 'MAX' };
+        if (/codex/.test(id)) return { level: 'high', levelLabel: '代码' };
+        if (/pro|sonnet.*4-6|gpt-5\.4$|grok|composer-2\.5/.test(id)) return { level: 'high', levelLabel: '高级' };
+        if (/mini|nano|haiku|flash/.test(id)) return { level: 'fast', levelLabel: '快速' };
+        return { level: 'medium', levelLabel: '标准' };
+    }
+
+    function buildModelFamilies(apiModels) {
+        const families = MODEL_FAMILY_META.map(meta => ({ ...meta, models: [] }));
+        const otherFamily = families[families.length - 1];
+
+        for (const m of apiModels) {
+            if (m.id === 'default') continue;
+            const { level, levelLabel } = _inferModelLevel(m.id);
+            const entry = { id: m.id, name: m.displayName || m.id, desc: '', level, levelLabel };
+
+            let matched = false;
+            for (const fam of families) {
+                if (fam.prefix && m.id.startsWith(fam.prefix)) {
+                    fam.models.push(entry);
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) otherFamily.models.push(entry);
+        }
+        return families.filter(f => f.models.length > 0);
+    }
+
+    let MODEL_FAMILIES = MODEL_FAMILY_META
+        .filter(m => m.prefix)
+        .map(meta => ({ ...meta, models: [] }));
 
     const MODEL_OPTIONS = {
         options: {
@@ -500,7 +504,10 @@
         async _loadModels() {
             try {
                 const data = await this._api('/models');
-                this.models = (data.models || []).filter(m => m.id !== 'default');
+                const raw = data.models || [];
+                this.models = raw.filter(m => m.id !== 'default');
+                MODEL_FAMILIES = buildModelFamilies(raw);
+                this._renderModelSelector();
             } catch { /* non-critical */ }
         }
 
@@ -1124,7 +1131,9 @@
             const wrap = this._panelEl?.querySelector('#cb-model-selector-wrap');
             if (!wrap) return;
 
-            const favModels = ['claude-sonnet-4-6', 'gpt-5.4', 'composer-2'];
+            const defaultFavs = ['claude-sonnet-4-6', 'gpt-5.4', 'composer-2.5', 'composer-2'];
+            const allIds = new Set(MODEL_FAMILIES.flatMap(f => f.models.map(m => m.id)));
+            const favModels = defaultFavs.filter(id => allIds.has(id)).slice(0, 3);
             wrap.innerHTML = `
                 <div class="cb-model-selector">
                     <div class="cb-model-tabs">
@@ -1190,7 +1199,7 @@
                                 const fm = MODEL_FAMILIES.flatMap(f => f.models.map(m => ({ ...m, family: f }))).find(m => m.id === id);
                                 if (!fm) return '';
                                 return `<button class="cb-model-fav-chip${id === this._selectedModel ? ' active' : ''}" data-fav-model="${id}">
-                                    <span class="cb-fav-dot" style="background:${fm.family.iconClass === 'icon-claude' ? '#ef4444' : fm.family.iconClass === 'icon-gpt' ? '#10a37f' : '#fbbf24'}"></span>
+                                    <span class="cb-fav-dot" style="background:${fm.family.color || '#9ca3af'}"></span>
                                     ${fm.name}
                                 </button>`;
                             }).join('')}
@@ -3532,7 +3541,7 @@
                         <div class="cb-collab-kv"><span>类型</span><strong>${summary.type || '-'}</strong></div>
                         <div class="cb-collab-kv"><span>规模</span><strong>${summary.scope || summary.scale || '-'}</strong></div>
                         <div class="cb-collab-kv"><span>复杂度</span><strong>${summary.estimatedComplexity || summary.complexity || '-'}</strong></div>
-                        <div class="cb-collab-kv"><span>技术栈</span><strong>${(summary.techStack || []).join(', ') || '-'}</strong></div>
+                        <div class="cb-collab-kv"><span>技术栈</span><strong>${(() => { const ts = summary.techStack || summary.tech_stack || summary.technologies || []; return (Array.isArray(ts) ? ts.join(', ') : String(ts)) || '-'; })()}</strong></div>
                     </div>
                 </div>
                 <div class="cb-collab-card">
@@ -3691,21 +3700,41 @@
 
         _appendTypingIndicator(roleId, roleName, round) {
             this._collabMessages.push({ roleId, round, content: '', _typing: true, _streaming: true });
-            this._renderCollabDiscussion(this._collabMessages);
+            const container = this._panelEl?.querySelector('#cb-collab-discussion');
+            if (!container) return;
+            const emptyEl = container.querySelector('.cb-collab-disc-empty');
+            if (emptyEl) emptyEl.remove();
+            const info = this._getRoleInfo(roleId);
+            const roundLabel = round ? `第${round}轮` : '';
+            const msgHtml = `
+                <div class="cb-collab-msg cb-collab-msg-typing cb-collab-msg-streaming" data-stream-role="${roleId}-${round}">
+                    <div class="cb-collab-msg-avatar" style="background:${info.color || '#6366f1'}">${(info.icon || '🤖').replace(/<[^>]+>/g, '').trim().slice(0, 2)}</div>
+                    <div class="cb-collab-msg-body">
+                        <div class="cb-collab-msg-header">
+                            <span class="cb-collab-msg-role">${info.name}</span>
+                            <span class="cb-collab-msg-meta">${roundLabel}</span>
+                        </div>
+                        <div class="cb-collab-msg-content"><span class="cb-typing-dots"><span></span><span></span><span></span></span></div>
+                    </div>
+                </div>`;
+            container.insertAdjacentHTML('beforeend', msgHtml);
+            container.scrollTop = container.scrollHeight;
         }
 
         _appendStreamToken(roleId, round, token) {
             const idx = this._collabMessages.findIndex(m => m.roleId === roleId && m.round === round && m._streaming);
-            if (idx >= 0) {
-                this._collabMessages[idx].content += token;
-                this._collabMessages[idx]._typing = false;
-                const msgEl = this._panelEl?.querySelector(`[data-stream-role="${roleId}-${round}"] .cb-collab-msg-content`);
+            if (idx < 0) return;
+            this._collabMessages[idx].content += token;
+            this._collabMessages[idx]._typing = false;
+
+            const wrapper = this._panelEl?.querySelector(`[data-stream-role="${roleId}-${round}"]`);
+            if (wrapper) {
+                wrapper.classList.remove('cb-collab-msg-typing');
+                const msgEl = wrapper.querySelector('.cb-collab-msg-content');
                 if (msgEl) {
                     msgEl.innerHTML = this._formatDiscussionContent(this._collabMessages[idx].content) + '<span class="cb-stream-cursor"></span>';
-                    msgEl.closest('.cb-collab-msg')?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-                } else {
-                    this._renderCollabDiscussion(this._collabMessages);
                 }
+                wrapper.scrollIntoView({ behavior: 'smooth', block: 'end' });
             }
         }
 
@@ -3716,7 +3745,18 @@
             } else {
                 this._collabMessages.push({ roleId, round, content, elapsed, _typing: false, _streaming: false });
             }
-            this._renderCollabDiscussion(this._collabMessages);
+            const wrapper = this._panelEl?.querySelector(`[data-stream-role="${roleId}-${round}"]`);
+            if (wrapper) {
+                wrapper.classList.remove('cb-collab-msg-typing', 'cb-collab-msg-streaming');
+                wrapper.removeAttribute('data-stream-role');
+                const meta = wrapper.querySelector('.cb-collab-msg-meta');
+                const roundLabel = round ? `第${round}轮` : '';
+                if (meta) meta.textContent = `${roundLabel}${elapsed ? ` · ${(elapsed / 1000).toFixed(1)}s` : ''}`;
+                const msgEl = wrapper.querySelector('.cb-collab-msg-content');
+                if (msgEl) msgEl.innerHTML = this._formatDiscussionContent(content || '');
+            } else {
+                this._renderCollabDiscussion(this._collabMessages);
+            }
         }
 
         async _collabNextRound() {
@@ -3864,15 +3904,15 @@
                     `).join('')}</ul>
                 </div>
                 <div class="cb-collab-exec-actions">
-                    <div class="cb-collab-dir-row">
-                        <label class="cb-collab-dir-label"><i class="fas fa-folder"></i> 输出目录</label>
-                        <input type="text" id="cb-collab-output-dir" class="cb-collab-dir-field" placeholder="可选，如 /path/to/project">
-                    </div>
-                    <div class="cb-collab-exec-btns">
-                        <button class="cb-btn cb-btn-primary" id="cb-collab-execute-all">
+                    <div class="cb-collab-exec-toolbar">
+                        <div class="cb-collab-dir-input-wrap">
+                            <i class="fas fa-folder cb-collab-dir-icon"></i>
+                            <input type="text" id="cb-collab-output-dir" class="cb-collab-dir-field" placeholder="可选，如 /path/to/project">
+                        </div>
+                        <button class="cb-btn cb-btn-primary cb-exec-toolbar-btn" id="cb-collab-execute-all">
                             <i class="fas fa-play"></i> 执行全部行动项
                         </button>
-                        <button class="cb-btn cb-btn-purple" id="cb-collab-save-writing">
+                        <button class="cb-btn cb-btn-purple cb-exec-toolbar-btn" id="cb-collab-save-writing">
                             <i class="fas fa-feather-alt"></i> 保存到写作空间
                         </button>
                     </div>
@@ -3943,19 +3983,22 @@
                     const statusEl = this._panelEl?.querySelector(`#cb-action-status-${i}`);
                     if (statusEl) statusEl.innerHTML = '<i class="fas fa-spinner fa-spin" style="color:#a78bfa"></i>';
 
-                    appendLog(`<div class="cb-exec-log-line cb-exec-info">⚙️ [${i + 1}/${squad.tasks.length}] 执行: ${t.title}</div>`);
+                    const logId = `cb-exec-active-${Date.now()}`;
+                    appendLog(`<div class="cb-exec-log-line cb-exec-running" id="${logId}"><span class="cb-exec-pulse"></span> <span class="cb-exec-step-label">[${i + 1}/${squad.tasks.length}]</span> ${t.title} <span class="cb-exec-dots"><span>.</span><span>.</span><span>.</span></span></div>`);
 
                     try {
                         const result = await this._api(`/squads/${squad.id}/execute/${t.id}`, { method: 'POST' });
                         if (result.error) throw new Error(result.error);
 
                         if (statusEl) statusEl.innerHTML = '<i class="fas fa-check-circle" style="color:#4ade80"></i>';
+                        const activeLine = logEl?.querySelector(`#${logId}`);
+                        if (activeLine) { activeLine.className = 'cb-exec-log-line cb-exec-success'; activeLine.innerHTML = `✅ 完成: ${t.title}`; }
                         const preview = (result.output || '').slice(0, 300).replace(/</g, '&lt;');
-                        appendLog(`<div class="cb-exec-log-line cb-exec-success">✅ 完成: ${t.title}</div>`);
-                        appendLog(`<pre class="cb-exec-output-pre">${preview}${result.output?.length > 300 ? '\n...' : ''}</pre>`);
+                        if (preview) appendLog(`<pre class="cb-exec-output-pre">${preview}${result.output?.length > 300 ? '\n...' : ''}</pre>`);
                     } catch (err) {
                         if (statusEl) statusEl.innerHTML = '<i class="fas fa-times-circle" style="color:#f87171"></i>';
-                        appendLog(`<div class="cb-exec-log-line cb-exec-error">❌ 失败: ${t.title} — ${err.message}</div>`);
+                        const activeLine = logEl?.querySelector(`#${logId}`);
+                        if (activeLine) { activeLine.className = 'cb-exec-log-line cb-exec-error'; activeLine.innerHTML = `❌ 失败: ${t.title} — ${err.message}`; }
                     }
                 }
 

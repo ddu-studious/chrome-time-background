@@ -14,6 +14,8 @@
     <link rel="stylesheet" href="css/blog.css">
     <link rel="stylesheet" href="css/snake-game.css">
     <link rel="stylesheet" href="css/tetris-game.css">
+    <link rel="stylesheet" href="css/tetris-3d-game.css">
+    <link rel="stylesheet" href="css/dock-manager.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
@@ -278,6 +280,10 @@
             <i class="fas fa-th"></i>
         </button>
         <div class="dock-divider" aria-hidden="true"></div>
+        <button class="dock-btn" id="tetris-3d-dock-btn" title="立体方块">
+            <i class="fas fa-cube"></i>
+        </button>
+        <div class="dock-divider" aria-hidden="true"></div>
         <button class="dock-btn" id="agent-dock-btn" title="Agent 矩阵">
             <i class="fas fa-robot"></i>
             <span class="cb-dock-indicator disconnected"></span>
@@ -331,6 +337,28 @@
         <div class="tetris-game-hint">← → / A D 平移，↑ / K / X 旋转，↓ / S 软降，C / End 硬降，空格暂停。</div>
     </div>
 
+    <div class="tetris-3d-game-panel" id="tetris-3d-game-panel" tabindex="-1" aria-label="立体方块游戏面板">
+        <div class="tetris-3d-game-header">
+            <span class="tetris-3d-game-title"><i class="fas fa-cube"></i> 立体方块</span>
+            <span class="tetris-3d-render-badge" id="tetris-3d-render-mode" title="渲染模式">—</span>
+            <button class="tetris-3d-game-close" id="tetris-3d-game-close" aria-label="关闭">×</button>
+        </div>
+        <div class="tetris-3d-viewport" id="tetris-3d-viewport" data-logical-width="300" data-logical-height="600"></div>
+        <div class="tetris-3d-game-footer">
+            <div class="tetris-3d-game-meta">
+                <span>得分：<strong id="tetris-3d-game-score">0</strong></span>
+                <span>消除行数：<strong id="tetris-3d-game-lines">0</strong></span>
+                <span id="tetris-3d-game-status">已就绪，点击「开始」启动</span>
+            </div>
+            <div class="tetris-3d-game-actions">
+                <button class="tetris-3d-game-btn secondary" id="tetris-3d-sound-toggle" type="button" aria-pressed="true">音效开</button>
+                <button class="tetris-3d-game-btn" id="tetris-3d-game-toggle">开始</button>
+                <button class="tetris-3d-game-btn secondary" id="tetris-3d-game-restart">重新开始</button>
+            </div>
+        </div>
+        <div class="tetris-3d-game-hint">← → / A D 平移，↑ / K / X 旋转，↓ / S 软降，C / End 硬降，空格暂停。点击面板获取焦点后再操作。</div>
+    </div>
+
     <script src="vendor/marked.min.js"></script>
     <script src="vendor/purify.min.js"></script>
     <script src="vendor/highlight.min.js"></script>
@@ -367,6 +395,13 @@
     <script src="js/snake-game.js"></script>
     <script src="js/tetris-effect-tiers.js"></script>
     <script src="js/tetris-game.js"></script>
+    <script src="js/webgl-capability-probe.js"></script>
+    <script src="js/tetris-3d-voxel-mapper.js"></script>
+    <script src="js/tetris-3d-fx.js"></script>
+    <script src="js/tetris-3d-platform.js"></script>
+    <script src="js/tetris-3d-renderer.js"></script>
+    <script src="js/tetris-3d-game.js"></script>
+    <script src="js/dock-manager.js"></script>
     <script src="js/main.js"></script>
   </body>
 </html>

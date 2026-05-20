@@ -1,9 +1,11 @@
 # 需求文档索引
 
-> 最后更新：2026-05-14
+> 最后更新：2026-05-20
 
 | 更新日期 | 文档 | 标题 |
 |----------|------|------|
+| 2026-05-20 | [br-tetris-3d-mvp-v1.md](br-tetris-3d-mvp-v1.md) | 立体方块 MVP 业务规则表 v1（BR-GAME/BR-SCORE/BR-VALID · UAT） |
+| 2026-05-20 | [prd-tetris-3d-v1.1.md](prd-tetris-3d-v1.1.md) | 立体方块（2.5D）v1.1 — Dock 小游戏 MVP |
 | 2026-05-11 | [prd-cursor-bridge.md](prd-cursor-bridge.md) | Cursor Bridge — 本地多 Agent 矩阵开发平台 |
 | 2026-05-11 | [prd-cursor-bridge-v1.0.md](prd-cursor-bridge-v1.0.md) | Cursor Bridge v1.0 — 完整矩阵视图需求规格 |
 | 2026-05-11 | [prd-blog-ai-autocomplete.md](prd-blog-ai-autocomplete.md) | 写作空间 AI 智能联想 |

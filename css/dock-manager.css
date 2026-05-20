@@ -1,0 +1,356 @@
+/* ─── Dock Manager Styles ─── */
+
+/* Drag & Drop */
+.dock-btn[draggable="true"] {
+    cursor: grab;
+    transition: transform 0.2s, opacity 0.2s, box-shadow 0.2s;
+}
+.dock-btn[draggable="true"]:active {
+    cursor: grabbing;
+}
+.dock-btn.dock-dragging {
+    opacity: 0.4;
+    transform: scale(0.9);
+}
+.dock-btn.dock-drop-before {
+    box-shadow: -3px 0 0 0 rgba(99, 102, 241, 0.8);
+}
+.dock-btn.dock-drop-after {
+    box-shadow: 3px 0 0 0 rgba(99, 102, 241, 0.8);
+}
+
+/* Add Animation */
+@keyframes dock-pop-in {
+    0% { transform: scale(0); opacity: 0; }
+    60% { transform: scale(1.15); opacity: 1; }
+    100% { transform: scale(1); }
+}
+.dock-add-anim {
+    animation: dock-pop-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Launchpad Button */
+.dock-launchpad-btn {
+    position: relative;
+}
+.dock-launchpad-btn i {
+    font-size: 14px;
+}
+
+/* ─── Group Buttons ─── */
+
+.dock-group-btn {
+    position: relative;
+    padding: 4px !important;
+}
+.dock-group-preview {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 1px;
+    width: 22px;
+    height: 22px;
+}
+.dock-group-preview-icon {
+    font-size: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+/* Group Popover */
+.dock-group-popover {
+    position: fixed;
+    z-index: 10001;
+    background: rgba(20, 20, 35, 0.95);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-radius: 12px;
+    padding: 12px;
+    min-width: 160px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px) scale(0.95);
+    transition: opacity 0.2s, transform 0.2s;
+}
+.dock-group-popover.open {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+}
+.dock-group-popover-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+    padding: 0 4px;
+}
+.dock-group-popover-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+.dock-group-popover-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 6px;
+    border-radius: 8px;
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.8);
+    cursor: pointer;
+    transition: background 0.15s;
+    font-size: 10px;
+}
+.dock-group-popover-item:hover {
+    background: rgba(99, 102, 241, 0.2);
+}
+.dock-group-popover-item i {
+    font-size: 16px;
+    color: rgba(167, 139, 250, 0.8);
+}
+.dock-group-popover-item span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 60px;
+}
+
+/* ─── Launchpad ─── */
+
+.dock-launchpad {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+.dock-launchpad.open {
+    pointer-events: auto;
+    opacity: 1;
+}
+.dock-launchpad-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(20px);
+}
+.dock-launchpad-content {
+    position: relative;
+    z-index: 1;
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+    height: 100%;
+    overflow-y: auto;
+    transform: translateY(20px) scale(0.97);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.dock-launchpad.open .dock-launchpad-content {
+    transform: translateY(0) scale(1);
+}
+
+/* Header */
+.dock-launchpad-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 28px;
+}
+.dock-launchpad-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    margin: 0;
+    white-space: nowrap;
+}
+.dock-launchpad-title i {
+    margin-right: 8px;
+    color: rgba(167, 139, 250, 0.8);
+}
+.dock-launchpad-search-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    padding: 0 12px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.dock-launchpad-search-wrap:focus-within {
+    border-color: rgba(99, 102, 241, 0.5);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+.dock-launchpad-search-wrap i {
+    color: rgba(255, 255, 255, 0.3);
+    font-size: 13px;
+    margin-right: 8px;
+}
+.dock-launchpad-search {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #e0e0ff;
+    font-size: 13px;
+    padding: 8px 0;
+}
+.dock-launchpad-search::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+}
+.dock-launchpad-close {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: background 0.15s, color 0.15s;
+    flex-shrink: 0;
+}
+.dock-launchpad-close:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+}
+
+/* Category */
+.dock-launchpad-category {
+    margin-bottom: 24px;
+}
+.dock-launchpad-cat-header {
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 12px;
+    padding-left: 4px;
+}
+.dock-launchpad-cat-header i {
+    margin-right: 6px;
+    color: rgba(167, 139, 250, 0.5);
+}
+.dock-launchpad-cat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 10px;
+}
+
+/* App Card */
+.dock-launchpad-app {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 14px 8px 10px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s, transform 0.15s;
+    user-select: none;
+}
+.dock-launchpad-app:hover {
+    background: rgba(99, 102, 241, 0.12);
+    border-color: rgba(99, 102, 241, 0.25);
+    transform: translateY(-2px);
+}
+.dock-launchpad-app.in-dock {
+    border-color: rgba(99, 102, 241, 0.2);
+    background: rgba(99, 102, 241, 0.06);
+}
+.dock-launchpad-app.dock-launchpad-dragging {
+    opacity: 0.5;
+    transform: scale(0.9);
+}
+.dock-launchpad-app-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: rgba(99, 102, 241, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: rgba(167, 139, 250, 0.9);
+}
+.dock-launchpad-app-name {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.7);
+    text-align: center;
+    line-height: 1.2;
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Badge (in-dock indicator) */
+.dock-launchpad-badge {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: rgba(74, 222, 128, 0.2);
+    color: #4ade80;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+}
+
+/* Toggle button (add/remove) */
+.dock-launchpad-toggle {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.4);
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    opacity: 0;
+    transition: opacity 0.2s, background 0.15s, color 0.15s;
+}
+.dock-launchpad-app:hover .dock-launchpad-toggle {
+    opacity: 1;
+}
+.dock-launchpad-toggle:hover {
+    background: rgba(99, 102, 241, 0.5);
+    color: #fff;
+}
+.dock-launchpad-app.in-dock .dock-launchpad-toggle:hover {
+    background: rgba(239, 68, 68, 0.5);
+}
+
+/* ─── Scrollbar ─── */
+.dock-launchpad-content::-webkit-scrollbar {
+    width: 6px;
+}
+.dock-launchpad-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+.dock-launchpad-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 3px;
+}

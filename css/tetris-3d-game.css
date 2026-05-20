@@ -1,0 +1,133 @@
+.tetris-3d-game-panel {
+    position: fixed;
+    right: 18px;
+    bottom: 92px;
+    width: 360px;
+    padding: 12px;
+    border-radius: 14px;
+    background: rgba(15, 23, 42, 0.94);
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    box-shadow: 0 20px 55px rgba(2, 8, 23, 0.55);
+    backdrop-filter: blur(14px);
+    z-index: 102;
+    color: #e2e8f0;
+    display: none;
+    outline: none;
+}
+
+.tetris-3d-game-panel.open {
+    display: block;
+}
+
+.tetris-3d-game-panel:focus-visible {
+    box-shadow:
+        0 20px 55px rgba(2, 8, 23, 0.55),
+        0 0 0 2px rgba(56, 189, 248, 0.45);
+}
+
+.tetris-3d-game-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 13px;
+}
+
+.tetris-3d-game-title {
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+}
+
+.tetris-3d-render-badge {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: rgba(56, 189, 248, 0.18);
+    color: #7dd3fc;
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    white-space: nowrap;
+}
+
+.tetris-3d-render-badge[data-mode='canvas2d'] {
+    background: rgba(251, 191, 36, 0.16);
+    color: #fcd34d;
+    border-color: rgba(251, 191, 36, 0.35);
+}
+
+.tetris-3d-game-close {
+    width: 26px;
+    height: 26px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    background: rgba(148, 163, 184, 0.2);
+    color: #e2e8f0;
+    flex-shrink: 0;
+}
+
+.tetris-3d-viewport {
+    width: 100%;
+    height: 420px;
+    border-radius: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    background: #020617;
+    overflow: hidden;
+    position: relative;
+}
+
+.tetris-3d-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.tetris-3d-game-footer {
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.tetris-3d-game-meta {
+    font-size: 12px;
+    color: #cbd5e1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.tetris-3d-game-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.tetris-3d-game-btn {
+    border: none;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    background: rgba(56, 189, 248, 0.22);
+    color: #e2e8f0;
+}
+
+.tetris-3d-game-btn.secondary {
+    background: rgba(148, 163, 184, 0.22);
+}
+
+.tetris-3d-game-hint {
+    margin-top: 8px;
+    font-size: 11px;
+    color: rgba(148, 163, 184, 0.95);
+    line-height: 1.45;
+}

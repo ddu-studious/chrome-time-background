@@ -41,7 +41,9 @@ EXCLUDE_PATTERNS=(
     "scripts/*"
     "test/*"
     "docs/*"
+    "cursor-bridge/*"
     "node_modules/*"
+    "vendor/three/three.module.js"
     ".git/*"
     ".cursor/*"
     ".github/*"
@@ -276,6 +278,8 @@ list_package_contents() {
         if [[ "$pattern" == *"/*" ]]; then
             local dir="${pattern%/*}"
             find_excludes+=(-not -path "./${dir}/*")
+        elif [[ "$pattern" == */* ]]; then
+            find_excludes+=(-not -path "./${pattern}")
         elif [[ "$pattern" == *.* ]]; then
             find_excludes+=(-not -name "$pattern")
         else

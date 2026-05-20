@@ -1,3 +1,5 @@
 .cursor/
 dist/
 .playwright-mcp/
+releases/archives/*.zip
+!releases/archives/.gitkeep

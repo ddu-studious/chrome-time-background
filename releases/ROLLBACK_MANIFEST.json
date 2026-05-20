@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "archives": [
+    {
+      "role": "l2-rollback-baseline",
+      "version": "3.16.0",
+      "gitRef": "HEAD",
+      "gitCommit": "87bb214384d2c07300c7ad0a8e51eee0eea4325a",
+      "archivedAt": "2026-05-20T05:16:46Z",
+      "zipFile": "chrome-time-background-v3.16.0-stable-87bb214384d2.zip",
+      "zipPath": "releases/archives/chrome-time-background-v3.16.0-stable-87bb214384d2.zip",
+      "sha256": "eb2bb9f45e3e4660aae59afef505dce016595d2c4ef1e3954075c7f1f2226cd1",
+      "sizeBytes": 2326150,
+      "gitTag": "stable/v3.16.0-pre-tetris3d-mvp",
+      "notes": "Pre-Tetris-3D-MVP stable; packaged from git tree (not working tree)."
+    }
+  ],
+  "latestStable": {
+    "role": "l2-rollback-baseline",
+    "version": "3.16.0",
+    "gitRef": "HEAD",
+    "gitCommit": "87bb214384d2c07300c7ad0a8e51eee0eea4325a",
+    "archivedAt": "2026-05-20T05:16:46Z",
+    "zipFile": "chrome-time-background-v3.16.0-stable-87bb214384d2.zip",
+    "zipPath": "releases/archives/chrome-time-background-v3.16.0-stable-87bb214384d2.zip",
+    "sha256": "eb2bb9f45e3e4660aae59afef505dce016595d2c4ef1e3954075c7f1f2226cd1",
+    "sizeBytes": 2326150,
+    "gitTag": "stable/v3.16.0-pre-tetris3d-mvp",
+    "notes": "Pre-Tetris-3D-MVP stable; packaged from git tree (not working tree)."
+  }
+}

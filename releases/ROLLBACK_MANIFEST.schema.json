@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Chrome Time Background Rollback Manifest",
+  "type": "object",
+  "required": ["schemaVersion", "archives", "latestStable"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "latestStable": { "$ref": "#/definitions/archiveEntry" },
+    "archives": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/archiveEntry" }
+    }
+  },
+  "definitions": {
+    "archiveEntry": {
+      "type": "object",
+      "required": [
+        "role",
+        "version",
+        "gitCommit",
+        "zipFile",
+        "sha256",
+        "sizeBytes",
+        "archivedAt"
+      ],
+      "properties": {
+        "role": { "type": "string" },
+        "version": { "type": "string" },
+        "gitRef": { "type": "string" },
+        "gitCommit": { "type": "string" },
+        "gitTag": { "type": ["string", "null"] },
+        "zipFile": { "type": "string" },
+        "zipPath": { "type": "string" },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "sizeBytes": { "type": "integer", "minimum": 1 },
+        "archivedAt": { "type": "string", "format": "date-time" },
+        "notes": { "type": "string" }
+      }
+    }
+  }
+}

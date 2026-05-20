@@ -1,0 +1,86 @@
+name: Tetris 3D CI Gate
+
+on:
+  push:
+    branches: [main, master, 'feature/**']
+    paths:
+      - 'js/tetris*.js'
+      - 'js/tetris-3d*.js'
+      - 'js/webgl-capability-probe.js'
+      - 'js/dock-manager.js'
+      - 'css/tetris-3d-game.css'
+      - 'css/dock-manager.css'
+      - 'vendor/three/**'
+      - 'vendor/VENDOR.lock.md'
+      - 'test/tetris*.test.js'
+      - 'index.html'
+      - 'manifest.json'
+      - 'scripts/package.sh'
+      - 'scripts/scan-package.sh'
+      - 'scripts/ci-gate.sh'
+      - '.github/workflows/tetris-3d-ci-gate.yml'
+  pull_request:
+    paths:
+      - 'js/tetris*.js'
+      - 'js/tetris-3d*.js'
+      - 'js/webgl-capability-probe.js'
+      - 'js/dock-manager.js'
+      - 'css/tetris-3d-game.css'
+      - 'css/dock-manager.css'
+      - 'vendor/three/**'
+      - 'vendor/VENDOR.lock.md'
+      - 'test/tetris*.test.js'
+      - 'index.html'
+      - 'manifest.json'
+      - 'scripts/package.sh'
+      - 'scripts/scan-package.sh'
+      - 'scripts/ci-gate.sh'
+      - '.github/workflows/tetris-3d-ci-gate.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: tetris-3d-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: Unit Tests + Package + CSP Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install scan dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ripgrep bc zip
+
+      - name: Run CI gate
+        run: ./scripts/ci-gate.sh
+
+      - name: Upload extension artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chrome-extension-zip
+          path: dist/chrome-time-background-v*.zip
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Gate summary
+        if: always()
+        run: |
+          echo "## Tetris 3D CI Gate" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 阶段 | 命令 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|------|------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 单测 | \`node --test test/tetris-game-core.test.js test/tetris-3d-voxel-mapper.test.js\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 打包 | \`./scripts/package.sh\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 扫描 | \`./scripts/scan-package.sh\` |" >> "$GITHUB_STEP_SUMMARY"

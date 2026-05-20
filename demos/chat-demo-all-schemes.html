@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>多 Agent 讨论 UI — 5 种方案对比</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0d0d1a; color: #c8c8d0; font-family: -apple-system, 'SF Pro', 'Noto Sans SC', sans-serif; min-height: 100vh; }
+
+/* === 顶部方案选择器 === */
+.scheme-bar {
+  position: sticky; top: 0; z-index: 100;
+  display: flex; align-items: center; gap: 6px;
+  padding: 12px 24px;
+  background: rgba(13,13,26,.95);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.scheme-bar h1 { font-size: 14px; font-weight: 700; color: #a78bfa; margin-right: 12px; white-space: nowrap; }
+.scheme-tab {
+  padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
+  background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06);
+  color: rgba(255,255,255,.5); cursor: pointer; transition: all .2s; white-space: nowrap;
+}
+.scheme-tab:hover { background: rgba(99,102,241,.08); color: rgba(255,255,255,.7); }
+.scheme-tab.active { background: rgba(99,102,241,.15); border-color: rgba(99,102,241,.3); color: #a78bfa; }
+
+/* === 通用容器 === */
+.scheme-panel { display: none; padding: 20px 24px; max-width: 820px; margin: 0 auto; }
+.scheme-panel.active { display: block; }
+.scheme-desc { font-size: 12px; color: rgba(255,255,255,.35); margin-bottom: 16px; padding: 10px 14px; background: rgba(255,255,255,.02); border-radius: 8px; border: 1px solid rgba(255,255,255,.04); }
+.scheme-desc strong { color: #a78bfa; }
+
+/* ====== 方案 1：轮次折叠分组 ====== */
+.s1-round { margin-bottom: 12px; border: 1px solid rgba(255,255,255,.06); border-radius: 10px; overflow: hidden; }
+.s1-round-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; background: rgba(255,255,255,.03); cursor: pointer;
+  transition: background .2s;
+}
+.s1-round-header:hover { background: rgba(255,255,255,.05); }
+.s1-round-header .chevron { font-size: 10px; color: rgba(255,255,255,.3); transition: transform .2s; }
+.s1-round.collapsed .chevron { transform: rotate(-90deg); }
+.s1-round-label { font-size: 13px; font-weight: 700; color: #818cf8; }
+.s1-round-avatars { display: flex; gap: -4px; margin-left: auto; }
+.s1-round-avatars .mini-av { width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #fff; font-weight: 700; margin-left: -4px; border: 2px solid #0d0d1a; }
+.s1-round-summary { font-size: 11px; color: rgba(255,255,255,.3); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.s1-round-body { padding: 12px 16px; }
+.s1-round.collapsed .s1-round-body { display: none; }
+.s1-msg { display: flex; gap: 10px; margin-bottom: 12px; }
+.s1-msg-av { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #fff; font-weight: 700; flex-shrink: 0; }
+.s1-msg-body { flex: 1; }
+.s1-msg-name { font-size: 12px; font-weight: 600; color: #a78bfa; margin-bottom: 2px; }
+.s1-msg-text { font-size: 13px; color: rgba(255,255,255,.65); line-height: 1.6; }
+
+/* ====== 方案 2：分栏角色视图 ====== */
+.s2-layout { display: flex; gap: 16px; height: 70vh; }
+.s2-sidebar { width: 180px; flex-shrink: 0; display: flex; flex-direction: column; gap: 4px; }
+.s2-role-btn {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  border-radius: 8px; cursor: pointer; transition: all .2s;
+  background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.04);
+}
+.s2-role-btn:hover { background: rgba(255,255,255,.06); }
+.s2-role-btn.active { background: rgba(99,102,241,.12); border-color: rgba(99,102,241,.2); }
+.s2-role-av { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #fff; font-weight: 700; }
+.s2-role-info { flex: 1; }
+.s2-role-name { font-size: 12px; font-weight: 600; color: #e0e0e8; }
+.s2-role-count { font-size: 10px; color: rgba(255,255,255,.3); }
+.s2-main { flex: 1; overflow-y: auto; padding-right: 8px; }
+.s2-msg { margin-bottom: 14px; padding: 12px 16px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06); border-radius: 10px; }
+.s2-msg-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.s2-msg-round { font-size: 10px; color: rgba(255,255,255,.3); background: rgba(255,255,255,.05); padding: 1px 8px; border-radius: 10px; }
+.s2-msg-text { font-size: 13px; color: rgba(255,255,255,.65); line-height: 1.6; }
+
+/* ====== 方案 3：时间线（GitHub Discussion） ====== */
+.s3-toolbar {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+  padding: 8px 12px; background: rgba(255,255,255,.02); border-radius: 8px;
+  border: 1px solid rgba(255,255,255,.04);
+}
+.s3-filter-btn {
+  padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
+  background: transparent; border: 1px solid rgba(255,255,255,.06);
+  color: rgba(255,255,255,.4); cursor: pointer; transition: all .2s;
+  display: flex; align-items: center; gap: 4px;
+}
+.s3-filter-btn:hover { background: rgba(255,255,255,.04); color: rgba(255,255,255,.6); }
+.s3-filter-btn.active { background: rgba(99,102,241,.12); border-color: rgba(99,102,241,.2); color: #a78bfa; }
+.s3-filter-btn .av { width: 16px; height: 16px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 8px; color: #fff; font-weight: 700; }
+.s3-timeline { position: relative; padding: 0 0 0 40px; }
+.s3-timeline::before { content: ''; position: absolute; left: 16px; top: 0; bottom: 0; width: 2px; background: linear-gradient(to bottom, rgba(99,102,241,.35), rgba(99,102,241,.05)); }
+.s3-round-div { display: flex; align-items: center; gap: 12px; margin: 20px 0 16px -40px; padding-left: 40px; font-size: 11px; color: rgba(255,255,255,.25); font-weight: 600; }
+.s3-round-div::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #6366f1; position: absolute; left: 13px; }
+.s3-round-div::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,.06); }
+.s3-item { position: relative; margin-bottom: 20px; animation: s3Fade .4s ease; }
+.s3-item.s3-hidden { display: none; }
+@keyframes s3Fade { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+.s3-dot { position: absolute; left: -32px; top: 6px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #0d0d1a; z-index: 1; }
+.s3-dot.active { box-shadow: 0 0 8px rgba(99,102,241,.5); }
+.s3-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.s3-av { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; }
+.s3-name { font-size: 13px; font-weight: 600; color: #e0e0e8; }
+.s3-tag { font-size: 10px; padding: 1px 6px; border-radius: 4px; font-weight: 600; }
+.s3-time { font-size: 10px; color: rgba(255,255,255,.2); margin-left: auto; }
+.s3-body {
+  background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06);
+  border-radius: 10px; padding: 14px 18px; font-size: 13px; line-height: 1.7; color: rgba(255,255,255,.65);
+}
+.s3-body p { margin: 4px 0; }
+.s3-body strong { color: #c4b5fd; }
+.s3-body code { background: rgba(139,92,246,.12); padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+.s3-body pre { background: rgba(0,0,0,.35); border-radius: 6px; padding: 10px; margin: 8px 0; font-size: 12px; overflow-x: auto; }
+.s3-body ul { padding-left: 16px; margin: 4px 0; }
+.s3-body li { margin: 2px 0; }
+.s3-reactions { display: flex; gap: 6px; margin-top: 8px; }
+.s3-reaction { padding: 2px 8px; border-radius: 12px; font-size: 11px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06); cursor: pointer; transition: all .2s; }
+.s3-reaction:hover { background: rgba(99,102,241,.1); border-color: rgba(99,102,241,.2); }
+.s3-typing .s3-body { border-color: rgba(99,102,241,.2); background: rgba(99,102,241,.03); }
+.s3-typing-bar { display: flex; align-items: center; gap: 6px; font-size: 12px; color: rgba(255,255,255,.35); }
+.s3-typing-bar .dots span { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: #6366f1; margin: 0 1px; animation: s3blink .8s infinite; }
+.s3-typing-bar .dots span:nth-child(2) { animation-delay: .2s; }
+.s3-typing-bar .dots span:nth-child(3) { animation-delay: .4s; }
+@keyframes s3blink { 0%,100% { opacity:.2; } 50% { opacity:1; } }
+
+/* 编辑功能 */
+.s3-edit-btn { position: absolute; top: 8px; right: 8px; opacity: 0; transition: opacity .2s; background: rgba(99,102,241,.15); border: none; color: #a78bfa; padding: 3px 8px; border-radius: 4px; font-size: 10px; cursor: pointer; }
+.s3-body:hover .s3-edit-btn { opacity: 1; }
+.s3-body[contenteditable="true"] { outline: 2px solid rgba(99,102,241,.3); background: rgba(99,102,241,.05); }
+.s3-edit-actions { display: none; gap: 6px; margin-top: 8px; }
+.s3-edit-actions.show { display: flex; }
+.s3-edit-actions button { padding: 4px 12px; border-radius: 6px; font-size: 11px; border: none; cursor: pointer; font-weight: 600; }
+.s3-save-btn { background: #6366f1; color: #fff; }
+.s3-cancel-btn { background: rgba(255,255,255,.06); color: rgba(255,255,255,.5); }
+
+/* ====== 方案 4：棋盘双列 ====== */
+.s4-board { display: flex; flex-direction: column; gap: 8px; }
+.s4-round-div { text-align: center; font-size: 11px; color: rgba(255,255,255,.2); padding: 8px 0; }
+.s4-row { display: flex; gap: 12px; }
+.s4-row.left { justify-content: flex-start; }
+.s4-row.right { justify-content: flex-end; }
+.s4-card {
+  max-width: 65%; padding: 12px 16px;
+  border-radius: 12px; position: relative;
+  background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06);
+}
+.s4-row.left .s4-card { border-left: 3px solid var(--role-color); border-radius: 2px 12px 12px 12px; }
+.s4-row.right .s4-card { border-right: 3px solid var(--role-color); border-radius: 12px 2px 12px 12px; }
+.s4-card-header { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.s4-card-av { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #fff; font-weight: 700; }
+.s4-card-name { font-size: 12px; font-weight: 600; }
+.s4-card-time { font-size: 10px; color: rgba(255,255,255,.2); margin-left: auto; }
+.s4-card-text { font-size: 13px; color: rgba(255,255,255,.65); line-height: 1.6; }
+
+/* ====== 方案 5：思维导图式 ====== */
+.s5-container { display: flex; flex-direction: column; align-items: center; gap: 32px; padding: 20px; }
+.s5-center {
+  padding: 16px 24px; background: linear-gradient(135deg, rgba(99,102,241,.15), rgba(139,92,246,.1));
+  border: 1px solid rgba(99,102,241,.25); border-radius: 12px; font-size: 14px; font-weight: 700; color: #c4b5fd;
+  text-align: center;
+}
+.s5-round { width: 100%; }
+.s5-round-label { text-align: center; font-size: 12px; color: rgba(255,255,255,.3); margin-bottom: 12px; }
+.s5-nodes { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.s5-node {
+  width: 200px; padding: 12px; border-radius: 10px;
+  background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06);
+  cursor: pointer; transition: all .2s; position: relative;
+}
+.s5-node:hover { background: rgba(255,255,255,.06); transform: translateY(-2px); }
+.s5-node.expanded { width: 100%; max-width: 600px; }
+.s5-node-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.s5-node-av { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #fff; font-weight: 700; }
+.s5-node-name { font-size: 12px; font-weight: 600; color: #e0e0e8; }
+.s5-node-preview { font-size: 11px; color: rgba(255,255,255,.4); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.s5-node.expanded .s5-node-preview { -webkit-line-clamp: unset; }
+.s5-node-line { position: absolute; top: -16px; left: 50%; width: 1px; height: 16px; background: rgba(99,102,241,.2); }
+
+/* ====== 视图切换器 (方案3增强) ====== */
+.s3-view-switcher {
+  display: flex; gap: 4px; margin-left: auto;
+  background: rgba(255,255,255,.03); border-radius: 6px; padding: 2px;
+}
+.s3-view-btn {
+  padding: 4px 10px; border-radius: 4px; font-size: 11px;
+  background: transparent; border: none; color: rgba(255,255,255,.35);
+  cursor: pointer; transition: all .2s;
+}
+.s3-view-btn:hover { color: rgba(255,255,255,.6); }
+.s3-view-btn.active { background: rgba(99,102,241,.15); color: #a78bfa; }
+
+/* 总结视图 */
+.s3-summary { display: none; padding: 16px; background: rgba(255,255,255,.02); border: 1px solid rgba(255,255,255,.06); border-radius: 10px; }
+.s3-summary.show { display: block; }
+.s3-summary h4 { font-size: 14px; color: #c4b5fd; margin-bottom: 12px; }
+.s3-summary-section { margin-bottom: 12px; }
+.s3-summary-section h5 { font-size: 12px; color: rgba(255,255,255,.5); margin-bottom: 4px; }
+.s3-summary-section p, .s3-summary-section li { font-size: 13px; color: rgba(255,255,255,.6); line-height: 1.6; }
+.s3-summary-section ul { padding-left: 16px; }
+</style>
+</head>
+<body>
+
+<div class="scheme-bar">
+  <h1><i class="fas fa-palette"></i> 方案对比</h1>
+  <div class="scheme-tab active" data-scheme="s1">方案1: 轮次折叠</div>
+  <div class="scheme-tab" data-scheme="s2">方案2: 分栏角色</div>
+  <div class="scheme-tab" data-scheme="s3">方案3: 时间线 ★</div>
+  <div class="scheme-tab" data-scheme="s4">方案4: 棋盘双列</div>
+  <div class="scheme-tab" data-scheme="s5">方案5: 思维导图</div>
+</div>
+
+<!-- ====== 方案 1 ====== -->
+<div class="scheme-panel active" id="panel-s1">
+  <div class="scheme-desc"><strong>方案 1 — 轮次折叠分组</strong>：每轮讨论可折叠/展开，折叠时显示参与者头像和摘要。点击头部展开/收起。</div>
+
+  <div class="s1-round" id="s1-r1">
+    <div class="s1-round-header" onclick="this.parentElement.classList.toggle('collapsed')">
+      <i class="fas fa-chevron-down chevron"></i>
+      <span class="s1-round-label">第 1 轮讨论</span>
+      <span class="s1-round-summary">核心 MVP、技术选型、任务拆分…</span>
+      <div class="s1-round-avatars">
+        <div class="mini-av" style="background:#6366f1">产</div>
+        <div class="mini-av" style="background:#8b5cf6">架</div>
+        <div class="mini-av" style="background:#ec4899">开</div>
+      </div>
+    </div>
+    <div class="s1-round-body">
+      <div class="s1-msg"><div class="s1-msg-av" style="background:#6366f1">产</div><div class="s1-msg-body"><div class="s1-msg-name">产品经理</div><div class="s1-msg-text"><strong>核心功能 MVP：</strong>经典贪吃蛇玩法，WASD / 方向键控制，10×10 最小网格，分数实时显示，一键重新开始。</div></div></div>
+      <div class="s1-msg"><div class="s1-msg-av" style="background:#8b5cf6">架</div><div class="s1-msg-body"><div class="s1-msg-name">架构师</div><div class="s1-msg-text"><strong>技术选型：</strong>纯 TypeScript + Canvas API，三层架构：SnakeEngine / CanvasRenderer / GameController 解耦设计。</div></div></div>
+      <div class="s1-msg"><div class="s1-msg-av" style="background:#ec4899">开</div><div class="s1-msg-body"><div class="s1-msg-name">一线开发</div><div class="s1-msg-text">架构清晰，开始编码。已拆分 T1-T4 四个子任务，先写测试再写实现。</div></div></div>
+    </div>
+  </div>
+
+  <div class="s1-round collapsed">
+    <div class="s1-round-header" onclick="this.parentElement.classList.toggle('collapsed')">
+      <i class="fas fa-chevron-down chevron"></i>
+      <span class="s1-round-label">第 2 轮讨论</span>
+      <span class="s1-round-summary">性能优化、碰撞检测算法讨论…</span>
+      <div class="s1-round-avatars">
+        <div class="mini-av" style="background:#14b8a6">技</div>
+        <div class="mini-av" style="background:#ec4899">开</div>
+      </div>
+    </div>
+    <div class="s1-round-body">
+      <div class="s1-msg"><div class="s1-msg-av" style="background:#14b8a6">技</div><div class="s1-msg-body"><div class="s1-msg-name">技术负责人</div><div class="s1-msg-text">碰撞检测建议用 Set 存储蛇身坐标，查询复杂度降到 O(1)。</div></div></div>
+      <div class="s1-msg"><div class="s1-msg-av" style="background:#ec4899">开</div><div class="s1-msg-body"><div class="s1-msg-name">一线开发</div><div class="s1-msg-text">好的，已按建议重构碰撞检测逻辑，单测全过。</div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 方案 2 ====== -->
+<div class="scheme-panel" id="panel-s2">
+  <div class="scheme-desc"><strong>方案 2 — 分栏角色视图</strong>：左侧选择角色筛选，右侧显示对应消息。点击"全部"恢复所有消息。</div>
+  <div class="s2-layout">
+    <div class="s2-sidebar">
+      <div class="s2-role-btn active" data-filter="all"><div class="s2-role-av" style="background:#6366f1"><i class="fas fa-users" style="font-size:10px"></i></div><div class="s2-role-info"><div class="s2-role-name">全部</div><div class="s2-role-count">5 条消息</div></div></div>
+      <div class="s2-role-btn" data-filter="pm"><div class="s2-role-av" style="background:#6366f1">产</div><div class="s2-role-info"><div class="s2-role-name">产品经理</div><div class="s2-role-count">1 条</div></div></div>
+      <div class="s2-role-btn" data-filter="arch"><div class="s2-role-av" style="background:#8b5cf6">架</div><div class="s2-role-info"><div class="s2-role-name">架构师</div><div class="s2-role-count">1 条</div></div></div>
+      <div class="s2-role-btn" data-filter="dev"><div class="s2-role-av" style="background:#ec4899">开</div><div class="s2-role-info"><div class="s2-role-name">一线开发</div><div class="s2-role-count">2 条</div></div></div>
+      <div class="s2-role-btn" data-filter="tl"><div class="s2-role-av" style="background:#14b8a6">技</div><div class="s2-role-info"><div class="s2-role-name">技术负责人</div><div class="s2-role-count">1 条</div></div></div>
+    </div>
+    <div class="s2-main">
+      <div class="s2-msg" data-role="pm"><div class="s2-msg-header"><div class="s2-role-av" style="background:#6366f1;width:24px;height:24px;font-size:10px">产</div><span class="s2-role-name" style="font-size:12px;color:#818cf8">产品经理</span><span class="s2-msg-round">第 1 轮</span></div><div class="s2-msg-text"><strong>核心功能 MVP：</strong>经典贪吃蛇玩法，WASD / 方向键控制，10×10 最小网格，分数实时显示，一键重新开始。</div></div>
+      <div class="s2-msg" data-role="arch"><div class="s2-msg-header"><div class="s2-role-av" style="background:#8b5cf6;width:24px;height:24px;font-size:10px">架</div><span class="s2-role-name" style="font-size:12px;color:#a78bfa">架构师</span><span class="s2-msg-round">第 1 轮</span></div><div class="s2-msg-text"><strong>技术选型：</strong>纯 TypeScript + Canvas API。三层架构解耦：SnakeEngine / CanvasRenderer / GameController。</div></div>
+      <div class="s2-msg" data-role="dev"><div class="s2-msg-header"><div class="s2-role-av" style="background:#ec4899;width:24px;height:24px;font-size:10px">开</div><span class="s2-role-name" style="font-size:12px;color:#f472b6">一线开发</span><span class="s2-msg-round">第 1 轮</span></div><div class="s2-msg-text">架构清晰，开始编码。已拆分 T1-T4 四个子任务，先写测试再写实现。TDD 走起 🚀</div></div>
+      <div class="s2-msg" data-role="tl"><div class="s2-msg-header"><div class="s2-role-av" style="background:#14b8a6;width:24px;height:24px;font-size:10px">技</div><span class="s2-role-name" style="font-size:12px;color:#2dd4bf">技术负责人</span><span class="s2-msg-round">第 2 轮</span></div><div class="s2-msg-text">碰撞检测建议用 Set 存储蛇身坐标，查询复杂度降到 O(1)。另外建议加入帧率控制。</div></div>
+      <div class="s2-msg" data-role="dev"><div class="s2-msg-header"><div class="s2-role-av" style="background:#ec4899;width:24px;height:24px;font-size:10px">开</div><span class="s2-role-name" style="font-size:12px;color:#f472b6">一线开发</span><span class="s2-msg-round">第 2 轮</span></div><div class="s2-msg-text">已按建议重构碰撞检测逻辑，单测全过。帧率控制用 requestAnimationFrame + deltaTime。</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 方案 3（推荐） ====== -->
+<div class="scheme-panel" id="panel-s3">
+  <div class="scheme-desc"><strong>方案 3 — GitHub Discussion 时间线 ★ 推荐</strong>：时间线风格 + Agent 快速筛选 + 多视图切换（时间线/总结/编辑）。支持内容编辑和保存。</div>
+
+  <div class="s3-toolbar">
+    <div class="s3-filter-btn active" data-agent="all"><i class="fas fa-users" style="font-size:10px"></i> 全部</div>
+    <div class="s3-filter-btn" data-agent="pm"><span class="av" style="background:#6366f1">产</span> 产品</div>
+    <div class="s3-filter-btn" data-agent="arch"><span class="av" style="background:#8b5cf6">架</span> 架构</div>
+    <div class="s3-filter-btn" data-agent="dev"><span class="av" style="background:#ec4899">开</span> 开发</div>
+    <div class="s3-filter-btn" data-agent="tl"><span class="av" style="background:#14b8a6">技</span> 技术</div>
+    <div class="s3-view-switcher">
+      <div class="s3-view-btn active" data-view="timeline"><i class="fas fa-stream"></i> 时间线</div>
+      <div class="s3-view-btn" data-view="summary"><i class="fas fa-file-lines"></i> 总结</div>
+    </div>
+  </div>
+
+  <div id="s3-timeline-view">
+    <div class="s3-timeline">
+      <div class="s3-round-div">第 1 轮讨论</div>
+
+      <div class="s3-item" data-agent="pm">
+        <div class="s3-dot" style="background:#6366f1"></div>
+        <div class="s3-header">
+          <div class="s3-av" style="background:#6366f1">产</div>
+          <span class="s3-name">产品经理</span>
+          <span class="s3-tag" style="background:rgba(99,102,241,.12);color:#818cf8">需求</span>
+          <span class="s3-time">20.7s</span>
+        </div>
+        <div class="s3-body" style="position:relative">
+          <button class="s3-edit-btn" onclick="toggleEdit(this)"><i class="fas fa-pen"></i> 编辑</button>
+          <p><strong>核心功能 MVP：</strong></p>
+          <ul>
+            <li>经典贪吃蛇玩法，WASD / 方向键控制</li>
+            <li>10×10 最小网格，食物随机生成</li>
+            <li>分数实时显示，游戏结束显示最终分数</li>
+            <li>一键重新开始</li>
+          </ul>
+          <p>用户故事：作为玩家，我想在浏览器里直接玩贪吃蛇。</p>
+          <div class="s3-edit-actions">
+            <button class="s3-save-btn" onclick="saveEdit(this)"><i class="fas fa-check"></i> 保存</button>
+            <button class="s3-cancel-btn" onclick="cancelEdit(this)">取消</button>
+          </div>
+        </div>
+        <div class="s3-reactions"><span class="s3-reaction">👍 3</span><span class="s3-reaction">💡 1</span></div>
+      </div>
+
+      <div class="s3-item" data-agent="arch">
+        <div class="s3-dot" style="background:#8b5cf6"></div>
+        <div class="s3-header">
+          <div class="s3-av" style="background:#8b5cf6">架</div>
+          <span class="s3-name">架构师</span>
+          <span class="s3-tag" style="background:rgba(139,92,246,.12);color:#a78bfa">架构</span>
+          <span class="s3-time">21.1s</span>
+        </div>
+        <div class="s3-body" style="position:relative">
+          <button class="s3-edit-btn" onclick="toggleEdit(this)"><i class="fas fa-pen"></i> 编辑</button>
+          <p><strong>技术选型：</strong>纯 TypeScript + Canvas API</p>
+          <pre>SnakeEngine (pure logic)
+  ├── Grid: 管理网格坐标
+  ├── Snake: 蛇的状态 &amp; 移动
+  └── Food: 食物生成逻辑
+
+CanvasRenderer (rendering)
+  └── draw(state) → Canvas 2D
+
+GameController (orchestrator)
+  ├── 绑定键盘事件
+  ├── 管理游戏循环
+  └── 处理 UI 交互</pre>
+          <p>测试策略：引擎层 100% 单元测试覆盖</p>
+          <div class="s3-edit-actions">
+            <button class="s3-save-btn" onclick="saveEdit(this)"><i class="fas fa-check"></i> 保存</button>
+            <button class="s3-cancel-btn" onclick="cancelEdit(this)">取消</button>
+          </div>
+        </div>
+        <div class="s3-reactions"><span class="s3-reaction">🏗️ 2</span></div>
+      </div>
+
+      <div class="s3-item" data-agent="dev">
+        <div class="s3-dot" style="background:#ec4899"></div>
+        <div class="s3-header">
+          <div class="s3-av" style="background:#ec4899">开</div>
+          <span class="s3-name">一线开发</span>
+          <span class="s3-tag" style="background:rgba(236,72,153,.12);color:#f472b6">实现</span>
+          <span class="s3-time">18.3s</span>
+        </div>
+        <div class="s3-body" style="position:relative">
+          <button class="s3-edit-btn" onclick="toggleEdit(this)"><i class="fas fa-pen"></i> 编辑</button>
+          <p>架构清晰，开始编码。任务拆分：</p>
+          <ul>
+            <li>T1: <code>SnakeEngine</code> 核心引擎 (1天)</li>
+            <li>T2: <code>CanvasRenderer</code> 渲染层 (半天)</li>
+            <li>T3: <code>GameController</code> + UI (半天)</li>
+            <li>T4: 单元测试 + 集成测试 (半天)</li>
+          </ul>
+          <p>先写测试，再写实现。TDD 走起 🚀</p>
+          <div class="s3-edit-actions">
+            <button class="s3-save-btn" onclick="saveEdit(this)"><i class="fas fa-check"></i> 保存</button>
+            <button class="s3-cancel-btn" onclick="cancelEdit(this)">取消</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="s3-round-div">第 2 轮讨论</div>
+
+      <div class="s3-item" data-agent="tl">
+        <div class="s3-dot" style="background:#14b8a6"></div>
+        <div class="s3-header">
+          <div class="s3-av" style="background:#14b8a6">技</div>
+          <span class="s3-name">技术负责人</span>
+          <span class="s3-tag" style="background:rgba(20,184,166,.12);color:#2dd4bf">审查</span>
+          <span class="s3-time">15.2s</span>
+        </div>
+        <div class="s3-body" style="position:relative">
+          <button class="s3-edit-btn" onclick="toggleEdit(this)"><i class="fas fa-pen"></i> 编辑</button>
+          <p>代码审查意见：</p>
+          <ul>
+            <li>碰撞检测改用 <code>Set</code> 存储蛇身坐标，O(1) 查询</li>
+            <li>帧率控制建议 <code>requestAnimationFrame</code> + deltaTime</li>
+            <li>食物生成需排除蛇身位置</li>
+          </ul>
+          <div class="s3-edit-actions">
+            <button class="s3-save-btn" onclick="saveEdit(this)"><i class="fas fa-check"></i> 保存</button>
+            <button class="s3-cancel-btn" onclick="cancelEdit(this)">取消</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="s3-item s3-typing" data-agent="dev">
+        <div class="s3-dot active" style="background:#ec4899"></div>
+        <div class="s3-header">
+          <div class="s3-av" style="background:#ec4899">开</div>
+          <span class="s3-name">一线开发</span>
+        </div>
+        <div class="s3-body">
+          <div class="s3-typing-bar">
+            <div class="dots"><span></span><span></span><span></span></div>
+            正在回复审查意见…
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="s3-summary" id="s3-summary-view">
+    <h4><i class="fas fa-file-lines"></i> 讨论总结</h4>
+    <div class="s3-summary-section">
+      <h5>关键决策</h5>
+      <ul>
+        <li>采用纯 TypeScript + Canvas API 技术栈</li>
+        <li>三层架构解耦：Engine / Renderer / Controller</li>
+        <li>碰撞检测使用 Set 数据结构，O(1) 查询</li>
+        <li>TDD 开发流程，引擎层 100% 单测覆盖</li>
+      </ul>
+    </div>
+    <div class="s3-summary-section">
+      <h5>任务拆分</h5>
+      <ul>
+        <li>T1: SnakeEngine 核心引擎 — 1天</li>
+        <li>T2: CanvasRenderer 渲染层 — 半天</li>
+        <li>T3: GameController + UI — 半天</li>
+        <li>T4: 单元测试 + 集成测试 — 半天</li>
+      </ul>
+    </div>
+    <div class="s3-summary-section">
+      <h5>待跟进</h5>
+      <p>一线开发正在根据技术负责人的审查意见进行重构。</p>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:8px">
+      <button style="padding:6px 14px;border-radius:6px;font-size:12px;border:none;background:#6366f1;color:#fff;cursor:pointer;font-weight:600"><i class="fas fa-feather-alt"></i> 保存到写作空间</button>
+      <button style="padding:6px 14px;border-radius:6px;font-size:12px;border:none;background:rgba(255,255,255,.06);color:rgba(255,255,255,.5);cursor:pointer"><i class="fas fa-copy"></i> 复制 Markdown</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 方案 4 ====== -->
+<div class="scheme-panel" id="panel-s4">
+  <div class="scheme-desc"><strong>方案 4 — 棋盘式双列布局</strong>：不同角色交替左右排列，类似 Slack 线程感。每条消息有角色色带标识。</div>
+  <div class="s4-board">
+    <div class="s4-round-div">—— 第 1 轮讨论 ——</div>
+    <div class="s4-row left"><div class="s4-card" style="--role-color:#6366f1"><div class="s4-card-header"><div class="s4-card-av" style="background:#6366f1">产</div><span class="s4-card-name" style="color:#818cf8">产品经理</span><span class="s4-card-time">20.7s</span></div><div class="s4-card-text"><strong>核心功能 MVP：</strong>经典贪吃蛇玩法，WASD 控制，10×10 网格，实时计分。</div></div></div>
+    <div class="s4-row right"><div class="s4-card" style="--role-color:#8b5cf6"><div class="s4-card-header"><div class="s4-card-av" style="background:#8b5cf6">架</div><span class="s4-card-name" style="color:#a78bfa">架构师</span><span class="s4-card-time">21.1s</span></div><div class="s4-card-text"><strong>技术选型：</strong>TypeScript + Canvas API，三层架构解耦设计。</div></div></div>
+    <div class="s4-row left"><div class="s4-card" style="--role-color:#ec4899"><div class="s4-card-header"><div class="s4-card-av" style="background:#ec4899">开</div><span class="s4-card-name" style="color:#f472b6">一线开发</span><span class="s4-card-time">18.3s</span></div><div class="s4-card-text">架构清晰，已拆分 T1-T4 四个子任务，TDD 开发模式。</div></div></div>
+    <div class="s4-round-div">—— 第 2 轮讨论 ——</div>
+    <div class="s4-row right"><div class="s4-card" style="--role-color:#14b8a6"><div class="s4-card-header"><div class="s4-card-av" style="background:#14b8a6">技</div><span class="s4-card-name" style="color:#2dd4bf">技术负责人</span><span class="s4-card-time">15.2s</span></div><div class="s4-card-text">碰撞检测改用 Set 存储蛇身坐标，O(1)。帧率控制用 rAF + deltaTime。</div></div></div>
+    <div class="s4-row left"><div class="s4-card" style="--role-color:#ec4899"><div class="s4-card-header"><div class="s4-card-av" style="background:#ec4899">开</div><span class="s4-card-name" style="color:#f472b6">一线开发</span><span class="s4-card-time">12.1s</span></div><div class="s4-card-text">已按建议重构碰撞检测逻辑，单测全过。</div></div></div>
+  </div>
+</div>
+
+<!-- ====== 方案 5 ====== -->
+<div class="scheme-panel" id="panel-s5">
+  <div class="scheme-desc"><strong>方案 5 — 思维导图式发散视图</strong>：中心是议题，每轮向外发散。点击节点可展开查看完整内容。</div>
+  <div class="s5-container">
+    <div class="s5-center"><i class="fas fa-gamepad"></i> 开发贪吃蛇小游戏</div>
+
+    <div class="s5-round">
+      <div class="s5-round-label">—— 第 1 轮讨论 ——</div>
+      <div class="s5-nodes">
+        <div class="s5-node" onclick="this.classList.toggle('expanded')">
+          <div class="s5-node-line"></div>
+          <div class="s5-node-header"><div class="s5-node-av" style="background:#6366f1">产</div><span class="s5-node-name">产品经理</span></div>
+          <div class="s5-node-preview"><strong>核心功能 MVP：</strong>经典贪吃蛇玩法，WASD / 方向键控制，10×10 最小网格，食物随机生成，分数实时显示，一键重新开始。用户故事：作为玩家，我想在浏览器里直接玩贪吃蛇，不需要下载安装。</div>
+        </div>
+        <div class="s5-node" onclick="this.classList.toggle('expanded')">
+          <div class="s5-node-line"></div>
+          <div class="s5-node-header"><div class="s5-node-av" style="background:#8b5cf6">架</div><span class="s5-node-name">架构师</span></div>
+          <div class="s5-node-preview"><strong>技术选型：</strong>纯 TypeScript + Canvas API。SnakeEngine → Grid / Snake / Food。CanvasRenderer → draw(state)。GameController → 事件绑定 + 游戏循环。测试策略：引擎层 100% 单元测试覆盖。</div>
+        </div>
+        <div class="s5-node" onclick="this.classList.toggle('expanded')">
+          <div class="s5-node-line"></div>
+          <div class="s5-node-header"><div class="s5-node-av" style="background:#ec4899">开</div><span class="s5-node-name">一线开发</span></div>
+          <div class="s5-node-preview">架构清晰，开始编码。已拆分 T1: SnakeEngine 核心引擎(1天)、T2: CanvasRenderer 渲染层(半天)、T3: GameController + UI(半天)、T4: 单元测试 + 集成测试(半天)。TDD 走起 🚀</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="s5-round">
+      <div class="s5-round-label">—— 第 2 轮讨论 ——</div>
+      <div class="s5-nodes">
+        <div class="s5-node" onclick="this.classList.toggle('expanded')">
+          <div class="s5-node-line"></div>
+          <div class="s5-node-header"><div class="s5-node-av" style="background:#14b8a6">技</div><span class="s5-node-name">技术负责人</span></div>
+          <div class="s5-node-preview">碰撞检测改用 Set 存储蛇身坐标，O(1) 查询。帧率控制建议 requestAnimationFrame + deltaTime。食物生成需排除蛇身位置。</div>
+        </div>
+        <div class="s5-node" onclick="this.classList.toggle('expanded')">
+          <div class="s5-node-line"></div>
+          <div class="s5-node-header"><div class="s5-node-av" style="background:#ec4899">开</div><span class="s5-node-name">一线开发</span></div>
+          <div class="s5-node-preview">已按建议重构碰撞检测逻辑，单测全过。帧率控制用 requestAnimationFrame + deltaTime 实现。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* 方案 tab 切换 */
+document.querySelectorAll('.scheme-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.scheme-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.scheme-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.scheme).classList.add('active');
+  });
+});
+
+/* 方案 2：角色筛选 */
+document.querySelectorAll('.s2-role-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.s2-role-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const filter = btn.dataset.filter;
+    document.querySelectorAll('.s2-msg').forEach(msg => {
+      const roleMap = { pm: 'pm', arch: 'arch', dev: 'dev', tl: 'tl' };
+      msg.style.display = (filter === 'all' || msg.dataset.role === filter) ? '' : 'none';
+    });
+  });
+});
+
+/* 方案 3：Agent 筛选 */
+document.querySelectorAll('.s3-filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.s3-filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const agent = btn.dataset.agent;
+    document.querySelectorAll('.s3-item').forEach(item => {
+      if (agent === 'all') { item.classList.remove('s3-hidden'); }
+      else { item.classList.toggle('s3-hidden', item.dataset.agent !== agent); }
+    });
+  });
+});
+
+/* 方案 3：视图切换 */
+document.querySelectorAll('.s3-view-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.s3-view-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const view = btn.dataset.view;
+    document.getElementById('s3-timeline-view').style.display = view === 'timeline' ? '' : 'none';
+    document.getElementById('s3-summary-view').classList.toggle('show', view === 'summary');
+  });
+});
+
+/* 方案 3：编辑功能 */
+function toggleEdit(btn) {
+  const body = btn.parentElement;
+  const isEditing = body.contentEditable === 'true';
+  if (isEditing) {
+    body.contentEditable = 'false';
+    body.querySelector('.s3-edit-actions').classList.remove('show');
+    btn.innerHTML = '<i class="fas fa-pen"></i> 编辑';
+  } else {
+    body.contentEditable = 'true';
+    body.querySelector('.s3-edit-actions').classList.add('show');
+    btn.innerHTML = '<i class="fas fa-check"></i> 完成';
+    body.focus();
+  }
+}
+function saveEdit(btn) {
+  const body = btn.closest('.s3-body');
+  body.contentEditable = 'false';
+  body.querySelector('.s3-edit-actions').classList.remove('show');
+  body.querySelector('.s3-edit-btn').innerHTML = '<i class="fas fa-pen"></i> 编辑';
+  showToast('已保存修改（可保存到写作空间）');
+}
+function cancelEdit(btn) {
+  const body = btn.closest('.s3-body');
+  body.contentEditable = 'false';
+  body.querySelector('.s3-edit-actions').classList.remove('show');
+  body.querySelector('.s3-edit-btn').innerHTML = '<i class="fas fa-pen"></i> 编辑';
+}
+
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.textContent = msg;
+  Object.assign(t.style, { position:'fixed',bottom:'20px',left:'50%',transform:'translateX(-50%)',padding:'8px 20px',background:'#6366f1',color:'#fff',borderRadius:'8px',fontSize:'13px',fontWeight:'600',zIndex:'999',animation:'s3Fade .3s ease' });
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2000);
+}
+</script>
+</body>
+</html>
