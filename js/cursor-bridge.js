@@ -1026,19 +1026,23 @@
                                 </div>
                             </div>
                             <div class="cb-collab-step" id="cb-collab-step-discussion">
-                                <div class="cb-collab-step-title"><span class="cb-collab-step-num">3</span> 团队讨论</div>
-                                <div class="cb-disc-toolbar" id="cb-disc-toolbar">
-                                    <div class="cb-disc-filters" id="cb-disc-filters"></div>
-                                    <div class="cb-disc-view-switcher">
-                                        <button class="cb-disc-view-btn active" data-view="timeline"><i class="fas fa-stream"></i> 时间线</button>
-                                        <button class="cb-disc-view-btn" data-view="summary"><i class="fas fa-file-lines"></i> 总结</button>
+                                <div class="cb-collab-disc-sticky-head">
+                                    <div class="cb-collab-step-title"><span class="cb-collab-step-num">3</span> 团队讨论</div>
+                                    <div class="cb-disc-toolbar" id="cb-disc-toolbar">
+                                        <div class="cb-disc-filters" id="cb-disc-filters"></div>
+                                        <div class="cb-disc-view-switcher">
+                                            <button class="cb-disc-view-btn active" data-view="timeline"><i class="fas fa-stream"></i> 时间线</button>
+                                            <button class="cb-disc-view-btn" data-view="summary"><i class="fas fa-file-lines"></i> 总结</button>
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="cb-collab-discussion cb-disc-timeline-wrap" id="cb-collab-discussion"></div>
-                                <div class="cb-disc-summary-view" id="cb-disc-summary" style="display:none"></div>
-                                <div class="cb-realign-input-wrap" id="cb-realign-input-wrap" style="display:none">
-                                    <div class="cb-realign-label"><i class="fas fa-bullseye"></i> 对齐调整说明</div>
-                                    <textarea id="cb-realign-input" rows="3" placeholder="描述需要调整的内容，例如：API 接口不要用 REST，改用 GraphQL..."></textarea>
+                                <div class="cb-collab-disc-scroll" id="cb-collab-disc-scroll">
+                                    <div class="cb-collab-discussion cb-disc-timeline-wrap" id="cb-collab-discussion"></div>
+                                    <div class="cb-disc-summary-view" id="cb-disc-summary" style="display:none"></div>
+                                    <div class="cb-realign-input-wrap" id="cb-realign-input-wrap" style="display:none">
+                                        <div class="cb-realign-label"><i class="fas fa-bullseye"></i> 对齐调整说明</div>
+                                        <textarea id="cb-realign-input" rows="3" placeholder="描述需要调整的内容，例如：API 接口不要用 REST，改用 GraphQL..."></textarea>
+                                    </div>
                                 </div>
                                 <div class="cb-collab-actions">
                                     <button class="cb-btn cb-btn-primary" id="cb-collab-next-round"><i class="fas fa-forward"></i> 下一轮讨论</button>
@@ -3428,10 +3432,33 @@
             const modal = this._panelEl?.querySelector('#cb-collab-modal');
             if (!modal) return;
             modal.classList.add('open');
-            this._collabGoToStep('input');
-            this._collabState = { taskId: null, discussionId: null, step: 'input' };
             this._loadCollabRoles().then(() => this._populateCollabModelPicker());
             this._bindCollabEvents();
+            if (this._collabState?.taskId) {
+                this._restoreCollabSession();
+            } else {
+                this._collabState = { taskId: null, discussionId: null, step: 'input' };
+                this._collabGoToStep('input');
+            }
+        }
+
+        _restoreCollabSession() {
+            const state = this._collabState;
+            const reqEl = this._panelEl?.querySelector('#cb-collab-requirement');
+            const requirement = state._requirement
+                || state._cachedTaskData?.originalRequirement
+                || '';
+            if (reqEl && requirement) reqEl.value = requirement;
+
+            const modelSel = this._panelEl?.querySelector('#cb-collab-global-model');
+            if (modelSel && state.globalModel) modelSel.value = state.globalModel;
+
+            const step = state.step || 'input';
+            if (state._analysisData) this._renderCollabAnalysis(state._analysisData);
+            if (this._collabMessages?.length) this._renderCollabDiscussion(this._collabMessages);
+            if (state.conclusion) this._renderCollabReport(state.conclusion, state._reportData || null);
+
+            this._collabGoToStep(step, true);
         }
 
         _populateCollabModelPicker() {
@@ -3453,6 +3480,8 @@
         }
 
         _hideCollabModal() {
+            const req = this._panelEl?.querySelector('#cb-collab-requirement')?.value;
+            if (req !== undefined && this._collabState) this._collabState._requirement = req;
             this._panelEl?.querySelector('#cb-collab-modal')?.classList.remove('open');
         }
 
@@ -3461,7 +3490,6 @@
             if (!modal || modal._collabBound) return;
             modal._collabBound = true;
 
-            modal.addEventListener('click', e => { if (e.target.classList.contains('cb-collab-modal')) this._hideCollabModal(); });
             modal.querySelector('#cb-collab-close')?.addEventListener('click', () => this._hideCollabModal());
             modal.querySelector('#cb-collab-analyze')?.addEventListener('click', () => this._collabAnalyze());
             modal.querySelector('#cb-collab-approve')?.addEventListener('click', () => this._collabApprove());
@@ -3470,6 +3498,7 @@
             modal.querySelector('#cb-collab-conclude')?.addEventListener('click', () => this._collabConclude());
             modal.querySelector('#cb-collab-new-task')?.addEventListener('click', () => {
                 this._panelEl.querySelector('#cb-collab-requirement').value = '';
+                this._collabMessages = [];
                 this._collabState = { taskId: null, discussionId: null, step: 'input' };
                 this._collabGoToStep('input');
             });
@@ -3522,7 +3551,7 @@
                 const color = info.color || '#6366f1';
                 html += `<div class="cb-disc-summary-section">
                     <h5 style="color:${color}"><i class="fas fa-user" style="font-size:10px"></i> ${info.name}（${rmsgs.length} 条发言）</h5>
-                    <ul>${rmsgs.map(m => `<li><strong>第${m.round}轮：</strong>${m.content.slice(0, 120)}${m.content.length > 120 ? '…' : ''}</li>`).join('')}</ul>
+                    <ul>${rmsgs.map(m => `<li><strong>${this._collabRoundLabel(m.round)}：</strong>${m.content.slice(0, 120)}${m.content.length > 120 ? '…' : ''}</li>`).join('')}</ul>
                 </div>`;
             }
             html += `<div class="cb-disc-summary-actions">
@@ -3530,7 +3559,7 @@
             </div>`;
             container.innerHTML = html;
             container.querySelector('#cb-disc-copy-all')?.addEventListener('click', () => {
-                const text = msgs.map(m => `${this._getRoleInfo(m.roleId).name}(第${m.round}轮):\n${m.content}`).join('\n\n');
+                const text = msgs.map(m => `${this._getRoleInfo(m.roleId).name}(${this._collabRoundLabel(m.round)}):\n${m.content}`).join('\n\n');
                 navigator.clipboard.writeText(text).then(() => this._showToast('已复制到剪贴板', 'success'));
             });
         }
@@ -3590,6 +3619,8 @@
                 ]);
                 if (data.error) throw new Error(data.error);
                 this._collabState.taskId = data.id;
+                this._collabState._analysisData = data;
+                this._collabState._requirement = requirement;
                 this._renderCollabAnalysis(data);
                 this._collabGoToStep('analysis');
             } catch (err) {
@@ -3716,6 +3747,7 @@
                 if (disc.error) throw new Error(disc.error);
                 this._collabState.discussionId = disc.id;
                 this._collabState.topic = taskData?.originalRequirement?.slice(0, 100) || '协作讨论';
+                this._collabState._discRound = 0;
 
                 this._collabMessages = [];
                 this._renderCollabDiscussion([]);
@@ -3735,6 +3767,17 @@
 
         _discActiveFilter = 'all';
         _discActiveView = 'timeline';
+
+        _collabResolveRound(round) {
+            const n = Number(round);
+            if (Number.isFinite(n) && n > 0) return n;
+            return this._collabState._discRound || 1;
+        }
+
+        _collabRoundLabel(round) {
+            const n = this._collabResolveRound(round);
+            return n > 0 ? `第${n}轮` : '';
+        }
 
         _renderCollabDiscussion(messages) {
             const container = this._panelEl?.querySelector('#cb-collab-discussion');
@@ -3780,7 +3823,7 @@
                         <div class="cb-collab-msg-avatar" style="background:${color}">${avatar}</div>
                         <span class="cb-collab-msg-role">${info.name}</span>
                         <span class="cb-disc-tag" style="background:${color}22;color:${color}">${info.nameEn || m.roleId}</span>
-                        <span class="cb-collab-msg-meta">${m.round ? `第${m.round}轮` : ''}${elapsedStr}</span>
+                        <span class="cb-collab-msg-meta">${this._collabRoundLabel(m.round)}${elapsedStr}</span>
                     </div>
                     <div class="cb-collab-msg-body">
                         <button class="cb-disc-edit-btn" data-idx="${idx}"><i class="fas fa-pen"></i></button>
@@ -3794,7 +3837,7 @@
             });
             container.innerHTML = frags.join('');
             this._bindDiscEditEvents(container);
-            container.scrollTop = container.scrollHeight;
+            this._scrollCollabDiscToEnd();
         }
 
         _updateDiscFilters(messages) {
@@ -3877,6 +3920,7 @@
         }
 
         _appendTypingIndicator(roleId, roleName, round) {
+            round = this._collabResolveRound(round);
             const idx = this._collabMessages.length;
             this._collabMessages.push({ roleId, round, content: '', _typing: true, _streaming: true });
             const container = this._panelEl?.querySelector('#cb-collab-discussion');
@@ -3908,10 +3952,17 @@
                 </div>`;
             container.insertAdjacentHTML('beforeend', msgHtml);
             this._updateDiscFilters(this._collabMessages);
-            container.scrollTop = container.scrollHeight;
+            this._scrollCollabDiscToEnd();
+        }
+
+        _scrollCollabDiscToEnd() {
+            const scrollEl = this._panelEl?.querySelector('#cb-collab-disc-scroll')
+                || this._panelEl?.querySelector('#cb-collab-discussion');
+            if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
         }
 
         _appendStreamToken(roleId, round, token) {
+            round = this._collabResolveRound(round);
             const idx = this._collabMessages.findIndex(m => m.roleId === roleId && m.round === round && m._streaming);
             if (idx < 0) return;
             this._collabMessages[idx].content += token;
@@ -3924,11 +3975,12 @@
                 if (msgEl) {
                     msgEl.innerHTML = this._formatDiscussionContent(this._collabMessages[idx].content) + '<span class="cb-stream-cursor"></span>';
                 }
-                wrapper.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                this._scrollCollabDiscToEnd();
             }
         }
 
         _replaceTypingWithContent(roleId, round, content, elapsed) {
+            round = this._collabResolveRound(round);
             const idx = this._collabMessages.findIndex(m => m.roleId === roleId && m.round === round && (m._typing || m._streaming));
             if (idx >= 0) {
                 this._collabMessages[idx] = { roleId, round, content, elapsed, _typing: false, _streaming: false };
@@ -4021,18 +4073,19 @@
                             }
 
                             if (currentEvent === 'role_start') {
-                                this._appendTypingIndicator(data.roleId, data.roleName, data.roundNumber);
+                                this._appendTypingIndicator(data.roleId, data.roleName, data.roundNumber ?? data.round);
                             }
 
                             if (currentEvent === 'role_token') {
-                                this._appendStreamToken(data.roleId, data.roundNumber, data.content);
+                                this._appendStreamToken(data.roleId, data.roundNumber ?? data.round, data.content);
                             }
 
                             if (currentEvent === 'role_done') {
-                                this._replaceTypingWithContent(data.roleId, data.roundNumber, data.content, data.elapsed);
+                                this._replaceTypingWithContent(data.roleId, data.roundNumber ?? data.round, data.content, data.elapsed);
                             }
 
                             if (currentEvent === 'round_done') {
+                                if (data.roundNumber != null) this._collabState._discRound = data.roundNumber;
                                 if (data.concluded) {
                                     if (btn) btn.style.display = 'none';
                                     this._showToast('讨论轮次已完成，可点击"总结决策"', 'info');
@@ -4067,6 +4120,7 @@
                     report = await this._api(`/tasks/${this._collabState.taskId}/report/generate`, { method: 'POST' });
                 } catch {}
 
+                this._collabState._reportData = report;
                 this._renderCollabReport(conclusion, report);
                 this._collabGoToStep('report');
             } catch (err) {
@@ -4238,7 +4292,7 @@
             const prevSummary = prevMessages.length
                 ? prevMessages.map(m => {
                     const info = this._getRoleInfo(m.roleId);
-                    return `[${info.name}](第${m.round}轮): ${m.content.slice(0, 200)}`;
+                    return `[${info.name}](${this._collabRoundLabel(m.round)}): ${m.content.slice(0, 200)}`;
                   }).join('\n')
                 : '';
 
@@ -4337,7 +4391,7 @@
                 sections.push('## 讨论记录', '');
                 this._collabMessages.filter(m => !m._typing && m.content).forEach(m => {
                     const info = this._getRoleInfo(m.roleId);
-                    sections.push(`### ${info.name} (第${m.round}轮)`);
+                    sections.push(`### ${info.name} (${this._collabRoundLabel(m.round)})`);
                     sections.push(m.content);
                     sections.push('');
                 });

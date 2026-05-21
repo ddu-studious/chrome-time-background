@@ -3466,7 +3466,10 @@
 
 .cb-collab-body {
     flex: 1;
-    overflow-y: auto;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
     padding: 20px;
 }
 
@@ -3476,6 +3479,39 @@
 .cb-collab-step.active {
     display: block;
     animation: cbCollabFadeIn .3s ease;
+}
+.cb-collab-step.active:not(#cb-collab-step-discussion) {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/* 讨论步骤：标题+角色栏固定，仅消息区滚动 */
+#cb-collab-step-discussion.active {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+.cb-collab-disc-sticky-head {
+    flex-shrink: 0;
+    background: #1a1a2e;
+    z-index: 2;
+    border-bottom: 1px solid rgba(255, 255, 255, .05);
+    margin: 0 0 8px;
+    padding-bottom: 4px;
+}
+.cb-collab-disc-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    margin-right: -4px;
+    padding-right: 4px;
+}
+#cb-collab-step-discussion.active .cb-collab-actions {
+    flex-shrink: 0;
+    margin-top: 12px;
 }
 
 @keyframes cbCollabFadeIn {
@@ -3726,8 +3762,8 @@
 /* --- 讨论消息 --- */
 
 .cb-collab-discussion {
-    max-height: 60vh;
-    overflow-y: auto;
+    max-height: none;
+    overflow-y: visible;
 }
 
 .cb-collab-disc-empty {

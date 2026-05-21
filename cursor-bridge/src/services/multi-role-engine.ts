@@ -510,17 +510,28 @@ export async function createDiscussion(taskAnalysisId: string, topic: string, ph
   return discussion;
 }
 
+function parseDiscussionRow(row: any): Discussion {
+  return {
+    id: row.id,
+    taskAnalysisId: row.task_analysis_id,
+    topic: row.topic,
+    phase: row.phase,
+    participants: JSON.parse(row.participants),
+    rounds: JSON.parse(row.rounds || '[]'),
+    maxRounds: row.max_rounds ?? 3,
+    currentRound: row.current_round ?? 0,
+    status: row.status,
+    conclusion: row.conclusion ? JSON.parse(row.conclusion) : undefined,
+    createdAt: row.created_at,
+  };
+}
+
 export async function runDiscussionRound(discussionId: string): Promise<DiscussionRound> {
   const db = getDb();
   const row: any = db.prepare('SELECT * FROM discussions WHERE id = ?').get(discussionId);
   if (!row) throw new Error(`Discussion ${discussionId} not found`);
 
-  const discussion: Discussion = {
-    ...row,
-    participants: JSON.parse(row.participants),
-    rounds: JSON.parse(row.rounds),
-    conclusion: row.conclusion ? JSON.parse(row.conclusion) : undefined,
-  };
+  const discussion = parseDiscussionRow(row);
 
   if (discussion.status !== 'active') throw new Error('Discussion is not active');
   if (discussion.currentRound >= discussion.maxRounds) throw new Error('Max rounds reached');
@@ -616,12 +627,7 @@ export async function* streamDiscussionRound(discussionId: string, extraContext?
   const row: any = db.prepare('SELECT * FROM discussions WHERE id = ?').get(discussionId);
   if (!row) { yield { type: 'error', content: `Discussion ${discussionId} not found` }; return; }
 
-  const discussion: Discussion = {
-    ...row,
-    participants: JSON.parse(row.participants),
-    rounds: JSON.parse(row.rounds),
-    conclusion: row.conclusion ? JSON.parse(row.conclusion) : undefined,
-  };
+  const discussion = parseDiscussionRow(row);
 
   if (discussion.status !== 'active') { yield { type: 'error', content: 'Discussion is not active' }; return; }
   if (discussion.currentRound >= discussion.maxRounds) { yield { type: 'error', content: 'Max rounds reached' }; return; }
@@ -716,10 +722,7 @@ export async function concludeDiscussion(discussionId: string): Promise<Discussi
   const row: any = db.prepare('SELECT * FROM discussions WHERE id = ?').get(discussionId);
   if (!row) { log.error(`讨论 ${discussionId} 未找到`); throw new Error(`Discussion ${discussionId} not found`); }
 
-  const discussion = {
-    ...row,
-    rounds: JSON.parse(row.rounds),
-  };
+  const discussion = parseDiscussionRow(row);
 
   const allMessages = discussion.rounds.flatMap((r: DiscussionRound) =>
     r.messages.map((m: DiscussionMessage) => `[${getRoleById(m.roleId)?.name || m.roleId}] (Round ${r.roundNumber}): ${m.content}`)
@@ -765,7 +768,7 @@ ${allMessages.join('\n\n---\n\n')}
   db.prepare('UPDATE discussions SET status = ?, conclusion = ? WHERE id = ?')
     .run('concluded', JSON.stringify(conclusion), discussionId);
 
-  const ctx = { taskAnalysisId: discussion.task_analysis_id, phase: discussion.phase };
+  const ctx = { taskAnalysisId: discussion.taskAnalysisId, phase: discussion.phase };
   traceVerdict(ctx, 'role-tech-lead', 'tech-lead', discussion.topic, conclusion.summary, '多角色讨论收敛', [], [], []);
   tracePhaseExit(ctx, 'role-tech-lead', 'tech-lead', `discussion:${discussion.phase}`, 'concluded', conclusion.summary);
 
@@ -1310,12 +1313,7 @@ export function getDiscussion(id: string): Discussion | null {
   const db = getDb();
   const row: any = db.prepare('SELECT * FROM discussions WHERE id = ?').get(id);
   if (!row) return null;
-  return {
-    ...row,
-    participants: JSON.parse(row.participants),
-    rounds: JSON.parse(row.rounds),
-    conclusion: row.conclusion ? JSON.parse(row.conclusion) : undefined,
-  };
+  return parseDiscussionRow(row);
 }
 
 export function getExecutionSquad(id: string): ExecutionSquad | null {
