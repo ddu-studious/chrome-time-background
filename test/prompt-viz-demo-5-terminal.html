@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo 5: Terminal + Graph 混合式</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'JetBrains Mono', 'SF Mono', 'Consolas', monospace; background: #1a1b26; color: #c0caf5; min-height: 100vh; }
+.layout { display: grid; grid-template-columns: 280px 1fr 320px; grid-template-rows: 48px 1fr; height: 100vh; }
+.topbar { grid-column: 1 / -1; background: #16161e; border-bottom: 1px solid #292e42; display: flex; align-items: center; padding: 0 16px; gap: 12px; }
+.topbar .title { font-size: 13px; font-weight: 600; color: #7aa2f7; }
+.topbar .sep { color: #3b4261; }
+.topbar .path { color: #565f89; font-size: 12px; }
+.topbar .status { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 11px; }
+.topbar .dot { width: 6px; height: 6px; border-radius: 50%; background: #9ece6a; }
+
+.sidebar { background: #16161e; border-right: 1px solid #292e42; overflow-y: auto; padding: 12px 0; }
+.sidebar .group-title { padding: 8px 16px; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #565f89; }
+.sidebar .item { padding: 8px 16px; display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; color: #a9b1d6; transition: all 0.1s; }
+.sidebar .item:hover { background: #1f2335; color: #c0caf5; }
+.sidebar .item.active { background: #292e42; color: #7aa2f7; border-left: 2px solid #7aa2f7; }
+.sidebar .item .emoji { font-size: 14px; }
+.sidebar .item .meta { margin-left: auto; font-size: 10px; color: #565f89; }
+
+.main { overflow-y: auto; display: flex; flex-direction: column; }
+.graph-area { flex: 0 0 200px; background: #1f2335; border-bottom: 1px solid #292e42; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.graph-area svg { width: 100%; height: 100%; }
+.node { cursor: pointer; }
+.node rect { fill: #292e42; stroke: #3b4261; rx: 6; transition: all 0.2s; }
+.node:hover rect { stroke: #7aa2f7; fill: #1f2335; }
+.node.active rect { stroke: #7aa2f7; fill: #24283b; stroke-width: 2; }
+.node text { fill: #c0caf5; font-size: 11px; font-family: inherit; }
+.edge { stroke: #3b4261; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+
+.editor-area { flex: 1; padding: 20px 24px; overflow-y: auto; }
+.editor-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.editor-header h2 { font-size: 16px; font-weight: 600; color: #c0caf5; }
+.editor-header .badge { background: #292e42; padding: 2px 8px; border-radius: 3px; font-size: 11px; color: #7aa2f7; }
+.editor-header .model-tag { background: #1a1b2699; border: 1px solid #3b4261; padding: 2px 8px; border-radius: 3px; font-size: 11px; color: #bb9af7; }
+
+.field { margin-bottom: 16px; }
+.field-label { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.field-label .key { font-size: 11px; color: #7aa2f7; }
+.field-label .type { font-size: 10px; color: #565f89; }
+.field-value { background: #1f2335; border: 1px solid #292e42; border-radius: 4px; padding: 10px 12px; font-size: 13px; line-height: 1.6; color: #a9b1d6; white-space: pre-wrap; outline: none; font-family: inherit; }
+.field-value:focus { border-color: #7aa2f7; }
+.field-value .var { color: #9ece6a; background: #9ece6a15; padding: 0 3px; border-radius: 2px; }
+
+.right-panel { background: #16161e; border-left: 1px solid #292e42; overflow-y: auto; padding: 16px; }
+.panel-section { margin-bottom: 20px; }
+.panel-section h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #565f89; margin-bottom: 8px; }
+.vars-list { display: flex; flex-direction: column; gap: 4px; }
+.var-item { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: #1f2335; border-radius: 4px; font-size: 11px; cursor: pointer; transition: all 0.1s; }
+.var-item:hover { background: #292e42; }
+.var-item .var-name { color: #9ece6a; font-family: monospace; }
+.var-item .var-desc { color: #565f89; margin-left: auto; font-size: 10px; }
+.var-item .inject-btn { background: #9ece6a22; border: 1px solid #9ece6a44; color: #9ece6a; padding: 2px 6px; border-radius: 2px; font-size: 9px; cursor: pointer; }
+.var-item .inject-btn:hover { background: #9ece6a44; }
+
+.exec-preview { background: #1f2335; border: 1px solid #292e42; border-radius: 6px; padding: 12px; font-size: 11px; line-height: 1.8; max-height: 200px; overflow-y: auto; }
+.exec-preview .line-num { color: #3b4261; display: inline-block; width: 20px; text-align: right; margin-right: 8px; }
+.exec-preview .key-token { color: #7aa2f7; }
+.exec-preview .val-token { color: #9ece6a; }
+.exec-preview .str-token { color: #e0af68; }
+
+.action-btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+.action-btns button { background: #292e42; border: 1px solid #3b4261; color: #a9b1d6; padding: 6px 12px; border-radius: 4px; font-size: 11px; cursor: pointer; font-family: inherit; }
+.action-btns button:hover { border-color: #7aa2f7; color: #7aa2f7; }
+.action-btns button.run { background: #9ece6a22; border-color: #9ece6a; color: #9ece6a; }
+.action-btns button.run:hover { background: #9ece6a44; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="topbar">
+    <span class="title">PROMPT_STUDIO</span>
+    <span class="sep">/</span>
+    <span class="path">multi-role-engine / prompts</span>
+    <div class="status">
+      <span class="dot"></span>
+      <span style="color:#9ece6a">7 roles active</span>
+      <span style="color:#565f89">|</span>
+      <span style="color:#565f89">last deploy: 2h ago</span>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="group-title">Discussion</div>
+    <div class="item" onclick="selectRole(this,'ops')"><span class="emoji">📊</span>运营<span class="meta">v3</span></div>
+    <div class="item active" onclick="selectRole(this,'pm')"><span class="emoji">📋</span>产品经理<span class="meta">v5</span></div>
+    <div class="group-title">Execution</div>
+    <div class="item" onclick="selectRole(this,'arch')"><span class="emoji">🏗️</span>架构师<span class="meta">v4</span></div>
+    <div class="item" onclick="selectRole(this,'fe')"><span class="emoji">🎨</span>前端开发<span class="meta">v6</span></div>
+    <div class="item" onclick="selectRole(this,'be')"><span class="emoji">⚙️</span>后端开发<span class="meta">v5</span></div>
+    <div class="group-title">QA</div>
+    <div class="item" onclick="selectRole(this,'qa')"><span class="emoji">🧪</span>测试工程师<span class="meta">v4</span></div>
+    <div class="group-title">Deploy</div>
+    <div class="item" onclick="selectRole(this,'devops')"><span class="emoji">🚀</span>DevOps<span class="meta">v3</span></div>
+  </div>
+
+  <div class="main">
+    <div class="graph-area">
+      <svg viewBox="0 0 700 180">
+        <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#3b4261"/></marker></defs>
+        <path class="edge" d="M 90,60 C 140,60 140,60 190,60"/>
+        <path class="edge" d="M 90,120 C 140,120 140,90 190,75"/>
+        <path class="edge" d="M 270,60 C 320,60 320,50 370,50"/>
+        <path class="edge" d="M 270,60 C 320,60 320,90 370,90"/>
+        <path class="edge" d="M 270,60 C 320,60 320,130 370,130"/>
+        <path class="edge" d="M 450,50 C 500,50 500,90 540,90"/>
+        <path class="edge" d="M 450,90 C 500,90 500,90 540,90"/>
+        <path class="edge" d="M 450,130 C 500,130 500,90 540,90"/>
+        <path class="edge" d="M 620,90 C 650,90 650,90 670,90"/>
+
+        <g class="node" transform="translate(20,45)"><rect width="70" height="30"/><text x="35" y="19" text-anchor="middle">📊 运营</text></g>
+        <g class="node" transform="translate(20,105)"><rect width="70" height="30"/><text x="35" y="19" text-anchor="middle">📊 运营</text></g>
+        <g class="node active" transform="translate(190,45)"><rect width="80" height="30"/><text x="40" y="19" text-anchor="middle">📋 产品经理</text></g>
+        <g class="node" transform="translate(370,35)"><rect width="80" height="30"/><text x="40" y="19" text-anchor="middle">🏗️ 架构师</text></g>
+        <g class="node" transform="translate(370,75)"><rect width="80" height="30"/><text x="40" y="19" text-anchor="middle">🎨 前端</text></g>
+        <g class="node" transform="translate(370,115)"><rect width="80" height="30"/><text x="40" y="19" text-anchor="middle">⚙️ 后端</text></g>
+        <g class="node" transform="translate(540,75)"><rect width="80" height="30"/><text x="40" y="19" text-anchor="middle">🧪 测试</text></g>
+        <g class="node" transform="translate(640,75)"><rect width="60" height="30"/><text x="30" y="19" text-anchor="middle">🚀 部署</text></g>
+      </svg>
+    </div>
+
+    <div class="editor-area">
+      <div class="editor-header">
+        <h2>📋 产品经理</h2>
+        <span class="badge">v5</span>
+        <span class="model-tag">composer-2.5</span>
+      </div>
+
+      <div class="field">
+        <div class="field-label"><span class="key">role:</span><span class="type">string</span></div>
+        <div class="field-value" contenteditable>资深产品经理，拥有8年B端SaaS产品经验</div>
+      </div>
+      <div class="field">
+        <div class="field-label"><span class="key">goal:</span><span class="type">string</span></div>
+        <div class="field-value" contenteditable>将用户需求转化为可执行的产品方案，输出结构化的PRD文档</div>
+      </div>
+      <div class="field">
+        <div class="field-label"><span class="key">backstory:</span><span class="type">string</span></div>
+        <div class="field-value" contenteditable>曾主导过3个从0到1的SaaS产品，熟悉敏捷开发流程</div>
+      </div>
+      <div class="field">
+        <div class="field-label"><span class="key">behavior_rules:</span><span class="type">string[]</span></div>
+        <div class="field-value" contenteditable>- 将需求拆解为用户故事
+- 定义功能优先级（P0/P1/P2）
+- 输出包含验收标准的PRD
+- 对不可行需求提出替代方案</div>
+      </div>
+      <div class="field">
+        <div class="field-label"><span class="key">constraints:</span><span class="type">string[]</span></div>
+        <div class="field-value" contenteditable>- 不做技术实现决策
+- 需求描述需可量化
+- 每次迭代不超过5个P0功能</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="right-panel">
+    <div class="panel-section">
+      <h3>Dynamic Variables</h3>
+      <div class="vars-list">
+        <div class="var-item"><span class="var-name">{{current_date}}</span><span class="var-desc">当前日期</span><span class="inject-btn">inject</span></div>
+        <div class="var-item"><span class="var-name">{{project_name}}</span><span class="var-desc">项目名</span><span class="inject-btn">inject</span></div>
+        <div class="var-item"><span class="var-name">{{user_input}}</span><span class="var-desc">用户原始需求</span><span class="inject-btn">inject</span></div>
+        <div class="var-item"><span class="var-name">{{sprint_goal}}</span><span class="var-desc">冲刺目标</span><span class="inject-btn">inject</span></div>
+        <div class="var-item"><span class="var-name">{{team_members}}</span><span class="var-desc">团队成员</span><span class="inject-btn">inject</span></div>
+        <div class="var-item"><span class="var-name">{{prev_output}}</span><span class="var-desc">上游输出</span><span class="inject-btn">inject</span></div>
+        <div class="var-item"><span class="var-name">{{constraints}}</span><span class="var-desc">外部约束</span><span class="inject-btn">inject</span></div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>Execution Preview</h3>
+      <div class="exec-preview">
+        <div><span class="line-num">1</span><span class="key-token">role</span>: <span class="str-token">"资深产品经理..."</span></div>
+        <div><span class="line-num">2</span><span class="key-token">goal</span>: <span class="str-token">"将用户需求..."</span></div>
+        <div><span class="line-num">3</span><span class="key-token">context</span>: {</div>
+        <div><span class="line-num">4</span>&nbsp;&nbsp;<span class="key-token">date</span>: <span class="val-token">"2026-05-23"</span></div>
+        <div><span class="line-num">5</span>&nbsp;&nbsp;<span class="key-token">project</span>: <span class="val-token">"chrome-time"</span></div>
+        <div><span class="line-num">6</span>&nbsp;&nbsp;<span class="key-token">sprint</span>: <span class="val-token">"Sprint 4"</span></div>
+        <div><span class="line-num">7</span>}</div>
+      </div>
+    </div>
+
+    <div class="action-btns">
+      <button class="run">▶ Execute</button>
+      <button>💾 Save</button>
+      <button>↩️ Rollback</button>
+      <button>📤 Export</button>
+      <button>⚡ AB Test</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function selectRole(el, roleId) {
+  document.querySelectorAll('.sidebar .item').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+}
+</script>
+</body>
+</html>

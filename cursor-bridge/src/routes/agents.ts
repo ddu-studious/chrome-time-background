@@ -10,15 +10,34 @@ export async function agentRoutes(fastify: FastifyInstance) {
     return { agents: agentPool.list() };
   });
 
-  fastify.post<{ Body: { name: string; model?: string; cwd: string; description?: string } }>(
+  fastify.post<{ Body: {
+    name: string;
+    model?: string;
+    modelParams?: Array<{ id: string; value: string }>;
+    mode?: 'agent' | 'plan';
+    cwd: string;
+    description?: string;
+    mcpServers?: Record<string, any>;
+    resumeAgentId?: string;
+    agents?: Record<string, { description: string; prompt: string; model?: any; mcpServers?: any[] }>;
+    cloud?: { repos: Array<{ url: string; startingRef?: string }>; autoCreatePR?: boolean; envVars?: Record<string, string> };
+  } }>(
     '/agents',
     async (request, reply) => {
-      const { name, model, cwd, description } = request.body || {};
-      if (!name || !cwd) {
-        return reply.code(400).send({ error: 'name and cwd are required' });
+      const { name, model, modelParams, mode, cwd, description, mcpServers, resumeAgentId, agents: subAgents, cloud } = request.body || {};
+      if (!name) {
+        return reply.code(400).send({ error: 'name is required' });
+      }
+      if (!cloud && !cwd) {
+        return reply.code(400).send({ error: 'cwd is required for local agents' });
       }
       try {
-        const agent = await agentPool.create({ name, model, cwd, description });
+        const agent = await agentPool.create({
+          name, model, modelParams, mode,
+          cwd: cwd || process.cwd(),
+          description, mcpServers, resumeAgentId,
+          agents: subAgents, cloud,
+        });
         return reply.code(201).send(agent);
       } catch (err: any) {
         const code = err.message.includes('pool is full') ? 429 : 500;
@@ -27,16 +46,16 @@ export async function agentRoutes(fastify: FastifyInstance) {
     }
   );
 
-  fastify.post<{ Params: { id: string }; Body: { prompt: string } }>(
+  fastify.post<{ Params: { id: string }; Body: { prompt: string; images?: Array<{ url?: string; data?: string; mimeType?: string; dimension?: { width: number; height: number } }> } }>(
     '/agents/:id/send',
     async (request, reply) => {
       const { id } = request.params;
-      const { prompt } = request.body || {};
+      const { prompt, images } = request.body || {};
       if (!prompt) {
         return reply.code(400).send({ error: 'prompt is required' });
       }
       try {
-        const runId = await agentPool.send(id, prompt);
+        const runId = await agentPool.send(id, prompt, images);
         return { runId, status: 'running' };
       } catch (err: any) {
         const code = err.message.includes('not found') ? 404
@@ -203,4 +222,82 @@ export async function agentRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({ error: err.message });
     }
   });
+
+  // ─── Structured Conversation History ───
+
+  fastify.get<{ Params: { id: string } }>(
+    '/agents/:id/conversation',
+    async (request, reply) => {
+      try {
+        const turns = await agentPool.getConversation(request.params.id);
+        return { turns };
+      } catch (err: any) {
+        return reply.code(404).send({ error: err.message });
+      }
+    }
+  );
+
+  // ─── SDK Agent Discovery (Agent.list / Agent.get / Agent.listRuns) ───
+
+  fastify.get<{ Querystring: { cwd?: string } }>(
+    '/sdk/agents',
+    async (request) => {
+      const agents = await agentPool.listSdkAgents(request.query.cwd);
+      return { agents };
+    }
+  );
+
+  fastify.get<{ Params: { sdkAgentId: string } }>(
+    '/sdk/agents/:sdkAgentId',
+    async (request, reply) => {
+      const agent = await agentPool.getSdkAgent(request.params.sdkAgentId);
+      if (!agent) return reply.code(404).send({ error: 'SDK Agent not found' });
+      return agent;
+    }
+  );
+
+  fastify.get<{ Params: { sdkAgentId: string } }>(
+    '/sdk/agents/:sdkAgentId/runs',
+    async (request) => {
+      const runs = await agentPool.listSdkRuns(request.params.sdkAgentId);
+      return { runs };
+    }
+  );
+
+  // ─── One-shot prompt (Agent.prompt) ───
+
+  fastify.post<{ Body: {
+    prompt: string;
+    model?: string;
+    modelParams?: Array<{ id: string; value: string }>;
+    cwd?: string;
+    mcpServers?: Record<string, any>;
+  } }>(
+    '/agents/prompt',
+    async (request, reply) => {
+      const { prompt, model, modelParams, cwd, mcpServers } = request.body || {};
+      if (!prompt) return reply.code(400).send({ error: 'prompt is required' });
+      try {
+        const result = await agentPool.prompt({ prompt, model, modelParams, cwd, mcpServers });
+        return result;
+      } catch (err: any) {
+        return reply.code(500).send({ error: err.message });
+      }
+    }
+  );
+
+  // ─── Hot-reload agent config ───
+
+  fastify.post<{ Params: { id: string } }>(
+    '/agents/:id/reload',
+    async (request, reply) => {
+      try {
+        const ok = await agentPool.reload(request.params.id);
+        return { ok };
+      } catch (err: any) {
+        const code = err.message.includes('not found') ? 404 : 409;
+        return reply.code(code).send({ error: err.message });
+      }
+    }
+  );
 }

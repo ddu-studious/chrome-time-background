@@ -407,16 +407,38 @@ class MemoManager {
         const filterBar = document.createElement('div');
         filterBar.className = 'sidebar-filter';
         filterBar.innerHTML = `
-            <select class="sidebar-filter-select" id="sidebar-filter-select">
-                <option value="all">全部任务</option>
-                <option value="uncompleted">未完成</option>
-                <option value="completed">已完成</option>
-                <option value="failed">已失败</option>
-                <option value="today">今日</option>
-                <option value="overdue">已过期</option>
-                <option value="in_progress">进行中</option>
-                <option value="habits">每日习惯</option>
-            </select>
+            <div class="sidebar-filter-multi" id="sidebar-filter-multi">
+                <div class="sidebar-filter-trigger" id="sidebar-filter-trigger">
+                    <span class="sidebar-filter-label">全部任务</span>
+                    <i class="fas fa-chevron-down sidebar-filter-arrow"></i>
+                </div>
+                <div class="sidebar-filter-dropdown" id="sidebar-filter-dropdown">
+                    <label class="sidebar-filter-option">
+                        <input type="checkbox" value="all" checked> <span>全部任务</span>
+                    </label>
+                    <label class="sidebar-filter-option">
+                        <input type="checkbox" value="uncompleted"> <span>未完成</span>
+                    </label>
+                    <label class="sidebar-filter-option">
+                        <input type="checkbox" value="completed"> <span>已完成</span>
+                    </label>
+                    <label class="sidebar-filter-option">
+                        <input type="checkbox" value="failed"> <span>已失败</span>
+                    </label>
+                    <label class="sidebar-filter-option">
+                        <input type="checkbox" value="today"> <span>今日</span>
+                    </label>
+                    <label class="sidebar-filter-option">
+                        <input type="checkbox" value="overdue"> <span>已过期</span>
+                    </label>
+                    <label class="sidebar-filter-option">
+                        <input type="checkbox" value="in_progress"> <span>进行中</span>
+                    </label>
+                    <label class="sidebar-filter-option">
+                        <input type="checkbox" value="habits"> <span>每日习惯</span>
+                    </label>
+                </div>
+            </div>
             <div class="sidebar-category-combobox-wrap" id="sidebar-category-combobox-wrap"></div>
             <div class="sidebar-priority-filter" id="sidebar-priority-filter" title="按优先级筛选">
                 <button type="button" class="sidebar-priority-btn active" data-priority="all" title="全部">全部</button>
@@ -646,11 +668,8 @@ class MemoManager {
             searchInput.addEventListener('input', () => this.renderSidebarTaskList());
         }
         
-        // 筛选
-        const filterSelect = document.getElementById('sidebar-filter-select');
-        if (filterSelect) {
-            filterSelect.addEventListener('change', () => this.renderSidebarTaskList());
-        }
+        // 多选筛选下拉
+        this._initFilterMultiSelect();
         
         // 分类筛选（使用 Combobox，onChange 已在创建时绑定）
         
@@ -818,11 +837,7 @@ class MemoManager {
             });
         }
         
-        // 侧边栏折叠按钮
-        const collapseBtn = document.getElementById('sidebar-collapse-btn');
-        if (collapseBtn) {
-            collapseBtn.addEventListener('click', () => this.toggleSidebar());
-        }
+        // 侧边栏折叠按钮（事件已在 _ensurePanelDOM 中绑定，此处不重复）
         
         // 图片上传：点击、拖拽、粘贴
         const imageUploadBtn = document.getElementById('image-upload-btn');
@@ -956,6 +971,91 @@ class MemoManager {
                 else if (isMod && e.key === '`') { e.preventDefault(); this._applyMdAction('code'); }
             });
         }
+    }
+
+    /**
+     * 初始化多选筛选下拉
+     */
+    _initFilterMultiSelect() {
+        const trigger = document.getElementById('sidebar-filter-trigger');
+        const dropdown = document.getElementById('sidebar-filter-dropdown');
+        if (!trigger || !dropdown) return;
+
+        this._filterValues = new Set(['all']);
+
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdown.classList.toggle('open');
+            trigger.classList.toggle('open');
+        });
+
+        dropdown.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+
+        dropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+            cb.addEventListener('change', () => {
+                const val = cb.value;
+                if (val === 'all') {
+                    if (cb.checked) {
+                        this._filterValues = new Set(['all']);
+                        dropdown.querySelectorAll('input[type="checkbox"]').forEach(c => {
+                            c.checked = c.value === 'all';
+                        });
+                    } else {
+                        cb.checked = true;
+                        return;
+                    }
+                } else {
+                    if (cb.checked) {
+                        this._filterValues.delete('all');
+                        this._filterValues.add(val);
+                        const allCb = dropdown.querySelector('input[value="all"]');
+                        if (allCb) allCb.checked = false;
+                    } else {
+                        this._filterValues.delete(val);
+                        if (this._filterValues.size === 0) {
+                            this._filterValues.add('all');
+                            const allCb = dropdown.querySelector('input[value="all"]');
+                            if (allCb) allCb.checked = true;
+                        }
+                    }
+                }
+                this._updateFilterLabel();
+                this.renderSidebarTaskList();
+            });
+        });
+
+        document.addEventListener('click', () => {
+            dropdown.classList.remove('open');
+            trigger.classList.remove('open');
+        });
+    }
+
+    /**
+     * 更新筛选标签显示文本
+     */
+    _updateFilterLabel() {
+        const label = document.querySelector('.sidebar-filter-label');
+        if (!label) return;
+        const nameMap = {
+            all: '全部任务', uncompleted: '未完成', completed: '已完成',
+            failed: '已失败', today: '今日', overdue: '已过期',
+            in_progress: '进行中', habits: '每日习惯'
+        };
+        if (this._filterValues.has('all')) {
+            label.textContent = '全部任务';
+        } else {
+            const names = [...this._filterValues].map(v => nameMap[v] || v);
+            label.textContent = names.join(' + ');
+        }
+    }
+
+    /**
+     * 获取当前筛选值集合（兼容旧代码）
+     */
+    _getFilterValues() {
+        return this._filterValues || new Set(['all']);
     }
     
     /**
@@ -1258,14 +1358,13 @@ class MemoManager {
         if (!container) return;
         
         const searchInput = document.getElementById('sidebar-search');
-        const filterSelect = document.getElementById('sidebar-filter-select');
         
         const priorityActive = document.querySelector('#sidebar-priority-filter .sidebar-priority-btn.active');
         const priorityValue = priorityActive ? priorityActive.dataset.priority : 'all';
         const categoryValue = this._sidebarCategoryCombobox ? this._sidebarCategoryCombobox.getValue() : 'all';
         
         const searchText = searchInput ? searchInput.value.trim() : '';
-        const filterValue = filterSelect ? filterSelect.value : 'all';
+        const filterValues = this._getFilterValues();
         
         // 筛选任务
         let filteredMemos = [...this.memos];
@@ -1303,30 +1402,23 @@ class MemoManager {
             filteredMemos = filteredMemos.filter(m => (m.priority || 'none') === priorityValue);
         }
         
-        // 状态筛选
-        const today = this.getTodayDate();
-        switch (filterValue) {
-            case 'completed':
-                filteredMemos = filteredMemos.filter(m => m.completed);
-                break;
-            case 'uncompleted':
-                filteredMemos = filteredMemos.filter(m => !m.completed && m.status !== 'failed');
-                break;
-            case 'failed':
-                filteredMemos = filteredMemos.filter(m => m.status === 'failed');
-                break;
-            case 'today':
-                filteredMemos = filteredMemos.filter(m => m.dueDate === today);
-                break;
-            case 'overdue':
-                filteredMemos = filteredMemos.filter(m => this.getTaskStatus(m).key === 'overdue');
-                break;
-            case 'in_progress':
-                filteredMemos = filteredMemos.filter(m => this.getTaskStatus(m).key === 'in_progress');
-                break;
-            case 'habits':
-                filteredMemos = filteredMemos.filter(m => m.recurrence?.enabled && m.recurrence?.type === 'daily');
-                break;
+        // 状态筛选（多选 AND 逻辑：任务必须同时满足所有勾选的条件）
+        if (!filterValues.has('all')) {
+            const today = this.getTodayDate();
+            filteredMemos = filteredMemos.filter(m => {
+                for (const fv of filterValues) {
+                    switch (fv) {
+                        case 'completed': if (!m.completed) return false; break;
+                        case 'uncompleted': if (m.completed || m.status === 'failed') return false; break;
+                        case 'failed': if (m.status !== 'failed') return false; break;
+                        case 'today': if (m.dueDate !== today) return false; break;
+                        case 'overdue': if (this.getTaskStatus(m).key !== 'overdue') return false; break;
+                        case 'in_progress': if (this.getTaskStatus(m).key !== 'in_progress') return false; break;
+                        case 'habits': if (!(m.recurrence?.enabled && m.recurrence?.type === 'daily')) return false; break;
+                    }
+                }
+                return true;
+            });
         }
         
         // 排序：失败任务排在已完成之后
@@ -1395,6 +1487,12 @@ class MemoManager {
             return;
         }
         
+        // 记录当前展开的分组（渲染前保存状态，用于恢复）
+        const expandedGroupKeys = new Set();
+        container.querySelectorAll('.date-group:not(.collapsed)').forEach(g => {
+            if (g.dataset.groupKey) expandedGroupKeys.add(g.dataset.groupKey);
+        });
+
         container.innerHTML = '';
         
         // 取消/替换上一次的渲染（用于搜索/筛选快速触发）
@@ -1411,7 +1509,6 @@ class MemoManager {
         const tasksToGroup = regularTasks.length > 0 ? regularTasks : [];
         
         if (tasksToGroup.length === 0 && habitTasks.length > 0) {
-            // 只有习惯任务，没有普通任务时不需要后续渲染
             return;
         }
         
@@ -1419,21 +1516,22 @@ class MemoManager {
         
         // 按日期分组渲染任务
         const groupedTasks = this.groupTasksByDate(tasksToGroup);
-        const recentGroups = ['today', 'yesterday', 'two-days-ago']; // 近3天不折叠
+        const recentGroups = ['today', 'yesterday', 'two-days-ago'];
         
-        // 先渲染分组壳子（标题/折叠），默认折叠的分组不渲染任务项（展开时再懒加载）
         const groupEntries = Object.entries(groupedTasks);
-        const eagerGroups = []; // 需要首屏渲染任务的分组（近3天）
-        const lazyGroups = [];  // 默认折叠分组：只渲染标题，任务展开时渲染
+        const eagerGroups = [];
+        const lazyGroups = [];
         
-        // 预计算每个分组的起始 index（用于渲染序号稳定）
-        let cumulative = habitTasks.length; // 序号从习惯任务之后开始
+        const hasActiveFilter = searchText || !filterValues.has('all') || categoryValue !== 'all' || priorityValue !== 'all';
+        
+        let cumulative = habitTasks.length;
         groupEntries.forEach(([dateKey, tasks]) => {
             const startIndex = cumulative + 1;
             cumulative += tasks.length;
 
-            // 判断是否应该默认折叠（近3天之外的都折叠）
-            const shouldCollapse = !recentGroups.includes(dateKey);
+            // 搜索/筛选时所有分组展开；否则仅展开近期分组或之前手动展开的分组
+            const wasExpanded = expandedGroupKeys.has(dateKey);
+            const shouldCollapse = hasActiveFilter ? false : (wasExpanded ? false : !recentGroups.includes(dateKey));
             
             // 创建日期分组
             const group = document.createElement('div');
@@ -1657,14 +1755,13 @@ class MemoManager {
         const tasksContainer = groupEl.querySelector('.date-group-tasks');
         if (!tasksContainer || tasksContainer.children.length > 0) return;
         
-        const filterSelect = document.getElementById('sidebar-filter-select');
         const searchInput = document.getElementById('sidebar-search');
         const categoryValue = this._sidebarCategoryCombobox ? this._sidebarCategoryCombobox.getValue() : 'all';
         const priorityActive = document.querySelector('#sidebar-priority-filter .sidebar-priority-btn.active');
         const priorityValue = priorityActive ? priorityActive.dataset.priority : 'all';
         
         const searchText = searchInput ? searchInput.value.toLowerCase().trim() : '';
-        const filterValue = filterSelect ? filterSelect.value : 'all';
+        const filterValues = this._getFilterValues();
         
         let filteredMemos = [...this.memos];
         
@@ -1682,15 +1779,22 @@ class MemoManager {
             filteredMemos = filteredMemos.filter(m => (m.priority || 'none') === priorityValue);
         }
         
-        const today = this.getTodayDate();
-        switch (filterValue) {
-            case 'completed': filteredMemos = filteredMemos.filter(m => m.completed); break;
-            case 'uncompleted': filteredMemos = filteredMemos.filter(m => !m.completed && m.status !== 'failed'); break;
-            case 'failed': filteredMemos = filteredMemos.filter(m => m.status === 'failed'); break;
-            case 'today': filteredMemos = filteredMemos.filter(m => m.dueDate === today); break;
-            case 'overdue': filteredMemos = filteredMemos.filter(m => this.getTaskStatus(m).key === 'overdue'); break;
-            case 'in_progress': filteredMemos = filteredMemos.filter(m => this.getTaskStatus(m).key === 'in_progress'); break;
-            case 'habits': filteredMemos = filteredMemos.filter(m => m.recurrence?.enabled && m.recurrence?.type === 'daily'); break;
+        if (!filterValues.has('all')) {
+            const today = this.getTodayDate();
+            filteredMemos = filteredMemos.filter(m => {
+                for (const fv of filterValues) {
+                    switch (fv) {
+                        case 'completed': if (!m.completed) return false; break;
+                        case 'uncompleted': if (m.completed || m.status === 'failed') return false; break;
+                        case 'failed': if (m.status !== 'failed') return false; break;
+                        case 'today': if (m.dueDate !== today) return false; break;
+                        case 'overdue': if (this.getTaskStatus(m).key !== 'overdue') return false; break;
+                        case 'in_progress': if (this.getTaskStatus(m).key !== 'in_progress') return false; break;
+                        case 'habits': if (!(m.recurrence?.enabled && m.recurrence?.type === 'daily')) return false; break;
+                    }
+                }
+                return true;
+            });
         }
         
         const regularTasks = filteredMemos.filter(m => !(m.recurrence?.enabled && m.recurrence?.type === 'daily'));
@@ -2495,8 +2599,8 @@ class MemoManager {
         // 生成图片预览 HTML（使用懒加载占位符，避免 Base64 直接嵌入 DOM 导致内存问题）
         let imagesHtml = '';
         if (task.images && task.images.length > 0) {
-            const displayImages = task.images.slice(0, 3);
-            const moreCount = task.images.length - 3;
+            const displayImages = task.images.slice(0, 15);
+            const moreCount = task.images.length - 15;
             imagesHtml = `
                 <div class="task-images" data-task-id="${task.id}">
                     ${displayImages.map((img, idx) => `<img data-src="${img.id}" data-image-index="${idx}" class="task-image-preview task-image-lazy" alt="图片" loading="lazy">`).join('')}
@@ -8698,7 +8802,7 @@ class MemoManager {
                         <span>任务</span>
                     </h2>
                     <div class="sidebar-header-actions">
-                        <a href="tasks.html" class="sidebar-manage-btn" id="sidebar-manage-btn" title="任务管理面板">
+                        <a href="tasks.html" target="_blank" class="sidebar-manage-btn" id="sidebar-manage-btn" title="任务管理面板">
                             <i class="fas fa-external-link-alt"></i>
                         </a>
                         <button class="sidebar-collapse-btn" id="sidebar-collapse-btn" title="关闭面板">

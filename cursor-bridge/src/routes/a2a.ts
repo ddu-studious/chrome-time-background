@@ -11,7 +11,7 @@
 import type { FastifyInstance } from 'fastify';
 import { ENTERPRISE_ROLES } from '../services/enterprise-roles.js';
 import { config } from '../config.js';
-import { checkBrowserConnection, executeAction } from '../services/browser-automation.js';
+import { checkBrowserConnection, executeAction, extractTextDom, runAssertions } from '../services/browser-automation.js';
 import { searchMemories, createMemory, getMemoryStats } from '../services/memory-service.js';
 
 const AGENT_CARD = {
@@ -108,11 +108,35 @@ export async function a2aRoutes(app: FastifyInstance) {
     const { action, target, params } = req.body as {
       action: string; target?: string; params?: Record<string, any>;
     };
-    const validActions = ['navigate', 'click', 'type', 'screenshot', 'evaluate', 'waitFor', 'getContent', 'getTabs'];
+    const validActions = [
+      'navigate', 'click', 'type', 'screenshot', 'evaluate', 'waitFor', 'getContent', 'getTabs',
+      'extractDom', 'clickByIndex', 'hover', 'selectOption', 'fillForm',
+      'scrollTo', 'waitForNetworkIdle',
+      'assertVisible', 'assertText', 'assertUrl', 'assertElementCount',
+    ];
     if (!validActions.includes(action)) {
       return { success: false, error: `Invalid action. Supported: ${validActions.join(', ')}` };
     }
     return executeAction({ action: action as any, target, params }, config.cdpPort);
+  });
+
+  app.get('/a2a/browser/dom', async (req) => {
+    const { tabId, filter } = req.query as { tabId?: string; filter?: string };
+    try {
+      return await extractTextDom(config.cdpPort, tabId, (filter as any) || 'interactive');
+    } catch (err: any) {
+      return { error: err.message, nodes: [], text: '', count: 0 };
+    }
+  });
+
+  app.post('/a2a/browser/assert', async (req) => {
+    const { assertions } = req.body as {
+      assertions: Array<{ type: string; target: string; params?: Record<string, any> }>;
+    };
+    if (!Array.isArray(assertions) || assertions.length === 0) {
+      return { passed: false, results: [], summary: 'No assertions provided' };
+    }
+    return runAssertions(assertions as any, config.cdpPort);
   });
 
   app.post('/a2a/browser/batch', async (req) => {

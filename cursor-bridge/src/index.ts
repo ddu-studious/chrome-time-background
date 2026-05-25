@@ -15,9 +15,15 @@ import { workflowRoutes } from './routes/workflows.js';
 import { traceRoutes } from './routes/traces.js';
 import { memoryRoutes } from './routes/memory.js';
 import { authRoutes } from './routes/auth.js';
+import { sessionRoutes } from './routes/sessions.js';
+import { promptVersionRoutes } from './routes/prompt-versions.js';
 import { agentPool } from './services/agent-pool.js';
-import { closeDb } from './services/database.js';
+import { closeDb, getActivePromptVersion } from './services/database.js';
 import { registerAuthHook } from './services/auth-middleware.js';
+import { setPromptVersionResolver } from './services/enterprise-roles.js';
+import { getDashboardData, getLocalUsage } from './services/dashboard.js';
+import { selfLoopVerify } from './services/self-loop-verify.js';
+import type { VerificationConfig, TestCase } from './services/self-loop-verify.js';
 
 // ─── Isolated Feature Modules ───
 import { writingRoutes, initWritingTables } from './modules/writing/index.js';
@@ -116,6 +122,31 @@ await fastify.register(workflowRoutes);
 await fastify.register(traceRoutes);
 await fastify.register(memoryRoutes);
 await fastify.register(authRoutes);
+await fastify.register(sessionRoutes);
+await fastify.register(promptVersionRoutes);
+
+// ─── Dashboard Usage Routes ───
+fastify.get('/dashboard', async (req) => {
+  const { since } = req.query as { since?: string };
+  return getDashboardData(since ? Number(since) : undefined);
+});
+fastify.get('/dashboard/usage', async (req) => {
+  const { since } = req.query as { since?: string };
+  return getLocalUsage(since ? Number(since) : undefined);
+});
+
+// ─── Self-Loop Verification ───
+fastify.post<{ Body: { config: VerificationConfig; testCases: TestCase[] } }>(
+  '/verify',
+  async (req, reply) => {
+    const { config: verifyConfig, testCases } = req.body || {};
+    if (!verifyConfig?.baseUrl || !Array.isArray(testCases) || testCases.length === 0) {
+      return reply.code(400).send({ error: 'config.baseUrl and non-empty testCases[] are required' });
+    }
+    const result = await selfLoopVerify(verifyConfig, testCases);
+    return result;
+  },
+);
 
 // ─── Module: Multi-Role Collaboration ───
 await fastify.register(multiRoleRoutes);
@@ -131,6 +162,8 @@ initMultiRoleTables();
 initAgentRegistry();
 initCollaborationTables();
 initWritingTables();
+
+setPromptVersionResolver(getActivePromptVersion);
 
 const shutdown = async () => {
   console.log('\n[cursor-bridge] Shutting down...');

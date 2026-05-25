@@ -508,8 +508,8 @@ class TaskManager {
                 ${task.progress !== null ? `<div class="card-progress">${this.renderProgressBar(task.progress)}</div>` : ''}
                 ${task.images && task.images.length > 0 ? `
                     <div class="card-images">
-                        ${task.images.slice(0, 4).map(img => `<img class="card-image-thumb" src="${this.getImageThumbnail(img)}" alt="图片">`).join('')}
-                        ${task.images.length > 4 ? `<span class="category-tag">+${task.images.length - 4}</span>` : ''}
+                        ${task.images.slice(0, 15).map(img => `<img class="card-image-thumb" src="${this.getImageThumbnail(img)}" alt="图片">`).join('')}
+                        ${task.images.length > 15 ? `<span class="category-tag">+${task.images.length - 15}</span>` : ''}
                     </div>
                 ` : ''}
                 <div class="card-meta">

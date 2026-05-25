@@ -1,11 +1,52 @@
 export type AgentStatus = 'idle' | 'running' | 'error' | 'disposed';
 
+export interface ModelParam {
+  id: string;
+  value: string;
+}
+
+export interface McpServerConfig {
+  type: 'stdio' | 'http' | 'sse';
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  cwd?: string;
+  url?: string;
+  headers?: Record<string, string>;
+}
+
+export interface AgentDefinition {
+  description: string;
+  prompt: string;
+  model?: { id: string; params?: ModelParam[] } | 'inherit';
+  mcpServers?: Array<string | Record<string, McpServerConfig>>;
+}
+
+export interface CloudRepoConfig {
+  url: string;
+  startingRef?: string;
+}
+
+export interface CloudConfig {
+  repos: CloudRepoConfig[];
+  autoCreatePR?: boolean;
+  envVars?: Record<string, string>;
+}
+
 export interface CreateAgentOpts {
   name: string;
   model?: string;
+  modelParams?: ModelParam[];
+  mode?: 'agent' | 'plan';
   cwd: string;
   description?: string;
   systemPrompt?: string;
+  sessionId?: string;
+  roleId?: string;
+  mcpServers?: Record<string, McpServerConfig>;
+  resumeAgentId?: string;
+  agents?: Record<string, AgentDefinition>;
+  cloud?: CloudConfig;
 }
 
 export interface BridgeAgent {
@@ -40,6 +81,22 @@ export interface AgentPublicInfo {
   createdAt: number;
   runCount: number;
   conversationId: string;
+  sdkAgentId?: string;
+  runtime?: 'local' | 'cloud';
+  subAgentNames?: string[];
+  hasCloudConfig?: boolean;
+}
+
+export interface SDKImageInput {
+  url?: string;
+  data?: string;
+  mimeType?: string;
+  dimension?: { width: number; height: number };
+}
+
+export interface SendMessageWithImages {
+  text: string;
+  images?: SDKImageInput[];
 }
 
 export interface SSEEvent {

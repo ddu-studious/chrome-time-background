@@ -35,6 +35,7 @@ import {
   getModelRecommendation,
   type EnterpriseRole,
   type ModelTier,
+  type DynamicContext,
 } from './enterprise-roles.js';
 import { agentPool } from './agent-pool.js';
 import {
@@ -51,6 +52,75 @@ import {
   tracePhaseExit,
   traceSystemEvent,
 } from './phase5-trace-hooks.js';
+
+// ─── Dynamic Context Builder ───
+
+interface DynamicContextRule {
+  match: (meta: { roleId: string; taskType?: string; phase?: string; topic?: string }) => boolean;
+  build: (meta: { roleId: string; taskType?: string; phase?: string; topic?: string; taskAnalysisId?: string }) => DynamicContext | null;
+}
+
+const DYNAMIC_CONTEXT_RULES: DynamicContextRule[] = [
+  {
+    match: ({ taskType }) => taskType === 'bugfix',
+    build: () => ({
+      key: '缺陷修复指引',
+      content: '本次任务为缺陷修复类型。请优先关注：1) 问题复现步骤 2) 根因分析 3) 回归测试方案。修复时务必考虑相关影响范围。',
+      priority: 'high',
+    }),
+  },
+  {
+    match: ({ taskType }) => taskType === 'refactor',
+    build: () => ({
+      key: '重构注意事项',
+      content: '本次任务为代码重构。请确保：1) 不改变外部行为 2) 保持向后兼容 3) 增加必要的单元测试覆盖。',
+      priority: 'normal',
+    }),
+  },
+  {
+    match: ({ phase }) => phase === 'qa',
+    build: () => ({
+      key: 'QA 阶段要求',
+      content: '当前处于 QA 阶段，请以质量保障为最高优先级。所有结论需有测试证据支撑。',
+      priority: 'high',
+    }),
+  },
+  {
+    match: ({ roleId }) => roleId === 'security-engineer',
+    build: () => ({
+      key: '安全审计补充',
+      content: '请重点关注 OWASP Top 10 风险，包括但不限于注入攻击、认证缺陷、敏感数据泄露、XSS/CSRF。',
+      priority: 'normal',
+    }),
+  },
+];
+
+function buildDynamicContexts(meta: {
+  roleId: string;
+  taskType?: string;
+  phase?: string;
+  topic?: string;
+  taskAnalysisId?: string;
+  extraContexts?: DynamicContext[];
+}): DynamicContext[] | undefined {
+  const matched: DynamicContext[] = [];
+
+  for (const rule of DYNAMIC_CONTEXT_RULES) {
+    if (rule.match(meta)) {
+      const ctx = rule.build(meta);
+      if (ctx) matched.push(ctx);
+    }
+  }
+
+  if (meta.extraContexts?.length) {
+    matched.push(...meta.extraContexts);
+  }
+
+  return matched.length > 0 ? matched : undefined;
+}
+
+export { DYNAMIC_CONTEXT_RULES, buildDynamicContexts };
+export type { DynamicContextRule };
 
 // ─── Types ───
 
@@ -544,6 +614,14 @@ export async function runDiscussionRound(discussionId: string): Promise<Discussi
     r.messages.map((m) => `[${getRoleById(m.roleId)?.name || m.roleId}]: ${m.content.slice(0, 200)}`)
   );
 
+  let taskType: string | undefined;
+  if (discussion.taskAnalysisId) {
+    const taRow: any = db.prepare('SELECT summary FROM task_analyses WHERE id = ?').get(discussion.taskAnalysisId);
+    if (taRow?.summary) {
+      try { taskType = JSON.parse(taRow.summary).type; } catch { /* ignore */ }
+    }
+  }
+
   log.info(`🔄 讨论轮次 ${roundNumber}/${discussion.maxRounds} 开始, 参与者: ${discussion.participants.map(p => p.roleId).join(', ')}`);
 
   for (const participant of discussion.participants) {
@@ -551,6 +629,13 @@ export async function runDiscussionRound(discussionId: string): Promise<Discussi
     if (!role) { log.warn(`角色 ${participant.roleId} 未找到，跳过`); continue; }
 
     log.debug(`  → ${role.name} (${role.nameEn}) 开始发言...`);
+    const dynamicContexts = buildDynamicContexts({
+      roleId: participant.roleId,
+      taskType,
+      phase: discussion.phase,
+      topic: discussion.topic,
+      taskAnalysisId: discussion.taskAnalysisId,
+    });
     const systemPrompt = buildRoleSystemPrompt(role, {
       topic: discussion.topic,
       otherParticipants: discussion.participants
@@ -558,6 +643,7 @@ export async function runDiscussionRound(discussionId: string): Promise<Discussi
         .map((p) => getRoleById(p.roleId)?.name || p.roleId),
       round: roundNumber,
       previousMessages: previousMessagesForContext,
+      dynamicContexts,
     });
 
     const roleModel = resolveModelForRole(role);
@@ -640,6 +726,14 @@ export async function* streamDiscussionRound(discussionId: string, extraContext?
     r.messages.map((m) => `[${getRoleById(m.roleId)?.name || m.roleId}]: ${m.content.slice(0, 200)}`)
   );
 
+  let streamTaskType: string | undefined;
+  if (discussion.taskAnalysisId) {
+    const stRow: any = db.prepare('SELECT summary FROM task_analyses WHERE id = ?').get(discussion.taskAnalysisId);
+    if (stRow?.summary) {
+      try { streamTaskType = JSON.parse(stRow.summary).type; } catch { /* ignore */ }
+    }
+  }
+
   log.info(`🔄 [流式] 讨论轮次 ${roundNumber}/${discussion.maxRounds} 开始`);
 
   for (const participant of discussion.participants) {
@@ -648,6 +742,13 @@ export async function* streamDiscussionRound(discussionId: string, extraContext?
 
     yield { type: 'role_start', roleId: participant.roleId, roleName: role.name, roundNumber };
 
+    const streamDynCtx = buildDynamicContexts({
+      roleId: participant.roleId,
+      taskType: streamTaskType,
+      phase: discussion.phase,
+      topic: discussion.topic,
+      taskAnalysisId: discussion.taskAnalysisId,
+    });
     const systemPrompt = buildRoleSystemPrompt(role, {
       topic: discussion.topic,
       otherParticipants: discussion.participants
@@ -655,6 +756,7 @@ export async function* streamDiscussionRound(discussionId: string, extraContext?
         .map((p) => getRoleById(p.roleId)?.name || p.roleId),
       round: roundNumber,
       previousMessages: previousMessagesForContext,
+      dynamicContexts: streamDynCtx,
     });
 
     const roleModel = resolveModelForRole(role);
@@ -849,7 +951,12 @@ export async function executeTask(squadId: string, taskId: string): Promise<stri
   task.startedAt = Date.now();
   log.info(`⚙️ 执行任务 [${taskId.slice(0, 8)}]: ${task.title}, 分配给 ${role.name} (原始: ${task.assignedTo})`);
 
-  const systemPrompt = buildRoleSystemPrompt(role, { topic: task.description });
+  const execDynCtx = buildDynamicContexts({
+    roleId: role.id,
+    phase: 'execution',
+    topic: task.description,
+  });
+  const systemPrompt = buildRoleSystemPrompt(role, { topic: task.description, dynamicContexts: execDynCtx });
   const execModel = resolveModelForRole(role);
   const agentId = await agentPool.createAgent({
     name: `${role.nameEn}-exec-${taskId.slice(0, 8)}`,
@@ -936,10 +1043,16 @@ export async function runQARound(sessionId: string): Promise<QARound> {
 
   const qaRole = getRoleById('qa')!;
   const qaModel = resolveModelForRole(qaRole);
+  const qaDynCtx = buildDynamicContexts({
+    roleId: 'qa',
+    phase: 'qa',
+    topic: '执行测试用例',
+    taskAnalysisId: session.taskAnalysisId,
+  });
   const agentId = await agentPool.createAgent({
     name: `qa-round-${roundNumber}`,
     model: qaModel,
-    systemPrompt: buildRoleSystemPrompt(qaRole, { topic: '执行测试用例' }),
+    systemPrompt: buildRoleSystemPrompt(qaRole, { topic: '执行测试用例', dynamicContexts: qaDynCtx }),
   });
 
   for (const tc of session.testPlan.testCases) {

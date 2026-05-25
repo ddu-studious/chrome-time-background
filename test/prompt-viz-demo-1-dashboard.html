@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo 1: Dashboard 仪表盘式</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f23; color: #e0e0e0; min-height: 100vh; }
+.header { background: linear-gradient(135deg, #1a1a3e, #2d1b69); padding: 20px 32px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: space-between; }
+.header h1 { font-size: 20px; color: #fff; }
+.header .badge { background: #4CAF50; color: #fff; padding: 4px 12px; border-radius: 12px; font-size: 12px; }
+.container { display: grid; grid-template-columns: 280px 1fr 320px; height: calc(100vh - 72px); }
+.sidebar { background: #1a1a2e; border-right: 1px solid rgba(255,255,255,0.05); overflow-y: auto; padding: 16px; }
+.sidebar h3 { color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+.phase-group { margin-bottom: 24px; }
+.role-card { background: #252540; border-radius: 10px; padding: 12px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; border: 2px solid transparent; }
+.role-card:hover { background: #2d2d50; }
+.role-card.active { border-color: #7c3aed; background: #2d2050; }
+.role-card .top { display: flex; align-items: center; gap: 10px; }
+.role-card .icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+.role-card .info { flex: 1; }
+.role-card .name { font-size: 14px; font-weight: 600; }
+.role-card .meta { font-size: 11px; color: #888; margin-top: 2px; }
+.role-card .score { display: flex; align-items: center; gap: 4px; font-size: 12px; color: #fbbf24; }
+.main { padding: 24px; overflow-y: auto; }
+.prompt-editor { background: #1e1e3a; border-radius: 12px; padding: 24px; }
+.prompt-editor h2 { font-size: 18px; margin-bottom: 16px; color: #fff; }
+.field-group { margin-bottom: 20px; }
+.field-label { font-size: 12px; color: #7c3aed; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+.field-label .tag { background: rgba(124,58,237,0.2); padding: 2px 6px; border-radius: 4px; font-size: 10px; }
+.field-content { background: #12122a; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 12px 16px; font-size: 14px; line-height: 1.6; min-height: 40px; outline: none; transition: border-color 0.2s; }
+.field-content:focus { border-color: #7c3aed; }
+.field-content[contenteditable] { cursor: text; }
+.dynamic-vars { background: #1a1a3e; border: 1px dashed #4CAF50; border-radius: 8px; padding: 12px; margin-top: 12px; }
+.dynamic-vars h4 { color: #4CAF50; font-size: 12px; margin-bottom: 8px; }
+.var-item { display: inline-flex; align-items: center; gap: 4px; background: rgba(76,175,80,0.15); padding: 4px 10px; border-radius: 4px; margin: 4px; font-size: 12px; color: #4CAF50; cursor: pointer; }
+.var-item:hover { background: rgba(76,175,80,0.3); }
+.right-panel { background: #1a1a2e; border-left: 1px solid rgba(255,255,255,0.05); padding: 16px; overflow-y: auto; }
+.right-panel h3 { font-size: 14px; margin-bottom: 16px; color: #fff; }
+.version-timeline { position: relative; padding-left: 20px; }
+.version-timeline::before { content: ''; position: absolute; left: 6px; top: 0; bottom: 0; width: 2px; background: #333; }
+.version-item { position: relative; margin-bottom: 16px; padding: 10px; background: #252540; border-radius: 8px; }
+.version-item::before { content: ''; position: absolute; left: -17px; top: 14px; width: 10px; height: 10px; border-radius: 50%; background: #7c3aed; border: 2px solid #1a1a2e; }
+.version-item.active::before { background: #4CAF50; box-shadow: 0 0 8px rgba(76,175,80,0.5); }
+.version-item .v-header { display: flex; justify-content: space-between; align-items: center; }
+.version-item .v-label { font-size: 13px; font-weight: 600; }
+.version-item .v-date { font-size: 11px; color: #888; }
+.version-item .v-desc { font-size: 12px; color: #aaa; margin-top: 4px; }
+.preview-btn { background: linear-gradient(135deg, #7c3aed, #5b21b6); color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; cursor: pointer; width: 100%; margin-top: 16px; }
+.preview-btn:hover { opacity: 0.9; }
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+.stat-card { background: #252540; border-radius: 8px; padding: 12px; text-align: center; }
+.stat-card .value { font-size: 20px; font-weight: 700; color: #7c3aed; }
+.stat-card .label { font-size: 11px; color: #888; margin-top: 4px; }
+.toolbar { display: flex; gap: 8px; margin-top: 16px; }
+.toolbar button { background: #252540; border: 1px solid rgba(255,255,255,0.1); color: #e0e0e0; padding: 8px 14px; border-radius: 6px; font-size: 12px; cursor: pointer; transition: all 0.2s; }
+.toolbar button:hover { background: #333355; border-color: #7c3aed; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Multi-Role Prompt Manager</h1>
+  <span class="badge">v2.1 Active</span>
+</div>
+<div class="container">
+  <div class="sidebar">
+    <div class="phase-group">
+      <h3>Discussion Phase</h3>
+      <div class="role-card" onclick="selectRole(this, 'ops')">
+        <div class="top">
+          <div class="icon" style="background:#e3f2fd">📊</div>
+          <div class="info"><div class="name">运营</div><div class="meta">v3 · 讨论阶段</div></div>
+          <div class="score">⭐ 7.8</div>
+        </div>
+      </div>
+      <div class="role-card active" onclick="selectRole(this, 'pm')">
+        <div class="top">
+          <div class="icon" style="background:#e8f5e9">📋</div>
+          <div class="info"><div class="name">产品经理</div><div class="meta">v5 · 讨论阶段</div></div>
+          <div class="score">⭐ 8.2</div>
+        </div>
+      </div>
+      <div class="role-card" onclick="selectRole(this, 'arch')">
+        <div class="top">
+          <div class="icon" style="background:#fff3e0">🏗️</div>
+          <div class="info"><div class="name">架构师</div><div class="meta">v4 · 讨论+执行</div></div>
+          <div class="score">⭐ 8.5</div>
+        </div>
+      </div>
+    </div>
+    <div class="phase-group">
+      <h3>Execution Phase</h3>
+      <div class="role-card" onclick="selectRole(this, 'fe')">
+        <div class="top">
+          <div class="icon" style="background:#fce4ec">🎨</div>
+          <div class="info"><div class="name">前端开发</div><div class="meta">v6 · 执行阶段</div></div>
+          <div class="score">⭐ 8.0</div>
+        </div>
+      </div>
+      <div class="role-card" onclick="selectRole(this, 'be')">
+        <div class="top">
+          <div class="icon" style="background:#e8eaf6">⚙️</div>
+          <div class="info"><div class="name">后端开发</div><div class="meta">v5 · 执行阶段</div></div>
+          <div class="score">⭐ 7.9</div>
+        </div>
+      </div>
+    </div>
+    <div class="phase-group">
+      <h3>QA & Deploy</h3>
+      <div class="role-card" onclick="selectRole(this, 'qa')">
+        <div class="top">
+          <div class="icon" style="background:#e0f7fa">🧪</div>
+          <div class="info"><div class="name">测试工程师</div><div class="meta">v4 · QA阶段</div></div>
+          <div class="score">⭐ 8.1</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="prompt-editor">
+      <h2>📋 产品经理 Prompt 配置</h2>
+      <div class="field-group">
+        <div class="field-label">Role <span class="tag">必填</span></div>
+        <div class="field-content" contenteditable>资深产品经理，拥有8年B端SaaS产品经验</div>
+      </div>
+      <div class="field-group">
+        <div class="field-label">Goal <span class="tag">必填</span></div>
+        <div class="field-content" contenteditable>将用户需求转化为可执行的产品方案，输出结构化的PRD文档</div>
+      </div>
+      <div class="field-group">
+        <div class="field-label">Backstory</div>
+        <div class="field-content" contenteditable>曾主导过3个从0到1的SaaS产品，熟悉敏捷开发流程。擅长用户访谈和需求优先级排序，坚持"数据驱动决策"理念。</div>
+      </div>
+      <div class="field-group">
+        <div class="field-label">Behavior Rules</div>
+        <div class="field-content" contenteditable>1. 将需求拆解为用户故事 (As a... I want... So that...)
+2. 定义功能优先级（P0/P1/P2）
+3. 输出包含验收标准的PRD
+4. 对技术不可行的需求提出替代方案</div>
+      </div>
+      <div class="field-group">
+        <div class="field-label">Constraints</div>
+        <div class="field-content" contenteditable>- 不直接做技术方案设计
+- 必须考虑MVP版本边界
+- 输出格式必须为JSON结构化文档</div>
+      </div>
+
+      <div class="dynamic-vars">
+        <h4>🔌 动态变量 (执行时注入)</h4>
+        <span class="var-item" onclick="insertVar('{{current_date}}')">{{current_date}}</span>
+        <span class="var-item" onclick="insertVar('{{project_name}}')">{{project_name}}</span>
+        <span class="var-item" onclick="insertVar('{{user_context}}')">{{user_context}}</span>
+        <span class="var-item" onclick="insertVar('{{team_size}}')">{{team_size}}</span>
+        <span class="var-item" onclick="insertVar('{{sprint_deadline}}')">{{sprint_deadline}}</span>
+        <span class="var-item" onclick="insertVar('{{previous_output}}')">{{previous_output}}</span>
+      </div>
+
+      <div class="toolbar">
+        <button onclick="previewPrompt()">👁️ 预览完整 Prompt</button>
+        <button>💾 保存新版本</button>
+        <button>↩️ 回滚</button>
+        <button>📤 导出 JSON</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="right-panel">
+    <h3>版本历史</h3>
+    <div class="version-timeline">
+      <div class="version-item active">
+        <div class="v-header"><span class="v-label">v5 (active)</span><span class="v-date">今天</span></div>
+        <div class="v-desc">优化 backstory，加入行业经验</div>
+      </div>
+      <div class="version-item">
+        <div class="v-header"><span class="v-label">v4</span><span class="v-date">昨天</span></div>
+        <div class="v-desc">加入输出格式约束</div>
+      </div>
+      <div class="version-item">
+        <div class="v-header"><span class="v-label">v3</span><span class="v-date">3天前</span></div>
+        <div class="v-desc">初始版本</div>
+      </div>
+    </div>
+
+    <h3 style="margin-top:24px">效果统计</h3>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="value">8.2</div><div class="label">评分</div></div>
+      <div class="stat-card"><div class="value">47</div><div class="label">使用次数</div></div>
+      <div class="stat-card"><div class="value">1.2k</div><div class="label">Token/次</div></div>
+      <div class="stat-card"><div class="value">94%</div><div class="label">成功率</div></div>
+    </div>
+
+    <button class="preview-btn" onclick="previewPrompt()">预览完整 System Prompt</button>
+  </div>
+</div>
+
+<script>
+function selectRole(el, roleId) {
+  document.querySelectorAll('.role-card').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+}
+function insertVar(varName) {
+  const sel = window.getSelection();
+  if (sel.rangeCount) {
+    const range = sel.getRangeAt(0);
+    range.insertNode(document.createTextNode(varName));
+  }
+}
+function previewPrompt() {
+  alert('完整 Prompt 预览弹窗 (实际实现中会渲染完整组装后的 system prompt)');
+}
+</script>
+</body>
+</html>

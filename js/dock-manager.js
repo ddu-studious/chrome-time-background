@@ -9,10 +9,12 @@
     { id: 'schedule', name: '计划管理', icon: 'fas fa-calendar-check', category: 'productivity', dockBtnId: 'schedule-dock-btn', isSystem: false, defaultOrder: 4 },
     { id: 'worklog', name: '工作日志', icon: 'fas fa-clipboard-list', category: 'productivity', dockBtnId: 'worklog-dock-btn', isSystem: false, defaultOrder: 5 },
     { id: 'blog', name: '写作空间', icon: 'fas fa-pen-nib', category: 'productivity', dockBtnId: 'blog-dock-btn', isSystem: false, defaultOrder: 6 },
+    { id: 'quick-nav', name: '快捷导航', icon: 'fas fa-compass', category: 'tools', dockBtnId: 'quick-nav-dock-btn', isSystem: false, defaultOrder: 6.5 },
     { id: 'snake-game', name: '贪吃蛇', icon: 'fas fa-gamepad', category: 'games', dockBtnId: 'snake-dock-btn', isSystem: false, defaultOrder: 7 },
     { id: 'tetris-game', name: '俄罗斯方块', icon: 'fas fa-th', category: 'games', dockBtnId: 'tetris-dock-btn', isSystem: false, defaultOrder: 8 },
     { id: 'tetris-3d-game', name: '立体方块', icon: 'fas fa-cube', category: 'games', dockBtnId: 'tetris-3d-dock-btn', panelId: 'tetris-3d-game-panel', isSystem: false, defaultOrder: 8.5 },
     { id: 'agent', name: 'Agent 矩阵', icon: 'fas fa-robot', category: 'tools', dockBtnId: 'agent-dock-btn', isSystem: false, defaultOrder: 9, hasIndicator: true },
+    { id: 'prompt-manager', name: 'Prompt 管理', icon: 'fas fa-magic', category: 'tools', dockBtnId: 'prompt-mgr-dock-btn', isSystem: false, defaultOrder: 9.5 },
     { id: 'settings', name: '设置', icon: 'fas fa-cog', category: 'system', dockBtnId: 'settings-dock-btn', isSystem: true, defaultOrder: 10 },
     { id: 'memo', name: '任务面板', icon: 'fas fa-tasks', category: 'productivity', dockBtnId: 'memo-toggle-btn', isSystem: false, defaultOrder: 11 },
   ];
@@ -283,14 +285,20 @@
       this.dockEl.addEventListener('dragstart', (e) => {
         const btn = e.target.closest('.dock-btn[data-dock-index]');
         if (!btn) return;
+        const appId = btn.dataset.dockAppId;
+        const app = this.apps.get(appId);
         this.dragState = {
           sourceIndex: parseInt(btn.dataset.dockIndex),
-          sourceAppId: btn.dataset.dockAppId,
+          sourceAppId: appId,
           el: btn,
         };
         btn.classList.add('dock-dragging');
         e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', btn.dataset.dockAppId || 'group');
+        e.dataTransfer.setData('text/plain', appId || 'group');
+
+        if (app && !app.isSystem) {
+          this._showRemoveZone();
+        }
       });
 
       this.dockEl.addEventListener('dragover', (e) => {
@@ -303,9 +311,13 @@
           return;
         }
 
+        const dockRect = this.dockEl.getBoundingClientRect();
+        const isOutside = e.clientY < dockRect.top - 40;
+        this._updateRemoveZone(isOutside);
+
         const btn = e.target.closest('.dock-btn[data-dock-index]');
         this.dockEl.querySelectorAll('.dock-btn').forEach(b => b.classList.remove('dock-drop-before', 'dock-drop-after'));
-        if (btn && btn !== this.dragState.el) {
+        if (!isOutside && btn && btn !== this.dragState.el) {
           const rect = btn.getBoundingClientRect();
           const midX = rect.left + rect.width / 2;
           if (e.clientX < midX) {
@@ -348,19 +360,71 @@
 
       this.dockEl.addEventListener('dragend', (e) => {
         this.dockEl.querySelectorAll('.dock-btn').forEach(b => b.classList.remove('dock-dragging', 'dock-drop-before', 'dock-drop-after'));
+        this._hideRemoveZone();
 
         if (this.dragState) {
           const dockRect = this.dockEl.getBoundingClientRect();
-          if (e.clientY < dockRect.top - 60) {
+          if (e.clientY < dockRect.top - 40) {
             const appId = this.dragState.sourceAppId;
             const app = this.apps.get(appId);
             if (app && !app.isSystem) {
               this.removeFromDock(appId);
+              this._showRemoveToast(app.name);
             }
           }
         }
         this.dragState = null;
       });
+
+      document.addEventListener('dragover', (e) => {
+        if (!this.dragState) return;
+        const dockRect = this.dockEl.getBoundingClientRect();
+        const isOutside = e.clientY < dockRect.top - 40;
+        this._updateRemoveZone(isOutside);
+      });
+    }
+
+    _showRemoveZone() {
+      let zone = document.getElementById('dock-remove-zone');
+      if (!zone) {
+        zone = document.createElement('div');
+        zone.id = 'dock-remove-zone';
+        zone.className = 'dock-remove-zone';
+        zone.innerHTML = '<i class="fas fa-times-circle"></i><span>拖出移除</span>';
+        document.body.appendChild(zone);
+      }
+      zone.classList.remove('active');
+      requestAnimationFrame(() => zone.classList.add('visible'));
+    }
+
+    _updateRemoveZone(isActive) {
+      const zone = document.getElementById('dock-remove-zone');
+      if (!zone) return;
+      if (isActive) {
+        zone.classList.add('active');
+      } else {
+        zone.classList.remove('active');
+      }
+    }
+
+    _hideRemoveZone() {
+      const zone = document.getElementById('dock-remove-zone');
+      if (zone) {
+        zone.classList.remove('visible', 'active');
+        setTimeout(() => zone.remove(), 300);
+      }
+    }
+
+    _showRemoveToast(appName) {
+      const toast = document.createElement('div');
+      toast.className = 'dock-remove-toast';
+      toast.innerHTML = `<i class="fas fa-check"></i> 已将 <strong>${appName}</strong> 从 Dock 移除`;
+      document.body.appendChild(toast);
+      requestAnimationFrame(() => toast.classList.add('show'));
+      setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+      }, 2000);
     }
 
     // ─── Dock Operations ───

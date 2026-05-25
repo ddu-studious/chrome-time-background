@@ -1,12 +1,13 @@
 import { Agent } from '@cursor/sdk';
 import type { SDKAgent, SDKMessage, Run } from '@cursor/sdk';
 import { config } from '../config.js';
-import type { BridgeAgent, CreateAgentOpts, AgentPublicInfo, RunRecord } from '../types.js';
+import type { BridgeAgent, CreateAgentOpts, AgentPublicInfo, RunRecord, McpServerConfig, SDKImageInput, AgentDefinition, CloudConfig } from '../types.js';
 import type { ServerResponse } from 'node:http';
 import {
   createConversation, updateConversationStatus, addMessage, recordTokenUsage,
 } from './database.js';
 import { recordTrace } from './trace-service.js';
+import { recordRunUsage } from './dashboard.js';
 
 function randomId(): string {
   return Math.random().toString(36).slice(2, 10);
@@ -27,6 +28,7 @@ interface ApprovalRequest {
 
 interface InternalAgent extends BridgeAgent {
   sdkAgent: SDKAgent;
+  sdkAgentId?: string;
   sseClients: Set<ServerResponse>;
   currentRun?: Run;
   lastActivityAt: number;
@@ -35,6 +37,10 @@ interface InternalAgent extends BridgeAgent {
   approvalEnabled: boolean;
   pendingApprovals: Map<string, ApprovalRequest>;
   systemPrompt?: string;
+  mcpServers?: Record<string, McpServerConfig>;
+  subAgents?: Record<string, AgentDefinition>;
+  cloudConfig?: CloudConfig;
+  runtime: 'local' | 'cloud';
 }
 
 export class AgentPool {
@@ -76,12 +82,57 @@ export class AgentPool {
 
     const model = opts.model || config.defaultModel;
 
-    const sdkAgent = await Agent.create({
-      apiKey: config.apiKey,
-      model: { id: model },
-      name: opts.name,
-      local: { cwd: opts.cwd },
-    });
+    const modelConfig: { id: string; params?: Array<{ id: string; value: string }> } = { id: model };
+    if (opts.modelParams?.length) {
+      modelConfig.params = opts.modelParams;
+    }
+
+    let sdkAgent: SDKAgent;
+    let sdkAgentId: string | undefined;
+
+    const isCloud = !!opts.cloud?.repos?.length;
+
+    if (opts.resumeAgentId) {
+      sdkAgent = await Agent.resume(opts.resumeAgentId, {
+        apiKey: config.apiKey,
+        ...(isCloud ? {} : { local: { cwd: opts.cwd } }),
+      });
+      sdkAgentId = opts.resumeAgentId;
+      console.log(`[AgentPool] Resumed existing SDK agent: ${opts.resumeAgentId}`);
+    } else {
+      const createOpts: Record<string, any> = {
+        apiKey: config.apiKey,
+        model: modelConfig,
+        name: opts.name,
+        mode: opts.mode || 'agent',
+      };
+
+      if (isCloud) {
+        createOpts.cloud = {
+          repos: opts.cloud!.repos,
+          autoCreatePR: opts.cloud!.autoCreatePR ?? false,
+          ...(opts.cloud!.envVars ? { envVars: opts.cloud!.envVars } : {}),
+        };
+        console.log(`[AgentPool] Creating cloud agent "${opts.name}" repos=${opts.cloud!.repos.map(r => r.url).join(', ')}`);
+      } else {
+        createOpts.local = {
+          cwd: opts.cwd,
+          settingSources: ['project', 'user'],
+        };
+      }
+
+      if (opts.mcpServers && Object.keys(opts.mcpServers).length > 0) {
+        createOpts.mcpServers = opts.mcpServers;
+      }
+
+      if (opts.agents && Object.keys(opts.agents).length > 0) {
+        createOpts.agents = opts.agents;
+        console.log(`[AgentPool] Agent "${opts.name}" configured with sub-agents: ${Object.keys(opts.agents).join(', ')}`);
+      }
+
+      sdkAgent = await Agent.create(createOpts);
+      sdkAgentId = sdkAgent.agentId;
+    }
 
     const id = `agent_${Date.now()}_${randomId()}`;
     const convId = `conv_${Date.now()}_${randomId()}`;
@@ -97,12 +148,17 @@ export class AgentPool {
       lastActivityAt: now,
       runHistory: [],
       sdkAgent,
+      sdkAgentId,
       sseClients: new Set(),
       conversationId: convId,
       textBuffer: '',
       approvalEnabled: false,
       pendingApprovals: new Map(),
       systemPrompt: opts.systemPrompt,
+      mcpServers: opts.mcpServers,
+      subAgents: opts.agents,
+      cloudConfig: opts.cloud,
+      runtime: isCloud ? 'cloud' : 'local',
     };
 
     this.agents.set(id, agent);
@@ -130,7 +186,7 @@ export class AgentPool {
     return this.agents.get(id);
   }
 
-  async send(agentId: string, prompt: string): Promise<string> {
+  async send(agentId: string, prompt: string, images?: SDKImageInput[]): Promise<string> {
     const agent = this.agents.get(agentId);
     if (!agent) throw new Error('Agent not found');
     if (agent.status === 'running') throw new Error('Agent is currently running a task');
@@ -142,7 +198,7 @@ export class AgentPool {
     const runId = `run_${Date.now()}_${randomId()}`;
     agent.currentRunId = runId;
     this.broadcast(agent, 'agent_status', { status: 'running' });
-    console.log(`[AgentPool] Agent ${agentId} (${agent.name}) → running, runId=${runId}, prompt="${prompt.substring(0, 80)}..."`);
+    console.log(`[AgentPool] Agent ${agentId} (${agent.name}) → running, runId=${runId}, prompt="${prompt.substring(0, 80)}..."${images?.length ? `, images=${images.length}` : ''}`);
 
     const record: RunRecord = {
       id: runId,
@@ -158,16 +214,29 @@ export class AgentPool {
       console.warn(`[AgentPool] Failed to persist user message for ${agentId}:`, e);
     }
 
-    this.processRun(agent, prompt, record).catch(err => {
+    const message: string | { text: string; images: SDKImageInput[] } =
+      images?.length ? { text: prompt, images } : prompt;
+
+    this.processRun(agent, message, record).catch(err => {
       console.error(`[AgentPool] Run error for ${agentId}:`, err.message);
     });
 
     return runId;
   }
 
-  private async processRun(agent: InternalAgent, prompt: string, record: RunRecord) {
+  private async processRun(agent: InternalAgent, prompt: string | { text: string; images: SDKImageInput[] }, record: RunRecord) {
     try {
-      const run = await agent.sdkAgent.send(prompt);
+      const run = await agent.sdkAgent.send(prompt as any, {
+        onDelta: ({ update }: { update: any }) => {
+          this.handleDeltaEvent(agent, update, record.id);
+        },
+        onStep: ({ step }: { step: any }) => {
+          this.broadcast(agent, 'step', {
+            type: step.type,
+            runId: record.id,
+          });
+        },
+      });
       agent.currentRun = run;
 
       for await (const event of run.stream()) {
@@ -207,6 +276,14 @@ export class AgentPool {
         }
       }
 
+      recordRunUsage({
+        model: agent.model,
+        runId: record.id,
+        agentId: agent.id,
+        durationMs: result.durationMs ?? 0,
+        timestamp: Date.now(),
+      });
+
       this.broadcast(agent, 'agent_status', { status: finalStatus });
 
       this.broadcast(agent, 'status', {
@@ -236,9 +313,26 @@ export class AgentPool {
     }
   }
 
-  private persistRunResult(agent: InternalAgent, record: RunRecord) {
+  private async persistRunResult(agent: InternalAgent, record: RunRecord) {
     try {
-      const text = agent.textBuffer.trim();
+      let text = agent.textBuffer.trim();
+
+      if (agent.currentRun) {
+        try {
+          if (agent.currentRun.supports('conversation')) {
+            const turns = await agent.currentRun.conversation();
+            const structured = turns
+              .filter((t: any) => t.type === 'agentConversationTurn')
+              .map((t: any) => t.turn);
+
+            if (structured.length > 0) {
+              const structuredText = JSON.stringify(structured);
+              addMessage(agent.conversationId, 'assistant', structuredText.substring(0, 50000), 'structured', record.id);
+            }
+          }
+        } catch { /* conversation() may not be supported */ }
+      }
+
       if (text) {
         addMessage(agent.conversationId, 'assistant', text.substring(0, 50000), 'text', record.id);
       }
@@ -248,6 +342,70 @@ export class AgentPool {
       console.warn(`[AgentPool] Failed to persist run result for ${agent.id}:`, e);
     }
     agent.textBuffer = '';
+  }
+
+  private handleDeltaEvent(agent: InternalAgent, update: any, runId: string) {
+    switch (update.type) {
+      case 'text-delta':
+        this.broadcast(agent, 'delta', {
+          type: 'text-delta',
+          text: update.text,
+          runId,
+        });
+        break;
+      case 'thinking-delta':
+        this.broadcast(agent, 'delta', {
+          type: 'thinking-delta',
+          text: update.text,
+          runId,
+        });
+        break;
+      case 'tool-call-started':
+        this.broadcast(agent, 'delta', {
+          type: 'tool-call-started',
+          toolCall: { type: update.toolCall?.type, name: update.toolCall?.name },
+          runId,
+        });
+        break;
+      case 'tool-call-completed':
+        this.broadcast(agent, 'delta', {
+          type: 'tool-call-completed',
+          toolCall: { type: update.toolCall?.type, name: update.toolCall?.name },
+          runId,
+        });
+        break;
+      case 'token-delta':
+        this.broadcast(agent, 'delta', {
+          type: 'token-delta',
+          runId,
+        });
+        break;
+      case 'step-started':
+        this.broadcast(agent, 'delta', {
+          type: 'step-started',
+          runId,
+        });
+        break;
+      case 'step-completed':
+        this.broadcast(agent, 'delta', {
+          type: 'step-completed',
+          runId,
+        });
+        break;
+      case 'turn-ended':
+        this.broadcast(agent, 'delta', {
+          type: 'turn-ended',
+          runId,
+        });
+        break;
+      case 'shell-output-delta':
+        this.broadcast(agent, 'delta', {
+          type: 'shell-output-delta',
+          text: update.text,
+          runId,
+        });
+        break;
+    }
   }
 
   private handleStreamEvent(agent: InternalAgent, event: SDKMessage, runId: string) {
@@ -356,6 +514,68 @@ export class AgentPool {
     } catch { /* best effort */ }
 
     this.broadcast(agent, 'status', { status: 'cancelled' });
+  }
+
+  async getConversation(agentId: string): Promise<any[]> {
+    const agent = this.agents.get(agentId);
+    if (!agent) throw new Error('Agent not found');
+
+    if (agent.currentRun) {
+      try {
+        if (agent.currentRun.supports('conversation')) {
+          return await agent.currentRun.conversation();
+        }
+      } catch { /* run may have ended */ }
+    }
+
+    const lastRun = agent.runHistory[agent.runHistory.length - 1];
+    if (lastRun && agent.sdkAgentId) {
+      try {
+        const run = await Agent.getRun(lastRun.id, {
+          runtime: 'local',
+          cwd: agent.cwd,
+        });
+        if (run.supports('conversation')) {
+          return await run.conversation();
+        }
+      } catch { /* best effort */ }
+    }
+
+    return [];
+  }
+
+  async listSdkAgents(cwd?: string): Promise<any[]> {
+    try {
+      const result = await Agent.list({
+        runtime: 'local',
+        cwd: cwd || process.cwd(),
+      } as any);
+      return result.items || [];
+    } catch {
+      return [];
+    }
+  }
+
+  async getSdkAgent(sdkAgentId: string): Promise<any | null> {
+    try {
+      return await Agent.get(sdkAgentId, {
+        cwd: process.cwd(),
+      } as any);
+    } catch {
+      return null;
+    }
+  }
+
+  async listSdkRuns(sdkAgentId: string): Promise<any[]> {
+    try {
+      const result = await Agent.listRuns(sdkAgentId, {
+        runtime: 'local',
+        cwd: process.cwd(),
+      } as any);
+      return result.items || [];
+    } catch {
+      return [];
+    }
   }
 
   async dispose(agentId: string) {
@@ -583,6 +803,49 @@ export class AgentPool {
     }
   }
 
+  // ─── One-shot prompt (Agent.prompt) ───
+
+  async prompt(opts: {
+    model?: string;
+    modelParams?: Array<{ id: string; value: string }>;
+    cwd?: string;
+    prompt: string;
+    mcpServers?: Record<string, McpServerConfig>;
+  }): Promise<{ result: string; durationMs?: number }> {
+    const modelId = opts.model || config.defaultModel;
+    const modelConfig: { id: string; params?: Array<{ id: string; value: string }> } = { id: modelId };
+    if (opts.modelParams?.length) modelConfig.params = opts.modelParams;
+
+    const result = await Agent.prompt(opts.prompt, {
+      apiKey: config.apiKey,
+      model: modelConfig,
+      local: { cwd: opts.cwd || process.cwd() },
+      ...(opts.mcpServers ? { mcpServers: opts.mcpServers } : {}),
+    } as any);
+
+    return {
+      result: result.result || '',
+      durationMs: result.durationMs,
+    };
+  }
+
+  // ─── Hot-reload agent config ───
+
+  async reload(agentId: string): Promise<boolean> {
+    const agent = this.agents.get(agentId);
+    if (!agent) throw new Error('Agent not found');
+    if (agent.status === 'running') throw new Error('Cannot reload while running');
+
+    try {
+      await agent.sdkAgent.reload();
+      console.log(`[AgentPool] Agent ${agentId} (${agent.name}) config reloaded`);
+      return true;
+    } catch (err: any) {
+      console.warn(`[AgentPool] reload failed for ${agentId}: ${err.message}`);
+      return false;
+    }
+  }
+
   // ─── Emergency Stop All ───
 
   async emergencyStopAll(): Promise<number> {
@@ -631,6 +894,10 @@ export class AgentPool {
     }
   }
 
+  getSdkAgentId(agentId: string): string | undefined {
+    return this.agents.get(agentId)?.sdkAgentId;
+  }
+
   private toPublicInfo(agent: InternalAgent): AgentPublicInfo {
     return {
       id: agent.id,
@@ -643,6 +910,10 @@ export class AgentPool {
       createdAt: agent.createdAt,
       runCount: agent.runHistory.length,
       conversationId: agent.conversationId,
+      sdkAgentId: agent.sdkAgentId,
+      runtime: agent.runtime,
+      subAgentNames: agent.subAgents ? Object.keys(agent.subAgents) : undefined,
+      hasCloudConfig: !!agent.cloudConfig,
     };
   }
 }

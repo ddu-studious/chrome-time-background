@@ -447,10 +447,10 @@ export function getModelRecommendation(
   roleId: string,
   taskComplexity: 1 | 2 | 3 | 4 | 5,
   taskType?: string,
-): { recommended: string; alternatives: typeof AVAILABLE_MODELS; reason: string } {
+): { recommended: string; alternatives: ReturnType<typeof getAvailableModels>; reason: string } {
   const role = getRoleById(roleId);
   if (!role) {
-    return { recommended: MODEL_TIER_DEFAULTS.balanced, alternatives: AVAILABLE_MODELS, reason: 'Unknown role' };
+    return { recommended: MODEL_TIER_DEFAULTS.balanced, alternatives: getAvailableModels(), reason: 'Unknown role' };
   }
 
   const recommended = resolveModelForRole(role, taskComplexity, true, taskType);
@@ -462,7 +462,7 @@ export function getModelRecommendation(
 
   return {
     recommended,
-    alternatives: AVAILABLE_MODELS,
+    alternatives: getAvailableModels(),
     reason: reasons.join(', '),
   };
 }
@@ -487,13 +487,55 @@ export function getModelTierDefaults(): Record<ModelTier, string> {
   return { ...MODEL_TIER_DEFAULTS };
 }
 
-export function buildRoleSystemPrompt(role: EnterpriseRole, context: {
+export interface DynamicContext {
+  key: string;
+  content: string;
+  priority?: 'high' | 'normal' | 'low';
+}
+
+export interface PromptBuildContext {
   topic: string;
   otherParticipants?: string[];
   round?: number;
   previousMessages?: string[];
-}): string {
-  const s = role.skill;
+  dynamicContexts?: DynamicContext[];
+}
+
+let _getActivePromptVersion: ((roleId: string) => any) | null = null;
+
+export function setPromptVersionResolver(resolver: (roleId: string) => any) {
+  _getActivePromptVersion = resolver;
+}
+
+function resolveSkill(role: EnterpriseRole): RoleSkill {
+  if (!_getActivePromptVersion) return role.skill;
+
+  try {
+    const activeVersion = _getActivePromptVersion(role.id);
+    if (!activeVersion?.prompt_config) return role.skill;
+
+    const custom: Partial<RoleSkill> = typeof activeVersion.prompt_config === 'string'
+      ? JSON.parse(activeVersion.prompt_config)
+      : activeVersion.prompt_config;
+
+    return {
+      role: custom.role || role.skill.role,
+      goal: custom.goal || role.skill.goal,
+      backstory: custom.backstory || role.skill.backstory,
+      behavior: custom.behavior?.length ? custom.behavior : role.skill.behavior,
+      outputFormat: custom.outputFormat || role.skill.outputFormat,
+      constraints: custom.constraints?.length ? custom.constraints : role.skill.constraints,
+      focusAreas: custom.focusAreas?.length ? custom.focusAreas : role.skill.focusAreas,
+      canDelegate: custom.canDelegate ?? role.skill.canDelegate,
+      canVeto: custom.canVeto ?? role.skill.canVeto,
+    };
+  } catch {
+    return role.skill;
+  }
+}
+
+export function buildRoleSystemPrompt(role: EnterpriseRole, context: PromptBuildContext): string {
+  const s = resolveSkill(role);
   const parts: string[] = [
     `# 你的角色: ${s.role}`,
     `## 目标\n${s.goal}`,
@@ -503,6 +545,17 @@ export function buildRoleSystemPrompt(role: EnterpriseRole, context: {
     `## 约束条件\n${s.constraints.map((c) => `- ${c}`).join('\n')}`,
     `## 关注领域\n${s.focusAreas.join(', ')}`,
   ];
+
+  if (context.dynamicContexts?.length) {
+    const sorted = [...context.dynamicContexts].sort((a, b) => {
+      const order = { high: 0, normal: 1, low: 2 };
+      return (order[a.priority || 'normal'] || 1) - (order[b.priority || 'normal'] || 1);
+    });
+    const items = sorted.map(dc =>
+      `### ${dc.key}\n${dc.content}`
+    );
+    parts.push(`## 任务补充信息\n${items.join('\n\n')}`);
+  }
 
   if (context.otherParticipants?.length) {
     parts.push(`## 当前参会角色\n${context.otherParticipants.join(', ')}`);

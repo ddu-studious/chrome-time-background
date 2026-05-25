@@ -161,13 +161,57 @@ function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_decisions_task ON decisions(task_analysis_id);
     CREATE INDEX IF NOT EXISTS idx_causal_from ON causal_links(from_trace);
     CREATE INDEX IF NOT EXISTS idx_causal_to ON causal_links(to_trace);
+
+    -- Agent Sessions: aggregation layer for multi-agent tasks
+    CREATE TABLE IF NOT EXISTS agent_sessions (
+      id TEXT PRIMARY KEY,
+      task_analysis_id TEXT,
+      title TEXT NOT NULL,
+      summary TEXT,
+      participant_roles TEXT DEFAULT '[]',
+      participant_count INTEGER DEFAULT 1,
+      status TEXT DEFAULT 'active',
+      total_messages INTEGER DEFAULT 0,
+      total_tokens INTEGER DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      completed_at INTEGER
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_sessions_status ON agent_sessions(status);
+    CREATE INDEX IF NOT EXISTS idx_sessions_created ON agent_sessions(created_at DESC);
+
+    -- Prompt version management for role engineering
+    CREATE TABLE IF NOT EXISTS role_prompt_versions (
+      id TEXT PRIMARY KEY,
+      role_id TEXT NOT NULL,
+      version INTEGER NOT NULL,
+      prompt_config TEXT NOT NULL,
+      changelog TEXT,
+      performance_score REAL,
+      usage_count INTEGER DEFAULT 0,
+      is_active INTEGER DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      created_by TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_prompt_versions_role ON role_prompt_versions(role_id);
+    CREATE INDEX IF NOT EXISTS idx_prompt_versions_active ON role_prompt_versions(is_active);
   `);
 
   try {
     db.exec(`ALTER TABLE projects ADD COLUMN agent_presets TEXT DEFAULT '[]'`);
-  } catch {
-    // column already exists
-  }
+  } catch { /* already exists */ }
+
+  try {
+    db.exec(`ALTER TABLE conversations ADD COLUMN session_id TEXT REFERENCES agent_sessions(id)`);
+  } catch { /* already exists */ }
+  try {
+    db.exec(`ALTER TABLE conversations ADD COLUMN role_id TEXT`);
+  } catch { /* already exists */ }
+  try {
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_conversations_session ON conversations(session_id)`);
+  } catch { /* already exists */ }
 }
 
 export function closeDb() {
@@ -479,4 +523,132 @@ export function getRecentTokenUsage(limit = 20) {
   return getDb().prepare(`
     SELECT * FROM token_usage ORDER BY created_at DESC LIMIT ?
   `).all(limit);
+}
+
+// ─── Agent Sessions (multi-agent task aggregation) ───
+
+export function createSession(id: string, opts: {
+  taskAnalysisId?: string;
+  title: string;
+  participantRoles?: string[];
+}) {
+  const now = Date.now();
+  getDb().prepare(`
+    INSERT INTO agent_sessions (id, task_analysis_id, title, participant_roles, participant_count, status, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 'active', ?, ?)
+  `).run(
+    id, opts.taskAnalysisId || null, opts.title,
+    JSON.stringify(opts.participantRoles || []),
+    (opts.participantRoles || []).length,
+    now, now
+  );
+}
+
+export function getSession(id: string) {
+  return getDb().prepare('SELECT * FROM agent_sessions WHERE id = ?').get(id);
+}
+
+export function listSessions(limit = 50, status?: string) {
+  if (status) {
+    return getDb().prepare(
+      'SELECT * FROM agent_sessions WHERE status = ? ORDER BY updated_at DESC LIMIT ?'
+    ).all(status, limit);
+  }
+  return getDb().prepare(
+    'SELECT * FROM agent_sessions ORDER BY updated_at DESC LIMIT ?'
+  ).all(limit);
+}
+
+export function updateSession(id: string, fields: {
+  title?: string;
+  summary?: string;
+  status?: string;
+  participantRoles?: string[];
+  totalMessages?: number;
+  totalTokens?: number;
+}) {
+  const sets: string[] = [];
+  const vals: any[] = [];
+  if (fields.title !== undefined) { sets.push('title = ?'); vals.push(fields.title); }
+  if (fields.summary !== undefined) { sets.push('summary = ?'); vals.push(fields.summary); }
+  if (fields.status !== undefined) { sets.push('status = ?'); vals.push(fields.status); }
+  if (fields.participantRoles !== undefined) {
+    sets.push('participant_roles = ?'); vals.push(JSON.stringify(fields.participantRoles));
+    sets.push('participant_count = ?'); vals.push(fields.participantRoles.length);
+  }
+  if (fields.totalMessages !== undefined) { sets.push('total_messages = ?'); vals.push(fields.totalMessages); }
+  if (fields.totalTokens !== undefined) { sets.push('total_tokens = ?'); vals.push(fields.totalTokens); }
+  if (fields.status === 'completed' || fields.status === 'failed') {
+    sets.push('completed_at = ?'); vals.push(Date.now());
+  }
+  if (sets.length === 0) return;
+  sets.push('updated_at = ?'); vals.push(Date.now());
+  vals.push(id);
+  getDb().prepare(`UPDATE agent_sessions SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
+}
+
+export function getSessionWithConversations(id: string) {
+  const session = getSession(id);
+  if (!session) return null;
+  const conversations = getDb().prepare(
+    'SELECT * FROM conversations WHERE session_id = ? ORDER BY created_at ASC'
+  ).all(id);
+  return { session, conversations };
+}
+
+export function deleteSession(id: string) {
+  const d = getDb();
+  d.prepare('UPDATE conversations SET session_id = NULL WHERE session_id = ?').run(id);
+  d.prepare('DELETE FROM agent_sessions WHERE id = ?').run(id);
+}
+
+// ─── Role Prompt Versions ───
+
+export function createPromptVersion(id: string, opts: {
+  roleId: string;
+  version: number;
+  promptConfig: string;
+  changelog?: string;
+  createdBy?: string;
+}) {
+  const now = Date.now();
+  getDb().prepare(`
+    INSERT INTO role_prompt_versions (id, role_id, version, prompt_config, changelog, is_active, created_at, created_by)
+    VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+  `).run(id, opts.roleId, opts.version, opts.promptConfig, opts.changelog || null, now, opts.createdBy || null);
+}
+
+export function activatePromptVersion(id: string, roleId: string) {
+  const d = getDb();
+  d.prepare('UPDATE role_prompt_versions SET is_active = 0 WHERE role_id = ?').run(roleId);
+  d.prepare('UPDATE role_prompt_versions SET is_active = 1 WHERE id = ?').run(id);
+}
+
+export function getActivePromptVersion(roleId: string) {
+  return getDb().prepare(
+    'SELECT * FROM role_prompt_versions WHERE role_id = ? AND is_active = 1'
+  ).get(roleId);
+}
+
+export function listPromptVersions(roleId: string) {
+  return getDb().prepare(
+    'SELECT * FROM role_prompt_versions WHERE role_id = ? ORDER BY version DESC'
+  ).all(roleId);
+}
+
+export function updatePromptVersionScore(id: string, score: number) {
+  getDb().prepare(
+    'UPDATE role_prompt_versions SET performance_score = ? WHERE id = ?'
+  ).run(score, id);
+}
+
+export function incrementPromptUsage(roleId: string) {
+  getDb().prepare(`
+    UPDATE role_prompt_versions SET usage_count = usage_count + 1
+    WHERE role_id = ? AND is_active = 1
+  `).run(roleId);
+}
+
+export function deletePromptVersion(id: string) {
+  getDb().prepare('DELETE FROM role_prompt_versions WHERE id = ? AND is_active = 0').run(id);
 }
