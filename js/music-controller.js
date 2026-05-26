@@ -321,16 +321,21 @@ class MusicController {
         document.body.appendChild(ctxMenu);
         this._ctxMenuEl = ctxMenu;
 
-        const timeContainer = wrapper.querySelector('.time-container');
-        if (timeContainer) {
-            timeContainer.after(container);
-        } else {
-            wrapper.appendChild(container);
-        }
+        document.body.appendChild(container);
         this._el = container;
         this._initBuiltinAudio();
         this._initFloatingVolume();
         this._updateModeUI();
+    }
+
+    toggle() {
+        if (!this._el) return;
+        const isVisible = this._el.classList.contains('mc-dock-open');
+        if (isVisible) {
+            this._el.classList.remove('mc-dock-open');
+        } else {
+            this._el.classList.add('mc-dock-open');
+        }
     }
 
     _initFloatingVolume() {
@@ -783,12 +788,31 @@ class MusicController {
     _handlePlaybackError(error, code) {
         this.state.isPlaying = false;
         this._updateUI();
-        if (code === 4) {
-            this._showToast('播放链接已失效，正在切换下一首…');
-            setTimeout(() => this._nextTrack(), 1500);
-        } else {
-            this._showToast(error || '播放出错');
+
+        const errHints = {
+            1: '加载被中止',
+            2: '网络错误',
+            3: '解码失败',
+            4: '链接已失效',
+        };
+        const hint = errHints[code] || '播放出错';
+        this._showToast(`${hint}，正在切换下一首…`);
+        this._autoSkipOnError();
+    }
+
+    _autoSkipOnError() {
+        const now = Date.now();
+        if (!this._skipErrorTs) this._skipErrorTs = [];
+        this._skipErrorTs = this._skipErrorTs.filter(t => now - t < 30000);
+        this._skipErrorTs.push(now);
+
+        const maxSkips = Math.min((this._playlist?.length || 5), 5);
+        if (this._skipErrorTs.length > maxSkips) {
+            this._showToast('连续多首播放失败，已暂停');
+            this._skipErrorTs = [];
+            return;
         }
+        setTimeout(() => this._nextTrack(), 1500);
     }
 
     // ===================== 播放控制 =====================
@@ -1412,6 +1436,7 @@ class MusicController {
         const songUrl = await this._getSongUrl(songId);
         if (!songUrl) {
             this._setRowLoading(songId, false);
+            this._autoSkipOnError();
             return;
         }
 

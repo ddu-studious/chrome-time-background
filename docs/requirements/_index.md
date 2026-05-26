@@ -1,9 +1,12 @@
 # 需求文档索引
 
-> 最后更新：2026-05-20
+> 最后更新：2026-05-25
 
 | 更新日期 | 文档 | 标题 |
 |----------|------|------|
+| 2026-05-25 | [ops-graphsphere-demo-script-brief-v0.1.md](ops-graphsphere-demo-script-brief-v0.1.md) | GraphSphere 5 分钟标准演示脚本与录屏/GIF 传播素材 Brief |
+| 2026-05-25 | [ba-graphsphere-scenario-entities-rkg-v0.1.md](ba-graphsphere-scenario-entities-rkg-v0.1.md) | GraphSphere 场景 A/B 实体关系清单与 R-KG 合规检查 |
+| 2026-05-25 | [prd-graphsphere-demo-scope-v0.1.md](prd-graphsphere-demo-scope-v0.1.md) | GraphSphere v0.1 Demo Scope 一页纸 |
 | 2026-05-20 | [br-tetris-3d-mvp-v1.md](br-tetris-3d-mvp-v1.md) | 立体方块 MVP 业务规则表 v1（BR-GAME/BR-SCORE/BR-VALID · UAT） |
 | 2026-05-20 | [prd-tetris-3d-v1.1.md](prd-tetris-3d-v1.1.md) | 立体方块（2.5D）v1.1 — Dock 小游戏 MVP |
 | 2026-05-11 | [prd-cursor-bridge.md](prd-cursor-bridge.md) | Cursor Bridge — 本地多 Agent 矩阵开发平台 |

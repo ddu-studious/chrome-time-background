@@ -115,7 +115,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
                     broadcastState();
                 }).catch((e) => {
                     console.warn('[Offscreen] play failed:', e);
-                    sendResponse({ ok: false, error: e.message });
+                    chrome.runtime.sendMessage({
+                        action: 'offscreen_error',
+                        error: e.message || 'play() rejected',
+                        code: 4,
+                    }).catch(() => {});
                 });
                 sendResponse({ ok: true });
             }

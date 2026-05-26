@@ -4,3 +4,5 @@ node_modules/
 .playwright-mcp/
 releases/archives/*.zip
 !releases/archives/.gitkeep
+releases/kg3d-demo/archives/*.zip
+!releases/kg3d-demo/archives/.gitkeep

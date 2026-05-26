@@ -235,12 +235,19 @@ async function initApp() {
             if (window.musicController && typeof window.musicController.init === 'function') {
                 window.musicController.init();
             }
+            const musicDockBtn = document.getElementById('music-dock-btn');
+            if (musicDockBtn) {
+                musicDockBtn.addEventListener('click', () => {
+                    if (window.musicController) window.musicController.toggle();
+                });
+            }
             console.log('音乐控制器初始化完成');
         } catch (error) {
             console.error('音乐控制器初始化失败:', error);
         }
     } else {
         console.log('音乐播放器已禁用（性能设置）');
+        document.getElementById('music-dock-btn')?.classList.add('hidden');
     }
 
 
@@ -371,12 +378,20 @@ async function initApp() {
     if (sm.getSetting('enableWarmTip') !== false) {
         try {
             initPoetryRadio();
+            const poetryDockBtn = document.getElementById('poetry-dock-btn');
+            if (poetryDockBtn) {
+                poetryDockBtn.addEventListener('click', () => {
+                    const el = document.getElementById('poetry-radio');
+                    if (el) el.classList.toggle('poetry-dock-open');
+                });
+            }
             console.log('诗词电台初始化完成');
         } catch (error) {
             console.error('诗词电台初始化失败:', error);
         }
     } else {
         console.log('温情提示已禁用（性能设置）');
+        document.getElementById('poetry-dock-btn')?.classList.add('hidden');
     }
 
     // 极简模式初始化
@@ -657,7 +672,6 @@ function initPoetryRadio() {
         if (els.speedSel) els.speedSel.value = String(state.speed);
         updateModeIcon();
         renderCurrent();
-        bar.style.display = '';
     }
 
     function renderCurrent() {
@@ -944,6 +958,16 @@ async function setupKeyboardShortcuts() {
         memoToggleBtn.addEventListener('click', () => {
             if (window.memoManager && typeof window.memoManager.toggle === 'function') {
                 window.memoManager.toggle();
+            }
+        });
+    }
+
+    // 阅读 dock 按钮
+    const readingDockBtn = document.getElementById('reading-dock-btn');
+    if (readingDockBtn) {
+        readingDockBtn.addEventListener('click', () => {
+            if (window.memoManager && typeof window.memoManager.toggleReading === 'function') {
+                window.memoManager.toggleReading();
             }
         });
     }

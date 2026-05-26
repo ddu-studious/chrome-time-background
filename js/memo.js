@@ -1591,6 +1591,8 @@ class MemoManager {
                     frag.appendChild(this.createSidebarTaskItem(tasks[i], startIndex + i, filteredCount));
                 }
                 tasksContainer.appendChild(frag);
+                const groupEl = tasksContainer.closest('.date-group');
+                if (groupEl) groupEl.dataset.rendered = 'true';
             }
             return;
         }
@@ -12611,18 +12613,26 @@ class MemoManager {
         const hasReviewItems = reviewQueue.length > 0 || unreviewed.length > 0;
         if (!hasReviewItems) return;
 
-        wrapper.style.display = '';
+        this._readingReady = true;
         this._renderReadingRecommendation(reviewQueue, unreviewed);
         this._bindReadingRecoEvents();
 
-        // v3.3.0: 默认收起，节省空间
         const body = document.getElementById('reading-reco-body');
-        const toggle = document.getElementById('reading-reco-toggle');
-        if (body && !body.classList.contains('collapsed')) {
-            body.classList.add('collapsed');
-            const icon = toggle?.querySelector('i');
-            if (icon) icon.className = 'fas fa-chevron-down';
+        if (body && body.classList.contains('collapsed')) {
+            body.classList.remove('collapsed');
         }
+    }
+
+    toggleReading() {
+        const wrapper = document.getElementById('reading-reco-wrapper');
+        if (!wrapper) return;
+        if (!this._readingReady) {
+            this.initReadingRecommendation().then(() => {
+                if (this._readingReady) wrapper.classList.add('reading-dock-open');
+            });
+            return;
+        }
+        wrapper.classList.toggle('reading-dock-open');
     }
 
     _renderReadingRecommendation(reviewQueue, unreviewed) {

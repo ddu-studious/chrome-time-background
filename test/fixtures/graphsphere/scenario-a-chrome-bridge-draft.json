@@ -1,0 +1,734 @@
+{
+  "schemaVersion": "1.0.0",
+  "meta": {
+    "id": "scenario-a-chrome-bridge",
+    "title": "Chrome 扩展 / Bridge 产品架构",
+    "description": "对内汇报：扩展模块与 Cursor Bridge 协作关系（Draft 42 节点）",
+    "layoutSeed": 20260525,
+    "locale": "zh-CN",
+    "updatedAt": "2026-05-25"
+  },
+  "schema": {
+    "nodeTypes": [
+      {
+        "id": "product",
+        "label": "产品",
+        "color": "#6366F1"
+      },
+      {
+        "id": "module",
+        "label": "模块",
+        "color": "#0EA5E9"
+      },
+      {
+        "id": "service",
+        "label": "服务",
+        "color": "#14B8A6"
+      },
+      {
+        "id": "infra",
+        "label": "基础设施",
+        "color": "#64748B"
+      },
+      {
+        "id": "data",
+        "label": "数据",
+        "color": "#F59E0B"
+      },
+      {
+        "id": "integration",
+        "label": "集成",
+        "color": "#A855F7"
+      },
+      {
+        "id": "capability",
+        "label": "能力",
+        "color": "#EC4899"
+      }
+    ],
+    "edgeTypes": [
+      {
+        "id": "contains",
+        "label": "包含",
+        "directed": true
+      },
+      {
+        "id": "depends_on",
+        "label": "依赖",
+        "directed": true
+      },
+      {
+        "id": "communicates_with",
+        "label": "通信",
+        "directed": true
+      },
+      {
+        "id": "stores_in",
+        "label": "持久化",
+        "directed": true
+      },
+      {
+        "id": "exposes",
+        "label": "暴露",
+        "directed": true
+      },
+      {
+        "id": "integrates_with",
+        "label": "集成",
+        "directed": true
+      },
+      {
+        "id": "derived_from",
+        "label": "衍生",
+        "directed": true
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "chrome-extension",
+      "label": "中国风景时钟扩展",
+      "type": "product",
+      "summary": "MV3 新标签页产品根节点",
+      "pinned": true,
+      "weight": 2
+    },
+    {
+      "id": "new-tab-page",
+      "label": "新标签页",
+      "type": "module",
+      "summary": "index.html 主入口与布局容器"
+    },
+    {
+      "id": "dock-manager",
+      "label": "Dock 栏",
+      "type": "module",
+      "summary": "底部快捷入口与模块切换"
+    },
+    {
+      "id": "settings-page",
+      "label": "设置页",
+      "type": "module",
+      "summary": "用户偏好与 LLM 配置"
+    },
+    {
+      "id": "main-bootstrap",
+      "label": "主 bootstrap",
+      "type": "module",
+      "summary": "main.js 模块初始化编排"
+    },
+    {
+      "id": "memo-system",
+      "label": "备忘录",
+      "type": "module",
+      "summary": "Markdown 备忘录与提醒"
+    },
+    {
+      "id": "knowledge-wall",
+      "label": "知识墙",
+      "type": "module",
+      "summary": "常用信息卡片与 Markdown 渲染"
+    },
+    {
+      "id": "task-manager",
+      "label": "任务管理",
+      "type": "module",
+      "summary": "每日任务与到期提醒"
+    },
+    {
+      "id": "schedule-planner",
+      "label": "日程计划",
+      "type": "module",
+      "summary": "日历与时间块规划"
+    },
+    {
+      "id": "daily-worklog",
+      "label": "工作日志",
+      "type": "module",
+      "summary": "按日记录与回看"
+    },
+    {
+      "id": "quick-navigation",
+      "label": "快速导航",
+      "type": "module",
+      "summary": "站点快捷入口"
+    },
+    {
+      "id": "prompt-manager",
+      "label": "Prompt 管理",
+      "type": "module",
+      "summary": "提示词模板库"
+    },
+    {
+      "id": "writing-assistant",
+      "label": "写作助手",
+      "type": "module",
+      "summary": "博客 / 写作空间 AI 联想"
+    },
+    {
+      "id": "bookmark-rag",
+      "label": "书签智能检索",
+      "type": "module",
+      "summary": "RAG + 语义搜索"
+    },
+    {
+      "id": "bookmark-srs",
+      "label": "书签 SRS",
+      "type": "module",
+      "summary": "间隔重复复习调度"
+    },
+    {
+      "id": "intelligent-query",
+      "label": "智能查询",
+      "type": "capability",
+      "summary": "自然语言理解搜索意图"
+    },
+    {
+      "id": "music-controller",
+      "label": "音乐播放器",
+      "type": "module",
+      "summary": "独立音乐控制面板"
+    },
+    {
+      "id": "bilibili-integration",
+      "label": "哔哩哔哩集成",
+      "type": "integration",
+      "summary": "关注 / 课程 / 播放器注入"
+    },
+    {
+      "id": "weather-widget",
+      "label": "天气组件",
+      "type": "module",
+      "summary": "地理位置天气展示"
+    },
+    {
+      "id": "landscape-clock",
+      "label": "风景时钟",
+      "type": "module",
+      "summary": "背景图与时钟展示"
+    },
+    {
+      "id": "tetris-3d",
+      "label": "立体方块",
+      "type": "module",
+      "summary": "WebGL 3D 小游戏"
+    },
+    {
+      "id": "webgl-probe",
+      "label": "WebGL 探针",
+      "type": "capability",
+      "summary": "WebGL 能力检测与 2D 降级决策"
+    },
+    {
+      "id": "activity-logger",
+      "label": "活动监控",
+      "type": "module",
+      "summary": "扩展使用行为记录"
+    },
+    {
+      "id": "cursor-bridge-ui",
+      "label": "Bridge 客户端 UI",
+      "type": "module",
+      "summary": "cursor-bridge.js 面板"
+    },
+    {
+      "id": "cursor-bridge",
+      "label": "Cursor Bridge 服务",
+      "type": "service",
+      "summary": "本地 Node.js 桥接服务",
+      "pinned": true,
+      "weight": 1.8
+    },
+    {
+      "id": "fastify-api",
+      "label": "Fastify API 层",
+      "type": "service",
+      "summary": "REST / SSE HTTP 接口"
+    },
+    {
+      "id": "agent-pool",
+      "label": "Agent 池",
+      "type": "service",
+      "summary": "Agent 生命周期内存管理",
+      "pinned": true,
+      "weight": 1.8
+    },
+    {
+      "id": "multi-role-engine",
+      "label": "多角色引擎",
+      "type": "capability",
+      "summary": "多 Agent 协作编排"
+    },
+    {
+      "id": "enterprise-roles",
+      "label": "企业角色库",
+      "type": "data",
+      "summary": "产品/架构/开发等角色定义"
+    },
+    {
+      "id": "sse-stream",
+      "label": "SSE 输出流",
+      "type": "capability",
+      "summary": "Agent 流式输出推送"
+    },
+    {
+      "id": "sqlite-database",
+      "label": "SQLite 数据库",
+      "type": "data",
+      "summary": "会话 / 消息 / 任务持久化"
+    },
+    {
+      "id": "native-messaging-host",
+      "label": "Native Messaging Host",
+      "type": "integration",
+      "summary": "自动启停 Bridge 进程"
+    },
+    {
+      "id": "browser-automation",
+      "label": "浏览器自动化",
+      "type": "capability",
+      "summary": "CDP / 页面操控能力"
+    },
+    {
+      "id": "agent-memory",
+      "label": "Agent 记忆服务",
+      "type": "service",
+      "summary": "跨会话上下文记忆"
+    },
+    {
+      "id": "trace-service",
+      "label": "追踪服务",
+      "type": "service",
+      "summary": "执行链路追踪"
+    },
+    {
+      "id": "writing-module",
+      "label": "写作模块 API",
+      "type": "service",
+      "summary": "服务端写作 / Qwen 集成"
+    },
+    {
+      "id": "service-worker",
+      "label": "Service Worker",
+      "type": "infra",
+      "summary": "background.js 后台中枢"
+    },
+    {
+      "id": "offscreen-document",
+      "label": "Offscreen 文档",
+      "type": "infra",
+      "summary": "音频等离屏任务"
+    },
+    {
+      "id": "chrome-storage",
+      "label": "Chrome Storage",
+      "type": "infra",
+      "summary": "本地键值与结构化存储"
+    },
+    {
+      "id": "declarative-net-request",
+      "label": "DNR 规则",
+      "type": "infra",
+      "summary": "请求头 / CSP 辅助"
+    },
+    {
+      "id": "cursor-sdk",
+      "label": "Cursor SDK",
+      "type": "integration",
+      "summary": "@cursor/sdk Agent 能力"
+    },
+    {
+      "id": "graphsphere-demo",
+      "label": "GraphSphere Demo",
+      "type": "module",
+      "summary": "3D 知识图谱演示入口（P0）"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-a-01",
+      "source": "chrome-extension",
+      "target": "new-tab-page",
+      "type": "contains"
+    },
+    {
+      "id": "e-a-02",
+      "source": "chrome-extension",
+      "target": "dock-manager",
+      "type": "contains"
+    },
+    {
+      "id": "e-a-03",
+      "source": "chrome-extension",
+      "target": "service-worker",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-a-04",
+      "source": "chrome-extension",
+      "target": "settings-page",
+      "type": "contains"
+    },
+    {
+      "id": "e-a-05",
+      "source": "new-tab-page",
+      "target": "main-bootstrap",
+      "type": "contains"
+    },
+    {
+      "id": "e-a-06",
+      "source": "dock-manager",
+      "target": "memo-system",
+      "type": "exposes"
+    },
+    {
+      "id": "e-a-07",
+      "source": "dock-manager",
+      "target": "knowledge-wall",
+      "type": "exposes"
+    },
+    {
+      "id": "e-a-08",
+      "source": "dock-manager",
+      "target": "task-manager",
+      "type": "exposes"
+    },
+    {
+      "id": "e-a-09",
+      "source": "dock-manager",
+      "target": "cursor-bridge-ui",
+      "type": "exposes"
+    },
+    {
+      "id": "e-a-10",
+      "source": "dock-manager",
+      "target": "tetris-3d",
+      "type": "exposes"
+    },
+    {
+      "id": "e-a-11",
+      "source": "dock-manager",
+      "target": "graphsphere-demo",
+      "type": "exposes"
+    },
+    {
+      "id": "e-a-12",
+      "source": "main-bootstrap",
+      "target": "weather-widget",
+      "type": "contains"
+    },
+    {
+      "id": "e-a-13",
+      "source": "main-bootstrap",
+      "target": "landscape-clock",
+      "type": "contains"
+    },
+    {
+      "id": "e-a-14",
+      "source": "memo-system",
+      "target": "chrome-storage",
+      "type": "stores_in"
+    },
+    {
+      "id": "e-a-15",
+      "source": "knowledge-wall",
+      "target": "chrome-storage",
+      "type": "stores_in"
+    },
+    {
+      "id": "e-a-16",
+      "source": "task-manager",
+      "target": "chrome-storage",
+      "type": "stores_in"
+    },
+    {
+      "id": "e-a-17",
+      "source": "schedule-planner",
+      "target": "task-manager",
+      "type": "integrates_with"
+    },
+    {
+      "id": "e-a-18",
+      "source": "daily-worklog",
+      "target": "task-manager",
+      "type": "derived_from"
+    },
+    {
+      "id": "e-a-19",
+      "source": "bookmark-rag",
+      "target": "intelligent-query",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-a-20",
+      "source": "bookmark-rag",
+      "target": "chrome-storage",
+      "type": "stores_in"
+    },
+    {
+      "id": "e-a-21",
+      "source": "bookmark-srs",
+      "target": "bookmark-rag",
+      "type": "derived_from"
+    },
+    {
+      "id": "e-a-22",
+      "source": "writing-assistant",
+      "target": "prompt-manager",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-a-23",
+      "source": "music-controller",
+      "target": "offscreen-document",
+      "type": "communicates_with"
+    },
+    {
+      "id": "e-a-24",
+      "source": "bilibili-integration",
+      "target": "service-worker",
+      "type": "communicates_with"
+    },
+    {
+      "id": "e-a-25",
+      "source": "tetris-3d",
+      "target": "webgl-probe",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-a-26",
+      "source": "graphsphere-demo",
+      "target": "webgl-probe",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-a-27",
+      "source": "cursor-bridge-ui",
+      "target": "cursor-bridge",
+      "type": "communicates_with"
+    },
+    {
+      "id": "e-a-28",
+      "source": "cursor-bridge-ui",
+      "target": "sse-stream",
+      "type": "communicates_with"
+    },
+    {
+      "id": "e-a-29",
+      "source": "cursor-bridge",
+      "target": "fastify-api",
+      "type": "contains"
+    },
+    {
+      "id": "e-a-30",
+      "source": "cursor-bridge",
+      "target": "agent-pool",
+      "type": "contains"
+    },
+    {
+      "id": "e-a-31",
+      "source": "cursor-bridge",
+      "target": "sqlite-database",
+      "type": "stores_in"
+    },
+    {
+      "id": "e-a-32",
+      "source": "cursor-bridge",
+      "target": "cursor-sdk",
+      "type": "integrates_with"
+    },
+    {
+      "id": "e-a-33",
+      "source": "agent-pool",
+      "target": "cursor-sdk",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-a-34",
+      "source": "multi-role-engine",
+      "target": "agent-pool",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-a-35",
+      "source": "multi-role-engine",
+      "target": "enterprise-roles",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-a-36",
+      "source": "fastify-api",
+      "target": "sse-stream",
+      "type": "exposes"
+    },
+    {
+      "id": "e-a-37",
+      "source": "fastify-api",
+      "target": "multi-role-engine",
+      "type": "exposes"
+    },
+    {
+      "id": "e-a-38",
+      "source": "fastify-api",
+      "target": "writing-module",
+      "type": "exposes"
+    },
+    {
+      "id": "e-a-39",
+      "source": "fastify-api",
+      "target": "browser-automation",
+      "type": "exposes"
+    },
+    {
+      "id": "e-a-40",
+      "source": "multi-role-engine",
+      "target": "trace-service",
+      "type": "communicates_with"
+    },
+    {
+      "id": "e-a-41",
+      "source": "agent-pool",
+      "target": "agent-memory",
+      "type": "communicates_with"
+    },
+    {
+      "id": "e-a-42",
+      "source": "native-messaging-host",
+      "target": "cursor-bridge",
+      "type": "communicates_with"
+    },
+    {
+      "id": "e-a-43",
+      "source": "service-worker",
+      "target": "native-messaging-host",
+      "type": "communicates_with"
+    },
+    {
+      "id": "e-a-44",
+      "source": "service-worker",
+      "target": "declarative-net-request",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-a-45",
+      "source": "service-worker",
+      "target": "activity-logger",
+      "type": "contains"
+    },
+    {
+      "id": "e-a-46",
+      "source": "settings-page",
+      "target": "chrome-storage",
+      "type": "stores_in"
+    },
+    {
+      "id": "e-a-47",
+      "source": "settings-page",
+      "target": "cursor-bridge-ui",
+      "type": "communicates_with"
+    },
+    {
+      "id": "e-a-48",
+      "source": "prompt-manager",
+      "target": "chrome-storage",
+      "type": "stores_in"
+    },
+    {
+      "id": "e-a-49",
+      "source": "intelligent-query",
+      "target": "writing-module",
+      "type": "communicates_with"
+    },
+    {
+      "id": "e-a-50",
+      "source": "writing-assistant",
+      "target": "writing-module",
+      "type": "communicates_with"
+    },
+    {
+      "id": "e-a-51",
+      "source": "enterprise-roles",
+      "target": "sqlite-database",
+      "type": "stores_in"
+    },
+    {
+      "id": "e-a-52",
+      "source": "agent-memory",
+      "target": "sqlite-database",
+      "type": "stores_in"
+    },
+    {
+      "id": "e-a-53",
+      "source": "trace-service",
+      "target": "sqlite-database",
+      "type": "stores_in"
+    },
+    {
+      "id": "e-a-54",
+      "source": "browser-automation",
+      "target": "cursor-bridge",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-a-55",
+      "source": "webgl-probe",
+      "target": "service-worker",
+      "type": "communicates_with"
+    },
+    {
+      "id": "e-a-56",
+      "source": "graphsphere-demo",
+      "target": "knowledge-wall",
+      "type": "derived_from"
+    },
+    {
+      "id": "e-a-57",
+      "source": "activity-logger",
+      "target": "sqlite-database",
+      "type": "stores_in"
+    },
+    {
+      "id": "e-a-58",
+      "source": "quick-navigation",
+      "target": "chrome-storage",
+      "type": "stores_in"
+    },
+    {
+      "id": "e-a-59",
+      "source": "chrome-extension",
+      "target": "cursor-bridge",
+      "type": "integrates_with"
+    },
+    {
+      "id": "e-a-60",
+      "source": "dock-manager",
+      "target": "bookmark-rag",
+      "type": "exposes"
+    },
+    {
+      "id": "e-a-61",
+      "source": "dock-manager",
+      "target": "music-controller",
+      "type": "exposes"
+    },
+    {
+      "id": "e-a-62",
+      "source": "service-worker",
+      "target": "offscreen-document",
+      "type": "contains"
+    }
+  ],
+  "demo": {
+    "tourNodeIds": [
+      "chrome-extension",
+      "cursor-bridge",
+      "multi-role-engine",
+      "agent-pool"
+    ],
+    "hubNodeIds": [
+      "chrome-extension",
+      "cursor-bridge",
+      "agent-pool"
+    ]
+  }
+}

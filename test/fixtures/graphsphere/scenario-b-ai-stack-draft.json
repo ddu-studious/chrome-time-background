@@ -1,0 +1,748 @@
+{
+  "schemaVersion": "1.0.0",
+  "meta": {
+    "id": "scenario-b-ai-stack",
+    "title": "AI 技术栈 / 产业链概念图谱",
+    "description": "对外路演：算力→模型→Agent→应用产业链（Draft 45 节点）",
+    "layoutSeed": 42,
+    "locale": "zh-CN",
+    "updatedAt": "2026-05-25"
+  },
+  "schema": {
+    "nodeTypes": [
+      {
+        "id": "product",
+        "label": "产品",
+        "color": "#6366F1"
+      },
+      {
+        "id": "module",
+        "label": "模块",
+        "color": "#0EA5E9"
+      },
+      {
+        "id": "service",
+        "label": "服务",
+        "color": "#14B8A6"
+      },
+      {
+        "id": "infra",
+        "label": "基础设施",
+        "color": "#64748B"
+      },
+      {
+        "id": "data",
+        "label": "数据",
+        "color": "#F59E0B"
+      },
+      {
+        "id": "integration",
+        "label": "集成",
+        "color": "#A855F7"
+      },
+      {
+        "id": "capability",
+        "label": "能力",
+        "color": "#EC4899"
+      }
+    ],
+    "edgeTypes": [
+      {
+        "id": "contains",
+        "label": "包含",
+        "directed": true
+      },
+      {
+        "id": "depends_on",
+        "label": "依赖",
+        "directed": true
+      },
+      {
+        "id": "communicates_with",
+        "label": "通信",
+        "directed": true
+      },
+      {
+        "id": "exposes",
+        "label": "暴露",
+        "directed": true
+      },
+      {
+        "id": "integrates_with",
+        "label": "集成",
+        "directed": true
+      },
+      {
+        "id": "derived_from",
+        "label": "衍生",
+        "directed": true
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "ai-landscape",
+      "label": "AI 产业全景",
+      "type": "product",
+      "summary": "对外 Demo 根节点",
+      "pinned": true,
+      "weight": 2
+    },
+    {
+      "id": "gpu-compute",
+      "label": "GPU 算力",
+      "type": "infra",
+      "summary": "训练与推理硬件基座"
+    },
+    {
+      "id": "tpu-asic",
+      "label": "TPU / ASIC",
+      "type": "infra",
+      "summary": "专用 AI 加速芯片"
+    },
+    {
+      "id": "cloud-infrastructure",
+      "label": "云基础设施",
+      "type": "infra",
+      "summary": "IaaS / PaaS 算力池"
+    },
+    {
+      "id": "data-centers",
+      "label": "数据中心",
+      "type": "infra",
+      "summary": "大规模训练集群"
+    },
+    {
+      "id": "edge-compute",
+      "label": "边缘计算",
+      "type": "infra",
+      "summary": "端侧低延迟推理"
+    },
+    {
+      "id": "foundation-llm",
+      "label": "基座大模型",
+      "type": "capability",
+      "summary": "通用语言理解与生成",
+      "pinned": true,
+      "weight": 1.8
+    },
+    {
+      "id": "multimodal-model",
+      "label": "多模态模型",
+      "type": "capability",
+      "summary": "图文音视频统一建模"
+    },
+    {
+      "id": "embedding-model",
+      "label": "嵌入模型",
+      "type": "capability",
+      "summary": "向量化语义表示"
+    },
+    {
+      "id": "speech-model",
+      "label": "语音模型",
+      "type": "capability",
+      "summary": "ASR / TTS"
+    },
+    {
+      "id": "code-model",
+      "label": "代码模型",
+      "type": "capability",
+      "summary": "代码生成与理解"
+    },
+    {
+      "id": "open-source-models",
+      "label": "开源模型生态",
+      "type": "integration",
+      "summary": "可自托管模型族"
+    },
+    {
+      "id": "pre-training",
+      "label": "预训练",
+      "type": "capability",
+      "summary": "海量语料基座训练"
+    },
+    {
+      "id": "fine-tuning",
+      "label": "微调",
+      "type": "capability",
+      "summary": "领域 / 任务适配"
+    },
+    {
+      "id": "rlhf-alignment",
+      "label": "RLHF 对齐",
+      "type": "capability",
+      "summary": "人类偏好对齐"
+    },
+    {
+      "id": "model-evaluation",
+      "label": "模型评估",
+      "type": "capability",
+      "summary": "Benchmark 与红队"
+    },
+    {
+      "id": "pytorch",
+      "label": "PyTorch",
+      "type": "integration",
+      "summary": "主流训练框架"
+    },
+    {
+      "id": "transformers",
+      "label": "Transformers",
+      "type": "integration",
+      "summary": "模型库与 Pipeline"
+    },
+    {
+      "id": "langchain",
+      "label": "LangChain",
+      "type": "integration",
+      "summary": "LLM 应用编排框架"
+    },
+    {
+      "id": "llamaindex",
+      "label": "LlamaIndex",
+      "type": "integration",
+      "summary": "数据索引与 RAG 框架"
+    },
+    {
+      "id": "onnx-runtime",
+      "label": "ONNX Runtime",
+      "type": "integration",
+      "summary": "跨平台推理运行时"
+    },
+    {
+      "id": "agent-framework",
+      "label": "Agent 框架",
+      "type": "capability",
+      "summary": "自主规划与执行",
+      "pinned": true,
+      "weight": 1.8
+    },
+    {
+      "id": "tool-calling",
+      "label": "工具调用",
+      "type": "capability",
+      "summary": "Function / Tool Use"
+    },
+    {
+      "id": "mcp-protocol",
+      "label": "MCP 协议",
+      "type": "integration",
+      "summary": "模型上下文工具协议"
+    },
+    {
+      "id": "workflow-orchestration",
+      "label": "工作流编排",
+      "type": "capability",
+      "summary": "多步任务 DAG"
+    },
+    {
+      "id": "vector-database",
+      "label": "向量数据库",
+      "type": "data",
+      "summary": "语义检索存储"
+    },
+    {
+      "id": "knowledge-graph",
+      "label": "知识图谱",
+      "type": "data",
+      "summary": "结构化关系网络"
+    },
+    {
+      "id": "rag-pipeline",
+      "label": "RAG 流水线",
+      "type": "module",
+      "summary": "检索增强生成"
+    },
+    {
+      "id": "document-parsing",
+      "label": "文档解析",
+      "type": "capability",
+      "summary": "PDF / HTML / OCR"
+    },
+    {
+      "id": "semantic-search",
+      "label": "语义搜索",
+      "type": "capability",
+      "summary": "向量 + 重排序"
+    },
+    {
+      "id": "code-assistant",
+      "label": "代码助手",
+      "type": "module",
+      "summary": "IDE 内嵌 AI 编程"
+    },
+    {
+      "id": "enterprise-copilot",
+      "label": "企业 Copilot",
+      "type": "module",
+      "summary": "办公场景 AI 助手"
+    },
+    {
+      "id": "ai-search",
+      "label": "AI 搜索",
+      "type": "module",
+      "summary": "对话式信息获取"
+    },
+    {
+      "id": "content-generation",
+      "label": "内容生成",
+      "type": "module",
+      "summary": "营销 / 媒体创作"
+    },
+    {
+      "id": "multi-agent-platform",
+      "label": "多 Agent 平台",
+      "type": "module",
+      "summary": "角色协作矩阵"
+    },
+    {
+      "id": "model-serving",
+      "label": "模型服务",
+      "type": "service",
+      "summary": "在线推理 API"
+    },
+    {
+      "id": "inference-optimization",
+      "label": "推理优化",
+      "type": "capability",
+      "summary": "批处理 / 缓存 / 路由"
+    },
+    {
+      "id": "quantization",
+      "label": "量化",
+      "type": "capability",
+      "summary": "INT8 / INT4 压缩"
+    },
+    {
+      "id": "prompt-engineering",
+      "label": "Prompt 工程",
+      "type": "capability",
+      "summary": "提示词设计与评测"
+    },
+    {
+      "id": "chip-vendors",
+      "label": "芯片厂商",
+      "type": "integration",
+      "summary": "算力供应链（类别）"
+    },
+    {
+      "id": "cloud-providers",
+      "label": "云服务商",
+      "type": "integration",
+      "summary": "算力与托管（类别）"
+    },
+    {
+      "id": "model-labs",
+      "label": "模型实验室",
+      "type": "integration",
+      "summary": "闭源 / 开源模型研发"
+    },
+    {
+      "id": "ai-startups",
+      "label": "AI 创业生态",
+      "type": "integration",
+      "summary": "垂直场景创新"
+    },
+    {
+      "id": "enterprise-adopters",
+      "label": "企业采纳者",
+      "type": "integration",
+      "summary": "行业落地方"
+    },
+    {
+      "id": "responsible-ai",
+      "label": "Responsible AI",
+      "type": "capability",
+      "summary": "安全 / 合规 / 可解释"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-b-01",
+      "source": "ai-landscape",
+      "target": "gpu-compute",
+      "type": "contains"
+    },
+    {
+      "id": "e-b-02",
+      "source": "ai-landscape",
+      "target": "foundation-llm",
+      "type": "contains"
+    },
+    {
+      "id": "e-b-03",
+      "source": "ai-landscape",
+      "target": "agent-framework",
+      "type": "contains"
+    },
+    {
+      "id": "e-b-04",
+      "source": "gpu-compute",
+      "target": "data-centers",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-b-05",
+      "source": "tpu-asic",
+      "target": "data-centers",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-b-06",
+      "source": "cloud-infrastructure",
+      "target": "data-centers",
+      "type": "contains"
+    },
+    {
+      "id": "e-b-07",
+      "source": "edge-compute",
+      "target": "cloud-infrastructure",
+      "type": "derived_from"
+    },
+    {
+      "id": "e-b-08",
+      "source": "foundation-llm",
+      "target": "pre-training",
+      "type": "derived_from"
+    },
+    {
+      "id": "e-b-09",
+      "source": "foundation-llm",
+      "target": "rlhf-alignment",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-b-10",
+      "source": "multimodal-model",
+      "target": "foundation-llm",
+      "type": "derived_from"
+    },
+    {
+      "id": "e-b-11",
+      "source": "embedding-model",
+      "target": "foundation-llm",
+      "type": "derived_from"
+    },
+    {
+      "id": "e-b-12",
+      "source": "code-model",
+      "target": "foundation-llm",
+      "type": "derived_from"
+    },
+    {
+      "id": "e-b-13",
+      "source": "speech-model",
+      "target": "multimodal-model",
+      "type": "derived_from"
+    },
+    {
+      "id": "e-b-14",
+      "source": "open-source-models",
+      "target": "foundation-llm",
+      "type": "integrates_with"
+    },
+    {
+      "id": "e-b-15",
+      "source": "pre-training",
+      "target": "gpu-compute",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-b-16",
+      "source": "fine-tuning",
+      "target": "foundation-llm",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-b-17",
+      "source": "fine-tuning",
+      "target": "gpu-compute",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-b-18",
+      "source": "rlhf-alignment",
+      "target": "model-evaluation",
+      "type": "communicates_with"
+    },
+    {
+      "id": "e-b-19",
+      "source": "model-evaluation",
+      "target": "foundation-llm",
+      "type": "communicates_with"
+    },
+    {
+      "id": "e-b-20",
+      "source": "pytorch",
+      "target": "pre-training",
+      "type": "integrates_with"
+    },
+    {
+      "id": "e-b-21",
+      "source": "transformers",
+      "target": "foundation-llm",
+      "type": "integrates_with"
+    },
+    {
+      "id": "e-b-22",
+      "source": "langchain",
+      "target": "agent-framework",
+      "type": "integrates_with"
+    },
+    {
+      "id": "e-b-23",
+      "source": "llamaindex",
+      "target": "rag-pipeline",
+      "type": "integrates_with"
+    },
+    {
+      "id": "e-b-24",
+      "source": "onnx-runtime",
+      "target": "inference-optimization",
+      "type": "integrates_with"
+    },
+    {
+      "id": "e-b-25",
+      "source": "agent-framework",
+      "target": "tool-calling",
+      "type": "contains"
+    },
+    {
+      "id": "e-b-26",
+      "source": "agent-framework",
+      "target": "workflow-orchestration",
+      "type": "contains"
+    },
+    {
+      "id": "e-b-27",
+      "source": "tool-calling",
+      "target": "mcp-protocol",
+      "type": "integrates_with"
+    },
+    {
+      "id": "e-b-28",
+      "source": "rag-pipeline",
+      "target": "vector-database",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-b-29",
+      "source": "rag-pipeline",
+      "target": "embedding-model",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-b-30",
+      "source": "rag-pipeline",
+      "target": "semantic-search",
+      "type": "contains"
+    },
+    {
+      "id": "e-b-31",
+      "source": "rag-pipeline",
+      "target": "foundation-llm",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-b-32",
+      "source": "semantic-search",
+      "target": "vector-database",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-b-33",
+      "source": "knowledge-graph",
+      "target": "rag-pipeline",
+      "type": "integrates_with"
+    },
+    {
+      "id": "e-b-34",
+      "source": "document-parsing",
+      "target": "rag-pipeline",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-b-35",
+      "source": "code-assistant",
+      "target": "code-model",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-b-36",
+      "source": "code-assistant",
+      "target": "tool-calling",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-b-37",
+      "source": "enterprise-copilot",
+      "target": "rag-pipeline",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-b-38",
+      "source": "ai-search",
+      "target": "rag-pipeline",
+      "type": "derived_from"
+    },
+    {
+      "id": "e-b-39",
+      "source": "content-generation",
+      "target": "foundation-llm",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-b-40",
+      "source": "multi-agent-platform",
+      "target": "agent-framework",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-b-41",
+      "source": "multi-agent-platform",
+      "target": "workflow-orchestration",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-b-42",
+      "source": "model-serving",
+      "target": "inference-optimization",
+      "type": "contains"
+    },
+    {
+      "id": "e-b-43",
+      "source": "model-serving",
+      "target": "foundation-llm",
+      "type": "exposes"
+    },
+    {
+      "id": "e-b-44",
+      "source": "inference-optimization",
+      "target": "quantization",
+      "type": "contains"
+    },
+    {
+      "id": "e-b-45",
+      "source": "quantization",
+      "target": "model-serving",
+      "type": "derived_from"
+    },
+    {
+      "id": "e-b-46",
+      "source": "prompt-engineering",
+      "target": "foundation-llm",
+      "type": "communicates_with"
+    },
+    {
+      "id": "e-b-47",
+      "source": "chip-vendors",
+      "target": "gpu-compute",
+      "type": "exposes"
+    },
+    {
+      "id": "e-b-48",
+      "source": "chip-vendors",
+      "target": "tpu-asic",
+      "type": "exposes"
+    },
+    {
+      "id": "e-b-49",
+      "source": "cloud-providers",
+      "target": "cloud-infrastructure",
+      "type": "exposes"
+    },
+    {
+      "id": "e-b-50",
+      "source": "cloud-providers",
+      "target": "model-serving",
+      "type": "integrates_with"
+    },
+    {
+      "id": "e-b-51",
+      "source": "model-labs",
+      "target": "foundation-llm",
+      "type": "exposes"
+    },
+    {
+      "id": "e-b-52",
+      "source": "model-labs",
+      "target": "multimodal-model",
+      "type": "exposes"
+    },
+    {
+      "id": "e-b-53",
+      "source": "ai-startups",
+      "target": "code-assistant",
+      "type": "integrates_with"
+    },
+    {
+      "id": "e-b-54",
+      "source": "ai-startups",
+      "target": "enterprise-copilot",
+      "type": "integrates_with"
+    },
+    {
+      "id": "e-b-55",
+      "source": "enterprise-adopters",
+      "target": "enterprise-copilot",
+      "type": "integrates_with"
+    },
+    {
+      "id": "e-b-56",
+      "source": "enterprise-adopters",
+      "target": "ai-search",
+      "type": "integrates_with"
+    },
+    {
+      "id": "e-b-57",
+      "source": "responsible-ai",
+      "target": "model-evaluation",
+      "type": "depends_on"
+    },
+    {
+      "id": "e-b-58",
+      "source": "responsible-ai",
+      "target": "rlhf-alignment",
+      "type": "communicates_with"
+    },
+    {
+      "id": "e-b-59",
+      "source": "langchain",
+      "target": "rag-pipeline",
+      "type": "integrates_with"
+    },
+    {
+      "id": "e-b-60",
+      "source": "mcp-protocol",
+      "target": "multi-agent-platform",
+      "type": "integrates_with"
+    },
+    {
+      "id": "e-b-61",
+      "source": "open-source-models",
+      "target": "model-serving",
+      "type": "integrates_with"
+    },
+    {
+      "id": "e-b-62",
+      "source": "edge-compute",
+      "target": "inference-optimization",
+      "type": "depends_on"
+    }
+  ],
+  "demo": {
+    "defaultScene": true,
+    "tourNodeIds": [
+      "ai-landscape",
+      "foundation-llm",
+      "rag-pipeline",
+      "agent-framework"
+    ],
+    "hubNodeIds": [
+      "ai-landscape",
+      "foundation-llm",
+      "agent-framework"
+    ]
+  }
+}

@@ -12750,14 +12750,23 @@ body.bright-bg .ticker-sources-panel {
 /* ==================== 音乐控制器 v2.9.0 — Minimal Card ==================== */
 
 .music-island {
-    display: flex;
+    display: none;
     flex-direction: column;
     align-items: center;
-    margin-top: 16px;
-    margin-bottom: 8px;
-    position: relative;
+    position: fixed;
+    bottom: 70px;
+    left: 50%;
+    transform: translateX(-50%);
     overflow: visible;
-    z-index: 50;
+    z-index: 1500;
+    animation: mc-dock-slide-up 0.35s cubic-bezier(.4, 0, .2, 1);
+}
+.music-island.mc-dock-open {
+    display: flex;
+}
+@keyframes mc-dock-slide-up {
+    from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
 /* --- 面板主体 --- */
@@ -13210,11 +13219,22 @@ body.bright-bg .ticker-sources-panel {
 /* ==================== 今日推荐阅读 ==================== */
 
 .reading-reco-wrapper {
-    width: 100%;
-    display: flex;
+    position: fixed;
+    bottom: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: none;
     justify-content: center;
-    padding: 0 20px;
-    margin-bottom: 1rem;
+    padding: 0;
+    z-index: 1500;
+    animation: reading-dock-slide-up 0.35s cubic-bezier(.4, 0, .2, 1);
+}
+.reading-reco-wrapper.reading-dock-open {
+    display: flex !important;
+}
+@keyframes reading-dock-slide-up {
+    from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
 .reading-reco-container {
@@ -16798,10 +16818,10 @@ body.bright-bg .ticker-sources-panel {
 
 .poetry-radio {
     position: fixed;
-    bottom: 40px;
+    bottom: 70px;
     left: 50%;
     transform: translateX(-50%);
-    display: flex;
+    display: none;
     align-items: center;
     gap: 12px;
     padding: 8px 12px 8px 16px;
@@ -16819,6 +16839,10 @@ body.bright-bg .ticker-sources-panel {
 
 .poetry-radio:hover {
     border-color: rgba(255, 255, 255, 0.1);
+}
+
+.poetry-radio.poetry-dock-open {
+    display: flex;
 }
 
 @keyframes prSlideIn {

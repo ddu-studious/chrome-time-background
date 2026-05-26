@@ -1,0 +1,237 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://graphsphere.local/schemas/graphsnapshot-v1.json",
+  "title": "GraphSnapshot",
+  "description": "GraphSphere v0.1 离线图谱数据 SSOT。布局坐标不持久化；运行时由 kg-graph-layout 计算。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "meta", "schema", "nodes", "edges"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "GraphSnapshot 契约版本；与 kg-graph-core 校验器硬编码一致"
+    },
+    "meta": { "$ref": "#/$defs/Meta" },
+    "schema": { "$ref": "#/$defs/TypeSchema" },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 200,
+      "items": { "$ref": "#/$defs/Node" }
+    },
+    "edges": {
+      "type": "array",
+      "maxItems": 800,
+      "items": { "$ref": "#/$defs/Edge" }
+    },
+    "demo": { "$ref": "#/$defs/DemoHints" }
+  },
+  "$defs": {
+    "Meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "layoutSeed"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$",
+          "description": "场景唯一 id，如 scenario-a-chrome-bridge"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "locale": {
+          "type": "string",
+          "enum": ["zh-CN", "en-US"],
+          "default": "zh-CN"
+        },
+        "layoutSeed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647,
+          "description": "力导向布局种子；同 seed + 同图 → 坐标可复现（R-KG-S06）"
+        },
+        "author": { "type": "string", "maxLength": 64 },
+        "updatedAt": {
+          "type": "string",
+          "format": "date",
+          "description": "ISO 8601 日期 YYYY-MM-DD"
+        },
+        "tags": {
+          "type": "array",
+          "maxItems": 8,
+          "items": { "type": "string", "maxLength": 32 }
+        }
+      }
+    },
+    "TypeSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nodeTypes", "edgeTypes"],
+      "properties": {
+        "nodeTypes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/NodeTypeDef" }
+        },
+        "edgeTypes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/EdgeTypeDef" }
+        }
+      }
+    },
+    "NodeTypeDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "color"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{1,31}$"
+        },
+        "label": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$"
+        },
+        "icon": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "P1：图例图标 token，v1 可省略"
+        }
+      }
+    },
+    "EdgeTypeDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{1,31}$"
+        },
+        "label": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$"
+        },
+        "directed": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "Node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "type"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,63}$",
+          "description": "R-KG-N01：场景内全局唯一，kebab-case"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "3D 标签截断 40 字；侧栏可展示全文"
+        },
+        "type": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{1,31}$",
+          "description": "必须属于 schema.nodeTypes[].id"
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 320,
+          "description": "R-KG-N05：hub 节点建议必填"
+        },
+        "weight": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 10,
+          "default": 1,
+          "description": "布局斥力/引力权重修饰（可选）"
+        },
+        "pinned": {
+          "type": "boolean",
+          "default": false,
+          "description": "true 时布局阶段固定初始锚点（hub 节点）"
+        },
+        "attrs": {
+          "type": "object",
+          "maxProperties": 8,
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "string", "maxLength": 128 },
+              { "type": "number" },
+              { "type": "boolean" }
+            ]
+          },
+          "description": "扩展属性；禁止密钥、绝对路径（R-KG-N06 由校验器拒绝）"
+        }
+      }
+    },
+    "Edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "source", "target", "type"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,80}$"
+        },
+        "source": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,63}$" },
+        "target": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,63}$" },
+        "type": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{1,31}$"
+        },
+        "label": { "type": "string", "maxLength": 40 },
+        "weight": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 10,
+          "default": 1
+        }
+      }
+    },
+    "DemoHints": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "演示模式元数据；不参与布局与 R-KG 拓扑校验",
+      "properties": {
+        "defaultScene": { "type": "boolean", "default": false },
+        "tourNodeIds": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 12,
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,63}$" },
+          "description": "R-KG-S05：巡航锚点顺序"
+        },
+        "hubNodeIds": {
+          "type": "array",
+          "maxItems": 8,
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,63}$" }
+        },
+        "camera": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "initialDistance": { "type": "number", "minimum": 50, "maximum": 500 },
+            "autoOrbitSpeed": { "type": "number", "minimum": 0, "maximum": 2 }
+          }
+        }
+      }
+    }
+  }
+}

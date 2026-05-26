@@ -537,6 +537,7 @@
             });
             this._clearOutput(agentId);
             this._appendOutput(agentId, 'user', `> ${prompt}`);
+            this._saveMessageToHistory(agentId, 'user', prompt, data?.runId);
             const agent = this.agents.find(a => a.id === agentId);
             if (agent) {
                 agent.status = 'running';
@@ -789,6 +790,11 @@
                 }
                 this._updateStatsBar();
                 this._debouncedRefreshAgents();
+                const fullText = this._sseTextBuffer[agentId] || '';
+                if (fullText) {
+                    this._saveMessageToHistory(agentId, 'assistant', fullText);
+                    this._updateConversationStatus(agentId, d.status || 'completed');
+                }
                 this._sseTextBuffer[agentId] = '';
                 if (d.status === 'completed') this._triggerDependents(agentId);
             });
@@ -877,6 +883,10 @@
                         <i class="fas fa-satellite-dish"></i>
                         <span class="cb-stat-label">追踪</span>
                     </div>
+                    <div class="cb-stat-item cb-stat-dash-btn" id="cb-dashboard-toggle" title="用量 Dashboard · Agent 运行监控">
+                        <i class="fas fa-chart-line"></i>
+                        <span class="cb-stat-label">Dashboard</span>
+                    </div>
                     <div class="cb-stat-item cb-stat-project-switcher" id="cb-project-switcher">
                         <i class="fas fa-folder-open"></i>
                         <span class="cb-stat-value" id="cb-stat-project">全部项目</span>
@@ -896,6 +906,8 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="cb-inline-panel-area" id="cb-inline-panel-area"></div>
 
                 <div class="cb-templates" id="cb-templates">
                     ${AGENT_TEMPLATES.map(t => `
@@ -1032,12 +1044,14 @@
                                         <div class="cb-disc-filters" id="cb-disc-filters"></div>
                                         <div class="cb-disc-view-switcher">
                                             <button class="cb-disc-view-btn active" data-view="timeline"><i class="fas fa-stream"></i> 时间线</button>
+                                            <button class="cb-disc-view-btn" data-view="interleaved"><i class="fas fa-code-branch"></i> 交织</button>
                                             <button class="cb-disc-view-btn" data-view="summary"><i class="fas fa-file-lines"></i> 总结</button>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="cb-collab-disc-scroll" id="cb-collab-disc-scroll">
                                     <div class="cb-collab-discussion cb-disc-timeline-wrap" id="cb-collab-discussion"></div>
+                                    <div class="cb-disc-interleaved-view" id="cb-disc-interleaved" style="display:none"></div>
                                     <div class="cb-disc-summary-view" id="cb-disc-summary" style="display:none"></div>
                                     <div class="cb-realign-input-wrap" id="cb-realign-input-wrap" style="display:none">
                                         <div class="cb-realign-label"><i class="fas fa-bullseye"></i> 对齐调整说明</div>
@@ -1305,6 +1319,7 @@
             panel.querySelector('#cb-emergency-stop')?.addEventListener('click', () => this._emergencyStop());
             panel.querySelector('#cb-stat-tokens-btn')?.addEventListener('click', () => this._showTokenUsagePanel());
             panel.querySelector('#cb-obs-toggle')?.addEventListener('click', () => this._toggleObservability());
+            panel.querySelector('#cb-dashboard-toggle')?.addEventListener('click', () => this._toggleDashboardPanel());
 
             this._initProjectSwitcher();
 
@@ -1691,9 +1706,12 @@
                     const timeStr = d.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
                     const statusCls = c.status === 'completed' ? 'done' : c.status === 'error' ? 'err' : 'run';
                     const msgCount = c.message_count || c.messageCount || 0;
-                    return `<div class="cb-history-item" data-conv-id="${c.id}" data-search-text="${this._esc((c.agent_name || '') + ' ' + (c.model || '') + ' ' + (c.description || '')).toLowerCase()}">
+                    const isMultiRole = c.model === 'multi-role';
+                    const multiRoleBadge = isMultiRole ? '<span class="cb-history-multi-badge"><i class="fas fa-users"></i> 多角色</span>' : '';
+                    const modelLabel = isMultiRole ? '' : (c.model ? `<span><i class="fas fa-robot"></i> ${c.model}</span>` : '');
+                    return `<div class="cb-history-item ${isMultiRole ? 'cb-history-multi' : ''}" data-conv-id="${c.id}" data-search-text="${this._esc((c.agent_name || '') + ' ' + (c.model || '') + ' ' + (c.description || '')).toLowerCase()}">
                         <div class="cb-history-item-top">
-                            <span class="cb-history-title">${this._esc(c.title || c.agent_name || 'Agent 对话')}</span>
+                            <span class="cb-history-title">${multiRoleBadge}${this._esc(c.title || c.agent_name || 'Agent 对话')}</span>
                             <div class="cb-history-item-actions">
                                 <span class="cb-history-status cb-hs-${statusCls}">${c.status === 'completed' ? '完成' : c.status === 'error' ? '失败' : '运行中'}</span>
                                 <button class="cb-btn-icon-sm cb-history-delete" data-conv-id="${c.id}" title="删除对话"><i class="fas fa-trash-alt"></i></button>
@@ -1702,7 +1720,7 @@
                         <div class="cb-history-item-meta">
                             <span><i class="fas fa-clock"></i> ${timeStr}</span>
                             <span><i class="fas fa-comment"></i> ${msgCount} 条消息</span>
-                            ${c.model ? `<span><i class="fas fa-robot"></i> ${c.model}</span>` : ''}
+                            ${modelLabel}
                         </div>
                     </div>`;
                 }).join('');
@@ -1768,6 +1786,7 @@
                 const conv = convData || {};
                 const msgs = msgData?.messages || [];
                 if (!msgs.length) { this._showToast('该对话暂无消息', 'info'); return; }
+                const isMultiRole = conv.model === 'multi-role';
                 const html = msgs.map(m => {
                     const role = m.role === 'user' ? '用户' : 'Agent';
                     const cls = m.role === 'user' ? 'user' : 'assistant';
@@ -1781,21 +1800,30 @@
                         <div class="cb-hist-msg-content">${rendered}</div>
                     </div>`;
                 }).join('');
+
+                const resumeBtnText = isMultiRole
+                    ? '<i class="fas fa-users"></i> 还原所有角色'
+                    : '<i class="fas fa-play"></i> 继续对话';
+                const resumeBtnTitle = isMultiRole
+                    ? '还原多角色协作对话，为每个角色创建 Agent'
+                    : '基于此历史继续对话';
+                const modelLabel = isMultiRole ? '多角色协作' : this._esc(conv.model || '');
+
                 const detail = document.createElement('div');
                 detail.className = 'cb-history-detail-overlay';
                 detail.innerHTML = `<div class="cb-history-detail">
                     <div class="cb-history-detail-header">
                         <h3>对话详情</h3>
                         <div class="cb-hist-detail-actions">
-                            <button class="cb-btn cb-btn-primary cb-hist-resume-btn" title="基于此历史继续对话">
-                                <i class="fas fa-play"></i> 继续对话
+                            <button class="cb-btn cb-btn-primary cb-hist-resume-btn" title="${resumeBtnTitle}">
+                                ${resumeBtnText}
                             </button>
                             <button class="cb-btn cb-btn-icon cb-hist-detail-close"><i class="fas fa-times"></i></button>
                         </div>
                     </div>
                     <div class="cb-history-detail-meta">
                         <span><i class="fas fa-robot"></i> ${this._esc(conv.agent_name || 'Agent')}</span>
-                        <span><i class="fas fa-microchip"></i> ${this._esc(conv.model || '')}</span>
+                        <span><i class="fas fa-microchip"></i> ${modelLabel}</span>
                         <span><i class="fas fa-folder"></i> ${this._esc(conv.cwd || '')}</span>
                     </div>
                     <div class="cb-history-detail-body">${html}</div>
@@ -1825,7 +1853,14 @@
 
         async _resumeConversation(conv, messages) {
             if (!this.connected) { this._showToast('cursor-bridge 未连接', 'error'); return; }
-            const lastUserMsgs = messages.filter(m => m.role === 'user');
+
+            const isMultiRole = conv.model === 'multi-role';
+
+            if (isMultiRole) {
+                await this._resumeMultiRoleConversation(conv, messages);
+                return;
+            }
+
             const contextSummary = messages.slice(-6).map(m => `${m.role}: ${(m.content || '').substring(0, 200)}`).join('\n');
 
             try {
@@ -1850,6 +1885,69 @@
                 this._showToast('已恢复对话，Agent 已创建', 'success');
             } catch (err) {
                 this._showToast('恢复对话失败: ' + err.message, 'error');
+            }
+        }
+
+        async _resumeMultiRoleConversation(conv, messages) {
+            const rolePattern = /^\*\*(.+?)\*\*\s*(第\d+轮)?:\s*\n/;
+            const roleMap = new Map();
+            const parsedMsgs = [];
+
+            for (const m of messages) {
+                if (m.role === 'user') {
+                    parsedMsgs.push({ role: 'user', content: m.content });
+                    continue;
+                }
+                const match = (m.content || '').match(rolePattern);
+                if (match) {
+                    const roleName = match[1];
+                    const content = m.content.replace(rolePattern, '').trim();
+                    roleMap.set(roleName, (roleMap.get(roleName) || 0) + 1);
+                    parsedMsgs.push({ role: 'assistant', roleName, content });
+                } else {
+                    parsedMsgs.push({ role: 'assistant', roleName: '系统', content: m.content });
+                }
+            }
+
+            const roles = [...roleMap.keys()];
+            const userMsg = messages.find(m => m.role === 'user')?.content || '';
+            const requirement = userMsg.replace(/^\[多角色协作任务\]\s*/, '').trim();
+
+            try {
+                this._showToast(`正在还原 ${roles.length} 个角色的协作对话…`, 'info');
+
+                const contextParts = parsedMsgs.slice(-10).map(m => {
+                    if (m.role === 'user') return `用户: ${(m.content || '').substring(0, 200)}`;
+                    return `${m.roleName}: ${(m.content || '').substring(0, 200)}`;
+                }).join('\n');
+
+                const createdAgents = [];
+                for (const roleName of roles) {
+                    const roleInfo = Object.values(this._collabRoleMap).find(r => r.name === roleName);
+                    const data = await this._api('/agents', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: `${roleName} (续)`,
+                            model: roleInfo?.resolvedModel || 'claude-sonnet-4-6',
+                            cwd: conv.cwd || '/',
+                            description: `多角色协作还原 — ${roleName}，原对话 ${conv.id}`,
+                        })
+                    });
+                    if (data?.id) createdAgents.push({ id: data.id, name: roleName });
+                }
+
+                await this.refreshAgents();
+                this._toggleHistory(false);
+
+                if (createdAgents.length > 0) {
+                    const resumePrompt = `请继续之前的多角色协作讨论。原始需求：${requirement}\n\n之前的讨论上下文摘要：\n${contextParts}\n\n请各角色基于以上上下文继续协助。`;
+                    await this.sendPrompt(createdAgents[0].id, resumePrompt);
+                }
+
+                this._showToast(`已还原 ${createdAgents.length} 个协作 Agent`, 'success');
+            } catch (err) {
+                this._showToast('多角色还原失败: ' + err.message, 'error');
             }
         }
 
@@ -3159,9 +3257,6 @@
         }
 
         _toggleObservability() {
-            const existing = this._panelEl?.querySelector('.cb-obs-panel');
-            if (existing) { existing.remove(); return; }
-
             const agentOptions = this.agents.map(a => {
                 const short = (a.id || '').split('_').pop()?.substring(0, 8) || a.id;
                 return `<option value="${a.id}">${a.name || short}</option>`;
@@ -3190,16 +3285,17 @@
                 </div>
                 <div class="cb-obs-log-list"></div>
             `;
-            obsPanel.querySelector('.cb-obs-close').addEventListener('click', () => obsPanel.remove());
+            obsPanel.querySelector('.cb-obs-close').addEventListener('click', () => {
+                const a = this._panelEl?.querySelector('#cb-inline-panel-area');
+                if (a) { a.innerHTML = ''; delete a.dataset.activePanel; }
+                this._updateStatBtnActive(null);
+            });
             obsPanel.querySelector('.cb-obs-clear').addEventListener('click', () => { this._traceLogs = []; this._updateObservabilityPanel(); });
             obsPanel.querySelector('.cb-obs-filter-type').addEventListener('change', e => { this._obsFilterType = e.target.value; this._updateObservabilityPanel(); });
             obsPanel.querySelector('.cb-obs-filter-agent').addEventListener('change', e => { this._obsFilterAgent = e.target.value; this._updateObservabilityPanel(); });
 
-            const tokenPanel = this._panelEl?.querySelector('.cb-token-panel');
-            if (tokenPanel) tokenPanel.after(obsPanel);
-            else this._panelEl?.querySelector('.cb-stats-bar')?.after(obsPanel);
-
-            this._updateObservabilityPanel();
+            const shown = this._showInlinePanel('observability', obsPanel);
+            if (shown) this._updateObservabilityPanel();
         }
 
         async _emergencyStop() {
@@ -3225,7 +3321,167 @@
             }
         }
 
+        _showInlinePanel(type, contentEl) {
+            const area = this._panelEl?.querySelector('#cb-inline-panel-area');
+            if (!area) return;
+            const current = area.dataset.activePanel;
+            area.innerHTML = '';
+            if (current === type) {
+                delete area.dataset.activePanel;
+                this._updateStatBtnActive(null);
+                return false;
+            }
+            area.dataset.activePanel = type;
+            area.appendChild(contentEl);
+            this._updateStatBtnActive(type);
+            return true;
+        }
+
+        _updateStatBtnActive(type) {
+            this._panelEl?.querySelectorAll('.cb-stat-dash-btn, .cb-stat-tokens-btn, .cb-stat-obs-btn').forEach(el => {
+                el.classList.remove('cb-stat-active');
+            });
+            if (type === 'dashboard') this._panelEl?.querySelector('.cb-stat-dash-btn')?.classList.add('cb-stat-active');
+            if (type === 'tokens') this._panelEl?.querySelector('.cb-stat-tokens-btn')?.classList.add('cb-stat-active');
+            if (type === 'observability') this._panelEl?.querySelector('.cb-stat-obs-btn')?.classList.add('cb-stat-active');
+        }
+
+        async _toggleDashboardPanel() {
+            const panel = document.createElement('div');
+            panel.className = 'cb-dashboard-panel';
+            panel.innerHTML = `
+                <div class="cb-dash-header">
+                    <h3><i class="fas fa-chart-line"></i> Agent Dashboard</h3>
+                    <div class="cb-dash-header-right">
+                        <div class="cb-dash-range">
+                            <button class="cb-dash-range-btn" data-range="3600000">1H</button>
+                            <button class="cb-dash-range-btn active" data-range="86400000">24H</button>
+                            <button class="cb-dash-range-btn" data-range="604800000">7D</button>
+                        </div>
+                        <button class="cb-btn cb-btn-icon cb-dash-close"><i class="fas fa-times"></i></button>
+                    </div>
+                </div>
+                <div class="cb-dash-loading"><i class="fas fa-spinner fa-spin"></i> 加载中…</div>
+                <div class="cb-dash-body" style="display:none">
+                    <div class="cb-dash-metrics"></div>
+                    <div class="cb-dash-charts-row">
+                        <div class="cb-dash-chart-panel"><h4><i class="fas fa-chart-bar"></i> 运行趋势</h4><div class="cb-dash-bar-chart"></div></div>
+                        <div class="cb-dash-chart-panel"><h4><i class="fas fa-chart-pie"></i> 模型分布</h4><div class="cb-dash-donut"></div></div>
+                    </div>
+                    <div class="cb-dash-agents-section"><h4><i class="fas fa-robot"></i> Agent 状态</h4><div class="cb-dash-agent-list"></div></div>
+                    <div class="cb-dash-runs-section"><h4><i class="fas fa-history"></i> 最近运行</h4><div class="cb-dash-run-table"></div></div>
+                </div>
+            `;
+
+            panel.querySelector('.cb-dash-close').addEventListener('click', () => {
+                const a = this._panelEl?.querySelector('#cb-inline-panel-area');
+                if (a) { a.innerHTML = ''; delete a.dataset.activePanel; }
+                this._updateStatBtnActive(null);
+            });
+            panel.querySelectorAll('.cb-dash-range-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    panel.querySelectorAll('.cb-dash-range-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    this._loadDashboardData(panel, Number(btn.dataset.range));
+                });
+            });
+
+            const shown = this._showInlinePanel('dashboard', panel);
+            if (shown) await this._loadDashboardData(panel, 86400000);
+        }
+
+        async _loadDashboardData(panel, rangeMs) {
+            const loading = panel.querySelector('.cb-dash-loading');
+            const body = panel.querySelector('.cb-dash-body');
+            loading.style.display = 'flex';
+            body.style.display = 'none';
+
+            try {
+                const since = Date.now() - rangeMs;
+                const data = await this._api(`/dashboard?since=${since}`);
+                const usage = data?.localUsage || {};
+                const agents = this.agents || [];
+
+                const totalRuns = usage.totalRuns || 0;
+                const totalDuration = usage.totalDurationMs || 0;
+                const avgDuration = totalRuns > 0 ? (totalDuration / totalRuns / 1000).toFixed(1) : '0';
+                const running = agents.filter(a => a.status === 'running').length;
+                const activeCount = agents.length;
+
+                panel.querySelector('.cb-dash-metrics').innerHTML = `
+                    <div class="cb-dash-metric purple"><div class="cb-dash-metric-label">总运行次数</div><div class="cb-dash-metric-value">${totalRuns}</div></div>
+                    <div class="cb-dash-metric green"><div class="cb-dash-metric-label">活跃 Agent</div><div class="cb-dash-metric-value">${activeCount}</div><div class="cb-dash-metric-sub">${running} 运行中</div></div>
+                    <div class="cb-dash-metric blue"><div class="cb-dash-metric-label">总时长</div><div class="cb-dash-metric-value">${(totalDuration / 1000).toFixed(0)}s</div></div>
+                    <div class="cb-dash-metric amber"><div class="cb-dash-metric-label">平均响应</div><div class="cb-dash-metric-value">${avgDuration}s</div></div>
+                `;
+
+                const byModel = usage.byModel || {};
+                const modelEntries = Object.entries(byModel);
+                const modelColors = ['#7c3aed', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899'];
+                if (modelEntries.length) {
+                    const totalModelRuns = modelEntries.reduce((s, [, v]) => s + (v.runs || 0), 0);
+                    let offset = 0;
+                    const radius = 40, circumference = 2 * Math.PI * radius;
+                    const segments = modelEntries.map(([name, v], i) => {
+                        const pct = totalModelRuns > 0 ? v.runs / totalModelRuns : 0;
+                        const dashArray = `${pct * circumference} ${circumference}`;
+                        const dashOffset = -offset * circumference;
+                        offset += pct;
+                        return `<circle cx="50" cy="50" r="${radius}" fill="none" stroke="${modelColors[i % modelColors.length]}" stroke-width="10" stroke-dasharray="${dashArray}" stroke-dashoffset="${dashOffset}" />`;
+                    }).join('');
+                    const legend = modelEntries.map(([name, v], i) => `
+                        <div class="cb-dash-legend-item"><span class="cb-dash-legend-dot" style="background:${modelColors[i % modelColors.length]}"></span><span>${name}</span><span class="cb-dash-legend-val">${v.runs}</span></div>
+                    `).join('');
+                    panel.querySelector('.cb-dash-donut').innerHTML = `
+                        <div class="cb-dash-donut-wrap"><svg viewBox="0 0 100 100">${segments}</svg><div class="cb-dash-donut-center"><span class="cb-dash-donut-num">${modelEntries.length}</span><span class="cb-dash-donut-unit">模型</span></div></div>
+                        <div class="cb-dash-legend">${legend}</div>
+                    `;
+                } else {
+                    panel.querySelector('.cb-dash-donut').innerHTML = '<div style="color:#666;font-size:12px;padding:20px">暂无模型数据</div>';
+                }
+
+                const recentRuns = usage.recentRuns || [];
+                if (recentRuns.length) {
+                    const maxDur = Math.max(...recentRuns.map(r => r.durationMs || 1));
+                    panel.querySelector('.cb-dash-bar-chart').innerHTML = recentRuns.slice(0, 12).map((r, i) => {
+                        const h = Math.max(((r.durationMs || 0) / maxDur) * 100, 4);
+                        return `<div class="cb-dash-bar-group"><div class="cb-dash-bar" style="height:${h}%;background:${modelColors[i % modelColors.length]}" title="${r.model} - ${(r.durationMs/1000).toFixed(1)}s"></div><div class="cb-dash-bar-label">${(r.durationMs/1000).toFixed(0)}s</div></div>`;
+                    }).join('');
+                } else {
+                    panel.querySelector('.cb-dash-bar-chart').innerHTML = '<div style="color:#666;font-size:12px;padding:20px">暂无运行数据</div>';
+                }
+
+                panel.querySelector('.cb-dash-agent-list').innerHTML = agents.length
+                    ? agents.map(a => {
+                        const statusCls = a.status === 'running' ? 'running' : a.status === 'error' ? 'error' : 'idle';
+                        return `<div class="cb-dash-agent-row"><span class="cb-dash-status-dot ${statusCls}"></span><span class="cb-dash-agent-name">${this._esc(a.name || a.id)}</span><span class="cb-dash-agent-model">${this._esc(a.model || '')}</span><span class="cb-dash-agent-status">${a.status || 'idle'}</span></div>`;
+                    }).join('')
+                    : '<div style="color:#666;font-size:12px;padding:8px">无活跃 Agent</div>';
+
+                if (recentRuns.length) {
+                    panel.querySelector('.cb-dash-run-table').innerHTML = `
+                        <table class="cb-dash-table"><thead><tr><th>Agent</th><th>模型</th><th>时长</th></tr></thead>
+                        <tbody>${recentRuns.slice(0, 10).map(r => `<tr><td>${this._esc(r.agentId?.slice(0, 8) || '')}</td><td>${this._esc(r.model || '')}</td><td>${((r.durationMs || 0)/1000).toFixed(1)}s</td></tr>`).join('')}</tbody></table>
+                    `;
+                } else {
+                    panel.querySelector('.cb-dash-run-table').innerHTML = '<div style="color:#666;font-size:12px;padding:8px">暂无运行记录</div>';
+                }
+
+                loading.style.display = 'none';
+                body.style.display = 'block';
+            } catch (err) {
+                loading.innerHTML = `<span style="color:#f87171"><i class="fas fa-exclamation-triangle"></i> 加载失败: ${err.message}</span>`;
+            }
+        }
+
         async _showTokenUsagePanel() {
+            const area = this._panelEl?.querySelector('#cb-inline-panel-area');
+            if (area?.dataset.activePanel === 'tokens') {
+                area.innerHTML = '';
+                delete area.dataset.activePanel;
+                this._updateStatBtnActive(null);
+                return;
+            }
             try {
                 const [summaryRes, recentRes] = await Promise.all([
                     fetch(`${this.baseUrl}/stats/tokens`),
@@ -3233,9 +3489,6 @@
                 ]);
                 const summary = await summaryRes.json();
                 const recent = await recentRes.json();
-
-                const existing = this._panelEl?.querySelector('.cb-token-panel');
-                if (existing) { existing.remove(); return; }
 
                 const fmtNum = n => {
                     if (!n) return '0';
@@ -3313,8 +3566,12 @@
                         </table>
                     </div>` : ''}
                 `;
-                panel.querySelector('.cb-token-close').addEventListener('click', () => panel.remove());
-                this._panelEl?.querySelector('.cb-stats-bar')?.after(panel);
+                panel.querySelector('.cb-token-close').addEventListener('click', () => {
+                    const a = this._panelEl?.querySelector('#cb-inline-panel-area');
+                    if (a) { a.innerHTML = ''; delete a.dataset.activePanel; }
+                    this._updateStatBtnActive(null);
+                });
+                this._showInlinePanel('tokens', panel);
             } catch (e) {
                 this._showToast('加载 Token 数据失败: ' + e.message, 'error');
             }
@@ -3524,13 +3781,82 @@
                     this._discActiveView = btn.dataset.view;
                     const disc = modal.querySelector('#cb-collab-discussion');
                     const summ = modal.querySelector('#cb-disc-summary');
+                    const interleaved = modal.querySelector('#cb-disc-interleaved');
+                    if (disc) disc.style.display = 'none';
+                    if (summ) summ.style.display = 'none';
+                    if (interleaved) interleaved.style.display = 'none';
                     if (btn.dataset.view === 'summary') {
-                        if (disc) disc.style.display = 'none';
                         if (summ) { summ.style.display = ''; this._renderDiscSummary(); }
+                    } else if (btn.dataset.view === 'interleaved') {
+                        if (interleaved) { interleaved.style.display = ''; this._renderInterleavedTimeline(); }
                     } else {
                         if (disc) disc.style.display = '';
-                        if (summ) summ.style.display = 'none';
                     }
+                });
+            });
+        }
+
+        _renderInterleavedTimeline() {
+            const container = this._panelEl?.querySelector('#cb-disc-interleaved');
+            if (!container) return;
+            const msgs = this._collabMessages.filter(m => !m._typing && !m._separator && m.content);
+            if (!msgs.length) {
+                container.innerHTML = '<div style="color:#666;font-size:12px;padding:20px;text-align:center"><i class="fas fa-stream"></i> 暂无讨论内容</div>';
+                return;
+            }
+
+            const roleIndex = {};
+            let ridx = 0;
+            let lastRound = 0;
+            const frags = [];
+
+            msgs.forEach((m, i) => {
+                if (m.round && m.round !== lastRound) {
+                    lastRound = m.round;
+                    frags.push(`<div class="cb-itl-phase"><span>第 ${m.round} 轮讨论</span></div>`);
+                }
+
+                if (!(m.roleId in roleIndex)) roleIndex[m.roleId] = ridx++;
+                const side = roleIndex[m.roleId] % 2 === 0 ? 'left' : 'right';
+                const info = this._getRoleInfo(m.roleId);
+                const color = info.color || '#6366f1';
+                const avatar = (info.icon || '🤖').replace(/<[^>]+>/g, '').trim().slice(0, 2);
+                const elapsed = m.elapsed ? `${(m.elapsed / 1000).toFixed(1)}s` : '';
+                const contentPreview = (m.content || '').substring(0, 200);
+
+                frags.push(`
+                    <div class="cb-itl-event cb-itl-${side}" style="--itl-color:${color}" data-idx="${i}">
+                        <div class="cb-itl-connector"><div class="cb-itl-dot" style="background:${color};box-shadow:0 0 6px ${color}"></div></div>
+                        <div class="cb-itl-card">
+                            <div class="cb-itl-header">
+                                <span class="cb-itl-avatar" style="background:${color}">${avatar}</span>
+                                <span class="cb-itl-role" style="color:${color}">${info.name}</span>
+                                ${elapsed ? `<span class="cb-itl-elapsed">${elapsed}</span>` : ''}
+                            </div>
+                            <div class="cb-itl-content">${this._formatDiscussionContent(contentPreview)}</div>
+                        </div>
+                    </div>
+                `);
+            });
+
+            const roleStats = Object.entries(roleIndex).map(([rid]) => {
+                const info = this._getRoleInfo(rid);
+                const count = msgs.filter(m => m.roleId === rid).length;
+                return `<span class="cb-itl-stat-chip" style="border-color:${info.color || '#6366f1'}">${info.name}: ${count}</span>`;
+            }).join('');
+
+            container.innerHTML = `
+                <div class="cb-itl-stats">${roleStats}</div>
+                <div class="cb-itl-timeline">
+                    <div class="cb-itl-axis"></div>
+                    ${frags.join('')}
+                </div>
+            `;
+
+            container.querySelectorAll('.cb-itl-event').forEach(ev => {
+                ev.addEventListener('click', () => {
+                    container.querySelectorAll('.cb-itl-event').forEach(e => e.classList.remove('cb-itl-selected'));
+                    ev.classList.add('cb-itl-selected');
                 });
             });
         }
@@ -4123,11 +4449,67 @@
                 this._collabState._reportData = report;
                 this._renderCollabReport(conclusion, report);
                 this._collabGoToStep('report');
+
+                this._persistCollabDiscussion(conclusion);
             } catch (err) {
                 this._showToast(`总结失败: ${err.message}`, 'error');
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-gavel"></i> 总结决策';
+            }
+        }
+
+        async _persistCollabDiscussion(conclusion) {
+            const validMsgs = (this._collabMessages || []).filter(m => !m._typing && !m._separator && m.content);
+            if (!validMsgs.length) return;
+
+            try {
+                const requirement = this._collabState._requirement || '多角色协作';
+                const convName = `collab-${requirement.slice(0, 30)}-${Date.now().toString(36)}`;
+                const convRes = await this._api('/conversations', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        agent_name: convName,
+                        model: 'multi-role',
+                        cwd: '',
+                        status: 'completed',
+                    }),
+                });
+                if (!convRes?.id) return;
+                const convId = convRes.id;
+
+                await this._api(`/conversations/${convId}/messages`, {
+                    method: 'POST',
+                    body: JSON.stringify({ role: 'user', content: `[多角色协作任务] ${requirement}` }),
+                });
+
+                for (const m of validMsgs) {
+                    const info = this._getRoleInfo(m.roleId);
+                    const roleName = info?.name || m.roleId || 'unknown';
+                    const roundLabel = m.round ? `第${m.round}轮` : '';
+                    const prefix = `**${roleName}** ${roundLabel}:\n\n`;
+                    await this._api(`/conversations/${convId}/messages`, {
+                        method: 'POST',
+                        body: JSON.stringify({ role: 'assistant', content: prefix + m.content }),
+                    });
+                }
+
+                if (conclusion?.summary || conclusion?.content) {
+                    const summaryText = `## 讨论总结\n\n${conclusion.summary || conclusion.content}`;
+                    await this._api(`/conversations/${convId}/messages`, {
+                        method: 'POST',
+                        body: JSON.stringify({ role: 'assistant', content: summaryText }),
+                    });
+                }
+
+                await this._api(`/conversations/${convId}/status`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ status: 'completed' }),
+                });
+
+                this._collabState._collabConvId = convId;
+            } catch (err) {
+                console.warn('[collab] 保存讨论记录失败:', err);
             }
         }
 

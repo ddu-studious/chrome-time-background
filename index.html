@@ -107,25 +107,26 @@
                     <div class="holiday" id="holiday"></div>
                 </div>
             </div>
-            <!-- 今日推荐阅读 -->
-            <div class="reading-reco-wrapper" id="reading-reco-wrapper" style="display: none;">
-                <div class="reading-reco-container" id="reading-reco">
-                    <div class="reading-reco-header">
-                        <span class="reading-reco-title">
-                            <i class="fas fa-book-reader"></i>
-                            今日推荐阅读
-                        </span>
-                        <div class="reading-reco-actions">
-                            <span class="reading-reco-count" id="reading-reco-count"></span>
-                            <button class="reading-reco-toggle" id="reading-reco-toggle" title="收起">
-                                <i class="fas fa-chevron-up"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="reading-reco-body" id="reading-reco-body"></div>
+        </main>
+    </div>
+
+    <!-- 今日推荐阅读（Dock App 浮层） -->
+    <div class="reading-reco-wrapper" id="reading-reco-wrapper" style="display: none;">
+        <div class="reading-reco-container" id="reading-reco">
+            <div class="reading-reco-header">
+                <span class="reading-reco-title">
+                    <i class="fas fa-book-reader"></i>
+                    今日推荐阅读
+                </span>
+                <div class="reading-reco-actions">
+                    <span class="reading-reco-count" id="reading-reco-count"></span>
+                    <button class="reading-reco-toggle" id="reading-reco-toggle" title="收起">
+                        <i class="fas fa-chevron-up"></i>
+                    </button>
                 </div>
             </div>
-        </main>
+            <div class="reading-reco-body" id="reading-reco-body"></div>
+        </div>
     </div>
 
     <!-- 紧急任务浮动提醒气泡 -->
@@ -283,6 +284,16 @@
         <div class="dock-divider" aria-hidden="true"></div>
         <button class="dock-btn" id="tetris-3d-dock-btn" title="立体方块">
             <i class="fas fa-cube"></i>
+        </button>
+        <div class="dock-divider" aria-hidden="true"></div>
+        <button class="dock-btn" id="music-dock-btn" title="音乐播放器">
+            <i class="fas fa-music"></i>
+        </button>
+        <button class="dock-btn" id="reading-dock-btn" title="今日阅读">
+            <i class="fas fa-book-reader"></i>
+        </button>
+        <button class="dock-btn" id="poetry-dock-btn" title="诗词电台">
+            <i class="fas fa-feather-alt"></i>
         </button>
         <div class="dock-divider" aria-hidden="true"></div>
         <button class="dock-btn" id="agent-dock-btn" title="Agent 矩阵">

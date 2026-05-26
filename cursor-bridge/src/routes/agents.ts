@@ -286,6 +286,46 @@ export async function agentRoutes(fastify: FastifyInstance) {
     }
   );
 
+  // ─── Cloud Artifacts ───
+
+  fastify.get<{ Params: { id: string } }>(
+    '/agents/:id/artifacts',
+    async (request, reply) => {
+      try {
+        const artifacts = await agentPool.listArtifacts(request.params.id);
+        return { artifacts };
+      } catch (err: any) {
+        const code = err.message.includes('not found') ? 404 : 500;
+        return reply.code(code).send({ error: err.message });
+      }
+    }
+  );
+
+  fastify.get<{ Params: { id: string }; Querystring: { path: string } }>(
+    '/agents/:id/artifacts/download',
+    async (request, reply) => {
+      const artifactPath = request.query.path;
+      if (!artifactPath) return reply.code(400).send({ error: 'path query is required' });
+      try {
+        const buffer = await agentPool.downloadArtifact(request.params.id, artifactPath);
+        const ext = artifactPath.split('.').pop() || 'bin';
+        const mimeMap: Record<string, string> = {
+          ts: 'text/typescript', js: 'text/javascript', json: 'application/json',
+          md: 'text/markdown', txt: 'text/plain', html: 'text/html',
+          css: 'text/css', py: 'text/x-python', rs: 'text/x-rust',
+          png: 'image/png', jpg: 'image/jpeg', svg: 'image/svg+xml',
+        };
+        reply.header('Content-Type', mimeMap[ext] || 'application/octet-stream');
+        reply.header('Content-Disposition', `attachment; filename="${artifactPath.split('/').pop()}"`);
+        return reply.send(buffer);
+      } catch (err: any) {
+        const code = err.message.includes('not found') ? 404
+          : err.message.includes('cloud') ? 400 : 500;
+        return reply.code(code).send({ error: err.message });
+      }
+    }
+  );
+
   // ─── Hot-reload agent config ───
 
   fastify.post<{ Params: { id: string } }>(

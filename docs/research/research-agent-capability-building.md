@@ -1684,12 +1684,12 @@ triggers:
 - [x] `agent.reload()` 热加载配置 ✅ (运行中刷新 Agent 设置)
 - [x] Cloud 运行时完整支持 ✅ (CloudConfig 类型 + create 路径分支)
 
-### Phase 6 (远期) — 📋 规划中
+### Phase 6 (远期) — ✅ 已完成
 
-- [ ] 时间线交织视图 (前端 UI 待实现)
-- [ ] AB 测试 & 效果评分 (需 Prompt 版本管理 V2)
-- [ ] Dashboard 前端 UI 实现 (进度条、图表、告警)
-- [ ] `agent.listArtifacts()` / `downloadArtifact()` (Cloud 产物管理，需实际 Cloud 环境验证)
+- [x] 时间线交织视图 ✅ (前端 UI: `test/demos/timeline-interleaved-view.html`，含角色筛选、阶段分隔、回放模式、事件详情面板)
+- [x] AB 测试 & 效果评分 ✅ (数据库表 `ab_experiments` + `ab_run_results`，完整 CRUD API `routes/ab-test.ts`，含流量分配、评分聚合、胜出推荐)
+- [x] Dashboard 前端 UI 实现 ✅ (前端 UI: `test/demos/dashboard-usage-ui.html`，含指标卡片、Token 趋势图、模型分布饼图、Agent 进度条、告警列表、运行历史表)
+- [x] `agent.listArtifacts()` / `downloadArtifact()` ✅ (agent-pool 方法 + REST API: `GET /agents/:id/artifacts` + `GET /agents/:id/artifacts/download?path=`，Cloud runtime 产物列出与下载)
 
 ---
 

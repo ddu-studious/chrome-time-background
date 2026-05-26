@@ -1,0 +1,60 @@
+{
+  "schemaVersion": "1.0.0",
+  "meta": {
+    "id": "scenario-b-ai-stack",
+    "title": "AI 技术栈概念图谱",
+    "layoutSeed": 42,
+    "locale": "zh-CN",
+    "updatedAt": "2026-05-25"
+  },
+  "schema": {
+    "nodeTypes": [
+      { "id": "product", "label": "产品", "color": "#4F46E5" },
+      { "id": "module", "label": "模块", "color": "#0EA5E9" }
+    ],
+    "edgeTypes": [
+      { "id": "contains", "label": "包含", "directed": true },
+      { "id": "depends_on", "label": "依赖", "directed": true }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "ai-landscape",
+      "label": "AI 产业全景",
+      "type": "product",
+      "summary": "对外路演根节点",
+      "pinned": true
+    },
+    {
+      "id": "rag-pipeline",
+      "label": "RAG Pipeline",
+      "type": "module",
+      "summary": "检索增强生成链路"
+    },
+    {
+      "id": "llm-core",
+      "label": "LLM Core",
+      "type": "module",
+      "summary": "大语言模型推理层"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-ai-rag",
+      "source": "ai-landscape",
+      "target": "rag-pipeline",
+      "type": "contains"
+    },
+    {
+      "id": "e-rag-llm",
+      "source": "rag-pipeline",
+      "target": "llm-core",
+      "type": "depends_on"
+    }
+  ],
+  "demo": {
+    "defaultScene": true,
+    "tourNodeIds": ["ai-landscape", "rag-pipeline", "llm-core"],
+    "hubNodeIds": ["ai-landscape"]
+  }
+}

@@ -1,0 +1,85 @@
+name: GraphSphere Demo CI Gate
+
+on:
+  push:
+    branches: [main, master, 'feature/**']
+    paths:
+      - 'js/kg-graph-*.js'
+      - 'js/webgl-capability-probe.js'
+      - 'vendor/three/**'
+      - 'vendor/VENDOR.lock.md'
+      - 'test/kg-graph-*.test.js'
+      - 'test/demos/knowledge-graph-3d-demo.html'
+      - 'test/fixtures/graphsphere/**'
+      - 'scripts/ci-gate-kg3d-demo.sh'
+      - 'scripts/package-kg3d-demo.sh'
+      - 'scripts/scan-kg3d-demo.sh'
+      - 'scripts/validate-demo-graph-json.*'
+      - 'scripts/archive-demo-graph-json.sh'
+      - 'releases/kg3d-demo/**'
+      - '.github/workflows/kg3d-demo-ci-gate.yml'
+  pull_request:
+    paths:
+      - 'js/kg-graph-*.js'
+      - 'js/webgl-capability-probe.js'
+      - 'vendor/three/**'
+      - 'vendor/VENDOR.lock.md'
+      - 'test/kg-graph-*.test.js'
+      - 'test/demos/knowledge-graph-3d-demo.html'
+      - 'test/fixtures/graphsphere/**'
+      - 'scripts/ci-gate-kg3d-demo.sh'
+      - 'scripts/package-kg3d-demo.sh'
+      - 'scripts/scan-kg3d-demo.sh'
+      - 'scripts/validate-demo-graph-json.*'
+      - 'scripts/archive-demo-graph-json.sh'
+      - 'releases/kg3d-demo/**'
+      - '.github/workflows/kg3d-demo-ci-gate.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: kg3d-demo-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: Tests + JSON + Package + Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install scan dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ripgrep bc zip
+
+      - name: Run GraphSphere CI gate
+        run: ./scripts/ci-gate-kg3d-demo.sh
+
+      - name: Upload demo artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: graphsphere-demo-zip
+          path: dist/graphsphere-demo-v*.zip
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Gate summary
+        if: always()
+        run: |
+          echo "## GraphSphere Demo CI Gate" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 阶段 | 命令 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|------|------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 单测 | \`node --test test/kg-graph-*.test.js\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| JSON | \`./scripts/validate-demo-graph-json.sh\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 打包 | \`./scripts/package-kg3d-demo.sh\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 扫描 | \`./scripts/scan-kg3d-demo.sh\` (gzip ≤800KB) |" >> "$GITHUB_STEP_SUMMARY"

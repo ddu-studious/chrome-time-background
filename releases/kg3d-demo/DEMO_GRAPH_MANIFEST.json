@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "bundles": [
+    {
+      "role": "demo-graph-release-bundle",
+      "demoVersion": "0.1.0",
+      "gitRef": "HEAD",
+      "gitCommit": "31bb591518b27585edabe03e7c9109459556ac18",
+      "archivedAt": "2026-05-25T15:51:21Z",
+      "gitTag": null,
+      "schemaVersion": "1.0.0",
+      "files": [
+        {
+          "alias": "demo-graph-a.json",
+          "sourcePath": "test/fixtures/graphsphere/scenario-a-chrome-bridge.json",
+          "archivePath": "releases/kg3d-demo/demo-graph-archives/demo-graph-a.json",
+          "sceneId": "scenario-a-chrome-bridge",
+          "sha256": "b49fe54b6b439b96e1895848bbe1f51878153d6456cfd67b5c7ec051574e05e3",
+          "sizeBytes": 16417,
+          "nodeCount": 42
+        },
+        {
+          "alias": "demo-graph-b.json",
+          "sourcePath": "test/fixtures/graphsphere/scenario-b-ai-stack.json",
+          "archivePath": "releases/kg3d-demo/demo-graph-archives/demo-graph-b.json",
+          "sceneId": "scenario-b-ai-stack",
+          "sha256": "392182be5d9ffc8c2bd000383efcbebe3a53cfc34a3b7d96721a38de8da90ee7",
+          "sizeBytes": 16597,
+          "nodeCount": 45
+        }
+      ]
+    }
+  ],
+  "latest": {
+    "role": "demo-graph-release-bundle",
+    "demoVersion": "0.1.0",
+    "gitRef": "HEAD",
+    "gitCommit": "31bb591518b27585edabe03e7c9109459556ac18",
+    "archivedAt": "2026-05-25T15:51:21Z",
+    "gitTag": null,
+    "schemaVersion": "1.0.0",
+    "files": [
+      {
+        "alias": "demo-graph-a.json",
+        "sourcePath": "test/fixtures/graphsphere/scenario-a-chrome-bridge.json",
+        "archivePath": "releases/kg3d-demo/demo-graph-archives/demo-graph-a.json",
+        "sceneId": "scenario-a-chrome-bridge",
+        "sha256": "b49fe54b6b439b96e1895848bbe1f51878153d6456cfd67b5c7ec051574e05e3",
+        "sizeBytes": 16417,
+        "nodeCount": 42
+      },
+      {
+        "alias": "demo-graph-b.json",
+        "sourcePath": "test/fixtures/graphsphere/scenario-b-ai-stack.json",
+        "archivePath": "releases/kg3d-demo/demo-graph-archives/demo-graph-b.json",
+        "sceneId": "scenario-b-ai-stack",
+        "sha256": "392182be5d9ffc8c2bd000383efcbebe3a53cfc34a3b7d96721a38de8da90ee7",
+        "sizeBytes": 16597,
+        "nodeCount": 45
+      }
+    ]
+  }
+}

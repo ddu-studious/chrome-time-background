@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GraphSphere · 3D 知识图谱 Demo</title>
+    <style>
+        :root {
+            --bg: #020617;
+            --panel: rgba(15, 23, 42, 0.94);
+            --border: rgba(148, 163, 184, 0.28);
+            --text: #e2e8f0;
+            --muted: #94a3b8;
+            --accent: #38bdf8;
+            --accent-dim: rgba(56, 189, 248, 0.15);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .banner {
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border);
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.18), transparent);
+        }
+        .banner h1 { font-size: 16px; font-weight: 600; }
+        .banner p { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.55; }
+        .banner code {
+            font-size: 11px;
+            background: rgba(15, 23, 42, 0.8);
+            padding: 1px 5px;
+            border-radius: 4px;
+        }
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 10px 20px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(2, 6, 23, 0.6);
+            align-items: center;
+        }
+        .toolbar label { font-size: 11px; color: var(--muted); margin-right: 4px; }
+        .toolbar select, .toolbar button {
+            font: inherit;
+            font-size: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--panel);
+            color: var(--text);
+            padding: 6px 12px;
+            cursor: pointer;
+        }
+        .toolbar button:hover { border-color: rgba(56, 189, 248, 0.5); background: var(--accent-dim); }
+        .toolbar button.primary {
+            background: rgba(56, 189, 248, 0.2);
+            border-color: rgba(56, 189, 248, 0.45);
+            color: #bae6fd;
+        }
+        .toolbar .spacer { flex: 1; }
+        .layout {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr minmax(260px, 320px);
+            min-height: 0;
+        }
+        @media (max-width: 900px) {
+            .layout { grid-template-columns: 1fr; }
+        }
+        .stage-wrap {
+            display: flex;
+            flex-direction: column;
+            padding: 12px 12px 12px 20px;
+            min-height: 480px;
+        }
+        .stage-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 12px;
+        }
+        .badge {
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: rgba(56, 189, 248, 0.18);
+            color: #7dd3fc;
+            border: 1px solid rgba(56, 189, 248, 0.35);
+        }
+        .badge[data-mode="canvas2d"] {
+            background: rgba(245, 158, 11, 0.18);
+            color: #fcd34d;
+            border-color: rgba(245, 158, 11, 0.35);
+        }
+        #viewport {
+            flex: 1;
+            min-height: 420px;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #020617;
+            border: 1px solid var(--border);
+            touch-action: none;
+        }
+        #status {
+            margin-top: 8px;
+            font-size: 11px;
+            color: var(--muted);
+        }
+        #status.error { color: #f87171; }
+        .sidebar {
+            border-left: 1px solid var(--border);
+            background: var(--panel);
+            padding: 16px;
+            overflow-y: auto;
+        }
+        .sidebar h2 {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--muted);
+            margin-bottom: 12px;
+        }
+        .kg-sidebar-empty { font-size: 12px; color: var(--muted); line-height: 1.6; }
+        .kg-node-detail h3 { font-size: 16px; margin: 8px 0; }
+        .kg-type-chip {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: color-mix(in srgb, var(--chip-color) 22%, transparent);
+            color: var(--chip-color);
+            border: 1px solid color-mix(in srgb, var(--chip-color) 45%, transparent);
+        }
+        .kg-summary { font-size: 12px; color: var(--muted); line-height: 1.55; margin: 8px 0 12px; }
+        .kg-meta {
+            display: grid;
+            grid-template-columns: 72px 1fr;
+            gap: 4px 8px;
+            font-size: 11px;
+            margin-bottom: 12px;
+        }
+        .kg-meta dt { color: var(--muted); }
+        .kg-meta dd code { font-size: 10px; word-break: break-all; }
+        .kg-neighbors h4 { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+        .kg-neighbors ul { list-style: none; font-size: 12px; }
+        .kg-neighbors li {
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+        }
+        .metrics {
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border);
+            font-size: 11px;
+            color: var(--muted);
+            line-height: 1.7;
+        }
+        .metrics strong { color: var(--accent); }
+        .hint {
+            margin: 12px 20px 20px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            background: var(--accent-dim);
+            border: 1px solid rgba(56, 189, 248, 0.25);
+            font-size: 11px;
+            color: #bae6fd;
+            line-height: 1.55;
+        }
+    </style>
+</head>
+<body>
+    <header class="banner">
+        <h1>GraphSphere v0.1 — 3D 知识图谱浏览器 Demo</h1>
+        <p>
+            P0：双预置场景 · 3D 力导向 · 点选邻域高亮 · 演示巡航 · WebGL/2D 降级。
+            模块链 <code>kg-graph-core</code> → <code>kg-graph-layout</code> →
+            <code>kg-graph-3d-renderer</code> / <code>kg-graph-2d-renderer</code> →
+            <code>kg-graph-host</code>。须 HTTP 打开（<code>npx serve -p 8765 .</code>）。
+        </p>
+    </header>
+
+    <div class="toolbar">
+        <label for="scenario-select">场景</label>
+        <select id="scenario-select" aria-label="选择场景">
+            <option value="scenario-a-chrome-bridge">A · Chrome 扩展 / Bridge 架构</option>
+            <option value="scenario-b-ai-stack">B · AI 技术栈概念图谱</option>
+        </select>
+        <button type="button" id="btn-tour" class="primary">▶ 演示巡航</button>
+        <button type="button" id="btn-pause">暂停</button>
+        <button type="button" id="btn-reset">重置视角</button>
+        <span class="spacer"></span>
+        <button type="button" id="btn-3d" title="强制 WebGL">3D</button>
+        <button type="button" id="btn-2d" title="Canvas 2D 降级">2D</button>
+    </div>
+
+    <main class="layout">
+        <section class="stage-wrap">
+            <div class="stage-header">
+                <span id="scene-title">加载中…</span>
+                <span class="badge" id="render-badge">—</span>
+            </div>
+            <div id="viewport" aria-label="3D 知识图谱视口"></div>
+            <p id="status">正在初始化…</p>
+        </section>
+        <aside class="sidebar">
+            <h2>节点详情</h2>
+            <div id="sidebar-content">
+                <p class="kg-sidebar-empty">点击节点查看详情与邻域高亮</p>
+            </div>
+            <div class="metrics" id="metrics">
+                <div>FPS: <strong id="metric-fps">—</strong></div>
+                <div>节点: <strong id="metric-nodes">—</strong></div>
+                <div>渲染: <strong id="metric-mode">—</strong></div>
+            </div>
+        </aside>
+    </main>
+
+    <p class="hint">
+        交互：拖拽旋转/平移 · 滚轮缩放 · 点击选中节点。
+        降级测试：<code>?force2d=1</code> 或工具栏 2D 按钮。
+        强制 3D：<code>?force3d=1</code>。
+    </p>
+
+    <script src="../../js/webgl-capability-probe.js"></script>
+    <script src="../../js/kg-graph-core.js"></script>
+    <script src="../../js/kg-graph-layout.js"></script>
+    <script src="../../js/kg-graph-3d-renderer.js"></script>
+    <script src="../../js/kg-graph-2d-renderer.js"></script>
+    <script src="../../js/kg-graph-host.js"></script>
+
+    <script type="module">
+        const SCENARIO_CATALOG = [
+            {
+                id: 'scenario-a-chrome-bridge',
+                title: 'Chrome 扩展 / Bridge 产品架构',
+                url: '../fixtures/graphsphere/scenario-a-chrome-bridge.json'
+            },
+            {
+                id: 'scenario-b-ai-stack',
+                title: 'AI 技术栈 / 产业链概念图谱',
+                url: '../fixtures/graphsphere/scenario-b-ai-stack.json'
+            }
+        ];
+
+        const viewport = document.getElementById('viewport');
+        const sidebar = document.getElementById('sidebar-content');
+        const statusEl = document.getElementById('status');
+        const badgeEl = document.getElementById('render-badge');
+        const scenarioSelect = document.getElementById('scenario-select');
+        const sceneTitleEl = document.getElementById('scene-title');
+
+        const urlParams = new URLSearchParams(location.search);
+        let host = null;
+
+        function setStatus(text, isError) {
+            statusEl.textContent = text;
+            statusEl.classList.toggle('error', Boolean(isError));
+        }
+
+        function updateMetrics(state) {
+            document.getElementById('metric-fps').textContent =
+                state.fps !== undefined ? String(state.fps) : '—';
+            document.getElementById('metric-nodes').textContent =
+                state.nodeCount !== undefined ? String(state.nodeCount) : '—';
+            document.getElementById('metric-mode').textContent =
+                state.renderMode === 'canvas2d' ? 'Canvas 2D' : 'WebGL 3D';
+            if (state.scenarioTitle) {
+                sceneTitleEl.textContent = state.scenarioTitle;
+            }
+        }
+
+        async function bootstrap() {
+            const { KnowledgeGraphDemoHost } = window.KnowledgeGraphDemoHost;
+
+            let three = null;
+            if (!urlParams.has('force2d')) {
+                three = await import('../../vendor/three/three.module.min.js');
+            }
+
+            host = new KnowledgeGraphDemoHost({
+                viewport,
+                sidebar,
+                statusEl,
+                badgeEl,
+                scenarioCatalog: SCENARIO_CATALOG,
+                initialScenarioId: scenarioSelect.value,
+                forceCanvas2d: urlParams.has('force2d'),
+                forceWebGL: urlParams.has('force3d'),
+                onStateChange: updateMetrics
+            });
+
+            await host.init({ three });
+
+            scenarioSelect.addEventListener('change', async () => {
+                try {
+                    await host.loadScenario(scenarioSelect.value);
+                } catch (err) {
+                    console.error(err);
+                    setStatus('场景加载失败：' + (err.message || String(err)), true);
+                }
+            });
+
+            document.getElementById('btn-tour').addEventListener('click', () => host.startTour());
+            document.getElementById('btn-pause').addEventListener('click', () => host.pauseTour());
+            document.getElementById('btn-reset').addEventListener('click', () => host.resetTour());
+
+            document.getElementById('btn-3d').addEventListener('click', async () => {
+                await host.switchRenderMode('3d');
+            });
+            document.getElementById('btn-2d').addEventListener('click', async () => {
+                await host.switchRenderMode('2d');
+            });
+        }
+
+        bootstrap().catch((err) => {
+            console.error(err);
+            setStatus(
+                '启动失败：' + (err && err.message ? err.message : String(err)) +
+                ' — 请通过 HTTP 服务打开，并确认 vendor/three 与 fixtures 存在。',
+                true
+            );
+        });
+
+        window.addEventListener('beforeunload', () => {
+            if (host) host.destroy();
+        });
+    </script>
+</body>
+</html>

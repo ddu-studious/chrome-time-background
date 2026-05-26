@@ -197,6 +197,40 @@ function initSchema() {
 
     CREATE INDEX IF NOT EXISTS idx_prompt_versions_role ON role_prompt_versions(role_id);
     CREATE INDEX IF NOT EXISTS idx_prompt_versions_active ON role_prompt_versions(is_active);
+
+    -- AB Test experiments for prompt version comparison
+    CREATE TABLE IF NOT EXISTS ab_experiments (
+      id TEXT PRIMARY KEY,
+      role_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      version_a TEXT NOT NULL,
+      version_b TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'running',
+      traffic_split REAL DEFAULT 0.5,
+      total_runs INTEGER DEFAULT 0,
+      runs_a INTEGER DEFAULT 0,
+      runs_b INTEGER DEFAULT 0,
+      score_a REAL DEFAULT 0,
+      score_b REAL DEFAULT 0,
+      winner TEXT,
+      created_at INTEGER NOT NULL,
+      finished_at INTEGER
+    );
+
+    CREATE TABLE IF NOT EXISTS ab_run_results (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      experiment_id TEXT NOT NULL REFERENCES ab_experiments(id),
+      version_id TEXT NOT NULL,
+      variant TEXT NOT NULL,
+      run_id TEXT,
+      score REAL,
+      latency_ms INTEGER,
+      token_count INTEGER,
+      feedback TEXT,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_ab_runs_experiment ON ab_run_results(experiment_id);
   `);
 
   try {
@@ -651,4 +685,70 @@ export function incrementPromptUsage(roleId: string) {
 
 export function deletePromptVersion(id: string) {
   getDb().prepare('DELETE FROM role_prompt_versions WHERE id = ? AND is_active = 0').run(id);
+}
+
+// ─── AB Test Experiments ───
+
+export function createABExperiment(id: string, opts: {
+  roleId: string; name: string; versionA: string; versionB: string; trafficSplit?: number;
+}) {
+  getDb().prepare(`
+    INSERT INTO ab_experiments (id, role_id, name, version_a, version_b, traffic_split, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'running', ?)
+  `).run(id, opts.roleId, opts.name, opts.versionA, opts.versionB, opts.trafficSplit ?? 0.5, Date.now());
+}
+
+export function getABExperiment(id: string) {
+  return getDb().prepare('SELECT * FROM ab_experiments WHERE id = ?').get(id);
+}
+
+export function listABExperiments(roleId?: string) {
+  if (roleId) {
+    return getDb().prepare('SELECT * FROM ab_experiments WHERE role_id = ? ORDER BY created_at DESC').all(roleId);
+  }
+  return getDb().prepare('SELECT * FROM ab_experiments ORDER BY created_at DESC').all();
+}
+
+export function recordABRunResult(opts: {
+  experimentId: string; versionId: string; variant: 'A' | 'B';
+  runId?: string; score?: number; latencyMs?: number; tokenCount?: number; feedback?: string;
+}) {
+  const d = getDb();
+  d.prepare(`
+    INSERT INTO ab_run_results (experiment_id, version_id, variant, run_id, score, latency_ms, token_count, feedback, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(opts.experimentId, opts.versionId, opts.variant, opts.runId ?? null,
+    opts.score ?? null, opts.latencyMs ?? null, opts.tokenCount ?? null, opts.feedback ?? null, Date.now());
+
+  const countCol = opts.variant === 'A' ? 'runs_a' : 'runs_b';
+  d.prepare(`UPDATE ab_experiments SET total_runs = total_runs + 1, ${countCol} = ${countCol} + 1 WHERE id = ?`)
+    .run(opts.experimentId);
+
+  if (typeof opts.score === 'number') {
+    const results = d.prepare(
+      'SELECT AVG(score) as avg_score FROM ab_run_results WHERE experiment_id = ? AND variant = ? AND score IS NOT NULL'
+    ).get(opts.experimentId, opts.variant) as any;
+    const scoreCol = opts.variant === 'A' ? 'score_a' : 'score_b';
+    if (results?.avg_score != null) {
+      d.prepare(`UPDATE ab_experiments SET ${scoreCol} = ? WHERE id = ?`).run(results.avg_score, opts.experimentId);
+    }
+  }
+}
+
+export function getABRunResults(experimentId: string) {
+  return getDb().prepare(
+    'SELECT * FROM ab_run_results WHERE experiment_id = ? ORDER BY created_at DESC'
+  ).all(experimentId);
+}
+
+export function finishABExperiment(id: string, winner?: string) {
+  getDb().prepare(
+    'UPDATE ab_experiments SET status = ?, winner = ?, finished_at = ? WHERE id = ?'
+  ).run('finished', winner ?? null, Date.now(), id);
+}
+
+export function pickABVariant(experimentId: string): 'A' | 'B' {
+  const exp = getABExperiment(experimentId) as any;
+  if (!exp || exp.status !== 'running') return 'A';
+  return Math.random() < (exp.traffic_split ?? 0.5) ? 'A' : 'B';
 }

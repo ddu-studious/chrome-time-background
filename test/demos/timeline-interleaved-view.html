@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>时间线交织视图 — 多角色协作可视化</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f23; color: #e0e0e0; min-height: 100vh; }
+
+.header { background: linear-gradient(135deg, #1a1a3e, #2d1b69); padding: 16px 24px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: space-between; }
+.header h1 { font-size: 18px; color: #fff; display: flex; align-items: center; gap: 10px; }
+.header h1 i { color: #7c3aed; }
+.controls { display: flex; gap: 8px; align-items: center; }
+.controls select, .controls input { background: #1e1e3a; border: 1px solid rgba(255,255,255,0.15); color: #e0e0e0; padding: 6px 12px; border-radius: 6px; font-size: 13px; }
+.controls button { background: #7c3aed; color: #fff; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.controls button:hover { background: #6d28d9; }
+
+.layout { display: grid; grid-template-columns: 220px 1fr 280px; height: calc(100vh - 56px); }
+
+.role-lane-panel { background: #1a1a2e; border-right: 1px solid rgba(255,255,255,0.05); padding: 16px; overflow-y: auto; }
+.role-lane-panel h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #666; margin-bottom: 12px; }
+.role-chip { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 8px; margin-bottom: 6px; cursor: pointer; transition: all 0.2s; border: 2px solid transparent; }
+.role-chip:hover { background: rgba(124,58,237,0.1); }
+.role-chip.active { border-color: var(--role-color, #7c3aed); background: rgba(124,58,237,0.08); }
+.role-chip .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.role-chip .name { font-size: 13px; flex: 1; }
+.role-chip .count { font-size: 11px; color: #666; background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; }
+
+.timeline-main { overflow-y: auto; padding: 20px 24px; position: relative; }
+
+.timeline-axis { position: absolute; left: 50%; width: 2px; top: 0; bottom: 0; background: linear-gradient(to bottom, #333 0%, #7c3aed 50%, #333 100%); opacity: 0.3; }
+
+.timeline-event { display: flex; margin-bottom: 12px; position: relative; animation: fadeSlideIn 0.3s ease-out; }
+@keyframes fadeSlideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+.timeline-event.left { flex-direction: row; }
+.timeline-event.right { flex-direction: row-reverse; }
+
+.event-time { width: 80px; flex-shrink: 0; font-size: 11px; color: #666; padding-top: 10px; text-align: center; }
+.event-connector { width: 40px; flex-shrink: 0; position: relative; display: flex; align-items: flex-start; justify-content: center; padding-top: 14px; }
+.event-connector::before { content: ''; width: 12px; height: 12px; border-radius: 50%; background: var(--role-color, #7c3aed); box-shadow: 0 0 8px var(--role-color, #7c3aed); }
+.event-connector::after { content: ''; position: absolute; width: 20px; height: 2px; background: var(--role-color, #7c3aed); top: 19px; }
+.timeline-event.left .event-connector::after { right: 0; }
+.timeline-event.right .event-connector::after { left: 0; }
+
+.event-card { flex: 1; max-width: 420px; background: #1e1e3a; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px 16px; border-left: 3px solid var(--role-color, #7c3aed); transition: all 0.2s; }
+.event-card:hover { background: #252540; border-color: rgba(255,255,255,0.15); transform: translateX(2px); }
+.timeline-event.right .event-card { border-left: none; border-right: 3px solid var(--role-color, #7c3aed); }
+
+.event-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.event-role { font-size: 11px; font-weight: 600; color: var(--role-color, #7c3aed); text-transform: uppercase; letter-spacing: 0.5px; }
+.event-type { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.05); color: #888; }
+.event-type.thinking { background: rgba(99,102,241,0.15); color: #818cf8; }
+.event-type.tool_call { background: rgba(245,158,11,0.15); color: #fbbf24; }
+.event-type.decision { background: rgba(16,185,129,0.15); color: #34d399; }
+.event-type.objection { background: rgba(239,68,68,0.15); color: #f87171; }
+.event-type.agreement { background: rgba(34,197,94,0.15); color: #4ade80; }
+.event-type.delegation { background: rgba(168,85,247,0.15); color: #c084fc; }
+
+.event-content { font-size: 13px; line-height: 1.5; color: #ccc; max-height: 80px; overflow: hidden; position: relative; }
+.event-content.expanded { max-height: none; }
+.event-content::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 24px; background: linear-gradient(transparent, #1e1e3a); pointer-events: none; }
+.event-content.expanded::after { display: none; }
+
+.event-footer { display: flex; gap: 8px; margin-top: 6px; align-items: center; }
+.event-footer .phase-tag { font-size: 10px; padding: 2px 8px; border-radius: 4px; background: rgba(124,58,237,0.1); color: #a78bfa; }
+.event-footer .causal-link { font-size: 10px; color: #666; cursor: pointer; }
+.event-footer .causal-link:hover { color: #7c3aed; }
+
+.phase-separator { text-align: center; padding: 16px 0; position: relative; }
+.phase-separator span { background: #0f0f23; padding: 0 16px; font-size: 12px; color: #7c3aed; font-weight: 600; position: relative; z-index: 1; }
+.phase-separator::before { content: ''; position: absolute; left: 10%; right: 10%; top: 50%; height: 1px; background: linear-gradient(to right, transparent, #7c3aed, transparent); }
+
+.detail-panel { background: #1a1a2e; border-left: 1px solid rgba(255,255,255,0.05); padding: 16px; overflow-y: auto; }
+.detail-panel h3 { font-size: 14px; color: #fff; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+.detail-section { margin-bottom: 16px; }
+.detail-section h4 { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+.detail-json { background: #12122a; border-radius: 8px; padding: 10px; font-size: 12px; line-height: 1.5; color: #4ade80; font-family: 'Fira Code', monospace; max-height: 200px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+.causal-chain { display: flex; flex-direction: column; gap: 4px; }
+.causal-item { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 4px 8px; background: rgba(255,255,255,0.03); border-radius: 4px; }
+.causal-item .arrow { color: #7c3aed; }
+
+.stats-bar { display: flex; gap: 12px; padding: 12px 16px; background: rgba(124,58,237,0.05); border-radius: 8px; margin-bottom: 16px; }
+.stat-item { text-align: center; }
+.stat-item .num { font-size: 20px; font-weight: 700; color: #fff; }
+.stat-item .label { font-size: 10px; color: #666; margin-top: 2px; }
+
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 300px; color: #666; }
+.empty-state i { font-size: 48px; margin-bottom: 16px; opacity: 0.3; }
+.empty-state p { font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1><i class="fas fa-stream"></i> 时间线交织视图</h1>
+  <div class="controls">
+    <select id="taskSelect">
+      <option value="">选择任务...</option>
+      <option value="demo" selected>Demo: 代码审查任务</option>
+    </select>
+    <select id="filterType">
+      <option value="">所有类型</option>
+      <option value="thinking">思考</option>
+      <option value="tool_call">工具调用</option>
+      <option value="decision">决策</option>
+      <option value="objection">异议</option>
+      <option value="agreement">共识</option>
+    </select>
+    <button onclick="togglePlayback()"><i class="fas fa-play" id="playIcon"></i> 回放</button>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="role-lane-panel">
+    <h3>参与角色</h3>
+    <div id="roleList"></div>
+
+    <h3 style="margin-top: 24px">阶段进度</h3>
+    <div id="phaseProgress"></div>
+  </div>
+
+  <div class="timeline-main" id="timelineMain">
+    <div class="timeline-axis"></div>
+    <div id="timelineEvents"></div>
+  </div>
+
+  <div class="detail-panel">
+    <h3><i class="fas fa-info-circle"></i> 事件详情</h3>
+    <div id="detailContent">
+      <div class="empty-state">
+        <i class="fas fa-mouse-pointer"></i>
+        <p>点击事件卡片查看详情</p>
+      </div>
+    </div>
+
+    <div class="stats-bar" id="statsBar" style="margin-top: 16px;">
+      <div class="stat-item"><div class="num" id="statTotal">0</div><div class="label">总事件</div></div>
+      <div class="stat-item"><div class="num" id="statDecisions">0</div><div class="label">决策</div></div>
+      <div class="stat-item"><div class="num" id="statTools">0</div><div class="label">工具调用</div></div>
+      <div class="stat-item"><div class="num" id="statRoles">0</div><div class="label">角色</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const ROLE_COLORS = {
+  'architect': '#7c3aed',
+  'reviewer': '#f59e0b',
+  'qa_engineer': '#10b981',
+  'tech_lead': '#3b82f6',
+  'security': '#ef4444',
+  'pm': '#ec4899',
+};
+
+const DEMO_DATA = [
+  { id: 't1', roleId: 'architect', type: 'thinking', phase: 'analysis', content: '分析代码结构，发现三层依赖耦合：Controller → Service → Repository。需要引入接口隔离。', timestamp: Date.now() - 300000, metadata: { reasoning: '依赖倒置原则', confidence: 0.85 }},
+  { id: 't2', roleId: 'reviewer', type: 'tool_call', phase: 'analysis', content: '调用 AST 分析器扫描 src/ 目录，统计模块间依赖关系和循环引用。', timestamp: Date.now() - 280000, metadata: { toolName: 'ast-analyzer', durationMs: 1200 }},
+  { id: 't3', roleId: 'architect', type: 'decision', phase: 'analysis', content: '决策：采用 Hexagonal Architecture 重构服务层。原因：降低耦合度，便于单元测试。', timestamp: Date.now() - 260000, metadata: { chosen: 'hexagonal', options: ['layered', 'hexagonal', 'clean'], reason: '适合当前团队规模和测试需求' }},
+  { id: 't4', roleId: 'qa_engineer', type: 'objection', phase: 'analysis', content: '对 Hexagonal 方案提出质疑：当前测试覆盖率仅 42%，重构风险高。建议先补全测试再重构。', timestamp: Date.now() - 240000, metadata: { stance: 'disagree', confidence: 0.72 }},
+  { id: 't5', roleId: 'tech_lead', type: 'thinking', phase: 'analysis', content: '权衡 QA 的担忧和架构师的方案。考虑分阶段重构：第一阶段补测试 + 抽取接口，第二阶段完整迁移。', timestamp: Date.now() - 220000, metadata: { reasoning: '渐进式重构降低风险' }},
+  { id: 't6', roleId: 'tech_lead', type: 'decision', phase: 'planning', content: '最终决策：分两阶段执行。Phase 1 (本周): 补充核心路径测试至 70%。Phase 2 (下周): 渐进式重构。', timestamp: Date.now() - 200000, metadata: { chosen: 'phased_approach', reason: '平衡质量与进度' }},
+  { id: 't7', roleId: 'architect', type: 'agreement', phase: 'planning', content: '同意分阶段方案。已更新架构设计文档，标注重构边界和接口定义。', timestamp: Date.now() - 180000, metadata: { stance: 'agree' }},
+  { id: 't8', roleId: 'qa_engineer', type: 'agreement', phase: 'planning', content: '接受折中方案。已准备测试计划：优先覆盖 UserService、OrderService 的核心路径。', timestamp: Date.now() - 160000, metadata: { stance: 'agree' }},
+  { id: 't9', roleId: 'reviewer', type: 'tool_call', phase: 'execution', content: '执行代码质量扫描：ESLint + SonarQube 规则。发现 12 个 Code Smell，3 个潜在安全问题。', timestamp: Date.now() - 140000, metadata: { toolName: 'sonarqube-scanner', durationMs: 3400 }},
+  { id: 't10', roleId: 'security', type: 'thinking', phase: 'execution', content: '审查 3 个安全问题：SQL 注入风险 (UserDAO.findByName)、XSS (模板渲染未转义)、硬编码密钥。', timestamp: Date.now() - 120000, metadata: { reasoning: 'OWASP Top 10 检查', confidence: 0.95 }},
+  { id: 't11', roleId: 'security', type: 'delegation', phase: 'execution', content: '将 SQL 注入修复任务指派给 reviewer，XSS 修复指派给 architect。硬编码密钥需要运维介入。', timestamp: Date.now() - 100000, metadata: { targetRoleId: 'reviewer' }},
+  { id: 't12', roleId: 'qa_engineer', type: 'tool_call', phase: 'verification', content: '运行完整测试套件：127 个测试用例，121 通过，6 个失败。覆盖率提升至 68%。', timestamp: Date.now() - 80000, metadata: { toolName: 'jest', durationMs: 8900, passRate: 0.953 }},
+];
+
+let activeRoles = new Set(Object.keys(ROLE_COLORS));
+let selectedEvent = null;
+let playbackTimer = null;
+let playbackIndex = 0;
+
+function init() {
+  renderRoles();
+  renderTimeline(DEMO_DATA);
+  updateStats(DEMO_DATA);
+}
+
+function renderRoles() {
+  const counts = {};
+  DEMO_DATA.forEach(e => { counts[e.roleId] = (counts[e.roleId] || 0) + 1; });
+
+  const roleNames = {
+    architect: '架构师', reviewer: '代码审查员',
+    qa_engineer: 'QA 工程师', tech_lead: '技术负责人',
+    security: '安全专家', pm: '产品经理',
+  };
+
+  const html = Object.entries(ROLE_COLORS)
+    .filter(([id]) => counts[id])
+    .map(([id, color]) => `
+      <div class="role-chip ${activeRoles.has(id) ? 'active' : ''}"
+           style="--role-color: ${color}"
+           onclick="toggleRole('${id}')">
+        <div class="dot" style="background: ${color}"></div>
+        <span class="name">${roleNames[id] || id}</span>
+        <span class="count">${counts[id] || 0}</span>
+      </div>
+    `).join('');
+  document.getElementById('roleList').innerHTML = html;
+
+  const phases = [...new Set(DEMO_DATA.map(e => e.phase))];
+  const phaseNames = { analysis: '分析', planning: '规划', execution: '执行', verification: '验证' };
+  const phaseHtml = phases.map(p => {
+    const count = DEMO_DATA.filter(e => e.phase === p).length;
+    return `<div style="margin-bottom:8px;"><div style="font-size:12px;color:#aaa;margin-bottom:4px;">${phaseNames[p] || p} (${count})</div><div style="height:4px;background:#1e1e3a;border-radius:2px;overflow:hidden;"><div style="height:100%;width:${(count / DEMO_DATA.length * 100)}%;background:#7c3aed;border-radius:2px;"></div></div></div>`;
+  }).join('');
+  document.getElementById('phaseProgress').innerHTML = phaseHtml;
+}
+
+function renderTimeline(events) {
+  const filtered = events.filter(e => activeRoles.has(e.roleId));
+  const filterType = document.getElementById('filterType').value;
+  const shown = filterType ? filtered.filter(e => e.type === filterType) : filtered;
+
+  if (shown.length === 0) {
+    document.getElementById('timelineEvents').innerHTML = '<div class="empty-state"><i class="fas fa-filter"></i><p>无匹配事件</p></div>';
+    return;
+  }
+
+  let lastPhase = '';
+  const roleNames = { architect: '架构师', reviewer: '审查员', qa_engineer: 'QA', tech_lead: '技术Lead', security: '安全', pm: 'PM' };
+  const roleIndex = {};
+  let idx = 0;
+
+  const html = shown.map((event, i) => {
+    let phaseBar = '';
+    if (event.phase !== lastPhase) {
+      const phaseNames = { analysis: '分析阶段', planning: '规划阶段', execution: '执行阶段', verification: '验证阶段' };
+      phaseBar = `<div class="phase-separator"><span>${phaseNames[event.phase] || event.phase}</span></div>`;
+      lastPhase = event.phase;
+    }
+
+    if (!(event.roleId in roleIndex)) roleIndex[event.roleId] = idx++;
+    const side = roleIndex[event.roleId] % 2 === 0 ? 'left' : 'right';
+    const color = ROLE_COLORS[event.roleId] || '#7c3aed';
+    const time = new Date(event.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    return `${phaseBar}
+      <div class="timeline-event ${side}" style="--role-color: ${color}" onclick="showDetail('${event.id}')">
+        <div class="event-time">${time}</div>
+        <div class="event-connector"></div>
+        <div class="event-card" id="card-${event.id}">
+          <div class="event-header">
+            <span class="event-role">${roleNames[event.roleId] || event.roleId}</span>
+            <span class="event-type ${event.type}">${event.type}</span>
+          </div>
+          <div class="event-content">${event.content}</div>
+          <div class="event-footer">
+            <span class="phase-tag">${event.phase}</span>
+            ${event.metadata?.confidence ? `<span class="phase-tag">置信度 ${Math.round(event.metadata.confidence * 100)}%</span>` : ''}
+            ${event.metadata?.toolName ? `<span class="phase-tag"><i class="fas fa-wrench"></i> ${event.metadata.toolName}</span>` : ''}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  document.getElementById('timelineEvents').innerHTML = html;
+}
+
+function showDetail(eventId) {
+  const event = DEMO_DATA.find(e => e.id === eventId);
+  if (!event) return;
+  selectedEvent = event;
+
+  document.querySelectorAll('.event-card').forEach(c => c.style.boxShadow = 'none');
+  const card = document.getElementById(`card-${eventId}`);
+  if (card) card.style.boxShadow = `0 0 12px ${ROLE_COLORS[event.roleId] || '#7c3aed'}40`;
+
+  const roleNames = { architect: '架构师', reviewer: '审查员', qa_engineer: 'QA', tech_lead: '技术Lead', security: '安全', pm: 'PM' };
+
+  let html = `
+    <div class="detail-section">
+      <h4>基本信息</h4>
+      <div style="font-size:13px;line-height:1.8;">
+        <div><strong>角色:</strong> ${roleNames[event.roleId] || event.roleId}</div>
+        <div><strong>类型:</strong> <span class="event-type ${event.type}">${event.type}</span></div>
+        <div><strong>阶段:</strong> ${event.phase}</div>
+        <div><strong>时间:</strong> ${new Date(event.timestamp).toLocaleString('zh-CN')}</div>
+      </div>
+    </div>
+    <div class="detail-section">
+      <h4>完整内容</h4>
+      <div style="font-size:13px;line-height:1.6;color:#ccc;">${event.content}</div>
+    </div>`;
+
+  if (event.metadata && Object.keys(event.metadata).length > 0) {
+    html += `
+    <div class="detail-section">
+      <h4>元数据</h4>
+      <div class="detail-json">${JSON.stringify(event.metadata, null, 2)}</div>
+    </div>`;
+  }
+
+  document.getElementById('detailContent').innerHTML = html;
+}
+
+function toggleRole(roleId) {
+  if (activeRoles.has(roleId)) activeRoles.delete(roleId);
+  else activeRoles.add(roleId);
+  renderRoles();
+  renderTimeline(DEMO_DATA);
+}
+
+function togglePlayback() {
+  const icon = document.getElementById('playIcon');
+  if (playbackTimer) {
+    clearInterval(playbackTimer);
+    playbackTimer = null;
+    icon.className = 'fas fa-play';
+    renderTimeline(DEMO_DATA);
+    return;
+  }
+  icon.className = 'fas fa-pause';
+  playbackIndex = 0;
+  document.getElementById('timelineEvents').innerHTML = '';
+  playbackTimer = setInterval(() => {
+    if (playbackIndex >= DEMO_DATA.length) {
+      clearInterval(playbackTimer);
+      playbackTimer = null;
+      icon.className = 'fas fa-play';
+      return;
+    }
+    renderTimeline(DEMO_DATA.slice(0, ++playbackIndex));
+    const main = document.getElementById('timelineMain');
+    main.scrollTop = main.scrollHeight;
+  }, 800);
+}
+
+function updateStats(events) {
+  document.getElementById('statTotal').textContent = events.length;
+  document.getElementById('statDecisions').textContent = events.filter(e => e.type === 'decision').length;
+  document.getElementById('statTools').textContent = events.filter(e => e.type === 'tool_call').length;
+  document.getElementById('statRoles').textContent = new Set(events.map(e => e.roleId)).size;
+}
+
+document.getElementById('filterType').addEventListener('change', () => renderTimeline(DEMO_DATA));
+
+init();
+</script>
+</body>
+</html>

@@ -1,21 +1,26 @@
 # 文档总索引
 
-> 最后更新：2026-05-14  
+> 最后更新：2026-05-25  
 > 文档管理规范：`.cursor/rules/05-docs-organization.mdc`
 
 ## 快速导航
 
 | 目录 | 说明 | 文档数量 |
-|------|------|----------|wwwwwwww
-| [requirements/](requirements/_index.md) | 需求文档、PRD | 21 |
+|------|------|----------|
+| [requirements/](requirements/_index.md) | 需求文档、PRD | 21+ |
 | [research/](research/_index.md) | 调研报告、竞品分析 | 34 |
-| [technical/](technical/_index.md) | 技术方案、架构文档 | 3 |
+| [technical/](technical/_index.md) | 技术方案、架构文档 | 4+ |
+| [adr/](adr/_index.md) | 架构决策记录（ADR） | 2 |
 | [deploy/](deploy/_index.md) | 部署、运维文档 | 1 |
 
 ## 最近更新（Top 10）
 
 | 更新日期 | 类型 | 文档 | 标题 |
 |----------|------|------|------|
+| 2026-05-25 | 运营 | [ops-graphsphere-demo-script-brief-v0.1.md](requirements/ops-graphsphere-demo-script-brief-v0.1.md) | GraphSphere 5 分钟演示脚本与传播 Brief |
+| 2026-05-25 | ADR | [adr-graphsphere-tech-stack-architecture-v2.md](adr/adr-graphsphere-tech-stack-architecture-v2.md) | ADR-002 GraphSphere 技术选型（草案） |
+| 2026-05-25 | 技术 | [arch-graphsnapshot-schema-v1.md](technical/arch-graphsnapshot-schema-v1.md) | GraphSnapshot Schema v1（冻结） |
+| 2026-05-25 | 执行 | [plan-graphsphere-execution-v0.2.md](technical/plan-graphsphere-execution-v0.2.md) | GraphSphere Demo Sprint 执行计划 |
 | 2026-05-11 | PRD | [prd-blog-ai-autocomplete.md](requirements/prd-blog-ai-autocomplete.md) | 写作空间 AI 智能联想 |
 | 2026-05-11 | PRD | [prd-cursor-bridge.md](requirements/prd-cursor-bridge.md) | Cursor Bridge 矩阵开发平台 |
 | 2026-05-11 | PRD | [prd-cursor-bridge-v1.0.md](requirements/prd-cursor-bridge-v1.0.md) | Cursor Bridge v1.0 完整规格 |

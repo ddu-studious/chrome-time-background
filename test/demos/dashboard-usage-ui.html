@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard 用量面板 — Agent 运行监控</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f23; color: #e0e0e0; min-height: 100vh; }
+
+.header { background: linear-gradient(135deg, #1a1a3e, #2d1b69); padding: 16px 24px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: space-between; }
+.header h1 { font-size: 18px; color: #fff; display: flex; align-items: center; gap: 10px; }
+.header h1 i { color: #7c3aed; }
+.header-right { display: flex; gap: 12px; align-items: center; }
+.time-range { display: flex; gap: 4px; }
+.time-range button { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #aaa; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+.time-range button.active { background: #7c3aed; color: #fff; border-color: #7c3aed; }
+.live-dot { width: 8px; height: 8px; background: #4ade80; border-radius: 50%; animation: pulse 2s infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+.dashboard { padding: 20px 24px; }
+
+.metric-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.metric-card { background: #1e1e3a; border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 20px; position: relative; overflow: hidden; }
+.metric-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+.metric-card.purple::before { background: linear-gradient(to right, #7c3aed, #a78bfa); }
+.metric-card.green::before { background: linear-gradient(to right, #10b981, #34d399); }
+.metric-card.blue::before { background: linear-gradient(to right, #3b82f6, #60a5fa); }
+.metric-card.amber::before { background: linear-gradient(to right, #f59e0b, #fbbf24); }
+.metric-card .label { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+.metric-card .value { font-size: 32px; font-weight: 700; color: #fff; }
+.metric-card .sub { font-size: 12px; color: #666; margin-top: 4px; }
+.metric-card .trend { position: absolute; top: 16px; right: 16px; font-size: 12px; padding: 2px 8px; border-radius: 4px; }
+.trend.up { background: rgba(16,185,129,0.15); color: #4ade80; }
+.trend.down { background: rgba(239,68,68,0.15); color: #f87171; }
+
+.charts-row { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 24px; }
+.chart-panel { background: #1e1e3a; border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 20px; }
+.chart-panel h3 { font-size: 14px; color: #fff; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+.chart-panel h3 i { color: #7c3aed; font-size: 12px; }
+
+.bar-chart { display: flex; align-items: flex-end; gap: 8px; height: 160px; padding-top: 8px; }
+.bar-group { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.bar { width: 100%; border-radius: 4px 4px 0 0; transition: height 0.5s ease; min-height: 2px; cursor: pointer; position: relative; }
+.bar:hover { opacity: 0.8; }
+.bar:hover::after { content: attr(data-value); position: absolute; top: -24px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 11px; white-space: nowrap; }
+.bar-label { font-size: 10px; color: #666; }
+
+.donut-chart { display: flex; align-items: center; gap: 24px; }
+.donut-container { position: relative; width: 140px; height: 140px; flex-shrink: 0; }
+.donut-container svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.donut-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+.donut-center .num { font-size: 24px; font-weight: 700; color: #fff; }
+.donut-center .unit { font-size: 11px; color: #888; }
+.donut-legend { display: flex; flex-direction: column; gap: 8px; }
+.legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.legend-value { margin-left: auto; font-weight: 600; color: #fff; }
+
+.progress-section { margin-bottom: 24px; }
+.progress-section h3 { font-size: 14px; color: #fff; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+.progress-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; padding: 12px 16px; background: #1e1e3a; border-radius: 8px; }
+.progress-row .agent-name { width: 140px; font-size: 13px; font-weight: 500; }
+.progress-row .progress-bar-bg { flex: 1; height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; }
+.progress-row .progress-bar-fill { height: 100%; border-radius: 4px; transition: width 1s ease; }
+.progress-row .progress-value { width: 50px; text-align: right; font-size: 13px; font-weight: 600; }
+.progress-row .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.status-dot.idle { background: #4ade80; }
+.status-dot.running { background: #fbbf24; animation: pulse 1.5s infinite; }
+.status-dot.error { background: #f87171; }
+
+.alerts-section { background: #1e1e3a; border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 20px; }
+.alerts-section h3 { font-size: 14px; color: #fff; margin-bottom: 12px; }
+.alert-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; margin-bottom: 6px; font-size: 13px; }
+.alert-item.warn { background: rgba(245,158,11,0.08); border-left: 3px solid #f59e0b; }
+.alert-item.error { background: rgba(239,68,68,0.08); border-left: 3px solid #ef4444; }
+.alert-item.info { background: rgba(59,130,246,0.08); border-left: 3px solid #3b82f6; }
+.alert-item i { font-size: 14px; }
+.alert-item.warn i { color: #f59e0b; }
+.alert-item.error i { color: #ef4444; }
+.alert-item.info i { color: #3b82f6; }
+.alert-item .time { margin-left: auto; font-size: 11px; color: #666; }
+
+.recent-runs { margin-top: 24px; }
+.recent-runs h3 { font-size: 14px; color: #fff; margin-bottom: 12px; }
+.run-table { width: 100%; border-collapse: collapse; }
+.run-table th { text-align: left; font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.run-table td { padding: 10px 12px; font-size: 13px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+.run-table tr:hover td { background: rgba(124,58,237,0.05); }
+.run-status { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.run-status.finished { background: rgba(16,185,129,0.15); color: #4ade80; }
+.run-status.running { background: rgba(245,158,11,0.15); color: #fbbf24; }
+.run-status.error { background: rgba(239,68,68,0.15); color: #f87171; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1><i class="fas fa-chart-line"></i> Agent Dashboard</h1>
+  <div class="header-right">
+    <div class="live-dot"></div>
+    <span style="font-size: 12px; color: #4ade80;">实时</span>
+    <div class="time-range">
+      <button onclick="setRange(this, '1h')">1H</button>
+      <button onclick="setRange(this, '24h')" class="active">24H</button>
+      <button onclick="setRange(this, '7d')">7D</button>
+      <button onclick="setRange(this, '30d')">30D</button>
+    </div>
+  </div>
+</div>
+
+<div class="dashboard">
+  <div class="metric-cards">
+    <div class="metric-card purple">
+      <div class="label">总运行次数</div>
+      <div class="value" id="metricRuns">0</div>
+      <div class="sub">今日 +12 次</div>
+      <div class="trend up">↑ 18%</div>
+    </div>
+    <div class="metric-card green">
+      <div class="label">Token 消耗</div>
+      <div class="value" id="metricTokens">0</div>
+      <div class="sub">预估费用 $2.14</div>
+      <div class="trend down">↓ 5%</div>
+    </div>
+    <div class="metric-card blue">
+      <div class="label">活跃 Agent</div>
+      <div class="value" id="metricAgents">0</div>
+      <div class="sub">3 运行中, 2 空闲</div>
+    </div>
+    <div class="metric-card amber">
+      <div class="label">平均响应时间</div>
+      <div class="value" id="metricLatency">0</div>
+      <div class="sub">P95: 12.4s</div>
+      <div class="trend up">↑ 2%</div>
+    </div>
+  </div>
+
+  <div class="charts-row">
+    <div class="chart-panel">
+      <h3><i class="fas fa-chart-bar"></i> Token 消耗趋势 (24h)</h3>
+      <div class="bar-chart" id="tokenChart"></div>
+    </div>
+    <div class="chart-panel">
+      <h3><i class="fas fa-chart-pie"></i> 模型分布</h3>
+      <div class="donut-chart" id="modelChart"></div>
+    </div>
+  </div>
+
+  <div class="progress-section">
+    <h3><i class="fas fa-robot" style="color: #7c3aed;"></i> Agent 状态</h3>
+    <div id="agentProgress"></div>
+  </div>
+
+  <div class="alerts-section">
+    <h3><i class="fas fa-bell" style="color: #f59e0b;"></i> 告警</h3>
+    <div id="alertList"></div>
+  </div>
+
+  <div class="recent-runs">
+    <h3><i class="fas fa-history" style="color: #7c3aed;"></i> 最近运行</h3>
+    <table class="run-table">
+      <thead><tr><th>Run ID</th><th>Agent</th><th>模型</th><th>Token</th><th>时长</th><th>状态</th></tr></thead>
+      <tbody id="runTableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const DEMO_DATA = {
+  totalRuns: 156,
+  totalTokens: 284500,
+  activeAgents: 5,
+  avgLatency: 4.2,
+  tokensByHour: [12000, 8500, 15000, 22000, 18000, 9000, 14000, 25000, 31000, 28000, 19000, 16000, 21000, 34000, 29000, 18000, 11000, 8000, 5000, 3000, 7000, 14000, 20000, 23000],
+  modelDistribution: [
+    { name: 'Claude Opus 4.6', value: 45, color: '#7c3aed' },
+    { name: 'Claude Sonnet 4.6', value: 30, color: '#3b82f6' },
+    { name: 'GPT-5.5', value: 15, color: '#10b981' },
+    { name: 'Codex', value: 10, color: '#f59e0b' },
+  ],
+  agents: [
+    { name: '架构师 Agent', status: 'running', progress: 72, color: '#7c3aed' },
+    { name: '代码审查 Agent', status: 'idle', progress: 100, color: '#10b981' },
+    { name: 'QA 测试 Agent', status: 'running', progress: 45, color: '#3b82f6' },
+    { name: '安全审计 Agent', status: 'idle', progress: 100, color: '#ef4444' },
+    { name: '文档生成 Agent', status: 'error', progress: 33, color: '#f59e0b' },
+  ],
+  alerts: [
+    { type: 'warn', icon: 'fa-exclamation-triangle', text: 'Token 用量已达今日预算的 78%', time: '2 分钟前' },
+    { type: 'error', icon: 'fa-times-circle', text: '文档生成 Agent 连续 3 次运行失败', time: '15 分钟前' },
+    { type: 'info', icon: 'fa-info-circle', text: '架构师 Agent 完成了代码审查任务，耗时 4.2s', time: '32 分钟前' },
+    { type: 'warn', icon: 'fa-exclamation-triangle', text: 'Claude Opus 4.6 模型响应延迟上升 (P95: 12.4s)', time: '1 小时前' },
+  ],
+  recentRuns: [
+    { id: 'run_17482..', agent: '架构师', model: 'opus-4.6', tokens: 4200, duration: '4.2s', status: 'running' },
+    { id: 'run_17481..', agent: 'QA 测试', model: 'sonnet-4.6', tokens: 2800, duration: '2.1s', status: 'running' },
+    { id: 'run_17480..', agent: '代码审查', model: 'opus-4.6', tokens: 6100, duration: '8.3s', status: 'finished' },
+    { id: 'run_17479..', agent: '文档生成', model: 'gpt-5.5', tokens: 1500, duration: '1.8s', status: 'error' },
+    { id: 'run_17478..', agent: '安全审计', model: 'codex', tokens: 3400, duration: '5.6s', status: 'finished' },
+    { id: 'run_17477..', agent: '架构师', model: 'opus-4.6', tokens: 5200, duration: '6.1s', status: 'finished' },
+  ],
+};
+
+function animateCounter(el, target, suffix = '') {
+  let current = 0;
+  const step = Math.ceil(target / 40);
+  const timer = setInterval(() => {
+    current = Math.min(current + step, target);
+    if (target >= 1000) el.textContent = (current / 1000).toFixed(1) + 'K' + suffix;
+    else el.textContent = current + suffix;
+    if (current >= target) clearInterval(timer);
+  }, 30);
+}
+
+function renderMetrics() {
+  animateCounter(document.getElementById('metricRuns'), DEMO_DATA.totalRuns);
+  animateCounter(document.getElementById('metricTokens'), DEMO_DATA.totalTokens);
+  animateCounter(document.getElementById('metricAgents'), DEMO_DATA.activeAgents);
+  document.getElementById('metricLatency').textContent = DEMO_DATA.avgLatency + 's';
+}
+
+function renderTokenChart() {
+  const max = Math.max(...DEMO_DATA.tokensByHour);
+  const container = document.getElementById('tokenChart');
+  container.innerHTML = DEMO_DATA.tokensByHour.map((val, i) => {
+    const h = Math.max((val / max) * 140, 4);
+    const hour = String(i).padStart(2, '0');
+    const color = val > max * 0.8 ? '#ef4444' : val > max * 0.6 ? '#f59e0b' : '#7c3aed';
+    return `<div class="bar-group"><div class="bar" style="height:${h}px;background:${color};" data-value="${(val/1000).toFixed(1)}K"></div><div class="bar-label">${hour}</div></div>`;
+  }).join('');
+}
+
+function renderModelChart() {
+  const total = DEMO_DATA.modelDistribution.reduce((a, b) => a + b.value, 0);
+  let offset = 0;
+  const radius = 54;
+  const circumference = 2 * Math.PI * radius;
+
+  const segments = DEMO_DATA.modelDistribution.map(item => {
+    const pct = item.value / total;
+    const dashArray = `${pct * circumference} ${circumference}`;
+    const dashOffset = -offset * circumference;
+    offset += pct;
+    return `<circle cx="70" cy="70" r="${radius}" fill="none" stroke="${item.color}" stroke-width="12" stroke-dasharray="${dashArray}" stroke-dashoffset="${dashOffset}" />`;
+  }).join('');
+
+  const legend = DEMO_DATA.modelDistribution.map(item => `
+    <div class="legend-item">
+      <div class="legend-dot" style="background:${item.color}"></div>
+      <span>${item.name}</span>
+      <span class="legend-value">${item.value}%</span>
+    </div>
+  `).join('');
+
+  document.getElementById('modelChart').innerHTML = `
+    <div class="donut-container">
+      <svg viewBox="0 0 140 140">${segments}</svg>
+      <div class="donut-center"><div class="num">4</div><div class="unit">模型</div></div>
+    </div>
+    <div class="donut-legend">${legend}</div>
+  `;
+}
+
+function renderAgentProgress() {
+  document.getElementById('agentProgress').innerHTML = DEMO_DATA.agents.map(a => `
+    <div class="progress-row">
+      <div class="status-dot ${a.status}"></div>
+      <div class="agent-name">${a.name}</div>
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" style="width:${a.progress}%;background:${a.color};"></div>
+      </div>
+      <div class="progress-value" style="color:${a.color}">${a.progress}%</div>
+    </div>
+  `).join('');
+}
+
+function renderAlerts() {
+  document.getElementById('alertList').innerHTML = DEMO_DATA.alerts.map(a => `
+    <div class="alert-item ${a.type}">
+      <i class="fas ${a.icon}"></i>
+      <span>${a.text}</span>
+      <span class="time">${a.time}</span>
+    </div>
+  `).join('');
+}
+
+function renderRunTable() {
+  document.getElementById('runTableBody').innerHTML = DEMO_DATA.recentRuns.map(r => `
+    <tr>
+      <td style="color:#7c3aed;font-family:monospace;">${r.id}</td>
+      <td>${r.agent}</td>
+      <td>${r.model}</td>
+      <td>${(r.tokens/1000).toFixed(1)}K</td>
+      <td>${r.duration}</td>
+      <td><span class="run-status ${r.status}">${r.status}</span></td>
+    </tr>
+  `).join('');
+}
+
+function setRange(btn, range) {
+  document.querySelectorAll('.time-range button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+renderMetrics();
+renderTokenChart();
+renderModelChart();
+renderAgentProgress();
+renderAlerts();
+renderRunTable();
+</script>
+</body>
+</html>

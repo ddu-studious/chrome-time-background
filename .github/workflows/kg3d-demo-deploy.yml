@@ -1,0 +1,140 @@
+name: GraphSphere Demo Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      demo_version:
+        description: 'Demo semver (e.g. 0.1.0)'
+        required: true
+        default: '0.1.0'
+      deploy_pages:
+        description: 'Publish to GitHub Pages (requires repo Pages enabled)'
+        type: boolean
+        default: false
+  push:
+    tags:
+      - 'demo-graph/v*'
+      - 'stable/kg3d-demo-v*'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: kg3d-demo-deploy
+  cancel-in-progress: false
+
+jobs:
+  gate-and-package:
+    name: CI Gate + Package
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      demo_version: ${{ steps.version.outputs.demo_version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep bc zip
+
+      - name: Resolve demo version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "demo_version=${{ inputs.demo_version }}" >> "$GITHUB_OUTPUT"
+          else
+            tag="${GITHUB_REF_NAME}"
+            ver="${tag##*/v}"
+            ver="${ver##*/}"
+            echo "demo_version=${ver:-0.1.0}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: CI gate
+        env:
+          KG3D_DEMO_VERSION: ${{ steps.version.outputs.demo_version }}
+        run: ./scripts/ci-gate-kg3d-demo.sh
+
+      - name: Archive demo-graph JSON bundle
+        env:
+          KG3D_DEMO_VERSION: ${{ steps.version.outputs.demo_version }}
+        run: |
+          ./scripts/archive-demo-graph-json.sh \
+            --ref "${{ github.sha }}" \
+            --version "${{ steps.version.outputs.demo_version }}"
+
+      - name: Upload static demo artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: graphsphere-demo-static
+          path: |
+            dist/graphsphere-demo-v*.zip
+            dist/kg3d-demo-staging/
+          retention-days: 90
+
+      - name: Upload demo-graph manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-graph-manifest
+          path: releases/kg3d-demo/DEMO_GRAPH_MANIFEST.json
+          retention-days: 90
+          if-no-files-found: warn
+
+  deploy-pages:
+    name: GitHub Pages (optional)
+    needs: gate-and-package
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy_pages == true
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: graphsphere-demo-static
+          path: artifact/
+
+      - name: Prepare Pages site root
+        run: |
+          mkdir -p site
+          if [[ -d artifact/dist/kg3d-demo-staging ]]; then
+            cp -R artifact/dist/kg3d-demo-staging/. site/
+          elif [[ -d artifact/kg3d-demo-staging ]]; then
+            cp -R artifact/kg3d-demo-staging/. site/
+          else
+            unzip -q artifact/dist/graphsphere-demo-v*.zip -d site 2>/dev/null || \
+              unzip -q artifact/graphsphere-demo-v*.zip -d site
+          fi
+          ls -la site/
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  post-deploy-smoke:
+    name: Post-deploy notes
+    needs: [gate-and-package, deploy-pages]
+    if: always() && needs.gate-and-package.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "## GraphSphere Demo Deploy" >> "$GITHUB_STEP_SUMMARY"
+          echo "version: ${{ needs.gate-and-package.outputs.demo_version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### 冒烟" >> "$GITHUB_STEP_SUMMARY"
+          echo "- 打开 index.html · 场景 A/B" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`?force2d=1\` L0 降级" >> "$GITHUB_STEP_SUMMARY"
+          echo "- fps ≥30 @ 200 nodes" >> "$GITHUB_STEP_SUMMARY"

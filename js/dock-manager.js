@@ -13,6 +13,9 @@
     { id: 'snake-game', name: '贪吃蛇', icon: 'fas fa-gamepad', category: 'games', dockBtnId: 'snake-dock-btn', isSystem: false, defaultOrder: 7 },
     { id: 'tetris-game', name: '俄罗斯方块', icon: 'fas fa-th', category: 'games', dockBtnId: 'tetris-dock-btn', isSystem: false, defaultOrder: 8 },
     { id: 'tetris-3d-game', name: '立体方块', icon: 'fas fa-cube', category: 'games', dockBtnId: 'tetris-3d-dock-btn', panelId: 'tetris-3d-game-panel', isSystem: false, defaultOrder: 8.5 },
+    { id: 'music', name: '音乐播放器', icon: 'fas fa-music', category: 'media', dockBtnId: 'music-dock-btn', isSystem: false, defaultOrder: 8.6 },
+    { id: 'reading', name: '今日阅读', icon: 'fas fa-book-reader', category: 'media', dockBtnId: 'reading-dock-btn', isSystem: false, defaultOrder: 8.7 },
+    { id: 'poetry', name: '诗词电台', icon: 'fas fa-feather-alt', category: 'media', dockBtnId: 'poetry-dock-btn', isSystem: false, defaultOrder: 8.8 },
     { id: 'agent', name: 'Agent 矩阵', icon: 'fas fa-robot', category: 'tools', dockBtnId: 'agent-dock-btn', isSystem: false, defaultOrder: 9, hasIndicator: true },
     { id: 'prompt-manager', name: 'Prompt 管理', icon: 'fas fa-magic', category: 'tools', dockBtnId: 'prompt-mgr-dock-btn', isSystem: false, defaultOrder: 9.5 },
     { id: 'settings', name: '设置', icon: 'fas fa-cog', category: 'system', dockBtnId: 'settings-dock-btn', isSystem: true, defaultOrder: 10 },
@@ -28,6 +31,14 @@
   };
 
   const STORAGE_KEY = 'dockManagerConfig';
+  const DOCK_EFFECT_KEY = 'dockEffectConfig';
+
+  const DOCK_EFFECTS = {
+    magnify: { name: '经典放大', maxScale: 1.5, range: 100 },
+    tilt: { name: '3D 倾斜', maxTilt: 15, range: 80 },
+    glow: { name: '光晕效果', glowSize: 12, range: 60 },
+    none: { name: '无效果' },
+  };
 
   class DockManager {
     constructor() {
@@ -37,6 +48,8 @@
       this.launchpadEl = null;
       this.dragState = null;
       this._originalButtons = new Map();
+      this._effectConfig = { effect: 'magnify', ...DOCK_EFFECTS.magnify };
+      this._magnifyRAF = null;
     }
 
     async init() {
@@ -50,9 +63,12 @@
       }
 
       await this.loadConfig();
+      await this._loadEffectConfig();
       this.render();
       this._createLaunchpad();
       this._bindDragEvents();
+      this._bindDockEffects();
+      this._bindContextMenu();
     }
 
     _backupOriginalButtons() {
@@ -65,6 +81,205 @@
           });
         }
       }
+    }
+
+    async _loadEffectConfig() {
+      try {
+        if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+          const data = await chrome.storage.local.get(DOCK_EFFECT_KEY);
+          if (data[DOCK_EFFECT_KEY]) {
+            this._effectConfig = data[DOCK_EFFECT_KEY];
+            return;
+          }
+        }
+      } catch { /* fallback */ }
+      try {
+        const raw = localStorage.getItem(DOCK_EFFECT_KEY);
+        if (raw) { this._effectConfig = JSON.parse(raw); return; }
+      } catch { /* fallback */ }
+      this._effectConfig = { effect: 'magnify', ...DOCK_EFFECTS.magnify };
+    }
+
+    async _saveEffectConfig() {
+      try {
+        if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+          await chrome.storage.local.set({ [DOCK_EFFECT_KEY]: this._effectConfig });
+        }
+      } catch { /* fallback */ }
+      try {
+        localStorage.setItem(DOCK_EFFECT_KEY, JSON.stringify(this._effectConfig));
+      } catch { /* ignore */ }
+    }
+
+    // ─── Dock Hover Effects (Apple-style magnification) ───
+
+    _bindDockEffects() {
+      if (!this.dockEl) return;
+
+      this.dockEl.addEventListener('mousemove', (e) => {
+        if (this.dragState) return;
+        if (this._magnifyRAF) cancelAnimationFrame(this._magnifyRAF);
+        this._magnifyRAF = requestAnimationFrame(() => {
+          this._applyEffect(e.clientX, e.clientY);
+        });
+      });
+
+      this.dockEl.addEventListener('mouseleave', () => {
+        if (this._magnifyRAF) cancelAnimationFrame(this._magnifyRAF);
+        this._resetEffect();
+      });
+    }
+
+    _applyEffect(mouseX, mouseY) {
+      const effect = this._effectConfig.effect || 'magnify';
+      if (effect === 'none') return;
+
+      const btns = this.dockEl.querySelectorAll('.dock-btn');
+      btns.forEach(btn => {
+        const rect = btn.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const distance = Math.abs(mouseX - centerX);
+
+        switch (effect) {
+          case 'magnify':
+            this._applyMagnify(btn, distance);
+            break;
+          case 'tilt':
+            this._applyTilt(btn, mouseX, mouseY, rect);
+            break;
+          case 'glow':
+            this._applyGlow(btn, distance);
+            break;
+        }
+      });
+    }
+
+    _applyMagnify(btn, distance) {
+      const { maxScale = 1.5, range = 100 } = this._effectConfig;
+      let scale = 1;
+      if (distance < range) {
+        scale = 1 + (maxScale - 1) * Math.cos((distance / range) * Math.PI / 2);
+      }
+      btn.style.transform = `translateY(${-(scale - 1) * 20}px) scale(${scale})`;
+      btn.style.zIndex = scale > 1.05 ? '10' : '';
+    }
+
+    _applyTilt(btn, mouseX, mouseY, rect) {
+      const { maxTilt = 15, range = 80 } = this._effectConfig;
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const distX = mouseX - centerX;
+      const distY = mouseY - centerY;
+      const distance = Math.sqrt(distX * distX + distY * distY);
+
+      if (distance < range) {
+        const intensity = 1 - distance / range;
+        const rotateY = (distX / range) * maxTilt * intensity;
+        const rotateX = -(distY / range) * maxTilt * intensity;
+        const scale = 1 + 0.15 * intensity;
+        btn.style.transform = `perspective(200px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(${scale})`;
+        btn.style.zIndex = intensity > 0.3 ? '10' : '';
+      } else {
+        btn.style.transform = '';
+        btn.style.zIndex = '';
+      }
+    }
+
+    _applyGlow(btn, distance) {
+      const { glowSize = 12, range = 60 } = this._effectConfig;
+      if (distance < range) {
+        const intensity = 1 - distance / range;
+        const size = glowSize * intensity;
+        const scale = 1 + 0.1 * intensity;
+        btn.style.transform = `translateY(${-intensity * 6}px) scale(${scale})`;
+        btn.style.boxShadow = `0 0 ${size}px ${size / 2}px rgba(167, 139, 250, ${0.6 * intensity}), inset 0 0 ${size / 2}px rgba(167, 139, 250, ${0.3 * intensity})`;
+        btn.style.zIndex = intensity > 0.3 ? '10' : '';
+      } else {
+        btn.style.transform = '';
+        btn.style.boxShadow = '';
+        btn.style.zIndex = '';
+      }
+    }
+
+    _resetEffect() {
+      const btns = this.dockEl.querySelectorAll('.dock-btn');
+      btns.forEach(btn => {
+        btn.style.transform = '';
+        btn.style.boxShadow = '';
+        btn.style.zIndex = '';
+      });
+    }
+
+    // ─── Dock Context Menu ───
+
+    _bindContextMenu() {
+      if (!this.dockEl) return;
+      this.dockEl.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        this._showContextMenu(e.clientX, e.clientY);
+      });
+    }
+
+    _showContextMenu(x, y) {
+      this._closeContextMenu();
+      const menu = document.createElement('div');
+      menu.className = 'dock-context-menu';
+      menu.id = 'dock-context-menu';
+
+      let html = '<div class="dock-context-menu-title">Dock 效果设置</div>';
+      for (const [key, cfg] of Object.entries(DOCK_EFFECTS)) {
+        const active = this._effectConfig.effect === key;
+        html += `<button class="dock-context-menu-item${active ? ' active' : ''}" data-effect="${key}">
+          <i class="fas ${active ? 'fa-check-circle' : 'fa-circle'}"></i>
+          <span>${cfg.name}</span>
+        </button>`;
+      }
+      html += '<div class="dock-context-menu-divider"></div>';
+      html += `<button class="dock-context-menu-item" data-action="reset">
+        <i class="fas fa-undo"></i><span>重置 Dock 布局</span>
+      </button>`;
+      menu.innerHTML = html;
+
+      document.body.appendChild(menu);
+
+      const menuRect = menu.getBoundingClientRect();
+      let left = x;
+      let top = y - menuRect.height;
+      if (top < 8) top = y + 8;
+      if (left + menuRect.width > window.innerWidth - 8) {
+        left = window.innerWidth - menuRect.width - 8;
+      }
+      menu.style.left = `${left}px`;
+      menu.style.top = `${top}px`;
+
+      requestAnimationFrame(() => menu.classList.add('open'));
+
+      menu.querySelectorAll('[data-effect]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const effect = btn.dataset.effect;
+          this._effectConfig = { effect, ...DOCK_EFFECTS[effect] };
+          this._saveEffectConfig();
+          this._resetEffect();
+          this._closeContextMenu();
+        });
+      });
+
+      menu.querySelector('[data-action="reset"]')?.addEventListener('click', () => {
+        this.resetToDefault();
+        this._closeContextMenu();
+      });
+
+      const closeHandler = (e) => {
+        if (!menu.contains(e.target)) {
+          this._closeContextMenu();
+          document.removeEventListener('click', closeHandler);
+        }
+      };
+      setTimeout(() => document.addEventListener('click', closeHandler), 0);
+    }
+
+    _closeContextMenu() {
+      document.getElementById('dock-context-menu')?.remove();
     }
 
     getDefaultConfig() {
@@ -651,6 +866,7 @@
 
     showLaunchpad() {
       this._updateLaunchpad();
+      this._positionLaunchpad();
       this.launchpadEl?.classList.add('open');
       const search = this.launchpadEl?.querySelector('#dock-launchpad-search');
       if (search) { search.value = ''; setTimeout(() => search.focus(), 100); }
@@ -658,6 +874,41 @@
 
     hideLaunchpad() {
       this.launchpadEl?.classList.remove('open');
+    }
+
+    _positionLaunchpad() {
+      const content = this.launchpadEl?.querySelector('.dock-launchpad-content');
+      if (!content || !this.dockEl) return;
+
+      const dockRect = this.dockEl.getBoundingClientRect();
+      const vpW = window.innerWidth;
+      const vpH = window.innerHeight;
+
+      content.style.position = 'fixed';
+      content.style.margin = '0';
+
+      const maxH = Math.min(vpH * 0.7, 520);
+      content.style.maxHeight = `${maxH}px`;
+
+      const bottomGap = vpH - dockRect.top + 12;
+      const spaceAbove = dockRect.top - 12;
+
+      if (spaceAbove >= 280) {
+        content.style.bottom = `${bottomGap}px`;
+        content.style.top = 'auto';
+      } else {
+        content.style.top = '60px';
+        content.style.bottom = 'auto';
+      }
+
+      const contentW = Math.min(620, vpW - 32);
+      content.style.width = `${contentW}px`;
+
+      let left = dockRect.left + dockRect.width / 2 - contentW / 2;
+      if (left < 16) left = 16;
+      if (left + contentW > vpW - 16) left = vpW - contentW - 16;
+      content.style.left = `${left}px`;
+      content.style.right = 'auto';
     }
 
     resetToDefault() {

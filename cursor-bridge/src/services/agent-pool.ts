@@ -727,6 +727,10 @@ export class AgentPool {
     agent.textBuffer = '';
 
     try {
+      addMessage(agent.conversationId, 'user', prompt.substring(0, 10000));
+    } catch { /* best effort */ }
+
+    try {
       const fullPrompt = agent.systemPrompt
         ? `${agent.systemPrompt}\n\n---\n\n${prompt}`
         : prompt;
@@ -750,11 +754,18 @@ export class AgentPool {
       agent.currentRun = undefined;
       agent.lastActivityAt = Date.now();
       agent.textBuffer = '';
+
+      try {
+        if (result) addMessage(agent.conversationId, 'assistant', result.substring(0, 50000));
+        updateConversationStatus(agent.conversationId, 'completed');
+      } catch { /* best effort */ }
+
       return result;
     } catch (err: any) {
       agent.status = 'error';
       agent.currentRun = undefined;
       agent.textBuffer = '';
+      try { updateConversationStatus(agent.conversationId, 'error'); } catch { /* best effort */ }
       throw err;
     }
   }
@@ -768,6 +779,10 @@ export class AgentPool {
     agent.status = 'running';
     agent.lastActivityAt = Date.now();
     agent.textBuffer = '';
+
+    try {
+      addMessage(agent.conversationId, 'user', prompt.substring(0, 10000));
+    } catch { /* best effort */ }
 
     try {
       const fullPrompt = agent.systemPrompt
@@ -794,11 +809,18 @@ export class AgentPool {
       agent.currentRun = undefined;
       agent.lastActivityAt = Date.now();
       agent.textBuffer = '';
+
+      try {
+        if (result) addMessage(agent.conversationId, 'assistant', result.substring(0, 50000));
+        updateConversationStatus(agent.conversationId, 'completed');
+      } catch { /* best effort */ }
+
       yield { type: 'done', content: result };
     } catch (err: any) {
       agent.status = 'error';
       agent.currentRun = undefined;
       agent.textBuffer = '';
+      try { updateConversationStatus(agent.conversationId, 'error'); } catch { /* best effort */ }
       yield { type: 'error', content: err.message };
     }
   }
@@ -892,6 +914,33 @@ export class AgentPool {
         client.write(payload);
       } catch { /* client disconnected */ }
     }
+  }
+
+  // ─── Cloud Artifacts ───
+
+  async listArtifacts(agentId: string): Promise<Array<{ path: string; size?: number }>> {
+    const agent = this.agents.get(agentId);
+    if (!agent) throw new Error('Agent not found');
+    if (agent.runtime !== 'cloud') return [];
+
+    try {
+      const artifacts = await agent.sdkAgent.listArtifacts();
+      return (artifacts || []).map((a: any) => ({
+        path: a.path || a.absolutePath || '',
+        size: a.size ?? a.sizeBytes,
+      }));
+    } catch (err: any) {
+      console.warn(`[AgentPool] listArtifacts failed for ${agentId}: ${err.message}`);
+      return [];
+    }
+  }
+
+  async downloadArtifact(agentId: string, artifactPath: string): Promise<Buffer> {
+    const agent = this.agents.get(agentId);
+    if (!agent) throw new Error('Agent not found');
+    if (agent.runtime !== 'cloud') throw new Error('Artifacts only available for cloud agents');
+
+    return agent.sdkAgent.downloadArtifact(artifactPath);
   }
 
   getSdkAgentId(agentId: string): string | undefined {

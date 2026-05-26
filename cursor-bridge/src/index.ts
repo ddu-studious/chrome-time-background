@@ -17,6 +17,7 @@ import { memoryRoutes } from './routes/memory.js';
 import { authRoutes } from './routes/auth.js';
 import { sessionRoutes } from './routes/sessions.js';
 import { promptVersionRoutes } from './routes/prompt-versions.js';
+import { abTestRoutes } from './routes/ab-test.js';
 import { agentPool } from './services/agent-pool.js';
 import { closeDb, getActivePromptVersion } from './services/database.js';
 import { registerAuthHook } from './services/auth-middleware.js';
@@ -124,6 +125,7 @@ await fastify.register(memoryRoutes);
 await fastify.register(authRoutes);
 await fastify.register(sessionRoutes);
 await fastify.register(promptVersionRoutes);
+await fastify.register(abTestRoutes);
 
 // ─── Dashboard Usage Routes ───
 fastify.get('/dashboard', async (req) => {

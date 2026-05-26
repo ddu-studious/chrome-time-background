@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "archives": [
+    {
+      "role": "l2-rollback-baseline",
+      "product": "graphsphere-demo",
+      "version": "0.1.0",
+      "gitRef": "HEAD",
+      "gitCommit": "31bb591518b27585edabe03e7c9109459556ac18",
+      "archivedAt": "2026-05-25T15:51:22Z",
+      "zipFile": "graphsphere-demo-v0.1.0-stable-31bb591518b2.zip",
+      "zipPath": "releases/kg3d-demo/archives/graphsphere-demo-v0.1.0-stable-31bb591518b2.zip",
+      "sha256": "ca77c9a4d047969c050e062b8e3f11bfc6fdcb39befdb8a16e0efb7dc22257a8",
+      "sizeBytes": 213112,
+      "gitTag": null,
+      "notes": "GraphSphere static demo; packaged from git tree."
+    }
+  ],
+  "latestStable": {
+    "role": "l2-rollback-baseline",
+    "product": "graphsphere-demo",
+    "version": "0.1.0",
+    "gitRef": "HEAD",
+    "gitCommit": "31bb591518b27585edabe03e7c9109459556ac18",
+    "archivedAt": "2026-05-25T15:51:22Z",
+    "zipFile": "graphsphere-demo-v0.1.0-stable-31bb591518b2.zip",
+    "zipPath": "releases/kg3d-demo/archives/graphsphere-demo-v0.1.0-stable-31bb591518b2.zip",
+    "sha256": "ca77c9a4d047969c050e062b8e3f11bfc6fdcb39befdb8a16e0efb7dc22257a8",
+    "sizeBytes": 213112,
+    "gitTag": null,
+    "notes": "GraphSphere static demo; packaged from git tree."
+  }
+}
