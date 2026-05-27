@@ -1,6 +1,7 @@
 import { getQwenClient, type CompletionChunk, type CompletionOptions } from './qwen-client.js';
 import { getDb } from '../../services/database.js';
 import { CompletionCache } from './cache.js';
+import { retrieveRelevant, getRAGConfig, RAG_SYSTEM_PROMPT } from './rag-service.js';
 
 export interface WritingContext {
   text: string;
@@ -24,7 +25,7 @@ export interface WritingConfig {
   cacheTTLMs: number;
 }
 
-const SYSTEM_PROMPT_COMPLETE = `续写用户文本1-2句。直接输出续写内容，不重复已有文本，不加引号。保持语气一致，优先中文。`;
+const SYSTEM_PROMPT_COMPLETE_DEFAULT = `续写用户文本1-2句。直接输出续写内容，不重复已有文本，不加引号。保持语气一致，优先中文。`;
 
 const SYSTEM_PROMPT_REWRITE = `你是一个写作润色助手。对用户提供的文本进行改写润色。
 
@@ -110,8 +111,25 @@ export async function* streamComplete(
     maxTokens: ctx.maxTokens ?? _config.maxTokens,
   };
 
+  let systemPrompt = SYSTEM_PROMPT_COMPLETE_DEFAULT;
+  let ragUserPrompt = userPrompt;
+
+  const ragConfig = getRAGConfig();
+  if (ragConfig.enabled) {
+    try {
+      const cursorPos = ctx.cursorPosition ?? ctx.text.length;
+      const queryText = ctx.text.slice(Math.max(0, cursorPos - 200), cursorPos);
+      const relevant = await retrieveRelevant(queryText, { topK: ragConfig.topK });
+      if (relevant.length > 0) {
+        systemPrompt = RAG_SYSTEM_PROMPT;
+        const refSnippets = relevant.map((r, i) => `[${i + 1}] (${r.docTitle}): ${r.text}`).join('\n');
+        ragUserPrompt = `参考文档片段:\n${refSnippets}\n\n---\n当前文本:\n${userPrompt}`;
+      }
+    } catch { /* RAG failure is non-critical, fallback to default */ }
+  }
+
   let fullContent = '';
-  for await (const chunk of client.streamComplete(SYSTEM_PROMPT_COMPLETE, userPrompt, opts)) {
+  for await (const chunk of client.streamComplete(systemPrompt, ragUserPrompt, opts)) {
     if (chunk.type === 'token') {
       fullContent += chunk.content;
     }

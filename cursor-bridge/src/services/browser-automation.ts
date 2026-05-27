@@ -41,6 +41,7 @@ type ActionType =
   | 'waitFor' | 'getContent' | 'getTabs'
   | 'extractDom' | 'clickByIndex' | 'hover' | 'selectOption' | 'fillForm'
   | 'scrollTo' | 'waitForNetworkIdle'
+  | 'doubleClick' | 'rightClick' | 'drag'
   | 'assertVisible' | 'assertText' | 'assertUrl' | 'assertElementCount';
 
 interface BrowserAction {
@@ -440,6 +441,8 @@ async function doAction(action: BrowserAction, port: number): Promise<any> {
           const el = document.querySelector(${JSON.stringify(selector)});
           if (!el) return { error: 'Element not found: ${selector}' };
           const rect = el.getBoundingClientRect();
+          el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+          el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
           return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
         })()`,
         returnByValue: true,
@@ -449,7 +452,87 @@ async function doAction(action: BrowserAction, port: number): Promise<any> {
       await sendCDPCommand(ws, 'Input.dispatchMouseEvent', {
         type: 'mouseMoved', x: loc.x, y: loc.y,
       });
-      return { hovered: selector, position: loc };
+      const holdMs = action.params?.holdMs || 300;
+      await sleep(holdMs);
+      return { hovered: selector, position: loc, holdMs };
+    }
+
+    case 'doubleClick': {
+      const selector = action.target;
+      if (!selector) throw new Error('target selector is required for doubleClick');
+      const ws = await getPageWs(port, action.params?.tabId);
+      const locResult = await sendCDPCommand(ws, 'Runtime.evaluate', {
+        expression: `(() => {
+          const el = document.querySelector(${JSON.stringify(selector)});
+          if (!el) return { error: 'Element not found: ${selector}' };
+          const rect = el.getBoundingClientRect();
+          return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+        })()`,
+        returnByValue: true,
+      });
+      const loc = locResult?.result?.value;
+      if (!loc || loc.error) throw new Error(loc?.error || 'Failed to locate element');
+      await sendCDPCommand(ws, 'Input.dispatchMouseEvent', { type: 'mousePressed', x: loc.x, y: loc.y, button: 'left', clickCount: 1 });
+      await sendCDPCommand(ws, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: loc.x, y: loc.y, button: 'left', clickCount: 1 });
+      await sendCDPCommand(ws, 'Input.dispatchMouseEvent', { type: 'mousePressed', x: loc.x, y: loc.y, button: 'left', clickCount: 2 });
+      await sendCDPCommand(ws, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: loc.x, y: loc.y, button: 'left', clickCount: 2 });
+      return { doubleClicked: selector, position: loc };
+    }
+
+    case 'rightClick': {
+      const selector = action.target;
+      if (!selector) throw new Error('target selector is required for rightClick');
+      const ws = await getPageWs(port, action.params?.tabId);
+      const locResult = await sendCDPCommand(ws, 'Runtime.evaluate', {
+        expression: `(() => {
+          const el = document.querySelector(${JSON.stringify(selector)});
+          if (!el) return { error: 'Element not found: ${selector}' };
+          const rect = el.getBoundingClientRect();
+          return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+        })()`,
+        returnByValue: true,
+      });
+      const loc = locResult?.result?.value;
+      if (!loc || loc.error) throw new Error(loc?.error || 'Failed to locate element');
+      await sendCDPCommand(ws, 'Input.dispatchMouseEvent', { type: 'mousePressed', x: loc.x, y: loc.y, button: 'right', clickCount: 1 });
+      await sendCDPCommand(ws, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: loc.x, y: loc.y, button: 'right', clickCount: 1 });
+      return { rightClicked: selector, position: loc };
+    }
+
+    case 'drag': {
+      const fromSelector = action.target;
+      const toSelector = action.params?.to;
+      if (!fromSelector) throw new Error('target (from selector) is required for drag');
+      if (!toSelector) throw new Error('params.to (target selector) is required for drag');
+      const ws = await getPageWs(port, action.params?.tabId);
+      const coordsResult = await sendCDPCommand(ws, 'Runtime.evaluate', {
+        expression: `(() => {
+          const from = document.querySelector(${JSON.stringify(fromSelector)});
+          const to = document.querySelector(${JSON.stringify(toSelector)});
+          if (!from) return { error: 'From element not found' };
+          if (!to) return { error: 'To element not found' };
+          const fr = from.getBoundingClientRect();
+          const tr = to.getBoundingClientRect();
+          return {
+            fx: fr.x + fr.width / 2, fy: fr.y + fr.height / 2,
+            tx: tr.x + tr.width / 2, ty: tr.y + tr.height / 2,
+          };
+        })()`,
+        returnByValue: true,
+      });
+      const coords = coordsResult?.result?.value;
+      if (!coords || coords.error) throw new Error(coords?.error || 'Failed to locate drag elements');
+      await sendCDPCommand(ws, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: coords.fx, y: coords.fy });
+      await sendCDPCommand(ws, 'Input.dispatchMouseEvent', { type: 'mousePressed', x: coords.fx, y: coords.fy, button: 'left', clickCount: 1 });
+      const steps = action.params?.steps || 10;
+      for (let i = 1; i <= steps; i++) {
+        const x = coords.fx + (coords.tx - coords.fx) * (i / steps);
+        const y = coords.fy + (coords.ty - coords.fy) * (i / steps);
+        await sendCDPCommand(ws, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+        await sleep(16);
+      }
+      await sendCDPCommand(ws, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: coords.tx, y: coords.ty, button: 'left', clickCount: 1 });
+      return { dragged: { from: fromSelector, to: toSelector }, steps };
     }
 
     case 'selectOption': {

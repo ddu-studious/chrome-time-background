@@ -18,6 +18,8 @@ import { authRoutes } from './routes/auth.js';
 import { sessionRoutes } from './routes/sessions.js';
 import { promptVersionRoutes } from './routes/prompt-versions.js';
 import { abTestRoutes } from './routes/ab-test.js';
+import { promptEditorUIRoutes } from './routes/prompt-editor-ui.js';
+import { sessionPanelUIRoutes } from './routes/session-panel-ui.js';
 import { agentPool } from './services/agent-pool.js';
 import { closeDb, getActivePromptVersion } from './services/database.js';
 import { registerAuthHook } from './services/auth-middleware.js';
@@ -27,7 +29,7 @@ import { selfLoopVerify } from './services/self-loop-verify.js';
 import type { VerificationConfig, TestCase } from './services/self-loop-verify.js';
 
 // ─── Isolated Feature Modules ───
-import { writingRoutes, initWritingTables } from './modules/writing/index.js';
+import { writingRoutes, initWritingTables, initRAGTables } from './modules/writing/index.js';
 import {
   multiRoleRoutes,
   a2aRoutes,
@@ -126,6 +128,8 @@ await fastify.register(authRoutes);
 await fastify.register(sessionRoutes);
 await fastify.register(promptVersionRoutes);
 await fastify.register(abTestRoutes);
+await fastify.register(promptEditorUIRoutes);
+await fastify.register(sessionPanelUIRoutes);
 
 // ─── Dashboard Usage Routes ───
 fastify.get('/dashboard', async (req) => {
@@ -164,6 +168,7 @@ initMultiRoleTables();
 initAgentRegistry();
 initCollaborationTables();
 initWritingTables();
+initRAGTables();
 
 setPromptVersionResolver(getActivePromptVersion);
 

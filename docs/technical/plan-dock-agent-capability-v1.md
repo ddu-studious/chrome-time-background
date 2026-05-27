@@ -299,13 +299,13 @@ curl -X POST http://127.0.0.1:19840/agents \
 | Launchpad 定位优化 | 100% | - |
 | 右键配置菜单 | 100% | - |
 | Session 聚合后端 | 100% | - |
-| Session 聚合前端 | 70% | 集成到主面板，点击还原对话框 |
-| 浏览器自动化 CDP | 90% | hover/drag 增强 |
-| Self-Loop 验证引擎 | 85% | 与 QA 角色深度联动 |
-| 多角色 Prompt 管理 | 90% | 前端可视化编辑器 |
+| Session 聚合前端 | 100% | ✅ 独立面板 /sessions/panel |
+| 浏览器自动化 CDP | 100% | ✅ hover/drag/doubleClick/rightClick |
+| Self-Loop 验证引擎 | 100% | ✅ QAReport + QA 角色联动 |
+| 多角色 Prompt 管理 | 100% | ✅ 可视化编辑器 /prompts/editor |
 | Cursor SDK 集成 | 100% | 所有公开 API 均已接入 |
 | Git Worktree | 100% | 使用 Cursor 原生能力 |
-| Dashboard 数据 | 80% | 等待 SDK 开放额度查询 API |
+| Dashboard 数据 | 100% | ✅ gRPC API + billing/usage |
 | AB 测试 | 100% | - |
 | 时间线视图 | 100% | Demo 完成 |
 | Cloud 运行时 | 100% | repos + PR + envVars |

@@ -9,8 +9,10 @@
  *   - WritingService: 补全/改写/摘要业务逻辑
  *   - WritingRoutes: HTTP API 路由（SSE 流式）
  *   - CompletionCache: 相似输入缓存复用
+ *   - RAGService: 基于千问 embedding 的文档检索增强
  */
 
 export { writingRoutes } from './routes.js';
 export { initWritingTables } from './service.js';
 export { isQwenConfigured } from './qwen-client.js';
+export { initRAGTables } from './rag-service.js';

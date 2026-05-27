@@ -762,9 +762,14 @@
       if (panel) { panel.remove(); return; }
 
       let config = {};
+      let ragConfig = {};
       try {
-        const res = await fetch(`${BRIDGE_URL}/writing/config`, { signal: AbortSignal.timeout(2000) });
-        if (res.ok) config = await res.json();
+        const [configRes, ragRes] = await Promise.all([
+          fetch(`${BRIDGE_URL}/writing/config`, { signal: AbortSignal.timeout(2000) }),
+          fetch(`${BRIDGE_URL}/writing/rag/config`, { signal: AbortSignal.timeout(2000) }).catch(() => null),
+        ]);
+        if (configRes.ok) config = await configRes.json();
+        if (ragRes?.ok) ragConfig = await ragRes.json();
       } catch { /* use defaults */ }
 
       panel = document.createElement('div');
@@ -797,6 +802,22 @@
             <span class="writing-ai-label">最大 Token</span>
             <input type="number" id="ws-max-tokens" min="50" max="4096" step="50" value="${config.maxTokens ?? 100}">
           </label>
+
+          <div class="writing-ai-divider" style="border-top:1px solid rgba(255,255,255,0.1);margin:12px 0;"></div>
+          <div class="writing-ai-label" style="font-weight:600;margin-bottom:8px;">RAG 文档联想</div>
+          <label class="writing-ai-field">
+            <span class="writing-ai-label">启用联想（基于历史文档）</span>
+            <input type="checkbox" id="ws-rag-enabled" ${ragConfig.enabled ? 'checked' : ''}>
+          </label>
+          <label class="writing-ai-field">
+            <span class="writing-ai-label">检索条数 (Top-K)</span>
+            <input type="number" id="ws-rag-topk" min="1" max="10" value="${ragConfig.topK ?? 3}" style="width:60px">
+          </label>
+          <div class="writing-ai-field">
+            <span class="writing-ai-label">联想系统提示词</span>
+            <textarea id="ws-rag-prompt" class="writing-ai-prompt-display" rows="5" readonly style="width:100%;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:8px;color:rgba(255,255,255,0.7);font-size:0.75rem;resize:vertical;font-family:monospace;">${ragConfig.systemPrompt || '(未加载)'}</textarea>
+          </div>
+
           <div class="writing-ai-settings-actions">
             <button class="writing-ai-save-btn" id="ws-save">保存</button>
           </div>
@@ -823,12 +844,25 @@
           maxTokens: parseInt(panel.querySelector('#ws-max-tokens')?.value || '100'),
         };
 
+        const newRagConfig = {
+          enabled: panel.querySelector('#ws-rag-enabled')?.checked ?? false,
+          topK: parseInt(panel.querySelector('#ws-rag-topk')?.value || '3'),
+        };
+
         try {
-          const res = await fetch(`${BRIDGE_URL}/writing/config`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newConfig),
-          });
+          const [res, ragRes] = await Promise.all([
+            fetch(`${BRIDGE_URL}/writing/config`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(newConfig),
+            }),
+            fetch(`${BRIDGE_URL}/writing/rag/config`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(newRagConfig),
+            }).catch(() => null),
+          ]);
+
           if (res.ok) {
             const wsStatus = panel.querySelector('#ws-status');
             if (wsStatus) { wsStatus.textContent = '已保存'; wsStatus.style.color = '#4caf50'; }

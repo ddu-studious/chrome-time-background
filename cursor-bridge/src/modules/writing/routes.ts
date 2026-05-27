@@ -14,6 +14,15 @@ import {
   type WritingContext,
   type WritingConfig,
 } from './service.js';
+import {
+  indexDocument,
+  retrieveRelevant,
+  getRAGConfig,
+  updateRAGConfig,
+  getRAGStats,
+  clearRAGStore,
+  getSystemPromptWithRAG,
+} from './rag-service.js';
 
 let fastifyLogger: any = null;
 
@@ -249,5 +258,70 @@ export async function writingRoutes(fastify: FastifyInstance) {
       accepted,
     });
     return { success: true };
+  });
+
+  // ─── RAG Routes ───
+
+  fastify.post('/writing/rag/index', async (request, reply) => {
+    if (!isQwenConfigured()) {
+      return reply.code(503).send({ error: 'Qwen API not configured' });
+    }
+    const ragConfig = getRAGConfig();
+    if (!ragConfig.enabled) {
+      return reply.code(400).send({ error: 'RAG is disabled. Enable it via PUT /writing/rag/config' });
+    }
+
+    const { docId, title, content } = request.body as { docId: string; title: string; content: string };
+    if (!docId || !content) {
+      return reply.code(400).send({ error: 'docId and content are required' });
+    }
+
+    log.info('RAG 索引文档', { docId, titleLen: title?.length, contentLen: content.length });
+    const result = await indexDocument(docId, title || 'Untitled', content);
+    return { success: true, ...result };
+  });
+
+  fastify.post('/writing/rag/retrieve', async (request, reply) => {
+    if (!isQwenConfigured()) {
+      return reply.code(503).send({ error: 'Qwen API not configured' });
+    }
+    const ragConfig = getRAGConfig();
+    if (!ragConfig.enabled) {
+      return reply.code(400).send({ error: 'RAG is disabled' });
+    }
+
+    const { query, topK, excludeDocId } = request.body as { query: string; topK?: number; excludeDocId?: string };
+    if (!query) {
+      return reply.code(400).send({ error: 'query is required' });
+    }
+
+    const results = await retrieveRelevant(query, { topK, excludeDocId });
+    return { results };
+  });
+
+  fastify.get('/writing/rag/config', async () => {
+    return {
+      ...getRAGConfig(),
+      systemPrompt: getSystemPromptWithRAG(),
+    };
+  });
+
+  fastify.put('/writing/rag/config', async (request) => {
+    const partial = request.body as Partial<{ enabled: boolean; topK: number; minScore: number }>;
+    const updated = updateRAGConfig(partial);
+    return { success: true, config: updated };
+  });
+
+  fastify.get('/writing/rag/stats', async () => {
+    return getRAGStats();
+  });
+
+  fastify.delete('/writing/rag/store', async () => {
+    clearRAGStore();
+    return { success: true };
+  });
+
+  fastify.get('/writing/rag/system-prompt', async () => {
+    return { systemPrompt: getSystemPromptWithRAG() };
   });
 }

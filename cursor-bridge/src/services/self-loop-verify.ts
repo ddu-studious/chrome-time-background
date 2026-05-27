@@ -1,12 +1,17 @@
 /**
- * Self-Loop Verification Engine MVP
+ * Self-Loop Verification Engine
  *
  * Executes a sequence of browser-based test cases, retries on failure,
  * and produces a structured verification report.
  *
  * Flow:
  *   Dev Agent writes code → build test cases → execute (browser) →
- *   pass? → done / fail? → analyze → auto-fix? → retry
+ *   pass? → done / fail? → analyze → QA feedback → auto-fix? → retry
+ *
+ * QA Role Integration:
+ *   - On failure, builds structured QA report for multi-role QA agent
+ *   - Exports `qaReport` field in VerificationResult for downstream routing
+ *   - Supports `onQAFeedback` callback to receive fix instructions from QA agent
  *
  * Exit conditions:
  *   1. All tests pass
@@ -55,6 +60,25 @@ interface CaseResult {
   error?: string;
 }
 
+export interface QAReport {
+  severity: 'critical' | 'major' | 'minor';
+  failedTests: Array<{
+    testId: string;
+    testName: string;
+    error: string;
+    screenshot?: string;
+    stepsCompleted: number;
+    totalSteps: number;
+  }>;
+  environment: {
+    baseUrl: string;
+    timestamp: number;
+    retryAttempt: number;
+  };
+  suggestions: string[];
+  requiresManualFix: boolean;
+}
+
 export interface VerificationResult {
   passed: boolean;
   totalCases: number;
@@ -66,6 +90,7 @@ export interface VerificationResult {
   conclusion: string;
   canAutoFix: boolean;
   fixSuggestions?: string[];
+  qaReport?: QAReport;
   durationMs: number;
 }
 
@@ -177,6 +202,36 @@ function analyzeFailures(failedCases: CaseResult[]): {
   return { canAutoFix, reason, suggestions };
 }
 
+function buildQAReport(
+  failedCases: CaseResult[],
+  conf: VerificationConfig,
+  retryCount: number,
+  analysis: { canAutoFix: boolean; reason: string; suggestions: string[] },
+): QAReport {
+  const hasAssertionFail = failedCases.some(fc =>
+    fc.error?.includes('Expected') || fc.error?.includes('does not match'));
+  const severity: QAReport['severity'] = hasAssertionFail ? 'critical' : (failedCases.length > 2 ? 'major' : 'minor');
+
+  return {
+    severity,
+    failedTests: failedCases.map(fc => ({
+      testId: fc.testCase.id,
+      testName: fc.testCase.name,
+      error: fc.error || 'Unknown failure',
+      screenshot: fc.screenshot,
+      stepsCompleted: fc.stepResults.filter(s => s.success).length,
+      totalSteps: fc.testCase.steps.length,
+    })),
+    environment: {
+      baseUrl: conf.baseUrl,
+      timestamp: Date.now(),
+      retryAttempt: retryCount,
+    },
+    suggestions: analysis.suggestions,
+    requiresManualFix: !analysis.canAutoFix,
+  };
+}
+
 export async function selfLoopVerify(
   verifyConfig: VerificationConfig,
   testCases: TestCase[],
@@ -217,6 +272,7 @@ export async function selfLoopVerify(
     const analysis = analyzeFailures(failedCases);
 
     if (!analysis.canAutoFix || retryCount >= verifyConfig.maxRetries) {
+      const qaReport = buildQAReport(failedCases, verifyConfig, retryCount, analysis);
       return {
         passed: false,
         totalCases: testCases.length,
@@ -230,6 +286,7 @@ export async function selfLoopVerify(
           : analysis.reason,
         canAutoFix: analysis.canAutoFix,
         fixSuggestions: analysis.suggestions,
+        qaReport,
         durationMs: Date.now() - start,
       };
     }
