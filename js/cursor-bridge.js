@@ -3347,47 +3347,60 @@
         }
 
         async _toggleDashboardPanel() {
-            const panel = document.createElement('div');
-            panel.className = 'cb-dashboard-panel';
-            panel.innerHTML = `
-                <div class="cb-dash-header">
-                    <h3><i class="fas fa-chart-line"></i> Agent Dashboard</h3>
-                    <div class="cb-dash-header-right">
-                        <div class="cb-dash-range">
-                            <button class="cb-dash-range-btn" data-range="3600000">1H</button>
-                            <button class="cb-dash-range-btn active" data-range="86400000">24H</button>
-                            <button class="cb-dash-range-btn" data-range="604800000">7D</button>
+            const existing = document.getElementById('cb-dashboard-overlay');
+            if (existing) { existing.remove(); return; }
+
+            const overlay = document.createElement('div');
+            overlay.className = 'cb-dashboard-overlay';
+            overlay.id = 'cb-dashboard-overlay';
+            overlay.innerHTML = `
+                <div class="cb-dashboard-backdrop"></div>
+                <div class="cb-dashboard-float-panel">
+                    <div class="cb-dash-header">
+                        <h3><i class="fas fa-chart-line"></i> Agent Dashboard</h3>
+                        <div class="cb-dash-header-right">
+                            <div class="cb-dash-range">
+                                <button class="cb-dash-range-btn" data-range="3600000">1H</button>
+                                <button class="cb-dash-range-btn active" data-range="86400000">24H</button>
+                                <button class="cb-dash-range-btn" data-range="604800000">7D</button>
+                            </div>
+                            <button class="cb-btn cb-btn-icon cb-dash-close"><i class="fas fa-times"></i></button>
                         </div>
-                        <button class="cb-btn cb-btn-icon cb-dash-close"><i class="fas fa-times"></i></button>
                     </div>
-                </div>
-                <div class="cb-dash-loading"><i class="fas fa-spinner fa-spin"></i> 加载中…</div>
-                <div class="cb-dash-body" style="display:none">
-                    <div class="cb-dash-metrics"></div>
-                    <div class="cb-dash-charts-row">
-                        <div class="cb-dash-chart-panel"><h4><i class="fas fa-chart-bar"></i> 运行趋势</h4><div class="cb-dash-bar-chart"></div></div>
-                        <div class="cb-dash-chart-panel"><h4><i class="fas fa-chart-pie"></i> 模型分布</h4><div class="cb-dash-donut"></div></div>
+                    <div class="cb-dash-loading"><i class="fas fa-spinner fa-spin"></i> 加载中…</div>
+                    <div class="cb-dash-body" style="display:none">
+                        <div class="cb-dash-metrics"></div>
+                        <div class="cb-dash-charts-row">
+                            <div class="cb-dash-chart-panel"><h4><i class="fas fa-chart-bar"></i> 运行趋势</h4><div class="cb-dash-bar-chart"></div></div>
+                            <div class="cb-dash-chart-panel"><h4><i class="fas fa-chart-pie"></i> 模型分布</h4><div class="cb-dash-donut"></div></div>
+                        </div>
+                        <div class="cb-dash-agents-section"><h4><i class="fas fa-robot"></i> Agent 状态</h4><div class="cb-dash-agent-list"></div></div>
+                        <div class="cb-dash-runs-section"><h4><i class="fas fa-history"></i> 最近运行</h4><div class="cb-dash-run-table"></div></div>
                     </div>
-                    <div class="cb-dash-agents-section"><h4><i class="fas fa-robot"></i> Agent 状态</h4><div class="cb-dash-agent-list"></div></div>
-                    <div class="cb-dash-runs-section"><h4><i class="fas fa-history"></i> 最近运行</h4><div class="cb-dash-run-table"></div></div>
                 </div>
             `;
 
-            panel.querySelector('.cb-dash-close').addEventListener('click', () => {
-                const a = this._panelEl?.querySelector('#cb-inline-panel-area');
-                if (a) { a.innerHTML = ''; delete a.dataset.activePanel; }
-                this._updateStatBtnActive(null);
+            const closeDash = () => overlay.remove();
+            overlay.querySelector('.cb-dashboard-backdrop').addEventListener('click', closeDash);
+            overlay.querySelector('.cb-dash-close').addEventListener('click', closeDash);
+            document.addEventListener('keydown', function escHandler(e) {
+                if (e.key === 'Escape' && document.getElementById('cb-dashboard-overlay')) {
+                    closeDash();
+                    document.removeEventListener('keydown', escHandler);
+                }
             });
-            panel.querySelectorAll('.cb-dash-range-btn').forEach(btn => {
+
+            overlay.querySelectorAll('.cb-dash-range-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
-                    panel.querySelectorAll('.cb-dash-range-btn').forEach(b => b.classList.remove('active'));
+                    overlay.querySelectorAll('.cb-dash-range-btn').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
-                    this._loadDashboardData(panel, Number(btn.dataset.range));
+                    this._loadDashboardData(overlay.querySelector('.cb-dashboard-float-panel'), Number(btn.dataset.range));
                 });
             });
 
-            const shown = this._showInlinePanel('dashboard', panel);
-            if (shown) await this._loadDashboardData(panel, 86400000);
+            document.body.appendChild(overlay);
+            requestAnimationFrame(() => overlay.classList.add('open'));
+            await this._loadDashboardData(overlay.querySelector('.cb-dashboard-float-panel'), 86400000);
         }
 
         async _loadDashboardData(panel, rangeMs) {

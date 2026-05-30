@@ -1,12 +1,18 @@
 /**
- * Dashboard Data Service — Cursor usage & quota via open API
+ * Dashboard Data Service — Cursor usage & quota via multiple auth strategies
+ *
+ * Auth priority (falls through on failure):
+ *   1. CURSOR_SESSION_TOKEN env — WorkosCursorSessionToken from browser cookie
+ *      → calls cursor.com dashboard API (usage-summary, filtered-usage-events)
+ *   2. CURSOR_API_KEY env — @cursor/sdk for user info & model list
+ *   3. state.vscdb fallback — reads JWT from local Cursor database (original method)
  *
  * Data sources:
- *   1. api2.cursor.sh gRPC — billing/usage/quota (Connect RPC v1)
- *   2. Cursor.me() / Cursor.models.list() — user info & model list
- *   3. Local token tracker — per-run cost from our agent pool
- *
- * Auth: reads access/refresh tokens from Cursor's local SQLite (state.vscdb).
+ *   - cursor.com/api/usage-summary — billing cycle, plan limits, usage totals
+ *   - cursor.com/api/dashboard/get-filtered-usage-events — per-request costs
+ *   - api2.cursor.sh Connect RPC — billing (when using JWT auth)
+ *   - @cursor/sdk — user info & model list
+ *   - Local token tracker — per-run cost from our agent pool
  */
 
 import { Cursor } from '@cursor/sdk';
@@ -60,11 +66,23 @@ interface BillingUsage {
   };
 }
 
+interface UsageEvent {
+  model: string;
+  timestamp: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cost: number;
+  mode: string;
+}
+
 interface DashboardSnapshot {
   user: UserInfo | null;
   models: ModelInfo[];
   localUsage: UsageSummary;
   billing: BillingUsage | null;
+  usageEvents?: UsageEvent[];
+  authMethod: 'session_token' | 'api_key' | 'vscdb' | 'none';
   fetchedAt: number;
 }
 
@@ -73,11 +91,98 @@ const usageRecords: LocalUsageRecord[] = [];
 let cachedUser: UserInfo | null = null;
 let cachedModels: ModelInfo[] = [];
 let cachedBilling: BillingUsage | null = null;
+let cachedEvents: UsageEvent[] = [];
 let lastFetchAt = 0;
 const CACHE_TTL_MS = 60_000;
 
+const CURSOR_DASHBOARD_BASE = 'https://www.cursor.com';
 const CURSOR_API_BASE = 'https://api2.cursor.sh';
 const CURSOR_CLIENT_ID = 'KbZUR41cY7W6zRSdpSUJ7I7mLYBKOCmB';
+
+// ─── Auth Strategy 1: Session Token (from browser cookie) ───
+
+function getSessionToken(): string | null {
+  return process.env.CURSOR_SESSION_TOKEN || null;
+}
+
+async function fetchWithSessionToken(path: string, options: RequestInit = {}): Promise<Response | null> {
+  const token = getSessionToken();
+  if (!token) return null;
+
+  const url = `${CURSOR_DASHBOARD_BASE}${path}`;
+  const headers: Record<string, string> = {
+    'Cookie': `WorkosCursorSessionToken=${token}`,
+    ...(options.method === 'POST' ? { 'Origin': 'https://www.cursor.com' } : {}),
+    ...(options.headers as Record<string, string> || {}),
+  };
+
+  try {
+    const res = await fetch(url, { ...options, headers });
+    if (res.ok) return res;
+    console.warn(`[dashboard] Session token request failed: ${res.status} ${path}`);
+    return null;
+  } catch (err: any) {
+    console.warn(`[dashboard] Session token fetch error: ${err.message}`);
+    return null;
+  }
+}
+
+async function fetchBillingViaSession(): Promise<BillingUsage | null> {
+  const res = await fetchWithSessionToken('/api/usage-summary');
+  if (!res) return null;
+
+  try {
+    const data = await res.json() as any;
+    const usage = data.individualUsage || data;
+
+    return {
+      billingCycleStart: data.billingPeriodStart || data.billingCycleStart || '',
+      billingCycleEnd: data.billingPeriodEnd || data.billingCycleEnd || '',
+      planUsage: {
+        totalSpend: (usage.plan?.totalSpend || usage.totalSpend || 0) / 100,
+        includedSpend: (usage.plan?.includedSpend || usage.includedSpend || 0) / 100,
+        remaining: (usage.plan?.remaining || usage.remaining || 0) / 100,
+        limit: (usage.plan?.limit || usage.limit || 0) / 100,
+        percentUsed: usage.plan?.percentUsed || usage.percentUsed || 0,
+      },
+      onDemandUsage: (usage.onDemand || data.onDemandUsage) ? {
+        totalSpend: ((usage.onDemand || data.onDemandUsage)?.totalSpend || 0) / 100,
+        limit: ((usage.onDemand || data.onDemandUsage)?.limit || 0) / 100,
+        remaining: ((usage.onDemand || data.onDemandUsage)?.remaining || 0) / 100,
+      } : undefined,
+    };
+  } catch (err: any) {
+    console.warn('[dashboard] Failed to parse session billing:', err.message);
+    return null;
+  }
+}
+
+async function fetchUsageEventsViaSession(page = 1, pageSize = 50): Promise<UsageEvent[]> {
+  const res = await fetchWithSessionToken('/api/dashboard/get-filtered-usage-events', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ page, pageSize }),
+  });
+  if (!res) return [];
+
+  try {
+    const data = await res.json() as any;
+    const events = data.usageEvents || data.events || [];
+    return events.map((e: any) => ({
+      model: e.model || e.modelId || 'unknown',
+      timestamp: e.createdAt || e.timestamp || '',
+      inputTokens: e.inputTokens || e.promptTokens || 0,
+      outputTokens: e.outputTokens || e.completionTokens || 0,
+      cacheReadTokens: e.cacheReadTokens || 0,
+      cost: (e.totalCostCents || e.cost || 0) / 100,
+      mode: e.source || e.mode || 'unknown',
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// ─── Auth Strategy 2 & 3: API Key + state.vscdb JWT ───
 
 function getCursorDbPath(): string {
   const platform = process.platform;
@@ -149,7 +254,6 @@ async function getValidAccessToken(): Promise<string | null> {
   const tokens = await readCursorTokens();
   if (!tokens.accessToken) return null;
 
-  // Check if token is expired by decoding JWT payload
   try {
     const payload = JSON.parse(Buffer.from(tokens.accessToken.split('.')[1], 'base64').toString());
     const expMs = (payload.exp || 0) * 1000;
@@ -176,7 +280,7 @@ async function getValidAccessToken(): Promise<string | null> {
   return _cachedAccessToken;
 }
 
-async function fetchBillingUsage(): Promise<BillingUsage | null> {
+async function fetchBillingViaJWT(): Promise<BillingUsage | null> {
   const token = await getValidAccessToken();
   if (!token) return null;
 
@@ -211,9 +315,21 @@ async function fetchBillingUsage(): Promise<BillingUsage | null> {
       } : undefined,
     };
   } catch (err: any) {
-    console.warn('[dashboard] Failed to fetch billing usage:', err.message);
+    console.warn('[dashboard] Failed to fetch billing via JWT:', err.message);
     return null;
   }
+}
+
+async function fetchBillingUsage(): Promise<{ billing: BillingUsage | null; method: DashboardSnapshot['authMethod'] }> {
+  // Strategy 1: session token (no local DB dependency)
+  const sessionBilling = await fetchBillingViaSession();
+  if (sessionBilling) return { billing: sessionBilling, method: 'session_token' };
+
+  // Strategy 2: JWT from state.vscdb
+  const jwtBilling = await fetchBillingViaJWT();
+  if (jwtBilling) return { billing: jwtBilling, method: 'vscdb' };
+
+  return { billing: null, method: 'none' };
 }
 
 export function recordRunUsage(record: LocalUsageRecord) {
@@ -282,22 +398,31 @@ async function fetchModels(): Promise<ModelInfo[]> {
 export async function getDashboardData(since?: number): Promise<DashboardSnapshot> {
   const now = Date.now();
   if (now - lastFetchAt > CACHE_TTL_MS) {
-    const [user, models, billing] = await Promise.all([
+    const [user, models, billingResult] = await Promise.all([
       fetchUserInfo(),
       fetchModels(),
       fetchBillingUsage(),
     ]);
     cachedUser = user;
     cachedModels = models;
-    cachedBilling = billing;
+    cachedBilling = billingResult.billing;
+
+    if (billingResult.method === 'session_token') {
+      cachedEvents = await fetchUsageEventsViaSession(1, 30);
+    }
+
     lastFetchAt = now;
   }
+
+  const billingResult = cachedBilling ? (getSessionToken() ? 'session_token' : 'vscdb') : 'none';
 
   return {
     user: cachedUser,
     models: cachedModels,
     localUsage: computeLocalUsage(since),
     billing: cachedBilling,
+    usageEvents: cachedEvents.length > 0 ? cachedEvents : undefined,
+    authMethod: billingResult as DashboardSnapshot['authMethod'],
     fetchedAt: lastFetchAt,
   };
 }
@@ -308,4 +433,21 @@ export function getLocalUsage(since?: number): UsageSummary {
 
 export function clearUsageRecords() {
   usageRecords.length = 0;
+}
+
+/**
+ * Update the session token at runtime (e.g. from a settings UI).
+ * This avoids requiring a restart when the cookie is refreshed.
+ */
+export function setSessionToken(token: string) {
+  process.env.CURSOR_SESSION_TOKEN = token;
+  lastFetchAt = 0; // force refresh on next call
+}
+
+export function getAuthStatus(): { method: string; configured: boolean } {
+  if (getSessionToken()) return { method: 'session_token', configured: true };
+  if (config.apiKey) return { method: 'api_key', configured: true };
+  const dbPath = getCursorDbPath();
+  if (existsSync(dbPath)) return { method: 'vscdb', configured: true };
+  return { method: 'none', configured: false };
 }

@@ -538,6 +538,7 @@ class BlogManager {
             updatedAt: Date.now(),
             wordCount: this._wordCount(data.content),
             pinned: false,
+            aiConfig: data.aiConfig || null,
         };
         this._posts.unshift(post);
         this._savePosts();
@@ -556,6 +557,21 @@ class BlogManager {
         if (data.category !== undefined) post.category = data.category;
         if (data.tags !== undefined) post.tags = data.tags;
         if (data.pinned !== undefined) post.pinned = data.pinned;
+        if (data.aiConfig !== undefined) post.aiConfig = data.aiConfig;
+        post.updatedAt = Date.now();
+        this._savePosts();
+        return post;
+    }
+
+    getPostAiConfig(id) {
+        const post = this._posts.find(p => p.id === id);
+        return post?.aiConfig || null;
+    }
+
+    updatePostAiConfig(id, aiConfig) {
+        const post = this._posts.find(p => p.id === id);
+        if (!post) return null;
+        post.aiConfig = aiConfig;
         post.updatedAt = Date.now();
         this._savePosts();
         return post;

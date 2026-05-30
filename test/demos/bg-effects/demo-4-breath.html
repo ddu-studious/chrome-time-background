@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>背景特效 Demo 4 — 呼吸灯写作状态</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0a0e1a;
+  overflow: hidden;
+  font-family: -apple-system, 'PingFang SC', sans-serif;
+  color: #fff;
+  height: 100vh;
+}
+.breath-layer {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+}
+.breath-edge {
+  position: absolute;
+  --breath-color: 100, 149, 237;
+  --breath-intensity: 0.2;
+}
+.breath-edge.top {
+  top: 0; left: 0; right: 0; height: 120px;
+  background: radial-gradient(ellipse 80% 100% at 50% 0%, rgba(var(--breath-color), var(--breath-intensity)) 0%, transparent 70%);
+}
+.breath-edge.bottom {
+  bottom: 0; left: 0; right: 0; height: 120px;
+  background: radial-gradient(ellipse 80% 100% at 50% 100%, rgba(var(--breath-color), var(--breath-intensity)) 0%, transparent 70%);
+}
+.breath-edge.left {
+  top: 0; bottom: 0; left: 0; width: 120px;
+  background: radial-gradient(ellipse 100% 80% at 0% 50%, rgba(var(--breath-color), var(--breath-intensity)) 0%, transparent 70%);
+}
+.breath-edge.right {
+  top: 0; bottom: 0; right: 0; width: 120px;
+  background: radial-gradient(ellipse 100% 80% at 100% 50%, rgba(var(--breath-color), var(--breath-intensity)) 0%, transparent 70%);
+}
+.breath-corner {
+  position: absolute; width: 200px; height: 200px;
+  border-radius: 50%;
+  filter: blur(60px);
+  background: rgba(var(--breath-color), var(--breath-intensity));
+  --breath-color: 100, 149, 237;
+  --breath-intensity: 0.15;
+}
+.breath-corner.tl { top: -60px; left: -60px; }
+.breath-corner.tr { top: -60px; right: -60px; }
+.breath-corner.bl { bottom: -60px; left: -60px; }
+.breath-corner.br { bottom: -60px; right: -60px; }
+
+.content {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  text-align: center; z-index: 5;
+}
+.content .status-icon { font-size: 48px; margin-bottom: 12px; }
+.content .status-text { font-size: 14px; opacity: 0.6; margin-bottom: 8px; }
+.content .word-count { font-size: 36px; font-weight: 200; }
+.content .word-label { font-size: 12px; opacity: 0.4; margin-top: 4px; }
+
+.progress-bar {
+  position: fixed; top: 50%; right: 40px; transform: translateY(-50%);
+  width: 4px; height: 200px; background: rgba(255,255,255,0.05); border-radius: 2px;
+  z-index: 5;
+}
+.progress-fill {
+  position: absolute; bottom: 0; left: 0; right: 0; border-radius: 2px;
+  transition: height 1s ease, background 1s ease;
+}
+
+.info {
+  position: fixed; top: 20px; left: 20px; z-index: 10;
+  font-size: 12px; opacity: 0.5; line-height: 1.8;
+}
+.info h2 { font-size: 16px; opacity: 1; margin-bottom: 6px; }
+.controls {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  z-index: 10; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(12px);
+  padding: 14px 20px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.08);
+}
+.controls button {
+  padding: 6px 14px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
+  background: rgba(255,255,255,0.05); color: #ccc; font-size: 13px; cursor: pointer;
+  transition: all 0.2s;
+}
+.controls button:hover { background: rgba(255,255,255,0.12); color: #fff; }
+.controls button.active { background: rgba(255,183,77,0.25); border-color: #ffb74d; color: #ffb74d; }
+.slider-group { display: flex; align-items: center; gap: 6px; color: #aaa; font-size: 12px; }
+.slider-group input[type="range"] { width: 80px; height: 3px; accent-color: #ffb74d; }
+</style>
+</head>
+<body>
+
+<div class="breath-layer" id="breathLayer">
+  <div class="breath-edge top"></div>
+  <div class="breath-edge bottom"></div>
+  <div class="breath-edge left"></div>
+  <div class="breath-edge right"></div>
+  <div class="breath-corner tl"></div>
+  <div class="breath-corner tr"></div>
+  <div class="breath-corner bl"></div>
+  <div class="breath-corner br"></div>
+</div>
+
+<div class="content">
+  <div class="status-icon" id="statusIcon">💤</div>
+  <div class="status-text" id="statusText">等待写作</div>
+  <div class="word-count" id="wordCount">0</div>
+  <div class="word-label">今日字数</div>
+</div>
+
+<div class="progress-bar">
+  <div class="progress-fill" id="progressFill"></div>
+</div>
+
+<div class="info">
+  <h2>呼吸灯写作状态</h2>
+  <div>光晕颜色随写作状态变化</div>
+  <div>灰蓝=未写作 / 淡蓝=进行中 / 暖金=达标</div>
+  <div>脉搏周期：4-6 秒</div>
+</div>
+
+<div class="controls">
+  <button data-state="idle">💤 未写作</button>
+  <button data-state="writing">✍️ 写作中</button>
+  <button data-state="goal">🏆 目标达成</button>
+  <button data-state="simulate">▶️ 模拟进度</button>
+  <div class="slider-group">
+    <span>脉搏速度</span>
+    <input type="range" id="pulseSpeed" min="2" max="10" value="5">
+  </div>
+  <div class="slider-group">
+    <span>亮度</span>
+    <input type="range" id="intensity" min="5" max="60" value="25">
+  </div>
+  <div class="slider-group">
+    <span>模式</span>
+    <select id="modeSelect" style="background:#222;color:#ccc;border:1px solid #444;border-radius:4px;padding:2px 6px;font-size:12px;">
+      <option value="edges">四边</option>
+      <option value="corners">四角</option>
+      <option value="top">顶部</option>
+    </select>
+  </div>
+</div>
+
+<script>
+const STATES = {
+  idle: { color: '100, 149, 237', icon: '💤', text: '等待写作', bgColor: '#1a237e' },
+  writing: { color: '79, 195, 247', icon: '✍️', text: '写作进行中', bgColor: '#01579b' },
+  goal: { color: '255, 183, 77', icon: '🏆', text: '今日目标已达成！', bgColor: '#e65100' },
+};
+
+let currentState = 'idle';
+let pulseSpeed = 5;
+let intensity = 0.25;
+let mode = 'edges';
+let wordCount = 0;
+let goalWords = 500;
+let simulating = false;
+let simInterval = null;
+
+const breathLayer = document.getElementById('breathLayer');
+const edges = breathLayer.querySelectorAll('.breath-edge');
+const corners = breathLayer.querySelectorAll('.breath-corner');
+
+function updateState(state) {
+  currentState = state;
+  const s = STATES[state];
+
+  document.getElementById('statusIcon').textContent = s.icon;
+  document.getElementById('statusText').textContent = s.text;
+  document.body.style.background = `linear-gradient(180deg, #0a0e1a 0%, ${s.bgColor}22 100%)`;
+
+  [...edges, ...corners].forEach(el => {
+    el.style.setProperty('--breath-color', s.color);
+  });
+}
+
+function updateMode(m) {
+  mode = m;
+  edges.forEach(e => e.style.display = (m === 'edges' || m === 'top') ? '' : 'none');
+  corners.forEach(c => c.style.display = m === 'corners' ? '' : 'none');
+
+  if (m === 'top') {
+    edges.forEach(e => {
+      e.style.display = e.classList.contains('top') ? '' : 'none';
+    });
+  }
+}
+
+function updateProgress() {
+  const pct = Math.min(100, (wordCount / goalWords) * 100);
+  const fill = document.getElementById('progressFill');
+  fill.style.height = pct + '%';
+
+  const s = STATES[currentState];
+  fill.style.background = `rgba(${s.color}, 0.6)`;
+
+  document.getElementById('wordCount').textContent = wordCount;
+}
+
+function breathe(time) {
+  const cycle = (pulseSpeed * 1000);
+  const phase = (time % cycle) / cycle;
+  const breath = Math.sin(phase * Math.PI * 2) * 0.5 + 0.5;
+  const value = intensity * (0.3 + breath * 0.7);
+
+  [...edges, ...corners].forEach(el => {
+    el.style.setProperty('--breath-intensity', value.toFixed(3));
+  });
+
+  requestAnimationFrame(breathe);
+}
+requestAnimationFrame(breathe);
+
+function startSimulation() {
+  if (simulating) {
+    clearInterval(simInterval);
+    simulating = false;
+    return;
+  }
+  simulating = true;
+  wordCount = 0;
+  updateState('writing');
+
+  simInterval = setInterval(() => {
+    wordCount += Math.floor(Math.random() * 20 + 5);
+    updateProgress();
+
+    if (wordCount >= goalWords) {
+      updateState('goal');
+      clearInterval(simInterval);
+      simulating = false;
+    }
+  }, 400);
+}
+
+updateState('idle');
+updateProgress();
+updateMode('edges');
+
+// Controls
+document.querySelectorAll('[data-state]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const state = btn.dataset.state;
+    if (state === 'simulate') {
+      startSimulation();
+    } else {
+      if (simulating) { clearInterval(simInterval); simulating = false; }
+      updateState(state);
+      if (state === 'goal') { wordCount = goalWords; updateProgress(); }
+    }
+  });
+});
+
+document.getElementById('pulseSpeed').addEventListener('input', e => { pulseSpeed = +e.target.value; });
+document.getElementById('intensity').addEventListener('input', e => { intensity = +e.target.value / 100; });
+document.getElementById('modeSelect').addEventListener('change', e => { updateMode(e.target.value); });
+</script>
+</body>
+</html>

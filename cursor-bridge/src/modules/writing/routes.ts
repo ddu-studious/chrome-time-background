@@ -11,6 +11,8 @@ import {
   recordWritingStat,
   getCacheStats,
   clearCache,
+  getSystemPrompt,
+  getDefaultSystemPrompt,
   type WritingContext,
   type WritingConfig,
 } from './service.js';
@@ -218,6 +220,8 @@ export async function writingRoutes(fastify: FastifyInstance) {
   fastify.get('/writing/config', async () => {
     return {
       ...getWritingConfig(),
+      systemPrompt: getSystemPrompt(),
+      defaultSystemPrompt: getDefaultSystemPrompt(),
       qwenConfigured: isQwenConfigured(),
     };
   });
@@ -226,6 +230,19 @@ export async function writingRoutes(fastify: FastifyInstance) {
     const partial = request.body as Partial<WritingConfig>;
     const updated = updateWritingConfig(partial);
     return { success: true, config: updated };
+  });
+
+  fastify.get('/writing/system-prompt', async () => {
+    return {
+      systemPrompt: getSystemPrompt(),
+      defaultPrompt: getDefaultSystemPrompt(),
+    };
+  });
+
+  fastify.put('/writing/system-prompt', async (request) => {
+    const { systemPrompt } = request.body as { systemPrompt: string };
+    const updated = updateWritingConfig({ systemPrompt: systemPrompt || undefined });
+    return { success: true, systemPrompt: updated.systemPrompt || getDefaultSystemPrompt() };
   });
 
   fastify.get('/writing/stats', async (request) => {

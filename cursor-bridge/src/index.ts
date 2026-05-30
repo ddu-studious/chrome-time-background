@@ -24,9 +24,10 @@ import { agentPool } from './services/agent-pool.js';
 import { closeDb, getActivePromptVersion } from './services/database.js';
 import { registerAuthHook } from './services/auth-middleware.js';
 import { setPromptVersionResolver } from './services/enterprise-roles.js';
-import { getDashboardData, getLocalUsage } from './services/dashboard.js';
+import { getDashboardData, getLocalUsage, getAuthStatus, setSessionToken } from './services/dashboard.js';
 import { selfLoopVerify } from './services/self-loop-verify.js';
 import type { VerificationConfig, TestCase } from './services/self-loop-verify.js';
+import { webSearch, getInstantAnswer, enrichWithSearch, isSearchConfigured, getSearchProviders } from './services/web-search.js';
 
 // ─── Isolated Feature Modules ───
 import { writingRoutes, initWritingTables, initRAGTables } from './modules/writing/index.js';
@@ -139,6 +140,45 @@ fastify.get('/dashboard', async (req) => {
 fastify.get('/dashboard/usage', async (req) => {
   const { since } = req.query as { since?: string };
   return getLocalUsage(since ? Number(since) : undefined);
+});
+fastify.get('/dashboard/auth-status', async () => {
+  return getAuthStatus();
+});
+fastify.put<{ Body: { sessionToken: string } }>('/dashboard/session-token', async (req) => {
+  const { sessionToken } = req.body || {};
+  if (sessionToken) setSessionToken(sessionToken);
+  return { success: true, authStatus: getAuthStatus() };
+});
+
+// ─── Web Search Tool (shared service for all AI modules) ───
+fastify.post<{ Body: { query: string; maxResults?: number; provider?: string; timeLimit?: string } }>(
+  '/tools/search',
+  async (req, reply) => {
+    const { query, maxResults, provider, timeLimit } = req.body || {};
+    if (!query) return reply.code(400).send({ error: 'query is required' });
+
+    const results = await webSearch(query, {
+      maxResults: maxResults || 5,
+      provider: provider as any,
+      timeLimit: timeLimit as any,
+    });
+    return { results, provider: provider || 'duckduckgo' };
+  },
+);
+fastify.post<{ Body: { query: string } }>('/tools/search/instant', async (req, reply) => {
+  const { query } = req.body || {};
+  if (!query) return reply.code(400).send({ error: 'query is required' });
+  const answer = await getInstantAnswer(query);
+  return { answer };
+});
+fastify.post<{ Body: { query: string; maxResults?: number } }>('/tools/search/enrich', async (req, reply) => {
+  const { query, maxResults } = req.body || {};
+  if (!query) return reply.code(400).send({ error: 'query is required' });
+  const enriched = await enrichWithSearch(query, maxResults || 3);
+  return { enriched, empty: !enriched };
+});
+fastify.get('/tools/search/status', async () => {
+  return { configured: isSearchConfigured(), providers: getSearchProviders() };
 });
 
 // ─── Self-Loop Verification ───

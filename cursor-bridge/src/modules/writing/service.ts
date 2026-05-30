@@ -2,6 +2,7 @@ import { getQwenClient, type CompletionChunk, type CompletionOptions } from './q
 import { getDb } from '../../services/database.js';
 import { CompletionCache } from './cache.js';
 import { retrieveRelevant, getRAGConfig, RAG_SYSTEM_PROMPT } from './rag-service.js';
+import { enrichWithSearch } from '../../services/web-search.js';
 
 export interface WritingContext {
   text: string;
@@ -12,6 +13,8 @@ export interface WritingContext {
   maxTokens?: number;
   temperature?: number;
   model?: string;
+  systemPrompt?: string;
+  completionPrompt?: string;
 }
 
 export interface WritingConfig {
@@ -23,9 +26,22 @@ export interface WritingConfig {
   triggerMinChars: number;
   cacheEnabled: boolean;
   cacheTTLMs: number;
+  systemPrompt?: string;
+  searchEnhanced?: boolean;
 }
 
-const SYSTEM_PROMPT_COMPLETE_DEFAULT = `续写用户文本1-2句。直接输出续写内容，不重复已有文本，不加引号。保持语气一致，优先中文。`;
+const SYSTEM_PROMPT_COMPLETE_DEFAULT = `你是一个专业的中文写作助手，擅长产品文档、技术文档和商业文案的撰写。
+
+核心能力：
+- 续写：基于上下文自然续写1-2句，保持文风连贯
+- 补全：在用户停顿时预测下一段合理内容
+- 风格适配：根据文档类型（PRD/技术方案/日报等）调整用词和结构
+
+约束：
+- 直接输出续写内容，不重复已有文本
+- 不加引号、不添加前缀标注
+- 保持与上文语气和行文风格一致
+- 优先中文，遇英文术语保留原文`;
 
 const SYSTEM_PROMPT_REWRITE = `你是一个写作润色助手。对用户提供的文本进行改写润色。
 
@@ -50,7 +66,7 @@ const SYSTEM_PROMPT_EXPAND = `你是一个写作扩展助手。基于用户提�
 - 只输出扩展后的内容`;
 
 let _config: WritingConfig = {
-  enabled: true,
+  enabled: false,
   model: 'qwen-turbo-latest',
   temperature: 0.3,
   maxTokens: 80,
@@ -111,7 +127,10 @@ export async function* streamComplete(
     maxTokens: ctx.maxTokens ?? _config.maxTokens,
   };
 
-  let systemPrompt = SYSTEM_PROMPT_COMPLETE_DEFAULT;
+  let systemPrompt = ctx.systemPrompt || _config.systemPrompt || SYSTEM_PROMPT_COMPLETE_DEFAULT;
+  if (ctx.completionPrompt) {
+    systemPrompt += `\n\n补充指导：\n${ctx.completionPrompt}`;
+  }
   let ragUserPrompt = userPrompt;
 
   const ragConfig = getRAGConfig();
@@ -126,6 +145,19 @@ export async function* streamComplete(
         ragUserPrompt = `参考文档片段:\n${refSnippets}\n\n---\n当前文本:\n${userPrompt}`;
       }
     } catch { /* RAG failure is non-critical, fallback to default */ }
+  }
+
+  if (_config.searchEnhanced) {
+    try {
+      const cursorPos = ctx.cursorPosition ?? ctx.text.length;
+      const queryText = ctx.text.slice(Math.max(0, cursorPos - 150), cursorPos).trim();
+      if (queryText.length > 20) {
+        const searchContext = await enrichWithSearch(queryText, 2);
+        if (searchContext) {
+          ragUserPrompt = `网络参考:\n${searchContext}\n\n---\n当前文本:\n${ragUserPrompt}`;
+        }
+      }
+    } catch { /* search failure is non-critical */ }
   }
 
   let fullContent = '';
@@ -230,6 +262,14 @@ export function getWritingStats(days = 30) {
     WHERE created_at > ?
     GROUP BY action
   `).all(since);
+}
+
+export function getSystemPrompt(): string {
+  return _config.systemPrompt || SYSTEM_PROMPT_COMPLETE_DEFAULT;
+}
+
+export function getDefaultSystemPrompt(): string {
+  return SYSTEM_PROMPT_COMPLETE_DEFAULT;
 }
 
 export function getCacheStats() {

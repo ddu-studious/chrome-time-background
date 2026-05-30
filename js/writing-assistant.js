@@ -25,7 +25,7 @@
       this._debounceTimer = null;
       this._pauseTimer = null;
       this._lastInputTime = 0;
-      this._enabled = true;
+      this._enabled = false;
       this._suggestion = '';
       this._pending = false;
       this._accepting = false;
@@ -490,12 +490,19 @@
       const titleEl = document.getElementById('blog-ed-title');
       const catEl = document.getElementById('blog-ed-cat');
 
+      const postAiConfig = _getCurrentPostAiConfig();
+
       const ctx = {
         text,
         cursorPosition,
         title: titleEl?.value || '',
         category: catEl?.value || '',
         triggerType: triggerType || 'typing',
+        systemPrompt: postAiConfig?.systemPrompt || undefined,
+        completionPrompt: postAiConfig?.completionPrompt || undefined,
+        model: postAiConfig?.model || undefined,
+        temperature: postAiConfig?.temperature || undefined,
+        maxTokens: postAiConfig?.maxTokens || undefined,
       };
 
       this._abortCtrl = new AbortController();
@@ -752,6 +759,26 @@
     updateToolbarStatus();
   }
 
+  function _getCurrentPostId() {
+    const blogMgr = window.blogManager || window._blogManager;
+    return blogMgr?._editingPost?.id || null;
+  }
+
+  function _getCurrentPostAiConfig() {
+    const blogMgr = window.blogManager || window._blogManager;
+    const postId = blogMgr?._editingPost?.id;
+    if (!postId || !blogMgr?.getPostAiConfig) return null;
+    return blogMgr.getPostAiConfig(postId);
+  }
+
+  function _saveCurrentPostAiConfig(aiConfig) {
+    const blogMgr = window.blogManager || window._blogManager;
+    const postId = blogMgr?._editingPost?.id;
+    if (!postId || !blogMgr?.updatePostAiConfig) return false;
+    blogMgr.updatePostAiConfig(postId, aiConfig);
+    return true;
+  }
+
   function bindSettingsPanel() {
     const settingsBtn = document.getElementById('writing-ai-settings-btn');
     if (!settingsBtn || settingsBtn.dataset.bound) return;
@@ -772,18 +799,39 @@
         if (ragRes?.ok) ragConfig = await ragRes.json();
       } catch { /* use defaults */ }
 
+      const postAiConfig = _getCurrentPostAiConfig();
+      const hasPost = !!_getCurrentPostId();
+      const effectiveSystemPrompt = postAiConfig?.systemPrompt || config.systemPrompt || config.defaultSystemPrompt || '';
+      const effectiveCompletionPrompt = postAiConfig?.completionPrompt || '';
+
+      const DEFAULT_SYSTEM_PROMPT = config.defaultSystemPrompt || `你是一个专业的中文写作助手，擅长产品文档、技术文档和商业文案的撰写。
+
+核心能力：
+- 续写：基于上下文自然续写1-2句，保持文风连贯
+- 补全：在用户停顿时预测下一段合理内容
+- 风格适配：根据文档类型（PRD/技术方案/日报等）调整用词和结构
+
+约束：
+- 直接输出续写内容，不重复已有文本
+- 不加引号、不添加前缀标注
+- 保持与上文语气和行文风格一致
+- 优先中文，遇英文术语保留原文`;
+
+      const DEFAULT_COMPLETION_PROMPT = `参考当前文章的写作风格和主题方向，续写时保持一致的语气和深度。如果是技术文档，注重准确性；如果是随笔，注重文采和流畅度。`;
+
       panel = document.createElement('div');
       panel.id = 'writing-ai-settings-panel';
       panel.className = 'writing-ai-settings-panel';
       panel.innerHTML = `
         <div class="writing-ai-settings-header">
           <span>写作 AI 设置</span>
+          ${hasPost ? '<span style="font-size:0.65rem;opacity:0.6;margin-left:8px;">仅影响当前文章</span>' : ''}
           <button class="writing-ai-settings-close">&times;</button>
         </div>
         <div class="writing-ai-settings-body">
           <label class="writing-ai-field">
             <span class="writing-ai-label">启用 AI 补全</span>
-            <input type="checkbox" id="ws-enabled" ${config.enabled !== false ? 'checked' : ''}>
+            <input type="checkbox" id="ws-enabled" ${config.enabled ? 'checked' : ''}>
           </label>
           <label class="writing-ai-field">
             <span class="writing-ai-label">模型</span>
@@ -795,13 +843,31 @@
             </select>
           </label>
           <label class="writing-ai-field">
-            <span class="writing-ai-label">温度 <small id="ws-temp-val">${config.temperature ?? 0.4}</small></span>
-            <input type="range" id="ws-temperature" min="0" max="1.5" step="0.1" value="${config.temperature ?? 0.4}">
+            <span class="writing-ai-label">温度 <small id="ws-temp-val">${config.temperature ?? 0.3}</small></span>
+            <input type="range" id="ws-temperature" min="0" max="1.5" step="0.1" value="${config.temperature ?? 0.3}">
           </label>
           <label class="writing-ai-field">
             <span class="writing-ai-label">最大 Token</span>
-            <input type="number" id="ws-max-tokens" min="50" max="4096" step="50" value="${config.maxTokens ?? 100}">
+            <input type="number" id="ws-max-tokens" min="50" max="4096" step="50" value="${config.maxTokens ?? 80}">
           </label>
+
+          <div class="writing-ai-divider" style="border-top:1px solid rgba(255,255,255,0.1);margin:12px 0;"></div>
+          <div class="writing-ai-label" style="font-weight:600;margin-bottom:8px;">系统提示词 ${hasPost ? '<small style="opacity:0.5;font-weight:normal;">（与当前文章绑定）</small>' : ''}</div>
+          <div class="writing-ai-field">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+              <span class="writing-ai-label" style="margin:0;">系统提示词 <small style="opacity:0.5">（定义 AI 角色和能力边界）</small></span>
+              <button id="ws-prompt-reset" style="font-size:0.7rem;padding:2px 8px;border-radius:4px;border:1px solid rgba(255,255,255,0.15);background:transparent;color:rgba(255,255,255,0.5);cursor:pointer;">恢复默认</button>
+            </div>
+            <textarea id="ws-system-prompt" rows="5" style="width:100%;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:8px;color:rgba(255,255,255,0.85);font-size:0.75rem;resize:vertical;font-family:monospace;line-height:1.5;">${effectiveSystemPrompt}</textarea>
+          </div>
+          <div class="writing-ai-field" style="margin-top:10px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+              <span class="writing-ai-label" style="margin:0;">补全提示词 <small style="opacity:0.5">（影响当前文章的AI续写风格）</small></span>
+              <button id="ws-completion-prompt-reset" style="font-size:0.7rem;padding:2px 8px;border-radius:4px;border:1px solid rgba(255,255,255,0.15);background:transparent;color:rgba(255,255,255,0.5);cursor:pointer;">恢复默认</button>
+            </div>
+            <textarea id="ws-completion-prompt" rows="4" style="width:100%;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:8px;color:rgba(255,255,255,0.85);font-size:0.75rem;resize:vertical;font-family:monospace;line-height:1.5;" placeholder="描述当前文章的续写风格偏好...">${effectiveCompletionPrompt}</textarea>
+            <div style="font-size:0.65rem;color:rgba(255,255,255,0.4);margin-top:4px;">${hasPost ? '提示词与当前文章绑定，切换文章时自动加载对应设置' : '当前未打开文章，修改将影响全局默认设置'}</div>
+          </div>
 
           <div class="writing-ai-divider" style="border-top:1px solid rgba(255,255,255,0.1);margin:12px 0;"></div>
           <div class="writing-ai-label" style="font-weight:600;margin-bottom:8px;">RAG 文档联想</div>
@@ -813,10 +879,6 @@
             <span class="writing-ai-label">检索条数 (Top-K)</span>
             <input type="number" id="ws-rag-topk" min="1" max="10" value="${ragConfig.topK ?? 3}" style="width:60px">
           </label>
-          <div class="writing-ai-field">
-            <span class="writing-ai-label">联想系统提示词</span>
-            <textarea id="ws-rag-prompt" class="writing-ai-prompt-display" rows="5" readonly style="width:100%;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:8px;color:rgba(255,255,255,0.7);font-size:0.75rem;resize:vertical;font-family:monospace;">${ragConfig.systemPrompt || '(未加载)'}</textarea>
-          </div>
 
           <div class="writing-ai-settings-actions">
             <button class="writing-ai-save-btn" id="ws-save">保存</button>
@@ -836,18 +898,42 @@
 
       panel.querySelector('.writing-ai-settings-close')?.addEventListener('click', () => panel.remove());
 
+      panel.querySelector('#ws-prompt-reset')?.addEventListener('click', () => {
+        const promptArea = panel.querySelector('#ws-system-prompt');
+        if (promptArea) promptArea.value = DEFAULT_SYSTEM_PROMPT;
+      });
+
+      panel.querySelector('#ws-completion-prompt-reset')?.addEventListener('click', () => {
+        const promptArea = panel.querySelector('#ws-completion-prompt');
+        if (promptArea) promptArea.value = DEFAULT_COMPLETION_PROMPT;
+      });
+
       panel.querySelector('#ws-save')?.addEventListener('click', async () => {
+        const newSystemPrompt = panel.querySelector('#ws-system-prompt')?.value || '';
+        const newCompletionPrompt = panel.querySelector('#ws-completion-prompt')?.value || '';
+
         const newConfig = {
-          enabled: panel.querySelector('#ws-enabled')?.checked ?? true,
+          enabled: panel.querySelector('#ws-enabled')?.checked ?? false,
           model: panel.querySelector('#ws-model')?.value || 'qwen-turbo-latest',
-          temperature: parseFloat(panel.querySelector('#ws-temperature')?.value || '0.4'),
-          maxTokens: parseInt(panel.querySelector('#ws-max-tokens')?.value || '100'),
+          temperature: parseFloat(panel.querySelector('#ws-temperature')?.value || '0.3'),
+          maxTokens: parseInt(panel.querySelector('#ws-max-tokens')?.value || '80'),
+          systemPrompt: newSystemPrompt,
         };
 
         const newRagConfig = {
           enabled: panel.querySelector('#ws-rag-enabled')?.checked ?? false,
           topK: parseInt(panel.querySelector('#ws-rag-topk')?.value || '3'),
         };
+
+        if (hasPost) {
+          _saveCurrentPostAiConfig({
+            systemPrompt: newSystemPrompt,
+            completionPrompt: newCompletionPrompt,
+            model: newConfig.model,
+            temperature: newConfig.temperature,
+            maxTokens: newConfig.maxTokens,
+          });
+        }
 
         try {
           const [res, ragRes] = await Promise.all([

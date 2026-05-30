@@ -439,7 +439,8 @@
 .dock-context-menu {
     position: fixed;
     z-index: 100000;
-    min-width: 180px;
+    min-width: 240px;
+    max-width: 320px;
     padding: 6px;
     border-radius: 12px;
     background: rgba(20, 20, 35, 0.96);

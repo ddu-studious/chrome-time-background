@@ -17,11 +17,14 @@
     <link rel="stylesheet" href="css/tetris-3d-game.css">
     <link rel="stylesheet" href="css/dock-manager.css">
     <link rel="stylesheet" href="css/prompt-manager.css">
+    <link rel="stylesheet" href="css/bg-effects.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
     <!-- 视频背景层（v3.16.0 多源背景支持） -->
     <video id="background-video" autoplay muted loop playsinline></video>
+    <!-- 背景交互特效 Canvas 层（z-index 最低，不捕获鼠标） -->
+    <canvas id="bg-effects-canvas" class="bgfx-canvas"></canvas>
     <!-- 主布局容器（单栏） -->
     <div class="main-layout">
         <main class="main-content">
@@ -417,6 +420,7 @@
     <script src="js/tetris-3d-platform.js"></script>
     <script src="js/tetris-3d-renderer.js"></script>
     <script src="js/tetris-3d-game.js"></script>
+    <script src="js/bg-effects.js"></script>
     <script src="js/dock-manager.js"></script>
     <script src="js/quick-nav.js"></script>
     <script src="js/main.js"></script>

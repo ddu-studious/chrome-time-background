@@ -34,10 +34,14 @@
   const DOCK_EFFECT_KEY = 'dockEffectConfig';
 
   const DOCK_EFFECTS = {
-    magnify: { name: '经典放大', maxScale: 1.5, range: 100 },
-    tilt: { name: '3D 倾斜', maxTilt: 15, range: 80 },
-    glow: { name: '光晕效果', glowSize: 12, range: 60 },
-    none: { name: '无效果' },
+    magnify: { name: '经典放大', desc: 'macOS 风格图标放大', maxScale: 1.5, range: 100 },
+    tilt: { name: '3D 倾斜', desc: '视差透视效果', maxTilt: 15, range: 80 },
+    glow: { name: '光晕效果', desc: '霓虹光环跟随', glowSize: 12, range: 60 },
+    bounce: { name: '弹跳', desc: 'iOS 通知弹跳', bounceHeight: 8, range: 80 },
+    wave: { name: '波浪', desc: '海浪连锁动画', amplitude: 6, frequency: 0.15, range: 120 },
+    spotlight: { name: '聚光灯', desc: '高亮当前，暗化周围', dimOpacity: 0.35, range: 100 },
+    jelly: { name: '果冻', desc: 'Q弹形变效果', squashX: 1.15, squashY: 0.88, range: 70 },
+    none: { name: '无效果', desc: '关闭所有 hover 效果' },
   };
 
   class DockManager {
@@ -69,6 +73,7 @@
       this._bindDragEvents();
       this._bindDockEffects();
       this._bindContextMenu();
+      this._bindQuickDismiss();
     }
 
     _backupOriginalButtons() {
@@ -115,19 +120,42 @@
 
     _bindDockEffects() {
       if (!this.dockEl) return;
+      this._lastMouseX = 0;
+      this._lastMouseY = 0;
+      this._isHovering = false;
 
       this.dockEl.addEventListener('mousemove', (e) => {
         if (this.dragState) return;
+        this._lastMouseX = e.clientX;
+        this._lastMouseY = e.clientY;
+        this._isHovering = true;
         if (this._magnifyRAF) cancelAnimationFrame(this._magnifyRAF);
         this._magnifyRAF = requestAnimationFrame(() => {
           this._applyEffect(e.clientX, e.clientY);
         });
+        if (this._effectConfig.effect === 'wave' && !this._waveLoop) {
+          this._startWaveLoop();
+        }
       });
 
       this.dockEl.addEventListener('mouseleave', () => {
+        this._isHovering = false;
         if (this._magnifyRAF) cancelAnimationFrame(this._magnifyRAF);
+        if (this._waveLoop) { cancelAnimationFrame(this._waveLoop); this._waveLoop = null; }
         this._resetEffect();
       });
+    }
+
+    _startWaveLoop() {
+      const loop = () => {
+        if (!this._isHovering || this._effectConfig.effect !== 'wave') {
+          this._waveLoop = null;
+          return;
+        }
+        this._applyEffect(this._lastMouseX, this._lastMouseY);
+        this._waveLoop = requestAnimationFrame(loop);
+      };
+      this._waveLoop = requestAnimationFrame(loop);
     }
 
     _applyEffect(mouseX, mouseY) {
@@ -135,7 +163,7 @@
       if (effect === 'none') return;
 
       const btns = this.dockEl.querySelectorAll('.dock-btn');
-      btns.forEach(btn => {
+      btns.forEach((btn, index) => {
         const rect = btn.getBoundingClientRect();
         const centerX = rect.left + rect.width / 2;
         const distance = Math.abs(mouseX - centerX);
@@ -149,6 +177,18 @@
             break;
           case 'glow':
             this._applyGlow(btn, distance);
+            break;
+          case 'bounce':
+            this._applyBounce(btn, distance);
+            break;
+          case 'wave':
+            this._applyWave(btn, distance, index);
+            break;
+          case 'spotlight':
+            this._applySpotlight(btn, distance);
+            break;
+          case 'jelly':
+            this._applyJelly(btn, distance);
             break;
         }
       });
@@ -201,12 +241,81 @@
       }
     }
 
+    _applyBounce(btn, distance) {
+      const { bounceHeight = 8, range = 80 } = this._effectConfig;
+      if (distance < range) {
+        const intensity = 1 - distance / range;
+        const y = -bounceHeight * Math.pow(intensity, 1.5);
+        const scale = 1 + 0.08 * intensity;
+        btn.style.transform = `translateY(${y}px) scale(${scale})`;
+        btn.style.zIndex = intensity > 0.3 ? '10' : '';
+      } else {
+        btn.style.transform = '';
+        btn.style.zIndex = '';
+      }
+    }
+
+    _applyWave(btn, distance, index) {
+      const { amplitude = 6, frequency = 0.15, range = 120 } = this._effectConfig;
+      if (distance < range) {
+        const intensity = 1 - distance / range;
+        const phase = index * frequency * Math.PI * 2;
+        const time = Date.now() * 0.005;
+        const y = -amplitude * intensity * Math.sin(time + phase);
+        const scale = 1 + 0.05 * intensity;
+        btn.style.transform = `translateY(${y}px) scale(${scale})`;
+        btn.style.zIndex = intensity > 0.3 ? '10' : '';
+      } else {
+        btn.style.transform = '';
+        btn.style.zIndex = '';
+      }
+    }
+
+    _applySpotlight(btn, distance) {
+      const { dimOpacity = 0.35, range = 100 } = this._effectConfig;
+      if (distance < range * 0.4) {
+        btn.style.transform = 'scale(1.12) translateY(-3px)';
+        btn.style.opacity = '1';
+        btn.style.filter = 'brightness(1.2)';
+        btn.style.zIndex = '10';
+      } else if (distance < range) {
+        const fade = (distance - range * 0.4) / (range * 0.6);
+        const opacity = 1 - (1 - dimOpacity) * fade;
+        btn.style.transform = '';
+        btn.style.opacity = `${opacity}`;
+        btn.style.filter = `brightness(${0.5 + 0.5 * (1 - fade)})`;
+        btn.style.zIndex = '';
+      } else {
+        btn.style.transform = '';
+        btn.style.opacity = `${dimOpacity}`;
+        btn.style.filter = 'brightness(0.5)';
+        btn.style.zIndex = '';
+      }
+    }
+
+    _applyJelly(btn, distance) {
+      const { squashX = 1.15, squashY = 0.88, range = 70 } = this._effectConfig;
+      if (distance < range) {
+        const intensity = 1 - distance / range;
+        const sx = 1 + (squashX - 1) * intensity;
+        const sy = 1 - (1 - squashY) * intensity;
+        const y = -4 * intensity;
+        btn.style.transform = `translateY(${y}px) scale(${sx}, ${sy})`;
+        btn.style.zIndex = intensity > 0.3 ? '10' : '';
+      } else {
+        btn.style.transform = '';
+        btn.style.zIndex = '';
+      }
+    }
+
     _resetEffect() {
       const btns = this.dockEl.querySelectorAll('.dock-btn');
       btns.forEach(btn => {
         btn.style.transform = '';
         btn.style.boxShadow = '';
         btn.style.zIndex = '';
+        btn.style.opacity = '';
+        btn.style.filter = '';
       });
     }
 
@@ -226,12 +335,13 @@
       menu.className = 'dock-context-menu';
       menu.id = 'dock-context-menu';
 
-      let html = '<div class="dock-context-menu-title">Dock 效果设置</div>';
+      let html = '<div class="dock-context-menu-title">Dock 悬浮效果</div>';
       for (const [key, cfg] of Object.entries(DOCK_EFFECTS)) {
         const active = this._effectConfig.effect === key;
         html += `<button class="dock-context-menu-item${active ? ' active' : ''}" data-effect="${key}">
           <i class="fas ${active ? 'fa-check-circle' : 'fa-circle'}"></i>
           <span>${cfg.name}</span>
+          <small style="margin-left:auto;opacity:0.4;font-size:10px;">${cfg.desc || ''}</small>
         </button>`;
       }
       html += '<div class="dock-context-menu-divider"></div>';
@@ -280,6 +390,76 @@
 
     _closeContextMenu() {
       document.getElementById('dock-context-menu')?.remove();
+    }
+
+    // ─── Quick Dismiss (快速收起面板) ───
+
+    _bindQuickDismiss() {
+      if (!this.dockEl) return;
+
+      // 1. 双击 dock-bar 空白区域 → 关闭所有面板
+      this.dockEl.addEventListener('dblclick', (e) => {
+        if (e.target === this.dockEl || e.target.classList.contains('dock-divider')) {
+          this._dismissAllPanels();
+        }
+      });
+
+      // 2. 向下滑动手势 → 收起面板 (移动端/触控板友好)
+      let touchStartY = 0;
+      let touchStartTime = 0;
+      this.dockEl.addEventListener('touchstart', (e) => {
+        touchStartY = e.touches[0].clientY;
+        touchStartTime = Date.now();
+      }, { passive: true });
+
+      this.dockEl.addEventListener('touchend', (e) => {
+        const deltaY = e.changedTouches[0].clientY - touchStartY;
+        const deltaTime = Date.now() - touchStartTime;
+        if (deltaY > 30 && deltaTime < 300) {
+          this._dismissAllPanels();
+        }
+      }, { passive: true });
+
+      // 3. 全局 ESC 统一关闭最顶层面板
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          this._dismissTopPanel();
+        }
+      });
+
+      // 4. 点击页面背景空白区域关闭面板 (不在 dock 和面板内)
+      document.addEventListener('mousedown', (e) => {
+        const target = e.target;
+        if (this.dockEl.contains(target)) return;
+        const isInPanel = target.closest('.cb-panel.open, [class*="-overlay"], [class*="-panel"], .dock-launchpad.open, .dock-context-menu, .dock-group-popover');
+        if (isInPanel) return;
+        // 不处理面板内部的点击
+        if (target.closest('[class*="memo"], [class*="worklog"], [class*="bilibili"], [class*="schedule"]')) return;
+        this._dismissAllPanels();
+      });
+    }
+
+    _dismissAllPanels() {
+      // Agent 面板
+      const bridge = window.cursorBridge || window.CursorBridge;
+      if (bridge?.isOpen) bridge.togglePanel();
+
+      // Launchpad
+      this.hideLaunchpad();
+
+      // 通用浮层面板 (overlay 类)
+      document.querySelectorAll('.cb-dashboard-overlay, .dock-group-popover, .dock-context-menu').forEach(el => el.remove());
+
+      // 其他已打开的通过 dock 触发的模块 — 通过自定义事件通知
+      document.dispatchEvent(new CustomEvent('dock:dismiss-all'));
+    }
+
+    _dismissTopPanel() {
+      // 优先关闭最顶层的浮层
+      const topOverlay = document.querySelector('.cb-dashboard-overlay, .dock-group-popover.open, .dock-context-menu');
+      if (topOverlay) { topOverlay.remove(); return; }
+      if (this.launchpadEl?.classList.contains('open')) { this.hideLaunchpad(); return; }
+      // 其余交给各模块的 ESC 处理
     }
 
     getDefaultConfig() {
