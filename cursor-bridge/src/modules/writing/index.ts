@@ -16,3 +16,4 @@ export { writingRoutes } from './routes.js';
 export { initWritingTables } from './service.js';
 export { isQwenConfigured } from './qwen-client.js';
 export { initRAGTables } from './rag-service.js';
+export { initHermesImportTables } from './hermes-import.js';

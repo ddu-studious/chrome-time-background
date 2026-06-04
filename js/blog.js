@@ -25,6 +25,9 @@ class BlogManager {
             { id: 'essay',   name: '随笔', icon: 'fa-feather-alt', color: '#9C27B0' },
             { id: 'weekly',  name: '周报', icon: 'fa-calendar-alt',color: '#00BCD4' },
             { id: 'agent',   name: 'Agent', icon: 'fa-robot',      color: '#7C3AED' },
+            { id: 'history', name: '历史故事', icon: 'fa-landmark', color: '#B8860B' },
+            { id: 'thought', name: '思想史', icon: 'fa-scroll',    color: '#8D6E63' },
+            { id: 'modern',  name: '近现代史', icon: 'fa-monument', color: '#C62828' },
             { id: 'draft',   name: '草稿箱',icon: 'fa-box-open',   color: '#9E9E9E' },
         ];
 
@@ -39,6 +42,64 @@ class BlogManager {
         this._initialized = true;
         this._updateDockBadge();
         console.log('[Blog] 初始化完成，文章数:', this._posts.length);
+        this._syncHermesInBackground();
+    }
+
+    async _syncHermesInBackground() {
+        if (!window.HermesWritingSync?.syncFromBridge) return;
+        try {
+            const result = await window.HermesWritingSync.syncFromBridge({ scan: true, forceScan: false });
+            if (result.ok && (result.created > 0 || result.deduped > 0)) {
+                console.log('[Blog] Hermes 同步:', result.created, '篇新故事',
+                    result.deduped ? `去重 ${result.deduped}` : '');
+                await this._loadData();
+                if (this._drawerOpen && this._currentView === 'list') {
+                    this._renderContent();
+                }
+                if (this._drawerOpen && result.deduped > 0) {
+                    this._renderSidebar?.();
+                    this._renderTopbarStats?.();
+                }
+            }
+        } catch (e) {
+            console.warn('[Blog] Hermes 同步跳过:', e?.message || e);
+        }
+    }
+
+    _showToast(msg, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `blog-toast blog-toast-${type}`;
+        toast.textContent = msg;
+        document.body.appendChild(toast);
+        requestAnimationFrame(() => toast.classList.add('show'));
+        setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 2800);
+    }
+
+    async syncFromHermes(showToast = true) {
+        if (!window.HermesWritingSync?.syncFromBridge) {
+            if (showToast) this._showToast('Hermes 同步模块未加载', 'warning');
+            return { ok: false };
+        }
+        const result = await window.HermesWritingSync.syncFromBridge({
+            scan: true,
+            forceScan: true,
+            showToast,
+        });
+        console.log('[Blog] Hermes 同步结果', result);
+        if (result.ok) {
+            await this._loadData();
+            console.log('[Blog] 重新加载后文章数', this._posts.length,
+                result.deduped ? `(去重 ${result.deduped})` : '');
+            if (this._drawerOpen && this._currentView === 'list') {
+                this._renderContent();
+            }
+            if (this._drawerOpen) {
+                this._updateDockBadge();
+                this._renderSidebar?.();
+                this._renderTopbarStats?.();
+            }
+        }
+        return result;
     }
 
     // ─── 数据加载/保存 ───
@@ -529,21 +590,46 @@ class BlogManager {
     // ─── CRUD ───
     createPost(data) {
         const post = {
-            id: this._genId(),
+            id: data.id || this._genId(),
             title: data.title || '无标题',
             content: data.content || '',
             category: data.category || 'essay',
             tags: data.tags || [],
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-            wordCount: this._wordCount(data.content),
-            pinned: false,
+            createdAt: data.createdAt || Date.now(),
+            updatedAt: data.updatedAt || Date.now(),
+            wordCount: data.wordCount ?? this._wordCount(data.content),
+            pinned: data.pinned ?? false,
             aiConfig: data.aiConfig || null,
+            source: data.source || null,
         };
         this._posts.unshift(post);
-        this._savePosts();
+        void this._savePosts();
         this._updateDockBadge();
         return post;
+    }
+
+    /** Hermes 批量入库：单次写入 storage，避免并发 createPost 竞态丢文 */
+    async importHermesPostsBatch(posts) {
+        if (!posts?.length) return 0;
+        const existingExtIds = new Set(
+            this._posts
+                .map(p => p.source?.externalId)
+                .filter(Boolean)
+        );
+        let added = 0;
+        for (const post of posts) {
+            const extId = post.source?.externalId;
+            if (extId && existingExtIds.has(extId)) continue;
+            this._posts.unshift(post);
+            if (extId) existingExtIds.add(extId);
+            added++;
+        }
+        if (added > 0) {
+            await this._savePosts();
+            this._updateDockBadge();
+        }
+        console.log('[Blog] Hermes 批量入库', { requested: posts.length, added, total: this._posts.length });
+        return added;
     }
 
     updatePost(id, data) {
@@ -748,6 +834,7 @@ class BlogManager {
                         <div class="blog-topbar-stats" id="blog-topbar-stats"></div>
                     </div>
                     <div class="blog-topbar-actions">
+                        <button type="button" class="blog-tb-btn" data-action="hermes-sync" title="从 Hermes 每日故事同步"><i class="fas fa-cloud-download-alt"></i> Hermes</button>
                         <button type="button" class="blog-tb-btn primary" data-action="new-post"><i class="fas fa-plus"></i> 写一篇</button>
                         <button type="button" class="blog-tb-btn" data-action="collapse" title="收起">收起 <i class="fas fa-chevron-down" style="font-size:10px"></i></button>
                         <button type="button" class="blog-tb-btn" data-action="fullscreen" title="全屏">全屏 <i class="fas fa-expand" style="font-size:10px"></i></button>
@@ -795,6 +882,11 @@ class BlogManager {
             const btn = e.target.closest('[data-action]');
             if (!btn) return;
             switch (btn.dataset.action) {
+                case 'hermes-sync':
+                    void this.syncFromHermes(true).catch((e) =>
+                        console.warn('[Blog] Hermes 同步异常:', e?.message || e)
+                    );
+                    break;
                 case 'new-post':
                     this._editingPost = null;
                     this._switchView('editor');
@@ -1011,6 +1103,57 @@ class BlogManager {
         }
     }
 
+    // ─── Hermes 故事：emoji 小节 → ## 标题（写作空间目录依赖 # 标题） ───
+    _isHermesStyleContent(content) {
+        if (!content) return false;
+        return /Hermes Cron/i.test(content)
+            || /^📅\s*\*\*/m.test(content)
+            || /^📖\s*\*\*/m.test(content);
+    }
+
+    _normalizeHermesSections(markdown) {
+        if (!markdown) return markdown;
+        const sectionRe = /^(📜|📅|📖|📚|✍️|💬|🤔|👤|⚔️|⚡|💰)\s*\*\*([^*]+)\*\*[：:]?\s*(.*)$/;
+        const lines = markdown.split('\n');
+        const out = [];
+        let sectionCount = 0;
+
+        for (const line of lines) {
+            const m = line.match(sectionRe);
+            if (!m) {
+                out.push(line);
+                continue;
+            }
+            const emoji = m[1];
+            const label = m[2].trim();
+            const inline = (m[3] || '').trim();
+
+            // 篇名行 / 模板「标题」不占目录
+            if (emoji === '📜') {
+                out.push(line);
+                continue;
+            }
+            if (label === '标题' || label === '简明有力' || /^标题[：:]/.test(label)) {
+                out.push(line);
+                continue;
+            }
+
+            sectionCount++;
+            out.push(`## ${label}`);
+            if (inline) out.push(inline);
+        }
+
+        return sectionCount >= 2 ? out.join('\n') : markdown;
+    }
+
+    _contentForDetailRender(post) {
+        let content = post?.content || '';
+        if (this._isHermesStyleContent(content)) {
+            content = this._normalizeHermesSections(content);
+        }
+        return content;
+    }
+
     // ─── 从 Markdown 源码提取标题 ───
     _extractHeadings(markdown) {
         if (!markdown) return [];
@@ -1116,8 +1259,9 @@ class BlogManager {
         const cat = this._getCategoryById(post.category);
         const tags = (post.tags || []).map(t => `<span class="blog-detail-tag">#${t}</span>`).join('');
 
-        const rendered = this._renderMarkdown(post.content || '');
-        const headings = this._extractHeadings(post.content || '');
+        const detailContent = this._contentForDetailRender(post);
+        const rendered = this._renderMarkdown(detailContent);
+        const headings = this._extractHeadings(detailContent);
         const hasToc = headings.length >= 2;
 
         container.innerHTML = `

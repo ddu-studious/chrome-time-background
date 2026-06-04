@@ -25,6 +25,17 @@ import {
   clearRAGStore,
   getSystemPromptWithRAG,
 } from './rag-service.js';
+import {
+  scanHermesCronOutputs,
+  listPendingHermesImports,
+  listHermesImportsNotInBlog,
+  ackHermesImports,
+  getHermesImportStats,
+  importHermesFile,
+  repairHermesImportTitles,
+  getHermesTitleMap,
+  HERMES_JOB_PROFILES,
+} from './hermes-import.js';
 
 let fastifyLogger: any = null;
 
@@ -340,5 +351,82 @@ export async function writingRoutes(fastify: FastifyInstance) {
 
   fastify.get('/writing/rag/system-prompt', async () => {
     return { systemPrompt: getSystemPromptWithRAG() };
+  });
+
+  // ─── Hermes Cron → 写作空间 ───
+
+  fastify.get('/writing/hermes/stats', async () => {
+    return getHermesImportStats();
+  });
+
+  fastify.get('/writing/hermes/jobs', async () => {
+    return { jobs: HERMES_JOB_PROFILES };
+  });
+
+  fastify.post('/writing/hermes/scan', async (request) => {
+    const { jobIds, force } = (request.body as { jobIds?: string[]; force?: boolean }) || {};
+    const result = scanHermesCronOutputs(jobIds, { force: !!force });
+    log.info('Hermes cron scan', result);
+    return { success: true, ...result };
+  });
+
+  fastify.post('/writing/hermes/import', async (request, reply) => {
+    const { outputPath } = request.body as { outputPath?: string };
+    if (!outputPath) {
+      return reply.code(400).send({ error: 'outputPath is required' });
+    }
+    const result = importHermesFile(outputPath);
+    return { success: result.imported, ...result };
+  });
+
+  fastify.get('/writing/hermes/pending', async (request) => {
+    const limit = Number((request.query as { limit?: string }).limit) || 50;
+    const items = listPendingHermesImports(limit);
+    log.info('Hermes pending', { count: items.length, limit });
+    return { items, count: items.length };
+  });
+
+  /** 与扩展 blogPosts 对账：返回 Bridge 有而客户端尚未收录的故事 */
+  fastify.get('/writing/hermes/gap', async (request) => {
+    const q = request.query as { known?: string; limit?: string };
+    const limit = Number(q.limit) || 100;
+    const known = (q.known || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+    const items = listHermesImportsNotInBlog(known, limit);
+    log.info('Hermes gap reconcile', { knownCount: known.length, gapCount: items.length });
+    return { items, count: items.length };
+  });
+
+  fastify.post('/writing/hermes/gap', async (request) => {
+    const { knownExternalIds, limit: lim } = (request.body as {
+      knownExternalIds?: string[];
+      limit?: number;
+    }) || {};
+    const limit = Number(lim) || 100;
+    const known = Array.isArray(knownExternalIds) ? knownExternalIds.filter(Boolean) : [];
+    const items = listHermesImportsNotInBlog(known, limit);
+    log.info('Hermes gap reconcile (POST)', { knownCount: known.length, gapCount: items.length });
+    return { items, count: items.length };
+  });
+
+  fastify.post('/writing/hermes/repair-titles', async () => {
+    const result = repairHermesImportTitles();
+    log.info('Hermes title repair', { repaired: result.repaired });
+    return { success: true, ...result };
+  });
+
+  fastify.get('/writing/hermes/title-map', async () => {
+    const items = getHermesTitleMap();
+    return { items, count: items.length };
+  });
+
+  fastify.post('/writing/hermes/ack', async (request, reply) => {
+    const { ids } = request.body as { ids?: number[] };
+    if (!Array.isArray(ids) || !ids.length) {
+      return reply.code(400).send({ error: 'ids array is required' });
+    }
+    return ackHermesImports(ids);
   });
 }

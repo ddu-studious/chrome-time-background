@@ -30,7 +30,7 @@ import type { VerificationConfig, TestCase } from './services/self-loop-verify.j
 import { webSearch, getInstantAnswer, enrichWithSearch, isSearchConfigured, getSearchProviders } from './services/web-search.js';
 
 // ─── Isolated Feature Modules ───
-import { writingRoutes, initWritingTables, initRAGTables } from './modules/writing/index.js';
+import { writingRoutes, initWritingTables, initRAGTables, initHermesImportTables } from './modules/writing/index.js';
 import {
   multiRoleRoutes,
   a2aRoutes,
@@ -209,6 +209,7 @@ initAgentRegistry();
 initCollaborationTables();
 initWritingTables();
 initRAGTables();
+initHermesImportTables();
 
 setPromptVersionResolver(getActivePromptVersion);
 

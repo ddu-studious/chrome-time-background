@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>Hermes 写作同步 API 测试</title>
+  <style>
+    body { font-family: system-ui; padding: 24px; max-width: 720px; }
+    pre { background: #1e1e1e; color: #ddd; padding: 12px; overflow: auto; }
+    button { margin-right: 8px; padding: 8px 14px; }
+    .ok { color: #2e7d32; }
+    .err { color: #c62828; }
+  </style>
+</head>
+<body>
+  <h1>Hermes → 写作空间 Bridge 测试</h1>
+  <p>依赖 cursor-bridge <code>http://127.0.0.1:19840</code></p>
+  <button id="btn-stats">Stats</button>
+  <button id="btn-scan">Scan</button>
+  <button id="btn-pending">Pending (3)</button>
+  <p id="status"></p>
+  <pre id="out">点击按钮测试…</pre>
+  <script>
+    const BRIDGE = 'http://127.0.0.1:19840';
+    const out = document.getElementById('out');
+    const status = document.getElementById('status');
+    async function call(path, opts) {
+      status.textContent = '请求中…';
+      status.className = '';
+      try {
+        const res = await fetch(BRIDGE + path, opts);
+        const data = await res.json();
+        out.textContent = JSON.stringify(data, null, 2);
+        status.textContent = res.ok ? 'OK' : 'HTTP ' + res.status;
+        status.className = res.ok ? 'ok' : 'err';
+      } catch (e) {
+        status.textContent = e.message;
+        status.className = 'err';
+        out.textContent = String(e);
+      }
+    }
+    document.getElementById('btn-stats').onclick = () => call('/writing/hermes/stats');
+    document.getElementById('btn-scan').onclick = () => call('/writing/hermes/scan', { method: 'POST', body: '{}' });
+    document.getElementById('btn-pending').onclick = () => call('/writing/hermes/pending?limit=3');
+  </script>
+</body>
+</html>

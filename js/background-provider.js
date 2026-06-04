@@ -367,19 +367,35 @@
 
     // ======================== Provider: Bing Daily Wallpaper ========================
 
-    async function fetchBingDaily() {
-        const cached = await getCache('bing', 12 * 3600_000);
-        if (cached) return cached;
+    function parseBingArchivePayload(text) {
+        const body = (text || '').trim();
+        if (!body) return null;
 
-        try {
-            const res = await fetch(
-                'https://www.bing.com/HPImageArchive.aspx?format=json&idx=0&n=8&mkt=zh-CN',
-                { cache: 'no-store' }
-            );
-            if (!res.ok) { console.warn(`[Provider:bing] HTTP ${res.status}`); return []; }
-            const data = await res.json();
+        if (body.startsWith('<')) {
+            const images = [];
+            const blocks = body.match(/<image>[\s\S]*?<\/image>/gi) || [];
+            for (const block of blocks) {
+                const pick = (tag) => block.match(new RegExp(`<${tag}>([^<]*)</${tag}>`, 'i'))?.[1]?.trim();
+                const url = pick('url');
+                if (!url) continue;
+                images.push({
+                    url,
+                    title: pick('title') || '',
+                    copyright: pick('copyright') || '',
+                    copyrightlink: pick('copyrightlink') || '',
+                });
+            }
+            return images.length ? { images } : null;
+        }
 
-            const items = (data.images || []).map(img => {
+        const jsonText = body.startsWith('(')
+            ? body.replace(/^\(/, '').replace(/\);?\s*$/, '')
+            : body;
+        return JSON.parse(jsonText);
+    }
+
+    function mapBingImages(data) {
+        return (data?.images || []).map(img => {
                 const uhd = `https://www.bing.com${img.url}`.replace('1920x1080', 'UHD');
                 const copyright = img.copyright || '';
                 const match = copyright.match(/^(.+?)\s*[\(（]/);
@@ -394,13 +410,45 @@
                     licenseUrl: img.copyrightlink || '',
                 });
             }).filter(it => it.url);
+    }
 
-            if (items.length) await setCache('bing', items);
-            return items;
-        } catch (e) {
-            console.warn('[Provider:bing] 拉取失败:', e?.message);
-            return [];
+    async function fetchBingDaily() {
+        const cached = await getCache('bing', 12 * 3600_000);
+        if (cached) return cached;
+
+        const endpoints = [
+            'https://www.bing.com/HPImageArchive.aspx?format=json&idx=0&n=8&mkt=zh-CN',
+            'https://cn.bing.com/HPImageArchive.aspx?format=json&idx=0&n=8&mkt=zh-CN',
+        ];
+        const fetchOpts = {
+            cache: 'no-store',
+            headers: {
+                Accept: 'application/json, text/javascript, */*;q=0.1',
+                'User-Agent': 'Mozilla/5.0 (compatible; ChromeTimeBackground/1.0)',
+            },
+        };
+
+        for (const endpoint of endpoints) {
+            try {
+                const res = await fetch(endpoint, fetchOpts);
+                if (!res.ok) {
+                    console.warn(`[Provider:bing] HTTP ${res.status} @ ${endpoint}`);
+                    continue;
+                }
+                const text = await res.text();
+                const data = parseBingArchivePayload(text);
+                const items = mapBingImages(data);
+                if (items.length) {
+                    await setCache('bing', items);
+                    return items;
+                }
+            } catch (e) {
+                console.warn(`[Provider:bing] ${endpoint} 失败:`, e?.message);
+            }
         }
+
+        console.warn('[Provider:bing] 所有端点均未返回可用壁纸');
+        return [];
     }
 
     // ======================== Provider: Wallhaven ========================

@@ -1,4 +1,4 @@
-importScripts('background-provider.js');
+importScripts('background-provider.js', 'hermes-writing-sync.js');
 
 (function() {
     // v3.16.0: 背景图片数据已迁移至 background-provider.js（多源 Provider 模块）
@@ -702,6 +702,22 @@ importScripts('background-provider.js');
             }
         } else {
             console.log('关键字扫描已禁用（用户设置）');
+        }
+
+        // Hermes → 写作空间：每小时拉取一次（scan 有冷却，多实例通过 storage 锁串行）
+        await chrome.alarms.create('hermes-writing-sync', {
+            periodInMinutes: 60,
+        });
+        console.log('已设置 Hermes 写作同步: 每60分钟');
+    }
+
+    async function runHermesWritingSyncAlarm() {
+        if (typeof HermesWritingSync === 'undefined') return;
+        try {
+            const result = await HermesWritingSync.syncFromBridge({ scan: true });
+            console.log('[HermesSync] 后台同步完成', result);
+        } catch (e) {
+            console.warn('[HermesSync] 后台同步失败:', e?.message || e);
         }
     }
     
@@ -1642,6 +1658,10 @@ importScripts('background-provider.js');
                 break;
             case 'worklog-smart-check':
                 await checkWorklogProgress();
+                break;
+            case 'hermes-writing-sync':
+                await runHermesWritingSyncAlarm();
+                logExtEvent('alarm', 'hermes-writing-sync', { durationMs: Date.now() - _alarmStart });
                 break;
             default:
                 if (alarm.name.startsWith('task-reminder-')) {
