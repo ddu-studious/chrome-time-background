@@ -28,6 +28,7 @@ class BlogManager {
             { id: 'history', name: '历史故事', icon: 'fa-landmark', color: '#B8860B' },
             { id: 'thought', name: '思想史', icon: 'fa-scroll',    color: '#8D6E63' },
             { id: 'modern',  name: '近现代史', icon: 'fa-monument', color: '#C62828' },
+            { id: 'geography', name: '地理故事', icon: 'fa-globe-asia', color: '#1B5E20' },
             { id: 'draft',   name: '草稿箱',icon: 'fa-box-open',   color: '#9E9E9E' },
         ];
 
@@ -724,18 +725,66 @@ class BlogManager {
             list = list.filter(p => (p.tags || []).includes(this._filterTag));
         }
         if (this._searchQuery) {
-            const q = this._searchQuery.toLowerCase();
-            list = list.filter(p =>
-                (p.title || '').toLowerCase().includes(q) ||
-                (p.content || '').toLowerCase().includes(q) ||
-                (p.tags || []).some(t => t.toLowerCase().includes(q))
-            );
+            const result = this._searchPosts(list, this._searchQuery);
+            list = result.posts;
+            this._lastSearchMode = result.mode;
+            return list;
         }
+        this._lastSearchMode = null;
         list.sort((a, b) => {
             if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
             return b.updatedAt - a.updatedAt;
         });
         return list;
+    }
+
+    _searchPosts(posts, query) {
+        const q = query.toLowerCase();
+
+        // Phase 1: exact substring match (title > tags > content)
+        const exactTitle = posts.filter(p => (p.title || '').toLowerCase().includes(q));
+        const exactTag = posts.filter(p =>
+            !exactTitle.includes(p) &&
+            (p.tags || []).some(t => t.toLowerCase().includes(q))
+        );
+        const exactContent = posts.filter(p =>
+            !exactTitle.includes(p) && !exactTag.includes(p) &&
+            (p.content || '').toLowerCase().includes(q)
+        );
+        const exactResults = [...exactTitle, ...exactTag, ...exactContent];
+
+        if (exactResults.length > 0) {
+            return { posts: exactResults, mode: 'exact' };
+        }
+
+        // Phase 2: Fuse.js fuzzy search fallback
+        if (typeof Fuse === 'undefined') {
+            return { posts: [], mode: 'none' };
+        }
+
+        if (!this._fuseIndex || this._fuseIndexVersion !== this._posts.length) {
+            this._fuseIndex = new Fuse(posts, {
+                keys: [
+                    { name: 'title', weight: 3 },
+                    { name: 'tags', weight: 2 },
+                    { name: 'content', weight: 1 },
+                ],
+                threshold: 0.4,
+                distance: 200,
+                includeScore: true,
+                minMatchCharLength: 2,
+                ignoreLocation: true,
+            });
+            this._fuseIndexVersion = this._posts.length;
+        } else {
+            this._fuseIndex.setCollection(posts);
+        }
+
+        const fuseResults = this._fuseIndex.search(query, { limit: 50 });
+        return {
+            posts: fuseResults.map(r => r.item),
+            mode: 'fuzzy',
+        };
     }
 
     // ─── Dock 徽标 ───
@@ -835,6 +884,8 @@ class BlogManager {
                     </div>
                     <div class="blog-topbar-actions">
                         <button type="button" class="blog-tb-btn" data-action="hermes-sync" title="从 Hermes 每日故事同步"><i class="fas fa-cloud-download-alt"></i> Hermes</button>
+                        <button type="button" class="blog-tb-btn" data-action="hermes-manage" title="管理 Hermes 数据源"><i class="fas fa-cogs"></i></button>
+                        <button type="button" class="blog-tb-btn" data-action="knowledge-wiki" title="知识图谱" style="color:#AB47BC"><i class="fas fa-project-diagram"></i> 知识库</button>
                         <button type="button" class="blog-tb-btn primary" data-action="new-post"><i class="fas fa-plus"></i> 写一篇</button>
                         <button type="button" class="blog-tb-btn" data-action="collapse" title="收起">收起 <i class="fas fa-chevron-down" style="font-size:10px"></i></button>
                         <button type="button" class="blog-tb-btn" data-action="fullscreen" title="全屏">全屏 <i class="fas fa-expand" style="font-size:10px"></i></button>
@@ -886,6 +937,12 @@ class BlogManager {
                     void this.syncFromHermes(true).catch((e) =>
                         console.warn('[Blog] Hermes 同步异常:', e?.message || e)
                     );
+                    break;
+                case 'hermes-manage':
+                    this._openHermesManager();
+                    break;
+                case 'knowledge-wiki':
+                    this._openKnowledgeWiki();
                     break;
                 case 'new-post':
                     this._editingPost = null;
@@ -1058,15 +1115,27 @@ class BlogManager {
                 </div>`;
         }
 
+        const modeHint = this._lastSearchMode === 'fuzzy'
+            ? '<span class="blog-search-mode fuzzy" title="模糊匹配结果（可能包含近似结果）">模糊</span>'
+            : this._lastSearchMode === 'exact'
+                ? '<span class="blog-search-mode exact" title="精确匹配">精确</span>'
+                : '';
+
         container.innerHTML = `
             <div class="blog-list-view">
                 <div class="blog-list-header">
                     <h1 class="blog-list-title">${catLabel}</h1>
                     <div class="blog-search-box">
                         <i class="fas fa-search"></i>
-                        <input type="text" placeholder="搜索文章..." value="${this._esc(this._searchQuery)}" />
+                        <input type="text" placeholder="搜索标题、内容、标签…" value="${this._esc(this._searchQuery)}" />
+                        ${modeHint}
                     </div>
                 </div>
+                ${this._searchQuery && posts.length === 0 ? `
+                    <div class="blog-list-empty">
+                        <i class="fas fa-search"></i>
+                        <p>未找到与「${this._esc(this._searchQuery)}」相关的文章</p>
+                    </div>` : ''}
                 ${postsHtml}
             </div>
         `;
@@ -1087,7 +1156,18 @@ class BlogManager {
         const searchInput = container.querySelector('.blog-search-box input');
         if (searchInput) {
             let timer;
+            let composing = false;
+            searchInput.addEventListener('compositionstart', () => { composing = true; });
+            searchInput.addEventListener('compositionend', () => {
+                composing = false;
+                clearTimeout(timer);
+                timer = setTimeout(() => {
+                    this._searchQuery = searchInput.value.trim();
+                    this._renderContent();
+                }, 60);
+            });
             searchInput.addEventListener('input', () => {
+                if (composing) return;
                 clearTimeout(timer);
                 timer = setTimeout(() => {
                     this._searchQuery = searchInput.value.trim();
@@ -2295,6 +2375,600 @@ class BlogManager {
     }
 
     // ─── Markdown 渲染增强：多色高亮 ───
+
+    // ─── Hermes 源管理面板 ───
+
+    async _openHermesManager() {
+        const BRIDGE = 'http://127.0.0.1:19840';
+        let existing = document.getElementById('hermes-manager-overlay');
+        if (existing) { existing.remove(); return; }
+
+        const overlay = document.createElement('div');
+        overlay.id = 'hermes-manager-overlay';
+        overlay.className = 'hermes-mgr-overlay';
+        overlay.innerHTML = `
+            <div class="hermes-mgr-panel">
+                <div class="hermes-mgr-header">
+                    <h3><i class="fas fa-cogs"></i> Hermes 数据源管理</h3>
+                    <button class="hermes-mgr-close" id="hermes-mgr-close"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="hermes-mgr-body" id="hermes-mgr-body">
+                    <div style="text-align:center;padding:40px;color:#aaa">
+                        <i class="fas fa-spinner fa-spin" style="font-size:24px"></i>
+                        <div style="margin-top:12px">加载 Hermes 任务列表…</div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        requestAnimationFrame(() => overlay.classList.add('open'));
+
+        overlay.querySelector('#hermes-mgr-close').addEventListener('click', () => {
+            overlay.classList.remove('open');
+            setTimeout(() => overlay.remove(), 300);
+        });
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                overlay.classList.remove('open');
+                setTimeout(() => overlay.remove(), 300);
+            }
+        });
+
+        try {
+            const [jobsResp, profilesResp] = await Promise.all([
+                fetch(`${BRIDGE}/writing/hermes/cron-jobs`).then(r => r.json()),
+                fetch(`${BRIDGE}/writing/hermes/profiles`).then(r => r.json()),
+            ]);
+
+            const jobs = jobsResp.jobs || [];
+            const profiles = profilesResp.profiles || [];
+            const profileMap = new Map(profiles.map(p => [p.jobId, p]));
+
+            this._renderHermesManagerBody(overlay, jobs, profileMap);
+        } catch (err) {
+            const body = overlay.querySelector('#hermes-mgr-body');
+            if (body) body.innerHTML = `
+                <div style="text-align:center;padding:40px;color:#ff6b6b">
+                    <i class="fas fa-exclamation-triangle" style="font-size:24px"></i>
+                    <div style="margin-top:12px">无法连接 cursor-bridge (19840)</div>
+                    <div style="margin-top:4px;font-size:12px;color:#999">${err.message}</div>
+                </div>`;
+        }
+    }
+
+    _renderHermesManagerBody(overlay, jobs, profileMap) {
+        const BRIDGE = 'http://127.0.0.1:19840';
+        const body = overlay.querySelector('#hermes-mgr-body');
+        const categories = this.CATEGORIES.filter(c => c.id !== 'draft');
+
+        const jobsHtml = jobs.map(job => {
+            const profile = profileMap.get(job.id);
+            const registered = !!profile?.enabled;
+            return `
+                <div class="hermes-mgr-job ${registered ? 'registered' : ''}" data-job-id="${job.id}">
+                    <div class="hermes-mgr-job-info">
+                        <div class="hermes-mgr-job-name">
+                            <span class="hermes-mgr-status ${registered ? 'active' : 'inactive'}"></span>
+                            ${this._esc(job.name)}
+                        </div>
+                        <div class="hermes-mgr-job-meta">
+                            <span title="任务 ID"><i class="fas fa-fingerprint"></i> ${job.id}</span>
+                            <span title="已有输出"><i class="fas fa-file-alt"></i> ${job.outputCount} 篇</span>
+                            ${job.schedule ? `<span title="调度规则"><i class="fas fa-clock"></i> ${this._esc(job.schedule.display || job.schedule.expr || String(job.schedule))}</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="hermes-mgr-job-actions">
+                        ${registered
+                            ? `<span class="hermes-mgr-cat-badge" style="background:${this._getCategoryById(profile.category)?.color || '#666'}">${this._getCategoryById(profile.category)?.name || profile.category}</span>
+                               <button class="hermes-mgr-btn danger" data-mgr-action="remove" data-job-id="${job.id}" title="停止同步"><i class="fas fa-unlink"></i></button>`
+                            : `<select class="hermes-mgr-cat-select" data-job-id="${job.id}">
+                                   ${categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+                               </select>
+                               <button class="hermes-mgr-btn primary" data-mgr-action="add" data-job-id="${job.id}" title="开始同步"><i class="fas fa-link"></i> 同步</button>`
+                        }
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        body.innerHTML = `
+            <div class="hermes-mgr-hint">
+                <i class="fas fa-info-circle"></i>
+                选择需要同步到写作空间的 Hermes 定时任务，并为每个任务指定文章分类。
+            </div>
+            <div class="hermes-mgr-list">${jobsHtml || '<div style="padding:20px;color:#aaa;text-align:center">未发现 Hermes 定时任务</div>'}</div>
+        `;
+
+        body.querySelectorAll('[data-mgr-action]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const jobId = btn.dataset.jobId;
+                const action = btn.dataset.mgrAction;
+                btn.disabled = true;
+
+                try {
+                    if (action === 'add') {
+                        const select = body.querySelector(`select[data-job-id="${jobId}"]`);
+                        const category = select?.value || 'history';
+                        const job = jobs.find(j => j.id === jobId);
+                        await fetch(`${BRIDGE}/writing/hermes/profiles`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                jobId,
+                                name: job?.name || 'Unknown',
+                                category,
+                                tags: ['hermes', category, 'cron'],
+                            }),
+                        });
+                        this._showToast(`已添加「${job?.name || jobId}」到同步列表`, 'success');
+                    } else if (action === 'remove') {
+                        await fetch(`${BRIDGE}/writing/hermes/profiles/${jobId}`, { method: 'DELETE' });
+                        this._showToast('已移除同步源', 'info');
+                    }
+
+                    const [jr, pr] = await Promise.all([
+                        fetch(`${BRIDGE}/writing/hermes/cron-jobs`).then(r => r.json()),
+                        fetch(`${BRIDGE}/writing/hermes/profiles`).then(r => r.json()),
+                    ]);
+                    const newMap = new Map((pr.profiles || []).map(p => [p.jobId, p]));
+                    this._renderHermesManagerBody(overlay, jr.jobs || [], newMap);
+                } catch (err) {
+                    this._showToast('操作失败: ' + err.message, 'error');
+                    btn.disabled = false;
+                }
+            });
+        });
+    }
+
+    // ─── LLM-wiki 知识库面板 ───
+
+    async _openKnowledgeWiki() {
+        let overlay = document.getElementById('knowledge-wiki-overlay');
+        if (overlay) { overlay.remove(); return; }
+
+        overlay = document.createElement('div');
+        overlay.id = 'knowledge-wiki-overlay';
+        overlay.className = 'kw-wiki-overlay';
+        overlay.innerHTML = `
+            <div class="kw-panel">
+                <div class="kw-header">
+                    <div class="kw-title"><i class="fas fa-project-diagram"></i> 知识图谱 · LLM-wiki</div>
+                    <div class="kw-header-actions">
+                        <button class="kw-btn" data-kw-action="index-all" title="索引全部未索引的故事"><i class="fas fa-magic"></i> 一键索引</button>
+                        <button class="kw-btn" data-kw-action="close"><i class="fas fa-times"></i></button>
+                    </div>
+                </div>
+                <div class="kw-tabs">
+                    <button class="kw-tab active" data-kw-tab="overview">概览</button>
+                    <button class="kw-tab" data-kw-tab="search">搜索</button>
+                    <button class="kw-tab" data-kw-tab="browse">浏览</button>
+                    <button class="kw-tab" data-kw-tab="graph">图谱</button>
+                </div>
+                <div class="kw-body" id="kw-body">
+                    <div class="kw-loading"><i class="fas fa-spinner fa-spin"></i> 加载中...</div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        requestAnimationFrame(() => overlay.classList.add('open'));
+
+        const closeWiki = () => {
+            overlay.classList.remove('open');
+            overlay.addEventListener('transitionend', () => overlay.remove(), { once: true });
+        };
+        overlay.querySelector('[data-kw-action="close"]').onclick = closeWiki;
+        overlay.querySelector('[data-kw-action="index-all"]').onclick = () => this._kwIndexAll(overlay);
+
+        overlay.querySelectorAll('.kw-tab').forEach(tab => {
+            tab.onclick = () => {
+                overlay.querySelectorAll('.kw-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                this._kwSwitchTab(overlay, tab.dataset.kwTab);
+            };
+        });
+
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) closeWiki();
+        });
+
+        await this._kwSwitchTab(overlay, 'overview');
+    }
+
+    async _kwSwitchTab(overlay, tab) {
+        const body = overlay.querySelector('#kw-body');
+        const BRIDGE = 'http://127.0.0.1:19840';
+        try {
+            switch (tab) {
+                case 'overview': {
+                    const stats = await fetch(`${BRIDGE}/writing/knowledge/stats`).then(r => r.json());
+                    body.innerHTML = this._kwRenderOverview(stats);
+                    break;
+                }
+                case 'search': {
+                    body.innerHTML = this._kwRenderSearch();
+                    body.querySelector('.kw-search-input').focus();
+                    body.querySelector('.kw-search-input').onkeydown = (e) => {
+                        if (e.key === 'Enter') this._kwDoSearch(overlay);
+                    };
+                    body.querySelector('.kw-search-btn').onclick = () => this._kwDoSearch(overlay);
+                    break;
+                }
+                case 'browse': {
+                    body.innerHTML = `<div class="kw-loading"><i class="fas fa-spinner fa-spin"></i></div>`;
+                    await this._kwRenderBrowse(overlay);
+                    break;
+                }
+                case 'graph': {
+                    body.innerHTML = `<div class="kw-loading"><i class="fas fa-spinner fa-spin"></i></div>`;
+                    await this._kwRenderGraph(overlay);
+                    break;
+                }
+            }
+        } catch (err) {
+            body.innerHTML = `<div class="kw-empty"><i class="fas fa-exclamation-triangle"></i> ${err.message}</div>`;
+        }
+    }
+
+    _kwRenderOverview(stats) {
+        const typeLabels = {
+            dynasty: '朝代', person: '人物', event: '事件',
+            place: '地点', concept: '概念',
+        };
+        const typeCards = Object.entries(stats.byType || {})
+            .map(([type, count]) => `
+                <div class="kw-stat-card">
+                    <div class="kw-stat-num">${count}</div>
+                    <div class="kw-stat-label">${typeLabels[type] || type}</div>
+                </div>
+            `).join('');
+
+        const catCards = Object.entries(stats.byCategory || {})
+            .map(([cat, count]) => {
+                const catObj = this.CATEGORIES.find(c => c.id === cat);
+                return `<span class="kw-cat-chip" style="background:${catObj?.color || '#666'}22;color:${catObj?.color || '#666'}">${catObj?.name || cat}: ${count}</span>`;
+            }).join('');
+
+        const topList = (stats.topEntities || []).slice(0, 20)
+            .map(e => `<span class="kw-entity-chip kw-type-${e.type}" data-kw-entity="${e.name}">${e.name} <small>(${e.count})</small></span>`)
+            .join('');
+
+        return `
+            <div class="kw-overview">
+                <div class="kw-overview-summary">
+                    <div class="kw-stat-card kw-stat-hero">
+                        <div class="kw-stat-num">${stats.indexedStories || 0}</div>
+                        <div class="kw-stat-label">已索引故事</div>
+                    </div>
+                    <div class="kw-stat-card kw-stat-hero">
+                        <div class="kw-stat-num">${stats.totalEntities || 0}</div>
+                        <div class="kw-stat-label">知识实体</div>
+                    </div>
+                    <div class="kw-stat-card kw-stat-hero">
+                        <div class="kw-stat-num">${stats.totalRelations || 0}</div>
+                        <div class="kw-stat-label">关系连接</div>
+                    </div>
+                </div>
+                ${stats.totalEntities > 0 ? `
+                    <div class="kw-section">
+                        <h4>实体类型分布</h4>
+                        <div class="kw-stat-grid">${typeCards}</div>
+                    </div>
+                    <div class="kw-section">
+                        <h4>分类来源</h4>
+                        <div class="kw-cat-chips">${catCards}</div>
+                    </div>
+                    <div class="kw-section">
+                        <h4>热门实体</h4>
+                        <div class="kw-entity-chips">${topList}</div>
+                    </div>
+                ` : `
+                    <div class="kw-empty-state">
+                        <i class="fas fa-seedling" style="font-size:56px;color:#4CAF50;opacity:0.6"></i>
+                        <p style="font-size:18px;font-weight:600;color:#ccc">知识库尚未索引</p>
+                        <p style="color:#999;font-size:14px;max-width:400px;line-height:1.6">写作空间中的故事需要先经过 LLM 索引，才能自动提取朝代、人物、事件、地点等知识实体，构建知识图谱。</p>
+                        <button class="kw-btn" onclick="this.closest('.kw-wiki-overlay')?.querySelector('[data-kw-action=\\'index-all\\']')?.click()" style="margin-top:8px;padding:10px 24px;font-size:14px;background:rgba(76,175,80,.15);border:1px solid rgba(76,175,80,.3);color:#4CAF50;cursor:pointer;border-radius:8px"><i class="fas fa-magic"></i> 开始一键索引</button>
+                    </div>
+                `}
+            </div>
+        `;
+    }
+
+    _kwRenderSearch() {
+        return `
+            <div class="kw-search-panel">
+                <div class="kw-search-bar">
+                    <input type="text" class="kw-search-input" placeholder="搜索人物、地点、事件、朝代...">
+                    <select class="kw-search-type">
+                        <option value="">全部类型</option>
+                        <option value="dynasty">朝代</option>
+                        <option value="person">人物</option>
+                        <option value="event">事件</option>
+                        <option value="place">地点</option>
+                        <option value="concept">概念</option>
+                    </select>
+                    <button class="kw-search-btn"><i class="fas fa-search"></i></button>
+                </div>
+                <div class="kw-search-results" id="kw-search-results"></div>
+            </div>
+        `;
+    }
+
+    async _kwDoSearch(overlay) {
+        const body = overlay.querySelector('#kw-body');
+        const input = body.querySelector('.kw-search-input');
+        const typeSelect = body.querySelector('.kw-search-type');
+        const resultsEl = body.querySelector('#kw-search-results');
+        const q = input.value.trim();
+        if (!q) return;
+
+        resultsEl.innerHTML = `<div class="kw-loading"><i class="fas fa-spinner fa-spin"></i></div>`;
+        const BRIDGE = 'http://127.0.0.1:19840';
+        try {
+            const params = new URLSearchParams({ q });
+            if (typeSelect.value) params.set('type', typeSelect.value);
+            const data = await fetch(`${BRIDGE}/writing/knowledge/search?${params}`).then(r => r.json());
+            const entities = data.entities || [];
+            if (!entities.length) {
+                resultsEl.innerHTML = `<div class="kw-empty">没有找到「${q}」相关的知识实体</div>`;
+                return;
+            }
+
+            resultsEl.innerHTML = entities.map(e => `
+                <div class="kw-result-card kw-type-${e.entityType}">
+                    <div class="kw-result-header">
+                        <span class="kw-result-name">${e.name}</span>
+                        <span class="kw-result-type">${this._kwTypeLabel(e.entityType)}</span>
+                    </div>
+                    ${e.description ? `<div class="kw-result-desc">${e.description}</div>` : ''}
+                    ${e.timeRange ? `<div class="kw-result-meta"><i class="far fa-clock"></i> ${e.timeRange}</div>` : ''}
+                    ${(e.aliases?.length) ? `<div class="kw-result-meta"><i class="fas fa-tags"></i> ${e.aliases.join(', ')}</div>` : ''}
+                    ${(e.relatedEntities?.length) ? `<div class="kw-result-related">关联: ${e.relatedEntities.map(r => `<span class="kw-entity-chip-sm">${r}</span>`).join('')}</div>` : ''}
+                </div>
+            `).join('');
+        } catch (err) {
+            resultsEl.innerHTML = `<div class="kw-empty"><i class="fas fa-exclamation-triangle"></i> ${err.message}</div>`;
+        }
+    }
+
+    async _kwRenderBrowse(overlay) {
+        const body = overlay.querySelector('#kw-body');
+        const BRIDGE = 'http://127.0.0.1:19840';
+        const types = ['dynasty', 'person', 'event', 'place', 'concept'];
+        const results = {};
+        for (const t of types) {
+            try {
+                const data = await fetch(`${BRIDGE}/writing/knowledge/entities?type=${t}&limit=50`).then(r => r.json());
+                results[t] = data.entities || [];
+            } catch { results[t] = []; }
+        }
+
+        const tabs = types.map((t, i) => `<button class="kw-browse-tab ${i === 0 ? 'active' : ''}" data-type="${t}">${this._kwTypeLabel(t)} (${results[t].length})</button>`).join('');
+        const panels = types.map((t, i) => {
+            const items = results[t];
+            if (!items.length) return `<div class="kw-browse-list" data-type="${t}" style="display:${i === 0 ? 'block' : 'none'}"><div class="kw-empty">暂无${this._kwTypeLabel(t)}数据</div></div>`;
+            return `<div class="kw-browse-list" data-type="${t}" style="display:${i === 0 ? 'block' : 'none'}">
+                ${items.map(e => `
+                    <div class="kw-browse-item">
+                        <span class="kw-browse-name">${e.name}</span>
+                        <span class="kw-browse-count">出现 ${e.count} 次</span>
+                        ${e.description ? `<span class="kw-browse-desc">${e.description}</span>` : ''}
+                        ${e.timeRange ? `<span class="kw-browse-time">${e.timeRange}</span>` : ''}
+                    </div>
+                `).join('')}
+            </div>`;
+        }).join('');
+
+        body.innerHTML = `
+            <div class="kw-browse-panel">
+                <div class="kw-browse-tabs">${tabs}</div>
+                ${panels}
+            </div>
+        `;
+
+        body.querySelectorAll('.kw-browse-tab').forEach(tab => {
+            tab.onclick = () => {
+                body.querySelectorAll('.kw-browse-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                body.querySelectorAll('.kw-browse-list').forEach(l => l.style.display = 'none');
+                body.querySelector(`.kw-browse-list[data-type="${tab.dataset.type}"]`).style.display = 'block';
+            };
+        });
+    }
+
+    async _kwRenderGraph(overlay) {
+        const body = overlay.querySelector('#kw-body');
+        const BRIDGE = 'http://127.0.0.1:19840';
+        try {
+            const data = await fetch(`${BRIDGE}/writing/knowledge/graph?limit=80`).then(r => r.json());
+            if (!data.nodes?.length) {
+                body.innerHTML = `<div class="kw-empty-state">
+                    <i class="fas fa-project-diagram" style="font-size:48px;color:#AB47BC;opacity:0.4"></i>
+                    <p>还没有足够的知识实体来绘制图谱</p>
+                    <p style="color:#999;font-size:13px">索引更多故事后，实体之间的关系网络将在此可视化</p>
+                </div>`;
+                return;
+            }
+
+            const typeColors = {
+                dynasty: '#FF9800', person: '#2196F3', event: '#F44336',
+                place: '#4CAF50', concept: '#9C27B0',
+            };
+
+            const width = 760, height = 500;
+            const legend = Object.entries(typeColors)
+                .map(([t, c]) => `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px"><span style="width:10px;height:10px;border-radius:50%;background:${c};display:inline-block"></span>${this._kwTypeLabel(t)}</span>`)
+                .join('');
+
+            body.innerHTML = `
+                <div class="kw-graph-panel">
+                    <div class="kw-graph-legend">${legend}</div>
+                    <svg id="kw-graph-svg" width="${width}" height="${height}" style="background:#1a1a2e;border-radius:8px">
+                    </svg>
+                </div>
+            `;
+
+            this._kwDrawForceGraph(data.nodes, data.edges, width, height, typeColors);
+        } catch (err) {
+            body.innerHTML = `<div class="kw-empty"><i class="fas fa-exclamation-triangle"></i> ${err.message}</div>`;
+        }
+    }
+
+    _kwDrawForceGraph(nodes, edges, width, height, typeColors) {
+        const svg = document.getElementById('kw-graph-svg');
+        if (!svg || !nodes.length) return;
+
+        const nodeMap = new Map();
+        nodes.forEach((n, i) => {
+            const angle = (2 * Math.PI * i) / nodes.length;
+            const r = Math.min(width, height) * 0.35;
+            n.x = width / 2 + r * Math.cos(angle) + (Math.random() - 0.5) * 40;
+            n.y = height / 2 + r * Math.sin(angle) + (Math.random() - 0.5) * 40;
+            n.vx = 0; n.vy = 0;
+            nodeMap.set(n.id, n);
+        });
+
+        const validEdges = edges.filter(e => nodeMap.has(e.source) && nodeMap.has(e.target));
+
+        const simulate = () => {
+            for (let i = 0; i < nodes.length; i++) {
+                for (let j = i + 1; j < nodes.length; j++) {
+                    const a = nodes[i], b = nodes[j];
+                    let dx = b.x - a.x, dy = b.y - a.y;
+                    let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                    let force = 800 / (dist * dist);
+                    a.vx -= (dx / dist) * force;
+                    a.vy -= (dy / dist) * force;
+                    b.vx += (dx / dist) * force;
+                    b.vy += (dy / dist) * force;
+                }
+            }
+
+            for (const e of validEdges) {
+                const a = nodeMap.get(e.source), b = nodeMap.get(e.target);
+                let dx = b.x - a.x, dy = b.y - a.y;
+                let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                let force = (dist - 100) * 0.01;
+                a.vx += (dx / dist) * force;
+                a.vy += (dy / dist) * force;
+                b.vx -= (dx / dist) * force;
+                b.vy -= (dy / dist) * force;
+            }
+
+            for (const n of nodes) {
+                let cx = width / 2 - n.x, cy = height / 2 - n.y;
+                n.vx += cx * 0.001;
+                n.vy += cy * 0.001;
+                n.vx *= 0.9; n.vy *= 0.9;
+                n.x += n.vx; n.y += n.vy;
+                n.x = Math.max(20, Math.min(width - 20, n.x));
+                n.y = Math.max(20, Math.min(height - 20, n.y));
+            }
+        };
+
+        for (let step = 0; step < 120; step++) simulate();
+
+        let svgContent = '<defs><marker id="kw-arrow" viewBox="0 0 10 10" refX="20" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#555"/></marker></defs>';
+
+        for (const e of validEdges) {
+            const a = nodeMap.get(e.source), b = nodeMap.get(e.target);
+            svgContent += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#444" stroke-width="1" marker-end="url(#kw-arrow)"/>`;
+            const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+            svgContent += `<text x="${mx}" y="${my - 4}" text-anchor="middle" fill="#888" font-size="9">${e.label}</text>`;
+        }
+
+        for (const n of nodes) {
+            const color = typeColors[n.type] || '#999';
+            const r = n.size || 6;
+            svgContent += `<circle cx="${n.x}" cy="${n.y}" r="${r}" fill="${color}" stroke="#fff" stroke-width="1.5" style="cursor:pointer">
+                <title>${n.label} (${this._kwTypeLabel(n.type)})</title>
+            </circle>`;
+            svgContent += `<text x="${n.x}" y="${n.y + r + 12}" text-anchor="middle" fill="#ccc" font-size="10" font-weight="500">${n.label}</text>`;
+        }
+
+        svg.innerHTML = svgContent;
+    }
+
+    async _kwIndexAll(overlay) {
+        const btn = overlay.querySelector('[data-kw-action="index-all"]');
+        if (btn.disabled) return;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 索引中...';
+
+        const BRIDGE = 'http://127.0.0.1:19840';
+        const stories = this._posts.filter(p => ['history', 'thought', 'modern', 'geography'].includes(p.category));
+
+        let indexed = 0, skipped = 0, failed = 0;
+
+        for (const story of stories) {
+            try {
+                const checkRes = await fetch(`${BRIDGE}/writing/knowledge/indexed?externalId=${encodeURIComponent(story.externalId || story.id)}`).then(r => r.json());
+                if (checkRes.indexed) { skipped++; continue; }
+
+                const extractText = `故事标题：${story.title}\n故事分类：${story.category}\n故事内容：\n${(story.content || '').substring(0, 6000)}`;
+
+                const response = await fetch(`${BRIDGE}/writing/knowledge-extract`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: extractText }),
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let fullText = '';
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    const chunk = decoder.decode(value, { stream: true });
+                    for (const line of chunk.split('\n')) {
+                        if (line.startsWith('data: ')) {
+                            const d = line.slice(6);
+                            if (d === '[DONE]') continue;
+                            try {
+                                const parsed = JSON.parse(d);
+                                if (parsed.content) fullText += parsed.content;
+                            } catch {}
+                        }
+                    }
+                }
+
+                const jsonMatch = fullText.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    const extracted = JSON.parse(jsonMatch[0]);
+                    const entities = (extracted.entities || []).map(e => ({
+                        ...e,
+                        storyExternalId: story.externalId || story.id,
+                        category: story.category,
+                    }));
+                    await fetch(`${BRIDGE}/writing/knowledge/index`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            storyExternalId: story.externalId || story.id,
+                            entities,
+                            relations: extracted.relations || [],
+                        }),
+                    });
+                    indexed++;
+                    btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${indexed}/${stories.length}`;
+                } else {
+                    failed++;
+                }
+            } catch (err) {
+                console.warn('[KW] 索引失败:', story.title, err);
+                failed++;
+            }
+        }
+
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-magic"></i> 一键索引';
+        this._showToast(`索引完成: ${indexed} 篇成功, ${skipped} 篇跳过, ${failed} 篇失败`, indexed > 0 ? 'success' : 'info');
+
+        if (indexed > 0) await this._kwSwitchTab(overlay, 'overview');
+    }
+
+    _kwTypeLabel(type) {
+        return { dynasty: '朝代', person: '人物', event: '事件', place: '地点', concept: '概念' }[type] || type;
+    }
 
     _renderHighlightColors(html) {
         const colorMap = {

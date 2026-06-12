@@ -1,16 +1,18 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, basename } from 'node:path';
 import { getDb } from '../../services/database.js';
 
 export const HERMES_CRON_OUTPUT_DIR = join(homedir(), '.hermes', 'cron', 'output');
+export const HERMES_CRON_JOBS_PATH = join(homedir(), '.hermes', 'cron', 'jobs.json');
 
-/** Known cron jobs → writing-space category & default tags */
-export const HERMES_JOB_PROFILES: Record<string, {
+export interface HermesJobProfile {
   name: string;
   category: string;
   tags: string[];
-}> = {
+}
+
+const DEFAULT_PROFILES: Record<string, HermesJobProfile> = {
   '0c0d2c2e0918': {
     name: '中国历史每日故事',
     category: 'history',
@@ -26,7 +28,148 @@ export const HERMES_JOB_PROFILES: Record<string, {
     category: 'modern',
     tags: ['hermes', '抗战史', '每日故事', 'cron'],
   },
+  '17e2846968d9': {
+    name: '地理故事',
+    category: 'geography',
+    tags: ['hermes', '地理', '每日故事', 'cron'],
+  },
 };
+
+/** Merged profiles: defaults + user-added from DB */
+export let HERMES_JOB_PROFILES: Record<string, HermesJobProfile> = { ...DEFAULT_PROFILES };
+
+export function initHermesJobProfilesTable() {
+  const db = getDb();
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS hermes_job_profiles (
+      job_id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL,
+      tags TEXT NOT NULL DEFAULT '[]',
+      enabled INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000)
+    );
+  `);
+  loadDynamicProfiles();
+}
+
+function loadDynamicProfiles() {
+  const db = getDb();
+  const rows = db.prepare(
+    'SELECT job_id, name, category, tags, enabled FROM hermes_job_profiles WHERE enabled = 1',
+  ).all() as { job_id: string; name: string; category: string; tags: string; enabled: number }[];
+
+  HERMES_JOB_PROFILES = { ...DEFAULT_PROFILES };
+  for (const row of rows) {
+    HERMES_JOB_PROFILES[row.job_id] = {
+      name: row.name,
+      category: row.category,
+      tags: JSON.parse(row.tags || '[]'),
+    };
+  }
+}
+
+export function addHermesJobProfile(
+  jobId: string,
+  profile: HermesJobProfile,
+): { success: boolean; reason?: string } {
+  const db = getDb();
+  db.prepare(`
+    INSERT OR REPLACE INTO hermes_job_profiles (job_id, name, category, tags, enabled)
+    VALUES (?, ?, ?, ?, 1)
+  `).run(jobId, profile.name, profile.category, JSON.stringify(profile.tags));
+  loadDynamicProfiles();
+  return { success: true };
+}
+
+export function removeHermesJobProfile(jobId: string): { success: boolean } {
+  const db = getDb();
+  if (DEFAULT_PROFILES[jobId]) {
+    db.prepare(`
+      INSERT OR REPLACE INTO hermes_job_profiles (job_id, name, category, tags, enabled)
+      VALUES (?, ?, ?, ?, 0)
+    `).run(jobId, DEFAULT_PROFILES[jobId].name, DEFAULT_PROFILES[jobId].category,
+      JSON.stringify(DEFAULT_PROFILES[jobId].tags));
+  } else {
+    db.prepare('DELETE FROM hermes_job_profiles WHERE job_id = ?').run(jobId);
+  }
+  loadDynamicProfiles();
+  return { success: true };
+}
+
+export function listAllHermesJobProfiles(): {
+  jobId: string;
+  name: string;
+  category: string;
+  tags: string[];
+  enabled: boolean;
+  isDefault: boolean;
+}[] {
+  const db = getDb();
+  const overrides = db.prepare(
+    'SELECT job_id, name, category, tags, enabled FROM hermes_job_profiles',
+  ).all() as { job_id: string; name: string; category: string; tags: string; enabled: number }[];
+  const overrideMap = new Map(overrides.map(r => [r.job_id, r]));
+
+  const result: {
+    jobId: string; name: string; category: string; tags: string[];
+    enabled: boolean; isDefault: boolean;
+  }[] = [];
+
+  for (const [id, p] of Object.entries(DEFAULT_PROFILES)) {
+    const ov = overrideMap.get(id);
+    result.push({
+      jobId: id,
+      name: ov?.name ?? p.name,
+      category: ov?.category ?? p.category,
+      tags: ov ? JSON.parse(ov.tags || '[]') : p.tags,
+      enabled: ov ? ov.enabled === 1 : true,
+      isDefault: true,
+    });
+    overrideMap.delete(id);
+  }
+
+  for (const [, ov] of overrideMap) {
+    result.push({
+      jobId: ov.job_id,
+      name: ov.name,
+      category: ov.category,
+      tags: JSON.parse(ov.tags || '[]'),
+      enabled: ov.enabled === 1,
+      isDefault: false,
+    });
+  }
+
+  return result;
+}
+
+/** List all cron jobs from ~/.hermes/cron/jobs.json */
+export function listHermesCronJobs(): {
+  id: string; name: string; schedule: string;
+  outputCount: number; registered: boolean;
+}[] {
+  if (!existsSync(HERMES_CRON_JOBS_PATH)) return [];
+  try {
+    const raw = readFileSync(HERMES_CRON_JOBS_PATH, 'utf-8');
+    const data = JSON.parse(raw);
+    return (data.jobs || []).map((job: any) => {
+      const outputDir = join(HERMES_CRON_OUTPUT_DIR, job.id);
+      let outputCount = 0;
+      try {
+        outputCount = readdirSync(outputDir).filter((f: string) => f.endsWith('.md')).length;
+      } catch { /* dir may not exist */ }
+      return {
+        id: job.id,
+        name: job.name || 'Unnamed',
+        schedule: job.schedule || '',
+        outputCount,
+        registered: !!HERMES_JOB_PROFILES[job.id],
+      };
+    });
+  } catch {
+    return [];
+  }
+}
 
 export interface ParsedHermesStory {
   externalId: string;
@@ -41,6 +184,7 @@ export interface ParsedHermesStory {
 }
 
 export function initHermesImportTables() {
+  initHermesJobProfilesTable();
   const db = getDb();
   db.exec(`
     CREATE TABLE IF NOT EXISTS hermes_writing_imports (

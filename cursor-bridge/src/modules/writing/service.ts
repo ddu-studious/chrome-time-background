@@ -216,6 +216,38 @@ export async function* streamExpand(
   yield* client.streamComplete(SYSTEM_PROMPT_EXPAND, text, compOpts);
 }
 
+const SYSTEM_PROMPT_KNOWLEDGE_EXTRACT = `你是一个历史知识实体提取助手。分析用户提供的历史故事，提取其中的知识实体和关系。
+
+返回纯JSON格式（不要markdown代码块），包含：
+{
+  "entities": [
+    { "entityType": "dynasty|person|event|place|concept", "name": "实体名", "aliases": ["别名"], "description": "一句话简介", "timeRange": "时间范围", "relatedEntities": ["关联实体名"] }
+  ],
+  "relations": [
+    { "fromEntity": "实体名", "toEntity": "实体名", "relationType": "关系类型", "description": "关系描述" }
+  ]
+}
+
+要求：
+- entityType 必须是 dynasty(朝代)、person(人物)、event(事件)、place(地点)、concept(概念) 之一
+- 尽可能完整地提取所有出现的实体
+- relations 用于描述实体间的关系（如：某人 → 某朝 → 统治）
+- 只输出JSON，不要解释`;
+
+export async function* streamKnowledgeExtract(
+  text: string,
+  opts?: { model?: string; temperature?: number },
+): AsyncGenerator<CompletionChunk> {
+  const client = getQwenClient();
+  const compOpts: CompletionOptions = {
+    model: opts?.model || _config.model,
+    temperature: opts?.temperature ?? 0.2,
+    maxTokens: 4000,
+  };
+
+  yield* client.streamComplete(SYSTEM_PROMPT_KNOWLEDGE_EXTRACT, text, compOpts);
+}
+
 export function initWritingTables() {
   const db = getDb();
   db.exec(`

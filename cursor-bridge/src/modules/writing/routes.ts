@@ -5,6 +5,7 @@ import {
   streamRewrite,
   streamSummarize,
   streamExpand,
+  streamKnowledgeExtract,
   getWritingConfig,
   updateWritingConfig,
   getWritingStats,
@@ -26,6 +27,18 @@ import {
   getSystemPromptWithRAG,
 } from './rag-service.js';
 import {
+  initKnowledgeIndexTables,
+  saveEntities,
+  getKnowledgeStats,
+  searchEntities,
+  getEntityRelations,
+  listEntitiesByType,
+  getGraphData,
+  isStoryIndexed,
+  type KnowledgeEntity,
+  type KnowledgeRelation,
+} from './knowledge-index.js';
+import {
   scanHermesCronOutputs,
   listPendingHermesImports,
   listHermesImportsNotInBlog,
@@ -35,6 +48,11 @@ import {
   repairHermesImportTitles,
   getHermesTitleMap,
   HERMES_JOB_PROFILES,
+  listAllHermesJobProfiles,
+  addHermesJobProfile,
+  removeHermesJobProfile,
+  listHermesCronJobs,
+  type HermesJobProfile,
 } from './hermes-import.js';
 
 let fastifyLogger: any = null;
@@ -120,6 +138,7 @@ async function handleStreamRoute(
 
 export async function writingRoutes(fastify: FastifyInstance) {
   fastifyLogger = fastify.log;
+  initKnowledgeIndexTables();
 
   fastify.post('/writing/complete', async (request, reply) => {
     log.info('POST /writing/complete', { qwenConfigured: isQwenConfigured() });
@@ -225,6 +244,32 @@ export async function writingRoutes(fastify: FastifyInstance) {
     const config = getWritingConfig();
     const generator = streamExpand(text, { model, temperature });
     await handleStreamRoute(reply.raw, generator, 'expand', model || config.model, log);
+    return;
+  });
+
+  fastify.post('/writing/knowledge-extract', async (request, reply) => {
+    log.info('POST /writing/knowledge-extract');
+    if (!isQwenConfigured()) {
+      return reply.code(503).send({
+        error: 'Writing assistant not configured',
+        message: 'Set DASHSCOPE_API_KEY in cursor-bridge/.env',
+      });
+    }
+
+    const { text, model, temperature } = request.body as {
+      text: string;
+      model?: string;
+      temperature?: number;
+    };
+    if (!text) {
+      return reply.code(400).send({ error: 'text field is required' });
+    }
+
+    log.debug('知识提取请求', { textLen: text.length });
+    reply.hijack();
+    const config = getWritingConfig();
+    const generator = streamKnowledgeExtract(text, { model, temperature });
+    await handleStreamRoute(reply.raw, generator, 'knowledge-extract', model || config.model, log);
     return;
   });
 
@@ -428,5 +473,108 @@ export async function writingRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: 'ids array is required' });
     }
     return ackHermesImports(ids);
+  });
+
+  // ─── Hermes Job Profiles CRUD ───
+
+  fastify.get('/writing/hermes/profiles', async () => {
+    const profiles = listAllHermesJobProfiles();
+    return { profiles };
+  });
+
+  fastify.get('/writing/hermes/cron-jobs', async () => {
+    const jobs = listHermesCronJobs();
+    return { jobs };
+  });
+
+  fastify.post('/writing/hermes/profiles', async (request, reply) => {
+    const { jobId, name, category, tags } = request.body as {
+      jobId: string; name: string; category: string; tags?: string[];
+    };
+    if (!jobId || !name || !category) {
+      return reply.code(400).send({ error: 'jobId, name, and category are required' });
+    }
+    const profile: HermesJobProfile = {
+      name,
+      category,
+      tags: tags || ['hermes', 'cron'],
+    };
+    const result = addHermesJobProfile(jobId, profile);
+    log.info('Hermes profile added', { jobId, name, category });
+    return result;
+  });
+
+  fastify.delete('/writing/hermes/profiles/:jobId', async (request) => {
+    const { jobId } = request.params as { jobId: string };
+    const result = removeHermesJobProfile(jobId);
+    log.info('Hermes profile removed', { jobId });
+    return result;
+  });
+
+  // ─── Knowledge Index (LLM-wiki) ───
+
+  fastify.get('/writing/knowledge/stats', async () => {
+    return getKnowledgeStats();
+  });
+
+  fastify.get('/writing/knowledge/search', async (request) => {
+    const { q, type, category, limit } = request.query as {
+      q: string; type?: string; category?: string; limit?: string;
+    };
+    if (!q) return { entities: [] };
+    const entities = searchEntities(q, {
+      type, category, limit: limit ? parseInt(limit) : undefined,
+    });
+    return { entities };
+  });
+
+  fastify.get('/writing/knowledge/entities', async (request) => {
+    const { type, category, limit } = request.query as {
+      type: string; category?: string; limit?: string;
+    };
+    if (!type) return { entities: [] };
+    const entities = listEntitiesByType(type, {
+      category, limit: limit ? parseInt(limit) : undefined,
+    });
+    return { entities };
+  });
+
+  fastify.get('/writing/knowledge/relations', async (request) => {
+    const { entity } = request.query as { entity: string };
+    if (!entity) return { relations: [] };
+    return { relations: getEntityRelations(entity) };
+  });
+
+  fastify.get('/writing/knowledge/graph', async (request) => {
+    const { category, limit } = request.query as { category?: string; limit?: string };
+    return getGraphData({
+      category, limit: limit ? parseInt(limit) : undefined,
+    });
+  });
+
+  fastify.post('/writing/knowledge/index', async (request, reply) => {
+    const body = request.body as {
+      storyExternalId: string;
+      entities: KnowledgeEntity[];
+      relations?: KnowledgeRelation[];
+    };
+    if (!body.storyExternalId || !Array.isArray(body.entities)) {
+      return reply.code(400).send({ error: 'storyExternalId and entities are required' });
+    }
+    const result = saveEntities(
+      body.storyExternalId,
+      body.entities,
+      body.relations || [],
+    );
+    log.info('Knowledge index saved', {
+      storyExternalId: body.storyExternalId,
+      ...result,
+    });
+    return { success: true, ...result };
+  });
+
+  fastify.get('/writing/knowledge/indexed', async (request) => {
+    const { externalId } = request.query as { externalId: string };
+    return { indexed: externalId ? isStoryIndexed(externalId) : false };
   });
 }

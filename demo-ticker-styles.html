@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>热榜浮层样式方案 - 选择</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: #0d0d14;
+    background-image: 
+        radial-gradient(ellipse at 20% 50%, rgba(30,60,80,.15) 0%, transparent 70%),
+        radial-gradient(ellipse at 80% 20%, rgba(60,30,80,.1) 0%, transparent 70%);
+    color: #e0e0e0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+    min-height: 100vh;
+    padding: 40px 0;
+}
+.page-header {
+    text-align: center;
+    padding: 0 20px 40px;
+}
+.page-header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #d4a843, #f0d78c);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+}
+.page-header p { color: #888; font-size: 14px; }
+
+.demo-section {
+    max-width: 960px;
+    margin: 0 auto 60px;
+    padding: 0 24px;
+}
+.demo-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+.demo-label h2 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #e0e0e0;
+}
+.demo-label .badge {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-weight: 500;
+}
+.demo-desc {
+    font-size: 13px;
+    color: #888;
+    margin-bottom: 16px;
+    line-height: 1.6;
+}
+
+/* mock data */
+.mock-bg {
+    position: relative;
+    border-radius: 16px;
+    overflow: hidden;
+    background: rgba(255,255,255,.02);
+    border: 1px solid rgba(255,255,255,.06);
+}
+
+/* ===== 方案 A: 紧凑侧边栏 ===== */
+.style-a {
+    display: flex;
+    width: 100%;
+    height: 520px;
+}
+.style-a .sa-sidebar {
+    width: 180px;
+    flex-shrink: 0;
+    background: rgba(15,15,25,.95);
+    border-right: 1px solid rgba(255,255,255,.06);
+    display: flex;
+    flex-direction: column;
+    padding: 16px 0;
+    overflow-y: auto;
+}
+.style-a .sa-tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 16px;
+    font-size: 13px;
+    color: #999;
+    cursor: pointer;
+    transition: all .15s;
+    border: none;
+    background: none;
+    text-align: left;
+    width: 100%;
+    white-space: nowrap;
+}
+.style-a .sa-tab:hover { color: #ddd; background: rgba(255,255,255,.04); }
+.style-a .sa-tab.active {
+    color: #f0d78c;
+    background: rgba(212,168,67,.08);
+    border-right: 2px solid #d4a843;
+}
+.style-a .sa-tab .count {
+    margin-left: auto;
+    font-size: 11px;
+    color: #666;
+    font-variant-numeric: tabular-nums;
+}
+.style-a .sa-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+.style-a .sa-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+    flex-shrink: 0;
+}
+.style-a .sa-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #e0e0e0;
+}
+.style-a .sa-close {
+    background: none;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 4px 8px;
+    border-radius: 6px;
+}
+.style-a .sa-close:hover { background: rgba(255,255,255,.08); color: #fff; }
+.style-a .sa-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+}
+.style-a .sa-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 20px;
+    cursor: pointer;
+    transition: background .12s;
+}
+.style-a .sa-item:hover { background: rgba(255,255,255,.03); }
+.style-a .sa-rank {
+    width: 22px;
+    height: 22px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+    color: #888;
+    background: rgba(255,255,255,.04);
+}
+.style-a .sa-rank.top { background: rgba(212,168,67,.15); color: #d4a843; }
+.style-a .sa-item-title {
+    flex: 1;
+    font-size: 13px;
+    color: #ccc;
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.style-a .sa-item:hover .sa-item-title { color: #fff; }
+.style-a .sa-metric {
+    font-size: 11px;
+    color: #777;
+    flex-shrink: 0;
+}
+.style-a .sa-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity .15s;
+}
+.style-a .sa-item:hover .sa-actions { opacity: 1; }
+.style-a .sa-act-btn {
+    background: rgba(255,255,255,.06);
+    border: none;
+    color: #aaa;
+    padding: 3px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    cursor: pointer;
+}
+.style-a .sa-act-btn:hover { background: rgba(255,255,255,.15); color: #fff; }
+
+/* ===== 方案 B: 瀑布流卡片（紧凑版） ===== */
+.style-b {
+    display: flex;
+    flex-direction: column;
+    height: 520px;
+}
+.style-b .sb-header {
+    display: flex;
+    align-items: center;
+    padding: 14px 20px;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+    flex-shrink: 0;
+    gap: 12px;
+}
+.style-b .sb-tabs {
+    display: flex;
+    gap: 4px;
+    flex: 1;
+    flex-wrap: wrap;
+}
+.style-b .sb-tab {
+    background: rgba(255,255,255,.05);
+    border: none;
+    color: #999;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all .15s;
+    white-space: nowrap;
+}
+.style-b .sb-tab:hover { background: rgba(255,255,255,.1); color: #ddd; }
+.style-b .sb-tab.active {
+    background: linear-gradient(135deg, rgba(212,168,67,.2), rgba(180,140,50,.15));
+    color: #f0d78c;
+    border: 1px solid rgba(212,168,67,.2);
+}
+.style-b .sb-close {
+    background: none; border: none; color: #888; cursor: pointer;
+    font-size: 14px; padding: 4px 8px; border-radius: 6px; flex-shrink: 0;
+}
+.style-b .sb-close:hover { background: rgba(255,255,255,.08); color: #fff; }
+.style-b .sb-grid {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    align-content: start;
+}
+.style-b .sb-card {
+    background: rgba(255,255,255,.03);
+    border: 1px solid rgba(255,255,255,.05);
+    border-radius: 10px;
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: all .2s;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.style-b .sb-card:hover {
+    background: rgba(255,255,255,.06);
+    border-color: rgba(212,168,67,.15);
+    transform: translateY(-1px);
+}
+.style-b .sb-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.style-b .sb-card-source { font-size: 11px; color: #888; }
+.style-b .sb-card-hot { font-size: 11px; color: #d4a843; font-weight: 500; }
+.style-b .sb-card-title {
+    font-size: 13px;
+    color: #ddd;
+    font-weight: 500;
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.style-b .sb-card:hover .sb-card-title { color: #fff; }
+.style-b .sb-card-foot {
+    display: flex;
+    gap: 4px;
+    margin-top: 2px;
+}
+.style-b .sb-card-tag {
+    font-size: 10px;
+    color: #777;
+    padding: 2px 6px;
+    background: rgba(255,255,255,.04);
+    border-radius: 8px;
+}
+
+/* ===== 方案 C: 极简列表（聚焦阅读） ===== */
+.style-c {
+    display: flex;
+    flex-direction: column;
+    height: 520px;
+}
+.style-c .sc-header {
+    display: flex;
+    align-items: center;
+    padding: 16px 24px;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+    flex-shrink: 0;
+}
+.style-c .sc-header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex: 1;
+}
+.style-c .sc-logo {
+    font-size: 16px;
+    font-weight: 700;
+    color: #e0e0e0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.style-c .sc-logo i { color: #d4a843; }
+.style-c .sc-search {
+    display: flex;
+    align-items: center;
+    background: rgba(255,255,255,.05);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 8px;
+    padding: 0 10px;
+    width: 200px;
+    transition: all .2s;
+}
+.style-c .sc-search:focus-within {
+    border-color: rgba(212,168,67,.3);
+    background: rgba(255,255,255,.07);
+}
+.style-c .sc-search i { color: #666; font-size: 12px; }
+.style-c .sc-search input {
+    flex: 1; border: none; background: none; padding: 7px 8px;
+    font-size: 12px; color: #ccc; outline: none; font-family: inherit;
+}
+.style-c .sc-search input::placeholder { color: #555; }
+.style-c .sc-close {
+    background: none; border: none; color: #888; cursor: pointer;
+    font-size: 14px; padding: 4px 8px; border-radius: 6px;
+}
+.style-c .sc-close:hover { background: rgba(255,255,255,.08); color: #fff; }
+.style-c .sc-tabs {
+    display: flex;
+    gap: 0;
+    padding: 0 24px;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+    flex-shrink: 0;
+}
+.style-c .sc-tab {
+    border: none;
+    background: none;
+    padding: 10px 16px;
+    font-size: 13px;
+    color: #888;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all .15s;
+}
+.style-c .sc-tab:hover { color: #bbb; }
+.style-c .sc-tab.active { color: #d4a843; border-bottom-color: #d4a843; }
+.style-c .sc-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+}
+.style-c .sc-group {
+    padding: 12px 24px 4px;
+}
+.style-c .sc-group-label {
+    font-size: 11px;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.style-c .sc-row {
+    display: flex;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255,255,255,.03);
+    cursor: pointer;
+    gap: 10px;
+    transition: all .1s;
+}
+.style-c .sc-row:hover { margin: 0 -8px; padding-left: 8px; padding-right: 8px; background: rgba(255,255,255,.03); border-radius: 6px; }
+.style-c .sc-row:last-child { border-bottom: none; }
+.style-c .sc-num {
+    width: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #555;
+    text-align: center;
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+}
+.style-c .sc-num.hot { color: #d4a843; }
+.style-c .sc-row-title {
+    flex: 1;
+    font-size: 13px;
+    color: #ccc;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.style-c .sc-row:hover .sc-row-title { color: #fff; }
+.style-c .sc-row-heat {
+    font-size: 11px;
+    color: #666;
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+}
+.style-c .sc-row-icon {
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity .15s;
+    color: #888;
+    font-size: 11px;
+}
+.style-c .sc-row:hover .sc-row-icon { opacity: 1; }
+
+/* ===== 方案 D: 杂志双栏布局 ===== */
+.style-d {
+    display: flex;
+    height: 520px;
+}
+.style-d .sd-left {
+    width: 340px;
+    flex-shrink: 0;
+    background: rgba(15,15,25,.6);
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid rgba(255,255,255,.06);
+}
+.style-d .sd-hero {
+    padding: 24px;
+    flex-shrink: 0;
+}
+.style-d .sd-hero-source {
+    font-size: 11px;
+    color: #d4a843;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.style-d .sd-hero-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #f0f0f0;
+    line-height: 1.45;
+    margin-bottom: 10px;
+}
+.style-d .sd-hero-desc {
+    font-size: 13px;
+    color: #999;
+    line-height: 1.55;
+    margin-bottom: 12px;
+}
+.style-d .sd-hero-meta {
+    display: flex;
+    gap: 12px;
+    font-size: 12px;
+    color: #777;
+}
+.style-d .sd-hero-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+}
+.style-d .sd-hero-btn {
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.1);
+    color: #bbb;
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all .15s;
+}
+.style-d .sd-hero-btn:hover { background: rgba(255,255,255,.12); color: #fff; }
+.style-d .sd-hero-btn.primary {
+    background: rgba(212,168,67,.15);
+    border-color: rgba(212,168,67,.2);
+    color: #f0d78c;
+}
+.style-d .sd-trending {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 24px 16px;
+}
+.style-d .sd-trending-title {
+    font-size: 11px;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    margin-bottom: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,.06);
+}
+.style-d .sd-trending-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    cursor: pointer;
+}
+.style-d .sd-trending-item:hover .sd-trending-text { color: #fff; }
+.style-d .sd-trending-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: #555;
+    flex-shrink: 0;
+}
+.style-d .sd-trending-text {
+    flex: 1;
+    font-size: 12px;
+    color: #aaa;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: color .12s;
+}
+.style-d .sd-right {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+.style-d .sd-right-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+    flex-shrink: 0;
+}
+.style-d .sd-right-tabs {
+    display: flex;
+    gap: 4px;
+}
+.style-d .sd-right-tab {
+    background: rgba(255,255,255,.05);
+    border: none;
+    color: #999;
+    padding: 5px 12px;
+    border-radius: 16px;
+    font-size: 11px;
+    cursor: pointer;
+}
+.style-d .sd-right-tab.active {
+    background: rgba(255,255,255,.1);
+    color: #e0e0e0;
+}
+.style-d .sd-close {
+    background: none; border: none; color: #888; cursor: pointer;
+    font-size: 14px; padding: 4px 8px; border-radius: 6px;
+}
+.style-d .sd-close:hover { background: rgba(255,255,255,.08); color: #fff; }
+.style-d .sd-right-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    align-content: start;
+}
+.style-d .sd-mini-card {
+    padding: 10px 12px;
+    background: rgba(255,255,255,.02);
+    border: 1px solid rgba(255,255,255,.04);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all .15s;
+}
+.style-d .sd-mini-card:hover {
+    background: rgba(255,255,255,.05);
+    border-color: rgba(255,255,255,.1);
+}
+.style-d .sd-mini-source {
+    font-size: 10px;
+    color: #777;
+    margin-bottom: 4px;
+}
+.style-d .sd-mini-title {
+    font-size: 12px;
+    color: #ccc;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.style-d .sd-mini-card:hover .sd-mini-title { color: #fff; }
+.style-d .sd-mini-heat {
+    font-size: 10px;
+    color: #666;
+    margin-top: 4px;
+}
+
+/* scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.2); }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+    <h1>热榜浮层样式方案</h1>
+    <p>请选择一套整体风格，选中后实现到扩展中。所有方案均为深色毛玻璃浮层，贴合扩展整体设计语言。</p>
+</div>
+
+<!-- ===== 方案 A ===== -->
+<div class="demo-section">
+    <div class="demo-label">
+        <h2>方案 A：侧边导航 + 列表</h2>
+        <span class="badge" style="background:rgba(76,175,80,.15);color:#66bb6a">推荐</span>
+    </div>
+    <p class="demo-desc">左侧数据源导航栏 + 右侧列表流。类似 RSS 阅读器的经典布局，数据源切换直觉，列表信息密度高。适合快速扫描。</p>
+    <div class="mock-bg">
+        <div class="style-a">
+            <div class="sa-sidebar">
+                <button class="sa-tab active">🔥 全部 <span class="count">59</span></button>
+                <button class="sa-tab">🐙 GitHub <span class="count">12</span></button>
+                <button class="sa-tab">🍊 Hacker News <span class="count">8</span></button>
+                <button class="sa-tab">🔴 Reddit <span class="count">8</span></button>
+                <button class="sa-tab">📰 DEV.to <span class="count">8</span></button>
+                <button class="sa-tab">🐦 微博热搜 <span class="count">8</span></button>
+                <button class="sa-tab">🐼 知乎热榜 <span class="count">8</span></button>
+                <button class="sa-tab">📺 B站热榜 <span class="count">8</span></button>
+            </div>
+            <div class="sa-main">
+                <div class="sa-header">
+                    <span class="sa-title">全部热榜 · 59 条</span>
+                    <button class="sa-close"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="sa-list">
+                    <div class="sa-item"><span class="sa-rank top">1</span><span class="sa-item-title">addyosmani/agent-skills — Production-grade engineering skills for AI coding agents</span><span class="sa-metric">53,216</span><div class="sa-actions"><button class="sa-act-btn"><i class="fas fa-external-link-alt"></i></button><button class="sa-act-btn"><i class="fas fa-bookmark"></i></button></div></div>
+                    <div class="sa-item"><span class="sa-rank top">2</span><span class="sa-item-title">obra/superpowers — An agentic skills framework & software development methodology</span><span class="sa-metric">224,205</span><div class="sa-actions"><button class="sa-act-btn"><i class="fas fa-external-link-alt"></i></button><button class="sa-act-btn"><i class="fas fa-bookmark"></i></button></div></div>
+                    <div class="sa-item"><span class="sa-rank top">3</span><span class="sa-item-title">x1xhlol/system-prompts-and-models-of-ai-tools</span><span class="sa-metric">139,694</span><div class="sa-actions"><button class="sa-act-btn"><i class="fas fa-external-link-alt"></i></button><button class="sa-act-btn"><i class="fas fa-bookmark"></i></button></div></div>
+                    <div class="sa-item"><span class="sa-rank">4</span><span class="sa-item-title">钉钉新CEO陈宇森称「未来的软件是日抛式的」，如何看待此观点？</span><span class="sa-metric">174万</span><div class="sa-actions"><button class="sa-act-btn"><i class="fas fa-external-link-alt"></i></button><button class="sa-act-btn"><i class="fas fa-bookmark"></i></button></div></div>
+                    <div class="sa-item"><span class="sa-rank">5</span><span class="sa-item-title">mvanhorn/last30days-skill — AI agent skill that researches any topic</span><span class="sa-metric">39,443</span><div class="sa-actions"><button class="sa-act-btn"><i class="fas fa-external-link-alt"></i></button><button class="sa-act-btn"><i class="fas fa-bookmark"></i></button></div></div>
+                    <div class="sa-item"><span class="sa-rank">6</span><span class="sa-item-title">soxoj/maigret — Collect a dossier on a person by username from 3000+ sites</span><span class="sa-metric">32,289</span><div class="sa-actions"><button class="sa-act-btn"><i class="fas fa-external-link-alt"></i></button><button class="sa-act-btn"><i class="fas fa-bookmark"></i></button></div></div>
+                    <div class="sa-item"><span class="sa-rank">7</span><span class="sa-item-title">phuryn/pm-skills — PM Skills Marketplace: 100+ agentic skills</span><span class="sa-metric">15,743</span><div class="sa-actions"><button class="sa-act-btn"><i class="fas fa-external-link-alt"></i></button><button class="sa-act-btn"><i class="fas fa-bookmark"></i></button></div></div>
+                    <div class="sa-item"><span class="sa-rank">8</span><span class="sa-item-title">refactoringhq/tolaria — Desktop app to manage markdown knowledge bases</span><span class="sa-metric">15,170</span><div class="sa-actions"><button class="sa-act-btn"><i class="fas fa-external-link-alt"></i></button><button class="sa-act-btn"><i class="fas fa-bookmark"></i></button></div></div>
+                    <div class="sa-item"><span class="sa-rank">9</span><span class="sa-item-title">chopratejas/headroom — Compress tool outputs, logs, files, and RAG chunks before they reach the LLM</span><span class="sa-metric">22,416</span><div class="sa-actions"><button class="sa-act-btn"><i class="fas fa-external-link-alt"></i></button><button class="sa-act-btn"><i class="fas fa-bookmark"></i></button></div></div>
+                    <div class="sa-item"><span class="sa-rank">10</span><span class="sa-item-title">lfnovo/open-notebook — An Open Source implementation of Notebook LM</span><span class="sa-metric">29,116</span><div class="sa-actions"><button class="sa-act-btn"><i class="fas fa-external-link-alt"></i></button><button class="sa-act-btn"><i class="fas fa-bookmark"></i></button></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== 方案 B ===== -->
+<div class="demo-section">
+    <div class="demo-label">
+        <h2>方案 B：胶囊标签 + 网格卡片</h2>
+        <span class="badge" style="background:rgba(167,139,250,.15);color:#c4b5fd">现有改进</span>
+    </div>
+    <p class="demo-desc">顶部胶囊标签切换 + 三列网格卡片。在现有样式基础上优化，卡片更紧凑，去掉冗余操作按钮，突出标题和热度。</p>
+    <div class="mock-bg">
+        <div class="style-b">
+            <div class="sb-header">
+                <div class="sb-tabs">
+                    <button class="sb-tab active">全部 (59)</button>
+                    <button class="sb-tab">🐙 GitHub (12)</button>
+                    <button class="sb-tab">🍊 HN (8)</button>
+                    <button class="sb-tab">🔴 Reddit (8)</button>
+                    <button class="sb-tab">📰 DEV.to (8)</button>
+                    <button class="sb-tab">🐦 微博 (8)</button>
+                    <button class="sb-tab">🐼 知乎 (8)</button>
+                    <button class="sb-tab">📺 B站 (8)</button>
+                </div>
+                <button class="sb-close"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="sb-grid">
+                <div class="sb-card"><div class="sb-card-top"><span class="sb-card-source">🐙 GitHub</span><span class="sb-card-hot">53,216 ★</span></div><div class="sb-card-title">addyosmani/agent-skills — Production-grade engineering skills for AI coding agents</div><div class="sb-card-foot"><span class="sb-card-tag">AI</span><span class="sb-card-tag">Skills</span></div></div>
+                <div class="sb-card"><div class="sb-card-top"><span class="sb-card-source">🐙 GitHub</span><span class="sb-card-hot">224,205 ★</span></div><div class="sb-card-title">obra/superpowers — An agentic skills framework & software development methodology</div><div class="sb-card-foot"><span class="sb-card-tag">Framework</span></div></div>
+                <div class="sb-card"><div class="sb-card-top"><span class="sb-card-source">🐙 GitHub</span><span class="sb-card-hot">139,694 ★</span></div><div class="sb-card-title">x1xhlol/system-prompts-and-models-of-ai-tools</div><div class="sb-card-foot"><span class="sb-card-tag">AI</span><span class="sb-card-tag">Prompts</span></div></div>
+                <div class="sb-card"><div class="sb-card-top"><span class="sb-card-source">🐼 知乎</span><span class="sb-card-hot">174万</span></div><div class="sb-card-title">钉钉新CEO陈宇森称「未来的软件是日抛式的」，如何看待此观点？</div><div class="sb-card-foot"><span class="sb-card-tag">科技</span></div></div>
+                <div class="sb-card"><div class="sb-card-top"><span class="sb-card-source">🐙 GitHub</span><span class="sb-card-hot">39,443 ★</span></div><div class="sb-card-title">mvanhorn/last30days-skill — AI agent skill that researches any topic</div><div class="sb-card-foot"><span class="sb-card-tag">Research</span></div></div>
+                <div class="sb-card"><div class="sb-card-top"><span class="sb-card-source">🐙 GitHub</span><span class="sb-card-hot">32,289 ★</span></div><div class="sb-card-title">soxoj/maigret — Collect a dossier on a person by username from 3000+ sites</div><div class="sb-card-foot"><span class="sb-card-tag">OSINT</span></div></div>
+                <div class="sb-card"><div class="sb-card-top"><span class="sb-card-source">🍊 HN</span><span class="sb-card-hot">443</span></div><div class="sb-card-title">Nextcloud Hub 26 Spring: Built-in AI assistant with local models</div></div>
+                <div class="sb-card"><div class="sb-card-top"><span class="sb-card-source">🔴 Reddit</span><span class="sb-card-hot">♥102</span></div><div class="sb-card-title">Two Devs and a Copilot Created ClassifierAI: A Prototype Chrome Extension</div></div>
+                <div class="sb-card"><div class="sb-card-top"><span class="sb-card-source">📺 B站</span><span class="sb-card-hot">447万</span></div><div class="sb-card-title">一头蓝鲸正面全力撞向一艘航母，结果会发生什么呢？</div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== 方案 C ===== -->
+<div class="demo-section">
+    <div class="demo-label">
+        <h2>方案 C：极简列表 + 分组标签</h2>
+        <span class="badge" style="background:rgba(96,165,250,.15);color:#93c5fd">简洁</span>
+    </div>
+    <p class="demo-desc">底部标签切换 + 编号列表。类似搜索引擎的热搜样式，信息密度最高，适合快速浏览大量条目。顶部带搜索栏可筛选。</p>
+    <div class="mock-bg">
+        <div class="style-c">
+            <div class="sc-header">
+                <div class="sc-header-left">
+                    <div class="sc-logo"><i class="fas fa-fire"></i> 热榜聚合</div>
+                    <div class="sc-search">
+                        <i class="fas fa-search"></i>
+                        <input placeholder="搜索热点…">
+                    </div>
+                </div>
+                <button class="sc-close"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="sc-tabs">
+                <button class="sc-tab active">全部</button>
+                <button class="sc-tab">🐙 GitHub</button>
+                <button class="sc-tab">🍊 HN</button>
+                <button class="sc-tab">🔴 Reddit</button>
+                <button class="sc-tab">📰 DEV.to</button>
+                <button class="sc-tab">🐦 微博</button>
+                <button class="sc-tab">🐼 知乎</button>
+                <button class="sc-tab">📺 B站</button>
+            </div>
+            <div class="sc-body">
+                <div class="sc-group">
+                    <div class="sc-group-label">🐙 GitHub Trending</div>
+                    <div class="sc-row"><span class="sc-num hot">1</span><span class="sc-row-title">obra/superpowers — An agentic skills framework & software development methodology</span><span class="sc-row-heat">224,205</span><span class="sc-row-icon"><i class="fas fa-external-link-alt"></i></span></div>
+                    <div class="sc-row"><span class="sc-num hot">2</span><span class="sc-row-title">x1xhlol/system-prompts-and-models-of-ai-tools — FULL Augment Code, Claude Code, Cluely...</span><span class="sc-row-heat">139,694</span><span class="sc-row-icon"><i class="fas fa-external-link-alt"></i></span></div>
+                    <div class="sc-row"><span class="sc-num hot">3</span><span class="sc-row-title">addyosmani/agent-skills — Production-grade engineering skills for AI coding agents</span><span class="sc-row-heat">53,216</span><span class="sc-row-icon"><i class="fas fa-external-link-alt"></i></span></div>
+                    <div class="sc-row"><span class="sc-num">4</span><span class="sc-row-title">mvanhorn/last30days-skill — AI agent skill that researches any topic</span><span class="sc-row-heat">39,443</span><span class="sc-row-icon"><i class="fas fa-external-link-alt"></i></span></div>
+                    <div class="sc-row"><span class="sc-num">5</span><span class="sc-row-title">soxoj/maigret — Collect a dossier on a person by username from 3000+ sites</span><span class="sc-row-heat">32,289</span><span class="sc-row-icon"><i class="fas fa-external-link-alt"></i></span></div>
+                </div>
+                <div class="sc-group">
+                    <div class="sc-group-label">🐼 知乎热榜</div>
+                    <div class="sc-row"><span class="sc-num hot">1</span><span class="sc-row-title">钉钉新CEO陈宇森称「未来的软件是日抛式的」，如何看待此观点？</span><span class="sc-row-heat">174万</span><span class="sc-row-icon"><i class="fas fa-external-link-alt"></i></span></div>
+                    <div class="sc-row"><span class="sc-num">2</span><span class="sc-row-title">如何评价2026年高考数学全国卷？</span><span class="sc-row-heat">95万</span><span class="sc-row-icon"><i class="fas fa-external-link-alt"></i></span></div>
+                    <div class="sc-row"><span class="sc-num">3</span><span class="sc-row-title">千问高考志愿大模型权威发布</span><span class="sc-row-heat">82万</span><span class="sc-row-icon"><i class="fas fa-external-link-alt"></i></span></div>
+                </div>
+                <div class="sc-group">
+                    <div class="sc-group-label">📺 B站热榜</div>
+                    <div class="sc-row"><span class="sc-num hot">1</span><span class="sc-row-title">一头蓝鲸正面全力撞向一艘航母，结果会发生什么呢？</span><span class="sc-row-heat">447万</span><span class="sc-row-icon"><i class="fas fa-external-link-alt"></i></span></div>
+                    <div class="sc-row"><span class="sc-num">2</span><span class="sc-row-title">新三国up锐评老三国01：这才叫真正的三国！</span><span class="sc-row-heat">243万</span><span class="sc-row-icon"><i class="fas fa-external-link-alt"></i></span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== 方案 D ===== -->
+<div class="demo-section">
+    <div class="demo-label">
+        <h2>方案 D：杂志双栏（焦点 + 速览）</h2>
+        <span class="badge" style="background:rgba(251,191,36,.15);color:#fbbf24">沉浸</span>
+    </div>
+    <p class="demo-desc">左侧大焦点卡片展示当前热点详情 + 趋势列表，右侧双列缩略卡片速览其余内容。适合深度阅读场景。</p>
+    <div class="mock-bg">
+        <div class="style-d">
+            <div class="sd-left">
+                <div class="sd-hero">
+                    <div class="sd-hero-source"><i class="fas fa-fire" style="color:#d4a843"></i> GitHub Trending · #1</div>
+                    <div class="sd-hero-title">obra/superpowers — An agentic skills framework & software development methodology that works.</div>
+                    <div class="sd-hero-desc">A production-grade framework for building AI agent skills with structured methodology. Includes 100+ built-in skills for code review, debugging, deployment, and more.</div>
+                    <div class="sd-hero-meta">
+                        <span>⭐ 224,205</span>
+                        <span>🔀 2,340 forks</span>
+                        <span>TypeScript</span>
+                    </div>
+                    <div class="sd-hero-actions">
+                        <button class="sd-hero-btn primary"><i class="fas fa-external-link-alt"></i> 查看</button>
+                        <button class="sd-hero-btn"><i class="fas fa-bookmark"></i> 收藏</button>
+                        <button class="sd-hero-btn"><i class="fas fa-robot"></i> Hermes</button>
+                    </div>
+                </div>
+                <div class="sd-trending">
+                    <div class="sd-trending-title">实时趋势</div>
+                    <div class="sd-trending-item"><span class="sd-trending-dot" style="background:#d4a843"></span><span class="sd-trending-text">addyosmani/agent-skills — 53,216 ★</span></div>
+                    <div class="sd-trending-item"><span class="sd-trending-dot" style="background:#d4a843"></span><span class="sd-trending-text">x1xhlol/system-prompts-and-models-of-ai-tools — 139,694 ★</span></div>
+                    <div class="sd-trending-item"><span class="sd-trending-dot"></span><span class="sd-trending-text">mvanhorn/last30days-skill — 39,443 ★</span></div>
+                    <div class="sd-trending-item"><span class="sd-trending-dot"></span><span class="sd-trending-text">soxoj/maigret — 32,289 ★</span></div>
+                    <div class="sd-trending-item"><span class="sd-trending-dot"></span><span class="sd-trending-text">chopratejas/headroom — 22,416 ★</span></div>
+                    <div class="sd-trending-item"><span class="sd-trending-dot"></span><span class="sd-trending-text">phuryn/pm-skills — 15,743 ★</span></div>
+                </div>
+            </div>
+            <div class="sd-right">
+                <div class="sd-right-header">
+                    <div class="sd-right-tabs">
+                        <button class="sd-right-tab active">HN</button>
+                        <button class="sd-right-tab">Reddit</button>
+                        <button class="sd-right-tab">DEV.to</button>
+                        <button class="sd-right-tab">微博</button>
+                        <button class="sd-right-tab">知乎</button>
+                        <button class="sd-right-tab">B站</button>
+                    </div>
+                    <button class="sd-close"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="sd-right-body">
+                    <div class="sd-mini-card"><div class="sd-mini-source">🍊 Hacker News</div><div class="sd-mini-title">Nextcloud Hub 26 Spring: Built-in AI assistant with local models</div><div class="sd-mini-heat">▲ 443</div></div>
+                    <div class="sd-mini-card"><div class="sd-mini-source">🍊 Hacker News</div><div class="sd-mini-title">How we built AIventure, an AI-powered adventure game</div><div class="sd-mini-heat">♥ 25</div></div>
+                    <div class="sd-mini-card"><div class="sd-mini-source">🔴 Reddit</div><div class="sd-mini-title">Two Devs Created ClassifierAI: A Prototype Chrome Extension that Auto-Detects Content</div><div class="sd-mini-heat">♥ 102</div></div>
+                    <div class="sd-mini-card"><div class="sd-mini-source">🐼 知乎</div><div class="sd-mini-title">钉钉新CEO陈宇森称「未来的软件是日抛式的」，如何看待此观点？</div><div class="sd-mini-heat">174万</div></div>
+                    <div class="sd-mini-card"><div class="sd-mini-source">📺 B站</div><div class="sd-mini-title">一头蓝鲸正面全力撞向一艘航母，结果会发生什么呢？</div><div class="sd-mini-heat">447万</div></div>
+                    <div class="sd-mini-card"><div class="sd-mini-source">📺 B站</div><div class="sd-mini-title">新三国up锐评老三国01：这才叫真正的三国！</div><div class="sd-mini-heat">243万</div></div>
+                    <div class="sd-mini-card"><div class="sd-mini-source">🐦 微博</div><div class="sd-mini-title">微信能合并发图了</div><div class="sd-mini-heat">热搜</div></div>
+                    <div class="sd-mini-card"><div class="sd-mini-source">🐦 微博</div><div class="sd-mini-title">莫高热度</div><div class="sd-mini-heat">热搜</div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

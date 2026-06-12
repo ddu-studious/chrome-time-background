@@ -279,6 +279,12 @@ class TechTicker {
             this.refreshData();
         });
         
+        // 展开全部热榜面板
+        document.getElementById('ticker-expand-btn')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggleExpandPanel();
+        });
+        
         // 折叠迷你滚动栏
         document.getElementById('ticker-toggle-btn')?.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -1798,6 +1804,261 @@ class TechTicker {
         const div = document.createElement('div');
         div.textContent = str;
         return div.innerHTML;
+    }
+    
+    // ========= 展开面板 =========
+    
+    toggleExpandPanel() {
+        let panel = document.getElementById('ticker-expand-panel');
+        if (panel) {
+            panel.classList.toggle('open');
+            this._expandPanelVisible = panel.classList.contains('open');
+            return;
+        }
+        this._createExpandPanel();
+    }
+    
+    _createExpandPanel() {
+        const panel = document.createElement('div');
+        panel.id = 'ticker-expand-panel';
+        panel.className = 'ticker-expand-panel';
+
+        const groups = {};
+        for (const item of this.tickerItems) {
+            const key = item.type;
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(item);
+        }
+
+        const sourceKeys = Object.keys(groups);
+        const sidebarHtml = `
+            <button class="tep-tab active" data-filter="all">🔥 全部<span class="tep-tab-count">${this.tickerItems.length}</span></button>
+            ${sourceKeys.map(k => {
+                const cfg = TICKER_SOURCE_REGISTRY[k];
+                return `<button class="tep-tab" data-filter="${k}">${cfg?.icon || ''} ${cfg?.name || k}<span class="tep-tab-count">${groups[k].length}</span></button>`;
+            }).join('')}
+        `;
+
+        panel.innerHTML = `
+            <div class="tep-layout">
+                <div class="tep-sidebar" id="tep-sidebar">${sidebarHtml}</div>
+                <div class="tep-main">
+                    <div class="tep-header">
+                        <span class="tep-title" id="tep-title">全部热榜 · ${this.tickerItems.length} 条</span>
+                        <button class="tep-close" id="tep-close"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div class="tep-body" id="tep-body"></div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(panel);
+        requestAnimationFrame(() => panel.classList.add('open'));
+        this._expandPanelVisible = true;
+        this._expandActiveFilter = 'all';
+
+        panel.querySelector('#tep-close').addEventListener('click', () => {
+            panel.classList.remove('open');
+            this._expandPanelVisible = false;
+        });
+
+        panel.querySelectorAll('.tep-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                panel.querySelectorAll('.tep-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                const filter = tab.dataset.filter;
+                this._expandActiveFilter = filter;
+                const cfg = TICKER_SOURCE_REGISTRY[filter];
+                const items = filter === 'all' ? this.tickerItems : (groups[filter] || []);
+                const titleEl = panel.querySelector('#tep-title');
+                if (titleEl) {
+                    titleEl.textContent = filter === 'all'
+                        ? `全部热榜 · ${this.tickerItems.length} 条`
+                        : `${cfg?.icon || ''} ${cfg?.name || filter} · ${items.length} 条`;
+                }
+                this._renderExpandItems(panel, filter);
+            });
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this._expandPanelVisible) {
+                panel.classList.remove('open');
+                this._expandPanelVisible = false;
+            }
+        });
+
+        this._renderExpandItems(panel, 'all');
+    }
+    
+    _isChinese(text) {
+        if (!text) return true;
+        const cn = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
+        return cn / text.length > 0.15;
+    }
+    
+    _renderExpandItems(panel, filter) {
+        const body = panel.querySelector('#tep-body');
+        const items = filter === 'all'
+            ? this.tickerItems
+            : this.tickerItems.filter(i => i.type === filter);
+
+        body.innerHTML = items.map((item, idx) => {
+            const isCn = this._isChinese(item.title);
+            const matchedClass = this.keywordMatches.has(item.title) ? ' keyword-matched' : '';
+            const rankClass = idx < 3 ? ' top' : '';
+            const cfg = TICKER_SOURCE_REGISTRY[item.type] || {};
+            const sourceName = cfg.name || item.type;
+            const sourceIcon = cfg.icon || item.icon || '';
+            const desc = item.desc || '';
+
+            return `
+                <div class="tep-item${matchedClass}" data-idx="${idx}" data-url="${item.url || ''}">
+                    <div class="tep-row-top">
+                        <span class="tep-rank${rankClass}">${idx + 1}</span>
+                        <span class="tep-item-title">${this.escapeHtml(item.title)}</span>
+                        ${item.metric ? `<span class="tep-metric">${this.escapeHtml(String(item.metric))}</span>` : ''}
+                    </div>
+                    <div class="tep-row-bottom">
+                        <div>
+                            ${desc ? `<div class="tep-expand-desc">${this.escapeHtml(desc)}</div>` : ''}
+                            <div class="tep-expand-tags">
+                                <span class="tep-source-tag">${sourceIcon} ${sourceName}</span>
+                            </div>
+                        </div>
+                        <div class="tep-actions">
+                            <button class="tep-action-btn" data-action="open" title="打开链接"><i class="fas fa-external-link-alt"></i></button>
+                            <button class="tep-action-btn" data-action="save" title="保存为任务"><i class="fas fa-bookmark"></i></button>
+                            ${!isCn ? `<button class="tep-action-btn" data-action="translate" title="翻译总结"><i class="fas fa-language"></i></button>` : ''}
+                            <button class="tep-action-btn" data-action="hermes" title="Hermes"><i class="fas fa-robot"></i></button>
+                        </div>
+                    </div>
+                </div>
+                <div class="tep-card-translate-result" id="tep-translate-${idx}" style="display:none"></div>
+            `;
+        }).join('') || '<div style="padding:40px;text-align:center;color:#888">暂无数据</div>';
+
+        body.querySelectorAll('.tep-action-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const row = btn.closest('.tep-item');
+                const idx = parseInt(row.dataset.idx);
+                const action = btn.dataset.action;
+                const item = items[idx];
+                if (!item) return;
+
+                switch (action) {
+                    case 'open':
+                        if (item.url) window.open(item.url, '_blank');
+                        break;
+                    case 'save':
+                        this._saveItemAsTask(item);
+                        break;
+                    case 'translate':
+                        this._translateItem(item, idx);
+                        break;
+                    case 'hermes':
+                        this._sendToHermes(item);
+                        break;
+                }
+            });
+        });
+
+        body.querySelectorAll('.tep-item').forEach(row => {
+            row.addEventListener('click', () => {
+                const url = row.dataset.url;
+                if (url) window.open(url, '_blank');
+            });
+        });
+    }
+    
+    async _saveItemAsTask(item) {
+        if (!window.memoManager) {
+            this._showSaveToast('备忘录模块未加载', 'error');
+            return;
+        }
+        const sourceCfg = TICKER_SOURCE_REGISTRY[item.type];
+        const newMemo = {
+            id: window.memoManager.generateId(),
+            title: item.title,
+            text: `${item.desc || ''}\n\n来源：${sourceCfg?.name || item.type}\n${item.metric ? '热度：' + item.metric : ''}`.trim(),
+            completed: false,
+            priority: 'none',
+            createdAt: Date.now(), updatedAt: Date.now(),
+            completedAt: null, startDate: null, dueDate: null,
+            images: [], progress: null, recurrence: null,
+            habit: null, habitCard: null, subtasks: [],
+            links: item.url ? [{ title: item.title, url: item.url }] : [],
+            tagIds: [], categoryId: null,
+        };
+        window.memoManager.memos.push(newMemo);
+        await window.memoManager.saveMemos();
+        this._showSaveToast('已保存为任务');
+    }
+    
+    async _translateItem(item, idx) {
+        const resultEl = document.getElementById(`tep-translate-${idx}`);
+        if (!resultEl) return;
+        
+        if (resultEl.style.display !== 'none') {
+            resultEl.style.display = 'none';
+            return;
+        }
+        
+        resultEl.style.display = 'block';
+        resultEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 翻译中…';
+        
+        try {
+            const resp = await fetch('http://127.0.0.1:19840/writing/summarize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: `请将以下内容翻译为中文并简要总结（2-3句话）：\n\n标题：${item.title}\n描述：${item.desc || '无'}\n来源：${TICKER_SOURCE_REGISTRY[item.type]?.name || item.type}`,
+                }),
+            });
+            
+            if (!resp.ok) throw new Error('Bridge 未响应');
+            
+            const reader = resp.body.getReader();
+            const decoder = new TextDecoder();
+            let fullText = '';
+            
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value, { stream: true });
+                for (const line of chunk.split('\n')) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            if (data.content) fullText += data.content;
+                        } catch {}
+                    }
+                }
+                resultEl.textContent = fullText || '翻译中…';
+            }
+            
+            if (!fullText) resultEl.textContent = '翻译失败';
+        } catch (err) {
+            resultEl.innerHTML = `<span style="color:#ff6b6b">翻译失败：${err.message}</span>`;
+        }
+    }
+    
+    async _sendToHermes(item) {
+        const cfg = TICKER_SOURCE_REGISTRY[item.type] || {};
+        const prompt = `我在浏览热榜时看到一条信息想和你讨论：\n\n来源：${cfg.name || item.type}\n标题：${item.title}\n描述：${item.desc || '无'}\n${item.url ? `链接：${item.url}` : ''}\n\n请帮我分析这个话题的背景和影响。`;
+        
+        try {
+            await navigator.clipboard.writeText(prompt);
+            this._showSaveToast('已复制到剪贴板，可粘贴到 Hermes 对话');
+        } catch {
+            const textarea = document.createElement('textarea');
+            textarea.value = prompt;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            textarea.remove();
+            this._showSaveToast('已复制提示词');
+        }
     }
 }
 

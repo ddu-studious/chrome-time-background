@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>热榜列表 Hover 展开效果 — 4 套方案</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0e0e16;color:#ddd;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:30px 40px}
+h1{font-size:22px;margin-bottom:6px;color:#fff}
+h2{font-size:15px;color:#888;font-weight:400;margin-bottom:30px}
+.demo-section{margin-bottom:60px;padding:30px;background:rgba(20,20,30,.95);border-radius:16px;border:1px solid rgba(255,255,255,.06)}
+.demo-title{font-size:17px;font-weight:700;margin-bottom:4px;color:#e0e0e0}
+.demo-desc{font-size:13px;color:#888;margin-bottom:20px}
+.demo-tag{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;margin-left:8px;vertical-align:middle}
+.demo-list{max-width:700px}
+
+/* ═══════════════════════════════════════════
+   方案 A: 内联滑开式（Inline Slide-Down）
+   行下方向下展开一个描述区域，推挤后续行
+   ═══════════════════════════════════════════ */
+.style-a .item{position:relative;cursor:pointer;transition:background .2s}
+.style-a .item:hover{background:rgba(255,255,255,.04)}
+.style-a .row{display:flex;align-items:center;padding:10px 14px;gap:10px}
+.style-a .rank{width:28px;height:28px;border-radius:8px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#777;flex-shrink:0}
+.style-a .rank.top{background:linear-gradient(135deg,#ff6b35,#f7931e);color:#fff}
+.style-a .title{flex:1;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.style-a .metric{font-size:12px;color:#888;flex-shrink:0}
+.style-a .actions{display:flex;gap:4px;opacity:0;transition:opacity .15s}
+.style-a .item:hover .actions{opacity:1}
+.style-a .action-btn{width:28px;height:28px;border:none;border-radius:6px;background:rgba(255,255,255,.06);color:#aaa;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;transition:all .15s}
+.style-a .action-btn:hover{background:rgba(255,255,255,.12);color:#fff}
+
+.style-a .expand{max-height:0;overflow:hidden;transition:max-height .3s cubic-bezier(0.4,0,0.2,1),opacity .25s;opacity:0}
+.style-a .item:hover .expand{max-height:120px;opacity:1}
+.style-a .expand-inner{padding:0 14px 12px 52px;font-size:13px;color:#999;line-height:1.6}
+.style-a .expand-inner .source-tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;background:rgba(255,180,80,.1);color:#ffb450;margin-right:8px}
+.style-a .expand-inner .url{color:#5b9bf8;font-size:12px;text-decoration:none;display:inline-block;margin-top:4px}
+.style-a .expand-inner .url:hover{text-decoration:underline}
+
+/* ═══════════════════════════════════════════
+   方案 B: 浮动卡片式（Floating Card）
+   hover 时从行右侧弹出一个浮动详情卡片
+   ═══════════════════════════════════════════ */
+.style-b .item{position:relative;display:flex;align-items:center;padding:10px 14px;gap:10px;cursor:pointer;transition:background .2s}
+.style-b .item:hover{background:rgba(255,255,255,.04)}
+.style-b .rank{width:28px;height:28px;border-radius:8px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#777;flex-shrink:0}
+.style-b .rank.top{background:linear-gradient(135deg,#ff6b35,#f7931e);color:#fff}
+.style-b .title{flex:1;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.style-b .metric{font-size:12px;color:#888;flex-shrink:0}
+
+.style-b .float-card{position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%) translateX(8px) scale(0.95);width:320px;padding:16px;background:rgba(30,32,44,.98);border:1px solid rgba(255,255,255,.1);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:all .25s cubic-bezier(0.4,0,0.2,1);z-index:100;backdrop-filter:blur(20px)}
+.style-b .item:hover .float-card{opacity:1;transform:translateY(-50%) translateX(0) scale(1);pointer-events:auto}
+.style-b .float-card .fc-source{font-size:11px;color:#ffb450;margin-bottom:6px}
+.style-b .float-card .fc-title{font-size:15px;font-weight:600;color:#eee;margin-bottom:8px;line-height:1.4}
+.style-b .float-card .fc-desc{font-size:13px;color:#999;line-height:1.6;margin-bottom:12px}
+.style-b .float-card .fc-footer{display:flex;gap:6px}
+.style-b .float-card .fc-btn{padding:6px 12px;border:none;border-radius:6px;background:rgba(255,255,255,.06);color:#aaa;cursor:pointer;font-size:12px;transition:all .15s;display:flex;align-items:center;gap:4px}
+.style-b .float-card .fc-btn:hover{background:rgba(255,255,255,.12);color:#fff}
+.style-b .float-card .fc-btn.primary{background:rgba(91,155,248,.15);color:#5b9bf8}
+.style-b .float-card .fc-btn.primary:hover{background:rgba(91,155,248,.25)}
+
+/* ═══════════════════════════════════════════
+   方案 C: 行内膨胀式（Row Inflate）
+   hover 时整行膨胀变高，原位显示更多信息
+   ═══════════════════════════════════════════ */
+.style-c .item{padding:10px 14px;cursor:pointer;border-radius:10px;transition:all .3s cubic-bezier(0.4,0,0.2,1);border:1px solid transparent}
+.style-c .item:hover{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.08);padding:14px;margin:4px 0}
+.style-c .row-top{display:flex;align-items:center;gap:10px}
+.style-c .rank{width:28px;height:28px;border-radius:8px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#777;flex-shrink:0}
+.style-c .rank.top{background:linear-gradient(135deg,#ff6b35,#f7931e);color:#fff}
+.style-c .title{flex:1;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:white-space .2s}
+.style-c .item:hover .title{white-space:normal;font-weight:500}
+.style-c .metric{font-size:12px;color:#888;flex-shrink:0}
+
+.style-c .row-bottom{display:grid;grid-template-columns:1fr auto;gap:10px;max-height:0;overflow:hidden;opacity:0;transition:max-height .3s,opacity .25s,padding .2s;padding-top:0}
+.style-c .item:hover .row-bottom{max-height:100px;opacity:1;padding-top:10px}
+.style-c .desc{font-size:13px;color:#999;line-height:1.5;padding-left:38px}
+.style-c .tag-row{display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap;padding-left:38px;margin-top:6px}
+.style-c .source-tag{padding:2px 8px;border-radius:4px;font-size:11px;background:rgba(255,180,80,.1);color:#ffb450}
+.style-c .actions{display:flex;gap:4px;align-self:end}
+.style-c .action-btn{width:28px;height:28px;border:none;border-radius:6px;background:rgba(255,255,255,.06);color:#aaa;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;transition:all .15s}
+.style-c .action-btn:hover{background:rgba(255,255,255,.12);color:#fff}
+
+/* ═══════════════════════════════════════════
+   方案 D: 抽屉叠层式（Drawer Overlay）
+   hover 时下方出现半透明抽屉，覆盖后续行
+   ═══════════════════════════════════════════ */
+.style-d{position:relative}
+.style-d .item{position:relative;display:flex;align-items:center;padding:10px 14px;gap:10px;cursor:pointer;transition:background .2s;z-index:1}
+.style-d .item:hover{background:rgba(255,255,255,.04);z-index:10}
+.style-d .rank{width:28px;height:28px;border-radius:8px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#777;flex-shrink:0}
+.style-d .rank.top{background:linear-gradient(135deg,#ff6b35,#f7931e);color:#fff}
+.style-d .title{flex:1;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.style-d .metric{font-size:12px;color:#888;flex-shrink:0}
+
+.style-d .drawer{position:absolute;left:0;right:0;top:100%;background:rgba(25,27,38,.97);border:1px solid rgba(255,255,255,.08);border-top:none;border-radius:0 0 12px 12px;padding:12px 14px 12px 52px;box-shadow:0 8px 30px rgba(0,0,0,.4);max-height:0;overflow:hidden;opacity:0;transition:max-height .3s cubic-bezier(0.4,0,0.2,1),opacity .2s;z-index:5;backdrop-filter:blur(16px)}
+.style-d .item:hover .drawer{max-height:130px;opacity:1}
+.style-d .drawer .d-source{font-size:11px;color:#ffb450;margin-bottom:4px}
+.style-d .drawer .d-desc{font-size:13px;color:#999;line-height:1.5;margin-bottom:8px}
+.style-d .drawer .d-actions{display:flex;gap:6px}
+.style-d .drawer .d-btn{padding:5px 10px;border:none;border-radius:6px;background:rgba(255,255,255,.06);color:#aaa;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:4px;transition:all .15s}
+.style-d .drawer .d-btn:hover{background:rgba(255,255,255,.12);color:#fff}
+.style-d .drawer .d-btn.primary{background:rgba(91,155,248,.15);color:#5b9bf8}
+</style>
+</head>
+<body>
+
+<h1>热榜列表 Hover 展开效果 — 4 套设计方案</h1>
+<h2>鼠标悬浮各列表项，查看不同的展开效果</h2>
+
+<!-- ═══════════ 方案 A ═══════════ -->
+<div class="demo-section">
+<div class="demo-title">方案 A：内联滑开式 <span class="demo-tag" style="background:rgba(76,175,80,.15);color:#4caf50">推荐</span></div>
+<div class="demo-desc">hover 时行下方平滑展开描述区域，推挤后续行。信息密度最高，不遮挡其他内容。</div>
+<div class="demo-list style-a">
+  <div class="item">
+    <div class="row">
+      <span class="rank top">1</span>
+      <span class="title">addyosmani/agent-skills — Production-grade engineering skills for AI coding agents</span>
+      <span class="metric">53,216</span>
+      <div class="actions">
+        <button class="action-btn" title="打开"><i class="fas fa-external-link-alt"></i></button>
+        <button class="action-btn" title="收藏"><i class="fas fa-bookmark"></i></button>
+        <button class="action-btn" title="翻译"><i class="fas fa-language"></i></button>
+        <button class="action-btn" title="Hermes"><i class="fas fa-robot"></i></button>
+      </div>
+    </div>
+    <div class="expand"><div class="expand-inner">
+      <span class="source-tag">🔥 GitHub Trending</span>
+      Production-grade engineering skills for AI coding agents. Includes best practices for code generation, testing, and deployment automation.
+      <br><a class="url" href="#">github.com/addyosmani/agent-skills</a>
+    </div></div>
+  </div>
+  <div class="item">
+    <div class="row">
+      <span class="rank top">2</span>
+      <span class="title">2026 美加墨世界杯揭幕战，墨西哥 2-0 南非，全场共出示三张红牌，如何评价本场比赛？</span>
+      <span class="metric">593万</span>
+      <div class="actions">
+        <button class="action-btn" title="打开"><i class="fas fa-external-link-alt"></i></button>
+        <button class="action-btn" title="收藏"><i class="fas fa-bookmark"></i></button>
+        <button class="action-btn" title="Hermes"><i class="fas fa-robot"></i></button>
+      </div>
+    </div>
+    <div class="expand"><div class="expand-inner">
+      <span class="source-tag">💭 知乎热榜</span>
+      2026年世界杯在美国、加拿大、墨西哥三国举办的首场揭幕战引发广泛讨论，三张红牌的激烈场面成为焦点。
+      <br><a class="url" href="#">zhihu.com/question/xxx</a>
+    </div></div>
+  </div>
+  <div class="item">
+    <div class="row">
+      <span class="rank top">3</span>
+      <span class="title">MiMo Code Is Now Released and Open-Source</span>
+      <span class="metric">▲50</span>
+      <div class="actions">
+        <button class="action-btn" title="打开"><i class="fas fa-external-link-alt"></i></button>
+        <button class="action-btn" title="收藏"><i class="fas fa-bookmark"></i></button>
+        <button class="action-btn" title="翻译"><i class="fas fa-language"></i></button>
+        <button class="action-btn" title="Hermes"><i class="fas fa-robot"></i></button>
+      </div>
+    </div>
+    <div class="expand"><div class="expand-inner">
+      <span class="source-tag">📰 Hacker News</span>
+      MiMo, the open-source code generation model from Xiaomi, has been released. It supports multiple programming languages with competitive benchmark results.
+      <br><a class="url" href="#">mimo.xiaomi.com</a>
+    </div></div>
+  </div>
+  <div class="item">
+    <div class="row">
+      <span class="rank">4</span>
+      <span class="title">微信能合并发图了</span>
+      <span class="metric">—</span>
+      <div class="actions">
+        <button class="action-btn" title="打开"><i class="fas fa-external-link-alt"></i></button>
+        <button class="action-btn" title="收藏"><i class="fas fa-bookmark"></i></button>
+      </div>
+    </div>
+    <div class="expand"><div class="expand-inner">
+      <span class="source-tag">🔥 微博热搜</span>
+      #微信能合并发图了# 微信新功能上线，支持将多张图片合并为一张发送。
+      <br><a class="url" href="#">weibo.com/hot/xxx</a>
+    </div></div>
+  </div>
+  <div class="item">
+    <div class="row">
+      <span class="rank">5</span>
+      <span class="title">obra/superpowers — An agentic skills framework and software development methodology</span>
+      <span class="metric">224,205</span>
+      <div class="actions">
+        <button class="action-btn" title="打开"><i class="fas fa-external-link-alt"></i></button>
+        <button class="action-btn" title="收藏"><i class="fas fa-bookmark"></i></button>
+        <button class="action-btn" title="翻译"><i class="fas fa-language"></i></button>
+      </div>
+    </div>
+    <div class="expand"><div class="expand-inner">
+      <span class="source-tag">🔥 GitHub Trending</span>
+      An agentic skills framework and software development methodology that works. Build production-grade AI agents with composable skills.
+      <br><a class="url" href="#">github.com/obra/superpowers</a>
+    </div></div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════ 方案 B ═══════════ -->
+<div class="demo-section">
+<div class="demo-title">方案 B：浮动卡片式</div>
+<div class="demo-desc">hover 时从行右侧弹出浮动详情卡片。不影响列表布局，适合宽屏。需要面板右侧有足够空间。</div>
+<div class="demo-list style-b">
+  <div class="item">
+    <span class="rank top">1</span>
+    <span class="title">addyosmani/agent-skills</span>
+    <span class="metric">53,216</span>
+    <div class="float-card">
+      <div class="fc-source">🔥 GitHub Trending · ⭐ 53,216</div>
+      <div class="fc-title">addyosmani/agent-skills</div>
+      <div class="fc-desc">Production-grade engineering skills for AI coding agents. Includes best practices for code generation, testing, and deployment automation.</div>
+      <div class="fc-footer">
+        <button class="fc-btn primary"><i class="fas fa-external-link-alt"></i> 打开</button>
+        <button class="fc-btn"><i class="fas fa-bookmark"></i> 收藏</button>
+        <button class="fc-btn"><i class="fas fa-language"></i> 翻译</button>
+        <button class="fc-btn"><i class="fas fa-robot"></i> Hermes</button>
+      </div>
+    </div>
+  </div>
+  <div class="item">
+    <span class="rank top">2</span>
+    <span class="title">2026 美加墨世界杯揭幕战，墨西哥 2-0 南非</span>
+    <span class="metric">593万</span>
+    <div class="float-card">
+      <div class="fc-source">💭 知乎热榜 · 🔥 593万</div>
+      <div class="fc-title">2026 美加墨世界杯揭幕战，墨西哥 2-0 南非，全场共出示三张红牌，如何评价本场比赛？</div>
+      <div class="fc-desc">2026年世界杯在美国、加拿大、墨西哥三国举办的首场揭幕战引发广泛讨论。</div>
+      <div class="fc-footer">
+        <button class="fc-btn primary"><i class="fas fa-external-link-alt"></i> 打开</button>
+        <button class="fc-btn"><i class="fas fa-bookmark"></i> 收藏</button>
+        <button class="fc-btn"><i class="fas fa-robot"></i> Hermes</button>
+      </div>
+    </div>
+  </div>
+  <div class="item">
+    <span class="rank top">3</span>
+    <span class="title">MiMo Code Is Now Released and Open-Source</span>
+    <span class="metric">▲50</span>
+    <div class="float-card">
+      <div class="fc-source">📰 Hacker News · ▲50</div>
+      <div class="fc-title">MiMo Code Is Now Released and Open-Source</div>
+      <div class="fc-desc">MiMo, the open-source code generation model from Xiaomi. Supports multiple languages with competitive benchmarks. mimo.xiaomi.com</div>
+      <div class="fc-footer">
+        <button class="fc-btn primary"><i class="fas fa-external-link-alt"></i> 打开</button>
+        <button class="fc-btn"><i class="fas fa-bookmark"></i> 收藏</button>
+        <button class="fc-btn"><i class="fas fa-language"></i> 翻译</button>
+        <button class="fc-btn"><i class="fas fa-robot"></i> Hermes</button>
+      </div>
+    </div>
+  </div>
+  <div class="item">
+    <span class="rank">4</span>
+    <span class="title">微信能合并发图了</span>
+    <span class="metric">—</span>
+    <div class="float-card">
+      <div class="fc-source">🔥 微博热搜</div>
+      <div class="fc-title">微信能合并发图了</div>
+      <div class="fc-desc">#微信能合并发图了# 微信新功能上线，支持将多张图片合并为一张发送。</div>
+      <div class="fc-footer">
+        <button class="fc-btn primary"><i class="fas fa-external-link-alt"></i> 打开</button>
+        <button class="fc-btn"><i class="fas fa-bookmark"></i> 收藏</button>
+      </div>
+    </div>
+  </div>
+  <div class="item">
+    <span class="rank">5</span>
+    <span class="title">obra/superpowers</span>
+    <span class="metric">224,205</span>
+    <div class="float-card">
+      <div class="fc-source">🔥 GitHub Trending · ⭐ 224,205</div>
+      <div class="fc-title">obra/superpowers</div>
+      <div class="fc-desc">An agentic skills framework and software development methodology that works. Build production-grade AI agents with composable skills.</div>
+      <div class="fc-footer">
+        <button class="fc-btn primary"><i class="fas fa-external-link-alt"></i> 打开</button>
+        <button class="fc-btn"><i class="fas fa-bookmark"></i> 收藏</button>
+        <button class="fc-btn"><i class="fas fa-language"></i> 翻译</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════ 方案 C ═══════════ -->
+<div class="demo-section">
+<div class="demo-title">方案 C：行内膨胀式</div>
+<div class="demo-desc">hover 时整行膨胀变高，标题不再截断，下方出现描述和操作区。卡片感最强，但会挤压后续行。</div>
+<div class="demo-list style-c">
+  <div class="item">
+    <div class="row-top">
+      <span class="rank top">1</span>
+      <span class="title">addyosmani/agent-skills — Production-grade engineering skills for AI coding agents</span>
+      <span class="metric">53,216</span>
+    </div>
+    <div class="row-bottom">
+      <div>
+        <div class="desc">Production-grade engineering skills for AI coding agents. Includes best practices for code generation, testing, and deployment.</div>
+        <div class="tag-row"><span class="source-tag">🔥 GitHub Trending</span></div>
+      </div>
+      <div class="actions">
+        <button class="action-btn" title="打开"><i class="fas fa-external-link-alt"></i></button>
+        <button class="action-btn" title="收藏"><i class="fas fa-bookmark"></i></button>
+        <button class="action-btn" title="翻译"><i class="fas fa-language"></i></button>
+        <button class="action-btn" title="Hermes"><i class="fas fa-robot"></i></button>
+      </div>
+    </div>
+  </div>
+  <div class="item">
+    <div class="row-top">
+      <span class="rank top">2</span>
+      <span class="title">2026 美加墨世界杯揭幕战，墨西哥 2-0 南非，全场共出示三张红牌，如何评价本场比赛？</span>
+      <span class="metric">593万</span>
+    </div>
+    <div class="row-bottom">
+      <div>
+        <div class="desc">2026年世界杯在美加墨三国举办的首场揭幕战引发广泛讨论，三张红牌的激烈场面成为焦点。</div>
+        <div class="tag-row"><span class="source-tag">💭 知乎热榜</span></div>
+      </div>
+      <div class="actions">
+        <button class="action-btn" title="打开"><i class="fas fa-external-link-alt"></i></button>
+        <button class="action-btn" title="收藏"><i class="fas fa-bookmark"></i></button>
+        <button class="action-btn" title="Hermes"><i class="fas fa-robot"></i></button>
+      </div>
+    </div>
+  </div>
+  <div class="item">
+    <div class="row-top">
+      <span class="rank top">3</span>
+      <span class="title">MiMo Code Is Now Released and Open-Source</span>
+      <span class="metric">▲50</span>
+    </div>
+    <div class="row-bottom">
+      <div>
+        <div class="desc">MiMo, the open-source code generation model from Xiaomi, has been released with competitive benchmark results.</div>
+        <div class="tag-row"><span class="source-tag">📰 Hacker News</span></div>
+      </div>
+      <div class="actions">
+        <button class="action-btn" title="打开"><i class="fas fa-external-link-alt"></i></button>
+        <button class="action-btn" title="收藏"><i class="fas fa-bookmark"></i></button>
+        <button class="action-btn" title="翻译"><i class="fas fa-language"></i></button>
+        <button class="action-btn" title="Hermes"><i class="fas fa-robot"></i></button>
+      </div>
+    </div>
+  </div>
+  <div class="item">
+    <div class="row-top">
+      <span class="rank">4</span>
+      <span class="title">微信能合并发图了</span>
+      <span class="metric">—</span>
+    </div>
+    <div class="row-bottom">
+      <div>
+        <div class="desc">#微信能合并发图了# 微信新功能上线，支持将多张图片合并为一张发送。</div>
+        <div class="tag-row"><span class="source-tag">🔥 微博热搜</span></div>
+      </div>
+      <div class="actions">
+        <button class="action-btn" title="打开"><i class="fas fa-external-link-alt"></i></button>
+        <button class="action-btn" title="收藏"><i class="fas fa-bookmark"></i></button>
+      </div>
+    </div>
+  </div>
+  <div class="item">
+    <div class="row-top">
+      <span class="rank">5</span>
+      <span class="title">obra/superpowers — An agentic skills framework</span>
+      <span class="metric">224,205</span>
+    </div>
+    <div class="row-bottom">
+      <div>
+        <div class="desc">An agentic skills framework and software development methodology that works.</div>
+        <div class="tag-row"><span class="source-tag">🔥 GitHub Trending</span></div>
+      </div>
+      <div class="actions">
+        <button class="action-btn" title="打开"><i class="fas fa-external-link-alt"></i></button>
+        <button class="action-btn" title="收藏"><i class="fas fa-bookmark"></i></button>
+        <button class="action-btn" title="翻译"><i class="fas fa-language"></i></button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════ 方案 D ═══════════ -->
+<div class="demo-section">
+<div class="demo-title">方案 D：抽屉叠层式</div>
+<div class="demo-desc">hover 时下方叠出半透明抽屉，覆盖在后续行之上。不推挤列表，适合快速预览后移走鼠标。</div>
+<div class="demo-list style-d">
+  <div class="item">
+    <span class="rank top">1</span>
+    <span class="title">addyosmani/agent-skills — Production-grade engineering skills for AI coding agents</span>
+    <span class="metric">53,216</span>
+    <div class="drawer">
+      <div class="d-source">🔥 GitHub Trending · ⭐ 53,216</div>
+      <div class="d-desc">Production-grade engineering skills for AI coding agents. Includes best practices for code generation, testing, and deployment automation.</div>
+      <div class="d-actions">
+        <button class="d-btn primary"><i class="fas fa-external-link-alt"></i> 打开</button>
+        <button class="d-btn"><i class="fas fa-bookmark"></i> 收藏</button>
+        <button class="d-btn"><i class="fas fa-language"></i> 翻译</button>
+        <button class="d-btn"><i class="fas fa-robot"></i> Hermes</button>
+      </div>
+    </div>
+  </div>
+  <div class="item">
+    <span class="rank top">2</span>
+    <span class="title">2026 美加墨世界杯揭幕战，墨西哥 2-0 南非，如何评价本场比赛？</span>
+    <span class="metric">593万</span>
+    <div class="drawer">
+      <div class="d-source">💭 知乎热榜 · 🔥 593万</div>
+      <div class="d-desc">2026年世界杯在美加墨三国举办的首场揭幕战引发广泛讨论，三张红牌的激烈场面成为焦点。</div>
+      <div class="d-actions">
+        <button class="d-btn primary"><i class="fas fa-external-link-alt"></i> 打开</button>
+        <button class="d-btn"><i class="fas fa-bookmark"></i> 收藏</button>
+        <button class="d-btn"><i class="fas fa-robot"></i> Hermes</button>
+      </div>
+    </div>
+  </div>
+  <div class="item">
+    <span class="rank top">3</span>
+    <span class="title">MiMo Code Is Now Released and Open-Source</span>
+    <span class="metric">▲50</span>
+    <div class="drawer">
+      <div class="d-source">📰 Hacker News · ▲50</div>
+      <div class="d-desc">MiMo, the open-source code generation model from Xiaomi, has been released. mimo.xiaomi.com</div>
+      <div class="d-actions">
+        <button class="d-btn primary"><i class="fas fa-external-link-alt"></i> 打开</button>
+        <button class="d-btn"><i class="fas fa-bookmark"></i> 收藏</button>
+        <button class="d-btn"><i class="fas fa-language"></i> 翻译</button>
+        <button class="d-btn"><i class="fas fa-robot"></i> Hermes</button>
+      </div>
+    </div>
+  </div>
+  <div class="item">
+    <span class="rank">4</span>
+    <span class="title">微信能合并发图了</span>
+    <span class="metric">—</span>
+    <div class="drawer">
+      <div class="d-source">🔥 微博热搜</div>
+      <div class="d-desc">#微信能合并发图了# 微信新功能上线，支持将多张图片合并为一张发送。</div>
+      <div class="d-actions">
+        <button class="d-btn primary"><i class="fas fa-external-link-alt"></i> 打开</button>
+        <button class="d-btn"><i class="fas fa-bookmark"></i> 收藏</button>
+      </div>
+    </div>
+  </div>
+  <div class="item">
+    <span class="rank">5</span>
+    <span class="title">obra/superpowers — An agentic skills framework</span>
+    <span class="metric">224,205</span>
+    <div class="drawer">
+      <div class="d-source">🔥 GitHub Trending · ⭐ 224,205</div>
+      <div class="d-desc">An agentic skills framework and software development methodology that works. Build production-grade AI agents.</div>
+      <div class="d-actions">
+        <button class="d-btn primary"><i class="fas fa-external-link-alt"></i> 打开</button>
+        <button class="d-btn"><i class="fas fa-bookmark"></i> 收藏</button>
+        <button class="d-btn"><i class="fas fa-language"></i> 翻译</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+</body>
+</html>
