@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>热榜面板 Demo 1 - 杂志卡片</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80') center/cover no-repeat fixed;
+            color: #fff;
+            min-height: 100vh;
+        }
+        body::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 0; }
+
+        .panel-overlay {
+            position: fixed; inset: 0; z-index: 900;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .panel {
+            position: relative; z-index: 901;
+            width: min(1100px, 94vw); height: 82vh;
+            border-radius: 16px;
+            background: rgba(22, 22, 30, 0.88);
+            backdrop-filter: blur(40px) saturate(180%);
+            border: 1px solid rgba(255,255,255,0.08);
+            box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+            display: flex; flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Header */
+        .panel-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 16px 24px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            flex-shrink: 0;
+        }
+        .panel-title { font-size: 16px; font-weight: 600; color: rgba(255,255,255,0.9); }
+        .panel-title .count { font-weight: 400; color: rgba(255,255,255,0.4); font-size: 13px; margin-left: 8px; }
+        .panel-close {
+            width: 32px; height: 32px; border-radius: 8px;
+            background: rgba(255,255,255,0.06); border: none; color: rgba(255,255,255,0.5);
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s;
+        }
+        .panel-close:hover { background: rgba(255,255,255,0.12); color: #fff; }
+
+        /* Filter bar */
+        .filter-bar {
+            display: flex; align-items: center; gap: 6px;
+            padding: 12px 24px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            flex-shrink: 0;
+            overflow-x: auto;
+        }
+        .filter-chip {
+            padding: 6px 14px; border-radius: 20px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.06);
+            color: rgba(255,255,255,0.55);
+            font-size: 12px; cursor: pointer;
+            white-space: nowrap; transition: all 0.2s;
+            display: flex; align-items: center; gap: 5px;
+        }
+        .filter-chip:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); }
+        .filter-chip.active {
+            background: rgba(99, 102, 241, 0.2);
+            border-color: rgba(99, 102, 241, 0.4);
+            color: #a5b4fc;
+        }
+        .filter-chip .chip-count {
+            background: rgba(255,255,255,0.08); padding: 1px 6px; border-radius: 10px;
+            font-size: 10px;
+        }
+        .filter-chip.active .chip-count { background: rgba(99, 102, 241, 0.3); }
+
+        /* Grid body */
+        .grid-body {
+            flex: 1; overflow-y: auto; padding: 16px 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 12px;
+            align-content: start;
+        }
+        .grid-body::-webkit-scrollbar { width: 6px; }
+        .grid-body::-webkit-scrollbar-track { background: transparent; }
+        .grid-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
+
+        /* Card */
+        .card {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 12px;
+            padding: 16px;
+            cursor: pointer;
+            transition: all 0.25s;
+            position: relative;
+            overflow: hidden;
+        }
+        .card:hover {
+            background: rgba(255,255,255,0.08);
+            border-color: rgba(255,255,255,0.12);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        }
+        .card-rank {
+            position: absolute; top: 12px; right: 12px;
+            width: 24px; height: 24px; border-radius: 6px;
+            background: rgba(255,255,255,0.06);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.35);
+        }
+        .card-rank.top { background: rgba(251, 191, 36, 0.2); color: #fbbf24; }
+        .card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .card-source-icon {
+            width: 32px; height: 32px; border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px; flex-shrink: 0;
+        }
+        .card-source-icon.github { background: rgba(110, 84, 148, 0.2); }
+        .card-source-icon.hackernews { background: rgba(255, 102, 0, 0.15); }
+        .card-source-icon.reddit { background: rgba(255, 69, 0, 0.15); }
+        .card-source-icon.devto { background: rgba(59, 130, 246, 0.15); }
+        .card-source-icon.weibo { background: rgba(255, 69, 0, 0.15); }
+        .card-source-icon.bilibili { background: rgba(0, 174, 236, 0.15); }
+        .card-source-icon.zhihu { background: rgba(0, 102, 255, 0.15); }
+        .card-source-name { font-size: 11px; color: rgba(255,255,255,0.35); }
+        .card-title {
+            font-size: 14px; font-weight: 500; color: rgba(255,255,255,0.88);
+            line-height: 1.5;
+            display: -webkit-box; -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical; overflow: hidden;
+            margin-bottom: 8px;
+        }
+        .card-desc {
+            font-size: 12px; color: rgba(255,255,255,0.4);
+            line-height: 1.5;
+            display: -webkit-box; -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical; overflow: hidden;
+            margin-bottom: 12px;
+        }
+        .card-footer { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .card-tag {
+            padding: 2px 8px; border-radius: 4px;
+            font-size: 10px; font-weight: 500;
+        }
+        .card-tag.lang { background: rgba(59, 130, 246, 0.15); color: #93c5fd; }
+        .card-tag.hot { background: rgba(239, 68, 68, 0.15); color: #fca5a5; }
+        .card-metric {
+            font-size: 11px; color: rgba(255,255,255,0.4);
+            display: flex; align-items: center; gap: 4px;
+        }
+        .card-metric i { font-size: 10px; }
+        .card-metric.stars { color: #fbbf24; }
+        .card-metric.comments { color: #60a5fa; }
+        .card-metric.upvotes { color: #f97316; }
+
+        .card-actions {
+            display: flex; gap: 4px; margin-left: auto;
+        }
+        .card-action-btn {
+            width: 26px; height: 26px; border-radius: 6px;
+            background: rgba(255,255,255,0.05); border: none;
+            color: rgba(255,255,255,0.35); cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 11px; transition: all 0.2s;
+            opacity: 0;
+        }
+        .card:hover .card-action-btn { opacity: 1; }
+        .card-action-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+
+        /* Featured top card (spans full width for #1) */
+        .card.featured {
+            grid-column: 1 / -1;
+            display: flex; gap: 20px; align-items: flex-start;
+            padding: 20px 24px;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(139, 92, 246, 0.04));
+            border-color: rgba(99, 102, 241, 0.15);
+        }
+        .card.featured .card-title { font-size: 16px; -webkit-line-clamp: 3; }
+        .card.featured .card-desc { -webkit-line-clamp: 3; }
+        .card.featured .card-rank { background: rgba(251, 191, 36, 0.25); color: #fbbf24; font-size: 13px; width: 28px; height: 28px; }
+
+        /* Empty state */
+        .empty-state {
+            grid-column: 1 / -1;
+            text-align: center; padding: 60px 20px;
+            color: rgba(255,255,255,0.3);
+        }
+        .empty-state i { font-size: 36px; margin-bottom: 12px; display: block; }
+    </style>
+</head>
+<body>
+    <div class="panel-overlay">
+        <div class="panel">
+            <div class="panel-header">
+                <div class="panel-title">
+                    <i class="fas fa-fire" style="color:#f97316"></i> 热榜
+                    <span class="count" id="total-count">31 条</span>
+                </div>
+                <button class="panel-close"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="filter-bar" id="filter-bar"></div>
+            <div class="grid-body" id="grid-body"></div>
+        </div>
+    </div>
+
+    <script>
+    const MOCK_DATA = [
+        { type: 'github', title: 'Krishnagangwal/CS-Fundamentals', desc: 'A comprehensive collection of computer science fundamentals for interview prep', metric: '1.5k', stars: 1500, lang: 'Python', url: '#' },
+        { type: 'hackernews', title: 'Astrophysicists Puzzle over Webb\'s New Universe', desc: 'New observations from JWST challenge existing models of galaxy formation', metric: '▲79', comments: 142, url: '#' },
+        { type: 'hackernews', title: 'Linux has officially won', desc: '', metric: '▲1.4k', comments: 891, url: '#' },
+        { type: 'reddit', title: 'What\'s Next for AI?', desc: 'Discussion on the future direction of artificial intelligence', metric: '❤192', comments: 445, url: '#' },
+        { type: 'github', title: 'yynxxxxx/Codex-5.5-codex-instruct-5.5', desc: 'OpenAI Codex 5.5 instruction-tuned model weights and inference code', metric: '1.3k', stars: 1300, lang: 'Python', url: '#' },
+        { type: 'hackernews', title: 'The Vespa at 80: Why the Italian scooter remains the coolest thing on 2 wheels', desc: '', metric: '▲43', comments: 67, url: '#' },
+        { type: 'hackernews', title: 'Division Polynomials of Elliptic Curves in Python', desc: '', metric: '▲7', comments: 12, url: '#' },
+        { type: 'reddit', title: 'Need a break? Play today\'s game from The Daily Context.', desc: '', metric: '❤111', comments: 23, url: '#' },
+        { type: 'github', title: 'mekos2772/ios-location-spoofer', desc: 'Spoof GPS location on iOS devices without jailbreak', metric: '1.3k', stars: 1300, lang: 'Swift', url: '#' },
+        { type: 'hackernews', title: 'Night Witches – all-female Soviet aviator regiment WW2', desc: 'The untold story of the 588th Night Bomber Regiment', metric: '▲18', comments: 34, url: '#' },
+        { type: 'hackernews', title: 'Hunting a 16-year-old SQLite bug with TLA+: is dqlite affected?', desc: '', metric: '▲80', comments: 45, url: '#' },
+        { type: 'devto', title: 'Welcome to AI Engineer World\'s Fair 2026', desc: 'The largest gathering of AI engineers, researchers, and builders', metric: '❤70', url: '#' },
+        { type: 'github', title: 'Kulaxyz/self-learning-skills', desc: 'Curated resources for self-taught developers', metric: '820', stars: 820, url: '#' },
+        { type: 'reddit', title: 'Maybe you should learn something', desc: 'A motivational post about continuous learning in tech', metric: '▲201', comments: 89, url: '#' },
+        { type: 'devto', title: 'CI workflows on Tangled for Elixir', desc: 'Setting up continuous integration for Elixir projects using Tangled', metric: '▲1', url: '#' },
+        { type: 'devto', title: 'My First Year at DEV Recap', desc: 'Reflecting on a year of writing and learning on DEV.to', metric: '❤62', url: '#' },
+        { type: 'github', title: 'HUANGCHIHHUNGLeo/claude-real-video', desc: 'Real-time video processing with Claude AI', metric: '675', stars: 675, lang: 'TypeScript', url: '#' },
+        { type: 'hackernews', title: 'The bottleneck might be the air in the room', desc: 'How CO2 levels affect cognitive performance', metric: '▲483', comments: 267, url: '#' },
+        { type: 'reddit', title: 'What I\'ve learned while leading the backend architecture of a university software project', desc: '', metric: '▲0', comments: 15, url: '#' },
+        { type: 'devto', title: 'Building a Modern CLI Tool with Go', desc: 'Step-by-step guide to creating command-line tools', metric: '❤45', url: '#' },
+        { type: 'github', title: 'anthropics/claude-code', desc: 'Claude Code - AI-powered coding assistant', metric: '12.4k', stars: 12400, lang: 'TypeScript', url: '#' },
+        { type: 'reddit', title: 'TIL about the Dunning-Kruger effect in software engineering', desc: 'Why junior devs think they know everything and seniors doubt themselves', metric: '▲1.2k', comments: 543, url: '#' },
+        { type: 'hackernews', title: 'Show HN: I built a browser extension that replaces new tab with a dashboard', desc: '', metric: '▲156', comments: 89, url: '#' },
+        { type: 'devto', title: 'Understanding TypeScript Generics Through Real Examples', desc: 'Practical guide to generics', metric: '❤88', url: '#' },
+    ];
+
+    const SOURCE_META = {
+        github: { name: 'GitHub Trending', icon: '🔥', color: '#8b5cf6' },
+        hackernews: { name: 'Hacker News', icon: '📰', color: '#f97316' },
+        reddit: { name: 'Reddit', icon: '💬', color: '#ef4444' },
+        devto: { name: 'DEV.to', icon: '📝', color: '#3b82f6' },
+    };
+
+    function renderFilters() {
+        const bar = document.getElementById('filter-bar');
+        const groups = {};
+        MOCK_DATA.forEach(d => {
+            groups[d.type] = (groups[d.type] || 0) + 1;
+        });
+        let html = `<div class="filter-chip active" data-filter="all">🔥 全部 <span class="chip-count">${MOCK_DATA.length}</span></div>`;
+        for (const [key, count] of Object.entries(groups)) {
+            const meta = SOURCE_META[key] || {};
+            html += `<div class="filter-chip" data-filter="${key}">${meta.icon || ''} ${meta.name || key} <span class="chip-count">${count}</span></div>`;
+        }
+        bar.innerHTML = html;
+
+        bar.querySelectorAll('.filter-chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                bar.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+                chip.classList.add('active');
+                renderGrid(chip.dataset.filter);
+            });
+        });
+    }
+
+    function renderGrid(filter = 'all') {
+        const body = document.getElementById('grid-body');
+        const items = filter === 'all' ? MOCK_DATA : MOCK_DATA.filter(d => d.type === filter);
+        document.getElementById('total-count').textContent = `${items.length} 条`;
+
+        body.innerHTML = items.map((item, idx) => {
+            const meta = SOURCE_META[item.type] || {};
+            const isFeatured = idx === 0 && filter === 'all';
+            const isTop = idx < 3;
+
+            let tagsHtml = '';
+            if (item.lang) tagsHtml += `<span class="card-tag lang">${item.lang}</span>`;
+
+            let metricsHtml = '';
+            if (item.stars) metricsHtml += `<span class="card-metric stars"><i class="fas fa-star"></i> ${item.metric}</span>`;
+            else if (item.metric) {
+                const icon = item.type === 'hackernews' ? 'fa-arrow-up' : item.type === 'reddit' ? 'fa-heart' : 'fa-heart';
+                const cls = item.type === 'hackernews' ? 'upvotes' : item.type === 'reddit' ? 'upvotes' : 'comments';
+                metricsHtml += `<span class="card-metric ${cls}"><i class="fas ${icon}"></i> ${item.metric.replace(/[▲❤]/g, '').trim()}</span>`;
+            }
+            if (item.comments) metricsHtml += `<span class="card-metric comments"><i class="fas fa-comment"></i> ${item.comments}</span>`;
+
+            return `
+                <div class="card${isFeatured ? ' featured' : ''}" data-url="${item.url}">
+                    <div class="card-rank${isTop ? ' top' : ''}">${idx + 1}</div>
+                    <div style="flex:1;min-width:0">
+                        <div class="card-header">
+                            <div class="card-source-icon ${item.type}">${meta.icon}</div>
+                            <span class="card-source-name">${meta.name}</span>
+                        </div>
+                        <div class="card-title">${item.title}</div>
+                        ${item.desc ? `<div class="card-desc">${item.desc}</div>` : ''}
+                        <div class="card-footer">
+                            ${tagsHtml}
+                            ${metricsHtml}
+                            <div class="card-actions">
+                                <button class="card-action-btn" title="打开"><i class="fas fa-external-link-alt"></i></button>
+                                <button class="card-action-btn" title="保存"><i class="fas fa-bookmark"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        body.querySelectorAll('.card').forEach(card => {
+            card.addEventListener('click', () => {
+                const url = card.dataset.url;
+                if (url && url !== '#') window.open(url, '_blank');
+            });
+        });
+    }
+
+    renderFilters();
+    renderGrid();
+    </script>
+</body>
+</html>

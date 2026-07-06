@@ -1089,6 +1089,9 @@
                 <div class="cb-footer">
                     <span class="cb-footer-info" id="cb-footer-info">cursor-bridge</span>
                     <div class="cb-footer-controls" id="cb-footer-controls">
+                        <button class="cb-btn cb-btn-sm" id="cb-quick-chat" title="快速对话 (Chatbot)" style="color:#58a6ff">
+                            <i class="fas fa-terminal"></i> 快速对话
+                        </button>
                         <button class="cb-btn cb-btn-sm cb-btn-start" id="cb-bridge-start" title="启动 cursor-bridge 服务">
                             <i class="fas fa-play"></i> 启动服务
                         </button>
@@ -1418,6 +1421,10 @@
 
             panel.querySelector('#cb-empty')?.addEventListener('click', () => this._showCreateModal());
 
+            panel.querySelector('#cb-quick-chat')?.addEventListener('click', () => {
+                this.togglePanel();
+                if (window.Chatbot) window.Chatbot.open();
+            });
             panel.querySelector('#cb-bridge-start')?.addEventListener('click', () => this.startBridge());
             panel.querySelector('#cb-bridge-stop')?.addEventListener('click', () => {
                 if (this.agents.length > 0) {

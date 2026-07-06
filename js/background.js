@@ -69,14 +69,12 @@ importScripts('background-provider.js', 'hermes-writing-sync.js');
 
     /**
      * 动态背景设置（可后续接入 settings UI；现在先给“优雅默认值”）
-     * - chinaFirst: 优先展示中国风景
      * - maxCategoriesPerRefresh: 每次刷新最多请求多少个分类（控制请求量）
      * - minWidth/minHeight: 过滤过小图片
      * - minAspect/maxAspect: 过滤过窄/过高的图（更适合做背景）
      * - allowLicenses: 默认过滤掉 NC（非商业）等不适合“可复用资源库”的授权
      */
     const DEFAULT_COMMONS_SETTINGS = Object.freeze({
-        chinaFirst: true,
         maxCategoriesPerRefresh: 2,
         minWidth: 1920,
         minHeight: 800,
@@ -90,24 +88,22 @@ importScripts('background-provider.js', 'hermes-writing-sync.js');
         ]
     });
 
-    // 你想“更多展示中国风景”，最稳妥的方式是：用 Commons 现成的中国相关分类池作为来源
-    // 同时保留全球兜底分类池，避免某些时候分类返回为空/失败。
-    const COMMONS_CATEGORY_PROFILES = Object.freeze({
-        china: [
-            { title: 'Category:Featured_pictures_of_China', label: '中国·精选' },
-            { title: 'Category:Landscapes_of_China', label: '中国·风景' },
-            { title: 'Category:Mountains_of_China', label: '中国·山川' },
-            { title: 'Category:Lakes_of_China', label: '中国·湖泊' },
-            { title: 'Category:Rivers_of_China', label: '中国·江河' },
-            { title: 'Category:National_parks_of_China', label: '中国·国家公园' },
-            { title: 'Category:UNESCO_World_Heritage_Sites_in_China', label: '中国·世界遗产' }
-        ],
-        global: [
-            { title: 'Category:Landscape_photographs', label: 'Wikimedia Commons' },
-            { title: 'Category:Images_of_landscapes', label: 'Wikimedia Commons' },
-            { title: 'Category:Landscapes', label: 'Wikimedia Commons' }
-        ]
-    });
+    const COMMONS_CATEGORY_PROFILES = Object.freeze([
+        { title: 'Category:Featured_pictures_of_landscapes', label: 'Landscapes' },
+        { title: 'Category:Landscape_photographs', label: 'Landscapes' },
+        { title: 'Category:Images_of_landscapes', label: 'Landscapes' },
+        { title: 'Category:Featured_pictures_of_mountains', label: 'Mountains' },
+        { title: 'Category:Featured_pictures_of_lakes', label: 'Lakes' },
+        { title: 'Category:Featured_pictures_of_oceans_and_seas', label: 'Oceans' },
+        { title: 'Category:Featured_pictures_of_sunsets', label: 'Sunsets' },
+        { title: 'Category:Featured_pictures_of_China', label: 'China' },
+        { title: 'Category:Featured_pictures_of_Norway', label: 'Norway' },
+        { title: 'Category:Featured_pictures_of_Iceland', label: 'Iceland' },
+        { title: 'Category:Featured_pictures_of_Switzerland', label: 'Switzerland' },
+        { title: 'Category:Featured_pictures_of_New_Zealand', label: 'New Zealand' },
+        { title: 'Category:Featured_pictures_of_Japan', label: 'Japan' },
+        { title: 'Category:National_parks', label: 'National Parks' },
+    ]);
 
     function stripHtml(html) {
         if (!html) return '';
@@ -317,45 +313,36 @@ importScripts('background-provider.js', 'hermes-writing-sync.js');
         const cursor = await getCommonsCursor();
         const maxCats = Math.max(1, Math.min(4, Number(settings.maxCategoriesPerRefresh) || 2));
 
-        const profiles = [];
-        if (settings.chinaFirst) profiles.push('china');
-        profiles.push('global');
+        const pool = COMMONS_CATEGORY_PROFILES;
+        const rotateKey = 'rotateIndex';
+        const startIndex = Number(cursor[rotateKey] || 0) % pool.length;
+        const picked = [];
+        for (let i = 0; i < Math.min(maxCats, pool.length); i++) {
+            picked.push(pool[(startIndex + i) % pool.length]);
+        }
+        cursor[rotateKey] = (startIndex + picked.length) % pool.length;
 
-        for (const profileName of profiles) {
-            const pool = COMMONS_CATEGORY_PROFILES[profileName] || [];
-            if (pool.length === 0) continue;
-
-            // 轮询分类池：避免每次都打同一个分类导致重复
-            const rotateKey = `rotateIndex:${profileName}`;
-            const startIndex = Number(cursor[rotateKey] || 0) % pool.length;
-            const picked = [];
-            for (let i = 0; i < Math.min(maxCats, pool.length); i++) {
-                picked.push(pool[(startIndex + i) % pool.length]);
+        const merged = [];
+        for (const cat of picked) {
+            try {
+                const catCursorKey = `gcmcontinue:${cat.title}`;
+                const { items, nextContinue } = await fetchCommonsByCategory(cat.title, {
+                    limit: 50,
+                    continueToken: cursor[catCursorKey],
+                    locationLabel: cat.label
+                });
+                if (nextContinue) cursor[catCursorKey] = nextContinue;
+                merged.push(...items);
+            } catch (e) {
+                console.warn('动态背景拉取失败（分类）:', cat.title, e?.message || e);
             }
-            cursor[rotateKey] = (startIndex + picked.length) % pool.length;
+        }
 
-            const merged = [];
-            for (const cat of picked) {
-                try {
-                    const catCursorKey = `gcmcontinue:${cat.title}`;
-                    const { items, nextContinue } = await fetchCommonsByCategory(cat.title, {
-                        limit: 50,
-                        continueToken: cursor[catCursorKey],
-                        locationLabel: cat.label
-                    });
-                    if (nextContinue) cursor[catCursorKey] = nextContinue;
-                    merged.push(...items);
-                } catch (e) {
-                    console.warn('动态背景拉取失败（分类）:', cat.title, e?.message || e);
-                }
-            }
-
-            const filtered = merged.filter(it => isGoodBackgroundCandidate(it, settings));
-            if (filtered.length > 0) {
-                await setCommonsCursor(cursor);
-                await setCachedDynamicBackgrounds(filtered, settingsHash);
-                return filtered;
-            }
+        const filtered = merged.filter(it => isGoodBackgroundCandidate(it, settings));
+        if (filtered.length > 0) {
+            await setCommonsCursor(cursor);
+            await setCachedDynamicBackgrounds(filtered, settingsHash);
+            return filtered;
         }
 
         // 网络不可用/分类为空：让调用方兜底

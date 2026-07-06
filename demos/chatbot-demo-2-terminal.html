@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot Demo 2 - 终端风格</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+            background: #0d1117;
+            min-height: 100vh; color: #c9d1d9;
+        }
+        .page-hint {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            text-align: center; opacity: 0.3; font-size: 13px;
+        }
+
+        /* Trigger */
+        .chatbot-trigger {
+            position: fixed; bottom: 24px; right: 24px; z-index: 1000;
+            width: 52px; height: 52px; border-radius: 12px;
+            background: #161b22; border: 1px solid #30363d; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+            transition: all 0.2s;
+        }
+        .chatbot-trigger:hover { border-color: #58a6ff; box-shadow: 0 0 16px rgba(88,166,255,0.2); }
+        .chatbot-trigger i { color: #58a6ff; font-size: 20px; }
+
+        /* Terminal Window */
+        .terminal-window {
+            position: fixed; bottom: 88px; right: 24px; z-index: 999;
+            width: 480px; height: 560px; border-radius: 12px;
+            background: #0d1117; border: 1px solid #30363d;
+            box-shadow: 0 20px 80px rgba(0,0,0,0.6);
+            display: flex; flex-direction: column;
+            opacity: 0; transform: translateY(10px); pointer-events: none;
+            transition: all 0.25s ease;
+        }
+        .terminal-window.visible { opacity: 1; transform: translateY(0); pointer-events: all; }
+
+        /* Title Bar */
+        .terminal-titlebar {
+            padding: 10px 16px; display: flex; align-items: center;
+            background: #161b22; border-bottom: 1px solid #21262d;
+            border-radius: 12px 12px 0 0; gap: 8px;
+        }
+        .terminal-dots { display: flex; gap: 6px; }
+        .terminal-dots span { width: 10px; height: 10px; border-radius: 50%; }
+        .terminal-dots span:nth-child(1) { background: #ff5f57; }
+        .terminal-dots span:nth-child(2) { background: #febc2e; }
+        .terminal-dots span:nth-child(3) { background: #28c840; }
+        .terminal-title {
+            flex: 1; text-align: center; font-size: 11px; color: #8b949e;
+        }
+
+        /* Agent Tabs */
+        .agent-tabs {
+            display: flex; padding: 0 12px; gap: 2px;
+            background: #161b22; border-bottom: 1px solid #21262d;
+        }
+        .agent-tab {
+            padding: 8px 14px; font-size: 11px; color: #8b949e; cursor: pointer;
+            border-bottom: 2px solid transparent; transition: all 0.2s;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .agent-tab:hover { color: #c9d1d9; }
+        .agent-tab.active { color: #58a6ff; border-bottom-color: #58a6ff; }
+        .agent-tab i { font-size: 10px; }
+
+        /* Messages */
+        .terminal-body {
+            flex: 1; overflow-y: auto; padding: 16px; font-size: 13px; line-height: 1.7;
+        }
+        .terminal-body::-webkit-scrollbar { width: 6px; }
+        .terminal-body::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+
+        .term-line { margin-bottom: 8px; animation: lineIn 0.2s ease; }
+        .term-prompt { color: #7ee787; }
+        .term-prompt-user { color: #58a6ff; }
+        .term-response { color: #c9d1d9; padding-left: 16px; border-left: 2px solid #21262d; margin: 4px 0 12px 0; }
+        .term-system { color: #8b949e; font-style: italic; font-size: 11px; }
+        .term-error { color: #f85149; }
+        .term-highlight { color: #ffa657; }
+
+        /* Cursor blink */
+        .term-cursor {
+            display: inline-block; width: 8px; height: 14px;
+            background: #58a6ff; margin-left: 2px; vertical-align: text-bottom;
+            animation: blink 1s step-end infinite;
+        }
+
+        /* Input */
+        .terminal-input {
+            padding: 12px 16px; border-top: 1px solid #21262d;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .terminal-input-prefix { color: #7ee787; font-size: 13px; white-space: nowrap; }
+        .terminal-input input {
+            flex: 1; background: transparent; border: none; color: #c9d1d9;
+            font-family: inherit; font-size: 13px; outline: none;
+        }
+        .terminal-input input::placeholder { color: #484f58; }
+
+        @keyframes lineIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
+
+        @media (max-width: 540px) {
+            .terminal-window { width: calc(100vw - 16px); right: 8px; height: 65vh; }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-hint">
+        <h2>Demo 2 - 终端风格 Chatbot</h2>
+        <p>点击右下角图标打开终端对话</p>
+    </div>
+
+    <button class="chatbot-trigger" id="chatbot-trigger">
+        <i class="fas fa-terminal"></i>
+    </button>
+
+    <div class="terminal-window" id="terminal-window">
+        <div class="terminal-titlebar">
+            <div class="terminal-dots"><span></span><span></span><span></span></div>
+            <div class="terminal-title">AI Agent Terminal — <span id="term-agent-label">general</span></div>
+        </div>
+        <div class="agent-tabs" id="agent-tabs"></div>
+        <div class="terminal-body" id="terminal-body">
+            <div class="term-line term-system">// 系统就绪。输入消息与 AI Agent 对话，使用 /switch &lt;agent&gt; 切换</div>
+            <div class="term-line term-system">// 可用 agents: general, code, writer, analyst</div>
+            <div class="term-line"><span class="term-prompt">agent@general ▸</span> 你好，有什么可以帮助你的？</div>
+        </div>
+        <div class="terminal-input">
+            <span class="terminal-input-prefix" id="input-prefix">you@chat ▸</span>
+            <input type="text" id="term-input" placeholder="输入消息或 /switch agent-id ..." autocomplete="off">
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        'use strict';
+
+        const AGENTS = [
+            { id: 'general', name: '通用', icon: 'fas fa-robot', color: '#58a6ff' },
+            { id: 'code', name: '代码', icon: 'fas fa-code', color: '#7ee787' },
+            { id: 'writer', name: '写作', icon: 'fas fa-pen', color: '#d2a8ff' },
+            { id: 'analyst', name: '分析', icon: 'fas fa-chart-bar', color: '#ffa657' },
+        ];
+
+        let currentAgent = 'general';
+        let isOpen = false;
+
+        const trigger = document.getElementById('chatbot-trigger');
+        const termWin = document.getElementById('terminal-window');
+        const body = document.getElementById('terminal-body');
+        const input = document.getElementById('term-input');
+        const tabs = document.getElementById('agent-tabs');
+        const agentLabel = document.getElementById('term-agent-label');
+
+        function renderTabs() {
+            tabs.innerHTML = AGENTS.map(a => `
+                <div class="agent-tab ${a.id === currentAgent ? 'active' : ''}" data-id="${a.id}">
+                    <i class="${a.icon}"></i> ${a.name}
+                </div>
+            `).join('');
+            tabs.querySelectorAll('.agent-tab').forEach(el => {
+                el.addEventListener('click', () => switchAgent(el.dataset.id));
+            });
+        }
+
+        function switchAgent(id) {
+            if (id === currentAgent) return;
+            currentAgent = id;
+            agentLabel.textContent = id;
+            renderTabs();
+            addLine(`<span class="term-system">// 已切换到 agent: ${id}</span>`);
+            addLine(`<span class="term-prompt">agent@${id} ▸</span> 你好，我是${AGENTS.find(a=>a.id===id).name}助手，请问有什么需要？`);
+        }
+
+        function addLine(html) {
+            const div = document.createElement('div');
+            div.className = 'term-line';
+            div.innerHTML = html;
+            body.appendChild(div);
+            body.scrollTop = body.scrollHeight;
+        }
+
+        function sendMessage() {
+            const text = input.value.trim();
+            if (!text) return;
+            input.value = '';
+
+            if (text.startsWith('/switch ')) {
+                const target = text.slice(8).trim();
+                if (AGENTS.find(a => a.id === target)) {
+                    switchAgent(target);
+                } else {
+                    addLine(`<span class="term-error">✗ 未知 agent: "${target}"。可用: ${AGENTS.map(a=>a.id).join(', ')}</span>`);
+                }
+                return;
+            }
+
+            addLine(`<span class="term-prompt-user">you ▸</span> ${escapeHtml(text)}`);
+
+            setTimeout(() => {
+                addLine(`<span class="term-prompt">agent@${currentAgent} ▸</span>`);
+                addLine(`<div class="term-response">[${currentAgent}] 模拟回复：你说了 "${escapeHtml(text)}"。实际会对接 cursor-bridge API。</div>`);
+            }, 800);
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        }
+
+        trigger.addEventListener('click', () => {
+            isOpen = !isOpen;
+            termWin.classList.toggle('visible', isOpen);
+            if (isOpen) input.focus();
+        });
+        input.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
+
+        renderTabs();
+    })();
+    </script>
+</body>
+</html>

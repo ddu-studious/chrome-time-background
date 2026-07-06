@@ -58,7 +58,6 @@
         enabledSources: ['wikimedia', 'bing'],
         apiKeys: { unsplash: '', pexels: '', pixabay: '', wallhaven: '', coverr: '', nasa: '' },
         enableVideoBackground: false,
-        chinaFirst: true,
         settingsPageBackground: false,
     });
 
@@ -75,22 +74,22 @@
 
     // ======================== Provider: Wikimedia Commons ========================
 
-    const COMMONS_CATEGORIES = Object.freeze({
-        china: [
-            { title: 'Category:Featured_pictures_of_China', label: '中国·精选' },
-            { title: 'Category:Landscapes_of_China', label: '中国·风景' },
-            { title: 'Category:Mountains_of_China', label: '中国·山川' },
-            { title: 'Category:Lakes_of_China', label: '中国·湖泊' },
-            { title: 'Category:Rivers_of_China', label: '中国·江河' },
-            { title: 'Category:National_parks_of_China', label: '中国·国家公园' },
-            { title: 'Category:UNESCO_World_Heritage_Sites_in_China', label: '中国·世界遗产' },
-        ],
-        global: [
-            { title: 'Category:Landscape_photographs', label: 'Wikimedia Commons' },
-            { title: 'Category:Images_of_landscapes', label: 'Wikimedia Commons' },
-            { title: 'Category:Landscapes', label: 'Wikimedia Commons' },
-        ],
-    });
+    const COMMONS_CATEGORIES = Object.freeze([
+        { title: 'Category:Featured_pictures_of_landscapes', label: 'Landscapes' },
+        { title: 'Category:Landscape_photographs', label: 'Landscapes' },
+        { title: 'Category:Images_of_landscapes', label: 'Landscapes' },
+        { title: 'Category:Featured_pictures_of_mountains', label: 'Mountains' },
+        { title: 'Category:Featured_pictures_of_lakes', label: 'Lakes' },
+        { title: 'Category:Featured_pictures_of_oceans_and_seas', label: 'Oceans' },
+        { title: 'Category:Featured_pictures_of_sunsets', label: 'Sunsets' },
+        { title: 'Category:Featured_pictures_of_China', label: 'China' },
+        { title: 'Category:Featured_pictures_of_Norway', label: 'Norway' },
+        { title: 'Category:Featured_pictures_of_Iceland', label: 'Iceland' },
+        { title: 'Category:Featured_pictures_of_Switzerland', label: 'Switzerland' },
+        { title: 'Category:Featured_pictures_of_New_Zealand', label: 'New Zealand' },
+        { title: 'Category:Featured_pictures_of_Japan', label: 'Japan' },
+        { title: 'Category:National_parks', label: 'National Parks' },
+    ]);
 
     const COMMONS_CURSOR_KEY = 'dynamicBackgroundsCursorV1';
     const COMMONS_ALLOWED_LICENSES = ['cc-by', 'cc-by-sa', 'cc0', 'public-domain'];
@@ -105,7 +104,7 @@
         return false;
     }
 
-    async function fetchWikimediaCommons(settings) {
+    async function fetchWikimediaCommons() {
         const cached = await getCache('wikimedia', 12 * 3600_000);
         if (cached) return cached;
 
@@ -115,77 +114,70 @@
             cursor = c && typeof c === 'object' ? c : {};
         } catch { cursor = {}; }
 
-        const profiles = settings.chinaFirst ? ['china', 'global'] : ['global'];
+        const pool = COMMONS_CATEGORIES;
         const allItems = [];
 
-        for (const profileName of profiles) {
-            const pool = COMMONS_CATEGORIES[profileName] || [];
-            if (!pool.length) continue;
+        const rotateKey = 'rotateIndex';
+        const startIdx = (Number(cursor[rotateKey] || 0)) % pool.length;
+        const picked = [];
+        for (let i = 0; i < Math.min(3, pool.length); i++) {
+            picked.push(pool[(startIdx + i) % pool.length]);
+        }
+        cursor[rotateKey] = (startIdx + picked.length) % pool.length;
 
-            const rotateKey = `rotateIndex:${profileName}`;
-            const startIdx = (Number(cursor[rotateKey] || 0)) % pool.length;
-            const picked = [];
-            for (let i = 0; i < Math.min(2, pool.length); i++) {
-                picked.push(pool[(startIdx + i) % pool.length]);
-            }
-            cursor[rotateKey] = (startIdx + picked.length) % pool.length;
+        for (const cat of picked) {
+            try {
+                const cursorKey = `gcmcontinue:${cat.title}`;
+                const continueToken = cursor[cursorKey] || '';
+                const url =
+                    'https://commons.wikimedia.org/w/api.php?action=query' +
+                    '&generator=categorymembers' +
+                    `&gcmtitle=${encodeURIComponent(cat.title)}` +
+                    '&gcmtype=file&gcmlimit=50' +
+                    (continueToken ? `&gcmcontinue=${encodeURIComponent(continueToken)}&continue=` : '') +
+                    '&prop=imageinfo&iiprop=url|size|mime|extmetadata&iiurlwidth=1920&format=json&origin=*';
 
-            for (const cat of picked) {
-                try {
-                    const cursorKey = `gcmcontinue:${cat.title}`;
-                    const continueToken = cursor[cursorKey] || '';
-                    const url =
-                        'https://commons.wikimedia.org/w/api.php?action=query' +
-                        '&generator=categorymembers' +
-                        `&gcmtitle=${encodeURIComponent(cat.title)}` +
-                        '&gcmtype=file&gcmlimit=50' +
-                        (continueToken ? `&gcmcontinue=${encodeURIComponent(continueToken)}&continue=` : '') +
-                        '&prop=imageinfo&iiprop=url|size|mime|extmetadata&iiurlwidth=1920&format=json&origin=*';
+                const res = await fetch(url, { cache: 'no-store' });
+                if (!res.ok) continue;
+                const data = await res.json();
 
-                    const res = await fetch(url, { cache: 'no-store' });
-                    if (!res.ok) continue;
-                    const data = await res.json();
+                if (data?.continue?.gcmcontinue) cursor[cursorKey] = data.continue.gcmcontinue;
 
-                    if (data?.continue?.gcmcontinue) cursor[cursorKey] = data.continue.gcmcontinue;
+                const pages = data?.query?.pages;
+                if (!pages) continue;
 
-                    const pages = data?.query?.pages;
-                    if (!pages) continue;
+                for (const pageId of Object.keys(pages)) {
+                    const info = pages[pageId]?.imageinfo?.[0];
+                    if (!info) continue;
+                    const imgUrl = info.thumburl || info.url;
+                    if (!imgUrl || !(/\.(jpg|jpeg|png|webp)(\?|$)/i.test(imgUrl))) continue;
 
-                    for (const pageId of Object.keys(pages)) {
-                        const info = pages[pageId]?.imageinfo?.[0];
-                        if (!info) continue;
-                        const imgUrl = info.thumburl || info.url;
-                        if (!imgUrl || !(/\.(jpg|jpeg|png|webp)(\?|$)/i.test(imgUrl))) continue;
+                    const meta = info.extmetadata || {};
+                    const licShort = stripHtml(meta.LicenseShortName?.value);
+                    const licUrl = stripHtml(meta.LicenseUrl?.value);
+                    if (!isAllowedLicense(licUrl, licShort)) continue;
 
-                        const meta = info.extmetadata || {};
-                        const licShort = stripHtml(meta.LicenseShortName?.value);
-                        const licUrl = stripHtml(meta.LicenseUrl?.value);
-                        if (!isAllowedLicense(licUrl, licShort)) continue;
+                    const w = Number(info.width) || 0;
+                    const h = Number(info.height) || 0;
+                    if (w && w < 1920) continue;
+                    if (h && h < 800) continue;
+                    if (w && h) { const a = w / h; if (a < 1.15 || a > 4.0) continue; }
 
-                        const w = Number(info.width) || 0;
-                        const h = Number(info.height) || 0;
-                        if (w && w < 1920) continue;
-                        if (h && h < 800) continue;
-                        if (w && h) { const a = w / h; if (a < 1.15 || a > 4.0) continue; }
-
-                        allItems.push(makeItem({
-                            url: imgUrl,
-                            location: cat.label,
-                            description: stripHtml(meta.ImageDescription?.value) || stripHtml(pages[pageId].title),
-                            photographer: stripHtml(meta.Artist?.value) || 'Wikimedia Commons',
-                            source: 'wikimedia',
-                            license: licShort,
-                            licenseUrl: licUrl,
-                            width: w, height: h,
-                            mime: String(info.mime || '').toLowerCase(),
-                        }));
-                    }
-                } catch (e) {
-                    console.warn('[Provider:wikimedia] 分类拉取失败:', cat.title, e?.message);
+                    allItems.push(makeItem({
+                        url: imgUrl,
+                        location: cat.label,
+                        description: stripHtml(meta.ImageDescription?.value) || stripHtml(pages[pageId].title),
+                        photographer: stripHtml(meta.Artist?.value) || 'Wikimedia Commons',
+                        source: 'wikimedia',
+                        license: licShort,
+                        licenseUrl: licUrl,
+                        width: w, height: h,
+                        mime: String(info.mime || '').toLowerCase(),
+                    }));
                 }
+            } catch (e) {
+                console.warn('[Provider:wikimedia] 分类拉取失败:', cat.title, e?.message);
             }
-
-            if (allItems.length > 0) break;
         }
 
         try { await chrome.storage.local.set({ [COMMONS_CURSOR_KEY]: cursor }); } catch { }
@@ -197,12 +189,12 @@
 
     // ======================== Provider: Unsplash ========================
 
-    async function fetchUnsplash(apiKey, settings) {
+    async function fetchUnsplash(apiKey) {
         if (!apiKey) return [];
         const cached = await getCache('unsplash', 6 * 3600_000);
         if (cached) return cached;
 
-        const query = settings.chinaFirst ? 'china+landscape+scenery' : 'landscape+nature+scenery';
+        const query = 'landscape+nature+scenery';
         const url = `https://api.unsplash.com/photos/random?query=${query}&orientation=landscape&count=30`;
 
         try {
@@ -234,12 +226,12 @@
 
     // ======================== Provider: Pexels ========================
 
-    async function fetchPexels(apiKey, settings, includeVideo) {
+    async function fetchPexels(apiKey, includeVideo) {
         if (!apiKey) return [];
         const cached = await getCache('pexels', 6 * 3600_000);
         if (cached) return cached;
 
-        const query = settings.chinaFirst ? 'china landscape' : 'landscape nature';
+        const query = 'landscape nature scenery';
         const items = [];
 
         try {
@@ -267,7 +259,7 @@
 
         if (includeVideo) {
             try {
-                const vQuery = settings.chinaFirst ? 'china nature' : 'nature landscape';
+                const vQuery = 'nature landscape scenery';
                 const res = await fetch(
                     `https://api.pexels.com/videos/search?query=${encodeURIComponent(vQuery)}&orientation=landscape&per_page=10`,
                     { headers: { Authorization: apiKey } }
@@ -303,12 +295,12 @@
 
     // ======================== Provider: Pixabay ========================
 
-    async function fetchPixabay(apiKey, settings, includeVideo) {
+    async function fetchPixabay(apiKey, includeVideo) {
         if (!apiKey) return [];
         const cached = await getCache('pixabay', 24 * 3600_000);
         if (cached) return cached;
 
-        const query = settings.chinaFirst ? 'china+landscape' : 'landscape+nature';
+        const query = 'landscape+nature+scenery';
         const items = [];
 
         try {
@@ -453,11 +445,11 @@
 
     // ======================== Provider: Wallhaven ========================
 
-    async function fetchWallhaven(apiKey, settings) {
+    async function fetchWallhaven(apiKey) {
         const cached = await getCache('wallhaven', 6 * 3600_000);
         if (cached) return cached;
 
-        const query = settings.chinaFirst ? 'china landscape' : 'landscape nature';
+        const query = 'landscape nature scenery';
         let url = `https://wallhaven.cc/api/v1/search?q=${encodeURIComponent(query)}&categories=100&purity=100&atleast=1920x1080&sorting=random`;
         if (apiKey) url += `&apikey=${apiKey}`;
 
@@ -564,14 +556,14 @@
     // ======================== 内置兜底图片 ========================
 
     const FALLBACK_BACKGROUNDS = [
-        { url: 'https://images.unsplash.com/photo-1547981609-4b6bfe67ca0b?auto=format&fit=crop&w=1920&q=80', location: '长城', description: '慕田峪长城', photographer: 'Unsplash', source: 'fallback' },
-        { url: 'https://images.unsplash.com/photo-1548919973-5cef591cdbc9?auto=format&fit=crop&w=1920&q=80', location: '张家界', description: '武陵源风景区', photographer: 'Unsplash', source: 'fallback' },
-        { url: 'https://images.unsplash.com/photo-1632891051939-01a4b8b8f4b7?auto=format&fit=crop&w=1920&q=80', location: '黄山', description: '云海日出', photographer: 'Unsplash', source: 'fallback' },
-        { url: 'https://images.unsplash.com/photo-1537531383496-f4749b8032cf?auto=format&fit=crop&w=1920&q=80', location: '桂林', description: '漓江山水', photographer: 'Unsplash', source: 'fallback' },
-        { url: 'https://images.unsplash.com/photo-1520252729650-ddced2015543?auto=format&fit=crop&w=1920&q=80', location: '西湖', description: '杭州西湖', photographer: 'Unsplash', source: 'fallback' },
-        { url: 'https://images.unsplash.com/photo-1527909249915-9fe4a354c35c?auto=format&fit=crop&w=1920&q=80', location: '九寨沟', description: '五彩池', photographer: 'Unsplash', source: 'fallback' },
-        { url: 'https://images.unsplash.com/photo-1535530992830-e25d07cfa780?auto=format&fit=crop&w=1920&q=80', location: '泰山', description: '日出云海', photographer: 'Unsplash', source: 'fallback' },
-        { url: 'https://images.unsplash.com/photo-1528164344705-47542687000d?auto=format&fit=crop&w=1920&q=80', location: '丽江', description: '古城风光', photographer: 'Unsplash', source: 'fallback' },
+        { url: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=1920&q=80', location: 'Swiss Alps', description: 'Mountain sunrise', photographer: 'Unsplash', source: 'fallback' },
+        { url: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1920&q=80', location: 'Green Valley', description: 'Foggy forest valley', photographer: 'Unsplash', source: 'fallback' },
+        { url: 'https://images.unsplash.com/photo-1547981609-4b6bfe67ca0b?auto=format&fit=crop&w=1920&q=80', location: 'Great Wall', description: 'Great Wall of China', photographer: 'Unsplash', source: 'fallback' },
+        { url: 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1920&q=80', location: 'Lake', description: 'Mountain lake reflection', photographer: 'Unsplash', source: 'fallback' },
+        { url: 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=1920&q=80', location: 'Yosemite', description: 'Sunlit valley', photographer: 'Unsplash', source: 'fallback' },
+        { url: 'https://images.unsplash.com/photo-1433086966358-54859d0ed716?auto=format&fit=crop&w=1920&q=80', location: 'Waterfall', description: 'Tropical waterfall', photographer: 'Unsplash', source: 'fallback' },
+        { url: 'https://images.unsplash.com/photo-1520252729650-ddced2015543?auto=format&fit=crop&w=1920&q=80', location: 'West Lake', description: 'West Lake, Hangzhou', photographer: 'Unsplash', source: 'fallback' },
+        { url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1920&q=80', location: 'Beach', description: 'Tropical beach', photographer: 'Unsplash', source: 'fallback' },
     ].map(f => makeItem(f));
 
     // ======================== Provider Manager ========================
@@ -611,22 +603,22 @@
                 let items = [];
                 switch (name) {
                     case 'wikimedia':
-                        items = await fetchWikimediaCommons(settings);
+                        items = await fetchWikimediaCommons();
                         break;
                     case 'unsplash':
-                        items = await fetchUnsplash(keys.unsplash, settings);
+                        items = await fetchUnsplash(keys.unsplash);
                         break;
                     case 'pexels':
-                        items = await fetchPexels(keys.pexels, settings, includeVideo);
+                        items = await fetchPexels(keys.pexels, includeVideo);
                         break;
                     case 'pixabay':
-                        items = await fetchPixabay(keys.pixabay, settings, includeVideo);
+                        items = await fetchPixabay(keys.pixabay, includeVideo);
                         break;
                     case 'bing':
                         items = await fetchBingDaily();
                         break;
                     case 'wallhaven':
-                        items = await fetchWallhaven(keys.wallhaven, settings);
+                        items = await fetchWallhaven(keys.wallhaven);
                         break;
                     case 'coverr':
                         items = await fetchCoverr(keys.coverr, includeVideo);

@@ -17,6 +17,7 @@
     { id: 'reading', name: '今日阅读', icon: 'fas fa-book-reader', category: 'media', dockBtnId: 'reading-dock-btn', isSystem: false, defaultOrder: 8.7 },
     { id: 'poetry', name: '诗词电台', icon: 'fas fa-feather-alt', category: 'media', dockBtnId: 'poetry-dock-btn', isSystem: false, defaultOrder: 8.8 },
     { id: 'agent', name: 'Agent 矩阵', icon: 'fas fa-robot', category: 'tools', dockBtnId: 'agent-dock-btn', isSystem: false, defaultOrder: 9, hasIndicator: true },
+    { id: 'chatbot', name: 'AI 对话', icon: 'fas fa-terminal', category: 'tools', dockBtnId: 'chatbot-dock-btn', isSystem: false, defaultOrder: 9.2 },
     { id: 'prompt-manager', name: 'Prompt 管理', icon: 'fas fa-magic', category: 'tools', dockBtnId: 'prompt-mgr-dock-btn', isSystem: false, defaultOrder: 9.5 },
     { id: 'settings', name: '设置', icon: 'fas fa-cog', category: 'system', dockBtnId: 'settings-dock-btn', isSystem: true, defaultOrder: 10 },
     { id: 'memo', name: '任务面板', icon: 'fas fa-tasks', category: 'productivity', dockBtnId: 'memo-toggle-btn', isSystem: false, defaultOrder: 11 },

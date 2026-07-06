@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>热榜面板 Demo 7 - 便当盒布局</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: url('https://images.unsplash.com/photo-1520252729650-ddced2015543?w=1920&q=80') center/cover no-repeat fixed;
+            color: #fff; min-height: 100vh;
+        }
+        body::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 0; }
+
+        .panel-overlay {
+            position: fixed; inset: 0; z-index: 900;
+            background: rgba(0,0,0,0.4); backdrop-filter: blur(12px);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .panel {
+            width: min(1100px, 94vw); height: 86vh;
+            display: flex; flex-direction: column;
+        }
+
+        .panel-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 24px;
+        }
+        .header-left { display: flex; align-items: center; gap: 16px; }
+        .panel-title { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+        .panel-subtitle { font-size: 14px; color: rgba(255,255,255,0.5); margin-top: 4px; }
+        
+        .header-actions { display: flex; gap: 12px; }
+        .filter-btn {
+            padding: 8px 16px; border-radius: 20px;
+            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.05);
+            color: #fff; font-size: 13px; cursor: pointer; transition: all 0.2s;
+            backdrop-filter: blur(10px);
+        }
+        .filter-btn:hover { background: rgba(255,255,255,0.2); }
+        .filter-btn.active { background: #fff; color: #000; font-weight: 600; }
+        .close-btn {
+            width: 36px; height: 36px; border-radius: 18px;
+            background: rgba(255,255,255,0.1); border: none; color: #fff;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            backdrop-filter: blur(10px); transition: all 0.2s;
+        }
+        .close-btn:hover { background: rgba(255,255,255,0.2); }
+
+        /* Bento Grid */
+        .bento-grid {
+            flex: 1; overflow-y: auto;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-auto-rows: 160px;
+            gap: 16px;
+            padding-bottom: 32px;
+        }
+        .bento-grid::-webkit-scrollbar { display: none; }
+
+        .bento-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 24px;
+            padding: 24px;
+            position: relative; overflow: hidden;
+            cursor: pointer; transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            backdrop-filter: blur(20px);
+            display: flex; flex-direction: column;
+        }
+        .bento-card:hover {
+            transform: scale(1.02);
+            background: rgba(255,255,255,0.08);
+            border-color: rgba(255,255,255,0.15);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+        }
+
+        /* Sizes */
+        .size-2x2 { grid-column: span 2; grid-row: span 2; }
+        .size-2x1 { grid-column: span 2; grid-row: span 1; }
+        .size-1x2 { grid-column: span 1; grid-row: span 2; }
+        .size-1x1 { grid-column: span 1; grid-row: span 1; }
+
+        /* Card Content Styles */
+        .card-source {
+            font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;
+            margin-bottom: 12px; display: flex; align-items: center; gap: 6px;
+        }
+        .source-github { color: #c4b5fd; }
+        .source-hn { color: #fdba74; }
+        .source-reddit { color: #fca5a5; }
+
+        .card-title {
+            font-weight: 600; line-height: 1.3; color: #fff;
+            display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden;
+        }
+        .size-2x2 .card-title { font-size: 28px; -webkit-line-clamp: 3; margin-bottom: 16px; }
+        .size-2x1 .card-title { font-size: 20px; -webkit-line-clamp: 2; margin-bottom: 8px; }
+        .size-1x2 .card-title { font-size: 20px; -webkit-line-clamp: 4; margin-bottom: 12px; }
+        .size-1x1 .card-title { font-size: 15px; -webkit-line-clamp: 3; margin-bottom: auto; }
+
+        .card-desc {
+            font-size: 14px; color: rgba(255,255,255,0.6); line-height: 1.5;
+            display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden;
+        }
+        .size-2x2 .card-desc { -webkit-line-clamp: 3; }
+        .size-2x1 .card-desc { -webkit-line-clamp: 1; }
+        .size-1x2 .card-desc { -webkit-line-clamp: 4; }
+
+        .card-footer {
+            margin-top: auto; display: flex; align-items: center; justify-content: space-between;
+            padding-top: 16px;
+        }
+        .card-metrics { display: flex; gap: 12px; font-size: 13px; font-weight: 500; }
+        .metric-stars { color: #fbbf24; }
+        .metric-points { color: #f97316; }
+        .metric-comments { color: rgba(255,255,255,0.4); }
+
+        .card-bg-icon {
+            position: absolute; right: -20px; bottom: -20px;
+            font-size: 120px; opacity: 0.03; transform: rotate(-15deg);
+            pointer-events: none;
+        }
+        .size-1x1 .card-bg-icon { font-size: 80px; }
+
+        /* Special Cards */
+        .card-gradient-1 { background: linear-gradient(135deg, rgba(79, 70, 229, 0.4), rgba(124, 58, 237, 0.1)); border-color: rgba(124, 58, 237, 0.3); }
+        .card-gradient-1:hover { background: linear-gradient(135deg, rgba(79, 70, 229, 0.5), rgba(124, 58, 237, 0.2)); }
+        
+        .card-gradient-2 { background: linear-gradient(135deg, rgba(234, 88, 12, 0.3), rgba(0,0,0,0)); border-color: rgba(234, 88, 12, 0.2); }
+        .card-gradient-2:hover { background: linear-gradient(135deg, rgba(234, 88, 12, 0.4), rgba(0,0,0,0)); }
+
+        .rank-badge {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 28px; height: 28px; border-radius: 50%;
+            background: #fff; color: #000; font-weight: 800; font-size: 14px;
+            margin-right: 8px;
+        }
+
+        .ai-insight {
+            margin-top: 16px; padding: 12px 16px; border-radius: 12px;
+            background: rgba(0,0,0,0.2); border-left: 3px solid #818cf8;
+            font-size: 13px; color: rgba(255,255,255,0.8); line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="panel-overlay">
+        <div class="panel">
+            <div class="panel-header">
+                <div class="header-left">
+                    <div>
+                        <div class="panel-title">今日热榜精选</div>
+                        <div class="panel-subtitle">为您聚合最值得关注的科技资讯</div>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <button class="filter-btn active">全部精选</button>
+                    <button class="filter-btn">GitHub</button>
+                    <button class="filter-btn">Hacker News</button>
+                    <button class="close-btn"><i class="fas fa-times"></i></button>
+                </div>
+            </div>
+
+            <div class="bento-grid">
+                <!-- Top 1: Big Card -->
+                <div class="bento-card size-2x2 card-gradient-1">
+                    <i class="fab fa-github card-bg-icon"></i>
+                    <div class="card-source source-github"><i class="fab fa-github"></i> GitHub Trending #1</div>
+                    <div class="card-title"><span class="rank-badge">1</span> anthropics/claude-code</div>
+                    <div class="card-desc">Claude Code is an agentic coding tool that lives in your terminal, understands your codebase, and helps you code faster by executing routine tasks, explaining complex logic, and writing code.</div>
+                    <div class="ai-insight">
+                        <strong>✨ AI 洞察：</strong> Anthropic 官方出品的终端 AI 助手，直接改变了开发者的工作流。它不仅能写代码，还能自己运行测试和修复错误，是目前最火的工程效能工具。
+                    </div>
+                    <div class="card-footer">
+                        <div class="card-metrics">
+                            <span class="metric-stars"><i class="fas fa-star"></i> 12.4k</span>
+                            <span>TypeScript</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top 2: Medium Card -->
+                <div class="bento-card size-2x1 card-gradient-2">
+                    <i class="fab fa-hacker-news card-bg-icon"></i>
+                    <div class="card-source source-hn"><i class="fab fa-hacker-news"></i> Hacker News #1</div>
+                    <div class="card-title">Linux has officially won</div>
+                    <div class="card-desc">A deep dive into how Linux became the undisputed king of the server, mobile, and embedded worlds.</div>
+                    <div class="card-footer">
+                        <div class="card-metrics">
+                            <span class="metric-points"><i class="fas fa-arrow-up"></i> 1.4k</span>
+                            <span class="metric-comments"><i class="fas fa-comment"></i> 891</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top 3: Tall Card -->
+                <div class="bento-card size-1x2">
+                    <i class="fab fa-reddit card-bg-icon"></i>
+                    <div class="card-source source-reddit"><i class="fab fa-reddit"></i> Reddit Hot</div>
+                    <div class="card-title">What's Next for AI? Discussion on the future</div>
+                    <div class="card-desc" style="margin-top: 12px;">The community is debating the trajectory of LLMs after the recent release of GPT-5 and Claude 4. Are we hitting a plateau, or is AGI closer than we think?</div>
+                    <div class="card-footer">
+                        <div class="card-metrics">
+                            <span class="metric-points" style="color:#ef4444"><i class="fas fa-arrow-up"></i> 1.2k</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Small Cards -->
+                <div class="bento-card size-1x1">
+                    <div class="card-source source-github"><i class="fab fa-github"></i> GitHub</div>
+                    <div class="card-title">Krishnagangwal/CS-Fundamentals</div>
+                    <div class="card-footer">
+                        <div class="card-metrics"><span class="metric-stars"><i class="fas fa-star"></i> 1.5k</span></div>
+                    </div>
+                </div>
+
+                <div class="bento-card size-1x1">
+                    <div class="card-source source-hn"><i class="fab fa-hacker-news"></i> HN</div>
+                    <div class="card-title">Astrophysicists Puzzle over Webb's New Universe</div>
+                    <div class="card-footer">
+                        <div class="card-metrics"><span class="metric-points"><i class="fas fa-arrow-up"></i> 79</span></div>
+                    </div>
+                </div>
+
+                <!-- Medium Card -->
+                <div class="bento-card size-2x1">
+                    <div class="card-source source-github"><i class="fab fa-github"></i> GitHub Trending</div>
+                    <div class="card-title">yynxxxxx/Codex-5.5-codex-instruct-5.5</div>
+                    <div class="card-desc">OpenAI Codex 5.5 instruction-tuned model weights and inference code leaked.</div>
+                    <div class="card-footer">
+                        <div class="card-metrics">
+                            <span class="metric-stars"><i class="fas fa-star"></i> 1.3k</span>
+                            <span>Python</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Small Cards -->
+                <div class="bento-card size-1x1">
+                    <div class="card-source source-hn"><i class="fab fa-hacker-news"></i> HN</div>
+                    <div class="card-title">The Vespa at 80: Why it remains the coolest</div>
+                    <div class="card-footer">
+                        <div class="card-metrics"><span class="metric-points"><i class="fas fa-arrow-up"></i> 43</span></div>
+                    </div>
+                </div>
+
+                <div class="bento-card size-1x1">
+                    <div class="card-source source-github"><i class="fab fa-github"></i> GitHub</div>
+                    <div class="card-title">mekos2772/ios-location-spoofer</div>
+                    <div class="card-footer">
+                        <div class="card-metrics"><span class="metric-stars"><i class="fas fa-star"></i> 1.3k</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

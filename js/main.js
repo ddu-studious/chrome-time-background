@@ -361,6 +361,19 @@ async function initApp() {
         console.error('Cursor Bridge 初始化失败:', error);
     }
 
+    // Chatbot 终端对话模块
+    try {
+        const chatbotDockBtn = document.getElementById('chatbot-dock-btn');
+        if (chatbotDockBtn && window.Chatbot) {
+            chatbotDockBtn.addEventListener('click', () => {
+                window.Chatbot.toggle();
+            });
+            console.log('Chatbot 模块初始化完成');
+        }
+    } catch (error) {
+        console.error('Chatbot 初始化失败:', error);
+    }
+
     // v3.0.0: 初始化系统监控
     if (sm.getSetting('enableSystemMonitor') !== false) {
         try {

@@ -1806,7 +1806,7 @@ class TechTicker {
         return div.innerHTML;
     }
     
-    // ========= 展开面板 =========
+    // ========= 展开面板（三合一可切换视图） =========
     
     toggleExpandPanel() {
         let panel = document.getElementById('ticker-expand-panel');
@@ -1823,61 +1823,69 @@ class TechTicker {
         panel.id = 'ticker-expand-panel';
         panel.className = 'ticker-expand-panel';
 
-        const groups = {};
-        for (const item of this.tickerItems) {
-            const key = item.type;
-            if (!groups[key]) groups[key] = [];
-            groups[key].push(item);
-        }
-
-        const sourceKeys = Object.keys(groups);
-        const sidebarHtml = `
-            <button class="tep-tab active" data-filter="all">🔥 全部<span class="tep-tab-count">${this.tickerItems.length}</span></button>
-            ${sourceKeys.map(k => {
-                const cfg = TICKER_SOURCE_REGISTRY[k];
-                return `<button class="tep-tab" data-filter="${k}">${cfg?.icon || ''} ${cfg?.name || k}<span class="tep-tab-count">${groups[k].length}</span></button>`;
-            }).join('')}
-        `;
+        this._expandActiveFilter = 'all';
+        this._expandActiveView = this._savedExpandView || 'table';
+        this._expandSearchQuery = '';
+        this._expandSort = null;
+        this._expandSortAsc = false;
 
         panel.innerHTML = `
-            <div class="tep-layout">
-                <div class="tep-sidebar" id="tep-sidebar">${sidebarHtml}</div>
-                <div class="tep-main">
-                    <div class="tep-header">
-                        <span class="tep-title" id="tep-title">全部热榜 · ${this.tickerItems.length} 条</span>
-                        <button class="tep-close" id="tep-close"><i class="fas fa-times"></i></button>
-                    </div>
-                    <div class="tep-body" id="tep-body"></div>
+            <div class="tep-header">
+                <div class="tep-header-left">
+                    <div class="tep-icon"><i class="fas fa-fire-flame-curved"></i></div>
+                    <span class="tep-title" id="tep-title">热榜</span>
+                    <span class="tep-count" id="tep-count">${this.tickerItems.length} 条</span>
                 </div>
+                <div class="tep-header-center">
+                    <div class="tep-view-switcher" id="tep-view-switcher">
+                        <button class="tep-view-btn${this._expandActiveView==='table'?' active':''}" data-view="table"><i class="fas fa-table-list"></i> 表格</button>
+                        <button class="tep-view-btn${this._expandActiveView==='bento'?' active':''}" data-view="bento"><i class="fas fa-border-all"></i> 精选</button>
+                        <button class="tep-view-btn${this._expandActiveView==='insight'?' active':''}" data-view="insight"><i class="fas fa-sparkles"></i> AI 洞察</button>
+                    </div>
+                </div>
+                <div class="tep-header-right">
+                    <div class="tep-search">
+                        <i class="fas fa-search"></i>
+                        <input type="text" placeholder="搜索..." id="tep-search-input">
+                    </div>
+                    <button class="tep-close" id="tep-close"><i class="fas fa-times"></i></button>
+                </div>
+            </div>
+            <div class="tep-filter-bar" id="tep-filter-bar"></div>
+            <div class="tep-view-container">
+                <div class="tep-view-pane" id="tep-pane-table"></div>
+                <div class="tep-view-pane tep-hidden" id="tep-pane-bento"></div>
+                <div class="tep-view-pane tep-hidden" id="tep-pane-insight"></div>
             </div>
         `;
 
         document.body.appendChild(panel);
         requestAnimationFrame(() => panel.classList.add('open'));
         this._expandPanelVisible = true;
-        this._expandActiveFilter = 'all';
+
+        this._renderExpandFilterBar(panel);
+        this._renderExpandCurrentView(panel);
 
         panel.querySelector('#tep-close').addEventListener('click', () => {
             panel.classList.remove('open');
             this._expandPanelVisible = false;
         });
 
-        panel.querySelectorAll('.tep-tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                panel.querySelectorAll('.tep-tab').forEach(t => t.classList.remove('active'));
-                tab.classList.add('active');
-                const filter = tab.dataset.filter;
-                this._expandActiveFilter = filter;
-                const cfg = TICKER_SOURCE_REGISTRY[filter];
-                const items = filter === 'all' ? this.tickerItems : (groups[filter] || []);
-                const titleEl = panel.querySelector('#tep-title');
-                if (titleEl) {
-                    titleEl.textContent = filter === 'all'
-                        ? `全部热榜 · ${this.tickerItems.length} 条`
-                        : `${cfg?.icon || ''} ${cfg?.name || filter} · ${items.length} 条`;
-                }
-                this._renderExpandItems(panel, filter);
+        panel.querySelectorAll('.tep-view-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                panel.querySelectorAll('.tep-view-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this._expandActiveView = btn.dataset.view;
+                this._saveExpandViewPref(this._expandActiveView);
+                panel.querySelectorAll('.tep-view-pane').forEach(p => p.classList.add('tep-hidden'));
+                panel.querySelector(`#tep-pane-${this._expandActiveView}`).classList.remove('tep-hidden');
+                this._renderExpandCurrentView(panel);
             });
+        });
+
+        panel.querySelector('#tep-search-input').addEventListener('input', (e) => {
+            this._expandSearchQuery = e.target.value.trim();
+            this._renderExpandCurrentView(panel);
         });
 
         document.addEventListener('keydown', (e) => {
@@ -1887,88 +1895,299 @@ class TechTicker {
             }
         });
 
-        this._renderExpandItems(panel, 'all');
+        this._loadExpandViewPref();
     }
-    
+
+    _renderExpandFilterBar(panel) {
+        const bar = panel.querySelector('#tep-filter-bar');
+        const groups = {};
+        this.tickerItems.forEach(d => { groups[d.type] = (groups[d.type]||0)+1; });
+        let h = `<button class="tep-filter-chip active" data-filter="all"><i class="fas fa-globe"></i> 全部</button>`;
+        for (const [k, c] of Object.entries(groups)) {
+            const cfg = TICKER_SOURCE_REGISTRY[k];
+            h += `<button class="tep-filter-chip" data-filter="${k}">${cfg?.icon||''} ${cfg?.name||k} <span class="tep-chip-num">${c}</span></button>`;
+        }
+        bar.innerHTML = h;
+        bar.querySelectorAll('.tep-filter-chip').forEach(btn => btn.addEventListener('click', () => {
+            bar.querySelectorAll('.tep-filter-chip').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            this._expandActiveFilter = btn.dataset.filter;
+            this._renderExpandCurrentView(panel);
+        }));
+    }
+
+    _getExpandFiltered() {
+        let items = this._expandActiveFilter === 'all' ? [...this.tickerItems] : this.tickerItems.filter(d => d.type === this._expandActiveFilter);
+        if (this._expandSearchQuery) {
+            const q = this._expandSearchQuery.toLowerCase();
+            items = items.filter(d => d.title.toLowerCase().includes(q) || (d.desc||'').toLowerCase().includes(q));
+        }
+        if (this._expandSort === 'metric') items.sort((a,b) => this._expandSortAsc ? (a._metricNum||0)-(b._metricNum||0) : (b._metricNum||0)-(a._metricNum||0));
+        return items;
+    }
+
+    _expandMetricNum(item) {
+        const m = item.metric;
+        if (!m) return 0;
+        const s = String(m).replace(/[▲❤️⭐]/g,'').trim();
+        if (s.endsWith('k')) return parseFloat(s)*1000;
+        if (s.endsWith('万')) return parseFloat(s)*10000;
+        if (s.endsWith('亿')) return parseFloat(s)*100000000;
+        return parseFloat(s) || 0;
+    }
+
+    _renderExpandCurrentView(panel) {
+        const items = this._getExpandFiltered();
+        items.forEach(it => { it._metricNum = this._expandMetricNum(it); });
+        if (this._expandSort) {
+            items.sort((a,b) => this._expandSortAsc ? a._metricNum - b._metricNum : b._metricNum - a._metricNum);
+        }
+        const countEl = panel.querySelector('#tep-count');
+        if (countEl) countEl.textContent = `${items.length} 条`;
+
+        panel.querySelectorAll('.tep-view-pane').forEach(p => p.classList.add('tep-hidden'));
+        const activePane = panel.querySelector(`#tep-pane-${this._expandActiveView}`);
+        if (activePane) activePane.classList.remove('tep-hidden');
+
+        if (this._expandActiveView === 'table') this._renderTableView(panel, items);
+        else if (this._expandActiveView === 'bento') this._renderBentoView(panel, items);
+        else this._renderInsightView(panel, items);
+    }
+
+    // ---- Table View ----
+    _renderTableView(panel, items) {
+        const pane = panel.querySelector('#tep-pane-table');
+        let html = `<table class="tep-table"><thead><tr>
+            <th class="tep-th-rank">#</th>
+            <th class="tep-th-source">来源</th>
+            <th class="tep-th-title">标题</th>
+            <th class="tep-th-metric" data-sort="metric">热度 <i class="fas fa-sort tep-sort-icon"></i></th>
+            <th class="tep-th-actions"></th>
+        </tr></thead><tbody>`;
+        html += items.map((item, idx) => {
+            const cfg = TICKER_SOURCE_REGISTRY[item.type] || {};
+            const srcCls = item.type;
+            let metricHtml = '';
+            if (item.metric) {
+                const mType = item.metricType || '';
+                let mCls = 'tep-mv-default';
+                if (mType === 'stars') mCls = 'tep-mv-stars';
+                else if (mType === 'score' || mType === 'upvotes') mCls = 'tep-mv-points';
+                else if (mType === 'reactions') mCls = 'tep-mv-hearts';
+                metricHtml = `<span class="tep-mv ${mCls}">${this.escapeHtml(String(item.metric))}</span>`;
+            }
+            const matchCls = this.keywordMatches.has(item.title) ? ' tep-tr-matched' : '';
+            const rankCls = idx < 3 ? ` tep-rank-${idx+1}` : '';
+            return `<tr class="tep-tr${matchCls}" data-url="${item.url||''}">
+                <td class="tep-td-rank${rankCls}">${idx+1}</td>
+                <td><span class="tep-src-chip tep-src-${srcCls}">${cfg.icon||''} ${cfg.name||item.type}</span></td>
+                <td class="tep-td-title">
+                    <span class="tep-tt-text">${this.escapeHtml(item.title)}</span>
+                    ${item.desc ? `<div class="tep-tt-desc">${this.escapeHtml(item.desc)}</div>` : ''}
+                    ${item._badge ? `<span class="tep-tt-badge">${item._badge}</span>` : ''}
+                </td>
+                <td class="tep-td-metric">${metricHtml}</td>
+                <td class="tep-td-actions">
+                    <div class="tep-row-acts">
+                        <button class="tep-act-btn" data-action="open" title="打开"><i class="fas fa-external-link-alt"></i></button>
+                        <button class="tep-act-btn" data-action="save" title="保存"><i class="fas fa-bookmark"></i></button>
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+        html += '</tbody></table>';
+        if (items.length === 0) html = '<div class="tep-empty">无匹配结果</div>';
+        pane.innerHTML = html;
+
+        pane.querySelector('.tep-th-metric')?.addEventListener('click', () => {
+            if (this._expandSort === 'metric') this._expandSortAsc = !this._expandSortAsc;
+            else { this._expandSort = 'metric'; this._expandSortAsc = false; }
+            this._renderExpandCurrentView(panel);
+        });
+        this._bindExpandItemEvents(pane, items);
+    }
+
+    // ---- Bento View ----
+    _renderBentoView(panel, items) {
+        const pane = panel.querySelector('#tep-pane-bento');
+        const SIZES = ['tep-b-2x2','tep-b-2x1','tep-b-1x2','tep-b-1x1','tep-b-1x1','tep-b-2x1','tep-b-1x1','tep-b-1x1'];
+        const GRADS = ['tep-bg-purple','tep-bg-orange','','','','','',''];
+        let html = '<div class="tep-bento-grid">';
+        html += items.map((item, idx) => {
+            const cfg = TICKER_SOURCE_REGISTRY[item.type] || {};
+            const sz = SIZES[idx] || 'tep-b-1x1';
+            const gr = GRADS[idx] || '';
+            const srcCls = {github:'tep-bs-gh',hackernews:'tep-bs-hn',reddit:'tep-bs-rd',devto:'tep-bs-dev'}[item.type] || '';
+            let foot = '';
+            if (item.metric) foot += `<span>${this.escapeHtml(String(item.metric))}</span>`;
+            if (item._badge) foot += `<span class="tep-bento-badge">${item._badge}</span>`;
+            const isBig = sz.includes('2x2');
+            return `<div class="tep-bento-card ${sz} ${gr}" data-url="${item.url||''}">
+                <div class="tep-bento-src ${srcCls}">${cfg.icon||''} ${cfg.name||item.type} #${idx+1}</div>
+                <div class="tep-bento-title">${idx<3?`<span class="tep-bento-rank">${idx+1}</span>`:''}${this.escapeHtml(item.title)}</div>
+                ${item.desc && sz !== 'tep-b-1x1' ? `<div class="tep-bento-desc">${this.escapeHtml(item.desc)}</div>` : ''}
+                <div class="tep-bento-foot">${foot}</div>
+                <div class="tep-bento-acts">
+                    <button class="tep-act-btn" data-action="open" title="打开"><i class="fas fa-external-link-alt"></i></button>
+                    <button class="tep-act-btn" data-action="save" title="保存"><i class="fas fa-bookmark"></i></button>
+                </div>
+            </div>`;
+        }).join('');
+        html += '</div>';
+        if (items.length === 0) html = '<div class="tep-empty">无匹配结果</div>';
+        pane.innerHTML = html;
+        this._bindExpandItemEvents(pane, items);
+    }
+
+    // ---- AI Insight View ----
+    _renderInsightView(panel, items) {
+        const pane = panel.querySelector('#tep-pane-insight');
+        let html = '<div class="tep-insight-feed">';
+        items.forEach((item, idx) => {
+            const cfg = TICKER_SOURCE_REGISTRY[item.type] || {};
+            const srcCls = {github:'tep-is-gh',hackernews:'tep-is-hn',reddit:'tep-is-rd',devto:'tep-is-dev'}[item.type] || '';
+            const isCn = this._isChinese(item.title);
+            let foot = '';
+            if (item.metric) foot += `<span class="tep-if-metric">${this.escapeHtml(String(item.metric))}</span>`;
+            html += `<div class="tep-insight-card" data-url="${item.url||''}" data-idx="${idx}">
+                <div class="tep-ic-header">
+                    <div class="tep-ic-src ${srcCls}"><i class="${this._srcFaIcon(item.type)}"></i></div>
+                    <span class="tep-ic-src-name">${cfg.name||item.type}</span>
+                </div>
+                <div class="tep-ic-title">${this.escapeHtml(item.title)}</div>
+                ${item.desc ? `<div class="tep-ic-desc">${this.escapeHtml(item.desc)}</div>` : ''}
+                <div class="tep-ic-insight-slot" id="tep-insight-slot-${idx}">
+                    <button class="tep-insight-gen-btn" data-idx="${idx}">
+                        <i class="fas fa-sparkles"></i> 生成 AI 洞察
+                    </button>
+                </div>
+                <div class="tep-ic-footer">
+                    <div class="tep-ic-metrics">${foot}</div>
+                    <div class="tep-ic-acts">
+                        <button class="tep-act-btn" data-action="save" title="保存"><i class="fas fa-bookmark"></i></button>
+                        ${!isCn ? `<button class="tep-act-btn" data-action="translate" title="翻译"><i class="fas fa-language"></i></button>` : ''}
+                        <button class="tep-act-btn" data-action="open" title="打开"><i class="fas fa-external-link-alt"></i></button>
+                    </div>
+                </div>
+                <div class="tep-card-translate-result" id="tep-translate-${idx}" style="display:none"></div>
+            </div>`;
+        });
+        html += '</div>';
+        if (items.length === 0) html = '<div class="tep-empty">无匹配结果</div>';
+        pane.innerHTML = html;
+        this._bindExpandItemEvents(pane, items);
+
+        pane.querySelectorAll('.tep-insight-gen-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const idx = parseInt(btn.dataset.idx);
+                this._generateInsight(items[idx], idx);
+            });
+        });
+    }
+
+    _srcFaIcon(type) {
+        return {github:'fab fa-github',hackernews:'fab fa-hacker-news',reddit:'fab fa-reddit',devto:'fab fa-dev'}[type] || 'fas fa-rss';
+    }
+
+    async _generateInsight(item, idx) {
+        const slot = document.getElementById(`tep-insight-slot-${idx}`);
+        if (!slot) return;
+        slot.innerHTML = '<div class="tep-insight-loading"><i class="fas fa-spinner fa-spin"></i> AI 分析中…</div>';
+        try {
+            const cfg = TICKER_SOURCE_REGISTRY[item.type] || {};
+            const resp = await fetch('http://127.0.0.1:19840/writing/summarize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: `请用中文分析以下热榜内容为什么上榜并简要总结（3-4句话，突出核心价值和为什么开发者应该关注）：\n\n标题：${item.title}\n描述：${item.desc || '无'}\n来源：${cfg.name || item.type}\n热度：${item.metric || '未知'}`,
+                }),
+            });
+            if (!resp.ok) throw new Error('Bridge 未响应');
+            const reader = resp.body.getReader();
+            const decoder = new TextDecoder();
+            let fullText = '';
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value, { stream: true });
+                for (const line of chunk.split('\n')) {
+                    if (line.startsWith('data: ')) {
+                        try { const data = JSON.parse(line.slice(6)); if (data.content) fullText += data.content; } catch {}
+                    }
+                }
+                slot.innerHTML = `<div class="tep-insight-box"><div class="tep-insight-label"><i class="fas fa-bolt"></i> AI 洞察</div><div class="tep-insight-text">${fullText}</div></div>`;
+            }
+            if (!fullText) slot.innerHTML = '<div class="tep-insight-box tep-insight-err">AI 分析失败，请重试</div>';
+        } catch (err) {
+            slot.innerHTML = `<div class="tep-insight-box tep-insight-err"><i class="fas fa-exclamation-triangle"></i> ${err.message || '生成失败'}<br><button class="tep-insight-gen-btn" data-idx="${idx}" style="margin-top:6px"><i class="fas fa-redo"></i> 重试</button></div>`;
+            slot.querySelector('.tep-insight-gen-btn')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this._generateInsight(item, idx);
+            });
+        }
+    }
+
+    _bindExpandItemEvents(container, items) {
+        container.querySelectorAll('.tep-act-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const card = btn.closest('[data-url]');
+                const idx = parseInt(card?.dataset.idx ?? Array.from(card?.parentElement?.parentElement?.parentElement?.querySelectorAll('[data-url]') || []).indexOf(card));
+                const action = btn.dataset.action;
+                const item = items[idx] || items.find(it => it.url === card?.dataset.url);
+                if (!item) return;
+                switch (action) {
+                    case 'open': if (item.url) window.open(item.url, '_blank'); break;
+                    case 'save': this._saveItemAsTask(item); break;
+                    case 'translate': this._translateItem(item, idx); break;
+                    case 'hermes': this._sendToHermes(item); break;
+                }
+            });
+        });
+        container.querySelectorAll('[data-url]').forEach((el, idx) => {
+            el.addEventListener('click', (e) => {
+                if (e.target.closest('.tep-act-btn,.tep-insight-gen-btn')) return;
+                const url = el.dataset.url;
+                if (url) window.open(url, '_blank');
+            });
+        });
+    }
+
+    async _loadExpandViewPref() {
+        try {
+            const storage = chrome?.storage?.sync || chrome?.storage?.local;
+            if (storage) {
+                const { tickerExpandView } = await storage.get('tickerExpandView');
+                if (tickerExpandView && ['table','bento','insight'].includes(tickerExpandView)) {
+                    this._savedExpandView = tickerExpandView;
+                    if (this._expandActiveView !== tickerExpandView) {
+                        this._expandActiveView = tickerExpandView;
+                        const panel = document.getElementById('ticker-expand-panel');
+                        if (panel) {
+                            panel.querySelectorAll('.tep-view-btn').forEach(b => {
+                                b.classList.toggle('active', b.dataset.view === tickerExpandView);
+                            });
+                            this._renderExpandCurrentView(panel);
+                        }
+                    }
+                }
+            }
+        } catch {}
+    }
+
+    async _saveExpandViewPref(view) {
+        this._savedExpandView = view;
+        try {
+            const storage = chrome?.storage?.sync || chrome?.storage?.local;
+            if (storage) await storage.set({ tickerExpandView: view });
+        } catch {}
+    }
+
     _isChinese(text) {
         if (!text) return true;
         const cn = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
         return cn / text.length > 0.15;
-    }
-    
-    _renderExpandItems(panel, filter) {
-        const body = panel.querySelector('#tep-body');
-        const items = filter === 'all'
-            ? this.tickerItems
-            : this.tickerItems.filter(i => i.type === filter);
-
-        body.innerHTML = items.map((item, idx) => {
-            const isCn = this._isChinese(item.title);
-            const matchedClass = this.keywordMatches.has(item.title) ? ' keyword-matched' : '';
-            const rankClass = idx < 3 ? ' top' : '';
-            const cfg = TICKER_SOURCE_REGISTRY[item.type] || {};
-            const sourceName = cfg.name || item.type;
-            const sourceIcon = cfg.icon || item.icon || '';
-            const desc = item.desc || '';
-
-            return `
-                <div class="tep-item${matchedClass}" data-idx="${idx}" data-url="${item.url || ''}">
-                    <div class="tep-row-top">
-                        <span class="tep-rank${rankClass}">${idx + 1}</span>
-                        <span class="tep-item-title">${this.escapeHtml(item.title)}</span>
-                        ${item.metric ? `<span class="tep-metric">${this.escapeHtml(String(item.metric))}</span>` : ''}
-                    </div>
-                    <div class="tep-row-bottom">
-                        <div>
-                            ${desc ? `<div class="tep-expand-desc">${this.escapeHtml(desc)}</div>` : ''}
-                            <div class="tep-expand-tags">
-                                <span class="tep-source-tag">${sourceIcon} ${sourceName}</span>
-                            </div>
-                        </div>
-                        <div class="tep-actions">
-                            <button class="tep-action-btn" data-action="open" title="打开链接"><i class="fas fa-external-link-alt"></i></button>
-                            <button class="tep-action-btn" data-action="save" title="保存为任务"><i class="fas fa-bookmark"></i></button>
-                            ${!isCn ? `<button class="tep-action-btn" data-action="translate" title="翻译总结"><i class="fas fa-language"></i></button>` : ''}
-                            <button class="tep-action-btn" data-action="hermes" title="Hermes"><i class="fas fa-robot"></i></button>
-                        </div>
-                    </div>
-                </div>
-                <div class="tep-card-translate-result" id="tep-translate-${idx}" style="display:none"></div>
-            `;
-        }).join('') || '<div style="padding:40px;text-align:center;color:#888">暂无数据</div>';
-
-        body.querySelectorAll('.tep-action-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const row = btn.closest('.tep-item');
-                const idx = parseInt(row.dataset.idx);
-                const action = btn.dataset.action;
-                const item = items[idx];
-                if (!item) return;
-
-                switch (action) {
-                    case 'open':
-                        if (item.url) window.open(item.url, '_blank');
-                        break;
-                    case 'save':
-                        this._saveItemAsTask(item);
-                        break;
-                    case 'translate':
-                        this._translateItem(item, idx);
-                        break;
-                    case 'hermes':
-                        this._sendToHermes(item);
-                        break;
-                }
-            });
-        });
-
-        body.querySelectorAll('.tep-item').forEach(row => {
-            row.addEventListener('click', () => {
-                const url = row.dataset.url;
-                if (url) window.open(url, '_blank');
-            });
-        });
     }
     
     async _saveItemAsTask(item) {

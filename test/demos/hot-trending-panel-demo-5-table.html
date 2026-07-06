@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>热榜面板 Demo 5 - Notion 表格</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: url('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1920&q=80') center/cover no-repeat fixed;
+            color: #fff; min-height: 100vh;
+        }
+        body::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 0; }
+
+        .panel-overlay {
+            position: fixed; inset: 0; z-index: 900;
+            background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .panel {
+            width: min(1100px, 96vw); height: 84vh;
+            border-radius: 14px;
+            background: rgba(25, 25, 33, 0.94);
+            backdrop-filter: blur(40px) saturate(180%);
+            border: 1px solid rgba(255,255,255,0.06);
+            box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+            display: flex; flex-direction: column; overflow: hidden;
+        }
+
+        /* Header with search + filters */
+        .panel-header {
+            display: flex; align-items: center; gap: 12px;
+            padding: 12px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            flex-shrink: 0;
+        }
+        .panel-icon { font-size: 18px; }
+        .panel-title { font-size: 15px; font-weight: 600; color: rgba(255,255,255,0.9); }
+        .header-spacer { flex: 1; }
+        .search-box {
+            display: flex; align-items: center; gap: 6px;
+            padding: 6px 12px; border-radius: 8px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.06);
+            transition: all 0.2s;
+        }
+        .search-box:focus-within { border-color: rgba(99,102,241,0.4); background: rgba(255,255,255,0.08); }
+        .search-box i { font-size: 12px; color: rgba(255,255,255,0.3); }
+        .search-box input {
+            background: none; border: none; outline: none;
+            color: rgba(255,255,255,0.8); font-size: 13px;
+            width: 180px;
+        }
+        .search-box input::placeholder { color: rgba(255,255,255,0.25); }
+        .panel-close {
+            width: 30px; height: 30px; border-radius: 8px;
+            background: rgba(255,255,255,0.06); border: none; color: rgba(255,255,255,0.5);
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+        }
+        .panel-close:hover { background: rgba(255,255,255,0.12); color: #fff; }
+
+        /* Toolbar */
+        .toolbar {
+            display: flex; align-items: center; gap: 8px;
+            padding: 8px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            flex-shrink: 0;
+        }
+        .tool-btn {
+            padding: 5px 12px; border-radius: 6px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.05);
+            color: rgba(255,255,255,0.45);
+            font-size: 12px; cursor: pointer;
+            display: flex; align-items: center; gap: 5px;
+            transition: all 0.2s;
+        }
+        .tool-btn:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.7); }
+        .tool-btn.active { background: rgba(99,102,241,0.15); border-color: rgba(99,102,241,0.3); color: #a5b4fc; }
+        .tool-btn i { font-size: 11px; }
+        .tool-sep { width: 1px; height: 20px; background: rgba(255,255,255,0.06); }
+        .tool-count { font-size: 12px; color: rgba(255,255,255,0.3); margin-left: auto; }
+
+        /* Table */
+        .table-container {
+            flex: 1; overflow: auto;
+        }
+        .table-container::-webkit-scrollbar { width: 6px; height: 6px; }
+        .table-container::-webkit-scrollbar-track { background: transparent; }
+        .table-container::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+
+        table {
+            width: 100%; border-collapse: collapse;
+            table-layout: fixed;
+        }
+        thead { position: sticky; top: 0; z-index: 2; }
+        th {
+            padding: 8px 12px;
+            font-size: 11px; font-weight: 600;
+            color: rgba(255,255,255,0.35);
+            text-align: left; text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: rgba(25, 25, 33, 0.98);
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            cursor: pointer; user-select: none;
+            transition: color 0.2s;
+            white-space: nowrap;
+        }
+        th:hover { color: rgba(255,255,255,0.6); }
+        th .sort-icon { font-size: 9px; margin-left: 4px; opacity: 0.4; }
+        th.sorted .sort-icon { opacity: 1; color: #a5b4fc; }
+
+        th:nth-child(1) { width: 44px; text-align: center; }
+        th:nth-child(2) { width: 80px; }
+        th:nth-child(3) { width: auto; }
+        th:nth-child(4) { width: 90px; text-align: right; }
+        th:nth-child(5) { width: 80px; text-align: right; }
+        th:nth-child(6) { width: 64px; text-align: center; }
+
+        td {
+            padding: 8px 12px;
+            font-size: 13px;
+            border-bottom: 1px solid rgba(255,255,255,0.02);
+            vertical-align: middle;
+        }
+        tr { transition: background 0.15s; cursor: pointer; }
+        tr:hover { background: rgba(255,255,255,0.03); }
+        tr:nth-child(even) { background: rgba(255,255,255,0.008); }
+        tr:nth-child(even):hover { background: rgba(255,255,255,0.04); }
+
+        /* Rank column */
+        .rank-cell { text-align: center; font-weight: 700; font-size: 12px; color: rgba(255,255,255,0.15); }
+        .rank-cell.r1 { color: #fbbf24; }
+        .rank-cell.r2 { color: #94a3b8; }
+        .rank-cell.r3 { color: #b45309; }
+
+        /* Source column */
+        .source-cell {
+            display: flex; align-items: center; gap: 6px;
+        }
+        .source-chip {
+            padding: 2px 8px; border-radius: 4px;
+            font-size: 10px; font-weight: 600;
+            white-space: nowrap;
+        }
+        .source-chip.github { background: rgba(139,92,246,0.15); color: #c4b5fd; }
+        .source-chip.hackernews { background: rgba(249,115,22,0.15); color: #fdba74; }
+        .source-chip.reddit { background: rgba(239,68,68,0.15); color: #fca5a5; }
+        .source-chip.devto { background: rgba(59,130,246,0.15); color: #93c5fd; }
+
+        /* Title column */
+        .title-cell { min-width: 0; }
+        .title-text {
+            color: rgba(255,255,255,0.85);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            display: block;
+        }
+        .title-desc {
+            font-size: 11px; color: rgba(255,255,255,0.25);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            margin-top: 2px;
+        }
+        .title-tags { display: flex; gap: 4px; margin-top: 4px; }
+        .title-tag {
+            padding: 1px 6px; border-radius: 3px;
+            font-size: 10px;
+        }
+        .title-tag.lang { background: rgba(59,130,246,0.1); color: #93c5fd; }
+
+        /* Metric column */
+        .metric-cell { text-align: right; white-space: nowrap; }
+        .metric-value {
+            display: flex; align-items: center; gap: 4px;
+            justify-content: flex-end; font-size: 12px;
+        }
+        .metric-value i { font-size: 10px; }
+        .metric-value.stars { color: #fbbf24; }
+        .metric-value.points { color: #f97316; }
+        .metric-value.votes { color: #ef4444; }
+        .metric-value.hearts { color: #f472b6; }
+
+        /* Comments column */
+        .comments-cell {
+            text-align: right; font-size: 12px;
+            color: rgba(255,255,255,0.25);
+            white-space: nowrap;
+        }
+        .comments-cell i { font-size: 10px; margin-right: 3px; }
+
+        /* Actions column */
+        .actions-cell {
+            text-align: center;
+        }
+        .row-actions {
+            display: flex; gap: 2px; justify-content: center;
+            opacity: 0; transition: opacity 0.15s;
+        }
+        tr:hover .row-actions { opacity: 1; }
+        .row-act {
+            width: 24px; height: 24px; border-radius: 5px;
+            background: transparent; border: none;
+            color: rgba(255,255,255,0.3); cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 11px; transition: all 0.15s;
+        }
+        .row-act:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    </style>
+</head>
+<body>
+    <div class="panel-overlay">
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-icon">📊</span>
+                <span class="panel-title">热榜数据库</span>
+                <span class="header-spacer"></span>
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="搜索标题..." id="search-input">
+                </div>
+                <button class="panel-close"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="toolbar" id="toolbar">
+                <button class="tool-btn active" data-filter="all"><i class="fas fa-globe"></i> 全部</button>
+                <button class="tool-btn" data-filter="github"><i class="fab fa-github"></i> GitHub</button>
+                <button class="tool-btn" data-filter="hackernews"><i class="fab fa-hacker-news"></i> HN</button>
+                <button class="tool-btn" data-filter="reddit"><i class="fab fa-reddit"></i> Reddit</button>
+                <button class="tool-btn" data-filter="devto"><i class="fab fa-dev"></i> DEV</button>
+                <div class="tool-sep"></div>
+                <button class="tool-btn" id="sort-metric-btn"><i class="fas fa-sort-amount-down"></i> 按热度</button>
+                <span class="tool-count" id="result-count">24 条结果</span>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>来源</th>
+                            <th>标题</th>
+                            <th data-sort="metric">热度 <i class="fas fa-sort sort-icon"></i></th>
+                            <th data-sort="comments">评论 <i class="fas fa-sort sort-icon"></i></th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    const ALL_DATA = [
+        { type: 'github', title: 'Krishnagangwal/CS-Fundamentals', desc: 'CS fundamentals for interviews', metricNum: 1500, stars: 1500, lang: 'Python' },
+        { type: 'hackernews', title: 'Astrophysicists Puzzle over Webb\'s New Universe', desc: 'New JWST observations challenge models', metricNum: 79, points: 79, comments: 142 },
+        { type: 'hackernews', title: 'Linux has officially won', desc: '', metricNum: 1400, points: 1400, comments: 891 },
+        { type: 'reddit', title: 'What\'s Next for AI?', desc: 'Future direction of AI', metricNum: 192, votes: 192, comments: 445 },
+        { type: 'github', title: 'yynxxxxx/Codex-5.5-codex-instruct-5.5', desc: 'Codex 5.5 instruction-tuned model', metricNum: 1300, stars: 1300, lang: 'Python' },
+        { type: 'hackernews', title: 'The Vespa at 80: Why the Italian scooter remains the coolest thing on 2 wheels', desc: '', metricNum: 43, points: 43, comments: 67 },
+        { type: 'hackernews', title: 'Division Polynomials of Elliptic Curves in Python', desc: '', metricNum: 7, points: 7, comments: 12 },
+        { type: 'reddit', title: 'Need a break? Play today\'s game from The Daily Context', desc: '', metricNum: 111, votes: 111, comments: 23 },
+        { type: 'github', title: 'mekos2772/ios-location-spoofer', desc: 'Spoof GPS location on iOS', metricNum: 1300, stars: 1300, lang: 'Swift' },
+        { type: 'hackernews', title: 'Night Witches – all-female Soviet aviator regiment WW2', desc: '', metricNum: 18, points: 18, comments: 34 },
+        { type: 'hackernews', title: 'Hunting a 16-year-old SQLite bug with TLA+: is dqlite affected?', desc: '', metricNum: 80, points: 80, comments: 45 },
+        { type: 'devto', title: 'Welcome to AI Engineer World\'s Fair 2026', desc: 'AI engineers gathering', metricNum: 70, hearts: 70 },
+        { type: 'github', title: 'Kulaxyz/self-learning-skills', desc: 'Curated resources for self-taught devs', metricNum: 820, stars: 820 },
+        { type: 'reddit', title: 'Maybe you should learn something', desc: 'Motivational post about learning', metricNum: 201, votes: 201, comments: 89 },
+        { type: 'devto', title: 'CI workflows on Tangled for Elixir', desc: 'CI for Elixir projects', metricNum: 1, hearts: 1 },
+        { type: 'devto', title: 'My First Year at DEV Recap', desc: 'Year in review', metricNum: 62, hearts: 62 },
+        { type: 'github', title: 'HUANGCHIHHUNGLeo/claude-real-video', desc: 'Real-time video with Claude AI', metricNum: 675, stars: 675, lang: 'TypeScript' },
+        { type: 'hackernews', title: 'The bottleneck might be the air in the room', desc: 'CO2 and cognitive performance', metricNum: 483, points: 483, comments: 267 },
+        { type: 'reddit', title: 'What I\'ve learned leading backend architecture of a university project', desc: '', metricNum: 0, votes: 0, comments: 15 },
+        { type: 'devto', title: 'Building a Modern CLI Tool with Go', desc: 'Step-by-step CLI guide', metricNum: 45, hearts: 45 },
+        { type: 'github', title: 'anthropics/claude-code', desc: 'AI-powered coding assistant', metricNum: 12400, stars: 12400, lang: 'TypeScript' },
+        { type: 'reddit', title: 'TIL about the Dunning-Kruger effect in software engineering', desc: '', metricNum: 1200, votes: 1200, comments: 543 },
+        { type: 'hackernews', title: 'Show HN: I built a browser extension that replaces new tab', desc: '', metricNum: 156, points: 156, comments: 89 },
+        { type: 'devto', title: 'Understanding TypeScript Generics Through Real Examples', desc: 'Practical generics guide', metricNum: 88, hearts: 88 },
+    ];
+
+    const SOURCE_LABELS = {
+        github: 'GitHub', hackernews: 'HN', reddit: 'Reddit', devto: 'DEV',
+    };
+
+    let currentFilter = 'all';
+    let currentSort = null;
+    let sortAsc = false;
+    let searchQuery = '';
+
+    function formatNum(n) {
+        if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+        return String(n);
+    }
+
+    function getFiltered() {
+        let items = currentFilter === 'all' ? [...ALL_DATA] : ALL_DATA.filter(d => d.type === currentFilter);
+        if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            items = items.filter(d => d.title.toLowerCase().includes(q) || (d.desc || '').toLowerCase().includes(q));
+        }
+        if (currentSort === 'metric') {
+            items.sort((a, b) => sortAsc ? a.metricNum - b.metricNum : b.metricNum - a.metricNum);
+        } else if (currentSort === 'comments') {
+            items.sort((a, b) => sortAsc ? (a.comments || 0) - (b.comments || 0) : (b.comments || 0) - (a.comments || 0));
+        }
+        return items;
+    }
+
+    function renderTable() {
+        const items = getFiltered();
+        document.getElementById('result-count').textContent = `${items.length} 条结果`;
+
+        const tbody = document.getElementById('table-body');
+        tbody.innerHTML = items.map((item, idx) => {
+            let metricHtml = '';
+            if (item.stars) metricHtml = `<span class="metric-value stars"><i class="fas fa-star"></i> ${formatNum(item.stars)}</span>`;
+            else if (item.points) metricHtml = `<span class="metric-value points"><i class="fas fa-arrow-up"></i> ${formatNum(item.points)}</span>`;
+            else if (item.votes) metricHtml = `<span class="metric-value votes"><i class="fas fa-arrow-up"></i> ${formatNum(item.votes)}</span>`;
+            else if (item.hearts) metricHtml = `<span class="metric-value hearts"><i class="fas fa-heart"></i> ${formatNum(item.hearts)}</span>`;
+
+            const rankClass = idx < 3 ? ` r${idx + 1}` : '';
+
+            return `
+                <tr>
+                    <td class="rank-cell${rankClass}">${idx + 1}</td>
+                    <td><div class="source-cell"><span class="source-chip ${item.type}">${SOURCE_LABELS[item.type]}</span></div></td>
+                    <td class="title-cell">
+                        <span class="title-text">${item.title}</span>
+                        ${item.desc ? `<div class="title-desc">${item.desc}</div>` : ''}
+                        ${item.lang ? `<div class="title-tags"><span class="title-tag lang">${item.lang}</span></div>` : ''}
+                    </td>
+                    <td class="metric-cell">${metricHtml}</td>
+                    <td class="comments-cell">${item.comments ? `<i class="fas fa-comment"></i> ${item.comments}` : '—'}</td>
+                    <td class="actions-cell">
+                        <div class="row-actions">
+                            <button class="row-act" title="打开"><i class="fas fa-external-link-alt"></i></button>
+                            <button class="row-act" title="保存"><i class="fas fa-bookmark"></i></button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('') || '<tr><td colspan="6" style="text-align:center;padding:40px;color:rgba(255,255,255,0.2)">无匹配结果</td></tr>';
+    }
+
+    // Filter buttons
+    document.querySelectorAll('.tool-btn[data-filter]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.tool-btn[data-filter]').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentFilter = btn.dataset.filter;
+            renderTable();
+        });
+    });
+
+    // Sort by metric
+    document.getElementById('sort-metric-btn').addEventListener('click', () => {
+        if (currentSort === 'metric') {
+            sortAsc = !sortAsc;
+        } else {
+            currentSort = 'metric';
+            sortAsc = false;
+        }
+        renderTable();
+    });
+
+    // Sort by clicking column headers
+    document.querySelectorAll('th[data-sort]').forEach(th => {
+        th.addEventListener('click', () => {
+            const key = th.dataset.sort;
+            if (currentSort === key) {
+                sortAsc = !sortAsc;
+            } else {
+                currentSort = key;
+                sortAsc = false;
+            }
+            document.querySelectorAll('th').forEach(t => t.classList.remove('sorted'));
+            th.classList.add('sorted');
+            renderTable();
+        });
+    });
+
+    // Search
+    document.getElementById('search-input').addEventListener('input', (e) => {
+        searchQuery = e.target.value.trim();
+        renderTable();
+    });
+
+    renderTable();
+    </script>
+</body>
+</html>

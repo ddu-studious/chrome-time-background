@@ -135,7 +135,6 @@
         enabledSources: ['wikimedia', 'bing'],
         apiKeys: { unsplash: '', pexels: '', pixabay: '', wallhaven: '', coverr: '', nasa: '' },
         enableVideoBackground: false,
-        chinaFirst: true,
         settingsPageBackground: false,
     };
 
@@ -162,9 +161,6 @@
     }
 
     function applyBgProviderUI() {
-        const chinaFirstEl = document.getElementById('set-bgChinaFirst');
-        if (chinaFirstEl) chinaFirstEl.checked = bgProviderSettings.chinaFirst !== false;
-
         const videoEl = document.getElementById('set-bgEnableVideo');
         if (videoEl) videoEl.checked = !!bgProviderSettings.enableVideoBackground;
 
@@ -189,14 +185,6 @@
     }
 
     function bindBgProviderEvents() {
-        const chinaFirstEl = document.getElementById('set-bgChinaFirst');
-        if (chinaFirstEl) {
-            chinaFirstEl.addEventListener('change', () => {
-                bgProviderSettings.chinaFirst = chinaFirstEl.checked;
-                saveBgProviderSettings();
-            });
-        }
-
         const videoEl = document.getElementById('set-bgEnableVideo');
         if (videoEl) {
             videoEl.addEventListener('change', () => {

@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>热榜面板 Demo 10 - 三合一可切换</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80') center/cover no-repeat fixed;
+            color: #fff; min-height: 100vh;
+        }
+        body::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 0; }
+
+        .panel-overlay {
+            position: fixed; inset: 0; z-index: 900;
+            background: rgba(0,0,0,0.45); backdrop-filter: blur(10px);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .panel {
+            width: min(1100px, 96vw); height: 88vh;
+            border-radius: 16px;
+            background: rgba(18, 18, 26, 0.92);
+            backdrop-filter: blur(40px) saturate(180%);
+            border: 1px solid rgba(255,255,255,0.08);
+            box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+            display: flex; flex-direction: column; overflow: hidden;
+        }
+
+        /* ============ Unified Header ============ */
+        .panel-header {
+            display: flex; align-items: center; gap: 12px;
+            padding: 14px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            flex-shrink: 0;
+        }
+        .header-title-area { display: flex; align-items: center; gap: 10px; }
+        .header-icon {
+            width: 32px; height: 32px; border-radius: 8px;
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 15px;
+        }
+        .header-title { font-size: 16px; font-weight: 600; }
+        .header-count { font-size: 12px; color: rgba(255,255,255,0.4); margin-left: 4px; }
+
+        .header-spacer { flex: 1; }
+
+        /* View Switcher */
+        .view-switcher {
+            display: flex; gap: 2px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px; padding: 3px;
+        }
+        .view-btn {
+            padding: 6px 14px; border-radius: 6px; border: none;
+            background: transparent; color: rgba(255,255,255,0.45);
+            font-size: 12px; cursor: pointer; transition: all 0.2s;
+            display: flex; align-items: center; gap: 6px;
+            font-family: inherit;
+        }
+        .view-btn:hover { color: rgba(255,255,255,0.7); }
+        .view-btn.active {
+            background: rgba(255,255,255,0.12); color: #fff; font-weight: 500;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+        }
+        .view-btn i { font-size: 11px; }
+
+        .search-box {
+            display: flex; align-items: center; gap: 6px;
+            padding: 6px 12px; border-radius: 8px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.06);
+            transition: all 0.2s; margin-left: 8px;
+        }
+        .search-box:focus-within { border-color: rgba(99,102,241,0.4); background: rgba(255,255,255,0.08); }
+        .search-box i { font-size: 12px; color: rgba(255,255,255,0.3); }
+        .search-box input {
+            background: none; border: none; outline: none;
+            color: rgba(255,255,255,0.8); font-size: 13px; width: 140px; font-family: inherit;
+        }
+        .search-box input::placeholder { color: rgba(255,255,255,0.25); }
+
+        .panel-close {
+            width: 30px; height: 30px; border-radius: 8px;
+            background: rgba(255,255,255,0.06); border: none; color: rgba(255,255,255,0.5);
+            cursor: pointer; display: flex; align-items: center; justify-content: center; margin-left: 8px;
+        }
+        .panel-close:hover { background: rgba(255,255,255,0.12); color: #fff; }
+
+        /* ============ Filter Bar (shared) ============ */
+        .filter-bar {
+            display: flex; align-items: center; gap: 6px;
+            padding: 8px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            flex-shrink: 0;
+        }
+        .filter-chip {
+            padding: 5px 12px; border-radius: 6px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.05);
+            color: rgba(255,255,255,0.45);
+            font-size: 12px; cursor: pointer; transition: all 0.2s;
+            display: flex; align-items: center; gap: 5px;
+            font-family: inherit;
+        }
+        .filter-chip:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.7); }
+        .filter-chip.active { background: rgba(99,102,241,0.15); border-color: rgba(99,102,241,0.3); color: #a5b4fc; }
+        .filter-chip i { font-size: 11px; }
+        .filter-count { font-size: 12px; color: rgba(255,255,255,0.3); margin-left: auto; }
+
+        /* ============ View Container ============ */
+        .view-container { flex: 1; overflow: hidden; position: relative; }
+        .view-pane { position: absolute; inset: 0; overflow-y: auto; transition: opacity 0.25s, transform 0.25s; }
+        .view-pane.hidden { opacity: 0; pointer-events: none; transform: translateY(8px); }
+        .view-pane::-webkit-scrollbar { width: 6px; }
+        .view-pane::-webkit-scrollbar-track { background: transparent; }
+        .view-pane::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+
+        /* ============ TABLE VIEW ============ */
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        thead { position: sticky; top: 0; z-index: 2; }
+        th {
+            padding: 8px 12px; font-size: 11px; font-weight: 600;
+            color: rgba(255,255,255,0.35); text-align: left; text-transform: uppercase;
+            letter-spacing: 0.5px; background: rgba(18, 18, 26, 0.98);
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            cursor: pointer; user-select: none; white-space: nowrap;
+        }
+        th:hover { color: rgba(255,255,255,0.6); }
+        th .sort-icon { font-size: 9px; margin-left: 4px; opacity: 0.4; }
+        th.sorted .sort-icon { opacity: 1; color: #a5b4fc; }
+        th:nth-child(1) { width: 44px; text-align: center; }
+        th:nth-child(2) { width: 80px; }
+        th:nth-child(3) { width: auto; }
+        th:nth-child(4) { width: 90px; text-align: right; }
+        th:nth-child(5) { width: 80px; text-align: right; }
+        th:nth-child(6) { width: 64px; text-align: center; }
+        td { padding: 8px 12px; font-size: 13px; border-bottom: 1px solid rgba(255,255,255,0.02); vertical-align: middle; }
+        tr { transition: background 0.15s; cursor: pointer; }
+        tr:hover { background: rgba(255,255,255,0.03); }
+        tr:nth-child(even) { background: rgba(255,255,255,0.008); }
+        tr:nth-child(even):hover { background: rgba(255,255,255,0.04); }
+        .rank-cell { text-align: center; font-weight: 700; font-size: 12px; color: rgba(255,255,255,0.15); }
+        .rank-cell.r1 { color: #fbbf24; } .rank-cell.r2 { color: #94a3b8; } .rank-cell.r3 { color: #b45309; }
+        .source-chip { padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; white-space: nowrap; }
+        .source-chip.github { background: rgba(139,92,246,0.15); color: #c4b5fd; }
+        .source-chip.hackernews { background: rgba(249,115,22,0.15); color: #fdba74; }
+        .source-chip.reddit { background: rgba(239,68,68,0.15); color: #fca5a5; }
+        .source-chip.devto { background: rgba(59,130,246,0.15); color: #93c5fd; }
+        .title-cell { min-width: 0; }
+        .title-text { color: rgba(255,255,255,0.85); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+        .title-desc { font-size: 11px; color: rgba(255,255,255,0.25); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+        .title-tags { display: flex; gap: 4px; margin-top: 4px; }
+        .title-tag { padding: 1px 6px; border-radius: 3px; font-size: 10px; }
+        .title-tag.lang { background: rgba(59,130,246,0.1); color: #93c5fd; }
+        .metric-cell { text-align: right; white-space: nowrap; }
+        .metric-value { display: flex; align-items: center; gap: 4px; justify-content: flex-end; font-size: 12px; }
+        .metric-value i { font-size: 10px; }
+        .metric-value.stars { color: #fbbf24; } .metric-value.points { color: #f97316; }
+        .metric-value.votes { color: #ef4444; } .metric-value.hearts { color: #f472b6; }
+        .comments-cell { text-align: right; font-size: 12px; color: rgba(255,255,255,0.25); white-space: nowrap; }
+        .comments-cell i { font-size: 10px; margin-right: 3px; }
+        .actions-cell { text-align: center; }
+        .row-actions { display: flex; gap: 2px; justify-content: center; opacity: 0; transition: opacity 0.15s; }
+        tr:hover .row-actions { opacity: 1; }
+        .row-act {
+            width: 24px; height: 24px; border-radius: 5px; background: transparent; border: none;
+            color: rgba(255,255,255,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center;
+            font-size: 11px;
+        }
+        .row-act:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+        /* ============ BENTO VIEW ============ */
+        .bento-grid {
+            display: grid; grid-template-columns: repeat(4, 1fr);
+            grid-auto-rows: 160px; gap: 14px; padding: 16px 20px 32px;
+        }
+        .bento-card {
+            background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 20px; padding: 20px; position: relative; overflow: hidden;
+            cursor: pointer; transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            backdrop-filter: blur(16px); display: flex; flex-direction: column;
+        }
+        .bento-card:hover {
+            transform: scale(1.02); background: rgba(255,255,255,0.07);
+            border-color: rgba(255,255,255,0.14); box-shadow: 0 16px 40px rgba(0,0,0,0.35);
+        }
+        .size-2x2 { grid-column: span 2; grid-row: span 2; }
+        .size-2x1 { grid-column: span 2; }
+        .size-1x2 { grid-row: span 2; }
+        .bento-source { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+        .bento-source.src-gh { color: #c4b5fd; } .bento-source.src-hn { color: #fdba74; } .bento-source.src-rd { color: #fca5a5; } .bento-source.src-dev { color: #93c5fd; }
+        .bento-title { font-weight: 600; line-height: 1.3; color: #fff; display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+        .size-2x2 .bento-title { font-size: 24px; -webkit-line-clamp: 3; margin-bottom: 12px; }
+        .size-2x1 .bento-title { font-size: 18px; -webkit-line-clamp: 2; margin-bottom: 6px; }
+        .size-1x2 .bento-title { font-size: 18px; -webkit-line-clamp: 4; margin-bottom: 10px; }
+        .size-1x1 .bento-title { font-size: 14px; -webkit-line-clamp: 3; margin-bottom: auto; }
+        .bento-desc { font-size: 13px; color: rgba(255,255,255,0.55); line-height: 1.5; display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+        .size-2x2 .bento-desc { -webkit-line-clamp: 3; }
+        .size-2x1 .bento-desc { -webkit-line-clamp: 1; }
+        .size-1x2 .bento-desc { -webkit-line-clamp: 3; }
+        .bento-footer { margin-top: auto; display: flex; align-items: center; gap: 12px; padding-top: 12px; font-size: 12px; font-weight: 500; }
+        .bento-footer .m-stars { color: #fbbf24; } .bento-footer .m-pts { color: #f97316; } .bento-footer .m-cmt { color: rgba(255,255,255,0.35); }
+        .bento-bg { position: absolute; right: -16px; bottom: -16px; font-size: 100px; opacity: 0.03; transform: rotate(-12deg); pointer-events: none; }
+        .size-1x1 .bento-bg { font-size: 70px; }
+        .card-g1 { background: linear-gradient(135deg, rgba(79,70,229,0.35), rgba(124,58,237,0.08)); border-color: rgba(124,58,237,0.25); }
+        .card-g1:hover { background: linear-gradient(135deg, rgba(79,70,229,0.45), rgba(124,58,237,0.15)); }
+        .card-g2 { background: linear-gradient(135deg, rgba(234,88,12,0.25), rgba(0,0,0,0)); border-color: rgba(234,88,12,0.18); }
+        .card-g2:hover { background: linear-gradient(135deg, rgba(234,88,12,0.35), rgba(0,0,0,0)); }
+        .bento-insight { margin-top: 12px; padding: 10px 14px; border-radius: 10px; background: rgba(0,0,0,0.2); border-left: 3px solid #818cf8; font-size: 12px; color: rgba(255,255,255,0.8); line-height: 1.5; }
+        .rank-badge { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: #fff; color: #000; font-weight: 800; font-size: 13px; margin-right: 6px; }
+
+        /* ============ AI INSIGHT VIEW ============ */
+        .insight-feed { padding: 20px 24px; display: flex; flex-direction: column; gap: 20px; }
+        .feed-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 20px; transition: all 0.2s; }
+        .feed-card:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); }
+        .feed-header { display: flex; align-items: center; gap: 8px; font-size: 12px; color: rgba(255,255,255,0.45); margin-bottom: 10px; }
+        .feed-src-icon { width: 20px; height: 20px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+        .feed-src-icon.s-gh { background: rgba(139,92,246,0.15); color: #c4b5fd; }
+        .feed-src-icon.s-hn { background: rgba(249,115,22,0.15); color: #fdba74; }
+        .feed-src-icon.s-rd { background: rgba(239,68,68,0.15); color: #fca5a5; }
+        .feed-src-icon.s-dev { background: rgba(59,130,246,0.15); color: #93c5fd; }
+        .feed-title { font-size: 18px; font-weight: 600; line-height: 1.4; color: #fff; margin-bottom: 6px; cursor: pointer; transition: color 0.2s; }
+        .feed-title:hover { color: #818cf8; }
+        .insight-box { margin: 14px 0; padding: 16px; border-radius: 12px; background: linear-gradient(135deg, rgba(79,70,229,0.1), rgba(236,72,153,0.05)); border: 1px solid rgba(79,70,229,0.2); position: relative; }
+        .insight-box::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: linear-gradient(to bottom, #4f46e5, #ec4899); border-radius: 3px 0 0 3px; }
+        .insight-label { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #a5b4fc; margin-bottom: 8px; letter-spacing: 0.3px; }
+        .insight-text { font-size: 14px; line-height: 1.6; color: rgba(255,255,255,0.85); }
+        .insight-text strong { color: #fff; font-weight: 600; }
+        .feed-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.05); }
+        .feed-metrics { display: flex; gap: 14px; font-size: 13px; font-weight: 500; }
+        .fm { display: flex; align-items: center; gap: 5px; }
+        .fm.fm-star { color: #fbbf24; } .fm.fm-pt { color: #f97316; } .fm.fm-vote { color: #ef4444; } .fm.fm-cmt { color: rgba(255,255,255,0.35); }
+        .feed-actions { display: flex; gap: 6px; }
+        .feed-act { padding: 6px 12px; border-radius: 6px; background: rgba(255,255,255,0.06); border: none; color: rgba(255,255,255,0.65); font-size: 12px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 6px; font-family: inherit; }
+        .feed-act:hover { background: rgba(255,255,255,0.12); color: #fff; }
+    </style>
+</head>
+<body>
+    <div class="panel-overlay">
+        <div class="panel">
+            <!-- Header -->
+            <div class="panel-header">
+                <div class="header-title-area">
+                    <div class="header-icon"><i class="fas fa-fire-flame-curved"></i></div>
+                    <span class="header-title">热榜<span class="header-count" id="hdr-count">24 条</span></span>
+                </div>
+                <div class="header-spacer"></div>
+                <div class="view-switcher">
+                    <button class="view-btn active" data-view="table"><i class="fas fa-table-list"></i> 表格</button>
+                    <button class="view-btn" data-view="bento"><i class="fas fa-border-all"></i> 精选</button>
+                    <button class="view-btn" data-view="insight"><i class="fas fa-sparkles"></i> AI 洞察</button>
+                </div>
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="搜索..." id="search-input">
+                </div>
+                <button class="panel-close"><i class="fas fa-times"></i></button>
+            </div>
+
+            <!-- Source Filter Bar -->
+            <div class="filter-bar" id="filter-bar"></div>
+
+            <!-- Views -->
+            <div class="view-container">
+                <div class="view-pane" id="pane-table">
+                    <table><thead><tr>
+                        <th>#</th><th>来源</th><th>标题</th>
+                        <th data-sort="metric">热度 <i class="fas fa-sort sort-icon"></i></th>
+                        <th data-sort="comments">评论 <i class="fas fa-sort sort-icon"></i></th>
+                        <th></th>
+                    </tr></thead><tbody id="table-body"></tbody></table>
+                </div>
+                <div class="view-pane hidden" id="pane-bento"></div>
+                <div class="view-pane hidden" id="pane-insight"></div>
+            </div>
+        </div>
+    </div>
+
+<script>
+const ALL_DATA = [
+    { type:'github', title:'anthropics/claude-code', desc:'AI-powered coding assistant by Anthropic', metricNum:12400, stars:12400, lang:'TypeScript', aiInsight:'<strong>Anthropic 官方下场做开发工具了。</strong>这是一个直接运行在终端的 AI 编程助手，具备 Agentic 能力——不仅能写代码，还能自己运行测试、查看报错并自动修复。开发者社区认为这是 Cursor 的有力补充。', aiLabel:'上榜原因解析', aiIcon:'fa-bolt' },
+    { type:'hackernews', title:'Linux has officially won', desc:'', metricNum:1400, points:1400, comments:891, aiInsight:'这篇文章引发了 HN 上近 900 条的激烈讨论。作者指出 Linux 已经<strong>彻底统治了服务器、移动端和嵌入式设备</strong>。评论区争议集中在"桌面 Linux 年"是否是伪命题。', aiLabel:'社区热议焦点', aiIcon:'fa-fire' },
+    { type:'github', title:'Krishnagangwal/CS-Fundamentals', desc:'CS fundamentals for interviews', metricNum:1500, stars:1500, lang:'Python', aiInsight:'面向求职的计算机基础知识大全，涵盖数据结构、算法和系统设计。在面试季到来时飙升。', aiLabel:'上榜趋势', aiIcon:'fa-chart-line' },
+    { type:'reddit', title:'What\'s Next for AI?', desc:'Future direction of AI', metricNum:192, votes:192, comments:445, aiInsight:'社区正在讨论 LLM 的演进方向：我们是否触及了天花板？评论中<strong>多数人看好 Agent 和多模态方向</strong>，而非单纯的模型规模扩大。', aiLabel:'核心观点提取', aiIcon:'fa-lightbulb' },
+    { type:'github', title:'yynxxxxx/Codex-5.5-codex-instruct-5.5', desc:'Codex 5.5 instruction-tuned model', metricNum:1300, stars:1300, lang:'Python' },
+    { type:'hackernews', title:'The Vespa at 80: Why the Italian scooter remains the coolest thing on 2 wheels', desc:'', metricNum:43, points:43, comments:67 },
+    { type:'hackernews', title:'Division Polynomials of Elliptic Curves in Python', desc:'', metricNum:7, points:7, comments:12 },
+    { type:'reddit', title:'Need a break? Play today\'s game from The Daily Context', desc:'', metricNum:111, votes:111, comments:23 },
+    { type:'github', title:'mekos2772/ios-location-spoofer', desc:'Spoof GPS location on iOS', metricNum:1300, stars:1300, lang:'Swift' },
+    { type:'hackernews', title:'Night Witches – all-female Soviet aviator regiment WW2', desc:'', metricNum:18, points:18, comments:34 },
+    { type:'hackernews', title:'Hunting a 16-year-old SQLite bug with TLA+: is dqlite affected?', desc:'', metricNum:80, points:80, comments:45 },
+    { type:'devto', title:'Welcome to AI Engineer World\'s Fair 2026', desc:'AI engineers gathering', metricNum:70, hearts:70 },
+    { type:'github', title:'Kulaxyz/self-learning-skills', desc:'Curated resources for self-taught devs', metricNum:820, stars:820 },
+    { type:'reddit', title:'Maybe you should learn something', desc:'Motivational post about learning', metricNum:201, votes:201, comments:89 },
+    { type:'devto', title:'CI workflows on Tangled for Elixir', desc:'CI for Elixir projects', metricNum:1, hearts:1 },
+    { type:'devto', title:'My First Year at DEV Recap', desc:'Year in review', metricNum:62, hearts:62 },
+    { type:'github', title:'HUANGCHIHHUNGLeo/claude-real-video', desc:'Real-time video with Claude AI', metricNum:675, stars:675, lang:'TypeScript' },
+    { type:'hackernews', title:'The bottleneck might be the air in the room', desc:'CO2 and cognitive performance', metricNum:483, points:483, comments:267, aiInsight:'研究表明会议室 CO2 浓度过高会<strong>显著降低认知能力</strong>。这条新闻引发了远程工作者对室内空气质量的讨论。', aiLabel:'冷知识解读', aiIcon:'fa-flask' },
+    { type:'reddit', title:'What I\'ve learned leading backend architecture of a university project', desc:'', metricNum:0, votes:0, comments:15 },
+    { type:'devto', title:'Building a Modern CLI Tool with Go', desc:'Step-by-step CLI guide', metricNum:45, hearts:45 },
+    { type:'reddit', title:'TIL about the Dunning-Kruger effect in software engineering', desc:'', metricNum:1200, votes:1200, comments:543, aiInsight:'<strong>初级开发者往往过度自信，高级开发者反而陷入冒名顶替综合征。</strong>高赞评论指出，真正的"高级"在于知道自己不知道什么。', aiLabel:'核心观点提取', aiIcon:'fa-lightbulb' },
+    { type:'hackernews', title:'Show HN: I built a browser extension that replaces new tab', desc:'', metricNum:156, points:156, comments:89 },
+    { type:'devto', title:'Understanding TypeScript Generics Through Real Examples', desc:'Practical generics guide', metricNum:88, hearts:88 },
+];
+
+const SRC = { github:'GitHub', hackernews:'HN', reddit:'Reddit', devto:'DEV' };
+const SRC_ICON = { github:'fab fa-github', hackernews:'fab fa-hacker-news', reddit:'fab fa-reddit', devto:'fab fa-dev' };
+let currentFilter = 'all', currentSort = null, sortAsc = false, searchQuery = '', currentView = 'table';
+
+function fmt(n) { return n >= 1000 ? (n/1000).toFixed(1).replace(/\.0$/,'')+'k' : String(n); }
+
+function getFiltered() {
+    let items = currentFilter === 'all' ? [...ALL_DATA] : ALL_DATA.filter(d => d.type === currentFilter);
+    if (searchQuery) { const q = searchQuery.toLowerCase(); items = items.filter(d => d.title.toLowerCase().includes(q) || (d.desc||'').toLowerCase().includes(q)); }
+    if (currentSort === 'metric') items.sort((a,b) => sortAsc ? a.metricNum - b.metricNum : b.metricNum - a.metricNum);
+    else if (currentSort === 'comments') items.sort((a,b) => sortAsc ? (a.comments||0)-(b.comments||0) : (b.comments||0)-(a.comments||0));
+    return items;
+}
+
+// ---- Filter Bar ----
+function renderFilters() {
+    const bar = document.getElementById('filter-bar');
+    const groups = {}; ALL_DATA.forEach(d => { groups[d.type] = (groups[d.type]||0)+1; });
+    let h = `<button class="filter-chip active" data-filter="all"><i class="fas fa-globe"></i> 全部</button>`;
+    for (const [k,c] of Object.entries(groups)) h += `<button class="filter-chip" data-filter="${k}"><i class="${SRC_ICON[k]}"></i> ${SRC[k]} <span style="opacity:.5;margin-left:2px">${c}</span></button>`;
+    h += `<span class="filter-count" id="result-count">${ALL_DATA.length} 条</span>`;
+    bar.innerHTML = h;
+    bar.querySelectorAll('.filter-chip').forEach(btn => btn.addEventListener('click', () => {
+        bar.querySelectorAll('.filter-chip').forEach(b => b.classList.remove('active')); btn.classList.add('active');
+        currentFilter = btn.dataset.filter; renderCurrentView();
+    }));
+}
+
+// ---- View Switching ----
+document.querySelectorAll('.view-btn').forEach(btn => btn.addEventListener('click', () => {
+    document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active');
+    currentView = btn.dataset.view;
+    document.querySelectorAll('.view-pane').forEach(p => p.classList.add('hidden'));
+    document.getElementById('pane-' + currentView).classList.remove('hidden');
+    renderCurrentView();
+}));
+
+function renderCurrentView() {
+    const items = getFiltered();
+    document.getElementById('result-count').textContent = items.length + ' 条';
+    document.getElementById('hdr-count').textContent = items.length + ' 条';
+    if (currentView === 'table') renderTable(items);
+    else if (currentView === 'bento') renderBento(items);
+    else renderInsight(items);
+}
+
+// ---- TABLE ----
+function renderTable(items) {
+    const tbody = document.getElementById('table-body');
+    tbody.innerHTML = items.map((item, idx) => {
+        let mh = '';
+        if (item.stars) mh = `<span class="metric-value stars"><i class="fas fa-star"></i> ${fmt(item.stars)}</span>`;
+        else if (item.points) mh = `<span class="metric-value points"><i class="fas fa-arrow-up"></i> ${fmt(item.points)}</span>`;
+        else if (item.votes) mh = `<span class="metric-value votes"><i class="fas fa-arrow-up"></i> ${fmt(item.votes)}</span>`;
+        else if (item.hearts) mh = `<span class="metric-value hearts"><i class="fas fa-heart"></i> ${fmt(item.hearts)}</span>`;
+        return `<tr>
+            <td class="rank-cell${idx<3?' r'+(idx+1):''}">${idx+1}</td>
+            <td><span class="source-chip ${item.type}">${SRC[item.type]}</span></td>
+            <td class="title-cell"><span class="title-text">${item.title}</span>${item.desc?`<div class="title-desc">${item.desc}</div>`:''}${item.lang?`<div class="title-tags"><span class="title-tag lang">${item.lang}</span></div>`:''}</td>
+            <td class="metric-cell">${mh}</td>
+            <td class="comments-cell">${item.comments?`<i class="fas fa-comment"></i> ${item.comments}`:'—'}</td>
+            <td class="actions-cell"><div class="row-actions"><button class="row-act" title="打开"><i class="fas fa-external-link-alt"></i></button><button class="row-act" title="保存"><i class="fas fa-bookmark"></i></button></div></td>
+        </tr>`;
+    }).join('') || '<tr><td colspan="6" style="text-align:center;padding:40px;color:rgba(255,255,255,0.2)">无匹配结果</td></tr>';
+}
+document.querySelectorAll('th[data-sort]').forEach(th => th.addEventListener('click', () => {
+    const k = th.dataset.sort; if (currentSort===k) sortAsc=!sortAsc; else { currentSort=k; sortAsc=false; }
+    document.querySelectorAll('th').forEach(t=>t.classList.remove('sorted')); th.classList.add('sorted');
+    renderCurrentView();
+}));
+
+// ---- BENTO ----
+const BENTO_SIZES = ['size-2x2','size-2x1','size-1x2','size-1x1','size-1x1','size-2x1','size-1x1','size-1x1'];
+const BENTO_GRADIENTS = ['card-g1','card-g2','','','','','',''];
+function renderBento(items) {
+    const pane = document.getElementById('pane-bento');
+    pane.innerHTML = '<div class="bento-grid">' + items.map((item, idx) => {
+        const sz = BENTO_SIZES[idx] || 'size-1x1';
+        const gr = BENTO_GRADIENTS[idx] || '';
+        const srcCls = {github:'src-gh',hackernews:'src-hn',reddit:'src-rd',devto:'src-dev'}[item.type]||'';
+        let foot = '';
+        if (item.stars) foot += `<span class="m-stars"><i class="fas fa-star"></i> ${fmt(item.stars)}</span>`;
+        if (item.points) foot += `<span class="m-pts"><i class="fas fa-arrow-up"></i> ${fmt(item.points)}</span>`;
+        if (item.votes) foot += `<span class="m-pts" style="color:#ef4444"><i class="fas fa-arrow-up"></i> ${fmt(item.votes)}</span>`;
+        if (item.hearts) foot += `<span class="m-pts" style="color:#f472b6"><i class="fas fa-heart"></i> ${fmt(item.hearts)}</span>`;
+        if (item.comments) foot += `<span class="m-cmt"><i class="fas fa-comment"></i> ${item.comments}</span>`;
+        if (item.lang) foot += `<span style="color:rgba(255,255,255,.4)">${item.lang}</span>`;
+        const insightHtml = (idx === 0 && item.aiInsight) ? `<div class="bento-insight"><strong>✨ AI 洞察：</strong>${item.aiInsight}</div>` : '';
+        return `<div class="bento-card ${sz} ${gr}">
+            <i class="${SRC_ICON[item.type]} bento-bg"></i>
+            <div class="bento-source ${srcCls}"><i class="${SRC_ICON[item.type]}"></i> ${SRC[item.type]} #${idx+1}</div>
+            <div class="bento-title">${idx<3?`<span class="rank-badge">${idx+1}</span>`:''}${item.title}</div>
+            ${item.desc && sz!=='size-1x1' ? `<div class="bento-desc">${item.desc}</div>`:''}
+            ${insightHtml}
+            <div class="bento-footer">${foot}</div>
+        </div>`;
+    }).join('') + '</div>';
+}
+
+// ---- AI INSIGHT ----
+function renderInsight(items) {
+    const pane = document.getElementById('pane-insight');
+    const withInsight = items.filter(i => i.aiInsight);
+    const without = items.filter(i => !i.aiInsight);
+    let h = '<div class="insight-feed">';
+    for (const item of withInsight) {
+        const srcCls = {github:'s-gh',hackernews:'s-hn',reddit:'s-rd',devto:'s-dev'}[item.type]||'';
+        let foot = '';
+        if (item.stars) foot += `<span class="fm fm-star"><i class="fas fa-star"></i> ${fmt(item.stars)}</span>`;
+        if (item.points) foot += `<span class="fm fm-pt"><i class="fas fa-arrow-up"></i> ${fmt(item.points)}</span>`;
+        if (item.votes) foot += `<span class="fm fm-vote"><i class="fas fa-arrow-up"></i> ${fmt(item.votes)}</span>`;
+        if (item.hearts) foot += `<span class="fm" style="color:#f472b6"><i class="fas fa-heart"></i> ${fmt(item.hearts)}</span>`;
+        if (item.comments) foot += `<span class="fm fm-cmt"><i class="fas fa-comment"></i> ${item.comments}</span>`;
+        if (item.lang) foot += `<span class="fm fm-cmt">${item.lang}</span>`;
+        h += `<div class="feed-card">
+            <div class="feed-header"><div class="feed-src-icon ${srcCls}"><i class="${SRC_ICON[item.type]}"></i></div> ${SRC[item.type]}</div>
+            <div class="feed-title">${item.title}</div>
+            <div class="insight-box"><div class="insight-label"><i class="fas ${item.aiIcon||'fa-bolt'}"></i> ${item.aiLabel||'AI 洞察'}</div><div class="insight-text">${item.aiInsight}</div></div>
+            <div class="feed-footer"><div class="feed-metrics">${foot}</div><div class="feed-actions"><button class="feed-act"><i class="fas fa-bookmark"></i> 稍后读</button><button class="feed-act"><i class="fas fa-external-link-alt"></i> 打开</button></div></div>
+        </div>`;
+    }
+    if (without.length) {
+        h += `<div style="font-size:12px;color:rgba(255,255,255,0.3);padding:8px 0;border-top:1px solid rgba(255,255,255,0.05);margin-top:4px">其他 ${without.length} 条暂无 AI 洞察</div>`;
+        for (const item of without) {
+            const srcCls = {github:'s-gh',hackernews:'s-hn',reddit:'s-rd',devto:'s-dev'}[item.type]||'';
+            let foot = '';
+            if (item.stars) foot += `<span class="fm fm-star"><i class="fas fa-star"></i> ${fmt(item.stars)}</span>`;
+            if (item.points) foot += `<span class="fm fm-pt"><i class="fas fa-arrow-up"></i> ${fmt(item.points)}</span>`;
+            if (item.votes) foot += `<span class="fm fm-vote"><i class="fas fa-arrow-up"></i> ${fmt(item.votes)}</span>`;
+            if (item.hearts) foot += `<span class="fm" style="color:#f472b6"><i class="fas fa-heart"></i> ${fmt(item.hearts)}</span>`;
+            if (item.comments) foot += `<span class="fm fm-cmt"><i class="fas fa-comment"></i> ${item.comments}</span>`;
+            h += `<div class="feed-card" style="padding:14px 20px">
+                <div style="display:flex;align-items:center;gap:8px"><div class="feed-src-icon ${srcCls}"><i class="${SRC_ICON[item.type]}"></i></div><span style="flex:1;font-size:14px;font-weight:500;color:rgba(255,255,255,.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.title}</span><div class="feed-metrics" style="flex-shrink:0">${foot}</div></div>
+            </div>`;
+        }
+    }
+    h += '</div>';
+    pane.innerHTML = h;
+}
+
+// ---- Search ----
+document.getElementById('search-input').addEventListener('input', e => { searchQuery = e.target.value.trim(); renderCurrentView(); });
+
+// ---- Init ----
+renderFilters();
+renderCurrentView();
+</script>
+</body>
+</html>

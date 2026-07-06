@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>热榜面板 Demo 4 - 终端风格</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: url('https://images.unsplash.com/photo-1433086966358-54859d0ed716?w=1920&q=80') center/cover no-repeat fixed;
+            color: #fff; min-height: 100vh;
+        }
+        body::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 0; }
+
+        .panel-overlay {
+            position: fixed; inset: 0; z-index: 900;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .panel {
+            width: min(960px, 94vw); height: 82vh;
+            border-radius: 12px;
+            background: rgba(10, 10, 16, 0.96);
+            border: 1px solid rgba(255,255,255,0.06);
+            box-shadow: 0 24px 80px rgba(0,0,0,0.8);
+            display: flex; flex-direction: column; overflow: hidden;
+            font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Cascadia Code', Menlo, Monaco, monospace;
+        }
+
+        /* macOS window chrome */
+        .window-chrome {
+            display: flex; align-items: center; gap: 8px;
+            padding: 10px 16px;
+            background: rgba(30, 30, 40, 0.9);
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            flex-shrink: 0;
+        }
+        .traffic-lights { display: flex; gap: 6px; }
+        .traffic-light {
+            width: 12px; height: 12px; border-radius: 50%;
+            cursor: pointer; transition: filter 0.15s;
+        }
+        .traffic-light:hover { filter: brightness(1.3); }
+        .tl-close { background: #ff5f57; }
+        .tl-minimize { background: #febc2e; }
+        .tl-maximize { background: #28c840; }
+        .window-title {
+            flex: 1; text-align: center;
+            font-size: 12px; color: rgba(255,255,255,0.35);
+        }
+
+        /* Tab bar */
+        .tab-bar {
+            display: flex; gap: 0;
+            background: rgba(20, 20, 28, 0.9);
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            flex-shrink: 0; overflow-x: auto;
+        }
+        .tab {
+            padding: 8px 18px;
+            font-size: 12px; color: rgba(255,255,255,0.35);
+            cursor: pointer; transition: all 0.2s;
+            border-right: 1px solid rgba(255,255,255,0.03);
+            white-space: nowrap; position: relative;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .tab:hover { color: rgba(255,255,255,0.6); background: rgba(255,255,255,0.02); }
+        .tab.active {
+            color: #4ade80; background: rgba(74, 222, 128, 0.04);
+        }
+        .tab.active::after {
+            content: ''; position: absolute; bottom: 0; left: 0; right: 0;
+            height: 2px; background: #4ade80;
+        }
+        .tab-count {
+            font-size: 10px; padding: 1px 5px; border-radius: 8px;
+            background: rgba(255,255,255,0.06);
+        }
+        .tab.active .tab-count { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+
+        /* Terminal body */
+        .terminal-body {
+            flex: 1; overflow-y: auto; padding: 0;
+            font-size: 13px; line-height: 1.6;
+        }
+        .terminal-body::-webkit-scrollbar { width: 6px; }
+        .terminal-body::-webkit-scrollbar-track { background: transparent; }
+        .terminal-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+
+        /* Prompt line */
+        .prompt-line {
+            padding: 6px 16px;
+            color: rgba(255,255,255,0.25);
+            font-size: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.02);
+        }
+        .prompt-line .prompt { color: #4ade80; }
+        .prompt-line .cmd { color: #93c5fd; }
+        .prompt-line .flag { color: #fbbf24; }
+        .prompt-line .pipe { color: rgba(255,255,255,0.3); }
+
+        /* Item row */
+        .term-row {
+            display: flex; align-items: flex-start; gap: 0;
+            padding: 6px 16px;
+            cursor: pointer; transition: background 0.15s;
+            border-bottom: 1px solid rgba(255,255,255,0.015);
+        }
+        .term-row:hover { background: rgba(255,255,255,0.03); }
+        .term-row:nth-child(even) { background: rgba(255,255,255,0.008); }
+        .term-row:nth-child(even):hover { background: rgba(255,255,255,0.04); }
+
+        .term-rank {
+            width: 36px; flex-shrink: 0;
+            font-size: 12px; font-weight: 600;
+            color: rgba(255,255,255,0.15);
+            text-align: right; padding-right: 12px;
+            padding-top: 1px;
+        }
+        .term-rank.top { color: #fbbf24; }
+        .term-rank.top2 { color: #94a3b8; }
+        .term-rank.top3 { color: #b45309; }
+
+        .term-source {
+            width: 32px; flex-shrink: 0;
+            font-size: 14px; text-align: center;
+            padding-top: 1px;
+        }
+
+        .term-content { flex: 1; min-width: 0; }
+        .term-title {
+            color: rgba(255,255,255,0.85);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .term-title .repo { color: #93c5fd; }
+        .term-title .sep { color: rgba(255,255,255,0.2); }
+
+        .term-details {
+            display: flex; align-items: center; gap: 10px;
+            margin-top: 2px;
+        }
+        .term-lang {
+            font-size: 11px; color: #c084fc;
+        }
+        .term-lang::before {
+            content: '●'; margin-right: 4px; font-size: 8px;
+        }
+        .term-desc {
+            font-size: 11px; color: rgba(255,255,255,0.25);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            font-style: italic;
+        }
+
+        .term-metrics {
+            flex-shrink: 0; display: flex; gap: 12px;
+            padding-left: 12px; padding-top: 1px;
+        }
+        .term-metric {
+            font-size: 12px; display: flex; align-items: center; gap: 4px;
+            white-space: nowrap;
+        }
+        .term-metric.stars { color: #fbbf24; }
+        .term-metric.points { color: #f97316; }
+        .term-metric.votes { color: #ef4444; }
+        .term-metric.hearts { color: #f472b6; }
+        .term-metric.comments { color: rgba(255,255,255,0.25); }
+        .term-metric i { font-size: 10px; }
+
+        .term-actions {
+            flex-shrink: 0; display: flex; gap: 4px;
+            padding-left: 8px; opacity: 0; transition: opacity 0.15s;
+        }
+        .term-row:hover .term-actions { opacity: 1; }
+        .term-act {
+            width: 22px; height: 22px; border-radius: 4px;
+            background: transparent; border: none;
+            color: rgba(255,255,255,0.3); cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 10px;
+        }
+        .term-act:hover { color: #4ade80; }
+
+        /* Status bar */
+        .status-bar {
+            display: flex; align-items: center; gap: 16px;
+            padding: 6px 16px;
+            background: rgba(20, 20, 28, 0.9);
+            border-top: 1px solid rgba(255,255,255,0.04);
+            font-size: 11px; color: rgba(255,255,255,0.25);
+            flex-shrink: 0;
+        }
+        .status-bar .status-item { display: flex; align-items: center; gap: 4px; }
+        .status-bar .status-item i { font-size: 9px; }
+        .status-bar .status-active { color: #4ade80; }
+        .status-bar .spacer { flex: 1; }
+    </style>
+</head>
+<body>
+    <div class="panel-overlay">
+        <div class="panel">
+            <div class="window-chrome">
+                <div class="traffic-lights">
+                    <div class="traffic-light tl-close"></div>
+                    <div class="traffic-light tl-minimize"></div>
+                    <div class="traffic-light tl-maximize"></div>
+                </div>
+                <div class="window-title">trending — hot-feed — 31 items</div>
+            </div>
+            <div class="tab-bar" id="tab-bar"></div>
+            <div class="terminal-body" id="terminal-body"></div>
+            <div class="status-bar">
+                <span class="status-item status-active"><i class="fas fa-circle"></i> LIVE</span>
+                <span class="status-item"><i class="fas fa-clock"></i> 5m ago</span>
+                <span class="status-item"><i class="fas fa-database"></i> 4 sources</span>
+                <span class="spacer"></span>
+                <span class="status-item"><i class="fas fa-arrow-up"></i> ↑/↓ navigate</span>
+                <span class="status-item"><i class="fas fa-sign-in-alt"></i> Enter open</span>
+                <span class="status-item">ESC close</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    const ALL_DATA = [
+        { type: 'github', title: 'Krishnagangwal/CS-Fundamentals', desc: 'CS fundamentals for interviews', stars: 1500, lang: 'Python' },
+        { type: 'hackernews', title: 'Astrophysicists Puzzle over Webb\'s New Universe', points: 79, comments: 142 },
+        { type: 'hackernews', title: 'Linux has officially won', points: 1400, comments: 891 },
+        { type: 'reddit', title: 'What\'s Next for AI?', votes: 192, comments: 445 },
+        { type: 'github', title: 'yynxxxxx/Codex-5.5-codex-instruct-5.5', desc: 'Codex 5.5 model', stars: 1300, lang: 'Python' },
+        { type: 'hackernews', title: 'The Vespa at 80: Italian scooter on 2 wheels', points: 43, comments: 67 },
+        { type: 'hackernews', title: 'Division Polynomials of Elliptic Curves in Python', points: 7, comments: 12 },
+        { type: 'reddit', title: 'Need a break? Play today\'s game from The Daily Context', votes: 111, comments: 23 },
+        { type: 'github', title: 'mekos2772/ios-location-spoofer', desc: 'GPS spoofer for iOS', stars: 1300, lang: 'Swift' },
+        { type: 'hackernews', title: 'Night Witches – all-female Soviet aviator regiment WW2', points: 18, comments: 34 },
+        { type: 'hackernews', title: 'Hunting a 16-year-old SQLite bug with TLA+: is dqlite affected?', points: 80, comments: 45 },
+        { type: 'devto', title: 'Welcome to AI Engineer World\'s Fair 2026', hearts: 70 },
+        { type: 'github', title: 'Kulaxyz/self-learning-skills', desc: 'Self-taught dev resources', stars: 820 },
+        { type: 'reddit', title: 'Maybe you should learn something', votes: 201, comments: 89 },
+        { type: 'devto', title: 'CI workflows on Tangled for Elixir', hearts: 1 },
+        { type: 'devto', title: 'My First Year at DEV Recap', hearts: 62 },
+        { type: 'github', title: 'HUANGCHIHHUNGLeo/claude-real-video', desc: 'Real-time video with Claude', stars: 675, lang: 'TypeScript' },
+        { type: 'hackernews', title: 'The bottleneck might be the air in the room', points: 483, comments: 267 },
+        { type: 'reddit', title: 'What I\'ve learned leading backend architecture', votes: 0, comments: 15 },
+        { type: 'devto', title: 'Building a Modern CLI Tool with Go', hearts: 45 },
+        { type: 'github', title: 'anthropics/claude-code', desc: 'AI coding assistant', stars: 12400, lang: 'TypeScript' },
+        { type: 'reddit', title: 'TIL about Dunning-Kruger in software engineering', votes: 1200, comments: 543 },
+        { type: 'hackernews', title: 'Show HN: Browser extension that replaces new tab', points: 156, comments: 89 },
+        { type: 'devto', title: 'Understanding TypeScript Generics Through Examples', hearts: 88 },
+    ];
+
+    const SOURCE_META = {
+        github: { name: 'GitHub', icon: '🔥', cmd: 'gh trending' },
+        hackernews: { name: 'HN', icon: '📰', cmd: 'hn top' },
+        reddit: { name: 'Reddit', icon: '💬', cmd: 'reddit hot' },
+        devto: { name: 'DEV', icon: '📝', cmd: 'dev feed' },
+    };
+
+    function formatNum(n) {
+        if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+        return String(n);
+    }
+
+    function renderTabs() {
+        const bar = document.getElementById('tab-bar');
+        const groups = {};
+        ALL_DATA.forEach(d => { groups[d.type] = (groups[d.type] || 0) + 1; });
+
+        let html = `<div class="tab active" data-filter="all">all <span class="tab-count">${ALL_DATA.length}</span></div>`;
+        for (const [key, count] of Object.entries(groups)) {
+            const meta = SOURCE_META[key];
+            html += `<div class="tab" data-filter="${key}">${meta.icon} ${meta.name} <span class="tab-count">${count}</span></div>`;
+        }
+        bar.innerHTML = html;
+
+        bar.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                bar.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                renderTerminal(tab.dataset.filter);
+            });
+        });
+    }
+
+    function renderTerminal(filter = 'all') {
+        const body = document.getElementById('terminal-body');
+        const items = filter === 'all' ? ALL_DATA : ALL_DATA.filter(d => d.type === filter);
+        const meta = SOURCE_META[filter] || {};
+        const cmd = filter === 'all' ? 'hot-feed --all --sort=rank' : `${meta.cmd} --top=${items.length}`;
+
+        let html = `
+            <div class="prompt-line">
+                <span class="prompt">❯</span> <span class="cmd">${cmd}</span> <span class="pipe">|</span> <span class="flag">--format=table</span>
+            </div>
+        `;
+
+        html += items.map((item, idx) => {
+            const srcMeta = SOURCE_META[item.type];
+            let titleHtml = item.title;
+            if (item.type === 'github' && item.title.includes('/')) {
+                const parts = item.title.split('/');
+                titleHtml = `<span class="repo">${parts[0]}</span><span class="sep">/</span><span class="repo">${parts.slice(1).join('/')}</span>`;
+            }
+
+            let metricsHtml = '';
+            if (item.stars) metricsHtml += `<span class="term-metric stars"><i class="fas fa-star"></i> ${formatNum(item.stars)}</span>`;
+            if (item.points) metricsHtml += `<span class="term-metric points"><i class="fas fa-arrow-up"></i> ${formatNum(item.points)}</span>`;
+            if (item.votes) metricsHtml += `<span class="term-metric votes"><i class="fas fa-arrow-up"></i> ${formatNum(item.votes)}</span>`;
+            if (item.hearts) metricsHtml += `<span class="term-metric hearts"><i class="fas fa-heart"></i> ${formatNum(item.hearts)}</span>`;
+            if (item.comments) metricsHtml += `<span class="term-metric comments"><i class="fas fa-comment"></i> ${item.comments}</span>`;
+
+            const rankClass = idx === 0 ? 'top' : idx === 1 ? 'top2' : idx === 2 ? 'top3' : '';
+
+            return `
+                <div class="term-row">
+                    <div class="term-rank ${rankClass}">${idx + 1}</div>
+                    <div class="term-source">${srcMeta.icon}</div>
+                    <div class="term-content">
+                        <div class="term-title">${titleHtml}</div>
+                        <div class="term-details">
+                            ${item.lang ? `<span class="term-lang">${item.lang}</span>` : ''}
+                            ${item.desc ? `<span class="term-desc">${item.desc}</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="term-metrics">${metricsHtml}</div>
+                    <div class="term-actions">
+                        <button class="term-act" title="Open"><i class="fas fa-external-link-alt"></i></button>
+                        <button class="term-act" title="Save"><i class="fas fa-bookmark"></i></button>
+                        <button class="term-act" title="Copy"><i class="fas fa-copy"></i></button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        html += `<div class="prompt-line" style="margin-top: 4px; opacity: 0.5">
+            <span class="prompt">❯</span> <span style="animation: blink 1s step-end infinite">_</span>
+        </div>`;
+
+        body.innerHTML = html;
+    }
+
+    renderTabs();
+    renderTerminal();
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            document.querySelector('.panel-overlay').style.display = 'none';
+        }
+    });
+    </script>
+    <style>
+        @keyframes blink { 50% { opacity: 0; } }
+    </style>
+</body>
+</html>

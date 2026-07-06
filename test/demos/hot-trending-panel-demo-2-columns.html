@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>热榜面板 Demo 2 - 多栏信息流</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: url('https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1920&q=80') center/cover no-repeat fixed;
+            color: #fff;
+            min-height: 100vh;
+        }
+        body::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 0; }
+
+        .panel-overlay {
+            position: fixed; inset: 0; z-index: 900;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .panel {
+            position: relative; z-index: 901;
+            width: min(1200px, 96vw); height: 85vh;
+            border-radius: 16px;
+            background: rgba(18, 18, 26, 0.92);
+            backdrop-filter: blur(40px) saturate(180%);
+            border: 1px solid rgba(255,255,255,0.08);
+            box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+            display: flex; flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Header */
+        .panel-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 14px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            flex-shrink: 0;
+        }
+        .panel-title { font-size: 15px; font-weight: 600; color: rgba(255,255,255,0.9); display: flex; align-items: center; gap: 8px; }
+        .panel-badge {
+            padding: 2px 8px; border-radius: 10px;
+            background: rgba(99, 102, 241, 0.15); color: #a5b4fc;
+            font-size: 11px; font-weight: 500;
+        }
+        .panel-close {
+            width: 30px; height: 30px; border-radius: 8px;
+            background: rgba(255,255,255,0.06); border: none; color: rgba(255,255,255,0.5);
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s;
+        }
+        .panel-close:hover { background: rgba(255,255,255,0.12); color: #fff; }
+
+        /* Multi-column layout */
+        .columns-container {
+            flex: 1; display: flex; gap: 0; overflow: hidden;
+        }
+        .column {
+            flex: 1; display: flex; flex-direction: column;
+            border-right: 1px solid rgba(255,255,255,0.04);
+            min-width: 0;
+        }
+        .column:last-child { border-right: none; }
+
+        .column-header {
+            padding: 12px 16px;
+            display: flex; align-items: center; gap: 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            flex-shrink: 0;
+            position: relative;
+        }
+        .column-header::after {
+            content: ''; position: absolute; bottom: 0; left: 16px; right: 16px;
+            height: 2px; border-radius: 1px;
+        }
+        .column-header.github::after { background: #8b5cf6; }
+        .column-header.hackernews::after { background: #f97316; }
+        .column-header.reddit::after { background: #ef4444; }
+        .column-header.devto::after { background: #3b82f6; }
+
+        .column-icon {
+            width: 28px; height: 28px; border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px; flex-shrink: 0;
+        }
+        .column-icon.github { background: rgba(139, 92, 246, 0.15); }
+        .column-icon.hackernews { background: rgba(249, 115, 22, 0.15); }
+        .column-icon.reddit { background: rgba(239, 68, 68, 0.15); }
+        .column-icon.devto { background: rgba(59, 130, 246, 0.15); }
+        .column-name { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.8); }
+        .column-count { font-size: 11px; color: rgba(255,255,255,0.3); margin-left: auto; }
+
+        .column-body {
+            flex: 1; overflow-y: auto; padding: 8px 0;
+        }
+        .column-body::-webkit-scrollbar { width: 4px; }
+        .column-body::-webkit-scrollbar-track { background: transparent; }
+        .column-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+        /* Feed item */
+        .feed-item {
+            padding: 10px 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-bottom: 1px solid rgba(255,255,255,0.02);
+            position: relative;
+        }
+        .feed-item:hover {
+            background: rgba(255,255,255,0.04);
+        }
+        .feed-item-rank {
+            position: absolute; left: 4px; top: 12px;
+            font-size: 10px; font-weight: 700;
+            color: rgba(255,255,255,0.15);
+            width: 12px; text-align: center;
+        }
+        .feed-item-rank.top { color: #fbbf24; }
+        .feed-item-title {
+            font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.85);
+            line-height: 1.5;
+            display: -webkit-box; -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical; overflow: hidden;
+            margin-bottom: 6px;
+        }
+        .feed-item-meta {
+            display: flex; align-items: center; gap: 10px;
+            font-size: 11px; color: rgba(255,255,255,0.35);
+        }
+        .feed-meta-tag {
+            padding: 1px 6px; border-radius: 3px;
+            background: rgba(59, 130, 246, 0.12); color: #93c5fd;
+            font-size: 10px;
+        }
+        .feed-metric { display: flex; align-items: center; gap: 3px; }
+        .feed-metric.stars { color: #fbbf24; }
+        .feed-metric.points { color: #f97316; }
+        .feed-metric.votes { color: #ef4444; }
+        .feed-metric.hearts { color: #ec4899; }
+        .feed-metric i { font-size: 9px; }
+        .feed-comments { color: rgba(255,255,255,0.3); }
+        .feed-comments i { font-size: 9px; }
+
+        .feed-item-actions {
+            display: flex; gap: 2px; margin-left: auto;
+            opacity: 0; transition: opacity 0.2s;
+        }
+        .feed-item:hover .feed-item-actions { opacity: 1; }
+        .feed-action {
+            width: 22px; height: 22px; border-radius: 4px;
+            background: transparent; border: none;
+            color: rgba(255,255,255,0.3); cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 10px; transition: all 0.15s;
+        }
+        .feed-action:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+        /* Responsive: stack columns on narrow screens */
+        @media (max-width: 800px) {
+            .columns-container { flex-direction: column; }
+            .column { border-right: none; border-bottom: 1px solid rgba(255,255,255,0.04); max-height: 300px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="panel-overlay">
+        <div class="panel">
+            <div class="panel-header">
+                <div class="panel-title">
+                    <i class="fas fa-columns" style="color:#a5b4fc"></i> 热榜信息流
+                    <span class="panel-badge">4 个源</span>
+                </div>
+                <button class="panel-close"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="columns-container" id="columns"></div>
+        </div>
+    </div>
+
+    <script>
+    const MOCK_DATA = {
+        github: [
+            { title: 'Krishnagangwal/CS-Fundamentals', desc: 'CS fundamentals collection', metric: '1.5k', stars: 1500, lang: 'Python' },
+            { title: 'yynxxxxx/Codex-5.5-codex-instruct-5.5', desc: 'Codex 5.5 model weights', metric: '1.3k', stars: 1300, lang: 'Python' },
+            { title: 'mekos2772/ios-location-spoofer', desc: 'GPS location spoofer for iOS', metric: '1.3k', stars: 1300, lang: 'Swift' },
+            { title: 'Kulaxyz/self-learning-skills', desc: 'Self-taught developer resources', metric: '820', stars: 820 },
+            { title: 'HUANGCHIHHUNGLeo/claude-real-video', desc: 'Real-time video with Claude', metric: '675', stars: 675, lang: 'TypeScript' },
+            { title: 'anthropics/claude-code', desc: 'AI-powered coding assistant', metric: '12.4k', stars: 12400, lang: 'TypeScript' },
+            { title: 'vercel/next.js', desc: 'The React Framework', metric: '128k', stars: 128000, lang: 'JavaScript' },
+            { title: 'denoland/deno', desc: 'A modern runtime for JS/TS', metric: '98k', stars: 98000, lang: 'Rust' },
+        ],
+        hackernews: [
+            { title: 'Astrophysicists Puzzle over Webb\'s New Universe', metric: '▲79', points: 79, comments: 142 },
+            { title: 'Linux has officially won', metric: '▲1.4k', points: 1400, comments: 891 },
+            { title: 'The Vespa at 80: Why the Italian scooter remains the coolest thing on 2 wheels', metric: '▲43', points: 43, comments: 67 },
+            { title: 'Division Polynomials of Elliptic Curves in Python', metric: '▲7', points: 7, comments: 12 },
+            { title: 'Night Witches – all-female Soviet aviator regiment WW2', metric: '▲18', points: 18, comments: 34 },
+            { title: 'Hunting a 16-year-old SQLite bug with TLA+', metric: '▲80', points: 80, comments: 45 },
+            { title: 'The bottleneck might be the air in the room', metric: '▲483', points: 483, comments: 267 },
+            { title: 'Show HN: Browser extension new tab dashboard', metric: '▲156', points: 156, comments: 89 },
+        ],
+        reddit: [
+            { title: 'What\'s Next for AI?', metric: '❤192', votes: 192, comments: 445 },
+            { title: 'Need a break? Play today\'s game', metric: '❤111', votes: 111, comments: 23 },
+            { title: 'Maybe you should learn something', metric: '▲201', votes: 201, comments: 89 },
+            { title: 'Leading backend architecture of a university project', metric: '▲0', votes: 0, comments: 15 },
+            { title: 'TIL about the Dunning-Kruger effect in software engineering', metric: '▲1.2k', votes: 1200, comments: 543 },
+            { title: 'What programming language should I learn in 2026?', metric: '▲890', votes: 890, comments: 234 },
+            { title: 'My side project just hit 10k users!', metric: '▲567', votes: 567, comments: 178 },
+        ],
+        devto: [
+            { title: 'Welcome to AI Engineer World\'s Fair 2026', metric: '❤70', hearts: 70 },
+            { title: 'CI workflows on Tangled for Elixir', metric: '▲1', hearts: 1 },
+            { title: 'My First Year at DEV Recap', metric: '❤62', hearts: 62 },
+            { title: 'Building a Modern CLI Tool with Go', metric: '❤45', hearts: 45 },
+            { title: 'Understanding TypeScript Generics', metric: '❤88', hearts: 88 },
+            { title: '10 VS Code Extensions You Need in 2026', metric: '❤156', hearts: 156 },
+            { title: 'How to Write Clean Python Code', metric: '❤94', hearts: 94 },
+            { title: 'GraphQL vs REST: A Practical Guide', metric: '❤77', hearts: 77 },
+        ],
+    };
+
+    const SOURCE_META = {
+        github: { name: 'GitHub Trending', icon: '🔥' },
+        hackernews: { name: 'Hacker News', icon: '📰' },
+        reddit: { name: 'Reddit', icon: '💬' },
+        devto: { name: 'DEV.to', icon: '📝' },
+    };
+
+    function renderColumns() {
+        const container = document.getElementById('columns');
+        container.innerHTML = '';
+
+        for (const [source, items] of Object.entries(MOCK_DATA)) {
+            const meta = SOURCE_META[source];
+            const col = document.createElement('div');
+            col.className = 'column';
+            col.innerHTML = `
+                <div class="column-header ${source}">
+                    <div class="column-icon ${source}">${meta.icon}</div>
+                    <span class="column-name">${meta.name}</span>
+                    <span class="column-count">${items.length}</span>
+                </div>
+                <div class="column-body">
+                    ${items.map((item, idx) => {
+                        let metricHtml = '';
+                        if (item.stars) metricHtml = `<span class="feed-metric stars"><i class="fas fa-star"></i> ${item.metric}</span>`;
+                        else if (item.points) metricHtml = `<span class="feed-metric points"><i class="fas fa-arrow-up"></i> ${item.points}</span>`;
+                        else if (item.votes) metricHtml = `<span class="feed-metric votes"><i class="fas fa-arrow-up"></i> ${item.votes}</span>`;
+                        else if (item.hearts) metricHtml = `<span class="feed-metric hearts"><i class="fas fa-heart"></i> ${item.hearts}</span>`;
+
+                        return `
+                            <div class="feed-item">
+                                <div class="feed-item-rank${idx < 3 ? ' top' : ''}">${idx + 1}</div>
+                                <div class="feed-item-title">${item.title}</div>
+                                <div class="feed-item-meta">
+                                    ${item.lang ? `<span class="feed-meta-tag">${item.lang}</span>` : ''}
+                                    ${metricHtml}
+                                    ${item.comments ? `<span class="feed-comments"><i class="fas fa-comment"></i> ${item.comments}</span>` : ''}
+                                    <div class="feed-item-actions">
+                                        <button class="feed-action" title="打开"><i class="fas fa-external-link-alt"></i></button>
+                                        <button class="feed-action" title="保存"><i class="fas fa-bookmark"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+            container.appendChild(col);
+        }
+    }
+
+    renderColumns();
+    </script>
+</body>
+</html>
