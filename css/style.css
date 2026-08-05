@@ -12904,6 +12904,7 @@ body.bright-bg .ticker-sources-panel {
 .mc-tab:hover { color: rgba(255,255,255,0.6); }
 .mc-tab.active { color: rgba(200,160,255,0.95); font-weight: 500; }
 .mc-tab-indicator { position: absolute; bottom: 0; height: 2px; background: rgba(200,160,255,0.8); border-radius: 1px; transition: all .3s cubic-bezier(.4,0,.2,1); }
+.mc-tab-count { font-size: 9px; opacity: 0.5; font-weight: 400; }
 
 /* --- 内容区 --- */
 .mc-content { flex: 1; overflow: hidden; position: relative; }
@@ -12918,11 +12919,17 @@ body.bright-bg .ticker-sources-panel {
 .mc-row:hover { background: rgba(255,255,255,0.03); }
 .mc-row-active { background: rgba(200,160,255,0.04); }
 .mc-row-num { width: 22px; text-align: center; font-size: 10px; color: rgba(255,255,255,0.22); flex-shrink: 0; }
+.mc-row-num-top { font-weight: 700; }
 .mc-row-active .mc-row-num { color: rgba(200,160,255,0.7); }
 .mc-row-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .mc-row-title { font-size: 12px; color: rgba(255,255,255,0.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
 .mc-row-active .mc-row-title { color: rgba(200,160,255,0.95); font-weight: 500; }
-.mc-row-artist { font-size: 10px; color: rgba(255,255,255,0.25); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+.mc-row-artist { font-size: 10px; color: rgba(255,255,255,0.25); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; display: flex; align-items: center; gap: 0; }
+.mc-artist-link { cursor: pointer; transition: color .15s, text-decoration .15s; color: rgba(255,255,255,0.35); border-radius: 2px; }
+.mc-artist-link:hover { color: rgba(180,160,255,0.85); text-decoration: underline; }
+.mc-artist-sep { color: rgba(255,255,255,0.15); margin: 0 1px; pointer-events: none; }
+#mc-sub .mc-artist-link { color: rgba(255,255,255,0.35); }
+#mc-sub .mc-artist-link:hover { color: rgba(180,160,255,0.85); text-decoration: underline; }
 .mc-row-like { opacity: 0; background: none; border: none; color: rgba(255,255,255,0.15); cursor: pointer; font-size: 10px; transition: all .15s; flex-shrink: 0; padding: 6px; }
 .mc-row:hover .mc-row-like { opacity: 1; }
 .mc-row-like:hover { color: rgba(255,80,80,0.7); transform: scale(1.15); }
@@ -12955,6 +12962,39 @@ body.bright-bg .ticker-sources-panel {
 .mc-pl-play-all:hover { background: rgba(200,160,255,0.4); transform: scale(1.05); }
 .mc-pl-shuffle-all { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.5); }
 .mc-pl-shuffle-all:hover { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.8); }
+.mc-pl-heartbeat { background: rgba(255,100,150,0.12); color: rgba(255,100,150,0.7); }
+.mc-pl-heartbeat:hover { background: rgba(255,100,150,0.25); color: rgba(255,100,150,0.95); transform: scale(1.05); }
+.mc-pl-clear-all { background: rgba(255,80,80,0.12); color: rgba(255,100,100,0.7); }
+.mc-pl-clear-all:hover { background: rgba(255,80,80,0.25); color: rgba(255,100,100,0.95); transform: scale(1.05); }
+
+/* --- 单首删除按钮 --- */
+.mc-row-remove { background: none; border: none; color: rgba(255,255,255,0.1); cursor: pointer; font-size: 10px; padding: 4px; border-radius: 50%; transition: all .15s; flex-shrink: 0; opacity: 0; }
+.mc-row:hover .mc-row-remove { opacity: 1; }
+.mc-row-remove:hover { color: rgba(255,100,100,0.8); background: rgba(255,80,80,0.12); }
+
+/* --- 清空确认弹窗 --- */
+.mc-confirm-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 100; border-radius: inherit; opacity: 0; transition: opacity .2s; }
+.mc-confirm-overlay.mc-confirm-show { opacity: 1; }
+.mc-confirm-box { background: rgba(30,30,36,0.95); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 20px 24px; text-align: center; min-width: 220px; transform: scale(0.92); transition: transform .2s; }
+.mc-confirm-show .mc-confirm-box { transform: scale(1); }
+.mc-confirm-msg { font-size: 13px; color: rgba(255,255,255,0.8); margin-bottom: 16px; line-height: 1.6; }
+.mc-confirm-actions { display: flex; gap: 10px; justify-content: center; }
+.mc-confirm-cancel, .mc-confirm-ok { padding: 6px 20px; border-radius: 8px; border: none; cursor: pointer; font-size: 12px; font-weight: 500; transition: all .15s; }
+.mc-confirm-cancel { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.5); }
+.mc-confirm-cancel:hover { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.8); }
+.mc-confirm-ok { background: rgba(255,80,80,0.2); color: rgba(255,100,100,0.9); }
+.mc-confirm-ok:hover { background: rgba(255,80,80,0.35); }
+
+/* --- 睡眠定时器 --- */
+.mc-sleep-toggle { position: relative; }
+.mc-sleep-badge { position: absolute; top: -4px; right: -6px; background: rgba(200,160,255,0.85); color: #1a1a20; font-size: 8px; font-weight: 700; padding: 1px 4px; border-radius: 6px; white-space: nowrap; pointer-events: none; line-height: 1.3; }
+.mc-sleep-active-icon { color: rgba(200,160,255,0.9) !important; }
+.mc-sleep-menu { position: absolute; background: rgba(30,30,36,0.95); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 6px; min-width: 130px; z-index: 200; backdrop-filter: blur(12px); box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
+.mc-sleep-option { padding: 8px 14px; font-size: 12px; color: rgba(255,255,255,0.6); border-radius: 8px; cursor: pointer; transition: all .12s; white-space: nowrap; }
+.mc-sleep-option:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.9); }
+.mc-sleep-option.mc-sleep-active { color: rgba(200,160,255,0.95); background: rgba(200,160,255,0.08); }
+.mc-sleep-cancel { color: rgba(255,100,100,0.7); border-top: 1px solid rgba(255,255,255,0.04); margin-top: 4px; padding-top: 10px; }
+.mc-sleep-cancel:hover { color: rgba(255,100,100,0.95); background: rgba(255,80,80,0.08); }
 
 /* --- 歌词面板 --- */
 .mc-lrc-pane { padding: 16px 20px; }
@@ -12977,6 +13017,63 @@ body.bright-bg .ticker-sources-panel {
 .mc-hot-tags { display: flex; gap: 4px; flex-wrap: wrap; padding: 0 4px; }
 .mc-hot-tag { font-size: 10px; padding: 4px 10px; border-radius: 10px; background: rgba(200,160,255,0.06); color: rgba(255,255,255,0.4); cursor: pointer; transition: all .2s; }
 .mc-hot-tag:hover { background: rgba(200,160,255,0.15); color: rgba(255,255,255,0.7); }
+
+/* --- 私人FM入口 --- */
+.mc-fm-entry { display: flex; align-items: center; gap: 10px; margin: 8px 16px; padding: 10px 14px; border-radius: 12px; background: linear-gradient(135deg, rgba(200,100,255,0.12) 0%, rgba(100,160,255,0.08) 100%); border: 1px solid rgba(200,160,255,0.12); cursor: pointer; transition: all .2s; }
+.mc-fm-entry:hover { background: linear-gradient(135deg, rgba(200,100,255,0.2) 0%, rgba(100,160,255,0.14) 100%); border-color: rgba(200,160,255,0.25); transform: translateY(-1px); }
+.mc-fm-entry-icon { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, rgba(200,100,255,0.3), rgba(100,160,255,0.3)); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.mc-fm-entry-icon i { color: rgba(255,255,255,0.9); font-size: 14px; }
+.mc-fm-entry-text { flex: 1; min-width: 0; }
+.mc-fm-entry-title { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.85); }
+.mc-fm-entry-desc { font-size: 10px; color: rgba(255,255,255,0.35); margin-top: 1px; }
+.mc-fm-entry-play { width: 28px; height: 28px; border-radius: 50%; background: rgba(200,160,255,0.2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.mc-fm-entry-play i { color: rgba(200,160,255,0.9); font-size: 11px; margin-left: 1px; }
+
+/* --- 私人FM播放界面 --- */
+.mc-fm-container { padding: 12px 16px; }
+.mc-fm-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.mc-fm-badge { font-size: 11px; font-weight: 600; color: rgba(200,160,255,0.8); display: flex; align-items: center; gap: 6px; }
+.mc-fm-badge i { font-size: 12px; }
+.mc-fm-exit { background: none; border: none; color: rgba(255,255,255,0.3); cursor: pointer; font-size: 14px; padding: 4px 8px; border-radius: 8px; transition: all .15s; }
+.mc-fm-exit:hover { color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.06); }
+.mc-fm-card { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 14px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); }
+.mc-fm-cover { position: relative; width: 80px; height: 80px; border-radius: 10px; overflow: hidden; background: rgba(255,255,255,0.03); flex-shrink: 0; }
+.mc-fm-cover img { width: 100%; height: 100%; object-fit: cover; }
+.mc-fm-cover i { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 24px; color: rgba(255,255,255,0.1); }
+.mc-fm-info { flex: 1; min-width: 0; }
+.mc-fm-title { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.85); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mc-fm-artist { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mc-fm-album { font-size: 10px; color: rgba(255,255,255,0.2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mc-fm-controls { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 14px; }
+.mc-fm-btn { width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.5); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 15px; transition: all .2s; }
+.mc-fm-btn:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.85); border-color: rgba(255,255,255,0.15); }
+.mc-fm-trash:hover { color: rgba(255,100,100,0.9); border-color: rgba(255,100,100,0.2); background: rgba(255,100,100,0.08); }
+.mc-fm-like:hover { color: rgba(255,100,150,0.9); border-color: rgba(255,100,150,0.2); background: rgba(255,100,150,0.08); }
+.mc-fm-next { width: 48px; height: 48px; font-size: 18px; background: rgba(200,160,255,0.1); border-color: rgba(200,160,255,0.15); color: rgba(200,160,255,0.8); }
+.mc-fm-next:hover { background: rgba(200,160,255,0.2); color: rgba(200,160,255,1); border-color: rgba(200,160,255,0.3); }
+
+/* --- 排行榜 --- */
+.mc-toplist-section { padding: 0; }
+.mc-toplist-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 4px 16px 12px; }
+.mc-toplist-card { cursor: pointer; border-radius: 10px; transition: all .15s; padding: 4px; min-width: 0; }
+.mc-toplist-card:hover { background: rgba(255,255,255,0.04); }
+.mc-toplist-cover { position: relative; width: 100%; aspect-ratio: 1/1; border-radius: 8px; overflow: hidden; background: rgba(255,255,255,0.03); display: flex; align-items: center; justify-content: center; }
+.mc-toplist-cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.mc-toplist-cover i { font-size: 20px; color: rgba(255,255,255,0.1); }
+.mc-toplist-play-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.35); opacity: 0; transition: opacity .2s; }
+.mc-toplist-card:hover .mc-toplist-play-overlay { opacity: 1; }
+.mc-toplist-play-overlay i { color: #fff; font-size: 16px; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.3)); }
+.mc-toplist-freq { position: absolute; bottom: 3px; right: 4px; font-size: 8px; color: rgba(255,255,255,0.7); background: rgba(0,0,0,0.4); padding: 1px 5px; border-radius: 6px; }
+.mc-toplist-name { font-size: 10px; color: rgba(255,255,255,0.6); margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
+
+/* --- 分类随机听 --- */
+.mc-cat-section { padding: 4px 0 0; }
+.mc-cat-section .mc-rec-header { margin-bottom: 4px; }
+.mc-cat-tags { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 16px 6px; }
+.mc-cat-tag { font-size: 10px; padding: 4px 10px; border-radius: 10px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); color: rgba(255,255,255,0.4); cursor: pointer; transition: all .2s; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.mc-cat-tag i { font-size: 9px; opacity: 0.6; }
+.mc-cat-tag:hover { background: rgba(200,160,255,0.12); color: rgba(200,160,255,0.9); border-color: rgba(200,160,255,0.2); }
+.mc-cat-tag-loading { pointer-events: none; opacity: 0.5; }
 
 /* --- 推荐 --- */
 .mc-rec-compact { padding: 8px 16px; }
@@ -13005,10 +13102,10 @@ body.bright-bg .ticker-sources-panel {
 /* --- 歌单卡片网格 --- */
 .mc-pl-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 4px 16px 12px; }
 .mc-search-pl-grid { padding: 8px 12px; }
-.mc-pl-card { cursor: pointer; border-radius: 10px; transition: all .15s; padding: 4px; }
+.mc-pl-card { cursor: pointer; border-radius: 10px; transition: all .15s; padding: 4px; min-width: 0; }
 .mc-pl-card:hover { background: rgba(255,255,255,0.04); }
-.mc-pl-card-cover { position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: rgba(255,255,255,0.03); display: flex; align-items: center; justify-content: center; }
-.mc-pl-card-cover img { width: 100%; height: 100%; object-fit: cover; }
+.mc-pl-card-cover { position: relative; width: 100%; aspect-ratio: 1/1; border-radius: 8px; overflow: hidden; background: rgba(255,255,255,0.03); display: flex; align-items: center; justify-content: center; }
+.mc-pl-card-cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 .mc-pl-card-cover i { font-size: 20px; color: rgba(255,255,255,0.1); }
 .mc-pl-card-play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); opacity: 0; transition: opacity .2s; }
 .mc-pl-card:hover .mc-pl-card-play { opacity: 1; }
@@ -13016,7 +13113,13 @@ body.bright-bg .ticker-sources-panel {
 .mc-pl-card-count { position: absolute; top: 3px; right: 4px; font-size: 8px; color: rgba(255,255,255,0.8); background: rgba(0,0,0,0.4); padding: 1px 5px; border-radius: 6px; display: flex; align-items: center; gap: 2px; }
 .mc-pl-card-count i { font-size: 7px; }
 .mc-pl-card-name { font-size: 10px; color: rgba(255,255,255,0.6); margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
+.mc-pl-card-meta { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-top: 2px; }
+.mc-pl-card-meta .mc-pl-card-creator { margin-top: 0; flex: 1; min-width: 0; }
 .mc-pl-card-creator { font-size: 9px; color: rgba(255,255,255,0.2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mc-pl-card-collect { background: none; border: none; color: rgba(255,255,255,0.2); font-size: 11px; cursor: pointer; padding: 2px; flex-shrink: 0; transition: all .2s; border-radius: 4px; display: flex; align-items: center; justify-content: center; }
+.mc-pl-card-collect:hover { color: rgba(200,160,255,0.9); background: rgba(200,160,255,0.1); }
+.mc-pl-card-collect:disabled { cursor: default; }
+.mc-pl-card-collected, .mc-pl-card-collected:hover { color: rgba(200,160,255,0.7); }
 
 /* --- 歌手搜索结果 --- */
 .mc-artist-list { padding: 4px 0; }
@@ -13139,12 +13242,15 @@ body.bright-bg .ticker-sources-panel {
 
 .mc-as-header { padding: 16px 18px 10px; flex-shrink: 0; }
 .mc-as-artist-header { display: flex; align-items: center; gap: 12px; }
-.mc-as-artist-avatar { width: 52px; height: 52px; border-radius: 50%; overflow: hidden; flex-shrink: 0; background: rgba(200,160,255,0.08); display: flex; align-items: center; justify-content: center; }
+.mc-as-artist-header-enhanced { position: relative; overflow: hidden; flex-direction: column; gap: 0; }
+.mc-as-artist-banner { position: absolute; inset: 0; background-size: cover; background-position: center 30%; filter: blur(12px) brightness(0.35); transform: scale(1.2); z-index: 0; }
+.mc-as-artist-header-content { display: flex; align-items: center; gap: 12px; position: relative; z-index: 1; width: 100%; }
+.mc-as-artist-avatar { width: 52px; height: 52px; border-radius: 50%; overflow: hidden; flex-shrink: 0; background: rgba(200,160,255,0.08); display: flex; align-items: center; justify-content: center; border: 2px solid rgba(255,255,255,0.12); }
 .mc-as-artist-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .mc-as-artist-avatar i { font-size: 18px; color: rgba(200,160,255,0.3); }
 .mc-as-artist-info { flex: 1; min-width: 0; }
 .mc-as-artist-name { font-size: 16px; font-weight: 600; color: rgba(255,255,255,0.92); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mc-as-artist-sub { font-size: 11px; color: rgba(255,255,255,0.3); margin-top: 2px; }
+.mc-as-artist-sub { font-size: 11px; color: rgba(255,255,255,0.35); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mc-as-close { background: rgba(255,255,255,0.06); border: none; color: rgba(255,255,255,0.4); width: 32px; height: 32px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; transition: all .2s; flex-shrink: 0; }
 .mc-as-close:hover { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.8); }
 
@@ -13172,10 +13278,10 @@ body.bright-bg .ticker-sources-panel {
 
 /* --- 专辑网格 --- */
 .mc-as-album-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 10px 16px; }
-.mc-as-album-card { cursor: pointer; border-radius: 10px; transition: all .15s; padding: 4px; }
+.mc-as-album-card { cursor: pointer; border-radius: 10px; transition: all .15s; padding: 4px; min-width: 0; }
 .mc-as-album-card:hover { background: rgba(255,255,255,0.04); }
-.mc-as-album-cover { position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: rgba(255,255,255,0.03); display: flex; align-items: center; justify-content: center; }
-.mc-as-album-cover img { width: 100%; height: 100%; object-fit: cover; }
+.mc-as-album-cover { position: relative; width: 100%; aspect-ratio: 1/1; border-radius: 8px; overflow: hidden; background: rgba(255,255,255,0.03); display: flex; align-items: center; justify-content: center; }
+.mc-as-album-cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 .mc-as-album-cover i { font-size: 20px; color: rgba(255,255,255,0.1); }
 .mc-as-album-play-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.35); opacity: 0; transition: opacity .2s; }
 .mc-as-album-card:hover .mc-as-album-play-overlay { opacity: 1; }
@@ -13190,6 +13296,19 @@ body.bright-bg .ticker-sources-panel {
 .mc-as-album-detail-info { flex: 1; min-width: 0; }
 .mc-as-album-detail-name { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.85); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mc-as-album-detail-count { font-size: 10px; color: rgba(255,255,255,0.3); }
+
+/* --- 专辑详情 hero 区 --- */
+.mc-album-hero { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.04); position: relative; }
+.mc-album-back { position: absolute; top: 8px; left: 8px; z-index: 1; }
+.mc-album-hero-cover { width: 80px; height: 80px; border-radius: 8px; object-fit: cover; flex-shrink: 0; box-shadow: 0 2px 12px rgba(0,0,0,0.3); }
+.mc-album-cover-ph { width: 80px; height: 80px; border-radius: 8px; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.15); font-size: 28px; flex-shrink: 0; }
+.mc-album-hero-info { flex: 1; min-width: 0; padding-top: 4px; }
+.mc-album-hero-name { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.9); line-height: 1.3; margin-bottom: 4px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.mc-album-hero-artist { font-size: 11px; color: rgba(255,255,255,0.4); margin-bottom: 2px; display: flex; align-items: center; gap: 0; }
+.mc-album-hero-artist .mc-artist-link { color: rgba(180,160,255,0.6); }
+.mc-album-hero-artist .mc-artist-link:hover { color: rgba(180,160,255,0.9); }
+.mc-album-hero-meta { font-size: 10px; color: rgba(255,255,255,0.25); }
+.mc-album-hero-actions { display: flex; gap: 6px; flex-shrink: 0; align-self: flex-end; }
 
 /* --- 相似歌手 --- */
 .mc-as-similar-list { padding: 6px 0; }

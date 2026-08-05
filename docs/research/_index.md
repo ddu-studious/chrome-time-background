@@ -1,9 +1,10 @@
 # 调研文档索引
 
-> 最后更新：2026-05-24
+> 最后更新：2026-08-05
 
 | 更新日期 | 文档 | 标题 |
 |----------|------|------|
+| 2026-08-05 | [research-music-artist-album-api.md](research-music-artist-album-api.md) | 网易云音乐歌手/专辑 API 调研报告 |
 | 2026-05-24 | [research-agent-capability-building.md](research-agent-capability-building.md) | Agent 能力建设调研 v1.2（+Skills/MCP安装使用推荐指南+Phase 4进度更新） |
 | 2026-05-11 | [research-writing-ai-autocomplete.md](research-writing-ai-autocomplete.md) | 写作空间 AI 智能联想调研 |
 | 2026-05-11 | [research-task-form-demo-designs.md](research-task-form-demo-designs.md) | 任务编辑窗口设计方案 |

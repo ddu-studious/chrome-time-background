@@ -1,5 +1,5 @@
 /**
- * 音乐控制器模块 v3.16.0
+ * 音乐控制器模块 v3.17.0
  * UI 风格：Minimal Card（极简紧凑 + 滑动切换）— 基于 Demo 5
  * v3.0.0: 纯 API + Offscreen Document 独立播放器模式
  * v3.12.0: 音量浮层修复、发现全播、搜索队列、状态持久化、歌词防抖
@@ -7,6 +7,8 @@
  * v3.14.0: 队列列表UI优化（双行布局+喜欢按钮）、刷新后队列自动恢复
  * v3.15.0: 歌手操作台浮层（热门/专辑/相似）、歌曲加入队列能力、歌曲操作菜单
  * v3.16.0: 修复歌手专辑加载失败、搜索tab切换、搜索历史清除功能、搜索栏清除按钮
+ * v3.17.0: 一键清空队列、单曲移除、智能跳过失效歌曲、睡眠定时器、队列计数
+ * v3.18.0: 歌手/专辑交互导航（歌手名可点击、右键菜单增强、数据管线扩展）
  */
 class MusicController {
     constructor() {
@@ -50,6 +52,10 @@ class MusicController {
         this._shuffleIndex = -1;
         this._searchHistory = [];
         this._searchVer = 0;
+
+        // v3.18.0: 歌手/专辑导航栈 + 缓存
+        this._artistNavStack = [];
+        this._artistCache = new Map();
 
         // v3.0.0: Offscreen 独立播放器模式
         this._offscreenMode = false;
@@ -135,6 +141,7 @@ class MusicController {
             try {
                 const trimmed = (this._playlist || []).slice(0, 300).map(s => ({
                     title: s.title, artist: s.artist, songId: s.songId, index: s.index,
+                    artists: s.artists || undefined, albumId: s.albumId || undefined,
                 }));
                 chrome.storage.local.set({
                     musicPlaylistCache: {
@@ -215,7 +222,7 @@ class MusicController {
                   <div class="mc-drawer-inner">
                     <div class="mc-drawer-handle"><div class="mc-drawer-handle-bar"></div></div>
                     <div class="mc-tabs" id="mc-tabs">
-                        <button class="mc-tab active" data-mc-tab="queue">队列</button>
+                        <button class="mc-tab active" data-mc-tab="queue">队列<span class="mc-tab-count" id="mc-queue-count"></span></button>
                         <button class="mc-tab" data-mc-tab="playlists">歌单</button>
                         <button class="mc-tab" data-mc-tab="lyrics">歌词</button>
                         <button class="mc-tab" data-mc-tab="discover">发现</button>
@@ -272,6 +279,7 @@ class MusicController {
                                 <input type="range" class="mc-vol-input" id="mc-vol-input" min="0" max="100" value="100">
                             </div>
                         </div>
+                        <button class="mc-ctrl-btn mc-sleep-toggle" id="mc-sleep-toggle" title="定时关闭"><i class="fas fa-moon" id="mc-sleep-icon"></i><span class="mc-sleep-badge hidden" id="mc-sleep-badge"></span></button>
                         <div class="mc-mode-divider"></div>
                         <button class="mc-ctrl-btn mc-disconnect" id="mc-disconnect" title="断开连接"><i class="fas fa-times-circle"></i></button>
                     </div>
@@ -360,19 +368,21 @@ class MusicController {
         this._builtinAudio.style.display = 'none';
         document.body.appendChild(this._builtinAudio);
 
-        this._builtinAudio.addEventListener('ended', () => this._onBuiltinTrackEnd());
+        this._builtinAudio.addEventListener('ended', () => {
+            if (!this._offscreenMode) this._onBuiltinTrackEnd();
+        });
         this._builtinAudio.addEventListener('timeupdate', () => {
-            if (this._builtinMode) {
+            if (this._builtinMode && !this._offscreenMode) {
                 this.state.currentTime = this._builtinAudio.currentTime;
                 this.state.duration = this._builtinAudio.duration || 0;
                 this._lastUpdateTs = Date.now();
             }
         });
         this._builtinAudio.addEventListener('play', () => {
-            if (this._builtinMode) { this.state.isPlaying = true; this._updateUI(); }
+            if (this._builtinMode && !this._offscreenMode) { this.state.isPlaying = true; this._updateUI(); }
         });
         this._builtinAudio.addEventListener('pause', () => {
-            if (this._builtinMode) { this.state.isPlaying = false; this._updateUI(); }
+            if (this._builtinMode && !this._offscreenMode) { this.state.isPlaying = false; this._updateUI(); }
         });
     }
 
@@ -485,6 +495,12 @@ class MusicController {
                 if (q?.trim()) this._performSearch(q);
             });
         }
+
+        // 睡眠定时器
+        el.querySelector('#mc-sleep-toggle')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._showSleepTimerMenu(e);
+        });
 
         // 断开连接
         el.querySelector('#mc-disconnect')?.addEventListener('click', (e) => {
@@ -643,12 +659,12 @@ class MusicController {
         if (btn) btn.innerHTML = '<i class="fas fa-play-circle"></i> 独立播放';
     }
 
-    async _offscreenPlay(url, songId, title, artist, cover) {
+    async _offscreenPlay(url, songId, title, artist, cover, album) {
         try {
             return await new Promise(resolve => {
                 chrome.runtime.sendMessage({
                     action: 'offscreen_play',
-                    url, songId, title, artist, cover
+                    url, songId, title, artist, cover, album
                 }, resolve);
             });
         } catch {
@@ -708,8 +724,6 @@ class MusicController {
             }
         });
     }
-
-    
 
     // ===================== 网易云 API =====================
 
@@ -785,7 +799,14 @@ class MusicController {
         }, 5000);
     }
 
-    _handlePlaybackError(error, code) {
+    async _handlePlaybackError(error, code) {
+        const now = Date.now();
+        try {
+            const { _musicErrorLock: lockTs } = await chrome.storage.session.get('_musicErrorLock');
+            if (lockTs && now - lockTs < 2000) return;
+            await chrome.storage.session.set({ _musicErrorLock: now });
+        } catch { /* proceed */ }
+
         this.state.isPlaying = false;
         this._updateUI();
 
@@ -803,16 +824,42 @@ class MusicController {
     _autoSkipOnError() {
         const now = Date.now();
         if (!this._skipErrorTs) this._skipErrorTs = [];
+        if (!this._failedSongIds) this._failedSongIds = new Set();
         this._skipErrorTs = this._skipErrorTs.filter(t => now - t < 30000);
         this._skipErrorTs.push(now);
 
-        const maxSkips = Math.min((this._playlist?.length || 5), 5);
+        if (this._currentSongId) {
+            this._failedSongIds.add(String(this._currentSongId));
+        }
+
+        const maxSkips = Math.min((this._playlist?.length || 3), 3);
         if (this._skipErrorTs.length > maxSkips) {
-            this._showToast('连续多首播放失败，已暂停');
+            const failedCount = this._failedSongIds.size;
+            this._showToast(`连续 ${failedCount} 首播放失败，已暂停`);
             this._skipErrorTs = [];
             return;
         }
-        setTimeout(() => this._nextTrack(), 1500);
+        setTimeout(() => this._skipToNextValid(), 800);
+    }
+
+    _skipToNextValid() {
+        if (!this._failedSongIds) this._failedSongIds = new Set();
+        if (this._playlist.length === 0) return;
+
+        const currentIdx = this._playlist.findIndex(s => s.isActive || String(s.songId) === String(this._currentSongId));
+        let tried = 0;
+        let nextIdx = currentIdx;
+
+        while (tried < this._playlist.length) {
+            nextIdx = (nextIdx + 1) % this._playlist.length;
+            tried++;
+            const song = this._playlist[nextIdx];
+            if (song && !this._failedSongIds.has(String(song.songId))) {
+                this._playSongById(song.songId);
+                return;
+            }
+        }
+        this._showToast('队列中所有歌曲均无法播放');
     }
 
     // ===================== 播放控制 =====================
@@ -890,7 +937,17 @@ class MusicController {
                 titleEl.classList.remove('mc-title-unknown');
             }
         }
-        if (subEl) subEl.textContent = this.state.artist || '';
+        if (subEl) {
+            const artistHtml = this._renderArtistLink(this.state.artists, this.state.artist);
+            if (artistHtml) {
+                subEl.innerHTML = artistHtml;
+                subEl.querySelectorAll('.mc-artist-link').forEach(link => {
+                    link.addEventListener('click', (e) => this._handleArtistLinkClick(e));
+                });
+            } else {
+                subEl.textContent = this.state.artist || '';
+            }
+        }
 
         if (coverImg && this.state.cover) {
             if (coverImg.src !== this.state.cover) {
@@ -1085,9 +1142,13 @@ class MusicController {
             const resp = await this._neteaseApi('/api/v3/song/detail', { c: JSON.stringify([{ id: this._currentSongId }]) });
             if (resp?.ok && resp?.data?.songs?.[0]) {
                 const s = resp.data.songs[0];
+                const ar = (s.ar || []).map(a => ({ id: a.id, name: a.name }));
                 this.state.title = s.name || '';
-                this.state.artist = (s.ar || []).map(a => a.name).join('/') || '';
+                this.state.artist = ar.map(a => a.name).join('/') || '';
+                this.state.artists = ar;
+                this.state.albumId = s.al?.id || null;
                 this.state.cover = (s.al?.picUrl || '') + '?param=200y200';
+                this.state.album = s.al?.name || '';
                 this._updateUI();
                 this._hideMetaGuide();
                 this._syncMetaToOffscreen();
@@ -1105,6 +1166,7 @@ class MusicController {
             title: this.state.title,
             artist: this.state.artist,
             cover: this.state.cover,
+            album: this.state.album || '',
             songId: this._currentSongId,
         }).catch(() => {});
     }
@@ -1226,6 +1288,8 @@ class MusicController {
     async _refreshPlaylist() {
         const songs = Array.isArray(this._playlist) ? this._playlist : [];
         this._renderQueueWithApi(songs);
+        const countEl = this._el?.querySelector('#mc-queue-count');
+        if (countEl) countEl.textContent = songs.length > 0 ? ` ${songs.length}` : '';
     }
 
     // ===================== 用户歌单 =====================
@@ -1319,9 +1383,12 @@ class MusicController {
             const songResp = await this._neteaseApi('/api/v3/song/detail', { c: JSON.stringify(batch.map(id => ({ id }))) });
             if (songResp?.ok && songResp?.data?.songs) {
                 songResp.data.songs.forEach(s => {
+                    const ar = (s.ar || []).map(a => ({ id: a.id, name: a.name }));
                     allSongs.push({
                         title: s.name || '未知歌曲',
-                        artist: (s.ar || []).map(a => a.name).join('/') || '',
+                        artist: ar.map(a => a.name).join('/') || '',
+                        artists: ar,
+                        albumId: s.al?.id || null,
                         index: allSongs.length, isActive: s.name === this.state.title, songId: s.id,
                     });
                 });
@@ -1331,13 +1398,14 @@ class MusicController {
         this._playlist = allSongs;
         this._savePlaylistCache();
         this._apiLoadingQueue = false;
-        this._renderPlaylistDetail(pane, allSongs, playlistName, coverUrl, totalCount);
+        this._renderPlaylistDetail(pane, allSongs, playlistName, coverUrl, totalCount, true);
     }
 
-    _renderPlaylistDetail(pane, songs, name, coverUrl, totalCount) {
+    _renderPlaylistDetail(pane, songs, name, coverUrl, totalCount, forceQueue) {
         if (!pane) return;
         if (songs.length === 0) { pane.innerHTML = '<div class="mc-empty">歌单为空</div>'; return; }
 
+        const isQueue = forceQueue || (!coverUrl && !this._currentPlaylistId);
         const headerHtml = `
             <div class="mc-pl-detail-header">
                 <button class="mc-pl-back" id="mc-pl-back" title="返回歌单列表"><i class="fas fa-arrow-left"></i></button>
@@ -1349,6 +1417,8 @@ class MusicController {
                 <div class="mc-pl-detail-actions">
                     <button class="mc-pl-action-btn mc-pl-play-all" id="mc-pl-play-all" title="播放全部"><i class="fas fa-play"></i></button>
                     <button class="mc-pl-action-btn mc-pl-shuffle-all" id="mc-pl-shuffle-all" title="随机播放"><i class="fas fa-random"></i></button>
+                    ${this._currentPlaylistId ? '<button class="mc-pl-action-btn mc-pl-heartbeat" id="mc-pl-heartbeat" title="心动模式"><i class="fas fa-heartbeat"></i></button>' : ''}
+                    ${isQueue ? '<button class="mc-pl-action-btn mc-pl-clear-all" id="mc-pl-clear-all" title="清空队列"><i class="fas fa-trash-alt"></i></button>' : ''}
                 </div>
             </div>
         `;
@@ -1358,9 +1428,10 @@ class MusicController {
                 <span class="mc-row-num">${song.isActive ? '<i class="fas fa-volume-up" style="font-size:9px"></i>' : (idx + 1)}</span>
                 <div class="mc-row-info">
                     <span class="mc-row-title">${this._esc(song.title)}</span>
-                    <span class="mc-row-artist">${this._esc(song.artist)}</span>
+                    <span class="mc-row-artist">${this._renderArtistLink(song.artists, song.artist)}</span>
                 </div>
                 <button class="mc-row-like" data-song-id="${song.songId || ''}" title="添加到我喜欢"><i class="fas fa-heart"></i></button>
+                ${isQueue ? `<button class="mc-row-remove" data-song-id="${song.songId || ''}" title="从队列移除"><i class="fas fa-times"></i></button>` : ''}
                 <button class="mc-row-play"><i class="fas fa-play"></i></button>
             </div>
         `).join('');
@@ -1388,15 +1459,24 @@ class MusicController {
             }
         });
 
+        pane.querySelector('#mc-pl-heartbeat')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._startHeartbeatMode(songs);
+        });
+
         pane.querySelectorAll('.mc-row').forEach(item => {
             item.addEventListener('click', (e) => {
-                if (e.target.closest('.mc-row-like') || e.target.closest('.mc-row-play')) return;
+                if (e.target.closest('.mc-row-like') || e.target.closest('.mc-row-play') || e.target.closest('.mc-artist-link')) return;
                 e.stopPropagation();
                 const songId = item.dataset.songId;
                 if (songId) {
                     this._playSongById(songId);
                 }
             });
+        });
+
+        pane.querySelectorAll('.mc-artist-link').forEach(link => {
+            link.addEventListener('click', (e) => this._handleArtistLinkClick(e));
         });
 
         pane.querySelectorAll('.mc-row-play').forEach(btn => {
@@ -1416,6 +1496,26 @@ class MusicController {
             });
         });
 
+        pane.querySelector('#mc-pl-clear-all')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._confirmClearPlaylist();
+        });
+
+        pane.querySelectorAll('.mc-row-remove').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const songId = btn.dataset.songId;
+                if (songId) this._removeSongFromQueue(songId);
+            });
+        });
+
+        pane.querySelectorAll('.mc-row').forEach((row, idx) => {
+            row.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                this._showSongContextMenu(e, songs[idx] || {});
+            });
+        });
+
         const active = pane.querySelector('.mc-row-active');
         if (active) this._scrollToCenter(pane, active);
     }
@@ -1427,7 +1527,7 @@ class MusicController {
             pane.innerHTML = '<div class="mc-empty">暂无歌曲，请先播放音乐</div>';
             return;
         }
-        this._renderPlaylistDetail(pane, songs, this._currentPlaylistName || '播放队列', '', songs.length);
+        this._renderPlaylistDetail(pane, songs, this._currentPlaylistName || '播放队列', '', songs.length, true);
     }
 
     async _playSongById(songId) {
@@ -1441,34 +1541,43 @@ class MusicController {
         }
 
         this._currentSongId = songId;
+        if (this._failedSongIds) this._failedSongIds.delete(String(songId));
+        this._skipErrorTs = [];
 
         if (this._offscreenMode) {
             const detailResp = await this._neteaseApi('/api/v3/song/detail', { c: JSON.stringify([{ id: songId }]) });
-            let title = '', artist = '', cover = '';
+            let title = '', artist = '', cover = '', album = '';
+            let artists = [], albumId = null;
             if (detailResp?.ok && detailResp?.data?.songs?.[0]) {
                 const s = detailResp.data.songs[0];
                 title = s.name || '';
-                artist = (s.ar || []).map(a => a.name).join('/') || '';
+                artists = (s.ar || []).map(a => ({ id: a.id, name: a.name }));
+                artist = artists.map(a => a.name).join('/') || '';
                 cover = (s.al?.picUrl || '') + '?param=200y200';
+                album = s.al?.name || '';
+                albumId = s.al?.id || null;
             }
 
             // 独立播放场景如果是“单曲触发”，确保队列不会是空的（否则队列/next/prev 会显得不连贯）
             if (!Array.isArray(this._playlist) || this._playlist.length === 0) {
-                this._playlist = [{ title, artist, index: 0, isActive: true, songId }];
+                this._playlist = [{ title, artist, artists, albumId, index: 0, isActive: true, songId }];
                 this._currentPlaylistName = this._currentPlaylistName || '播放队列';
                 this._savePlaylistCache();
             }
 
             this.state.title = title;
             this.state.artist = artist;
+            this.state.artists = artists;
+            this.state.albumId = albumId;
             this.state.cover = cover;
+            this.state.album = album;
             this.state.isPlaying = true;
             this._lastUpdateTs = Date.now();
             this._updateUI();
             this._show();
             this._hideMetaGuide();
 
-            await this._offscreenPlay(songUrl, songId, title, artist, cover);
+            await this._offscreenPlay(songUrl, songId, title, artist, cover, album);
             this._setRowLoading(songId, false);
             this._tryFetchLyricsForCurrentSong();
             this._updatePlaylistActiveState(songId);
@@ -1692,11 +1801,314 @@ class MusicController {
         return '';
     }
 
+    // ===================== 私人FM (v3.13.0) =====================
+
+    async _startPersonalFM() {
+        this._fmMode = true;
+        this._fmTrashIds = new Set();
+        this._showToast('正在加载私人FM...');
+        await this._loadFMSongs();
+    }
+
+    async _loadFMSongs() {
+        const resp = await this._neteaseApi('/api/v1/radio/get');
+        const songs = resp?.ok ? (resp?.data?.data || []) : [];
+        if (songs.length === 0) {
+            this._showToast('私人FM暂无推荐');
+            this._fmMode = false;
+            return;
+        }
+        this._fmQueue = songs.map(s => ({
+            songId: s.id,
+            title: s.name || '',
+            artist: (s.artists || []).map(a => a.name).join('/'),
+            cover: (s.album?.picUrl || '') + '?param=200y200',
+            album: s.album?.name || '',
+            duration: s.duration || 0,
+        }));
+        this._fmIndex = 0;
+        await this._playFMCurrent();
+    }
+
+    async _playFMCurrent() {
+        if (!this._fmQueue || this._fmIndex >= this._fmQueue.length) {
+            await this._loadFMSongs();
+            return;
+        }
+        const song = this._fmQueue[this._fmIndex];
+        this._playlist = this._fmQueue.map((s, i) => ({
+            title: s.title, artist: s.artist, songId: s.songId, index: i, isActive: i === this._fmIndex,
+        }));
+        this._currentPlaylistName = '私人FM';
+        this._savePlaylistCache();
+
+        this.state.title = song.title;
+        this.state.artist = song.artist;
+        this.state.cover = song.cover;
+        this.state.album = song.album;
+        this.state.isPlaying = true;
+        this._currentSongId = song.songId;
+        this._lastUpdateTs = Date.now();
+        this._updateUI();
+        this._show();
+
+        const songUrl = await this._getSongUrl(song.songId);
+        if (!songUrl) {
+            this._showToast('获取播放链接失败，跳到下一首');
+            this._fmIndex++;
+            await this._playFMCurrent();
+            return;
+        }
+
+        if (this._offscreenMode) {
+            await this._offscreenPlay(songUrl, song.songId, song.title, song.artist, song.cover, song.album);
+        } else if (this._builtinAudio) {
+            this._builtinAudio.src = songUrl;
+            this._builtinAudio.play().catch(() => {});
+        }
+        this._tryFetchLyricsForCurrentSong();
+        this._renderFMUI();
+    }
+
+    async _fmNext() {
+        this._fmIndex++;
+        if (this._fmIndex >= (this._fmQueue?.length || 0)) {
+            await this._loadFMSongs();
+        } else {
+            await this._playFMCurrent();
+        }
+    }
+
+    async _fmTrash() {
+        if (!this._fmQueue || !this._fmQueue[this._fmIndex]) return;
+        const songId = this._fmQueue[this._fmIndex].songId;
+        this._fmTrashIds.add(songId);
+        this._neteaseApi('/api/radio/trash/add', { songId, alg: 'RT', time: 25 }, 'POST').catch(() => {});
+        this._showToast('已标记为不感兴趣');
+        await this._fmNext();
+    }
+
+    async _subscribePlaylist(playlistId, playlistName, btnEl) {
+        if (!playlistId) return;
+        if (btnEl) {
+            btnEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            btnEl.disabled = true;
+        }
+        const resp = await this._neteaseApi('/api/playlist/subscribe', { id: playlistId, t: 1 }, 'POST');
+        if (resp?.ok && resp?.data?.code === 200) {
+            this._showToast(`已收藏: ${playlistName || '歌单'}`);
+            if (btnEl) {
+                btnEl.innerHTML = '<i class="fas fa-check"></i>';
+                btnEl.title = '已收藏';
+                btnEl.classList.add('mc-pl-card-collected');
+            }
+        } else {
+            const errCode = resp?.data?.code;
+            if (errCode === 501) {
+                this._showToast('已经收藏过了');
+                if (btnEl) {
+                    btnEl.innerHTML = '<i class="fas fa-check"></i>';
+                    btnEl.title = '已收藏';
+                    btnEl.classList.add('mc-pl-card-collected');
+                }
+            } else {
+                this._showToast('收藏失败，请重试');
+                if (btnEl) {
+                    btnEl.innerHTML = '<i class="fas fa-folder-plus"></i>';
+                    btnEl.disabled = false;
+                }
+            }
+        }
+    }
+
+    _renderFMUI() {
+        const pane = this._el?.querySelector('#mc-pane-discover');
+        if (!pane || !this._fmMode || !this._fmQueue) return;
+        const song = this._fmQueue[this._fmIndex];
+        if (!song) return;
+
+        pane.innerHTML = `
+            <div class="mc-fm-container">
+                <div class="mc-fm-header">
+                    <div class="mc-fm-badge"><i class="fas fa-broadcast-tower"></i> 私人FM</div>
+                    <button class="mc-fm-exit" title="退出FM"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="mc-fm-card">
+                    <div class="mc-fm-cover">
+                        ${song.cover ? `<img src="${this._esc(song.cover)}" alt="" loading="lazy">` : '<i class="fas fa-music"></i>'}
+                    </div>
+                    <div class="mc-fm-info">
+                        <div class="mc-fm-title">${this._esc(song.title)}</div>
+                        <div class="mc-fm-artist">${this._esc(song.artist)}</div>
+                        ${song.album ? `<div class="mc-fm-album">${this._esc(song.album)}</div>` : ''}
+                    </div>
+                </div>
+                <div class="mc-fm-controls">
+                    <button class="mc-fm-btn mc-fm-trash" title="不感兴趣"><i class="fas fa-ban"></i></button>
+                    <button class="mc-fm-btn mc-fm-like" title="喜欢"><i class="fas fa-heart"></i></button>
+                    <button class="mc-fm-btn mc-fm-next" title="下一首"><i class="fas fa-step-forward"></i></button>
+                </div>
+            </div>
+        `;
+
+        pane.querySelector('.mc-fm-exit')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._fmMode = false;
+            this._loadRecommended();
+        });
+        pane.querySelector('.mc-fm-trash')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._fmTrash();
+        });
+        pane.querySelector('.mc-fm-like')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._toggleLike(song.songId);
+        });
+        pane.querySelector('.mc-fm-next')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._fmNext();
+        });
+    }
+
+    // ===================== 心动模式 (v3.13.0) =====================
+
+    async _startHeartbeatMode(songs) {
+        if (!songs || songs.length === 0) return;
+        const pid = this._currentPlaylistId;
+        if (!pid) {
+            this._showToast('心动模式需要在歌单中使用');
+            return;
+        }
+
+        const startSong = songs.find(s => s.songId == this._currentSongId) || songs[0];
+        this._showToast('正在加载心动模式...');
+
+        const resp = await this._neteaseApi('/api/playmode/intelligence/list', {
+            id: startSong.songId,
+            pid: pid,
+            sid: startSong.songId,
+            type: 'fromPlayOne',
+        });
+
+        const intelligenceList = resp?.ok ? (resp?.data?.data || []) : [];
+        if (intelligenceList.length === 0) {
+            this._showToast('心动模式暂无推荐');
+            return;
+        }
+
+        const heartSongs = intelligenceList.map((item, i) => {
+            const s = item.songInfo || item;
+            return {
+                title: s.name || '',
+                artist: (s.ar || s.artists || []).map(a => a.name).join('/'),
+                songId: s.id,
+                index: i,
+                isActive: false,
+            };
+        });
+
+        this._playlist = heartSongs;
+        this._currentPlaylistName = '心动模式';
+        this._savePlaylistCache();
+        this._setPlayMode('sequence');
+
+        if (heartSongs[0]?.songId) {
+            this._playSongById(heartSongs[0].songId);
+        }
+        this._showToast(`心动模式已开启，${heartSongs.length} 首推荐`);
+    }
+
+    // ===================== 分类随机听 (v3.13.0) =====================
+
+    _CAT_PRESETS = [
+        { name: '华语', icon: 'music' },
+        { name: '流行', icon: 'fire' },
+        { name: '摇滚', icon: 'guitar' },
+        { name: '民谣', icon: 'leaf' },
+        { name: '电子', icon: 'bolt' },
+        { name: '说唱', icon: 'microphone' },
+        { name: '古风', icon: 'feather' },
+        { name: '轻音乐', icon: 'cloud' },
+        { name: 'R&B/Soul', icon: 'heart' },
+        { name: '爵士', icon: 'wine-glass' },
+        { name: '古典', icon: 'theater-masks' },
+        { name: '乡村', icon: 'tree' },
+        { name: '欧美', icon: 'globe-americas' },
+        { name: '日语', icon: 'sun' },
+        { name: '韩语', icon: 'star' },
+        { name: '粤语', icon: 'comment' },
+        { name: 'ACG', icon: 'gamepad' },
+        { name: '影视原声', icon: 'film' },
+        { name: '学习', icon: 'book' },
+        { name: '工作', icon: 'briefcase' },
+        { name: '运动', icon: 'running' },
+        { name: '睡眠', icon: 'moon' },
+        { name: '放松', icon: 'spa' },
+        { name: '驾车', icon: 'car' },
+    ];
+
+    _loadCategoryTags(pane) {
+        const container = pane?.querySelector('#mc-cat-tags');
+        if (!container) return;
+
+        container.innerHTML = this._CAT_PRESETS.map(cat =>
+            `<button class="mc-cat-tag" data-cat="${this._esc(cat.name)}" title="随机播放${cat.name}歌单"><i class="fas fa-${cat.icon}"></i> ${this._esc(cat.name)}</button>`
+        ).join('');
+
+        container.querySelectorAll('.mc-cat-tag').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this._playCategoryRandom(btn.dataset.cat, btn);
+            });
+        });
+    }
+
+    async _playCategoryRandom(cat, btn) {
+        if (this._catLoading) return;
+        this._catLoading = true;
+        const origHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        btn.classList.add('mc-cat-tag-loading');
+
+        try {
+            const offset = Math.floor(Math.random() * 10) * 6;
+            const resp = await this._neteaseApi('/api/playlist/list', {
+                cat,
+                order: 'hot',
+                limit: 6,
+                offset,
+                total: true,
+            });
+
+            const playlists = resp?.ok ? (resp?.data?.playlists || []) : [];
+            if (playlists.length === 0) {
+                this._showToast(`"${cat}" 分类暂无歌单`);
+                return;
+            }
+
+            const picked = playlists[Math.floor(Math.random() * playlists.length)];
+            this._showToast(`正在加载「${picked.name}」...`);
+            this._loadPlaylistSongsViaApi(picked.id, null);
+        } catch (e) {
+            this._showToast('加载失败，请重试');
+        } finally {
+            btn.innerHTML = origHtml;
+            btn.classList.remove('mc-cat-tag-loading');
+            this._catLoading = false;
+        }
+    }
+
     // ===================== 推荐歌曲 API (v2.9.0) =====================
 
     async _loadRecommended() {
         const pane = this._el?.querySelector('#mc-pane-discover');
         if (!pane) return;
+
+        if (this._fmMode) {
+            this._renderFMUI();
+            return;
+        }
+
         pane.innerHTML = '<div class="mc-empty"><i class="fas fa-spinner fa-spin"></i> 加载中...</div>';
 
         let songRendered = false;
@@ -1704,9 +2116,10 @@ class MusicController {
         const resp = await this._neteaseApi('/api/v3/discovery/recommend/songs');
         const dailySongs = resp?.ok ? (resp?.data?.data?.dailySongs || resp?.data?.dailySongs) : null;
         if (dailySongs?.length > 0) {
-            this._recommendSongs = dailySongs.map((s, i) => ({
-                title: s.name, artist: (s.ar || []).map(a => a.name).join('/'), songId: s.id, index: i,
-            }));
+            this._recommendSongs = dailySongs.map((s, i) => {
+                const ar = (s.ar || []).map(a => ({ id: a.id, name: a.name }));
+                return { title: s.name, artist: ar.map(a => a.name).join('/'), artists: ar, albumId: s.al?.id || null, songId: s.id, index: i };
+            });
             this._renderRecommend(pane, this._recommendSongs, '每日推荐');
             songRendered = true;
         }
@@ -1715,9 +2128,10 @@ class MusicController {
             const hotResp = await this._neteaseApi('/api/playlist/detail', { id: 3778678, n: 20 });
             const hotPlaylist = hotResp?.ok ? (hotResp?.data?.playlist || hotResp?.data?.result?.playlist) : null;
             if (hotPlaylist?.tracks?.length > 0) {
-                const songs = hotPlaylist.tracks.slice(0, 20).map((s, i) => ({
-                    title: s.name, artist: (s.ar || []).map(a => a.name).join('/'), songId: s.id, index: i,
-                }));
+                const songs = hotPlaylist.tracks.slice(0, 20).map((s, i) => {
+                    const ar = (s.ar || []).map(a => ({ id: a.id, name: a.name }));
+                    return { title: s.name, artist: ar.map(a => a.name).join('/'), artists: ar, albumId: s.al?.id || null, songId: s.id, index: i };
+                });
                 this._recommendSongs = songs;
                 this._renderRecommend(pane, songs, '热门歌曲');
                 songRendered = true;
@@ -1725,6 +2139,7 @@ class MusicController {
         }
 
         await this._loadRecommendPlaylists(pane, songRendered);
+        await this._loadToplistSection(pane);
     }
 
     async _loadRecommendPlaylists(pane, hasSongs) {
@@ -1748,7 +2163,7 @@ class MusicController {
                     ${playlists.map(pl => `
                         <div class="mc-pl-card" data-pl-id="${pl.id || ''}" title="${this._esc(pl.name || '')}">
                             <div class="mc-pl-card-cover">
-                                ${pl.picUrl ? `<img src="${this._esc(pl.picUrl)}?param=120y120" alt="">` : '<i class="fas fa-music"></i>'}
+                                ${pl.picUrl ? `<img src="${this._esc(pl.picUrl)}?param=120y120" alt="" loading="lazy" onerror="this.style.display='none'">` : '<i class="fas fa-music"></i>'}
                                 <div class="mc-pl-card-play"><i class="fas fa-play"></i></div>
                                 ${pl.playCount ? `<span class="mc-pl-card-count"><i class="fas fa-headphones"></i> ${this._formatCount(pl.playCount)}</span>` : ''}
                             </div>
@@ -1769,6 +2184,44 @@ class MusicController {
         });
     }
 
+    async _loadToplistSection(pane) {
+        if (!pane) return;
+        const resp = await this._neteaseApi('/api/toplist');
+        const list = resp?.ok ? (resp?.data?.list || []) : [];
+        if (list.length === 0) return;
+
+        const topCharts = list.slice(0, 6);
+
+        const html = `
+            <div class="mc-toplist-section">
+                <div class="mc-rec-header" style="margin-top:8px">
+                    <div class="mc-rec-tag"><i class="fas fa-chart-line"></i> 排行榜</div>
+                </div>
+                <div class="mc-toplist-grid">
+                    ${topCharts.map(chart => `
+                        <div class="mc-toplist-card" data-pl-id="${chart.id || ''}" title="${this._esc(chart.name || '')}">
+                            <div class="mc-toplist-cover">
+                                ${chart.coverImgUrl ? `<img src="${this._esc(chart.coverImgUrl)}?param=80y80" alt="" loading="lazy" onerror="this.style.display='none'">` : '<i class="fas fa-trophy"></i>'}
+                                <div class="mc-toplist-play-overlay"><i class="fas fa-play"></i></div>
+                                ${chart.updateFrequency ? `<span class="mc-toplist-freq">${this._esc(chart.updateFrequency)}</span>` : ''}
+                            </div>
+                            <div class="mc-toplist-name">${this._esc(chart.name || '')}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+        pane.insertAdjacentHTML('beforeend', html);
+
+        pane.querySelectorAll('.mc-toplist-card').forEach(card => {
+            card.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const plId = card.dataset.plId;
+                if (plId) this._loadPlaylistSongsViaApi(plId, null);
+            });
+        });
+    }
+
     _formatCount(n) {
         if (!n) return '0';
         if (n >= 100000000) return (n / 100000000).toFixed(1) + '亿';
@@ -1778,7 +2231,22 @@ class MusicController {
 
     _renderRecommend(pane, songs, label) {
         const gradients = [0.5, 0.4, 0.3, 0.25, 0.2, 0.15, 0.12, 0.1, 0.08, 0.06];
-        pane.innerHTML = `<div class="mc-rec-compact">
+        pane.innerHTML = `
+        <div class="mc-fm-entry" id="mc-fm-entry">
+            <div class="mc-fm-entry-icon"><i class="fas fa-broadcast-tower"></i></div>
+            <div class="mc-fm-entry-text">
+                <div class="mc-fm-entry-title">私人FM</div>
+                <div class="mc-fm-entry-desc">根据你的口味推荐歌曲</div>
+            </div>
+            <div class="mc-fm-entry-play"><i class="fas fa-play"></i></div>
+        </div>
+        <div class="mc-cat-section">
+            <div class="mc-rec-header">
+                <div class="mc-rec-tag"><i class="fas fa-th-large"></i> 分类随机听</div>
+            </div>
+            <div class="mc-cat-tags" id="mc-cat-tags"></div>
+        </div>
+        <div class="mc-rec-compact">
             <div class="mc-rec-header">
                 <div class="mc-rec-tag"><i class="fas fa-calendar-day"></i> ${this._esc(label)}</div>
                 <div class="mc-rec-actions">
@@ -1791,7 +2259,7 @@ class MusicController {
                     <span class="mc-row-num" style="color:rgba(200,160,255,${gradients[idx] || 0.06})">${idx + 1}</span>
                     <div class="mc-row-info">
                         <span class="mc-row-title">${this._esc(song.title)}</span>
-                        <span class="mc-row-artist">${this._esc(song.artist || '')}</span>
+                        <span class="mc-row-artist">${this._renderArtistLink(song.artists, song.artist)}</span>
                     </div>
                     <button class="mc-row-add-queue" data-song-id="${song.songId || ''}" title="加入队列"><i class="fas fa-plus"></i></button>
                     <button class="mc-row-like" data-song-id="${song.songId || ''}" title="添加到我喜欢"><i class="fas fa-heart"></i></button>
@@ -1799,6 +2267,13 @@ class MusicController {
                 </div>
             `).join('')}
         </div>`;
+
+        pane.querySelector('#mc-fm-entry')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._startPersonalFM();
+        });
+
+        this._loadCategoryTags(pane);
 
         pane.querySelector('#mc-rec-play-all')?.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -1824,9 +2299,13 @@ class MusicController {
             }
         });
 
+        pane.querySelectorAll('.mc-rec-row .mc-artist-link').forEach(link => {
+            link.addEventListener('click', (e) => this._handleArtistLinkClick(e));
+        });
+
         pane.querySelectorAll('.mc-rec-row').forEach(item => {
             item.addEventListener('click', (e) => {
-                if (e.target.closest('.mc-row-like') || e.target.closest('.mc-row-play') || e.target.closest('.mc-row-add-queue')) return;
+                if (e.target.closest('.mc-row-like') || e.target.closest('.mc-row-play') || e.target.closest('.mc-row-add-queue') || e.target.closest('.mc-artist-link')) return;
                 e.stopPropagation();
                 const songId = item.dataset.songId;
                 if (songId) {
@@ -1875,6 +2354,13 @@ class MusicController {
                 e.stopPropagation();
                 const songId = btn.dataset.songId;
                 if (songId) this._likeSong(songId, btn);
+            });
+        });
+
+        pane.querySelectorAll('.mc-rec-row').forEach((row, idx) => {
+            row.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                this._showSongContextMenu(e, songs[idx] || {});
             });
         });
     }
@@ -1977,9 +2463,10 @@ class MusicController {
         const apiResp = await this._neteaseApi('/api/search/get/web', { s: query, type: 1, limit: 20, offset: 0 });
         if (ver !== undefined && ver !== this._searchVer) return;
         const results = (apiResp?.ok && apiResp?.data?.result?.songs)
-            ? apiResp.data.result.songs.map((s, idx) => ({
-                index: idx, title: s.name || '', artist: (s.artists || []).map(a => a.name).join('/') || '', songId: s.id,
-            }))
+            ? apiResp.data.result.songs.map((s, idx) => {
+                const ar = (s.artists || s.ar || []).map(a => ({ id: a.id, name: a.name }));
+                return { index: idx, title: s.name || '', artist: ar.map(a => a.name).join('/') || '', artists: ar, albumId: s.album?.id || s.al?.id || null, songId: s.id };
+            })
             : [];
 
         if (results.length === 0) {
@@ -1992,7 +2479,7 @@ class MusicController {
                 <span class="mc-row-num">${idx + 1}</span>
                 <div class="mc-row-info">
                     <span class="mc-row-title">${this._esc(song.title)}</span>
-                    <span class="mc-row-artist">${this._esc(song.artist || '')}</span>
+                    <span class="mc-row-artist">${this._renderArtistLink(song.artists, song.artist)}</span>
                 </div>
                 <button class="mc-row-add-queue" data-song-id="${song.songId || ''}" title="加入队列"><i class="fas fa-plus"></i></button>
                 <button class="mc-row-like" data-song-id="${song.songId || ''}" title="添加到我喜欢"><i class="fas fa-heart"></i></button>
@@ -2000,9 +2487,13 @@ class MusicController {
             </div>
         `).join('');
 
+        resultsEl.querySelectorAll('.mc-artist-link').forEach(link => {
+            link.addEventListener('click', (e) => this._handleArtistLinkClick(e));
+        });
+
         resultsEl.querySelectorAll('.mc-search-row').forEach(item => {
             item.addEventListener('click', (e) => {
-                if (e.target.closest('.mc-row-like') || e.target.closest('.mc-row-add-queue')) return;
+                if (e.target.closest('.mc-row-like') || e.target.closest('.mc-row-add-queue') || e.target.closest('.mc-artist-link')) return;
                 e.stopPropagation();
                 item.querySelector('.mc-row-play i')?.classList.replace('fa-play', 'fa-spinner');
                 item.querySelector('.mc-row-play i')?.classList.add('fa-spin');
@@ -2040,6 +2531,13 @@ class MusicController {
                 if (songId) this._likeSong(songId, btn);
             });
         });
+
+        resultsEl.querySelectorAll('.mc-search-row').forEach((row, idx) => {
+            row.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                this._showSongContextMenu(e, results[idx] || {});
+            });
+        });
     }
 
     async _searchPlaylists(query, resultsEl, ver) {
@@ -2056,21 +2554,34 @@ class MusicController {
             ${playlists.map(pl => `
                 <div class="mc-pl-card" data-pl-id="${pl.id || ''}" title="${this._esc(pl.name || '')}">
                     <div class="mc-pl-card-cover">
-                        ${pl.coverImgUrl ? `<img src="${this._esc(pl.coverImgUrl)}?param=120y120" alt="">` : '<i class="fas fa-music"></i>'}
+                        ${pl.coverImgUrl ? `<img src="${this._esc(pl.coverImgUrl)}?param=120y120" alt="" loading="lazy" onerror="this.style.display='none'">` : '<i class="fas fa-music"></i>'}
                         <div class="mc-pl-card-play"><i class="fas fa-play"></i></div>
                         ${pl.playCount ? `<span class="mc-pl-card-count"><i class="fas fa-headphones"></i> ${this._formatCount(pl.playCount)}</span>` : ''}
                     </div>
                     <div class="mc-pl-card-name">${this._esc(pl.name || '未命名歌单')}</div>
-                    <div class="mc-pl-card-creator">${this._esc(pl.creator?.nickname || '')}</div>
+                    <div class="mc-pl-card-meta">
+                        <span class="mc-pl-card-creator">${this._esc(pl.creator?.nickname || '')}</span>
+                        <button class="mc-pl-card-collect" data-pl-id="${pl.id || ''}" data-pl-name="${this._esc(pl.name || '')}" title="收藏歌单"><i class="fas fa-folder-plus"></i></button>
+                    </div>
                 </div>
             `).join('')}
         </div>`;
 
         resultsEl.querySelectorAll('.mc-pl-card').forEach(card => {
             card.addEventListener('click', (e) => {
+                if (e.target.closest('.mc-pl-card-collect')) return;
                 e.stopPropagation();
                 const plId = card.dataset.plId;
                 if (plId) this._loadPlaylistSongsViaApi(plId, null);
+            });
+        });
+
+        resultsEl.querySelectorAll('.mc-pl-card-collect').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const plId = btn.dataset.plId;
+                const plName = btn.dataset.plName;
+                if (plId) this._subscribePlaylist(plId, plName, btn);
             });
         });
     }
@@ -2153,35 +2664,52 @@ class MusicController {
             this._actionSheetEl.querySelector('#mc-as-body')?.replaceChildren();
         }
         document.body.classList.remove('mc-as-open');
+        this._artistNavStack = [];
     }
 
     async _openArtistActionSheet(artistId, artistName, artistImg) {
+        let coverImg = artistImg || '';
+        let briefDesc = '';
+
+        if (artistId) {
+            try {
+                const detailResp = await this._neteaseApi('/api/artist/detail', { id: artistId });
+                const ad = detailResp?.ok ? (detailResp?.data?.data?.artist || detailResp?.data?.artist) : null;
+                if (ad) {
+                    coverImg = ad.cover || ad.img1v1Url || coverImg;
+                    briefDesc = ad.briefDesc || '';
+                }
+            } catch { /* fallback to existing img */ }
+        }
+
         const headerHtml = `
-            <div class="mc-as-artist-header">
-                <div class="mc-as-artist-avatar">
-                    ${artistImg ? `<img src="${this._esc(artistImg)}?param=120y120" alt="">` : '<i class="fas fa-user"></i>'}
+            <div class="mc-as-artist-header mc-as-artist-header-enhanced">
+                ${coverImg ? `<div class="mc-as-artist-banner" style="background-image:url('${this._esc(coverImg)}?param=400y200')"></div>` : ''}
+                <div class="mc-as-artist-header-content">
+                    <div class="mc-as-artist-avatar">
+                        ${coverImg ? `<img src="${this._esc(coverImg)}?param=120y120" alt="">` : '<i class="fas fa-user"></i>'}
+                    </div>
+                    <div class="mc-as-artist-info">
+                        <div class="mc-as-artist-name">${this._esc(artistName)}</div>
+                        <div class="mc-as-artist-sub">歌手${briefDesc ? ' · ' + this._esc(briefDesc.slice(0, 40)) + (briefDesc.length > 40 ? '…' : '') : ''}</div>
+                    </div>
+                    <button class="mc-as-close" id="mc-as-close"><i class="fas fa-times"></i></button>
                 </div>
-                <div class="mc-as-artist-info">
-                    <div class="mc-as-artist-name">${this._esc(artistName)}</div>
-                    <div class="mc-as-artist-sub">歌手</div>
-                </div>
-                <button class="mc-as-close" id="mc-as-close"><i class="fas fa-times"></i></button>
             </div>
         `;
 
-        let cachedHotSongs = null;
-        let cachedAlbums = null;
-        let cachedSimilar = null;
+        const cached = this._getArtistCacheEntry(artistId) || {};
 
         const tabs = [
             {
                 key: 'hot', label: '<i class="fas fa-fire"></i> 热门',
                 onActivate: async (body) => {
-                    if (cachedHotSongs) { this._renderArtistHotSongs(body, cachedHotSongs, artistName); return; }
+                    if (cached.hotSongs) { this._renderArtistHotSongs(body, cached.hotSongs, artistName); return; }
                     body.innerHTML = '<div class="mc-empty"><i class="fas fa-spinner fa-spin"></i> 加载中...</div>';
                     const songs = await this._fetchArtistHotSongs(artistId, artistName);
                     if (songs && songs.length > 0) {
-                        cachedHotSongs = songs;
+                        cached.hotSongs = songs;
+                        this._setArtistCache(artistId, 'hotSongs', songs);
                     }
                     this._renderArtistHotSongs(body, songs || [], artistName);
                 }
@@ -2189,11 +2717,12 @@ class MusicController {
             {
                 key: 'albums', label: '<i class="fas fa-compact-disc"></i> 专辑',
                 onActivate: async (body) => {
-                    if (cachedAlbums) { this._renderArtistAlbums(body, cachedAlbums); return; }
+                    if (cached.albums) { this._renderArtistAlbums(body, cached.albums); return; }
                     body.innerHTML = '<div class="mc-empty"><i class="fas fa-spinner fa-spin"></i> 加载中...</div>';
                     const albums = await this._fetchArtistAlbums(artistId, artistName);
                     if (albums && albums.length > 0) {
-                        cachedAlbums = albums;
+                        cached.albums = albums;
+                        this._setArtistCache(artistId, 'albums', albums);
                     }
                     this._renderArtistAlbums(body, albums || []);
                 }
@@ -2201,11 +2730,12 @@ class MusicController {
             {
                 key: 'similar', label: '<i class="fas fa-users"></i> 相似',
                 onActivate: async (body) => {
-                    if (cachedSimilar) { this._renderSimilarArtists(body, cachedSimilar); return; }
+                    if (cached.similar) { this._renderSimilarArtists(body, cached.similar); return; }
                     body.innerHTML = '<div class="mc-empty"><i class="fas fa-spinner fa-spin"></i> 加载中...</div>';
                     const artists = await this._fetchSimilarArtists(artistId);
                     if (artists && artists.length > 0) {
-                        cachedSimilar = artists;
+                        cached.similar = artists;
+                        this._setArtistCache(artistId, 'similar', artists);
                     }
                     this._renderSimilarArtists(body, artists || []);
                 }
@@ -2216,8 +2746,23 @@ class MusicController {
 
         this._actionSheetEl.querySelector('#mc-as-close')?.addEventListener('click', (e) => {
             e.stopPropagation();
-            this._closeActionSheet();
+            if (this._artistNavStack.length > 1) {
+                this._artistNavStack.pop();
+                const prev = this._artistNavStack.pop();
+                this._openArtistActionSheet(prev.id, prev.name, prev.img);
+            } else {
+                this._closeActionSheet();
+            }
         });
+
+        if (this._artistNavStack.length >= 5) this._artistNavStack.splice(0, this._artistNavStack.length - 4);
+        this._artistNavStack.push({ id: artistId, name: artistName, img: coverImg });
+
+        const closeBtn = this._actionSheetEl.querySelector('#mc-as-close');
+        if (this._artistNavStack.length > 1 && closeBtn) {
+            closeBtn.innerHTML = '<i class="fas fa-arrow-left"></i>';
+            closeBtn.title = '返回上一位歌手';
+        }
     }
 
     _renderArtistHotSongs(body, hotSongs, artistName) {
@@ -2233,11 +2778,16 @@ class MusicController {
         }
 
         // 兼容 /api/v1/artist (ar) 和 /api/artist/top/song (artists) 两种返回格式
-        const songs = hotSongs.slice(0, 50).map((s, i) => ({
-            title: s.name || '',
-            artist: (s.ar || s.artists || []).map(a => a.name).join('/') || '',
-            songId: s.id, index: i, isActive: false,
-        }));
+        const songs = hotSongs.slice(0, 50).map((s, i) => {
+            const ar = (s.ar || s.artists || []).map(a => ({ id: a.id, name: a.name }));
+            return {
+                title: s.name || '',
+                artist: ar.map(a => a.name).join('/') || '',
+                artists: ar,
+                albumId: (s.al || s.album)?.id || null,
+                songId: s.id, index: i, isActive: false,
+            };
+        });
 
         body.innerHTML = `
             <div class="mc-as-actions">
@@ -2245,17 +2795,19 @@ class MusicController {
                 <button class="mc-as-action-btn" id="mc-as-add-all"><i class="fas fa-plus"></i> 全部加入队列</button>
             </div>
             <div class="mc-as-song-list">
-                ${songs.map((song, idx) => `
+                ${songs.map((song, idx) => {
+                    const numColor = idx < 3 ? 'rgba(200,160,255,0.7)' : idx < 10 ? `rgba(200,160,255,${0.4 - idx * 0.03})` : 'rgba(255,255,255,0.15)';
+                    return `
                     <div class="mc-row mc-as-row" data-song-id="${song.songId}" data-index="${idx}">
-                        <span class="mc-row-num">${idx + 1}</span>
+                        <span class="mc-row-num${idx < 3 ? ' mc-row-num-top' : ''}" style="color:${numColor}">${idx + 1}</span>
                         <div class="mc-row-info">
                             <span class="mc-row-title">${this._esc(song.title)}</span>
-                            <span class="mc-row-artist">${this._esc(song.artist)}</span>
+                            <span class="mc-row-artist">${this._renderArtistLink(song.artists, song.artist)}</span>
                         </div>
                         <button class="mc-row-add-queue" data-song-id="${song.songId}" title="加入队列"><i class="fas fa-plus"></i></button>
                         <button class="mc-row-play"><i class="fas fa-play"></i></button>
-                    </div>
-                `).join('')}
+                    </div>`;
+                }).join('')}
             </div>
         `;
 
@@ -2275,9 +2827,13 @@ class MusicController {
             this._showToast(`已将 ${songs.length} 首歌加入队列`);
         });
 
+        body.querySelectorAll('.mc-as-song-list .mc-artist-link').forEach(link => {
+            link.addEventListener('click', (e) => this._handleArtistLinkClick(e));
+        });
+
         body.querySelectorAll('.mc-as-row').forEach(row => {
             row.addEventListener('click', (e) => {
-                if (e.target.closest('.mc-row-add-queue') || e.target.closest('.mc-row-play')) return;
+                if (e.target.closest('.mc-row-add-queue') || e.target.closest('.mc-row-play') || e.target.closest('.mc-artist-link')) return;
                 e.stopPropagation();
                 const songId = row.dataset.songId;
                 if (songId) {
@@ -2336,7 +2892,7 @@ class MusicController {
             ${albums.map(al => `
                 <div class="mc-as-album-card" data-album-id="${al.id || ''}">
                     <div class="mc-as-album-cover">
-                        ${al.picUrl ? `<img src="${this._esc(al.picUrl)}?param=120y120" alt="">` : '<i class="fas fa-compact-disc"></i>'}
+                        ${al.picUrl ? `<img src="${this._esc(al.picUrl)}?param=120y120" alt="" loading="lazy" onerror="this.style.display='none'">` : '<i class="fas fa-compact-disc"></i>'}
                         <div class="mc-as-album-play-overlay"><i class="fas fa-play"></i></div>
                     </div>
                     <div class="mc-as-album-name">${this._esc(al.name || '未知专辑')}</div>
@@ -2365,20 +2921,32 @@ class MusicController {
         if (songs.length === 0) { body.innerHTML = '<div class="mc-empty">专辑无歌曲</div>'; return; }
 
         const albumName = album?.name || '专辑';
-        const mappedSongs = songs.map((s, i) => ({
-            title: s.name || '', artist: (s.ar || s.artists || []).map(a => a.name).join('/') || '',
-            songId: s.id, index: i, isActive: false,
-        }));
+        const albumCover = album?.picUrl ? album.picUrl + '?param=200y200' : '';
+        const albumArtists = (album?.artists || (album?.artist ? [album.artist] : [])).map(a => ({ id: a.id, name: a.name }));
+        const albumArtistName = albumArtists.map(a => a.name).join('/') || '';
+        const publishTime = album?.publishTime ? new Date(album.publishTime).getFullYear() : '';
+        const mappedSongs = songs.map((s, i) => {
+            const ar = (s.ar || s.artists || []).map(a => ({ id: a.id, name: a.name }));
+            return {
+                title: s.name || '', artist: ar.map(a => a.name).join('/') || '',
+                artists: ar, albumId: albumId,
+                songId: s.id, index: i, isActive: false,
+            };
+        });
 
         body.innerHTML = `
-            <div class="mc-as-album-detail-header">
-                <button class="mc-as-back" id="mc-as-album-back"><i class="fas fa-arrow-left"></i></button>
-                <div class="mc-as-album-detail-info">
-                    <div class="mc-as-album-detail-name">${this._esc(albumName)}</div>
-                    <div class="mc-as-album-detail-count">${songs.length} 首歌曲</div>
+            <div class="mc-album-hero">
+                <button class="mc-as-back mc-album-back" id="mc-as-album-back"><i class="fas fa-arrow-left"></i></button>
+                ${albumCover ? `<img class="mc-album-hero-cover" src="${this._esc(albumCover)}" alt="">` : '<div class="mc-album-hero-cover mc-album-cover-ph"><i class="fas fa-compact-disc"></i></div>'}
+                <div class="mc-album-hero-info">
+                    <div class="mc-album-hero-name">${this._esc(albumName)}</div>
+                    <div class="mc-album-hero-artist">${this._renderArtistLink(albumArtists, albumArtistName)}</div>
+                    <div class="mc-album-hero-meta">${publishTime ? publishTime + ' · ' : ''}${songs.length} 首歌曲</div>
                 </div>
-                <button class="mc-as-action-btn mc-as-action-sm" id="mc-as-album-play"><i class="fas fa-play"></i> 播放</button>
-                <button class="mc-as-action-btn mc-as-action-sm" id="mc-as-album-add"><i class="fas fa-plus"></i> 加入队列</button>
+                <div class="mc-album-hero-actions">
+                    <button class="mc-as-action-btn mc-as-action-sm" id="mc-as-album-play"><i class="fas fa-play"></i> 播放</button>
+                    <button class="mc-as-action-btn mc-as-action-sm" id="mc-as-album-add"><i class="fas fa-plus"></i> 加入</button>
+                </div>
             </div>
             <div class="mc-as-song-list">
                 ${mappedSongs.map((song, idx) => `
@@ -2386,7 +2954,7 @@ class MusicController {
                         <span class="mc-row-num">${idx + 1}</span>
                         <div class="mc-row-info">
                             <span class="mc-row-title">${this._esc(song.title)}</span>
-                            <span class="mc-row-artist">${this._esc(song.artist)}</span>
+                            <span class="mc-row-artist">${this._renderArtistLink(song.artists, song.artist)}</span>
                         </div>
                         <button class="mc-row-add-queue" data-song-id="${song.songId}" title="加入队列"><i class="fas fa-plus"></i></button>
                         <button class="mc-row-play"><i class="fas fa-play"></i></button>
@@ -2416,6 +2984,10 @@ class MusicController {
             e.stopPropagation();
             this._addSongsToQueue(mappedSongs);
             this._showToast(`已将 ${mappedSongs.length} 首歌加入队列`);
+        });
+
+        body.querySelectorAll('.mc-album-hero .mc-artist-link').forEach(link => {
+            link.addEventListener('click', (e) => this._handleArtistLinkClick(e));
         });
 
         this._bindAsSongRowEvents(body, mappedSongs, albumName);
@@ -2463,7 +3035,24 @@ class MusicController {
     }
 
     // 多端点回退策略获取歌手热门歌曲
+    _getArtistCacheEntry(artistId) {
+        const entry = this._artistCache.get(artistId);
+        if (entry && (Date.now() - entry.ts < 10 * 60 * 1000)) return entry;
+        if (entry) this._artistCache.delete(artistId);
+        return null;
+    }
+
+    _setArtistCache(artistId, key, data) {
+        const entry = this._artistCache.get(artistId) || { ts: Date.now() };
+        entry[key] = data;
+        entry.ts = Date.now();
+        this._artistCache.set(artistId, entry);
+    }
+
     async _fetchArtistHotSongs(artistId, artistName) {
+        const cached = this._getArtistCacheEntry(artistId);
+        if (cached?.hotSongs) return cached.hotSongs;
+
         const strategies = [
             {
                 endpoint: '/api/artist/top/song', params: { id: artistId },
@@ -2585,9 +3174,13 @@ class MusicController {
     }
 
     _bindAsSongRowEvents(body, songs, listName) {
+        body.querySelectorAll('.mc-artist-link').forEach(link => {
+            link.addEventListener('click', (e) => this._handleArtistLinkClick(e));
+        });
+
         body.querySelectorAll('.mc-as-row').forEach(row => {
             row.addEventListener('click', (e) => {
-                if (e.target.closest('.mc-row-add-queue') || e.target.closest('.mc-row-play')) return;
+                if (e.target.closest('.mc-row-add-queue') || e.target.closest('.mc-row-play') || e.target.closest('.mc-artist-link')) return;
                 e.stopPropagation();
                 const songId = row.dataset.songId;
                 if (songId) {
@@ -2630,6 +3223,198 @@ class MusicController {
         });
     }
 
+    // ===================== 队列管理 =====================
+
+    _confirmClearPlaylist() {
+        const overlay = document.createElement('div');
+        overlay.className = 'mc-confirm-overlay';
+        overlay.innerHTML = `
+            <div class="mc-confirm-box">
+                <div class="mc-confirm-msg">确定清空播放队列？<br><span style="font-size:11px;opacity:0.5">共 ${this._playlist.length} 首歌曲</span></div>
+                <div class="mc-confirm-actions">
+                    <button class="mc-confirm-cancel">取消</button>
+                    <button class="mc-confirm-ok">清空</button>
+                </div>
+            </div>
+        `;
+        this._el?.appendChild(overlay);
+        requestAnimationFrame(() => overlay.classList.add('mc-confirm-show'));
+
+        overlay.querySelector('.mc-confirm-cancel')?.addEventListener('click', () => {
+            overlay.classList.remove('mc-confirm-show');
+            setTimeout(() => overlay.remove(), 200);
+        });
+        overlay.querySelector('.mc-confirm-ok')?.addEventListener('click', () => {
+            overlay.classList.remove('mc-confirm-show');
+            setTimeout(() => overlay.remove(), 200);
+            this._clearPlaylist();
+        });
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                overlay.classList.remove('mc-confirm-show');
+                setTimeout(() => overlay.remove(), 200);
+            }
+        });
+    }
+
+    _clearPlaylist() {
+        if (this.state.isPlaying) {
+            if (this._offscreenMode) {
+                this._offscreenCommand('pause');
+            } else if (this._builtinAudio) {
+                this._builtinAudio.pause();
+                this._builtinAudio.src = '';
+            }
+        }
+        this._playlist = [];
+        this._currentSongId = null;
+        this._currentPlaylistId = null;
+        this._currentPlaylistName = '';
+        this._shuffleQueue = [];
+        this._shuffleIndex = -1;
+        this.state = { ...this.state, isPlaying: false, title: '', artist: '', cover: '', currentTime: 0, duration: 0, lyricLine: '' };
+        this._lyrics = [];
+        this._lyricsTranslation = {};
+        this._currentLyricIndex = -1;
+        this._lyricSongId = null;
+        this._skipErrorTs = [];
+        this._savePlaylistCache();
+        this._refreshPlaylist();
+        this._updateUI();
+        this._showToast('队列已清空');
+        try { chrome.storage.local.remove('lastMusicState'); } catch {}
+    }
+
+    _removeSongFromQueue(songId) {
+        const idx = this._playlist.findIndex(s => String(s.songId) === String(songId));
+        if (idx < 0) return;
+        const isPlaying = String(this._currentSongId) === String(songId);
+        this._playlist.splice(idx, 1);
+        this._playlist.forEach((s, i) => { s.index = i; });
+        this._savePlaylistCache();
+
+        if (isPlaying && this._playlist.length > 0) {
+            const nextIdx = Math.min(idx, this._playlist.length - 1);
+            this._playSongById(this._playlist[nextIdx].songId);
+        } else if (this._playlist.length === 0) {
+            this._clearPlaylist();
+            return;
+        }
+        this._refreshPlaylist();
+        this._showToast('已从队列移除');
+    }
+
+    // ===================== 睡眠定时器 =====================
+
+    _showSleepTimerMenu(e) {
+        const island = document.getElementById('music-island');
+        const existing = island?.querySelector('.mc-sleep-menu');
+        if (existing) { existing.remove(); return; }
+
+        const options = [
+            { label: '15 分钟', mins: 15 },
+            { label: '30 分钟', mins: 30 },
+            { label: '45 分钟', mins: 45 },
+            { label: '60 分钟', mins: 60 },
+            { label: '播完当前歌曲', mins: -1 },
+        ];
+
+        const menu = document.createElement('div');
+        menu.className = 'mc-sleep-menu';
+        menu.innerHTML = options.map(o => `
+            <div class="mc-sleep-option${this._sleepTimerMins === o.mins ? ' mc-sleep-active' : ''}" data-mins="${o.mins}">${o.label}</div>
+        `).join('') + (this._sleepTimerMins ? '<div class="mc-sleep-option mc-sleep-cancel" data-mins="0">取消定时</div>' : '');
+
+        const btn = e.target.closest('.mc-sleep-toggle');
+        const rect = btn.getBoundingClientRect();
+        const islandRect = island?.getBoundingClientRect() || { left: 0, top: 0 };
+        menu.style.position = 'absolute';
+        menu.style.left = (rect.left - islandRect.left + rect.width / 2 - 65) + 'px';
+        menu.style.bottom = (islandRect.top + islandRect.height - rect.top + 8) + 'px';
+        island?.appendChild(menu);
+
+        menu.addEventListener('click', (ev) => {
+            const opt = ev.target.closest('.mc-sleep-option');
+            if (!opt) return;
+            const mins = parseInt(opt.dataset.mins);
+            menu.remove();
+            if (mins === 0) {
+                this._cancelSleepTimer();
+            } else {
+                this._setSleepTimer(mins);
+            }
+        });
+
+        const dismiss = (ev) => {
+            if (!menu.contains(ev.target) && !btn.contains(ev.target)) {
+                menu.remove();
+                document.removeEventListener('click', dismiss);
+            }
+        };
+        setTimeout(() => document.addEventListener('click', dismiss), 0);
+    }
+
+    _setSleepTimer(mins) {
+        this._cancelSleepTimer();
+        this._sleepTimerMins = mins;
+
+        if (mins === -1) {
+            this._sleepAfterCurrent = true;
+            this._updateSleepBadge('1曲');
+            this._showToast('将在当前歌曲播完后停止');
+            return;
+        }
+
+        this._sleepEndTime = Date.now() + mins * 60 * 1000;
+        this._updateSleepBadge(`${mins}m`);
+        this._showToast(`将在 ${mins} 分钟后停止播放`);
+
+        this._sleepTickTimer = setInterval(() => {
+            const remain = Math.max(0, this._sleepEndTime - Date.now());
+            const remMins = Math.ceil(remain / 60000);
+            if (remain <= 0) {
+                this._executeSleepStop();
+                return;
+            }
+            this._updateSleepBadge(remMins <= 1 ? `${Math.ceil(remain / 1000)}s` : `${remMins}m`);
+        }, 1000);
+    }
+
+    _cancelSleepTimer() {
+        if (this._sleepTickTimer) { clearInterval(this._sleepTickTimer); this._sleepTickTimer = null; }
+        this._sleepEndTime = null;
+        this._sleepTimerMins = null;
+        this._sleepAfterCurrent = false;
+        this._updateSleepBadge(null);
+    }
+
+    _executeSleepStop() {
+        this._cancelSleepTimer();
+        if (this._offscreenMode) {
+            this._offscreenCommand('pause');
+        } else if (this._builtinAudio) {
+            this._builtinAudio.pause();
+        }
+        this.state.isPlaying = false;
+        this._updateUI();
+        this._showToast('定时停止，晚安~');
+    }
+
+    _updateSleepBadge(text) {
+        const badge = this._el?.querySelector('#mc-sleep-badge');
+        const icon = this._el?.querySelector('#mc-sleep-icon');
+        if (badge) {
+            if (text) {
+                badge.textContent = text;
+                badge.classList.remove('hidden');
+                icon?.classList.add('mc-sleep-active-icon');
+            } else {
+                badge.classList.add('hidden');
+                icon?.classList.remove('mc-sleep-active-icon');
+            }
+        }
+    }
+
     // ===================== 加入队列 (v3.15.0) =====================
 
     _addSongToQueue(song) {
@@ -2653,6 +3438,7 @@ class MusicController {
             if (exists) continue;
             this._playlist.push({
                 title: song.title || '', artist: song.artist || '',
+                artists: song.artists || undefined, albumId: song.albumId || undefined,
                 songId: song.songId, index: this._playlist.length, isActive: false,
             });
             added++;
@@ -2669,15 +3455,20 @@ class MusicController {
         const menu = this._ctxMenuEl;
         if (!menu) return;
 
+        const artistItems = this._buildCtxArtistItems(song);
+        const albumItem = (song.albumId) ? `<div class="mc-ctx-item" data-action="view-album" data-album-id="${song.albumId}"><i class="fas fa-compact-disc"></i> 查看专辑</div>` : '';
+
         menu.innerHTML = `
             <div class="mc-ctx-item" data-action="play"><i class="fas fa-play"></i> 播放</div>
             <div class="mc-ctx-item" data-action="add-queue"><i class="fas fa-plus"></i> 加入队列</div>
             <div class="mc-ctx-item" data-action="play-next"><i class="fas fa-step-forward"></i> 下一首播放</div>
             <div class="mc-ctx-item" data-action="like"><i class="fas fa-heart"></i> 我喜欢</div>
+            ${artistItems}
+            ${albumItem}
         `;
 
         const rect = (e.target.closest('.mc-row') || e.target).getBoundingClientRect();
-        const menuW = 160, menuH = 160;
+        const menuW = 160, menuH = 200;
         let left = rect.right - menuW;
         let top = rect.bottom + 4;
         if (left < 4) left = 4;
@@ -2701,9 +3492,57 @@ class MusicController {
                     this._showToast(`下一首播放: ${song.title}`);
                 } else if (action === 'like') {
                     if (song.songId) this._likeSong(song.songId, null);
+                } else if (action === 'view-artist') {
+                    const aId = Number(item.dataset.artistId);
+                    const aName = item.dataset.artistName || '';
+                    if (aId) this._openArtistActionSheet(aId, aName, '');
+                    else if (aName) this._openArtistByName(aName);
+                } else if (action === 'view-album') {
+                    const albumId = item.dataset.albumId;
+                    if (albumId) this._openAlbumFromCtx(Number(albumId));
                 }
             }, { once: true });
         });
+    }
+
+    _buildCtxArtistItems(song) {
+        const artists = song.artists;
+        if (Array.isArray(artists) && artists.length > 0) {
+            if (artists.length === 1) {
+                return `<div class="mc-ctx-item" data-action="view-artist" data-artist-id="${artists[0].id || ''}" data-artist-name="${this._esc(artists[0].name)}"><i class="fas fa-user"></i> 查看歌手</div>`;
+            }
+            return artists.map(a =>
+                `<div class="mc-ctx-item" data-action="view-artist" data-artist-id="${a.id || ''}" data-artist-name="${this._esc(a.name)}"><i class="fas fa-user"></i> ${this._esc(a.name)}</div>`
+            ).join('');
+        }
+        if (song.artist) {
+            return `<div class="mc-ctx-item" data-action="view-artist" data-artist-name="${this._esc(song.artist)}"><i class="fas fa-user"></i> 查看歌手</div>`;
+        }
+        return '';
+    }
+
+    async _openAlbumFromCtx(albumId) {
+        if (!albumId) return;
+        const resp = await this._neteaseApi('/api/v1/album', { id: albumId });
+        const album = resp?.ok ? resp?.data?.album : null;
+        const songs = resp?.ok ? (resp?.data?.songs || []) : [];
+        if (!album || songs.length === 0) { this._showToast('加载专辑失败'); return; }
+        const artistName = (album.artists || album.artist ? [album.artist] : []).map(a => a?.name).filter(Boolean).join('/') || '';
+        this._openArtistActionSheet(
+            album.artists?.[0]?.id || album.artist?.id || 0,
+            artistName,
+            album.artists?.[0]?.img1v1Url || ''
+        );
+        setTimeout(() => {
+            const albumsTab = this._actionSheetEl?.querySelector('[data-as-tab="albums"]');
+            if (albumsTab) {
+                albumsTab.click();
+                setTimeout(() => {
+                    const body = this._actionSheetEl?.querySelector('.mc-as-body');
+                    if (body) this._loadAlbumSongs(albumId, body);
+                }, 100);
+            }
+        }, 300);
     }
 
     _addSongPlayNext(song) {
@@ -2751,6 +3590,7 @@ class MusicController {
                 this.state.title = s.name || '';
                 this.state.artist = (s.ar || []).map(a => a.name).join('/') || '';
                 this.state.cover = (s.al?.picUrl || '') + '?param=200y200';
+                this.state.album = s.al?.name || '';
             }
         }
 
@@ -2774,26 +3614,50 @@ class MusicController {
     }
 
     async _onBuiltinTrackEnd() {
-        switch (this._playMode) {
-            case 'single':
-                if (this._offscreenMode) {
-                    this._offscreenCommand('seekTo', 0);
-                    this._offscreenCommand('resume');
-                } else if (this._builtinAudio) {
-                    this._builtinAudio.currentTime = 0;
-                    this._builtinAudio.play();
-                }
-                break;
-            case 'shuffle':
-                await this._playAdjacentTrack(1);
-                break;
-            case 'loop':
-                await this._playAdjacentTrack(1);
-                break;
-            case 'sequence':
-            default:
-                await this._playAdjacentTrack(1);
-                break;
+        const now = Date.now();
+        if (this._trackEndLock) return;
+        if (now - (this._lastTrackEndTs || 0) < 2000) return;
+
+        try {
+            const { _musicTrackEndLock: lockTs } = await chrome.storage.session.get('_musicTrackEndLock');
+            if (lockTs && now - lockTs < 3000) return;
+            await chrome.storage.session.set({ _musicTrackEndLock: now });
+        } catch { /* session storage unavailable, proceed anyway */ }
+
+        this._lastTrackEndTs = now;
+        this._trackEndLock = true;
+        try {
+            if (this._sleepAfterCurrent) {
+                this._executeSleepStop();
+                return;
+            }
+            if (this._fmMode) {
+                await this._fmNext();
+                return;
+            }
+            switch (this._playMode) {
+                case 'single':
+                    if (this._offscreenMode) {
+                        this._offscreenCommand('seekTo', 0);
+                        this._offscreenCommand('resume');
+                    } else if (this._builtinAudio) {
+                        this._builtinAudio.currentTime = 0;
+                        this._builtinAudio.play();
+                    }
+                    break;
+                case 'shuffle':
+                    await this._playAdjacentTrack(1);
+                    break;
+                case 'loop':
+                    await this._playAdjacentTrack(1);
+                    break;
+                case 'sequence':
+                default:
+                    await this._playAdjacentTrack(1);
+                    break;
+            }
+        } finally {
+            this._trackEndLock = false;
         }
     }
 
@@ -2856,6 +3720,48 @@ class MusicController {
         }
         const desiredScroll = offsetTop - scrollParent.clientHeight / 2 + target.offsetHeight / 2;
         scrollParent.scrollTo({ top: Math.max(0, desiredScroll), behavior: 'smooth' });
+    }
+
+    _renderArtistLink(artists, fallbackName) {
+        if (Array.isArray(artists) && artists.length > 0) {
+            return artists.map(a =>
+                `<span class="mc-artist-link" data-artist-id="${a.id || ''}" data-artist-name="${this._esc(a.name)}">${this._esc(a.name)}</span>`
+            ).join('<span class="mc-artist-sep">/</span>');
+        }
+        if (fallbackName) {
+            return `<span class="mc-artist-link mc-artist-link-search" data-artist-name="${this._esc(fallbackName)}">${this._esc(fallbackName)}</span>`;
+        }
+        return '';
+    }
+
+    _handleArtistLinkClick(e) {
+        const link = e.target.closest('.mc-artist-link');
+        if (!link) return;
+        e.stopPropagation();
+        e.preventDefault();
+        const artistId = link.dataset.artistId;
+        const artistName = link.dataset.artistName;
+        if (!artistName) return;
+        if (artistId && artistId !== '' && artistId !== 'undefined' && artistId !== 'null') {
+            this._openArtistActionSheet(Number(artistId), artistName, '');
+        } else {
+            this._openArtistByName(artistName);
+        }
+    }
+
+    async _openArtistByName(name) {
+        try {
+            const resp = await this._neteaseApi('/api/search/get/web', { s: name, type: 100, limit: 5 });
+            const artists = resp?.ok ? (resp?.data?.result?.artists || []) : [];
+            const match = artists.find(a => a.name === name) || artists[0];
+            if (match) {
+                this._openArtistActionSheet(match.id, match.name, match.img1v1Url || '');
+            } else {
+                this._showToast('未找到歌手信息');
+            }
+        } catch {
+            this._showToast('获取歌手信息失败');
+        }
     }
 
     _esc(str) {

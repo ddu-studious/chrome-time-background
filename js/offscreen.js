@@ -10,6 +10,7 @@ let currentState = {
     isPlaying: false,
     title: '',
     artist: '',
+    album: '',
     cover: '',
     currentTime: 0,
     duration: 0,
@@ -72,7 +73,7 @@ function updateMediaSession() {
     navigator.mediaSession.metadata = new MediaMetadata({
         title: currentState.title || '未知歌曲',
         artist: currentState.artist || '',
-        album: '中国风景时钟',
+        album: currentState.album || '',
         artwork: currentState.cover ? [
             { src: currentState.cover, sizes: '200x200', type: 'image/jpeg' }
         ] : []
@@ -102,10 +103,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
     switch (msg.command) {
         case 'play': {
-            const { url, songId, title, artist, cover } = msg;
+            const { url, songId, title, artist, cover, album } = msg;
             if (url) {
                 currentState.title = title || '';
                 currentState.artist = artist || '';
+                currentState.album = album || '';
                 currentState.cover = cover || '';
                 currentState.songId = songId || null;
                 player.src = url;
@@ -169,9 +171,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             sendResponse({ ok: true, data: { ...currentState } });
             return true;
         case 'updateMeta': {
-            const { title, artist, cover, songId } = msg;
+            const { title, artist, cover, album, songId } = msg;
             if (title !== undefined) currentState.title = title;
             if (artist !== undefined) currentState.artist = artist;
+            if (album !== undefined) currentState.album = album;
             if (cover !== undefined) currentState.cover = cover;
             if (songId !== undefined) currentState.songId = songId;
             updateMediaSession();
@@ -183,7 +186,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             player.pause();
             player.src = '';
             currentState = {
-                isPlaying: false, title: '', artist: '', cover: '',
+                isPlaying: false, title: '', artist: '', album: '', cover: '',
                 currentTime: 0, duration: 0, volume: currentState.volume, songId: null,
             };
             broadcastState();

@@ -374,6 +374,10 @@ importScripts('background-provider.js', 'hermes-writing-sync.js');
         });
     }
 
+    async function _sendMusicControl(msg) {
+        chrome.runtime.sendMessage(msg).catch(() => {});
+    }
+
     // ==================== 温情提示内置数据库（v3.0.0）====================
 
     const WARM_QUOTES = [
@@ -2257,6 +2261,7 @@ importScripts('background-provider.js', 'hermes-writing-sync.js');
                         title: message.title,
                         artist: message.artist,
                         cover: message.cover,
+                        album: message.album || '',
                     });
                     logExtEvent('music', 'offscreen-play', { durationMs: Date.now() - _t, context: message.title || message.songId });
                     sendResponse(resp);
@@ -2289,27 +2294,27 @@ importScripts('background-provider.js', 'hermes-writing-sync.js');
             return false;
         }
 
-        if (message.action === 'offscreen_error') {
-            logExtEvent('music', 'playback-error', { ok: false, error: message.error, context: `code=${message.code}` });
-            chrome.runtime.sendMessage({
-                action: 'music_playback_error',
-                error: message.error,
-                code: message.code,
-            }).catch(() => {});
-            return false;
-        }
-
         if (message.action === 'offscreen_track_ended') {
             logExtEvent('music', 'track-ended');
-            chrome.runtime.sendMessage({ action: 'music_track_ended' }).catch(() => {});
+            _sendMusicControl({ action: 'music_track_ended' });
             return false;
         }
 
         if (message.action === 'offscreen_media_action') {
-            chrome.runtime.sendMessage({
+            _sendMusicControl({
                 action: 'music_media_action',
                 command: message.command
-            }).catch(() => {});
+            });
+            return false;
+        }
+
+        if (message.action === 'offscreen_error') {
+            logExtEvent('music', 'playback-error', { ok: false, error: message.error, context: `code=${message.code}` });
+            _sendMusicControl({
+                action: 'music_playback_error',
+                error: message.error,
+                code: message.code,
+            });
             return false;
         }
 
