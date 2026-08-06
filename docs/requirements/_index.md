@@ -4,6 +4,7 @@
 
 | 更新日期 | 文档 | 标题 |
 |----------|------|------|
+| 2026-08-05 | [prd-v3.19.0-music-enhanced-features.md](prd-v3.19.0-music-enhanced-features.md) | 音乐播放器 — 网易云增强功能集 |
 | 2026-08-05 | [prd-v3.18.0-music-artist-album-navigation.md](prd-v3.18.0-music-artist-album-navigation.md) | 音乐播放器 — 歌手/专辑交互导航增强 |
 | 2026-05-25 | [ops-graphsphere-demo-script-brief-v0.1.md](ops-graphsphere-demo-script-brief-v0.1.md) | GraphSphere 5 分钟标准演示脚本与录屏/GIF 传播素材 Brief |
 | 2026-05-25 | [ba-graphsphere-scenario-entities-rkg-v0.1.md](ba-graphsphere-scenario-entities-rkg-v0.1.md) | GraphSphere 场景 A/B 实体关系清单与 R-KG 合规检查 |

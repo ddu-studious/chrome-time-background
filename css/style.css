@@ -12966,6 +12966,10 @@ body.bright-bg .ticker-sources-panel {
 .mc-pl-heartbeat:hover { background: rgba(255,100,150,0.25); color: rgba(255,100,150,0.95); transform: scale(1.05); }
 .mc-pl-clear-all { background: rgba(255,80,80,0.12); color: rgba(255,100,100,0.7); }
 .mc-pl-clear-all:hover { background: rgba(255,80,80,0.25); color: rgba(255,100,100,0.95); transform: scale(1.05); }
+.mc-pl-subscribe { background: rgba(100,180,255,0.12); color: rgba(100,180,255,0.7); }
+.mc-pl-subscribe:hover { background: rgba(100,180,255,0.25); color: rgba(100,180,255,0.95); transform: scale(1.05); }
+.mc-pl-subscribe.mc-pl-card-collected { color: rgba(100,180,255,0.5); cursor: default; }
+.mc-pl-subscribe.mc-pl-card-collected:hover { transform: none; }
 
 /* --- 单首删除按钮 --- */
 .mc-row-remove { background: none; border: none; color: rgba(255,255,255,0.1); cursor: pointer; font-size: 10px; padding: 4px; border-radius: 50%; transition: all .15s; flex-shrink: 0; opacity: 0; }
@@ -13004,6 +13008,26 @@ body.bright-bg .ticker-sources-panel {
 .mc-lrc-adj { color: rgba(255,255,255,0.35); }
 .mc-lrc-sub { font-size: 10px; color: rgba(200,160,255,0.3); margin-top: -6px; padding-left: 4px; }
 
+/* --- 热门评论 --- */
+.mc-comments-section { padding: 8px 16px 16px; border-top: 1px solid rgba(255,255,255,0.04); }
+.mc-comments-toggle { display: flex; align-items: center; gap: 6px; width: 100%; background: rgba(200,160,255,0.06); border: 1px solid rgba(200,160,255,0.1); color: rgba(200,160,255,0.7); padding: 8px 14px; border-radius: 10px; font-size: 12px; cursor: pointer; transition: all .2s; justify-content: center; }
+.mc-comments-toggle:hover { background: rgba(200,160,255,0.12); color: rgba(200,160,255,0.95); }
+.mc-comments-list { display: none; margin-top: 10px; }
+.mc-comments-list.show { display: block; }
+.mc-comments-header { font-size: 12px; font-weight: 600; color: rgba(200,160,255,0.7); padding: 4px 0 8px; }
+.mc-comment-item { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
+.mc-comment-item:last-child { border-bottom: none; }
+.mc-comment-avatar { width: 28px; height: 28px; border-radius: 50%; overflow: hidden; flex-shrink: 0; background: rgba(200,160,255,0.08); display: flex; align-items: center; justify-content: center; }
+.mc-comment-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.mc-comment-avatar i { font-size: 12px; color: rgba(200,160,255,0.3); }
+.mc-comment-body { flex: 1; min-width: 0; }
+.mc-comment-meta { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.mc-comment-user { font-size: 11px; color: rgba(200,160,255,0.6); font-weight: 500; }
+.mc-comment-time { font-size: 10px; color: rgba(255,255,255,0.2); }
+.mc-comment-content { font-size: 12px; color: rgba(255,255,255,0.7); line-height: 1.6; word-break: break-word; }
+.mc-comment-likes { font-size: 10px; color: rgba(255,255,255,0.2); margin-top: 4px; }
+.mc-comment-likes i { margin-right: 3px; }
+
 /* --- 搜索 --- */
 .mc-search-bar { padding: 10px 16px 6px; position: sticky; top: 0; z-index: 5; background: rgba(20,20,32,0.95); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
 .mc-search-wrap { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.04); border-radius: 12px; padding: 0 10px; border: 1px solid transparent; transition: border-color .2s; }
@@ -13028,6 +13052,53 @@ body.bright-bg .ticker-sources-panel {
 .mc-fm-entry-desc { font-size: 10px; color: rgba(255,255,255,0.35); margin-top: 1px; }
 .mc-fm-entry-play { width: 28px; height: 28px; border-radius: 50%; background: rgba(200,160,255,0.2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .mc-fm-entry-play i { color: rgba(200,160,255,0.9); font-size: 11px; margin-left: 1px; }
+
+/* --- 每日签到入口 --- */
+.mc-checkin-entry { background: linear-gradient(135deg, rgba(100,200,150,0.12) 0%, rgba(100,180,255,0.08) 100%); border-color: rgba(100,200,150,0.12); }
+.mc-checkin-entry:hover { background: linear-gradient(135deg, rgba(100,200,150,0.2) 0%, rgba(100,180,255,0.14) 100%); border-color: rgba(100,200,150,0.25); }
+.mc-checkin-icon { background: linear-gradient(135deg, rgba(100,200,150,0.3), rgba(100,180,255,0.3)) !important; }
+.mc-checkin-done { opacity: 0.5; cursor: default; }
+.mc-checkin-done:hover { transform: none; }
+.mc-checkin-check { background: rgba(100,200,150,0.2) !important; }
+.mc-checkin-check i { color: rgba(100,200,150,0.9) !important; }
+
+/* --- 最近播放入口 --- */
+.mc-recent-entry { background: linear-gradient(135deg, rgba(100,160,255,0.12) 0%, rgba(200,160,255,0.08) 100%); border-color: rgba(100,160,255,0.12); }
+.mc-recent-entry:hover { background: linear-gradient(135deg, rgba(100,160,255,0.2) 0%, rgba(200,160,255,0.14) 100%); border-color: rgba(100,160,255,0.25); }
+.mc-recent-icon { background: linear-gradient(135deg, rgba(100,160,255,0.3), rgba(200,160,255,0.3)) !important; }
+.mc-record-tabs { display: flex; gap: 4px; padding: 8px 16px; }
+.mc-record-tab { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); color: rgba(255,255,255,0.35); padding: 4px 10px; border-radius: 10px; font-size: 11px; cursor: pointer; transition: all .2s; white-space: nowrap; }
+.mc-record-tab:hover { background: rgba(200,160,255,0.08); color: rgba(255,255,255,0.5); }
+.mc-record-tab.active { background: rgba(200,160,255,0.15); color: rgba(200,160,255,0.95); border-color: rgba(200,160,255,0.25); font-weight: 500; }
+
+/* --- 新歌速递 --- */
+.mc-newsong-section { padding: 0; }
+.mc-newsong-tabs { display: flex; gap: 4px; padding: 4px 16px 8px; }
+.mc-newsong-tab { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); color: rgba(255,255,255,0.35); padding: 3px 12px; border-radius: 10px; font-size: 10px; cursor: pointer; transition: all .2s; }
+.mc-newsong-tab:hover { background: rgba(200,160,255,0.08); color: rgba(255,255,255,0.5); }
+.mc-newsong-tab.active { background: rgba(200,160,255,0.15); color: rgba(200,160,255,0.95); border-color: rgba(200,160,255,0.25); font-weight: 500; }
+.mc-newsong-list { padding: 0 12px 8px; }
+
+/* --- 相似歌曲 --- */
+.mc-simi-header { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: rgba(200,160,255,0.85); }
+.mc-simi-header i { font-size: 14px; color: rgba(200,160,255,0.7); }
+
+/* --- 收藏到歌单选择弹窗 --- */
+.mc-playlist-picker-overlay { position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; }
+.mc-playlist-picker { width: 280px; max-height: 400px; background: linear-gradient(135deg, rgba(40,40,50,0.98), rgba(30,30,40,0.98)); border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 16px 48px rgba(0,0,0,0.5); overflow: hidden; display: flex; flex-direction: column; }
+.mc-playlist-picker-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.mc-playlist-picker-header span { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.85); }
+.mc-playlist-picker-close { background: none; border: none; color: rgba(255,255,255,0.3); cursor: pointer; font-size: 14px; padding: 4px; border-radius: 6px; transition: all .15s; }
+.mc-playlist-picker-close:hover { color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.06); }
+.mc-playlist-picker-list { overflow-y: auto; flex: 1; padding: 4px 0; }
+.mc-playlist-picker-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; cursor: pointer; transition: background .15s; }
+.mc-playlist-picker-item:hover { background: rgba(255,255,255,0.05); }
+.mc-playlist-picker-cover { width: 36px; height: 36px; border-radius: 6px; overflow: hidden; background: rgba(255,255,255,0.03); flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.mc-playlist-picker-cover img { width: 100%; height: 100%; object-fit: cover; }
+.mc-playlist-picker-cover i { font-size: 14px; color: rgba(255,255,255,0.1); }
+.mc-playlist-picker-info { flex: 1; min-width: 0; }
+.mc-playlist-picker-name { font-size: 12px; color: rgba(255,255,255,0.75); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mc-playlist-picker-count { font-size: 10px; color: rgba(255,255,255,0.25); margin-top: 1px; }
 
 /* --- 私人FM播放界面 --- */
 .mc-fm-container { padding: 12px 16px; }
@@ -13331,6 +13402,17 @@ body.bright-bg .ticker-sources-panel {
 .mc-ctx-item { display: flex; align-items: center; gap: 8px; padding: 8px 14px; font-size: 12px; color: rgba(255,255,255,0.7); cursor: pointer; transition: all .12s; }
 .mc-ctx-item:hover { background: rgba(200,160,255,0.08); color: rgba(255,255,255,0.95); }
 .mc-ctx-item i { font-size: 11px; color: rgba(200,160,255,0.5); width: 14px; text-align: center; }
+
+/* --- 搜索建议下拉 --- */
+.mc-suggest-dropdown { display: none; position: absolute; left: 0; right: 0; top: 100%; z-index: 9999; background: rgba(20,18,28,0.97); backdrop-filter: blur(20px); border-radius: 0 0 12px 12px; box-shadow: 0 6px 20px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.06); border-top: none; max-height: 240px; overflow-y: auto; }
+.mc-suggest-dropdown.show { display: block; }
+.mc-suggest-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; transition: background .15s; }
+.mc-suggest-item:hover { background: rgba(200,160,255,0.08); }
+.mc-suggest-icon { color: rgba(200,160,255,0.4); font-size: 11px; width: 14px; text-align: center; flex-shrink: 0; }
+.mc-suggest-text { flex: 1; min-width: 0; }
+.mc-suggest-name { display: block; font-size: 12px; color: rgba(255,255,255,0.8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mc-suggest-sub { display: block; font-size: 10px; color: rgba(255,255,255,0.3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mc-suggest-type { font-size: 10px; color: rgba(200,160,255,0.3); flex-shrink: 0; }
 
 /* --- 搜索历史 --- */
 .mc-search-history { padding: 4px 0; }
