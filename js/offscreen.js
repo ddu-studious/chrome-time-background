@@ -17,6 +17,7 @@ let currentState = {
     volume: 1,
     songId: null,
 };
+let playGeneration = 0;
 
 player.addEventListener('timeupdate', () => {
     currentState.currentTime = player.currentTime;
@@ -35,7 +36,7 @@ player.addEventListener('pause', () => {
 
 player.addEventListener('ended', () => {
     currentState.isPlaying = false;
-    chrome.runtime.sendMessage({ action: 'offscreen_track_ended' }).catch(() => {});
+    chrome.runtime.sendMessage({ action: 'offscreen_track_ended', songId: currentState.songId }).catch(() => {});
 });
 
 player.addEventListener('loadedmetadata', () => {
@@ -45,6 +46,8 @@ player.addEventListener('loadedmetadata', () => {
 
 player.addEventListener('error', () => {
     const code = player.error?.code || 0;
+    // 切换 src 时浏览器可能主动中止上一首；这是预期切歌，不应触发自动跳过下一首。
+    if (code === 1) return;
     const mediaErrMap = {
         1: 'MEDIA_ERR_ABORTED: 加载被中止',
         2: 'MEDIA_ERR_NETWORK: 网络错误',
@@ -57,6 +60,7 @@ player.addEventListener('error', () => {
         action: 'offscreen_error',
         error: errMsg,
         code,
+        songId: currentState.songId,
     }).catch(() => {});
 });
 
@@ -105,6 +109,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         case 'play': {
             const { url, songId, title, artist, cover, album } = msg;
             if (url) {
+                const generation = ++playGeneration;
+                const requestedSongId = songId || null;
                 currentState.title = title || '';
                 currentState.artist = artist || '';
                 currentState.album = album || '';
@@ -113,14 +119,17 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
                 player.src = url;
                 player.volume = currentState.volume;
                 player.play().then(() => {
+                    if (generation !== playGeneration) return;
                     updateMediaSession();
                     broadcastState();
                 }).catch((e) => {
+                    if (generation !== playGeneration) return;
                     console.warn('[Offscreen] play failed:', e);
                     chrome.runtime.sendMessage({
                         action: 'offscreen_error',
                         error: e.message || 'play() rejected',
                         code: 4,
+                        songId: requestedSongId,
                     }).catch(() => {});
                 });
                 sendResponse({ ok: true });
@@ -183,6 +192,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             break;
         }
         case 'stop':
+            playGeneration++;
             player.pause();
             player.src = '';
             currentState = {

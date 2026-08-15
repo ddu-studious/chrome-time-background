@@ -1,38 +1,14 @@
 (function () {
   'use strict';
 
-  const APP_REGISTRY = [
-    { id: 'zen-mode', name: '极简模式', icon: 'fas fa-eye-slash', category: 'system', dockBtnId: 'zen-mode-btn', isSystem: true, defaultOrder: 0 },
-    { id: 'sys-monitor', name: '扩展监控', icon: 'fas fa-heartbeat', category: 'system', dockBtnId: 'sys-monitor-toggle', isSystem: true, defaultOrder: 1 },
-    { id: 'knowledge', name: '常用信息', icon: 'fas fa-brain', category: 'tools', dockBtnId: 'kw-dock-btn', isSystem: false, defaultOrder: 2 },
-    { id: 'bilibili', name: '哔哩哔哩', icon: 'fab fa-bilibili', category: 'media', dockBtnId: 'bili-dock-btn', isSystem: false, defaultOrder: 3 },
-    { id: 'schedule', name: '计划管理', icon: 'fas fa-calendar-check', category: 'productivity', dockBtnId: 'schedule-dock-btn', isSystem: false, defaultOrder: 4 },
-    { id: 'worklog', name: '工作日志', icon: 'fas fa-clipboard-list', category: 'productivity', dockBtnId: 'worklog-dock-btn', isSystem: false, defaultOrder: 5 },
-    { id: 'blog', name: '写作空间', icon: 'fas fa-pen-nib', category: 'productivity', dockBtnId: 'blog-dock-btn', isSystem: false, defaultOrder: 6 },
-    { id: 'quick-nav', name: '快捷导航', icon: 'fas fa-compass', category: 'tools', dockBtnId: 'quick-nav-dock-btn', isSystem: false, defaultOrder: 6.5 },
-    { id: 'snake-game', name: '贪吃蛇', icon: 'fas fa-gamepad', category: 'games', dockBtnId: 'snake-dock-btn', isSystem: false, defaultOrder: 7 },
-    { id: 'tetris-game', name: '俄罗斯方块', icon: 'fas fa-th', category: 'games', dockBtnId: 'tetris-dock-btn', isSystem: false, defaultOrder: 8 },
-    { id: 'tetris-3d-game', name: '立体方块', icon: 'fas fa-cube', category: 'games', dockBtnId: 'tetris-3d-dock-btn', panelId: 'tetris-3d-game-panel', isSystem: false, defaultOrder: 8.5 },
-    { id: 'music', name: '音乐播放器', icon: 'fas fa-music', category: 'media', dockBtnId: 'music-dock-btn', isSystem: false, defaultOrder: 8.6 },
-    { id: 'reading', name: '今日阅读', icon: 'fas fa-book-reader', category: 'media', dockBtnId: 'reading-dock-btn', isSystem: false, defaultOrder: 8.7 },
-    { id: 'poetry', name: '诗词电台', icon: 'fas fa-feather-alt', category: 'media', dockBtnId: 'poetry-dock-btn', isSystem: false, defaultOrder: 8.8 },
-    { id: 'agent', name: 'Agent 矩阵', icon: 'fas fa-robot', category: 'tools', dockBtnId: 'agent-dock-btn', isSystem: false, defaultOrder: 9, hasIndicator: true },
-    { id: 'chatbot', name: 'AI 对话', icon: 'fas fa-terminal', category: 'tools', dockBtnId: 'chatbot-dock-btn', isSystem: false, defaultOrder: 9.2 },
-    { id: 'prompt-manager', name: 'Prompt 管理', icon: 'fas fa-magic', category: 'tools', dockBtnId: 'prompt-mgr-dock-btn', isSystem: false, defaultOrder: 9.5 },
-    { id: 'settings', name: '设置', icon: 'fas fa-cog', category: 'system', dockBtnId: 'settings-dock-btn', isSystem: true, defaultOrder: 10 },
-    { id: 'memo', name: '任务面板', icon: 'fas fa-tasks', category: 'productivity', dockBtnId: 'memo-toggle-btn', isSystem: false, defaultOrder: 11 },
-  ];
-
-  const CATEGORIES = {
-    system: { name: '系统工具', icon: 'fas fa-cog', order: 0 },
-    tools: { name: '效率工具', icon: 'fas fa-wrench', order: 1 },
-    productivity: { name: '生产力', icon: 'fas fa-briefcase', order: 2 },
-    media: { name: '媒体', icon: 'fas fa-play-circle', order: 3 },
-    games: { name: '游戏', icon: 'fas fa-gamepad', order: 4 },
-  };
+  const registry = window.ProductAppRegistry;
+  if (!registry) throw new Error('ProductAppRegistry must load before dock-manager.js');
+  const APP_REGISTRY = registry.apps;
+  const CATEGORIES = registry.categories;
 
   const STORAGE_KEY = 'dockManagerConfig';
   const DOCK_EFFECT_KEY = 'dockEffectConfig';
+  const RECENT_APPS_KEY = 'dockManagerRecentApps';
 
   const DOCK_EFFECTS = {
     magnify: { name: '经典放大', desc: 'macOS 风格图标放大', maxScale: 1.5, range: 100 },
@@ -55,6 +31,11 @@
       this._originalButtons = new Map();
       this._effectConfig = { effect: 'magnify', ...DOCK_EFFECTS.magnify };
       this._magnifyRAF = null;
+      this._launchpadCategory = 'all';
+      this._recentAppIds = null;
+      this._launchpadReturnFocus = null;
+      this._launchpadBackgroundInert = [];
+      this._contextReturnFocus = null;
     }
 
     async init() {
@@ -326,44 +307,76 @@
       if (!this.dockEl) return;
       this.dockEl.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        this._showContextMenu(e.clientX, e.clientY);
+        this._showContextMenu(e.clientX, e.clientY, e.target.closest('button') || document.activeElement);
       });
     }
 
-    _showContextMenu(x, y) {
-      this._closeContextMenu();
+    _showContextMenu(x, y, returnTarget = null) {
+      this._closeContextMenu(false);
+      this._contextReturnFocus = returnTarget?.isConnected ? returnTarget : document.activeElement;
+      window.ProductUIV5?.setBusinessPage?.('launchpad', 'dock-menu');
       const menu = document.createElement('div');
       menu.className = 'dock-context-menu';
       menu.id = 'dock-context-menu';
+      menu.setAttribute('role', 'menu');
+      menu.setAttribute('aria-label', 'Dock 悬浮效果与布局');
+      menu.tabIndex = -1;
 
       let html = '<div class="dock-context-menu-title">Dock 悬浮效果</div>';
       for (const [key, cfg] of Object.entries(DOCK_EFFECTS)) {
         const active = this._effectConfig.effect === key;
-        html += `<button class="dock-context-menu-item${active ? ' active' : ''}" data-effect="${key}">
+        html += `<button class="dock-context-menu-item${active ? ' active' : ''}" data-effect="${key}" role="menuitemradio" aria-checked="${active}">
           <i class="fas ${active ? 'fa-check-circle' : 'fa-circle'}"></i>
           <span>${cfg.name}</span>
           <small style="margin-left:auto;opacity:0.4;font-size:10px;">${cfg.desc || ''}</small>
         </button>`;
       }
       html += '<div class="dock-context-menu-divider"></div>';
-      html += `<button class="dock-context-menu-item" data-action="reset">
+      html += `<button class="dock-context-menu-item" data-action="reset" role="menuitem">
         <i class="fas fa-undo"></i><span>重置 Dock 布局</span>
       </button>`;
       menu.innerHTML = html;
 
       document.body.appendChild(menu);
 
-      const menuRect = menu.getBoundingClientRect();
+      // The closed menu is scaled to 0.92, so getBoundingClientRect() would
+      // underestimate its final open size and let the right/bottom edges clip.
+      const menuWidth = menu.offsetWidth;
+      const menuHeight = menu.offsetHeight;
       let left = x;
-      let top = y - menuRect.height;
+      let top = y - menuHeight;
       if (top < 8) top = y + 8;
-      if (left + menuRect.width > window.innerWidth - 8) {
-        left = window.innerWidth - menuRect.width - 8;
+      if (top + menuHeight > window.innerHeight - 8) {
+        top = Math.max(8, window.innerHeight - menuHeight - 8);
       }
+      if (left + menuWidth > window.innerWidth - 8) {
+        left = window.innerWidth - menuWidth - 8;
+      }
+      left = Math.max(8, left);
       menu.style.left = `${left}px`;
       menu.style.top = `${top}px`;
 
-      requestAnimationFrame(() => menu.classList.add('open'));
+      requestAnimationFrame(() => {
+        menu.classList.add('open');
+        menu.querySelector('.dock-context-menu-item.active, .dock-context-menu-item')?.focus({ preventScroll: true });
+      });
+
+      menu.addEventListener('keydown', (event) => {
+        const items = [...menu.querySelectorAll('.dock-context-menu-item')];
+        const index = items.indexOf(document.activeElement);
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          event.stopPropagation();
+          this._closeContextMenu();
+        } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          const delta = event.key === 'ArrowDown' ? 1 : -1;
+          items[(index + delta + items.length) % items.length]?.focus();
+        } else if (event.key === 'Home' || event.key === 'End') {
+          event.preventDefault();
+          items[event.key === 'Home' ? 0 : items.length - 1]?.focus();
+        }
+      });
 
       menu.querySelectorAll('[data-effect]').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -389,8 +402,15 @@
       setTimeout(() => document.addEventListener('click', closeHandler), 0);
     }
 
-    _closeContextMenu() {
+    _closeContextMenu(restore = true) {
       document.getElementById('dock-context-menu')?.remove();
+      if (restore) {
+        if (this.launchpadEl?.classList.contains('open')) window.ProductUIV5?.setBusinessPage?.('launchpad', 'all-apps');
+        else window.ProductUIV5?.setShellPage?.('home');
+        const fallback = document.getElementById('dock-launchpad-btn');
+        (this._contextReturnFocus?.isConnected ? this._contextReturnFocus : fallback)?.focus?.({ preventScroll: true });
+      }
+      this._contextReturnFocus = null;
     }
 
     // ─── Quick Dismiss (快速收起面板) ───
@@ -465,8 +485,8 @@
 
     getDefaultConfig() {
       return {
-        version: 1,
-        items: APP_REGISTRY.map(a => ({ type: 'app', appId: a.id })),
+        version: 2,
+        items: APP_REGISTRY.filter(a => a.defaultInDock).map(a => ({ type: 'app', appId: a.id })),
         hiddenApps: [],
         lastModified: Date.now(),
       };
@@ -565,6 +585,7 @@
       launchpadBtn.className = 'dock-btn dock-managed dock-launchpad-btn';
       launchpadBtn.id = 'dock-launchpad-btn';
       launchpadBtn.title = '应用启动台';
+      launchpadBtn.setAttribute('aria-label', '应用启动台');
       launchpadBtn.innerHTML = '<i class="fas fa-th-large"></i>';
       launchpadBtn.addEventListener('click', () => this.toggleLaunchpad());
 
@@ -645,8 +666,7 @@
       popover.querySelectorAll('.dock-group-popover-item').forEach(item => {
         item.addEventListener('click', () => {
           const appId = item.dataset.appId;
-          const origBtn = document.getElementById(this.apps.get(appId)?.dockBtnId);
-          origBtn?.click();
+          this._activateApp(appId);
           this._closeGroupPopover();
         });
       });
@@ -915,18 +935,41 @@
       const el = document.createElement('div');
       el.className = 'dock-launchpad';
       el.id = 'dock-launchpad';
+      el.setAttribute('aria-hidden', 'true');
+      el.inert = true;
       el.innerHTML = `
         <div class="dock-launchpad-overlay"></div>
-        <div class="dock-launchpad-content">
+        <div class="dock-launchpad-content" role="dialog" aria-modal="true" aria-labelledby="dock-launchpad-title">
           <div class="dock-launchpad-header">
-            <h2 class="dock-launchpad-title"><i class="fas fa-th-large"></i> 应用启动台</h2>
+            <div class="dock-launchpad-heading">
+              <span class="dock-launchpad-eyebrow">全部能力</span>
+              <h2 class="dock-launchpad-title" id="dock-launchpad-title"><i class="fas fa-th-large"></i> 应用启动台</h2>
+              <p>搜索、打开或固定功能到 Dock</p>
+            </div>
             <div class="dock-launchpad-search-wrap">
               <i class="fas fa-search"></i>
-              <input type="text" class="dock-launchpad-search" placeholder="搜索应用…" id="dock-launchpad-search">
+              <input type="search" class="dock-launchpad-search" placeholder="搜索名称或功能…" id="dock-launchpad-search" aria-label="搜索应用">
+              <kbd>⌘ K</kbd>
             </div>
-            <button class="dock-launchpad-close" id="dock-launchpad-close"><i class="fas fa-times"></i></button>
+            <button class="dock-launchpad-close" id="dock-launchpad-close" aria-label="关闭应用启动台"><i class="fas fa-times"></i></button>
           </div>
-          <div class="dock-launchpad-grid" id="dock-launchpad-grid"></div>
+          <div class="dock-launchpad-body">
+            <nav class="dock-launchpad-categories" id="dock-launchpad-categories" aria-label="应用分类"></nav>
+            <div class="dock-launchpad-catalog">
+              <section class="dock-launchpad-recent" id="dock-launchpad-recent" hidden>
+                <div class="dock-launchpad-section-title"><span>最近使用</span><small>快速回到刚才的工作</small></div>
+                <div class="dock-launchpad-recent-grid" id="dock-launchpad-recent-grid"></div>
+              </section>
+              <div class="dock-launchpad-grid" id="dock-launchpad-grid"></div>
+              <div class="dock-launchpad-empty" id="dock-launchpad-empty" hidden>
+                <i class="fas fa-search"></i><span>没有匹配的功能</span><small>试试更短的关键词</small>
+              </div>
+            </div>
+          </div>
+          <div class="dock-launchpad-footer">
+            <span id="dock-launchpad-count"></span>
+            <span><i class="fas fa-thumbtack"></i> 固定后的功能会显示在 Dock</span>
+          </div>
         </div>
       `;
       document.body.appendChild(el);
@@ -936,11 +979,7 @@
       el.querySelector('#dock-launchpad-close').addEventListener('click', () => this.hideLaunchpad());
       el.querySelector('#dock-launchpad-search').addEventListener('input', (e) => this._filterLaunchpad(e.target.value));
 
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && this.launchpadEl?.classList.contains('open')) {
-          this.hideLaunchpad();
-        }
-      });
+      document.addEventListener('keydown', (e) => this._handleLaunchpadKeydown(e));
 
       this._updateLaunchpad();
     }
@@ -960,55 +999,111 @@
         ([a], [b]) => (CATEGORIES[a]?.order ?? 99) - (CATEGORIES[b]?.order ?? 99)
       );
 
+      const categoryNav = this.launchpadEl.querySelector('#dock-launchpad-categories');
+      categoryNav.innerHTML = `
+        <button class="dock-launchpad-category-btn${this._launchpadCategory === 'all' ? ' active' : ''}" data-category="all" aria-pressed="${this._launchpadCategory === 'all'}">
+          <i class="fas fa-border-all"></i><span>全部</span><small>${this.apps.size}</small>
+        </button>` + sortedCats.map(([catKey, apps]) => {
+          const info = CATEGORIES[catKey] || { name: catKey, icon: 'fas fa-folder' };
+          return `<button class="dock-launchpad-category-btn${this._launchpadCategory === catKey ? ' active' : ''}" data-category="${catKey}" aria-pressed="${this._launchpadCategory === catKey}">
+            <i class="${info.icon}"></i><span>${info.name}</span><small>${apps.length}</small>
+          </button>`;
+        }).join('');
+
+      categoryNav.querySelectorAll('.dock-launchpad-category-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          this._launchpadCategory = btn.dataset.category;
+          window.ProductUIV5?.setBusinessPage?.('launchpad', this._launchpadCategory === 'all' ? 'all-apps' : 'category');
+          categoryNav.querySelectorAll('.dock-launchpad-category-btn').forEach(item => {
+            const active = item === btn;
+            item.classList.toggle('active', active);
+            item.setAttribute('aria-pressed', String(active));
+          });
+          this._filterLaunchpad(this.launchpadEl.querySelector('#dock-launchpad-search')?.value || '');
+        });
+      });
+
+      const buildCard = (app, recent = false) => {
+        const inDock = this.isInDock(app.id);
+        return `<article class="dock-launchpad-app${inDock ? ' in-dock' : ''}${recent ? ' recent' : ''}" data-app-id="${app.id}" data-category="${app.category}" draggable="true">
+          <button type="button" class="dock-launchpad-open" data-app-open="${app.id}" aria-label="打开${app.name}">
+            <span class="dock-launchpad-app-icon"><i class="${app.icon}"></i></span>
+            <span class="dock-launchpad-app-copy">
+              <span class="dock-launchpad-app-name">${app.name}</span>
+              <span class="dock-launchpad-app-summary">${app.summary || '打开应用'}</span>
+            </span>
+          </button>
+          <span class="dock-launchpad-actions">
+            ${inDock ? `<button class="dock-launchpad-move" data-app-move="-1" data-app-id="${app.id}" aria-label="将${app.name}前移"><i class="fas fa-arrow-up"></i></button><button class="dock-launchpad-move" data-app-move="1" data-app-id="${app.id}" aria-label="将${app.name}后移"><i class="fas fa-arrow-down"></i></button>` : ''}
+            <button class="dock-launchpad-toggle" data-app-id="${app.id}" title="${inDock ? '从 Dock 移除' : '固定到 Dock'}" aria-label="${inDock ? `从 Dock 移除${app.name}` : `固定${app.name}到 Dock`}">
+              <i class="fas fa-thumbtack"></i><span>${inDock ? '已固定' : '固定'}</span>
+            </button>
+          </span>
+        </article>`;
+      };
+
+      const recentIds = this._getRecentAppIds();
+      const recentApps = recentIds.map(id => this.apps.get(id)).filter(Boolean).slice(0, 4);
+      const recentSection = this.launchpadEl.querySelector('#dock-launchpad-recent');
+      const recentGrid = this.launchpadEl.querySelector('#dock-launchpad-recent-grid');
+      recentSection.hidden = recentApps.length === 0;
+      recentGrid.innerHTML = recentApps.map(app => buildCard(app, true)).join('');
+
       let html = '';
       for (const [catKey, apps] of sortedCats) {
         const catInfo = CATEGORIES[catKey] || { name: catKey, icon: 'fas fa-folder' };
         html += `<div class="dock-launchpad-category" data-category="${catKey}">`;
-        html += `<div class="dock-launchpad-cat-header"><i class="${catInfo.icon}"></i> ${catInfo.name}</div>`;
+        html += `<div class="dock-launchpad-cat-header"><span><i class="${catInfo.icon}"></i> ${catInfo.name}</span><small>${apps.length} 个功能</small></div>`;
         html += '<div class="dock-launchpad-cat-grid">';
         for (const app of apps) {
-          const inDock = this.isInDock(app.id);
-          html += `
-            <div class="dock-launchpad-app${inDock ? ' in-dock' : ''}" data-app-id="${app.id}" draggable="true">
-              <div class="dock-launchpad-app-icon"><i class="${app.icon}"></i></div>
-              <div class="dock-launchpad-app-name">${app.name}</div>
-              ${inDock ? '<div class="dock-launchpad-badge"><i class="fas fa-check"></i></div>' : ''}
-              <button class="dock-launchpad-toggle" data-app-id="${app.id}" title="${inDock ? '从 Dock 移除' : '添加到 Dock'}">
-                <i class="fas ${inDock ? 'fa-minus-circle' : 'fa-plus-circle'}"></i>
-              </button>
-            </div>`;
+          html += buildCard(app);
         }
         html += '</div></div>';
       }
       grid.innerHTML = html;
 
-      grid.querySelectorAll('.dock-launchpad-toggle').forEach(btn => {
+      this.launchpadEl.querySelectorAll('.dock-launchpad-toggle').forEach(btn => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
+          window.ProductUIV5?.setBusinessPage?.('launchpad', 'pin-order');
           const appId = btn.dataset.appId;
-          const app = this.apps.get(appId);
-          if (app?.isSystem) return;
           if (this.isInDock(appId)) {
             this.removeFromDock(appId);
           } else {
             this.addToDock(appId);
           }
+          requestAnimationFrame(() => {
+            this._filterLaunchpad(this.launchpadEl?.querySelector('#dock-launchpad-search')?.value || '');
+            this.launchpadEl?.querySelector(`.dock-launchpad-toggle[data-app-id="${appId}"]`)?.focus({ preventScroll: true });
+          });
         });
       });
 
-      grid.querySelectorAll('.dock-launchpad-app').forEach(card => {
-        card.addEventListener('click', (e) => {
-          if (e.target.closest('.dock-launchpad-toggle')) return;
+      this.launchpadEl.querySelectorAll('.dock-launchpad-move').forEach(btn => {
+        btn.addEventListener('click', (event) => {
+          event.stopPropagation();
+          window.ProductUIV5?.setBusinessPage?.('launchpad', 'pin-order');
+          const appId = btn.dataset.appId;
+          const direction = Number(btn.dataset.appMove) < 0 ? -1 : 1;
+          if (!this._moveDockApp(appId, direction)) return;
+          this._updateLaunchpad();
+          requestAnimationFrame(() => this.launchpadEl?.querySelector(`.dock-launchpad-move[data-app-id="${appId}"][data-app-move="${direction}"]`)?.focus({ preventScroll: true }));
+        });
+      });
+
+      this.launchpadEl.querySelectorAll('.dock-launchpad-app').forEach(card => {
+        card.querySelector('.dock-launchpad-open')?.addEventListener('click', () => {
           const appId = card.dataset.appId;
           const app = this.apps.get(appId);
           if (app) {
-            const origBtn = document.getElementById(app.dockBtnId);
-            origBtn?.click();
-            this.hideLaunchpad();
+            this._recordRecentApp(appId);
+            this._activateApp(appId);
+            this.hideLaunchpad(false, false);
           }
         });
 
         card.addEventListener('dragstart', (e) => {
+          window.ProductUIV5?.setBusinessPage?.('launchpad', 'pin-order');
           e.dataTransfer.setData('application/dock-app', card.dataset.appId);
           e.dataTransfer.effectAllowed = 'copy';
           card.classList.add('dock-launchpad-dragging');
@@ -1017,24 +1112,86 @@
           card.classList.remove('dock-launchpad-dragging');
         });
       });
+
+      this._filterLaunchpad(this.launchpadEl.querySelector('#dock-launchpad-search')?.value || '');
+    }
+
+    _activateApp(appId) {
+      if (appId === 'chatbot' && window.Chatbot?.open) {
+        window.Chatbot.open();
+        return true;
+      }
+      if (appId === 'quick-nav' && window.quickNavManager?.open) {
+        window.quickNavManager.open();
+        return true;
+      }
+      const app = this.apps.get(appId);
+      const button = app ? document.getElementById(app.dockBtnId) : null;
+      if (!button) return false;
+      button.click();
+      return true;
+    }
+
+    _moveDockApp(appId, direction) {
+      const currentIndex = this.config.items.findIndex(item => item.type === 'app' && item.appId === appId);
+      if (currentIndex < 0) return false;
+      const appIndices = this.config.items
+        .map((item, index) => item.type === 'app' ? index : -1)
+        .filter(index => index >= 0);
+      const position = appIndices.indexOf(currentIndex);
+      const targetIndex = appIndices[position + direction];
+      if (targetIndex == null) return false;
+      this.reorderDock(currentIndex, targetIndex);
+      return true;
     }
 
     _filterLaunchpad(query) {
       const grid = this.launchpadEl?.querySelector('#dock-launchpad-grid');
       if (!grid) return;
       const q = query.toLowerCase().trim();
+      window.ProductUIV5?.setBusinessPage?.('launchpad', q ? 'search' : (this._launchpadCategory === 'all' ? 'all-apps' : 'category'));
+      let visibleCount = 0;
 
       grid.querySelectorAll('.dock-launchpad-app').forEach(card => {
         const appId = card.dataset.appId;
         const app = this.apps.get(appId);
-        const match = !q || app?.name.toLowerCase().includes(q) || appId.includes(q);
+        const matchesCategory = this._launchpadCategory === 'all' || app?.category === this._launchpadCategory;
+        const searchText = `${app?.name || ''} ${app?.summary || ''} ${appId}`.toLowerCase();
+        const match = matchesCategory && (!q || searchText.includes(q));
         card.style.display = match ? '' : 'none';
+        if (match) visibleCount += 1;
       });
 
       grid.querySelectorAll('.dock-launchpad-category').forEach(cat => {
         const visibleApps = cat.querySelectorAll('.dock-launchpad-app:not([style*="display: none"])');
         cat.style.display = visibleApps.length ? '' : 'none';
       });
+
+      const recentSection = this.launchpadEl.querySelector('#dock-launchpad-recent');
+      if (recentSection) recentSection.style.display = (!q && this._launchpadCategory === 'all' && !recentSection.hidden) ? '' : 'none';
+      const empty = this.launchpadEl.querySelector('#dock-launchpad-empty');
+      if (empty) empty.hidden = visibleCount > 0;
+      const count = this.launchpadEl.querySelector('#dock-launchpad-count');
+      const pinnedCount = grid.querySelectorAll('.dock-launchpad-app.in-dock').length;
+      if (count) count.textContent = `${visibleCount} 个功能 · ${pinnedCount} 个已固定`;
+    }
+
+    _getRecentAppIds() {
+      if (Array.isArray(this._recentAppIds)) return this._recentAppIds;
+      try {
+        const value = JSON.parse(localStorage.getItem(RECENT_APPS_KEY) || '[]');
+        this._recentAppIds = Array.isArray(value) ? value : [];
+      } catch {
+        this._recentAppIds = [];
+      }
+      return this._recentAppIds;
+    }
+
+    _recordRecentApp(appId) {
+      const ids = this._getRecentAppIds().filter(id => id !== appId);
+      ids.unshift(appId);
+      this._recentAppIds = ids.slice(0, 8);
+      try { localStorage.setItem(RECENT_APPS_KEY, JSON.stringify(this._recentAppIds)); } catch { /* ignore */ }
     }
 
     toggleLaunchpad() {
@@ -1046,15 +1203,64 @@
     }
 
     showLaunchpad() {
+      if (!this.launchpadEl?.classList.contains('open')) this._launchpadReturnFocus = document.activeElement;
+      window.ProductUIV5?.setBusinessPage?.('launchpad', 'all-apps');
       this._updateLaunchpad();
       this._positionLaunchpad();
+      this._setLaunchpadBackgroundInert(true);
+      this.launchpadEl.inert = false;
+      this.launchpadEl.setAttribute('aria-hidden', 'false');
       this.launchpadEl?.classList.add('open');
       const search = this.launchpadEl?.querySelector('#dock-launchpad-search');
-      if (search) { search.value = ''; setTimeout(() => search.focus(), 100); }
+      if (search) {
+        search.value = '';
+        this._filterLaunchpad('');
+        setTimeout(() => search.focus(), 100);
+      }
     }
 
-    hideLaunchpad() {
+    hideLaunchpad(restoreFocus = true, restoreShell = true) {
       this.launchpadEl?.classList.remove('open');
+      this.launchpadEl?.setAttribute('aria-hidden', 'true');
+      if (this.launchpadEl) this.launchpadEl.inert = true;
+      this._setLaunchpadBackgroundInert(false);
+      if (restoreShell) window.ProductUIV5?.setShellPage?.('home');
+      if (restoreFocus) {
+        const fallback = document.getElementById('dock-launchpad-btn');
+        (this._launchpadReturnFocus?.isConnected ? this._launchpadReturnFocus : fallback)?.focus?.({ preventScroll: true });
+      }
+      this._launchpadReturnFocus = null;
+    }
+
+    _setLaunchpadBackgroundInert(active) {
+      if (active) {
+        if (this._launchpadBackgroundInert.length) return;
+        this._launchpadBackgroundInert = [...document.body.children]
+          .filter(child => child !== this.launchpadEl && !child.inert);
+        this._launchpadBackgroundInert.forEach(child => { child.inert = true; });
+        return;
+      }
+      this._launchpadBackgroundInert.forEach(child => { child.inert = false; });
+      this._launchpadBackgroundInert = [];
+    }
+
+    _handleLaunchpadKeydown(event) {
+      if (!this.launchpadEl?.classList.contains('open') || document.getElementById('dock-context-menu')) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        this.hideLaunchpad();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const content = this.launchpadEl.querySelector('.dock-launchpad-content');
+      const focusable = [...content.querySelectorAll('button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])')]
+        .filter(element => !element.hidden && element.getClientRects().length);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!content.contains(document.activeElement)) { event.preventDefault(); first.focus(); }
+      else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     }
 
     _positionLaunchpad() {
@@ -1068,7 +1274,7 @@
       content.style.position = 'fixed';
       content.style.margin = '0';
 
-      const maxH = Math.min(vpH * 0.7, 520);
+      const maxH = Math.min(vpH * 0.84, 780);
       content.style.maxHeight = `${maxH}px`;
 
       const bottomGap = vpH - dockRect.top + 12;
@@ -1082,7 +1288,7 @@
         content.style.bottom = 'auto';
       }
 
-      const contentW = Math.min(620, vpW - 32);
+      const contentW = Math.min(1080, vpW - 32);
       content.style.width = `${contentW}px`;
 
       let left = dockRect.left + dockRect.width / 2 - contentW / 2;

@@ -107,7 +107,7 @@
             el.addEventListener('keydown', (e) => { if (e.key === 'Enter') el.blur(); });
         });
 
-        document.querySelectorAll('.sp-nav-item').forEach(item => {
+        document.querySelectorAll('.sp-sidebar:not([data-v5-ready]) .sp-nav-item').forEach(item => {
             item.addEventListener('click', (e) => {
                 e.preventDefault();
                 const page = item.dataset.page;
@@ -124,9 +124,11 @@
             });
         });
 
-        const hash = location.hash.replace('#', '') || 'time';
-        const navItem = document.querySelector(`.sp-nav-item[data-page="${hash}"]`);
-        if (navItem) navItem.click();
+        if (!document.querySelector('.sp-sidebar[data-v5-ready]')) {
+            const hash = location.hash.replace('#', '') || 'time';
+            const navItem = document.querySelector(`.sp-nav-item[data-page="${hash}"]`);
+            if (navItem) navItem.click();
+        }
     }
 
     // ==================== 背景 Provider 设置 (v3.16.0) ====================

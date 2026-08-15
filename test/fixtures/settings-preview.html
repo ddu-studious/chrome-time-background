@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>设置中心本地验收夹具</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; background: #080a11; color: #cfd3df; font: 12px/1.4 system-ui, sans-serif; }
+    body { display: grid; grid-template-rows: 34px 1fr; }
+    .fixture-note { display: flex; align-items: center; justify-content: center; width: 100%; padding: 0 12px; border-bottom: 1px solid rgba(167,139,250,.2); background: #171524; color: #aaa2c2; }
+    iframe { width: 100%; height: 100%; border: 0; }
+  </style>
+</head>
+<body>
+  <div class="fixture-note">本地验收配置 · 独立 Dock 样例 · 离页恢复预览存储，不写入 Chrome 扩展</div>
+  <iframe id="settings-frame" title="设置中心"></iframe>
+  <script>
+    (() => {
+      const seed = {
+        dockManagerConfig: {
+          version: 2,
+          items: [
+            { type: 'app', appId: 'knowledge' },
+            { type: 'group', id: 'work', name: '工作', children: ['schedule', 'worklog'] },
+            { type: 'divider' },
+            { type: 'app', appId: 'quick-nav' },
+            { type: 'app', appId: 'music' },
+            { type: 'app', appId: 'agent' },
+            { type: 'app', appId: 'memo' }
+          ],
+          hiddenApps: []
+        },
+        dockEffectConfig: { effect: 'magnify' }
+      };
+      const previous = Object.fromEntries(Object.keys(seed).map(key => [key, localStorage.getItem(key)]));
+      for (const [key, value] of Object.entries(seed)) localStorage.setItem(key, JSON.stringify(value));
+      addEventListener('beforeunload', () => {
+        for (const [key, value] of Object.entries(previous)) {
+          if (value == null) localStorage.removeItem(key);
+          else localStorage.setItem(key, value);
+        }
+      }, { once: true });
+      const frame = document.querySelector('#settings-frame');
+      const requestedWidth = Number(new URLSearchParams(location.search).get('width'));
+      if (Number.isFinite(requestedWidth) && requestedWidth >= 360 && requestedWidth <= 1280) {
+        frame.style.width = `${requestedWidth}px`;
+        frame.style.justifySelf = 'center';
+      }
+      frame.src = `../../settings.html?fixtureRev=${Date.now()}#appearance`;
+    })();
+  </script>
+</body>
+</html>

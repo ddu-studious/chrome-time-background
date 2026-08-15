@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>快捷导航真实页面验收夹具</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E">
+  <link rel="stylesheet" href="../../css/style.css?v=13">
+  <link rel="stylesheet" href="../../css/product-ui-v5.css?v=6">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style>
+    html, body { min-height: 100%; overflow: hidden; }
+    body { margin: 0; background: radial-gradient(circle at 50% 110%, #29234a, transparent 42%), linear-gradient(145deg, #0b0d18, #13182a); color: #eef2ff; font-family: system-ui, sans-serif; }
+    .fixture-note { position: fixed; inset: 0 0 auto; z-index: 3; min-height: 36px; display: flex; align-items: center; justify-content: center; padding: 0 16px; border-bottom: 1px solid rgba(167,139,250,.2); background: rgba(19,17,34,.92); color: #bdb5d7; font-size: 11px; }
+    .fixture-launch { position: fixed; left: 50%; bottom: 22px; z-index: 4; transform: translateX(-50%); width: 44px; height: 44px; border: 1px solid rgba(167,139,250,.32); border-radius: 14px; background: #25213e; color: #c4b5fd; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="fixture-note" id="fixture-note">本地验收样例 · 6 个明确网址 · 不会打开外链，离开页面时恢复原 HTTP 预览存储</div>
+  <button type="button" id="quick-nav-dock-btn" class="fixture-launch" aria-label="打开快捷导航"><i class="fas fa-compass"></i></button>
+  <script>
+    (() => {
+      const key = 'quickNavLinks';
+      const previous = localStorage.getItem(key);
+      const links = [
+        { id: 'docs', name: '项目文档', url: 'https://example.com/docs', icon: 'fas fa-book', color: '#6366f1' },
+        { id: 'github', name: 'GitHub', url: 'https://github.com', icon: 'fab fa-github', color: '#30363d' },
+        { id: 'feishu', name: '飞书', url: 'https://www.feishu.cn', icon: 'fas fa-feather-alt', color: '#3370ff' },
+        { id: 'notion', name: 'Notion', url: 'https://www.notion.so', icon: 'fas fa-layer-group', color: '#3f3f46' },
+        { id: 'chatgpt', name: 'ChatGPT', url: 'https://chat.openai.com', icon: 'fas fa-comment-dots', color: '#10a37f' },
+        { id: 'music', name: '网易云音乐', url: 'https://music.163.com', icon: 'fas fa-music', color: '#d43c33' }
+      ];
+      const emptyMode = new URLSearchParams(location.search).has('empty');
+      if (emptyMode) {
+        document.getElementById('fixture-note').textContent = '本地验收样例 · 空库模式 · 可验证添加与导入恢复入口，离开页面时恢复原 HTTP 预览存储';
+      }
+      localStorage.setItem(key, JSON.stringify(emptyMode ? [] : links));
+      addEventListener('beforeunload', () => {
+        if (previous == null) localStorage.removeItem(key);
+        else localStorage.setItem(key, previous);
+      }, { once: true });
+    })();
+  </script>
+  <script src="../../js/product-pages-v5.js?v=6"></script>
+  <script src="../../js/product-ui-v5.js?v=6"></script>
+  <script src="../../js/quick-nav.js?v=13"></script>
+</body>
+</html>

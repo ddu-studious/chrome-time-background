@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prompt 管理真实页面验收夹具</title>
+  <link rel="icon" href="data:,">
+  <style>html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#07101d}body{display:grid;place-items:center}iframe{width:var(--preview-width,100%);max-width:100%;height:100%;margin:0;border:0;background:#07101d}</style>
+</head>
+<body>
+  <iframe id="app" title="Prompt 管理本地验收页面"></iframe>
+  <script>
+    const frame = document.getElementById('app');
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+    const params = new URLSearchParams(location.search);
+    const width = Number(params.get('width'));
+    if (width > 0) document.documentElement.style.setProperty('--preview-width', `${width}px`);
+    const storageKeys = ['prompt_manager_product_review_draft_v1', 'prompt_manager_product_review_backups_v1'];
+    const savedStorage = storageKeys.map(key => [key, localStorage.getItem(key)]);
+    storageKeys.forEach(key => localStorage.removeItem(key));
+    addEventListener('beforeunload', () => savedStorage.forEach(([key, value]) => value === null ? localStorage.removeItem(key) : localStorage.setItem(key, value)));
+    frame.addEventListener('load', async () => {
+      const win = frame.contentWindow;
+      for (let i = 0; i < 200 && !win.PromptManager; i += 1) await sleep(50);
+      const manager = win.PromptManager;
+      if (!manager) return;
+      await manager.open();
+      const view = params.get('view') || 'role-editor';
+      const doc = frame.contentDocument;
+      if (view !== 'offline-error') {
+        doc.querySelector('.pm-v5-modal.open [data-pm-close]')?.click();
+        await sleep(50);
+      }
+      if (view === 'live-preview') {
+        doc.querySelector('#pm-preview-full-btn')?.click();
+        await sleep(50);
+        if (params.get('run') === '1') doc.querySelector('#pm-run-test')?.click();
+      } else if (view === 'version-diff') {
+        manager.showVersionDiff();
+      } else if (view === 'save-version') {
+        manager.showSaveVersion();
+      } else if (view === 'import-export') {
+        manager.showImportExport();
+      } else if (view === 'offline-error') {
+        manager.showOfflineError('真实 Bridge 未连接，使用内置角色模板继续验收。');
+      }
+    });
+    frame.src = '../../index.html';
+  </script>
+</body>
+</html>

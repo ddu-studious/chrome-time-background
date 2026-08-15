@@ -86,14 +86,22 @@ class TechTicker {
         
         this.enabledSources = null;
         this._sourcesPanelVisible = false;
+        this.favorites = [];
+        this.lastError = '';
+        this._modalPanel = null;
+        this._modalReturnFocus = null;
+        this._modalBackgroundInert = [];
+        this._floatingReturnFocus = {};
     }
     
     /**
      * 初始化
      */
     async init() {
+        this._setProductPage('compact');
         await this.loadRefreshIntervalFromSettings();
         await this.loadEnabledSources();
+        await this.loadFavorites();
         this.bindEvents();
         setTimeout(() => this.loadData(), 1500);
         this.initKeywordAlert();
@@ -185,13 +193,14 @@ class TechTicker {
     bindEvents() {
         const tickerMain = document.getElementById('ticker-main');
         if (!tickerMain) return;
+        document.addEventListener('keydown', (event) => this._handleTickerModalKeydown(event));
         
         // 上层卡片点击跳转
         tickerMain.addEventListener('click', (e) => {
             // 不拦截控制按钮的点击
             if (e.target.closest('.ticker-controls')) return;
             const item = this.tickerItems[this.currentIndex];
-            if (item?.url) window.open(item.url, '_blank');
+            if (item) this.showDetail(item, this.currentIndex);
         });
         
         // 悬停暂停轮播（仅上层卡片区域）
@@ -251,8 +260,10 @@ class TechTicker {
         if (miniTrack) {
             miniTrack.addEventListener('click', (e) => {
                 const miniItem = e.target.closest('.ticker-mini-item');
-                if (miniItem?.dataset.url) {
-                    window.open(miniItem.dataset.url, '_blank');
+                if (miniItem) {
+                    const index = Number(miniItem.dataset.index);
+                    const item = this.tickerItems[index];
+                    if (item) this.showDetail(item, index);
                 }
             });
         }
@@ -387,6 +398,7 @@ class TechTicker {
             await this.fetchAllData();
         } catch (err) {
             console.warn('[Ticker] 加载失败:', err);
+            this.showLoadingError(err);
         }
     }
     
@@ -401,6 +413,7 @@ class TechTicker {
             await this.fetchAllData();
         } catch (err) {
             console.warn('[Ticker] 刷新失败:', err);
+            this.showLoadingError(err);
         } finally {
             this.isRefreshing = false;
             if (btn) btn.classList.remove('refreshing');
@@ -492,6 +505,9 @@ class TechTicker {
         
         if (this.tickerItems.length > 0) {
             await this.setCache(this.tickerItems);
+            this.closeLoadingError();
+        } else {
+            this.showLoadingError(new Error('所有已启用数据源暂时都没有返回内容'));
         }
         
         this.currentIndex = 0;
@@ -1069,6 +1085,11 @@ class TechTicker {
         const panel = document.createElement('div');
         panel.id = 'keyword-alert-panel';
         panel.className = 'keyword-alert-panel';
+        panel.setAttribute('role', 'dialog');
+        panel.setAttribute('aria-label', '热搜关键字监控');
+        panel.setAttribute('aria-hidden', 'true');
+        panel.tabIndex = -1;
+        panel.inert = true;
         // 初始状态由 CSS max-height:0 + opacity:0 控制，不用 display:none
         
         panel.innerHTML = `
@@ -1082,7 +1103,7 @@ class TechTicker {
                         <input type="checkbox" id="kap-enabled" ${this.keywordAlertSettings?.enabled ? 'checked' : ''}>
                         <span class="kap-slider"></span>
                     </label>
-                    <button class="kap-close-btn" id="kap-close-btn" title="关闭面板">
+                    <button class="kap-close-btn" id="kap-close-btn" title="关闭面板" aria-label="关闭关键字监控">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
@@ -1256,24 +1277,6 @@ class TechTicker {
             }
         });
         
-        // 鼠标离开面板区域 + ticker 区域时自动隐藏（坐标二次确认）
-        panel.addEventListener('mouseleave', () => {
-            this._kwPanelHideTimer = setTimeout(() => {
-                const x = this._lastMouseX ?? -1;
-                const y = this._lastMouseY ?? -1;
-                const r = panel.getBoundingClientRect();
-                const mouseOverPanel = x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
-                const ticker = document.getElementById('tech-ticker');
-                const tr = ticker?.getBoundingClientRect();
-                const mouseOverTicker = tr && x >= tr.left && x <= tr.right && y >= tr.top && y <= tr.bottom;
-                if (!mouseOverPanel && !mouseOverTicker) {
-                    if (this._keywordPanelVisible) this.toggleKeywordPanel(false);
-                }
-            }, 400);
-        });
-        panel.addEventListener('mouseenter', () => {
-            clearTimeout(this._kwPanelHideTimer);
-        });
     }
     
     /**
@@ -1388,13 +1391,22 @@ class TechTicker {
         const show = force !== undefined ? force : !this._keywordPanelVisible;
         
         if (show) {
+            if (!this._keywordPanelVisible) this._floatingReturnFocus.keywords = document.activeElement;
             this._positionFloatingPanel(panel);
             panel.classList.add('open');
+            panel.setAttribute('aria-hidden', 'false');
+            panel.inert = false;
         } else {
             panel.classList.remove('open');
+            panel.setAttribute('aria-hidden', 'true');
+            panel.inert = true;
+            const fallback = document.getElementById('ticker-keyword-btn');
+            (this._floatingReturnFocus.keywords?.isConnected ? this._floatingReturnFocus.keywords : fallback)?.focus?.({ preventScroll: true });
+            this._floatingReturnFocus.keywords = null;
         }
         this._keywordPanelVisible = show;
         this._syncPanelOpenClass();
+        this._setProductPage(show ? 'keywords' : 'compact');
         
         // 打开时延迟聚焦输入框（等过渡动画完成）
         if (show) {
@@ -1436,6 +1448,11 @@ class TechTicker {
         const panel = document.createElement('div');
         panel.id = 'ticker-sources-panel';
         panel.className = 'ticker-sources-panel';
+        panel.setAttribute('role', 'dialog');
+        panel.setAttribute('aria-label', '热榜数据源管理');
+        panel.setAttribute('aria-hidden', 'true');
+        panel.tabIndex = -1;
+        panel.inert = true;
         
         const categoriesHtml = Object.entries(TICKER_SOURCE_CATEGORIES).map(([catKey, catName]) => {
             const sources = Object.entries(TICKER_SOURCE_REGISTRY)
@@ -1475,22 +1492,34 @@ class TechTicker {
             <div class="tsp-header">
                 <div class="tsp-title">
                     <i class="fas fa-sliders-h"></i>
-                    <span>数据源管理</span>
+                    <span><strong>数据源管理</strong><small>选择热榜中展示的内容来源</small></span>
                     <span class="tsp-count" id="tsp-count">${enabledCount}/${totalCount}</span>
                 </div>
                 <div class="tsp-header-actions">
                     <button class="tsp-reset-btn" id="tsp-reset-btn" title="恢复默认">
                         <i class="fas fa-undo"></i>
                     </button>
-                    <button class="tsp-close-btn" id="tsp-close-btn" title="关闭">
+                    <button class="tsp-close-btn" id="tsp-close-btn" title="关闭" aria-label="关闭数据源管理">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
             </div>
+            <div class="tsp-toolbar">
+                <label class="tsp-search-wrap">
+                    <i class="fas fa-search"></i>
+                    <input type="search" id="tsp-source-search" placeholder="搜索来源…" aria-label="搜索数据源">
+                </label>
+                <div class="tsp-bulk-actions">
+                    <button type="button" id="tsp-select-all">全选</button>
+                    <button type="button" id="tsp-clear-all">清空</button>
+                </div>
+            </div>
             <div class="tsp-body">
                 ${categoriesHtml}
+                <div class="tsp-empty" id="tsp-empty" hidden>没有匹配的数据源</div>
             </div>
             <div class="tsp-footer">
+                <span id="tsp-selection-summary">已选择 ${enabledCount} 个来源</span>
                 <button class="tsp-apply-btn" id="tsp-apply-btn">
                     <i class="fas fa-check"></i> 应用并刷新
                 </button>
@@ -1520,6 +1549,29 @@ class TechTicker {
             this._syncSourcesPanelCheckboxes();
             this._updateSourcesCount();
         });
+
+        panel.querySelector('#tsp-source-search')?.addEventListener('input', (e) => {
+            const query = e.target.value.trim().toLowerCase();
+            let visibleCount = 0;
+            panel.querySelectorAll('.tsp-source-item').forEach(item => {
+                const visible = !query || item.textContent.toLowerCase().includes(query);
+                item.hidden = !visible;
+                if (visible) visibleCount += 1;
+            });
+            panel.querySelectorAll('.tsp-category').forEach(category => {
+                category.hidden = category.querySelectorAll('.tsp-source-item:not([hidden])').length === 0;
+            });
+            panel.querySelector('#tsp-empty').hidden = visibleCount > 0;
+        });
+
+        const setAllSources = (checked) => {
+            panel.querySelectorAll('.tsp-source-item input[type=checkbox]').forEach(cb => { cb.checked = checked; });
+            this.enabledSources = checked ? Object.keys(TICKER_SOURCE_REGISTRY) : [];
+            panel.querySelectorAll('.tsp-category').forEach(category => this._updateCategoryCheckbox(category));
+            this._updateSourcesCount();
+        };
+        panel.querySelector('#tsp-select-all')?.addEventListener('click', () => setAllSources(true));
+        panel.querySelector('#tsp-clear-all')?.addEventListener('click', () => setAllSources(false));
         
         panel.querySelectorAll('.tsp-source-item input[type=checkbox]').forEach(cb => {
             cb.addEventListener('change', () => {
@@ -1571,24 +1623,6 @@ class TechTicker {
             }
         });
         
-        // 鼠标离开面板区域 + ticker 区域时自动隐藏（坐标二次确认）
-        panel.addEventListener('mouseleave', () => {
-            this._srcPanelHideTimer = setTimeout(() => {
-                const x = this._lastMouseX ?? -1;
-                const y = this._lastMouseY ?? -1;
-                const r = panel.getBoundingClientRect();
-                const mouseOverPanel = x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
-                const ticker = document.getElementById('tech-ticker');
-                const tr = ticker?.getBoundingClientRect();
-                const mouseOverTicker = tr && x >= tr.left && x <= tr.right && y >= tr.top && y <= tr.bottom;
-                if (!mouseOverPanel && !mouseOverTicker) {
-                    if (this._sourcesPanelVisible) this.toggleSourcesPanel(false);
-                }
-            }, 400);
-        });
-        panel.addEventListener('mouseenter', () => {
-            clearTimeout(this._srcPanelHideTimer);
-        });
     }
     
     _updateCategoryCheckbox(categoryEl) {
@@ -1606,6 +1640,8 @@ class TechTicker {
         if (countEl) {
             countEl.textContent = `${this.enabledSources.length}/${Object.keys(TICKER_SOURCE_REGISTRY).length}`;
         }
+        const summaryEl = document.getElementById('tsp-selection-summary');
+        if (summaryEl) summaryEl.textContent = `已选择 ${this.enabledSources.length} 个来源`;
     }
     
     _syncSourcesPanelCheckboxes() {
@@ -1630,14 +1666,24 @@ class TechTicker {
         
         if (show) {
             if (this._keywordPanelVisible) this.toggleKeywordPanel(false);
+            if (!this._sourcesPanelVisible) this._floatingReturnFocus.sources = document.activeElement;
             this._syncSourcesPanelCheckboxes();
             this._positionFloatingPanel(panel);
             panel.classList.add('open');
+            panel.setAttribute('aria-hidden', 'false');
+            panel.inert = false;
+            requestAnimationFrame(() => panel.querySelector('#tsp-source-search')?.focus({ preventScroll: true }));
         } else {
             panel.classList.remove('open');
+            panel.setAttribute('aria-hidden', 'true');
+            panel.inert = true;
+            const fallback = document.getElementById('ticker-sources-btn');
+            (this._floatingReturnFocus.sources?.isConnected ? this._floatingReturnFocus.sources : fallback)?.focus?.({ preventScroll: true });
+            this._floatingReturnFocus.sources = null;
         }
         this._sourcesPanelVisible = show;
         this._syncPanelOpenClass();
+        this._setProductPage(show ? 'sources' : 'compact');
     }
     
     updateKeywordBtnState() {
@@ -1800,6 +1846,162 @@ class TechTicker {
     /**
      * HTML 转义
      */
+    _setProductPage(page) {
+        window.ProductUIV5?.setBusinessPage?.('ticker', page);
+    }
+
+    _openTickerModal(panel, focusSelector) {
+        if (this._modalPanel && this._modalPanel !== panel) {
+            this._modalPanel.classList.remove('visible', 'open');
+            this._closeTickerModal(this._modalPanel, false);
+        }
+        if (this._modalPanel !== panel) {
+            this._modalReturnFocus = document.activeElement;
+            this._modalBackgroundInert = [...document.body.children]
+                .filter(child => child !== panel && !child.inert);
+            this._modalBackgroundInert.forEach(child => { child.inert = true; });
+        }
+        this._modalPanel = panel;
+        panel.setAttribute('aria-hidden', 'false');
+        panel.inert = false;
+        requestAnimationFrame(() => panel.querySelector(focusSelector)?.focus({ preventScroll: true }));
+    }
+
+    _closeTickerModal(panel, restoreFocus = true) {
+        if (!panel) return;
+        panel.setAttribute('aria-hidden', 'true');
+        panel.inert = true;
+        if (this._modalPanel !== panel) return;
+        this._modalBackgroundInert.forEach(child => { child.inert = false; });
+        this._modalBackgroundInert = [];
+        if (restoreFocus) {
+            const fallback = document.getElementById('ticker-expand-btn') || document.getElementById('ticker-main');
+            (this._modalReturnFocus?.isConnected ? this._modalReturnFocus : fallback)?.focus?.({ preventScroll: true });
+        }
+        this._modalReturnFocus = null;
+        this._modalPanel = null;
+    }
+
+    _handleTickerModalKeydown(event) {
+        const panel = this._modalPanel;
+        if (!panel || panel.getAttribute('aria-hidden') === 'true') return;
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            if (panel.id === 'ticker-v5-detail') {
+                panel.classList.remove('visible');
+                this._setProductPage('compact');
+                this._closeTickerModal(panel);
+            } else if (panel.id === 'ticker-v5-error') {
+                this.closeLoadingError();
+            } else if (panel.id === 'ticker-expand-panel') {
+                panel.classList.remove('open');
+                this._expandPanelVisible = false;
+                this._setProductPage('compact');
+                this._closeTickerModal(panel);
+            }
+            return;
+        }
+        if (event.key !== 'Tab') return;
+        const focusable = [...panel.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), [href], [tabindex]:not([tabindex="-1"])')]
+            .filter(element => !element.hidden && element.getClientRects().length);
+        if (!focusable.length) { event.preventDefault(); panel.focus(); return; }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (!panel.contains(document.activeElement)) { event.preventDefault(); first.focus(); }
+        else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
+
+    _itemKey(item) {
+        return `${item?.type || ''}|${item?.title || ''}|${item?.url || ''}`;
+    }
+
+    async loadFavorites() {
+        try {
+            const storage = chrome?.storage?.local;
+            const result = storage ? await storage.get('tickerFavorites') : null;
+            this.favorites = Array.isArray(result?.tickerFavorites) ? result.tickerFavorites : [];
+        } catch { this.favorites = []; }
+    }
+
+    async _saveFavorites() {
+        try { await chrome?.storage?.local?.set({ tickerFavorites: this.favorites }); } catch {}
+    }
+
+    async toggleFavorite(item) {
+        const key = this._itemKey(item);
+        const index = this.favorites.indexOf(key);
+        if (index >= 0) this.favorites.splice(index, 1);
+        else this.favorites.unshift(key);
+        await this._saveFavorites();
+        return index < 0;
+    }
+
+    showDetail(item, itemIndex = this.currentIndex) {
+        if (!item) return;
+        this.currentIndex = Number.isFinite(itemIndex) ? itemIndex : this.currentIndex;
+        this.renderCurrent();
+        this._setProductPage('detail-favorite');
+        let panel = document.getElementById('ticker-v5-detail');
+        if (!panel) {
+            panel = document.createElement('section');
+            panel.id = 'ticker-v5-detail';
+            panel.className = 'ticker-v5-detail';
+            panel.setAttribute('role', 'dialog');
+            panel.setAttribute('aria-modal', 'true');
+            panel.setAttribute('aria-label', '热榜详情');
+            panel.setAttribute('aria-hidden', 'true');
+            panel.tabIndex = -1;
+            panel.inert = true;
+            document.body.appendChild(panel);
+        }
+        const previousFocusId = panel.contains(document.activeElement) ? document.activeElement.id : '';
+        const cfg = TICKER_SOURCE_REGISTRY[item.type] || { name: item.type || '未知来源', icon: item.icon || '📰' };
+        const favorite = this.favorites.includes(this._itemKey(item));
+        panel.innerHTML = `<header><div><i class="fas fa-fire"></i><strong>热榜详情</strong><span>${this.currentIndex + 1} / ${this.tickerItems.length}</span></div><button id="ticker-detail-close" aria-label="关闭热榜详情"><i class="fas fa-times"></i></button></header><div class="ticker-v5-detail-layout"><article><div class="ticker-v5-detail-meta"><span>${cfg.icon} ${this.escapeHtml(cfg.name)}</span><span>${this.escapeHtml(item.metric || '热榜条目')}</span></div><h1>${this.escapeHtml(item.title)}</h1><p>${this.escapeHtml(item.desc || '当前数据源没有提供摘要，可通过明确点击“打开原文”查看完整内容。')}</p><div class="ticker-v5-detail-actions"><button class="primary" id="ticker-detail-open" ${item.url ? '' : 'disabled'}><i class="fas fa-external-link-alt"></i> 打开原文</button><button id="ticker-detail-favorite" class="${favorite ? 'active' : ''}" aria-pressed="${favorite}"><i class="${favorite ? 'fas' : 'far'} fa-heart"></i> ${favorite ? '已收藏' : '收藏'}</button><button id="ticker-detail-task"><i class="fas fa-check-square"></i> 转为任务</button></div><small>外部网址不会在打开详情时自动请求，只有点击“打开原文”才会跳转。</small></article><aside><h3>来源信息</h3><dl><div><dt>来源</dt><dd>${this.escapeHtml(cfg.name)}</dd></div><div><dt>分类</dt><dd>${this.escapeHtml(TICKER_SOURCE_CATEGORIES[cfg.category] || cfg.category || '综合')}</dd></div><div><dt>热度</dt><dd>${this.escapeHtml(item.metric || '未提供')}</dd></div></dl><h3>同源推荐</h3>${this.tickerItems.filter(v => v !== item && v.type === item.type).slice(0, 3).map(v => `<button data-ticker-related="${this.escapeHtml(this._itemKey(v))}">${this.escapeHtml(v.title)}</button>`).join('') || '<p>暂无同源条目</p>'}</aside></div>`;
+        panel.classList.add('visible');
+        this._openTickerModal(panel, previousFocusId ? `#${previousFocusId}` : '#ticker-detail-open');
+        panel.querySelector('#ticker-detail-close')?.addEventListener('click', () => { panel.classList.remove('visible'); this._setProductPage('compact'); this._closeTickerModal(panel); });
+        panel.querySelector('#ticker-detail-open')?.addEventListener('click', () => item.url && window.open(item.url, '_blank', 'noopener'));
+        panel.querySelector('#ticker-detail-favorite')?.addEventListener('click', async () => { await this.toggleFavorite(item); this.showDetail(item, this.currentIndex); });
+        panel.querySelector('#ticker-detail-task')?.addEventListener('click', () => this.saveCurrentAsTask());
+        panel.querySelectorAll('[data-ticker-related]').forEach(btn => btn.addEventListener('click', () => {
+            const index = this.tickerItems.findIndex(candidate => this._itemKey(candidate) === btn.dataset.tickerRelated);
+            if (index >= 0) this.showDetail(this.tickerItems[index], index);
+        }));
+    }
+
+    showLoadingError(error) {
+        this.lastError = error?.message || String(error || '数据源暂时不可用');
+        this._setProductPage('loading-error');
+        let panel = document.getElementById('ticker-v5-error');
+        if (!panel) {
+            panel = document.createElement('section');
+            panel.id = 'ticker-v5-error';
+            panel.className = 'ticker-v5-error';
+            panel.setAttribute('role', 'dialog');
+            panel.setAttribute('aria-modal', 'true');
+            panel.setAttribute('aria-label', '热榜加载恢复');
+            panel.setAttribute('aria-hidden', 'true');
+            panel.tabIndex = -1;
+            panel.inert = true;
+            document.body.appendChild(panel);
+        }
+        const enabled = (this.enabledSources || []).slice(0, 6).map(key => TICKER_SOURCE_REGISTRY[key]).filter(Boolean);
+        panel.innerHTML = `<div class="ticker-v5-error-icon"><i class="fas fa-cloud-bolt"></i></div><span>LOAD RECOVERY</span><h2>热榜暂时没有更新</h2><p>${this.escapeHtml(this.lastError)}</p><div class="ticker-v5-error-sources">${enabled.map(source => `<div><b>${source.icon}</b><span>${this.escapeHtml(source.name)}</span><small>等待重试</small></div>`).join('')}</div><div><button class="primary" id="ticker-error-retry"><i class="fas fa-sync-alt"></i> 重新加载</button><button id="ticker-error-cache"><i class="fas fa-clock-rotate-left"></i> 保留当前内容</button></div><small>已收藏条目和关键词规则仍保存在本地。</small>`;
+        panel.classList.add('visible');
+        this._openTickerModal(panel, '#ticker-error-retry');
+        panel.querySelector('#ticker-error-retry')?.addEventListener('click', () => this.refreshData());
+        panel.querySelector('#ticker-error-cache')?.addEventListener('click', () => this.closeLoadingError());
+    }
+
+    closeLoadingError() {
+        const panel = document.getElementById('ticker-v5-error');
+        panel?.classList.remove('visible');
+        this._closeTickerModal(panel);
+        this._setProductPage('compact');
+    }
+
     escapeHtml(str) {
         const div = document.createElement('div');
         div.textContent = str;
@@ -1813,6 +2015,9 @@ class TechTicker {
         if (panel) {
             panel.classList.toggle('open');
             this._expandPanelVisible = panel.classList.contains('open');
+            this._setProductPage(this._expandPanelVisible ? 'expanded' : 'compact');
+            if (this._expandPanelVisible) this._openTickerModal(panel, '#tep-search-input');
+            else this._closeTickerModal(panel);
             return;
         }
         this._createExpandPanel();
@@ -1822,6 +2027,12 @@ class TechTicker {
         const panel = document.createElement('div');
         panel.id = 'ticker-expand-panel';
         panel.className = 'ticker-expand-panel';
+        panel.setAttribute('role', 'dialog');
+        panel.setAttribute('aria-modal', 'true');
+        panel.setAttribute('aria-label', '全部热榜');
+        panel.setAttribute('aria-hidden', 'true');
+        panel.tabIndex = -1;
+        panel.inert = true;
 
         this._expandActiveFilter = 'all';
         this._expandActiveView = this._savedExpandView || 'table';
@@ -1838,9 +2049,9 @@ class TechTicker {
                 </div>
                 <div class="tep-header-center">
                     <div class="tep-view-switcher" id="tep-view-switcher">
-                        <button class="tep-view-btn${this._expandActiveView==='table'?' active':''}" data-view="table"><i class="fas fa-table-list"></i> 表格</button>
-                        <button class="tep-view-btn${this._expandActiveView==='bento'?' active':''}" data-view="bento"><i class="fas fa-border-all"></i> 精选</button>
-                        <button class="tep-view-btn${this._expandActiveView==='insight'?' active':''}" data-view="insight"><i class="fas fa-sparkles"></i> AI 洞察</button>
+                        <button class="tep-view-btn${this._expandActiveView==='table'?' active':''}" data-view="table" aria-pressed="${this._expandActiveView==='table'}"><i class="fas fa-table-list"></i> 表格</button>
+                        <button class="tep-view-btn${this._expandActiveView==='bento'?' active':''}" data-view="bento" aria-pressed="${this._expandActiveView==='bento'}"><i class="fas fa-border-all"></i> 精选</button>
+                        <button class="tep-view-btn${this._expandActiveView==='insight'?' active':''}" data-view="insight" aria-pressed="${this._expandActiveView==='insight'}"><i class="fas fa-sparkles"></i> AI 洞察</button>
                     </div>
                 </div>
                 <div class="tep-header-right">
@@ -1848,7 +2059,7 @@ class TechTicker {
                         <i class="fas fa-search"></i>
                         <input type="text" placeholder="搜索..." id="tep-search-input">
                     </div>
-                    <button class="tep-close" id="tep-close"><i class="fas fa-times"></i></button>
+                    <button class="tep-close" id="tep-close" aria-label="关闭全部热榜"><i class="fas fa-times"></i></button>
                 </div>
             </div>
             <div class="tep-filter-bar" id="tep-filter-bar"></div>
@@ -1862,6 +2073,8 @@ class TechTicker {
         document.body.appendChild(panel);
         requestAnimationFrame(() => panel.classList.add('open'));
         this._expandPanelVisible = true;
+        this._setProductPage('expanded');
+        this._openTickerModal(panel, '#tep-search-input');
 
         this._renderExpandFilterBar(panel);
         this._renderExpandCurrentView(panel);
@@ -1869,12 +2082,15 @@ class TechTicker {
         panel.querySelector('#tep-close').addEventListener('click', () => {
             panel.classList.remove('open');
             this._expandPanelVisible = false;
+            this._setProductPage('compact');
+            this._closeTickerModal(panel);
         });
 
         panel.querySelectorAll('.tep-view-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                panel.querySelectorAll('.tep-view-btn').forEach(b => b.classList.remove('active'));
+                panel.querySelectorAll('.tep-view-btn').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-pressed', 'false'); });
                 btn.classList.add('active');
+                btn.setAttribute('aria-pressed', 'true');
                 this._expandActiveView = btn.dataset.view;
                 this._saveExpandViewPref(this._expandActiveView);
                 panel.querySelectorAll('.tep-view-pane').forEach(p => p.classList.add('tep-hidden'));
@@ -1892,6 +2108,8 @@ class TechTicker {
             if (e.key === 'Escape' && this._expandPanelVisible) {
                 panel.classList.remove('open');
                 this._expandPanelVisible = false;
+                this._setProductPage('compact');
+                this._closeTickerModal(panel);
             }
         });
 
@@ -1902,15 +2120,16 @@ class TechTicker {
         const bar = panel.querySelector('#tep-filter-bar');
         const groups = {};
         this.tickerItems.forEach(d => { groups[d.type] = (groups[d.type]||0)+1; });
-        let h = `<button class="tep-filter-chip active" data-filter="all"><i class="fas fa-globe"></i> 全部</button>`;
+        let h = `<button class="tep-filter-chip active" data-filter="all" aria-pressed="true"><i class="fas fa-globe"></i> 全部</button>`;
         for (const [k, c] of Object.entries(groups)) {
             const cfg = TICKER_SOURCE_REGISTRY[k];
-            h += `<button class="tep-filter-chip" data-filter="${k}">${cfg?.icon||''} ${cfg?.name||k} <span class="tep-chip-num">${c}</span></button>`;
+            h += `<button class="tep-filter-chip" data-filter="${k}" aria-pressed="false">${cfg?.icon||''} ${cfg?.name||k} <span class="tep-chip-num">${c}</span></button>`;
         }
         bar.innerHTML = h;
         bar.querySelectorAll('.tep-filter-chip').forEach(btn => btn.addEventListener('click', () => {
-            bar.querySelectorAll('.tep-filter-chip').forEach(b => b.classList.remove('active'));
+            bar.querySelectorAll('.tep-filter-chip').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-pressed', 'false'); });
             btn.classList.add('active');
+            btn.setAttribute('aria-pressed', 'true');
             this._expandActiveFilter = btn.dataset.filter;
             this._renderExpandCurrentView(panel);
         }));

@@ -221,6 +221,7 @@ body {
     min-width: 120px;
 }
 
+.filter-category-combobox-wrap.category-combobox,
 .filter-category-combobox-wrap .category-combobox {
     position: relative;
     width: 100%;
@@ -364,6 +365,13 @@ body {
     padding-top: 8px;
     border-radius: 6px;
     transition: background 0.12s;
+    width: 100%;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    background: transparent;
+    font: inherit;
+    text-align: left;
 }
 
 .category-combobox-manage:hover {
@@ -559,6 +567,11 @@ body {
 
 /* 状态图标 */
 .status-icon {
+    display: inline-grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
     cursor: pointer;
     font-size: 1.1rem;
     transition: all var(--transition);
@@ -566,6 +579,12 @@ body {
 
 .status-icon:hover {
     transform: scale(1.2);
+}
+
+.status-icon:focus-visible,
+.action-btn-sm:focus-visible {
+    outline: 2px solid #c4b5fd;
+    outline-offset: 2px;
 }
 
 .status-icon.completed { color: var(--accent-green); }

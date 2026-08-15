@@ -69,8 +69,18 @@
   globalThis.chrome.storage.local = globalThis.chrome.storage.local || storageArea;
   globalThis.chrome.storage.sync = globalThis.chrome.storage.sync || storageArea;
   globalThis.chrome.storage.session = globalThis.chrome.storage.session || storageArea;
+  globalThis.chrome.storage.onChanged = globalThis.chrome.storage.onChanged || {
+    addListener: () => {},
+    removeListener: () => {},
+    hasListener: () => false,
+  };
 
   globalThis.chrome.runtime = globalThis.chrome.runtime || {};
+  globalThis.chrome.runtime.lastError = globalThis.chrome.runtime.lastError || null;
+  globalThis.chrome.runtime.getURL = globalThis.chrome.runtime.getURL ||
+    ((path = '') => new URL(path, globalThis.location?.href || 'http://localhost/').href);
+  globalThis.chrome.runtime.getManifest = globalThis.chrome.runtime.getManifest ||
+    (() => ({ name: '中国风景时钟（本地预览）', version: 'preview' }));
   globalThis.chrome.runtime.sendMessage =
     globalThis.chrome.runtime.sendMessage ||
     ((_msg, cb) => {
@@ -89,4 +99,3 @@
     create: async () => {},
   };
 })();
-

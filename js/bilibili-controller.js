@@ -35,11 +35,16 @@ class BilibiliController {
         this._commentsOpen = false;
         this._watchMemory = {};
         this._rcmdFreshIdx = 1;
+        this._returnFocus = null;
+        this._backgroundInertSiblings = [];
+        this._handleViewportResize = () => this._syncViewportHeight();
     }
 
     async init() {
         this._injectDOM();
         this._bindEvents();
+        this._syncViewportHeight();
+        window.addEventListener('resize', this._handleViewportResize, { passive: true });
         await this._restorePlayerPrefs();
         await this._loadWatchMemory();
         try {
@@ -186,6 +191,7 @@ class BilibiliController {
         if (this._loading) return;
         this._currentTab = tab;
         this._saveLastTab(tab);
+        this._setProductPage(this._pageForTab(tab));
 
         if (tab === 'following') {
             this._loading = true;
@@ -821,6 +827,7 @@ class BilibiliController {
     async _doSearch(keyword) {
         if (!keyword.trim()) return;
         this._currentTab = '_search';
+        this._setProductPage('search');
         this._showListLoading();
         try {
             const resp = await this._biliApi('/x/web-interface/wbi/search/all/v2', { keyword, page: 1 });
@@ -858,31 +865,34 @@ class BilibiliController {
         const el = document.createElement('div');
         el.className = 'bili-panel';
         el.id = 'bili-panel';
+        el.setAttribute('role', 'dialog');
+        el.setAttribute('aria-modal', 'true');
+        el.setAttribute('aria-label', '哔哩哔哩工作台');
+        el.setAttribute('aria-hidden', 'true');
+        el.inert = true;
         el.innerHTML = `
             <div class="bili-topbar">
                 <div class="bili-logo"><i class="fab fa-bilibili"></i><span>哔哩哔哩</span></div>
                 <div class="bili-search">
-                    <input type="text" placeholder="搜索视频、课程、UP主..." id="bili-search-input" maxlength="80">
-                    <button id="bili-search-btn"><i class="fas fa-search"></i></button>
+                    <input type="text" placeholder="搜索视频、课程、UP主..." id="bili-search-input" maxlength="80" aria-label="搜索视频、课程、UP主">
+                    <button type="button" id="bili-search-btn" aria-label="搜索"><i class="fas fa-search"></i></button>
                 </div>
-                <div class="bili-nav-pills">
-                    <button class="bili-pill active" data-tab="recommend"><i class="fas fa-thumbs-up"></i>推荐</button>
-                    <button class="bili-pill" data-tab="popular"><i class="fas fa-fire"></i>热门</button>
-                    <button class="bili-pill" data-tab="history"><i class="fas fa-history"></i>历史</button>
-                    <button class="bili-pill" data-tab="watchlater"><i class="fas fa-clock"></i>稍后看</button>
-                    <button class="bili-pill" data-tab="favorite"><i class="fas fa-star"></i>收藏</button>
-                    <button class="bili-pill" data-tab="ranking"><i class="fas fa-trophy"></i>排行</button>
-                    <button class="bili-pill" data-tab="course"><i class="fas fa-graduation-cap"></i>课程</button>
-                    <button class="bili-pill" data-tab="following"><i class="fas fa-users"></i>关注</button>
+                <div class="bili-nav-pills" aria-label="哔哩哔哩内容视图">
+                    <button type="button" class="bili-pill active" data-tab="recommend" aria-pressed="true"><i class="fas fa-thumbs-up"></i>推荐</button>
+                    <button type="button" class="bili-pill" data-tab="popular" aria-pressed="false"><i class="fas fa-fire"></i>热门</button>
+                    <button type="button" class="bili-pill" data-tab="history" aria-pressed="false"><i class="fas fa-history"></i>历史</button>
+                    <button type="button" class="bili-pill" data-tab="watchlater" aria-pressed="false"><i class="fas fa-clock"></i>稍后看</button>
+                    <button type="button" class="bili-pill" data-tab="favorite" aria-pressed="false"><i class="fas fa-star"></i>收藏</button>
+                    <button type="button" class="bili-pill" data-tab="ranking" aria-pressed="false"><i class="fas fa-trophy"></i>排行</button>
+                    <button type="button" class="bili-pill" data-tab="course" aria-pressed="false"><i class="fas fa-graduation-cap"></i>课程</button>
+                    <button type="button" class="bili-pill" data-tab="following" aria-pressed="false"><i class="fas fa-users"></i>关注</button>
                 </div>
-                <button class="bili-sidebar-toggle open" id="bili-sidebar-toggle" title="展开/收起列表"><i class="fas fa-columns"></i></button>
-                <button class="bili-close-btn" id="bili-close-btn" title="关闭"><i class="fas fa-times"></i></button>
+                <button type="button" class="bili-sidebar-toggle open" id="bili-sidebar-toggle" title="展开/收起列表" aria-label="展开或收起列表" aria-pressed="true"><i class="fas fa-columns"></i></button>
+                <button type="button" class="bili-close-btn" id="bili-close-btn" title="关闭" aria-label="关闭哔哩哔哩工作台"><i class="fas fa-times"></i></button>
             </div>
             <div class="bili-main">
                 <div class="bili-player-area">
-                    <div class="bili-player-frame" id="bili-player-frame">
-                        <div class="bili-player-empty"><i class="fab fa-bilibili"></i><p>从右侧列表中选择一个视频开始播放</p></div>
-                    </div>
+                    <div class="bili-player-frame" id="bili-player-frame">${this._emptyPlayerMarkup()}</div>
                     <div class="bili-now-playing hidden" id="bili-now-playing">
                         <i class="fas fa-play-circle bili-np-icon"></i>
                         <span class="bili-np-label">正在播放</span>
@@ -905,6 +915,7 @@ class BilibiliController {
                         <div class="bili-ctrl-sep"></div>
                         <div class="bili-ctrl-group">
                             <span class="bili-ctrl-label"><i class="fas fa-film"></i>画质</span>
+                            <span class="bili-quality-status" id="bili-quality-status" aria-live="polite">正在检测</span>
                             <div class="bili-quality-btns" id="bili-quality-btns">
                                 <span class="bili-quality-hint">加载中...</span>
                             </div>
@@ -954,14 +965,14 @@ class BilibiliController {
                 </div>
                 <div class="bili-sidebar visible" id="bili-sidebar">
                     <div class="bili-stabs">
-                        <div class="bili-stab active" data-tab="recommend"><i class="fas fa-thumbs-up"></i>推荐</div>
-                        <div class="bili-stab" data-tab="popular"><i class="fas fa-fire"></i>热门</div>
-                        <div class="bili-stab" data-tab="history"><i class="fas fa-history"></i>历史</div>
-                        <div class="bili-stab" data-tab="watchlater"><i class="fas fa-clock"></i>稍后看</div>
-                        <div class="bili-stab" data-tab="favorite"><i class="fas fa-star"></i>收藏</div>
-                        <div class="bili-stab" data-tab="ranking"><i class="fas fa-trophy"></i>排行</div>
-                        <div class="bili-stab" data-tab="course"><i class="fas fa-graduation-cap"></i>课程</div>
-                        <div class="bili-stab" data-tab="following"><i class="fas fa-users"></i>关注</div>
+                        <div class="bili-stab active" data-tab="recommend" role="button" tabindex="0"><i class="fas fa-thumbs-up"></i>推荐</div>
+                        <div class="bili-stab" data-tab="popular" role="button" tabindex="0"><i class="fas fa-fire"></i>热门</div>
+                        <div class="bili-stab" data-tab="history" role="button" tabindex="0"><i class="fas fa-history"></i>历史</div>
+                        <div class="bili-stab" data-tab="watchlater" role="button" tabindex="0"><i class="fas fa-clock"></i>稍后看</div>
+                        <div class="bili-stab" data-tab="favorite" role="button" tabindex="0"><i class="fas fa-star"></i>收藏</div>
+                        <div class="bili-stab" data-tab="ranking" role="button" tabindex="0"><i class="fas fa-trophy"></i>排行</div>
+                        <div class="bili-stab" data-tab="course" role="button" tabindex="0"><i class="fas fa-graduation-cap"></i>课程</div>
+                        <div class="bili-stab" data-tab="following" role="button" tabindex="0"><i class="fas fa-users"></i>关注</div>
                     </div>
                     <div class="bili-list-wrap" id="bili-list-wrap">
                         <div class="bili-list" id="bili-list"></div>
@@ -982,6 +993,11 @@ class BilibiliController {
         });
         el.querySelectorAll('.bili-stab').forEach(stab => {
             stab.addEventListener('click', () => { this._syncTabs(stab.dataset.tab); this._loadTab(stab.dataset.tab); });
+            stab.addEventListener('keydown', event => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                stab.click();
+            });
         });
 
         el.querySelector('#bili-sidebar-toggle').addEventListener('click', () => this._toggleSidebar());
@@ -998,10 +1014,22 @@ class BilibiliController {
         searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') this._doSearch(searchInput.value); });
         el.querySelector('#bili-search-btn').addEventListener('click', () => this._doSearch(searchInput.value));
 
+        el.querySelector('#bili-player-frame').addEventListener('click', event => {
+            const action = event.target.closest('[data-bili-empty-tab]');
+            if (!action) return;
+            const tab = action.dataset.biliEmptyTab;
+            this._syncTabs(tab);
+            this._loadTab(tab);
+            this._el.querySelector(`.bili-stab[data-tab="${tab}"]`)?.focus({ preventScroll: true });
+        });
+
         el.addEventListener('click', (e) => {
             e.stopPropagation();
         });
-        el.addEventListener('keydown', e => { if (e.key === 'Escape') this.hide(); });
+        el.addEventListener('keydown', e => {
+            if (e.key === 'Escape') this.hide();
+            if (e.key === 'Tab') this._trapFocus(e);
+        });
 
         el.querySelector('#bili-act-like').addEventListener('click', () => this._onActionLike());
         el.querySelector('#bili-act-later').addEventListener('click', () => this._onActionAddLater());
@@ -1124,13 +1152,14 @@ class BilibiliController {
             if (this._pendingQuality === qn && this._currentQuality !== qn) {
                 this._pendingQuality = 0;
                 this._updateQualityUI();
-                if (qn >= 112) {
-                    this._showBiliToast(`画质切换失败，可能需要大会员权限`, 'warn');
-                } else if (qn >= 64) {
-                    this._showBiliToast(`画质切换失败，可能需要登录B站`, 'warn');
-                } else {
-                    this._showBiliToast(`画质切换失败`, 'warn');
-                }
+                const requestedLabel = this._safeQualityLabel(this._qualityDescriptions, qn);
+                const fallbackLabel = this._currentQuality
+                    ? this._safeQualityLabel(this._qualityDescriptions, this._currentQuality)
+                    : '播放器自动画质';
+                this._preferredQuality = this._currentQuality || 0;
+                this._savePlayerPrefs();
+                this._setQualityStatus(`未切换 · 保留 ${fallbackLabel}`, 'fallback');
+                this._showBiliToast(`未能切换到 ${requestedLabel}，已保留 ${fallbackLabel}`, 'warn');
             }
         }, 8000);
     }
@@ -1145,6 +1174,15 @@ class BilibiliController {
                 btn.classList.remove('pending');
             }
         });
+        const label = this._safeQualityLabel(this._qualityDescriptions, qn);
+        this._setQualityStatus(`正在切换到 ${label}`, 'pending');
+    }
+
+    _setQualityStatus(text, tone = '') {
+        const status = this._el?.querySelector('#bili-quality-status');
+        if (!status) return;
+        status.textContent = text;
+        status.dataset.tone = tone;
     }
 
     _showBiliToast(msg, type = 'info') {
@@ -1152,12 +1190,23 @@ class BilibiliController {
         if (!toast) {
             toast = document.createElement('div');
             toast.className = 'bili-toast';
+            toast.setAttribute('role', 'status');
+            toast.setAttribute('aria-live', 'polite');
+            toast.setAttribute('aria-hidden', 'true');
             this._el?.querySelector('.bili-player-area')?.appendChild(toast);
         }
+        clearTimeout(this._biliToastClearTimer);
         toast.textContent = msg;
+        toast.setAttribute('aria-hidden', 'false');
         toast.className = `bili-toast bili-toast-${type} bili-toast-show`;
         clearTimeout(this._biliToastTimer);
-        this._biliToastTimer = setTimeout(() => toast.classList.remove('bili-toast-show'), 3000);
+        this._biliToastTimer = setTimeout(() => {
+            toast.classList.remove('bili-toast-show');
+            toast.setAttribute('aria-hidden', 'true');
+            this._biliToastClearTimer = setTimeout(() => {
+                if (!toast.classList.contains('bili-toast-show')) toast.textContent = '';
+            }, 250);
+        }, 3000);
     }
 
     _updateQualityUI() {
@@ -1197,6 +1246,11 @@ class BilibiliController {
         if (oldQuality && current && oldQuality !== current && !this._pendingQuality) {
             const label = this._safeQualityLabel(descriptions, current);
             this._showBiliToast(`当前画质: ${label}`, 'info');
+        }
+
+        if (this._currentQuality > 0 && !this._pendingQuality) {
+            const currentLabel = this._safeQualityLabel(descriptions, this._currentQuality);
+            this._setQualityStatus(`当前 ${currentLabel}`);
         }
 
         const container = this._el.querySelector('#bili-quality-btns');
@@ -1538,14 +1592,20 @@ class BilibiliController {
     }
 
     _syncTabs(tab) {
-        this._el.querySelectorAll('.bili-pill').forEach(p => p.classList.toggle('active', p.dataset.tab === tab));
+        this._el.querySelectorAll('.bili-pill').forEach(p => {
+            const active = p.dataset.tab === tab;
+            p.classList.toggle('active', active);
+            p.setAttribute('aria-pressed', String(active));
+        });
         this._el.querySelectorAll('.bili-stab').forEach(s => s.classList.toggle('active', s.dataset.tab === tab));
     }
 
     _toggleSidebar() {
         this._sidebarOpen = !this._sidebarOpen;
         this._el.querySelector('#bili-sidebar').classList.toggle('visible', this._sidebarOpen);
-        this._el.querySelector('#bili-sidebar-toggle').classList.toggle('open', this._sidebarOpen);
+        const toggle = this._el.querySelector('#bili-sidebar-toggle');
+        toggle.classList.toggle('open', this._sidebarOpen);
+        toggle.setAttribute('aria-pressed', String(this._sidebarOpen));
     }
 
     // ===================== Render =====================
@@ -1557,9 +1617,11 @@ class BilibiliController {
 
     _showListError(tab, msg) {
         const needLogin = ['history', 'watchlater', 'favorite', 'course', 'following'].includes(tab) && !this._loggedIn;
+        this._setProductPage(needLogin ? 'login-error' : this._pageForTab(tab));
+        if (needLogin) this._renderLoginError(tab);
         this._el.querySelector('#bili-list').innerHTML = needLogin
             ? `<div class="bili-list-msg"><i class="fas fa-user-lock"></i> 请先在浏览器中<br>登录 bilibili.com<br><small>扩展自动共享浏览器登录状态</small></div>`
-            : `<div class="bili-list-msg"><i class="fas fa-exclamation-circle"></i> ${this._esc(msg)}</div>`;
+            : `<div class="bili-list-msg"><i class="fas fa-exclamation-circle"></i> ${this._esc(msg)}<br><small>请检查网络或登录状态，点击右上角刷新重试</small></div>`;
     }
 
     _renderList(tab, items) {
@@ -1570,6 +1632,8 @@ class BilibiliController {
         const listEl = this._el.querySelector('#bili-list');
         if (!items.length) {
             const needLogin = ['history', 'watchlater', 'favorite'].includes(tab) && !this._loggedIn;
+            this._setProductPage(needLogin ? 'login-error' : this._pageForTab(tab));
+            if (needLogin) this._renderLoginError(tab);
             listEl.innerHTML = needLogin
                 ? '<div class="bili-list-msg"><i class="fas fa-user-lock"></i> 请先在浏览器中<br>登录 bilibili.com<br><small>扩展自动共享浏览器登录状态</small></div>'
                 : '<div class="bili-list-msg"><i class="fas fa-inbox"></i> 暂无内容</div>';
@@ -1610,6 +1674,49 @@ class BilibiliController {
         }
     }
 
+    _renderLoginError(tab) {
+        const frame = this._el.querySelector('#bili-player-frame');
+        if (!frame) return;
+        frame.innerHTML = `<div class="bili-v5-login-error">
+            <div class="bili-v5-login-icon"><i class="fas fa-user-lock"></i></div>
+            <span>ACCOUNT RECOVERY</span>
+            <h2>登录状态已失效</h2>
+            <p>历史、收藏和课程依赖浏览器里的 B 站登录状态。重新登录后可继续使用，本地观看进度不会被清除。</p>
+            <div class="bili-v5-login-steps">
+                <div><strong>1</strong><span>打开 bilibili.com 并完成登录</span></div>
+                <div><strong>2</strong><span>返回扩展重新检测状态</span></div>
+                <div><strong>3</strong><span>继续当前${tab === 'course' ? '课程' : tab === 'favorite' ? '收藏' : '列表'}</span></div>
+            </div>
+            <div class="bili-v5-login-actions">
+                <button type="button" data-bili-login="open"><i class="fab fa-bilibili"></i> 打开登录页</button>
+                <button type="button" data-bili-login="retry"><i class="fas fa-redo"></i> 重新检测</button>
+            </div>
+            <small>扩展只读取浏览器登录态，不会保存你的密码。</small>
+        </div>`;
+        this._el.querySelector('#bili-player-info')?.classList.add('hidden');
+        this._el.querySelector('#bili-ctrl-bar')?.classList.add('hidden');
+        frame.querySelector('[data-bili-login="open"]')?.addEventListener('click', () => window.open('https://www.bilibili.com', '_blank', 'noopener'));
+        frame.querySelector('[data-bili-login="retry"]')?.addEventListener('click', async event => {
+            const button = event.currentTarget;
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 检测中';
+            const info = await this._checkLogin();
+            this._loggedIn = info.loggedIn;
+            this._userMid = info.mid;
+            if (info.loggedIn) {
+                frame.innerHTML = this._emptyPlayerMarkup();
+                this._currentVideo = null;
+                this._el.querySelector('#bili-now-playing')?.classList.add('hidden');
+                this._setProductPage(this._pageForTab(tab));
+                await this._loadTab(tab);
+                this._el.querySelector(`.bili-stab[data-tab="${tab}"]`)?.focus({ preventScroll: true });
+            } else {
+                button.disabled = false;
+                button.innerHTML = '<i class="fas fa-redo"></i> 仍未登录，再试一次';
+            }
+        });
+    }
+
     _renderVideoItem(v, idx, tab, showRemoveBtn) {
         const isPlaying = this._currentVideo?.bvid === v.bvid;
         const rankHtml = v.rankNum ? `<span class="bili-item-rank">${v.rankNum}</span>` : '';
@@ -1635,7 +1742,7 @@ class BilibiliController {
         } else {
             metricHtml = '';
         }
-        return `<div class="bili-item${isPlaying ? ' playing' : ''}" data-idx="${idx}">
+        return `<div class="bili-item${isPlaying ? ' playing' : ''}" data-idx="${idx}" role="button" tabindex="0" aria-label="播放 ${this._esc(v.title)}">
             ${rankHtml}
             <img class="bili-item-cover" src="${this._esc(v.cover)}" alt="" loading="lazy">
             <span class="bili-item-dur">${this._esc(v.duration)}</span>
@@ -1656,7 +1763,7 @@ class BilibiliController {
 
     _renderCourseItem(v, idx) {
         const badgeCls = v.badge === '免费' ? 'free' : (v.badge === '已购' ? 'paid' : 'trial');
-        return `<div class="bili-item" data-idx="${idx}">
+        return `<div class="bili-item" data-idx="${idx}" role="button" tabindex="0" aria-label="播放课程 ${this._esc(v.title)}">
             <img class="bili-item-cover" src="${this._esc(v.cover)}" alt="" loading="lazy">
             <span class="bili-item-badge ${badgeCls}">${this._esc(v.badge)}</span>
             <div class="bili-item-info">
@@ -1672,13 +1779,19 @@ class BilibiliController {
 
     _bindListItemEvents(listEl, items) {
         listEl.querySelectorAll('.bili-item').forEach(itemEl => {
-            itemEl.addEventListener('click', (e) => {
+            const activate = (e) => {
                 if (e.target.closest('.bili-item-rm-btn')) return;
                 const idx = parseInt(itemEl.dataset.idx);
                 const item = items[idx];
                 if (item) this._playItem(item);
                 listEl.querySelectorAll('.bili-item').forEach(el => el.classList.remove('playing'));
                 itemEl.classList.add('playing');
+            };
+            itemEl.addEventListener('click', activate);
+            itemEl.addEventListener('keydown', event => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                activate(event);
             });
         });
 
@@ -1722,6 +1835,7 @@ class BilibiliController {
         }
 
         this._currentVideo = item;
+        this._setProductPage('player');
         this._pendingSeek = item.progressSec > 0 ? item.progressSec : null;
         this._seekRetries = 0;
 
@@ -1798,6 +1912,7 @@ class BilibiliController {
         if (item.type !== 'course') {
             ctrlBar?.classList.remove('hidden');
             this._el.querySelector('#bili-quality-btns').innerHTML = '<span class="bili-quality-hint">加载中...</span>';
+            this._setQualityStatus('正在检测');
             this._qualityList = [];
             this._currentQuality = 0;
             this._pendingQuality = 0;
@@ -1818,9 +1933,23 @@ class BilibiliController {
 
     show() {
         if (!this._el) return;
+        if (!this._panelOpen) this._returnFocus = document.activeElement;
         this._panelOpen = true;
+        this._syncViewportHeight();
+        this._setBackgroundInert(true);
+        this._el.inert = false;
+        this._el.setAttribute('aria-hidden', 'false');
         this._el.classList.add('visible');
         document.body.classList.add('bili-panel-open');
+        this._setProductPage(this._currentVideo ? 'player' : this._pageForTab(this._currentTab));
+        const searchInput = this._el.querySelector('#bili-search-input');
+        searchInput?.focus({ preventScroll: true });
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                if (!this._panelOpen) return;
+                searchInput?.focus({ preventScroll: true });
+            }, 80);
+        });
     }
 
     hide() {
@@ -1831,7 +1960,40 @@ class BilibiliController {
         this._clearBiliCookieRules();
         this._panelOpen = false;
         this._el.classList.remove('visible');
+        this._el.setAttribute('aria-hidden', 'true');
+        this._el.inert = true;
+        this._setBackgroundInert(false);
         document.body.classList.remove('bili-panel-open');
+        window.ProductUIV5?.setShellPage?.('home');
+        this._returnFocus?.focus?.({ preventScroll: true });
+        this._returnFocus = null;
+    }
+
+    _setBackgroundInert(active) {
+        if (active) {
+            if (this._backgroundInertSiblings.length) return;
+            this._backgroundInertSiblings = [...document.body.children]
+                .filter(child => child !== this._el && !child.inert);
+            this._backgroundInertSiblings.forEach(child => { child.inert = true; });
+            return;
+        }
+        this._backgroundInertSiblings.forEach(child => { child.inert = false; });
+        this._backgroundInertSiblings = [];
+    }
+
+    _trapFocus(event) {
+        const focusable = [...this._el.querySelectorAll('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"]), iframe')]
+            .filter(element => !element.hidden && element.getAttribute('aria-hidden') !== 'true');
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+        }
     }
 
     _destroyAllIframes() {
@@ -1840,7 +2002,7 @@ class BilibiliController {
             iframe.remove();
         });
         const frame = this._el.querySelector('#bili-player-frame');
-        frame.innerHTML = '<div class="bili-player-empty"><i class="fab fa-bilibili"></i><p>从右侧列表中选择一个视频开始播放</p></div>';
+        frame.innerHTML = this._emptyPlayerMarkup();
         this._el.querySelector('#bili-player-info').classList.add('hidden');
         this._el.querySelector('#bili-ctrl-bar')?.classList.add('hidden');
         this._el.querySelector('#bili-now-playing')?.classList.add('hidden');
@@ -1851,6 +2013,39 @@ class BilibiliController {
 
     toggle() { this._panelOpen ? this.hide() : this.show(); }
     isOpen() { return this._panelOpen; }
+
+    _syncViewportHeight() {
+        if (!this._el) return;
+        const height = Math.max(480, Math.round(window.visualViewport?.height || window.innerHeight || 720));
+        this._el.style.setProperty('--bili-viewport-height', `${height}px`);
+        // Chrome 在关闭停靠的 DevTools 后偶发保留旧的 flex 高度；显式读取布局可让侧栏同步到新视口。
+        void this._el.offsetHeight;
+    }
+
+    _emptyPlayerMarkup() {
+        return `<div class="bili-player-empty">
+            <div class="bili-empty-mark"><i class="fab fa-bilibili"></i></div>
+            <strong>挑一个今天想看的内容</strong>
+            <p>右侧列表会保留你的登录态、收藏与观看记录</p>
+            <div class="bili-empty-actions" aria-label="快速选择内容">
+                <button type="button" data-bili-empty-tab="recommend"><i class="fas fa-thumbs-up"></i> 为你推荐</button>
+                <button type="button" data-bili-empty-tab="history"><i class="fas fa-history"></i> 继续观看</button>
+                <button type="button" data-bili-empty-tab="course"><i class="fas fa-graduation-cap"></i> 我的课程</button>
+            </div>
+        </div>`;
+    }
+
+    _setProductPage(page) {
+        window.ProductUIV5?.setBusinessPage?.('bilibili', page);
+    }
+
+    _pageForTab(tab) {
+        if (tab === '_search') return 'search';
+        if (tab === 'course') return 'course';
+        if (tab === 'favorite' || tab === 'watchlater') return 'library';
+        if (tab === 'history' || tab === 'ranking') return 'history-ranking';
+        return 'recommend';
+    }
 
     // ===================== Utils =====================
 

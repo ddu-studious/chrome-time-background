@@ -22,6 +22,14 @@ class KnowledgeWall {
         this._timelineWeekOffset = 0;
         this._aiSummaryLoading = false;
         this._cardDensity = 'standard';
+        this._detailCardId = null;
+        this._returnFocus = null;
+        this._detailReturnFocus = null;
+        this._editorReturnFocus = null;
+        this._detailClose = null;
+        this._editorClose = null;
+        this._passwordClose = null;
+        this._backgroundInertSiblings = [];
 
         this.typeConfig = {
             note:    { label: '笔记',   icon: 'fas fa-sticky-note',    color: 'rgba(255,200,80,0.8)',  bg: 'rgba(255,200,80,0.1)' },
@@ -144,54 +152,59 @@ class KnowledgeWall {
         const overlay = document.createElement('div');
         overlay.className = 'kw-overlay';
         overlay.id = 'kw-overlay';
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
+        overlay.setAttribute('aria-labelledby', 'kw-dialog-title');
+        overlay.setAttribute('aria-hidden', 'true');
+        overlay.inert = true;
         overlay.innerHTML = `
-            <div class="kw-panel">
+            <div class="kw-panel" tabindex="-1">
                 <div class="kw-header">
                     <div class="kw-header-top">
-                        <h2><i class="fas fa-brain"></i> 常用信息</h2>
+                        <h2 id="kw-dialog-title"><i class="fas fa-brain"></i> 常用信息</h2>
                         <div class="kw-search">
                             <i class="fas fa-search"></i>
-                            <input type="text" id="kw-search-input" placeholder="搜索信息..." autocomplete="off">
+                            <input type="text" id="kw-search-input" placeholder="搜索信息..." autocomplete="off" aria-label="搜索常用信息">
                         </div>
                         <div class="kw-actions">
-                            <button id="kw-add-btn" title="添加卡片"><i class="fas fa-plus"></i></button>
-                            <button id="kw-export-btn" title="导出数据"><i class="fas fa-file-export"></i></button>
-                            <button id="kw-import-btn" title="导入数据"><i class="fas fa-file-import"></i></button>
+                            <button id="kw-add-btn" type="button" title="添加卡片" aria-label="添加卡片"><i class="fas fa-plus"></i></button>
+                            <button id="kw-export-btn" type="button" title="导出数据" aria-label="导出数据"><i class="fas fa-file-export"></i></button>
+                            <button id="kw-import-btn" type="button" title="导入数据" aria-label="导入数据"><i class="fas fa-file-import"></i></button>
                             <input type="file" id="kw-import-file" accept=".json" hidden>
                         </div>
-                        <button class="kw-close" id="kw-close"><i class="fas fa-times"></i></button>
+                        <button class="kw-close" id="kw-close" type="button" aria-label="关闭常用信息"><i class="fas fa-times"></i></button>
                     </div>
-                    <div class="kw-view-tabs" id="kw-view-tabs">
-                        <button class="kw-view-tab active" data-view="cards">
+                    <div class="kw-view-tabs" id="kw-view-tabs" role="tablist" aria-label="常用信息视图">
+                        <button class="kw-view-tab active" data-view="cards" type="button" role="tab" aria-selected="true" aria-controls="kw-view-cards">
                             <i class="fas fa-th-large"></i> 卡片墙
                             <span class="kw-tab-badge" id="kw-cards-count"></span>
                         </button>
-                        <button class="kw-view-tab" data-view="timeline">
+                        <button class="kw-view-tab" data-view="timeline" type="button" role="tab" aria-selected="false" aria-controls="kw-view-timeline">
                             <i class="fas fa-stream"></i> 时间线
                         </button>
-                        <button class="kw-view-tab" data-view="dashboard">
+                        <button class="kw-view-tab" data-view="dashboard" type="button" role="tab" aria-selected="false" aria-controls="kw-view-dashboard">
                             <i class="fas fa-chart-pie"></i> 仪表盘
                         </button>
                     </div>
-                    <div class="kw-filter-bar" id="kw-filter-bar">
-                        <button class="kw-filter-btn active" data-type="all">全部</button>
-                        <button class="kw-filter-btn" data-type="note">笔记</button>
-                        <button class="kw-filter-btn" data-type="link">链接</button>
-                        <button class="kw-filter-btn" data-type="code">代码</button>
-                        <button class="kw-filter-btn" data-type="contact">联系人</button>
-                        <button class="kw-filter-btn" data-type="weekly">周记</button>
+                    <div class="kw-filter-bar" id="kw-filter-bar" role="group" aria-label="卡片类型筛选">
+                        <button class="kw-filter-btn active" data-type="all" type="button" aria-pressed="true">全部</button>
+                        <button class="kw-filter-btn" data-type="note" type="button" aria-pressed="false">笔记</button>
+                        <button class="kw-filter-btn" data-type="link" type="button" aria-pressed="false">链接</button>
+                        <button class="kw-filter-btn" data-type="code" type="button" aria-pressed="false">代码</button>
+                        <button class="kw-filter-btn" data-type="contact" type="button" aria-pressed="false">联系人</button>
+                        <button class="kw-filter-btn" data-type="weekly" type="button" aria-pressed="false">周记</button>
                         <span class="kw-filter-spacer"></span>
-                        <div class="kw-density-toggle" id="kw-density-toggle" title="视图密度">
-                            <button class="kw-density-btn" data-density="compact" title="紧凑"><i class="fas fa-th"></i></button>
-                            <button class="kw-density-btn active" data-density="standard" title="标准"><i class="fas fa-th-large"></i></button>
-                            <button class="kw-density-btn" data-density="loose" title="宽松"><i class="fas fa-square"></i></button>
+                        <div class="kw-density-toggle" id="kw-density-toggle" title="视图密度" role="group" aria-label="卡片视图密度">
+                            <button class="kw-density-btn" data-density="compact" type="button" title="紧凑" aria-label="紧凑密度" aria-pressed="false"><i class="fas fa-th"></i></button>
+                            <button class="kw-density-btn active" data-density="standard" type="button" title="标准" aria-label="标准密度" aria-pressed="true"><i class="fas fa-th-large"></i></button>
+                            <button class="kw-density-btn" data-density="loose" type="button" title="宽松" aria-label="宽松密度" aria-pressed="false"><i class="fas fa-square"></i></button>
                         </div>
                     </div>
                 </div>
                 <div class="kw-tag-cloud" id="kw-tag-cloud"></div>
                 <div class="kw-content" id="kw-content">
                     <!-- 卡片墙视图 -->
-                    <div class="kw-view-panel active" id="kw-view-cards">
+                    <div class="kw-view-panel active" id="kw-view-cards" role="tabpanel" aria-label="卡片墙">
                         <div class="kw-masonry" id="kw-masonry"></div>
                         <div class="kw-empty hidden" id="kw-empty">
                             <i class="fas fa-folder-open"></i>
@@ -200,11 +213,11 @@ class KnowledgeWall {
                         </div>
                     </div>
                     <!-- 时间线视图 -->
-                    <div class="kw-view-panel" id="kw-view-timeline">
+                    <div class="kw-view-panel" id="kw-view-timeline" role="tabpanel" aria-label="时间线">
                         <div class="kw-tl-container" id="kw-tl-container"></div>
                     </div>
                     <!-- 仪表盘视图 -->
-                    <div class="kw-view-panel" id="kw-view-dashboard">
+                    <div class="kw-view-panel" id="kw-view-dashboard" role="tabpanel" aria-label="仪表盘">
                         <div class="kw-db-container" id="kw-db-container"></div>
                     </div>
                 </div>
@@ -234,8 +247,12 @@ class KnowledgeWall {
         viewTabs?.addEventListener('click', (e) => {
             const tab = e.target.closest('.kw-view-tab');
             if (!tab) return;
-            viewTabs.querySelectorAll('.kw-view-tab').forEach(t => t.classList.remove('active'));
+            viewTabs.querySelectorAll('.kw-view-tab').forEach(t => {
+                t.classList.remove('active');
+                t.setAttribute('aria-selected', 'false');
+            });
             tab.classList.add('active');
+            tab.setAttribute('aria-selected', 'true');
             const view = tab.dataset.view;
             this.switchView(view);
         });
@@ -247,6 +264,7 @@ class KnowledgeWall {
                 this.searchQuery = searchInput.value.trim().toLowerCase();
                 this.applyFilter();
                 this.render();
+                this._setProductPage(this.searchQuery ? 'search-filter' : 'card-wall');
                 if (this.searchQuery.length >= 2) {
                     this._showCrossModuleResults(this.searchQuery);
                 } else {
@@ -261,12 +279,17 @@ class KnowledgeWall {
         filterBar.addEventListener('click', (e) => {
             const btn = e.target.closest('.kw-filter-btn');
             if (!btn) return;
-            filterBar.querySelectorAll('.kw-filter-btn').forEach(b => b.classList.remove('active'));
+            filterBar.querySelectorAll('.kw-filter-btn').forEach(b => {
+                b.classList.remove('active');
+                b.setAttribute('aria-pressed', 'false');
+            });
             btn.classList.add('active');
+            btn.setAttribute('aria-pressed', 'true');
             this.filterType = btn.dataset.type;
             this.selectedTags.clear();
             this.applyFilter();
             this.render();
+            this._setProductPage(this.filterType === 'all' ? 'card-wall' : 'search-filter');
         });
 
         addBtn.addEventListener('click', () => this.showEditor());
@@ -277,18 +300,29 @@ class KnowledgeWall {
         document.getElementById('kw-density-toggle')?.addEventListener('click', (e) => {
             const btn = e.target.closest('.kw-density-btn');
             if (!btn) return;
-            document.querySelectorAll('.kw-density-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.kw-density-btn').forEach(b => {
+                b.classList.remove('active');
+                b.setAttribute('aria-pressed', 'false');
+            });
             btn.classList.add('active');
+            btn.setAttribute('aria-pressed', 'true');
             this._cardDensity = btn.dataset.density;
             this._applyDensity();
         });
 
         document.addEventListener('keydown', (e) => {
+            if (e.key === 'Tab' && this.isOpen) {
+                const activeSurface = document.querySelector('#kw-pw-dialog .kw-pw-dialog')
+                    || document.querySelector('#kw-editor-dialog')
+                    || document.querySelector('#kw-detail-overlay .kw-detail-panel')
+                    || document.querySelector('#kw-overlay .kw-panel');
+                if (activeSurface) this._trapFocus(activeSurface, e);
+            }
             if (e.key === 'Escape' && this.isOpen) {
                 const pwDialog = document.getElementById('kw-pw-dialog');
-                if (pwDialog) { pwDialog.remove(); return; }
-                const editor = document.getElementById('kw-editor-overlay');
-                if (editor) { editor.remove(); this.editingCardId = null; return; }
+                if (pwDialog) { this._passwordClose?.(); return; }
+                if (document.getElementById('kw-editor-overlay')) { this._editorClose?.(); return; }
+                if (document.getElementById('kw-detail-overlay')) { this._detailClose?.(); return; }
                 this.close();
             }
         });
@@ -297,20 +331,90 @@ class KnowledgeWall {
     // ===================== 开关 =====================
 
     open() {
+        const overlay = document.getElementById('kw-overlay');
+        if (!overlay?.classList.contains('open')) this._returnFocus = document.activeElement;
         this.isOpen = true;
         this.applyFilter();
         this.render();
         const countBadge = document.getElementById('kw-cards-count');
         if (countBadge) countBadge.textContent = this.cards.length;
-        const overlay = document.getElementById('kw-overlay');
+        this._setBackgroundInert(true);
+        overlay.inert = false;
+        overlay.setAttribute('aria-hidden', 'false');
         overlay.classList.add('open');
         if (this.currentView === 'timeline') this.renderTimeline();
         else if (this.currentView === 'dashboard') this.renderDashboard();
+        this._restoreProductPage();
+        const searchInput = document.getElementById('kw-search-input');
+        searchInput?.focus({ preventScroll: true });
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                const blockingDialog = document.querySelector('#kw-pw-dialog, #kw-editor-overlay, #kw-detail-overlay');
+                if (!this.isOpen || blockingDialog) return;
+                searchInput?.focus({ preventScroll: true });
+            }, 80);
+        });
     }
 
     close() {
         this.isOpen = false;
-        document.getElementById('kw-overlay').classList.remove('open');
+        const overlay = document.getElementById('kw-overlay');
+        overlay.classList.remove('open');
+        overlay.setAttribute('aria-hidden', 'true');
+        overlay.inert = true;
+        this._setBackgroundInert(false);
+        window.ProductUIV5?.setShellPage?.('home');
+        this._returnFocus?.focus?.();
+        this._returnFocus = null;
+    }
+
+    _setBackgroundInert(active) {
+        const overlay = document.getElementById('kw-overlay');
+        if (active) {
+            if (this._backgroundInertSiblings.length) return;
+            this._backgroundInertSiblings = [...document.body.children]
+                .filter(child => child !== overlay && !child.inert);
+            this._backgroundInertSiblings.forEach(child => { child.inert = true; });
+            return;
+        }
+        this._backgroundInertSiblings.forEach(child => { child.inert = false; });
+        this._backgroundInertSiblings = [];
+    }
+
+    _setKnowledgeMainInert(active) {
+        const overlay = document.getElementById('kw-overlay');
+        if (!overlay) return;
+        overlay.inert = active;
+        overlay.setAttribute('aria-hidden', active ? 'true' : 'false');
+    }
+
+    _trapFocus(container, event) {
+        const focusable = [...container.querySelectorAll('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')]
+            .filter(el => !el.hidden && el.getAttribute('aria-hidden') !== 'true');
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+        }
+    }
+
+    _setProductPage(page) {
+        window.ProductUIV5?.setBusinessPage?.('knowledge', page);
+    }
+
+    _baseProductPage() {
+        if (this.currentView === 'timeline') return 'timeline';
+        if (this.currentView === 'dashboard') return 'graph-dashboard';
+        return this.searchQuery || this.filterType !== 'all' || this.selectedTags.size > 0 ? 'search-filter' : 'card-wall';
+    }
+
+    _restoreProductPage() {
+        this._setProductPage(this._baseProductPage());
     }
 
     // ===================== 筛选 =====================
@@ -376,13 +480,13 @@ class KnowledgeWall {
         container.classList.remove('hidden');
         const chips = stats.map(({ tag, count }) => {
             const isActive = this.selectedTags.has(tag);
-            return `<span class="kw-tag-chip${isActive ? ' active' : ''}" data-tag="${this._escapeHtml(tag)}">
+            return `<button type="button" class="kw-tag-chip${isActive ? ' active' : ''}" data-tag="${this._escapeHtml(tag)}" aria-pressed="${isActive}">
                 ${this._escapeHtml(tag)}<span class="kw-tag-count">×${count}</span>
-            </span>`;
+            </button>`;
         }).join('');
 
         const clearBtn = this.selectedTags.size > 0
-            ? `<span class="kw-tag-chip kw-tag-clear" title="清除标签筛选"><i class="fas fa-times-circle"></i> 清除</span>`
+            ? `<button type="button" class="kw-tag-chip kw-tag-clear" title="清除标签筛选"><i class="fas fa-times-circle"></i> 清除</button>`
             : '';
 
         container.innerHTML = `<span class="kw-tag-label"><i class="fas fa-tags"></i></span>${chips}${clearBtn}`;
@@ -401,6 +505,7 @@ class KnowledgeWall {
                 this.applyFilter();
                 this.render();
                 this._renderTagCloud();
+                this._restoreProductPage();
             });
         }
     }
@@ -414,6 +519,7 @@ class KnowledgeWall {
         this.applyFilter();
         this.render();
         this._renderTagCloud();
+        this._restoreProductPage();
     }
 
     // ===================== 渲染 =====================
@@ -422,6 +528,8 @@ class KnowledgeWall {
         const masonry = document.getElementById('kw-masonry');
         const empty = document.getElementById('kw-empty');
         if (!masonry || !empty) return;
+        const countBadge = document.getElementById('kw-cards-count');
+        if (countBadge) countBadge.textContent = this.cards.length;
 
         if (this.filteredCards.length === 0) {
             masonry.innerHTML = '';
@@ -502,12 +610,12 @@ class KnowledgeWall {
         const tagsHtml = card.tags && card.tags.length > 0
             ? `<div class="wc-tags">${card.tags.map(t => {
                 const isActive = this.selectedTags.has(t);
-                return `<span class="wc-tag-clickable${isActive ? ' wc-tag-active' : ''}" data-tag="${esc(t)}">${esc(t)}</span>`;
+                return `<button type="button" class="wc-tag-clickable${isActive ? ' wc-tag-active' : ''}" data-tag="${esc(t)}" aria-pressed="${isActive}">${esc(t)}</button>`;
             }).join('')}</div>`
             : '';
 
         const lockIcon = isProtected
-            ? `<span class="wc-lock-badge${isUnlocked ? ' wc-lock-toggle' : ''}" data-card-id="${card.id}" title="${isUnlocked ? '点击重新锁定' : '密码保护'}"><i class="fas fa-${isUnlocked ? 'lock-open' : 'lock'}"></i></span>`
+            ? `<button type="button" class="wc-lock-badge${isUnlocked ? ' wc-lock-toggle' : ''}" data-card-id="${card.id}" title="${isUnlocked ? '点击重新锁定' : '密码保护'}" aria-label="${isUnlocked ? '重新锁定卡片' : '卡片受密码保护'}"><i class="fas fa-${isUnlocked ? 'lock-open' : 'lock'}"></i></button>`
             : '';
 
         const mdBadge = card.useMarkdown
@@ -522,13 +630,13 @@ class KnowledgeWall {
                     </div>
                     <div class="wc-badges">${lockIcon}${mdBadge}</div>
                     <div class="wc-card-actions">
-                        <button class="wc-action-btn" data-action="copy" title="复制内容"><i class="fas fa-copy"></i></button>
-                        <button class="wc-action-btn" data-action="pin" title="${card.pinned ? '取消置顶' : '置顶'}"><i class="fas fa-thumbtack${card.pinned ? '' : ' fa-rotate-90'}"></i></button>
-                        <button class="wc-action-btn" data-action="edit" title="编辑"><i class="fas fa-pen"></i></button>
-                        <button class="wc-action-btn wc-danger" data-action="delete" title="删除"><i class="fas fa-trash-alt"></i></button>
+                        <button class="wc-action-btn" type="button" data-action="copy" title="复制内容" aria-label="复制卡片内容"><i class="fas fa-copy"></i></button>
+                        <button class="wc-action-btn" type="button" data-action="pin" title="${card.pinned ? '取消置顶' : '置顶'}" aria-label="${card.pinned ? '取消置顶卡片' : '置顶卡片'}"><i class="fas fa-thumbtack${card.pinned ? '' : ' fa-rotate-90'}"></i></button>
+                        <button class="wc-action-btn" type="button" data-action="edit" title="编辑" aria-label="编辑卡片"><i class="fas fa-pen"></i></button>
+                        <button class="wc-action-btn wc-danger" type="button" data-action="delete" title="删除" aria-label="删除卡片"><i class="fas fa-trash-alt"></i></button>
                     </div>
                 </div>
-                <div class="wc-title">${esc(card.title)}</div>
+                <button type="button" class="wc-title wc-open-detail" aria-label="查看卡片：${esc(card.title)}">${esc(card.title)}</button>
                 ${bodyHtml}
                 ${tagsHtml}
                 <div class="wc-meta">
@@ -581,6 +689,11 @@ class KnowledgeWall {
                     this.render();
                 });
             }
+
+            el.addEventListener('click', (event) => {
+                if (!event.target.closest('.wc-title,.wc-text,.wc-code,.wc-meta')) return;
+                this._requireUnlock(cardId, () => this.showDetail(cardId));
+            });
 
             const header = el.querySelector('.wc-header');
             if (header) {
@@ -654,28 +767,167 @@ class KnowledgeWall {
         this.render();
     }
 
+    // ===================== 详情检查器 =====================
+
+    showDetail(cardId) {
+        const card = this.cards.find(item => item.id === cardId);
+        if (!card) return;
+        document.getElementById('kw-detail-overlay')?.remove();
+        if (!this._detailReturnFocus || !document.contains(this._detailReturnFocus)) {
+            this._detailReturnFocus = document.activeElement;
+        }
+        this._setKnowledgeMainInert(true);
+        this._detailCardId = cardId;
+        card.viewCount = (card.viewCount || 0) + 1;
+        card.lastViewedAt = Date.now();
+        void this.saveData();
+
+        const cfg = this.typeConfig[card.type] || this.typeConfig.note;
+        const related = this.cards
+            .filter(item => item.id !== card.id)
+            .map(item => ({ item, shared: (item.tags || []).filter(tag => (card.tags || []).includes(tag)) }))
+            .filter(result => result.shared.length > 0)
+            .sort((a, b) => b.shared.length - a.shared.length)
+            .slice(0, 6);
+        let contentHtml = '';
+        if (card.type === 'code') {
+            contentHtml = `<pre class="wc-code">${this._escapeHtml(card.content || '')}</pre>`;
+        } else {
+            contentHtml = card.useMarkdown
+                ? this._renderMarkdown(card.content || '')
+                : `<p>${this._escapeHtml(card.content || '').replace(/\n/g, '<br>')}</p>`;
+        }
+        const linksHtml = (card.links || []).map(link => `
+            <a class="kw-detail-source-link" href="${this._escapeHtml(link.url || '')}" target="_blank" rel="noopener noreferrer">
+                <i class="fas fa-external-link-alt"></i><span>${this._escapeHtml(link.title || link.url || '来源链接')}</span>
+            </a>`).join('');
+        const overlay = document.createElement('div');
+        overlay.id = 'kw-detail-overlay';
+        overlay.className = 'kw-detail-overlay';
+        overlay.setAttribute('aria-hidden', 'false');
+        overlay.innerHTML = `
+            <section class="kw-detail-panel" role="dialog" aria-modal="true" aria-labelledby="kw-detail-title" tabindex="-1">
+                <header class="kw-detail-head">
+                    <button type="button" class="kw-detail-back" data-kw-detail="close"><i class="fas fa-arrow-left"></i> 返回卡片墙</button>
+                    <div class="kw-detail-head-actions">
+                        <button type="button" data-kw-detail="edit"><i class="fas fa-pen"></i> 编辑</button>
+                        <button type="button" data-kw-detail="pin"><i class="fas fa-thumbtack"></i> ${card.pinned ? '取消置顶' : '置顶'}</button>
+                        <button type="button" data-kw-detail="close" aria-label="关闭"><i class="fas fa-times"></i></button>
+                    </div>
+                </header>
+                <div class="kw-detail-layout">
+                    <aside class="kw-detail-related">
+                        <span class="kw-detail-kicker">RELATED</span>
+                        <h3>关联内容</h3>
+                        ${related.length ? related.map(({ item, shared }) => `
+                            <button type="button" data-related-card="${this._escapeHtml(item.id)}">
+                                <i class="${(this.typeConfig[item.type] || this.typeConfig.note).icon}"></i>
+                                <strong>${this._escapeHtml(item.title)}</strong>
+                                <small>${shared.map(tag => `#${this._escapeHtml(tag)}`).join(' ')}</small>
+                            </button>`).join('') : '<p>添加相同标签后，相关内容会出现在这里。</p>'}
+                    </aside>
+                    <article class="kw-detail-article">
+                        <div class="kw-detail-type" style="color:${cfg.color};background:${cfg.bg}"><i class="${cfg.icon}"></i> ${cfg.label}</div>
+                        <h1 id="kw-detail-title">${this._escapeHtml(card.title)}</h1>
+                        <div class="kw-detail-subline">更新于 ${this._formatTime(card.updatedAt || card.createdAt)} · 已查看 ${card.viewCount} 次</div>
+                        <div class="kw-detail-body kw-md-body">${contentHtml || '<p class="kw-detail-empty">暂无正文</p>'}</div>
+                        ${linksHtml ? `<div class="kw-detail-sources"><h3>来源</h3>${linksHtml}</div>` : ''}
+                    </article>
+                    <aside class="kw-detail-inspector">
+                        <span class="kw-detail-kicker">INSPECTOR</span>
+                        <h3>内容属性</h3>
+                        <dl>
+                            <div><dt>类型</dt><dd>${cfg.label}</dd></div>
+                            <div><dt>创建</dt><dd>${this._formatTime(card.createdAt)}</dd></div>
+                            <div><dt>更新</dt><dd>${this._formatTime(card.updatedAt)}</dd></div>
+                            <div><dt>格式</dt><dd>${card.useMarkdown ? 'Markdown' : '纯文本'}</dd></div>
+                            <div><dt>保护</dt><dd>${card.isProtected ? '密码保护' : '未加密'}</dd></div>
+                        </dl>
+                        <h3>标签</h3>
+                        <div class="kw-detail-tags">${(card.tags || []).map(tag => `<span>#${this._escapeHtml(tag)}</span>`).join('') || '<small>暂无标签</small>'}</div>
+                    </aside>
+                </div>
+            </section>`;
+        document.body.appendChild(overlay);
+        this._setProductPage('detail-inspector');
+        requestAnimationFrame(() => overlay.classList.add('open'));
+        this._renderMermaidBlocks(overlay.querySelector('.kw-detail-body'));
+        this._bindCopyEvents(overlay);
+        setTimeout(() => overlay.querySelector('.kw-detail-back')?.focus({ preventScroll: true }), 80);
+
+        const close = (restoreFocus = true) => {
+            const returnFocus = this._detailReturnFocus;
+            overlay.classList.remove('open');
+            overlay.setAttribute('aria-hidden', 'true');
+            setTimeout(() => {
+                overlay.remove();
+                this._setKnowledgeMainInert(false);
+                if (restoreFocus) {
+                    const refreshedCard = document.querySelector(`.wall-card[data-id="${CSS.escape(card.id)}"] .wc-open-detail`);
+                    if (returnFocus && document.contains(returnFocus)) returnFocus.focus();
+                    else refreshedCard?.focus?.();
+                }
+            }, 220);
+            this._detailCardId = null;
+            this._detailClose = null;
+            this._detailReturnFocus = null;
+            this._restoreProductPage();
+            this.render();
+        };
+        this._detailClose = () => close(true);
+        overlay.addEventListener('click', event => {
+            const relatedButton = event.target.closest('[data-related-card]');
+            if (relatedButton) {
+                overlay.remove();
+                this._detailClose = null;
+                this.showDetail(relatedButton.dataset.relatedCard);
+                return;
+            }
+            const action = event.target.closest('[data-kw-detail]')?.dataset.kwDetail;
+            if (action === 'close' || event.target === overlay) close();
+            if (action === 'edit') {
+                this._editorReturnFocus = this._detailReturnFocus;
+                this._detailReturnFocus = null;
+                overlay.remove();
+                this._detailCardId = null;
+                this._detailClose = null;
+                this.showEditor(card.id);
+            }
+            if (action === 'pin') {
+                this.togglePin(card.id);
+                close();
+            }
+        });
+    }
+
     // ===================== 密码对话框 =====================
 
     _showPasswordDialog(cardId, onUnlocked) {
         const existing = document.getElementById('kw-pw-dialog');
         if (existing) existing.remove();
+        const returnFocus = document.activeElement;
+        const parentSurface = document.getElementById('kw-detail-overlay') || document.getElementById('kw-overlay');
+        if (parentSurface) {
+            parentSurface.inert = true;
+            parentSurface.setAttribute('aria-hidden', 'true');
+        }
 
         const dialog = document.createElement('div');
         dialog.className = 'kw-pw-dialog-overlay';
         dialog.id = 'kw-pw-dialog';
         dialog.innerHTML = `
-            <div class="kw-pw-dialog">
+            <div class="kw-pw-dialog" role="dialog" aria-modal="true" aria-labelledby="kw-pw-title">
                 <div class="kw-pw-header">
                     <i class="fas fa-lock"></i>
-                    <span>输入密码解锁</span>
+                    <span id="kw-pw-title">输入密码解锁</span>
                 </div>
                 <div class="kw-pw-body">
-                    <input type="password" id="kw-pw-input" placeholder="请输入卡片密码..." autocomplete="off">
-                    <div class="kw-pw-error hidden" id="kw-pw-error">密码错误，请重试</div>
+                    <input type="password" id="kw-pw-input" placeholder="请输入卡片密码..." autocomplete="off" aria-label="卡片密码">
+                    <div class="kw-pw-error hidden" id="kw-pw-error" aria-live="polite">密码错误，请重试</div>
                 </div>
                 <div class="kw-pw-footer">
-                    <button class="kw-pw-cancel" id="kw-pw-cancel">取消</button>
-                    <button class="kw-pw-confirm" id="kw-pw-confirm"><i class="fas fa-unlock"></i> 解锁</button>
+                    <button class="kw-pw-cancel" id="kw-pw-cancel" type="button">取消</button>
+                    <button class="kw-pw-confirm" id="kw-pw-confirm" type="button"><i class="fas fa-unlock"></i> 解锁</button>
                 </div>
             </div>
         `;
@@ -684,10 +936,19 @@ class KnowledgeWall {
 
         const input = dialog.querySelector('#kw-pw-input');
         const errorEl = dialog.querySelector('#kw-pw-error');
-        const closeDialog = () => {
+        const closeDialog = (restoreParent = true) => {
             dialog.classList.remove('open');
-            setTimeout(() => dialog.remove(), 250);
+            setTimeout(() => {
+                dialog.remove();
+                if (restoreParent && parentSurface) {
+                    parentSurface.inert = false;
+                    parentSurface.setAttribute('aria-hidden', 'false');
+                    returnFocus?.focus?.();
+                }
+            }, 250);
+            this._passwordClose = null;
         };
+        this._passwordClose = () => closeDialog(true);
 
         dialog.querySelector('#kw-pw-cancel').addEventListener('click', closeDialog);
         dialog.addEventListener('click', (e) => { if (e.target === dialog) closeDialog(); });
@@ -713,7 +974,7 @@ class KnowledgeWall {
                 this._unlockCard(cardId);
                 card.viewCount = (card.viewCount || 0) + 1;
                 await this.saveData();
-                closeDialog();
+                closeDialog(typeof onUnlocked !== 'function');
                 if (typeof onUnlocked === 'function') {
                     onUnlocked();
                 } else {
@@ -833,6 +1094,10 @@ class KnowledgeWall {
     showEditor(cardId) {
         const existing = document.getElementById('kw-editor-overlay');
         if (existing) existing.remove();
+        if (!this._editorReturnFocus || !document.contains(this._editorReturnFocus)) {
+            this._editorReturnFocus = document.activeElement;
+        }
+        this._setKnowledgeMainInert(true);
 
         const card = cardId ? this.cards.find(c => c.id === cardId) : null;
         this.editingCardId = cardId || null;
@@ -841,18 +1106,19 @@ class KnowledgeWall {
         const overlay = document.createElement('div');
         overlay.className = 'kw-editor-overlay';
         overlay.id = 'kw-editor-overlay';
+        overlay.setAttribute('aria-hidden', 'false');
         overlay.innerHTML = `
-            <div class="kw-editor kw-editor-resizable" id="kw-editor-dialog">
+            <div class="kw-editor kw-editor-resizable" id="kw-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="kw-editor-title" tabindex="-1">
                 <div class="kw-editor-header" id="kw-editor-drag-handle">
-                    <h3>${isEdit ? '编辑卡片' : '新增卡片'}</h3>
-                    <button class="kw-editor-close" id="kw-editor-close"><i class="fas fa-times"></i></button>
+                    <h3 id="kw-editor-title">${isEdit ? '编辑卡片' : '新增卡片'}</h3>
+                    <button class="kw-editor-close" id="kw-editor-close" type="button" aria-label="关闭卡片编辑器"><i class="fas fa-times"></i></button>
                 </div>
                 <div class="kw-editor-body">
                     <div class="kw-editor-row">
                         <label>类型</label>
                         <div class="kw-type-selector" id="kw-type-selector">
                             ${Object.entries(this.typeConfig).map(([k, v]) =>
-                                `<button class="kw-type-opt${card?.type === k || (!card && k === 'note') ? ' active' : ''}" data-type="${k}" style="--tc:${v.color};--tbg:${v.bg}">
+                                `<button class="kw-type-opt${card?.type === k || (!card && k === 'note') ? ' active' : ''}" type="button" data-type="${k}" aria-pressed="${card?.type === k || (!card && k === 'note')}" style="--tc:${v.color};--tbg:${v.bg}">
                                     <i class="${v.icon}"></i> ${v.label}
                                 </button>`
                             ).join('')}
@@ -945,16 +1211,18 @@ class KnowledgeWall {
                     </div>
                 </div>
                 <div class="kw-editor-footer">
-                    <button class="kw-ed-cancel" id="kw-ed-cancel">取消</button>
-                    <button class="kw-ed-save" id="kw-ed-save"><i class="fas fa-check"></i> 保存</button>
+                    <button class="kw-ed-cancel" id="kw-ed-cancel" type="button">取消</button>
+                    <button class="kw-ed-save" id="kw-ed-save" type="button"><i class="fas fa-check"></i> 保存</button>
                 </div>
                 <div class="kw-editor-resize-handle" id="kw-editor-resize-handle" title="拖动调整大小"></div>
             </div>
         `;
 
         document.body.appendChild(overlay);
+        this._setProductPage('create-edit');
         requestAnimationFrame(() => overlay.classList.add('open'));
         this._bindEditorEvents(overlay, card);
+        setTimeout(() => overlay.querySelector('#kw-ed-title')?.focus({ preventScroll: true }), 80);
     }
 
     _renderLinkRow(link, index) {
@@ -969,13 +1237,29 @@ class KnowledgeWall {
     _bindEditorEvents(overlay, card) {
         const editorDialog = overlay.querySelector('#kw-editor-dialog');
         const closeEditor = () => {
+            const returnFocus = this._editorReturnFocus;
+            const returnCardId = this.editingCardId;
             overlay.classList.remove('open');
-            setTimeout(() => overlay.remove(), 300);
+            overlay.setAttribute('aria-hidden', 'true');
+            setTimeout(() => {
+                overlay.remove();
+                this._setKnowledgeMainInert(false);
+                const refreshedCard = returnCardId
+                    ? document.querySelector(`.wall-card[data-id="${CSS.escape(returnCardId)}"] .wc-open-detail`)
+                    : null;
+                if (returnFocus && document.contains(returnFocus)) returnFocus.focus();
+                else refreshedCard?.focus?.();
+            }, 300);
             this.editingCardId = null;
+            this._editorReturnFocus = null;
+            this._editorClose = null;
+            this._restoreProductPage();
         };
+        this._editorClose = closeEditor;
 
         overlay.querySelector('#kw-editor-close').addEventListener('click', closeEditor);
         overlay.querySelector('#kw-ed-cancel').addEventListener('click', closeEditor);
+        overlay.addEventListener('click', event => { if (event.target === overlay) closeEditor(); });
 
         // 拖动编辑器移动
         this._initEditorDrag(overlay, editorDialog);
@@ -989,8 +1273,12 @@ class KnowledgeWall {
         typeSelector.addEventListener('click', (e) => {
             const btn = e.target.closest('.kw-type-opt');
             if (!btn) return;
-            typeSelector.querySelectorAll('.kw-type-opt').forEach(b => b.classList.remove('active'));
+            typeSelector.querySelectorAll('.kw-type-opt').forEach(b => {
+                b.classList.remove('active');
+                b.setAttribute('aria-pressed', 'false');
+            });
             btn.classList.add('active');
+            btn.setAttribute('aria-pressed', 'true');
             linksSection.classList.toggle('hidden', btn.dataset.type !== 'link');
         });
 
@@ -1701,6 +1989,7 @@ class KnowledgeWall {
 
         if (view === 'timeline') this.renderTimeline();
         else if (view === 'dashboard') this.renderDashboard();
+        this._restoreProductPage();
     }
 
     // ===================== 时间线视图 =====================
@@ -1726,7 +2015,7 @@ class KnowledgeWall {
             html += `<div class="kw-tl-nav">
                 <button class="kw-tl-nav-btn" id="kw-tl-prev" title="上一周"><i class="fas fa-chevron-left"></i></button>
                 <span class="kw-tl-nav-label">${this._timelineWeekOffset === 0 ? '本周' : this._timelineWeekOffset === -1 ? '上周' : `${Math.abs(this._timelineWeekOffset)}周前`} (${timeline.weekLabel})</span>
-                <button class="kw-tl-nav-btn ${this._timelineWeekOffset >= 0 ? 'disabled' : ''}" id="kw-tl-next" title="下一周"><i class="fas fa-chevron-right"></i></button>
+                <button class="kw-tl-nav-btn ${this._timelineWeekOffset >= 0 ? 'disabled' : ''}" id="kw-tl-next" type="button" title="下一周" ${this._timelineWeekOffset >= 0 ? 'disabled aria-disabled="true"' : ''}><i class="fas fa-chevron-right"></i></button>
             </div>`;
 
             html += await this._renderAISummarySection(this._timelineWeekOffset, timeline);
@@ -1757,7 +2046,8 @@ class KnowledgeWall {
                             : '';
 
                         const clickable = item.targetId ? 'kw-tl-item-clickable' : '';
-                        html += `<div class="kw-tl-item ${clickable}" data-target-id="${this._escapeHtml(item.targetId)}" data-module="${this._escapeHtml(item.module)}">
+                        const itemTag = item.targetId ? 'button' : 'div';
+                        html += `<${itemTag} ${item.targetId ? 'type="button"' : ''} class="kw-tl-item ${clickable}" data-target-id="${this._escapeHtml(item.targetId)}" data-module="${this._escapeHtml(item.module)}">
                             <div class="kw-tl-item-icon ${iconCfg.cls}"><i class="${iconCfg.icon}"></i></div>
                             <div class="kw-tl-item-body">
                                 <div class="kw-tl-item-title">${this._escapeHtml(item.title)}</div>
@@ -1768,7 +2058,7 @@ class KnowledgeWall {
                                     ${moduleBadge}
                                 </div>
                             </div>
-                        </div>`;
+                        </${itemTag}>`;
                     });
 
                     html += `</div>`;
@@ -1816,17 +2106,7 @@ class KnowledgeWall {
         if (module === 'knowledge-wall') {
             const card = this.cards.find(c => c.id === targetId);
             if (card) {
-                this.switchView('cards');
-                document.querySelectorAll('.kw-view-tab').forEach(t => t.classList.remove('active'));
-                document.querySelector('.kw-view-tab[data-view="cards"]')?.classList.add('active');
-                requestAnimationFrame(() => {
-                    const cardEl = document.querySelector(`.wall-card[data-id="${targetId}"]`);
-                    if (cardEl) {
-                        cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        cardEl.classList.add('kw-highlight-card');
-                        setTimeout(() => cardEl.classList.remove('kw-highlight-card'), 2000);
-                    }
-                });
+                this._requireUnlock(targetId, () => this.showDetail(targetId));
             }
         } else if (module === 'memo') {
             this.close();
@@ -1968,6 +2248,51 @@ class KnowledgeWall {
 
     // ===================== 仪表盘视图 =====================
 
+    _buildKnowledgeGraphHtml() {
+        const cards = [...this.cards]
+            .sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt))
+            .slice(0, 11);
+        if (!cards.length) {
+            return `<div class="kw-v5-graph-empty"><i class="fas fa-project-diagram"></i><span>添加卡片和标签后生成关系图谱</span></div>`;
+        }
+        const positions = cards.map((card, index) => {
+            if (cards.length === 1) return { card, x: 400, y: 160 };
+            if (cards.length === 2) return { card, x: index === 0 ? 275 : 525, y: 160 };
+            if (cards.length === 3) {
+                const triangle = [{ x: 400, y: 78 }, { x: 270, y: 226 }, { x: 530, y: 226 }];
+                return { card, ...triangle[index] };
+            }
+            if (index === 0) return { card, x: 400, y: 160 };
+            const angle = ((index - 1) / Math.max(cards.length - 1, 1)) * Math.PI * 2 - Math.PI / 2;
+            const rx = 300, ry = 112;
+            return { card, x: 400 + Math.cos(angle) * rx, y: 160 + Math.sin(angle) * ry };
+        });
+        const edges = [];
+        for (let i = 0; i < positions.length; i++) {
+            for (let j = i + 1; j < positions.length; j++) {
+                const tags = (positions[i].card.tags || []).filter(tag => (positions[j].card.tags || []).includes(tag));
+                if (tags.length) edges.push({ from: positions[i], to: positions[j], weight: Math.min(tags.length, 3) });
+            }
+        }
+        if (!edges.length && positions.length > 1) {
+            positions.slice(1).forEach(position => edges.push({ from: positions[0], to: position, weight: 1 }));
+        }
+        return `<section class="kw-v5-graph-section">
+            <div class="kw-db-section-header"><span class="kw-db-section-title"><i class="fas fa-project-diagram"></i> 知识关系图</span><span>${cards.length} 节点 · ${edges.length} 关系</span></div>
+            <div class="kw-v5-graph" role="group" aria-label="知识关系图">
+                <svg viewBox="0 0 800 320" preserveAspectRatio="none" aria-hidden="true">
+                    ${edges.map(edge => `<line x1="${edge.from.x}" y1="${edge.from.y}" x2="${edge.to.x}" y2="${edge.to.y}" stroke-width="${edge.weight}" />`).join('')}
+                </svg>
+                ${positions.map(({ card, x, y }, index) => {
+                    const cfg = this.typeConfig[card.type] || this.typeConfig.note;
+                    return `<button type="button" class="kw-v5-graph-node ${index === 0 ? 'primary' : ''}" data-card-id="${this._escapeHtml(card.id)}" style="left:${x / 8}%;top:${y / 3.2}%;--node-color:${cfg.color};--node-bg:${cfg.bg}" title="${this._escapeHtml(card.title)}">
+                        <i class="${cfg.icon}"></i><span>${this._escapeHtml(card.title)}</span>
+                    </button>`;
+                }).join('')}
+            </div>
+        </section>`;
+    }
+
     async renderDashboard() {
         const container = document.getElementById('kw-db-container');
         if (!container) return;
@@ -2012,6 +2337,8 @@ class KnowledgeWall {
                     <div class="kw-db-stat-value">${this.cards.filter(c => c.type === 'weekly').length}</div><div class="kw-db-stat-label">周记</div>
                 </div>
             </div>`;
+
+            html += this._buildKnowledgeGraphHtml();
 
             const typeOrder = ['note', 'link', 'code', 'contact', 'weekly'];
             const maxTypeCount = Math.max(...Object.values(typeCounts), 1);
@@ -2102,13 +2429,13 @@ class KnowledgeWall {
                 html += `<div class="kw-db-reco-list">`;
                 recommendations.forEach(r => {
                     const cfg = this.typeConfig[r.card.type] || this.typeConfig.note;
-                    html += `<div class="kw-db-reco-item" data-card-id="${this._escapeHtml(r.card.id)}">
+                    html += `<button type="button" class="kw-db-reco-item" data-card-id="${this._escapeHtml(r.card.id)}">
                         <div class="kw-db-reco-icon" style="background:${cfg.bg};color:${cfg.color};"><i class="${cfg.icon}"></i></div>
                         <div class="kw-db-reco-body">
                             <div class="kw-db-reco-title">${this._escapeHtml(r.card.title)}</div>
                             <div class="kw-db-reco-reason">${this._escapeHtml(r.reason)}</div>
                         </div>
-                    </div>`;
+                    </button>`;
                 });
                 html += `</div></div>`;
             }
@@ -2130,6 +2457,12 @@ class KnowledgeWall {
                 el.addEventListener('click', () => {
                     const cardId = el.dataset.cardId;
                     if (cardId) this._navigateToTarget(cardId, 'knowledge-wall');
+                });
+            });
+            container.querySelectorAll('.kw-v5-graph-node').forEach(el => {
+                el.addEventListener('click', () => {
+                    const cardId = el.dataset.cardId;
+                    if (cardId) this._requireUnlock(cardId, () => this.showDetail(cardId));
                 });
             });
 

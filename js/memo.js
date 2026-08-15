@@ -107,6 +107,13 @@ class MemoManager {
 
         // 浮层面板状态
         this._panelOpen = false;
+
+        // 今日阅读工作台状态
+        this._readingReady = false;
+        this._readingCurrentPage = 'review-queue';
+        this._readingReturnFocus = null;
+        this._readingBackgroundInertSiblings = [];
+        this._readingKeydownHandler = (event) => this._handleReadingKeydown(event);
     }
 
     /**
@@ -3870,6 +3877,12 @@ class MemoManager {
             // 终态标记: null(正常) | 'failed'(失败) — 失败任务不触发逾期提醒，用于回顾
             status: memo.status || null,
             failedAt: memo.failedAt || null,
+            // 任务工作台扩展字段。必须在主备忘录页一并保留，避免主页面保存时丢失任务状态。
+            archived: !!memo.archived,
+            archivedAt: memo.archivedAt || null,
+            recurrencePaused: !!memo.recurrencePaused,
+            lastSkippedAt: memo.lastSkippedAt || null,
+            assignee: memo.assignee || '我',
         };
         
         // 兼容旧数据：如果存在 isDaily 标记但没有 recurrence，自动迁移
@@ -12595,6 +12608,168 @@ class MemoManager {
 
     // ==================== 今日推荐阅读 ====================
 
+    _setReadingPage(page) {
+        window.ProductUIV5?.setBusinessPage?.('reading', page);
+    }
+
+    _setReadingBackgroundInert(active) {
+        const wrapper = document.getElementById('reading-reco-wrapper');
+        if (!wrapper) return;
+        if (active) {
+            const tracked = new Set(this._readingBackgroundInertSiblings);
+            [...document.body.children]
+                .filter(child => child !== wrapper && !child.inert && !tracked.has(child))
+                .forEach(child => this._readingBackgroundInertSiblings.push(child));
+            this._readingBackgroundInertSiblings.forEach(child => { child.inert = true; });
+            return;
+        }
+        this._readingBackgroundInertSiblings.forEach(child => { child.inert = false; });
+        this._readingBackgroundInertSiblings = [];
+    }
+
+    _getReadingFocusable() {
+        const container = document.querySelector('#reading-source-picker [role="dialog"]')
+            || document.getElementById('reading-reco');
+        if (!container) return [];
+        return [...container.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+            .filter(el => !el.hidden && el.getAttribute('aria-hidden') !== 'true' && el.getClientRects().length > 0);
+    }
+
+    _focusReadingSurface(page = this._readingCurrentPage) {
+        const selectors = {
+            detail: ['#reading-detail-back'],
+            permission: ['#reco-setup-btn'],
+            'complete-feedback': ['#reading-next-item'],
+            'history-stats': ['[data-reading-page="history-stats"]'],
+            'review-queue': ['.reco-card-open', '#reading-history-empty', '[data-reading-page="review-queue"]']
+        };
+        const target = (selectors[page] || selectors['review-queue'])
+            .map(selector => document.querySelector(selector))
+            .find(Boolean) || document.getElementById('reading-reco');
+        target?.focus?.({ preventScroll: true });
+    }
+
+    _handleReadingKeydown(event) {
+        const wrapper = document.getElementById('reading-reco-wrapper');
+        if (!wrapper?.classList.contains('reading-dock-open')) return;
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            if (document.getElementById('reading-source-picker')) {
+                this._closeReadingSourcePicker();
+                return;
+            }
+            if (this._readingCurrentPage !== 'review-queue' && this._isReadingConfigured()) {
+                this._renderReadingHome();
+            } else {
+                this._closeReadingPanel();
+            }
+            return;
+        }
+        if (event.key !== 'Tab') return;
+        const focusable = this._getReadingFocusable();
+        if (!focusable.length) {
+            event.preventDefault();
+            document.getElementById('reading-reco')?.focus();
+            return;
+        }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+        }
+    }
+
+    _openReadingPanel() {
+        const wrapper = document.getElementById('reading-reco-wrapper');
+        if (!wrapper || wrapper.classList.contains('reading-dock-open')) return;
+        this._readingReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        wrapper.classList.add('reading-dock-open');
+        wrapper.setAttribute('aria-hidden', 'false');
+        this._setReadingBackgroundInert(true);
+        document.addEventListener('keydown', this._readingKeydownHandler);
+        requestAnimationFrame(() => {
+            if (!wrapper.classList.contains('reading-dock-open')) return;
+            this._setReadingBackgroundInert(true);
+            this._focusReadingSurface();
+        });
+    }
+
+    _closeReadingPanel() {
+        const wrapper = document.getElementById('reading-reco-wrapper');
+        if (!wrapper?.classList.contains('reading-dock-open')) return;
+        this._closeReadingSourcePicker({ restoreFocus: false });
+        wrapper.classList.remove('reading-dock-open');
+        wrapper.setAttribute('aria-hidden', 'true');
+        document.removeEventListener('keydown', this._readingKeydownHandler);
+        this._setReadingBackgroundInert(false);
+        window.ProductUIV5?.setShellPage?.('home');
+        const dockButton = document.getElementById('reading-dock-btn');
+        const visibleDockButton = dockButton?.getClientRects?.().length ? dockButton : null;
+        const insideLaunchpad = this._readingReturnFocus?.closest?.('#dock-launchpad');
+        const focusableReturn = this._readingReturnFocus?.matches?.('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        const returnTarget = this._readingReturnFocus?.isConnected && focusableReturn && !insideLaunchpad
+            ? this._readingReturnFocus
+            : (visibleDockButton || document.getElementById('dock-launchpad-btn'));
+        this._readingReturnFocus = null;
+        returnTarget?.focus?.({ preventScroll: true });
+    }
+
+    _isReadingConfigured() {
+        const settings = this._bookmarkRAG?.settings;
+        return !!(settings?.enabled && settings.folderIds?.length);
+    }
+
+    _renderReadingShell(page, content, countText = '') {
+        const header = document.querySelector('#reading-reco .reading-reco-header');
+        const body = document.getElementById('reading-reco-body');
+        const countEl = document.getElementById('reading-reco-count');
+        if (!header || !body) return;
+
+        this._readingCurrentPage = page;
+        this._setReadingPage(page);
+        const todayActive = page === 'review-queue' || page === 'detail' || page === 'complete-feedback';
+        header.innerHTML = `
+            <div class="reading-v5-brand"><i class="fas fa-book-reader" aria-hidden="true"></i><strong id="reading-reco-title">今日阅读</strong></div>
+            <nav class="reading-v5-nav" aria-label="阅读页面">
+                <button data-reading-page="review-queue" class="${todayActive ? 'active' : ''}" ${todayActive ? 'aria-current="page"' : ''}>复习队列</button>
+                <button data-reading-page="history-stats" class="${page === 'history-stats' ? 'active' : ''}" ${page === 'history-stats' ? 'aria-current="page"' : ''}>历史统计</button>
+                <button data-reading-page="permission" class="${page === 'permission' ? 'active' : ''}" ${page === 'permission' ? 'aria-current="page"' : ''}>书签设置</button>
+            </nav>
+            <div class="reading-reco-actions">
+                <span class="reading-reco-count" id="reading-reco-count">${this._escHtml(countText)}</span>
+                <button class="reading-v5-close" id="reading-v5-close" type="button" title="关闭" aria-label="关闭今日阅读"><i class="fas fa-times" aria-hidden="true"></i></button>
+            </div>`;
+        body.classList.remove('collapsed');
+        body.innerHTML = content;
+        if (countEl) countEl.textContent = countText;
+        header.querySelectorAll('[data-reading-page]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const target = btn.dataset.readingPage;
+                if (target === 'history-stats') this._renderReadingHistoryStats();
+                else if (target === 'permission') this._renderReadingPermission();
+                else this._renderReadingHome();
+            });
+        });
+        header.querySelector('#reading-v5-close')?.addEventListener('click', () => this._closeReadingPanel());
+        if (document.getElementById('reading-reco-wrapper')?.classList.contains('reading-dock-open')) {
+            requestAnimationFrame(() => this._focusReadingSurface(page));
+        }
+    }
+
+    _renderReadingHome() {
+        const rag = this._bookmarkRAG;
+        if (!this._isReadingConfigured()) {
+            this._renderReadingPermission();
+            return;
+        }
+        this._renderReadingRecommendation(rag.getTodayReview(), rag.getUnreviewed(5));
+        this._bindReadingRecoEvents();
+    }
+
     async initReadingRecommendation() {
         const wrapper = document.getElementById('reading-reco-wrapper');
         if (!wrapper) return;
@@ -12605,13 +12780,14 @@ class MemoManager {
         }
 
         const rag = this._bookmarkRAG;
-        if (!rag.isConfigured()) return;
+        if (!this._isReadingConfigured()) {
+            this._readingReady = true;
+            this._renderReadingPermission();
+            return;
+        }
 
         const reviewQueue = rag.getTodayReview();
         const unreviewed = rag.getUnreviewed(5);
-
-        const hasReviewItems = reviewQueue.length > 0 || unreviewed.length > 0;
-        if (!hasReviewItems) return;
 
         this._readingReady = true;
         this._renderReadingRecommendation(reviewQueue, unreviewed);
@@ -12628,11 +12804,19 @@ class MemoManager {
         if (!wrapper) return;
         if (!this._readingReady) {
             this.initReadingRecommendation().then(() => {
-                if (this._readingReady) wrapper.classList.add('reading-dock-open');
+                if (this._readingReady) {
+                    this._isReadingConfigured() ? this._renderReadingHome() : this._renderReadingPermission();
+                    this._openReadingPanel();
+                }
             });
             return;
         }
-        wrapper.classList.toggle('reading-dock-open');
+        if (wrapper.classList.contains('reading-dock-open')) {
+            this._closeReadingPanel();
+            return;
+        }
+        this._renderReadingHome();
+        this._openReadingPanel();
     }
 
     _renderReadingRecommendation(reviewQueue, unreviewed) {
@@ -12643,11 +12827,6 @@ class MemoManager {
         const totalDue = reviewQueue.length;
         if (countEl) {
             countEl.textContent = totalDue > 0 ? `${totalDue} 条待复习` : `${unreviewed.length} 条新书签`;
-        }
-
-        if (reviewQueue.length === 0 && unreviewed.length === 0) {
-            body.innerHTML = `<div class="reco-empty"><i class="fas fa-check-circle"></i><span>今日复习已完成</span></div>`;
-            return;
         }
 
         let html = '';
@@ -12672,7 +12851,60 @@ class MemoManager {
             </div>`;
         }
 
-        body.innerHTML = html;
+        const stats = this._bookmarkRAG?.getReviewStats?.() || {};
+        const todayKey = new Date().toISOString().slice(0, 10);
+        const completedToday = (this._bookmarkRAG?.bookmarks || []).filter(item => {
+            if (!item.srs?.lastReview) return false;
+            return new Date(item.srs.lastReview).toISOString().slice(0, 10) === todayKey;
+        }).length;
+        const todayTotal = completedToday + (stats.dueToday || 0);
+        const progress = todayTotal ? Math.max(0, Math.min(100, Math.round((completedToday / todayTotal) * 100))) : 100;
+        const queue = reviewQueue.length ? reviewQueue : unreviewed;
+        const current = queue[0] || null;
+        const currentSource = current?.domain || (() => { try { return new URL(current?.url || '').hostname; } catch { return '本地书签'; } })();
+        const currentSummary = current?.summary || current?.contentSummary || current?.description || '先浏览书签信息，准备好后进入详情；只有明确点击“阅读原文”才会打开外部网站。';
+        const reviewed = (this._bookmarkRAG?.bookmarks || []).filter(item => item.srs?.lastReview);
+        const activeDays = new Set(reviewed.map(item => new Date(item.srs.lastReview).toISOString().slice(0, 10)));
+        const heatmap = Array.from({ length: 28 }, (_, index) => {
+            const date = new Date();
+            date.setDate(date.getDate() - (27 - index));
+            const key = date.toISOString().slice(0, 10);
+            return `<i class="${activeDays.has(key) ? 'active' : ''}" title="${date.toLocaleDateString('zh-CN')}${activeDays.has(key) ? ' · 已阅读' : ''}"></i>`;
+        }).join('');
+        const sourceCounts = new Map();
+        (this._bookmarkRAG?.bookmarks || []).forEach(item => {
+            const source = item.domain || (() => { try { return new URL(item.url).hostname; } catch { return '其他'; } })();
+            sourceCounts.set(source, (sourceCounts.get(source) || 0) + 1);
+        });
+        const sourceRows = [...sourceCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
+            .map(([source, count]) => `<li><span>${this._escHtml(source)}</span><b>${count}</b></li>`).join('')
+            || '<li class="empty"><span>选择目录后显示来源</span></li>';
+        this._renderReadingShell('review-queue', `
+            <div class="reading-v5-layout">
+                <section class="reading-v5-queue">
+                    <div class="reading-v5-section-head"><div><span class="eyebrow">复习队列</span><h2>今天读什么</h2></div><span>${queue.length} 条</span></div>
+                    <div class="reading-v5-card-list">${html || '<div class="reading-v5-inline-empty"><i class="fas fa-check-circle" aria-hidden="true"></i><strong>今日复习已完成</strong><span>没有到期内容，去历史页看看阅读积累。</span></div>'}</div>
+                </section>
+                <main class="reading-v5-focus">
+                    ${current ? `<span class="eyebrow">下一篇 · ${reviewQueue.length ? '到期复习' : '新书签'}</span>
+                    <div class="reading-v5-focus-meta"><span>${this._escHtml(currentSource)}</span><span>${current.srs?.repetition || 0} 次复习</span></div>
+                    <h1>${this._escHtml(current.title || '未命名书签')}</h1>
+                    <p>${this._escHtml(currentSummary)}</p>
+                    <div class="reading-v5-focus-facts"><span><i class="fas fa-lock" aria-hidden="true"></i> 本地索引</span><span><i class="fas fa-calendar" aria-hidden="true"></i> ${this._escHtml(BookmarkSRS.formatNextReview(current.srs?.nextReview))}</span></div>
+                    <div class="reading-v5-focus-actions"><button class="primary" id="reading-start-current"><i class="fas fa-play" aria-hidden="true"></i> 开始阅读</button>${reviewQueue.length ? '<button id="reading-later-current"><i class="fas fa-clock" aria-hidden="true"></i> 稍后</button>' : ''}</div>` : `<div class="reading-v5-focus-empty"><i class="fas fa-mug-hot" aria-hidden="true"></i><span class="eyebrow">今日完成</span><h1>让收藏先沉淀一下</h1><p>当前没有到期或未读书签。复习记录和统计仍保留在本地。</p><button id="reading-history-empty">查看历史统计</button></div>`}
+                </main>
+                <aside class="reading-v5-aside" aria-label="阅读统计与设置">
+                    <article class="reading-v5-progress"><span>今日进度</span><strong>${progress}%</strong><div><i style="width:${progress}%"></i></div><small>${completedToday} 今日完成 · ${stats.dueToday || 0} 待处理</small></article>
+                    <article class="reading-v5-activity"><div><h3>近四周活动</h3><button data-reading-page-link="history-stats">详情</button></div><div class="reading-v5-heatmap" aria-label="近 28 天阅读活动">${heatmap}</div></article>
+                    <article class="reading-v5-sources"><h3>主要来源</h3><ul>${sourceRows}</ul></article>
+                    <article class="reading-v5-privacy"><i class="fas fa-shield-alt" aria-hidden="true"></i><div><h3>书签只在本地整理</h3><p>调整目录或内容提取设置。</p></div><button data-reading-page-link="permission" aria-label="打开书签设置"><i class="fas fa-chevron-right" aria-hidden="true"></i></button></article>
+                </aside>
+            </div>`, totalDue > 0 ? `${totalDue} 条待复习` : `${unreviewed.length} 条新书签`);
+        document.querySelector('[data-reading-page-link="history-stats"]')?.addEventListener('click', () => this._renderReadingHistoryStats());
+        document.querySelector('[data-reading-page-link="permission"]')?.addEventListener('click', () => this._renderReadingPermission());
+        document.getElementById('reading-start-current')?.addEventListener('click', () => this._renderReadingDetail(current));
+        document.getElementById('reading-later-current')?.addEventListener('click', () => this._handleReviewFeedback(current.id, 2));
+        document.getElementById('reading-history-empty')?.addEventListener('click', () => this._renderReadingHistoryStats());
     }
 
     _renderRecoCard(bm, isReview) {
@@ -12684,15 +12916,15 @@ class MemoManager {
 
         const feedbackBtns = isReview ? `
             <div class="reco-card-actions">
-                <button class="reco-feedback-btn fb-archive" data-quality="0" data-bm-id="${bm.id}" title="归档"><i class="fas fa-box-archive"></i></button>
-                <button class="reco-feedback-btn fb-again" data-quality="1" data-bm-id="${bm.id}" title="不熟"><i class="fas fa-rotate-left"></i></button>
-                <button class="reco-feedback-btn fb-later" data-quality="2" data-bm-id="${bm.id}" title="稍后"><i class="fas fa-clock"></i></button>
-                <button class="reco-feedback-btn fb-good" data-quality="3" data-bm-id="${bm.id}" title="已读"><i class="fas fa-check"></i></button>
-                <button class="reco-card-task-btn" data-bm-title="${this._escHtml(bm.title)}" data-bm-url="${this._escHtml(bm.url)}" title="转为任务"><i class="fas fa-plus-circle"></i></button>
+                <button class="reco-feedback-btn fb-archive" type="button" data-quality="0" data-bm-id="${bm.id}" title="归档" aria-label="归档 ${this._escHtml(bm.title)}"><i class="fas fa-box-archive" aria-hidden="true"></i></button>
+                <button class="reco-feedback-btn fb-again" type="button" data-quality="1" data-bm-id="${bm.id}" title="不熟" aria-label="标记不熟 ${this._escHtml(bm.title)}"><i class="fas fa-rotate-left" aria-hidden="true"></i></button>
+                <button class="reco-feedback-btn fb-later" type="button" data-quality="2" data-bm-id="${bm.id}" title="稍后" aria-label="稍后复习 ${this._escHtml(bm.title)}"><i class="fas fa-clock" aria-hidden="true"></i></button>
+                <button class="reco-feedback-btn fb-good" type="button" data-quality="3" data-bm-id="${bm.id}" title="已读" aria-label="标记已读 ${this._escHtml(bm.title)}"><i class="fas fa-check" aria-hidden="true"></i></button>
+                <button class="reco-card-task-btn" type="button" data-bm-title="${this._escHtml(bm.title)}" data-bm-url="${this._escHtml(bm.url)}" title="转为任务" aria-label="将 ${this._escHtml(bm.title)} 转为任务"><i class="fas fa-plus-circle" aria-hidden="true"></i></button>
             </div>
         ` : `
             <div class="reco-card-actions">
-                <button class="reco-card-task-btn" data-bm-title="${this._escHtml(bm.title)}" data-bm-url="${this._escHtml(bm.url)}" title="转为任务"><i class="fas fa-plus-circle"></i></button>
+                <button class="reco-card-task-btn" type="button" data-bm-title="${this._escHtml(bm.title)}" data-bm-url="${this._escHtml(bm.url)}" title="转为任务" aria-label="将 ${this._escHtml(bm.title)} 转为任务"><i class="fas fa-plus-circle" aria-hidden="true"></i></button>
             </div>
         `;
 
@@ -12702,14 +12934,16 @@ class MemoManager {
 
         return `
         <div class="reco-card" data-bm-id="${bm.id}" data-url="${this._escHtml(bm.url)}">
-            <img class="reco-card-favicon" src="https://www.google.com/s2/favicons?domain=${this._escHtml(bm.domain)}&sz=32" alt="" loading="lazy">
-            <div class="reco-card-info">
-                <div class="reco-card-title">${this._escHtml(bm.title)}</div>
-                <div class="reco-card-meta">
-                    ${metaInfo}
-                    ${templateName ? `<span class="reco-card-template">${templateName}</span>` : ''}
-                </div>
-            </div>
+            <button class="reco-card-open" type="button" aria-label="查看 ${this._escHtml(bm.title)} 的阅读详情">
+                <span class="reco-card-favicon"><i class="fas fa-bookmark" aria-hidden="true"></i></span>
+                <span class="reco-card-info">
+                    <span class="reco-card-title">${this._escHtml(bm.title)}</span>
+                    <span class="reco-card-meta">
+                        ${metaInfo}
+                        ${templateName ? `<span class="reco-card-template">${templateName}</span>` : ''}
+                    </span>
+                </span>
+            </button>
             ${feedbackBtns}
         </div>`;
     }
@@ -12749,11 +12983,11 @@ class MemoManager {
         const body = document.getElementById('reading-reco-body');
         if (!body) return;
 
-        body.querySelectorAll('.reco-card').forEach(card => {
-            card.addEventListener('click', (e) => {
-                if (e.target.closest('.reco-feedback-btn') || e.target.closest('.reco-card-task-btn')) return;
-                const url = card.dataset.url;
-                if (url) window.open(url, '_blank');
+        body.querySelectorAll('.reco-card-open').forEach(openButton => {
+            openButton.addEventListener('click', () => {
+                const card = openButton.closest('.reco-card');
+                const bm = this._bookmarkRAG?.bookmarks?.find(item => String(item.id) === String(card.dataset.bmId));
+                if (bm) this._renderReadingDetail(bm);
             });
         });
 
@@ -12785,6 +13019,9 @@ class MemoManager {
         if (meta) {
             this.showToast(`${meta.label}：${BookmarkSRS.formatNextReview(result.srs?.nextReview)}`);
         }
+
+        this._renderReadingComplete(result, quality);
+        return;
 
         if (cardEl) {
             cardEl.classList.add('dismissing');
@@ -12818,6 +13055,195 @@ class MemoManager {
             if (textInput) textInput.value = url || '';
         }, 100);
         this.showToast('已填入书签信息，请确认保存');
+    }
+
+    _renderReadingDetail(bm) {
+        if (!bm) return;
+        const summary = bm.summary || bm.contentSummary || bm.description || '这个书签还没有提取正文摘要。你仍可先阅读原文，或在书签管理中启用内容提取。';
+        const source = bm.domain || (() => { try { return new URL(bm.url).hostname; } catch { return '未知来源'; } })();
+        const isReview = !!bm.srs && bm.status !== 'archived';
+        this._renderReadingShell('detail', `
+            <div class="reading-v5-detail-layout">
+                <aside class="reading-v5-outline"><button id="reading-detail-back"><i class="fas fa-arrow-left"></i> 返回队列</button><span>文章结构（本地）</span><a class="active">摘要</a><a>书签信息</a><a>复习计划</a></aside>
+                <article class="reading-v5-article">
+                    <div class="reading-v5-article-meta"><span>${this._escHtml(source)}</span><span>${bm.dateAdded ? new Date(bm.dateAdded).toLocaleDateString('zh-CN') : '收藏内容'}</span></div>
+                    <h1>${this._escHtml(bm.title || '未命名书签')}</h1>
+                    <p class="reading-v5-lead">${this._escHtml(summary)}</p>
+                    <section><h3>本地阅读说明</h3><p>这里展示扩展已经保存的书签元数据与摘要。打开原文是一次明确的外部跳转，不会在未点击时请求文章网站。</p></section>
+                    <div class="reading-v5-source-row"><code>${this._escHtml(bm.url || '')}</code><button id="reading-open-source"><i class="fas fa-external-link-alt"></i> 阅读原文</button></div>
+                </article>
+                <aside class="reading-v5-notes"><h3>阅读信息</h3><dl><div><dt>复习模板</dt><dd>${this._escHtml(BookmarkSRS.TEMPLATES[bm.srs?.template]?.name || '尚未启用')}</dd></div><div><dt>已复习</dt><dd>${bm.srs?.repetition || 0} 次</dd></div><div><dt>下次</dt><dd>${this._escHtml(BookmarkSRS.formatNextReview(bm.srs?.nextReview))}</dd></div></dl>${isReview ? `<div class="reading-v5-feedback"><button data-reading-quality="1">不熟</button><button data-reading-quality="2">稍后</button><button class="primary" data-reading-quality="3">已读</button></div>` : '<button class="primary" id="reading-enable-single">加入复习</button>'}</aside>
+            </div>`, '阅读详情');
+        document.getElementById('reading-detail-back')?.addEventListener('click', () => this._renderReadingHome());
+        document.getElementById('reading-open-source')?.addEventListener('click', () => bm.url && window.open(bm.url, '_blank', 'noopener'));
+        document.querySelectorAll('[data-reading-quality]').forEach(btn => btn.addEventListener('click', () => this._handleReviewFeedback(bm.id, Number(btn.dataset.readingQuality))));
+        document.getElementById('reading-enable-single')?.addEventListener('click', async () => {
+            BookmarkSRS.changeTemplate(bm, this._bookmarkRAG?.settings?.reviewTemplate || 'regular');
+            await this._bookmarkRAG?._saveBookmarkCache?.(this._bookmarkRAG.bookmarks);
+            this._renderReadingDetail(bm);
+        });
+    }
+
+    _renderReadingPermission() {
+        const rag = this._bookmarkRAG;
+        const configured = this._isReadingConfigured();
+        const folders = rag?.settings?.folderNames || [];
+        this._renderReadingShell('permission', `
+            <div class="reading-v5-permission"><span class="reco-setup-state" hidden aria-hidden="true"></span>
+                <section><span class="eyebrow">阅读来源设置</span><h2>${configured ? '书签阅读已连接' : '连接浏览器书签'}</h2><p>仅从你选择的书签目录建立复习队列。扩展会把索引与阅读记录保存在本地，未经操作不会打开或上传网页正文。</p>
+                    <ol><li class="done"><b>1</b><div><strong>读取书签标题与网址</strong><span>只读取你明确选择的目录</span></div></li><li class="${configured ? 'done' : ''}"><b>2</b><div><strong>选择复习目录</strong><span>${configured ? this._escHtml(folders.join('、') || '已选择目录') : '还没有授权任何目录'}</span></div></li><li><b>3</b><div><strong>可选：提取摘要</strong><span>需要你在书签管理中主动执行</span></div></li></ol>
+                    <div class="reading-v5-permission-actions"><button class="primary" id="reco-setup-btn"><i class="fas fa-folder-open"></i> ${configured ? '调整书签目录' : '选择书签目录'}</button><button id="reading-permission-back">${configured ? '返回今日阅读' : '暂不设置'}</button></div>
+                </section>
+                <aside><h3>权限会做什么？</h3><ul><li><i class="fas fa-check"></i> 建立本地待复习队列</li><li><i class="fas fa-check"></i> 保存间隔与反馈</li><li><i class="fas fa-lock"></i> 不自动发送正文给 AI</li><li><i class="fas fa-lock"></i> 不修改原始书签</li></ul></aside>
+            </div>`, configured ? `${rag.bookmarks.length} 条书签` : '尚未配置');
+        document.getElementById('reco-setup-btn')?.addEventListener('click', () => this._showReadingSourcePicker());
+        document.getElementById('reading-permission-back')?.addEventListener('click', () => configured ? this._renderReadingHome() : this._closeReadingPanel());
+    }
+
+    async _showReadingSourcePicker() {
+        const wrapper = document.getElementById('reading-reco-wrapper');
+        const readingContainer = document.getElementById('reading-reco');
+        const rag = this._bookmarkRAG;
+        if (!wrapper || !readingContainer || !rag) return;
+
+        this._closeReadingSourcePicker({ restoreFocus: false });
+        this._readingSourcePickerReturnFocus = document.activeElement instanceof HTMLElement
+            ? document.activeElement
+            : document.getElementById('reco-setup-btn');
+
+        const panel = document.createElement('div');
+        panel.id = 'reading-source-picker';
+        panel.className = 'reading-v5-source-picker';
+        panel.innerHTML = `
+            <div class="reading-v5-source-backdrop"></div>
+            <section class="reading-v5-source-dialog" role="dialog" aria-modal="true" aria-labelledby="reading-source-title" tabindex="-1">
+                <header><div><span class="eyebrow">本地阅读来源</span><h2 id="reading-source-title">选择书签目录</h2></div><button type="button" id="reading-source-close" aria-label="关闭目录选择"><i class="fas fa-times" aria-hidden="true"></i></button></header>
+                <p class="reading-v5-source-intro">这里只读取你勾选目录中的标题和网址，用于生成本地复习队列。AI 服务与正文摘要均为可选项。</p>
+                <div class="reading-v5-source-status" id="reading-source-status" role="status"><i class="fas fa-circle-notch fa-spin" aria-hidden="true"></i> 正在检查书签权限…</div>
+                <fieldset class="reading-v5-folder-list" id="reading-source-folders" disabled><legend>可用目录</legend></fieldset>
+                <footer><button type="button" id="reading-source-cancel">取消</button><button type="button" class="primary" id="reading-source-save" disabled>保存并同步</button></footer>
+            </section>`;
+        wrapper.appendChild(panel);
+        readingContainer.inert = true;
+
+        const status = panel.querySelector('#reading-source-status');
+        const folderList = panel.querySelector('#reading-source-folders');
+        const saveButton = panel.querySelector('#reading-source-save');
+        let availableFolders = [];
+
+        const loadFolders = async () => {
+            if (!panel.isConnected) return;
+            status.innerHTML = '<i class="fas fa-circle-notch fa-spin" aria-hidden="true"></i> 正在读取书签目录…';
+            try {
+                availableFolders = await rag.getBookmarkFolders();
+                if (!panel.isConnected) return;
+                const selected = new Set((rag.settings?.folderIds || []).map(String));
+                if (!availableFolders.length) {
+                    folderList.innerHTML = '<div class="reading-v5-folder-empty">没有找到可选择的书签目录。</div>';
+                    folderList.disabled = true;
+                    saveButton.disabled = true;
+                    status.textContent = '未找到书签目录';
+                    return;
+                }
+                folderList.innerHTML = availableFolders.map(folder => {
+                    const id = String(folder.id);
+                    return `<label><input type="checkbox" value="${this._escHtml(id)}" ${selected.has(id) ? 'checked' : ''}><span><strong>${this._escHtml(folder.title || '未命名目录')}</strong><small>${this._escHtml(folder.path || folder.title || '')} · ${folder.totalBookmarks || 0} 个书签</small></span></label>`;
+                }).join('');
+                folderList.disabled = false;
+                saveButton.disabled = false;
+                status.textContent = `已读取 ${availableFolders.length} 个目录，选择范围后保存。`;
+            } catch (error) {
+                if (!panel.isConnected) return;
+                folderList.disabled = true;
+                saveButton.disabled = true;
+                status.textContent = error?.message || '读取书签目录失败，请稍后重试。';
+            }
+        };
+
+        const showPermissionRequest = (message = '需要书签读取权限才能列出目录。', action = '授权并读取目录') => {
+            status.innerHTML = `<span>${this._escHtml(message)}</span><button type="button" id="reading-source-grant"><i class="fas fa-shield-alt" aria-hidden="true"></i> ${this._escHtml(action)}</button>`;
+            status.querySelector('#reading-source-grant')?.addEventListener('click', async () => {
+                const granted = await rag.requestBookmarkPermission();
+                if (granted) await loadFolders();
+                else showPermissionRequest('没有获得书签权限，未读取任何目录。', '重试授权');
+            });
+        };
+
+        panel.querySelector('#reading-source-close')?.addEventListener('click', () => this._closeReadingSourcePicker());
+        panel.querySelector('#reading-source-cancel')?.addEventListener('click', () => this._closeReadingSourcePicker());
+        panel.querySelector('.reading-v5-source-backdrop')?.addEventListener('click', () => this._closeReadingSourcePicker());
+        saveButton.addEventListener('click', async () => {
+            const selectedIds = [...folderList.querySelectorAll('input:checked')].map(input => String(input.value));
+            if (!selectedIds.length) {
+                status.textContent = '请至少选择一个书签目录。';
+                folderList.querySelector('input')?.focus();
+                return;
+            }
+            saveButton.disabled = true;
+            status.innerHTML = '<i class="fas fa-circle-notch fa-spin" aria-hidden="true"></i> 正在同步本地书签…';
+            const selectedNames = availableFolders.filter(folder => selectedIds.includes(String(folder.id))).map(folder => folder.title);
+            try {
+                await rag.saveSettings({ enabled: true, folderIds: selectedIds, folderNames: selectedNames });
+                await rag.syncBookmarks();
+                rag.startWatching?.();
+                this._readingReady = true;
+                this._closeReadingSourcePicker({ restoreFocus: false });
+                this._renderReadingHome();
+                this.showToast(`已连接 ${selectedNames.join('、')}，共 ${rag.bookmarks.length} 条书签`, 3000);
+            } catch (error) {
+                saveButton.disabled = false;
+                status.textContent = error?.message || '目录设置已保留，本地书签同步失败，请稍后重试。';
+            }
+        });
+
+        panel.querySelector('#reading-source-close')?.focus({ preventScroll: true });
+        try {
+            if (await rag.hasBookmarkPermission()) await loadFolders();
+            else showPermissionRequest();
+        } catch {
+            showPermissionRequest('无法检查书签权限，请重试。', '重试授权');
+        }
+    }
+
+    _closeReadingSourcePicker({ restoreFocus = true } = {}) {
+        const panel = document.getElementById('reading-source-picker');
+        const readingContainer = document.getElementById('reading-reco');
+        if (!panel) return;
+        panel.remove();
+        if (readingContainer) readingContainer.inert = false;
+        const target = this._readingSourcePickerReturnFocus?.isConnected
+            ? this._readingSourcePickerReturnFocus
+            : document.getElementById('reco-setup-btn');
+        this._readingSourcePickerReturnFocus = null;
+        if (restoreFocus) requestAnimationFrame(() => target?.focus?.({ preventScroll: true }));
+    }
+
+    _renderReadingComplete(bm, quality) {
+        const meta = BookmarkSRS.QUALITY_META[quality] || BookmarkSRS.QUALITY_META[3];
+        const next = BookmarkSRS.formatNextReview(bm.srs?.nextReview);
+        const remaining = this._bookmarkRAG?.getTodayReview?.().length || 0;
+        this._renderReadingShell('complete-feedback', `
+            <div class="reading-v5-complete">
+                <i class="fas fa-check-circle"></i><span class="eyebrow">反馈已保存在本地</span><h2>${this._escHtml(meta.label)}：${this._escHtml(bm.title)}</h2><p>下一次复习安排：<strong>${this._escHtml(next)}</strong></p>
+                <div class="reading-v5-complete-stats"><div><b>${bm.srs?.repetition || 0}</b><span>累计复习</span></div><div><b>${bm.srs?.interval || 0} 天</b><span>当前间隔</span></div><div><b>${remaining}</b><span>今日剩余</span></div></div>
+                <div><button class="primary" id="reading-next-item"><i class="fas fa-play"></i> ${remaining ? '继续下一篇' : '返回今日队列'}</button><button id="reading-view-history">查看历史统计</button></div>
+            </div>`, '完成反馈');
+        document.getElementById('reading-next-item')?.addEventListener('click', () => this._renderReadingHome());
+        document.getElementById('reading-view-history')?.addEventListener('click', () => this._renderReadingHistoryStats());
+    }
+
+    _renderReadingHistoryStats() {
+        const rag = this._bookmarkRAG;
+        const stats = rag?.getReviewStats?.() || {};
+        const reviewed = (rag?.bookmarks || []).filter(b => b.srs?.lastReview).sort((a, b) => b.srs.lastReview - a.srs.lastReview);
+        const maxRep = Math.max(1, ...reviewed.map(b => b.srs?.repetition || 0));
+        const rows = reviewed.slice(0, 8).map(b => `<li><div><strong>${this._escHtml(b.title)}</strong><span>${new Date(b.srs.lastReview).toLocaleString('zh-CN')}</span></div><b>${b.srs.repetition || 0} 次</b></li>`).join('') || '<li class="empty">还没有复习记录，从今日队列完成第一篇吧。</li>';
+        const bars = reviewed.slice(0, 7).reverse().map(b => `<i style="height:${Math.max(12, Math.round((b.srs.repetition || 0) / maxRep * 100))}%" title="${this._escHtml(b.title)}"></i>`).join('');
+        this._renderReadingShell('history-stats', `
+            <div class="reading-v5-history">
+                <section class="reading-v5-stat-grid"><article><span>累计复习</span><b>${stats.totalRepetitions || 0}</b><small>真实 SRS repetition 合计</small></article><article><span>进入计划</span><b>${stats.inReview || 0}</b><small>${stats.dueToday || 0} 条今天到期</small></article><article><span>已读书签</span><b>${stats.reviewed || 0}</b><small>${stats.unreviewed || 0} 条尚未加入</small></article><article><span>平均难度系数</span><b>${stats.averageEF || 0}</b><small>来自本地复习调度</small></article></section>
+                <section class="reading-v5-history-main"><article><div class="reading-v5-section-head"><div><span class="eyebrow">复习节奏</span><h2>最近阅读活动</h2></div></div><div class="reading-v5-bars">${bars || '<span>暂无可绘制记录</span>'}</div></article><article><h3>最近完成</h3><ul>${rows}</ul></article></section>
+            </div>`, `${reviewed.length} 条历史`);
     }
 }
 

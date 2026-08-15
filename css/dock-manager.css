@@ -128,11 +128,14 @@
     z-index: 99999;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 0.3s;
+    visibility: hidden;
+    transition: opacity 0.3s, visibility 0s linear 0.3s;
 }
 .dock-launchpad.open {
     pointer-events: auto;
     opacity: 1;
+    visibility: visible;
+    transition-delay: 0s;
 }
 .dock-launchpad-overlay {
     position: absolute;
@@ -280,6 +283,25 @@
 .dock-launchpad-app.dock-launchpad-dragging {
     opacity: 0.5;
     transform: scale(0.9);
+}
+.dock-launchpad-open {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr);
+    grid-column: 1 / 3;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+}
+.dock-launchpad-open:focus-visible,
+.dock-context-menu-item:focus-visible {
+    outline: 2px solid rgba(167, 139, 250, 0.95);
+    outline-offset: 3px;
 }
 .dock-launchpad-app-icon {
     width: 40px;

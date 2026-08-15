@@ -2296,7 +2296,7 @@ importScripts('background-provider.js', 'hermes-writing-sync.js');
 
         if (message.action === 'offscreen_track_ended') {
             logExtEvent('music', 'track-ended');
-            _sendMusicControl({ action: 'music_track_ended' });
+            _sendMusicControl({ action: 'music_track_ended', songId: message.songId });
             return false;
         }
 
@@ -2314,6 +2314,7 @@ importScripts('background-provider.js', 'hermes-writing-sync.js');
                 action: 'music_playback_error',
                 error: message.error,
                 code: message.code,
+                songId: message.songId,
             });
             return false;
         }

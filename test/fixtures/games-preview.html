@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>休闲游戏真实页面验收夹具</title>
+  <style>html,body,iframe{width:100%;height:100%;margin:0;border:0;overflow:hidden;background:#07101d}</style>
+</head>
+<body>
+  <iframe id="app" src="../../index.html" title="休闲游戏本地验收页面"></iframe>
+  <script>
+    const frame = document.getElementById('app');
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+    frame.addEventListener('load', async () => {
+      const win = frame.contentWindow;
+      for (let i = 0; i < 200 && !win.GamesV5; i += 1) await sleep(50);
+      if (!win.GamesV5) return;
+
+      const view = new URLSearchParams(location.search).get('view') || 'launcher';
+      if (view === 'snake' || view === 'tetris' || view === 'voxel') {
+        if (view === 'voxel' && win.tetris3DGameManager) {
+          win.tetris3DGameManager.forceCanvas2d = true;
+          win.tetris3DGameManager.renderModeOverride = 'canvas2d';
+        }
+        win.GamesV5.launch(view);
+      } else if (view === 'pause-gameover') {
+        win.GamesV5.showPauseGameover('tetris', 'gameover');
+      } else if (view === 'settings-help') {
+        win.GamesV5.showSettingsHelp();
+      } else {
+        win.GamesV5.showLauncher();
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>v5 音乐工作台视觉验收</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <link rel="stylesheet" href="../../css/product-ui-v4.css?v=4">
+  <link rel="stylesheet" href="../../css/product-ui-v5.css?v=6">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style>
+    body { background: radial-gradient(circle at 24% 18%, #27345b 0, transparent 31%), radial-gradient(circle at 80% 78%, #182c37 0, transparent 30%), linear-gradient(145deg, #070b14, #02050a 70%); }
+    body::before { content:""; position:fixed; inset:0; pointer-events:none; opacity:.22; background-image:radial-gradient(circle,rgba(255,255,255,.7) 0 1px,transparent 1.5px); background-size:92px 92px; }
+    .demo-note { position:fixed; top:18px; left:22px; z-index:2000; color:rgba(255,255,255,.52); font:11px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; letter-spacing:.04em; }
+  </style>
+</head>
+<body>
+  <div class="demo-note">V5 VISUAL QA · 复用生产 MusicView DOM 与样式</div>
+  <script src="../../js/music-view.js?v=5"></script>
+  <script>
+    (() => {
+      const { container, actionSheet, contextMenu } = window.MusicView.create();
+      document.body.append(actionSheet, contextMenu, container);
+      container.classList.add('mc-dock-open');
+      const panel = container.querySelector('#mc-panel');
+      panel.classList.remove('hidden');
+      panel.classList.add('mc-panel-expanded');
+
+      const songs = [
+        ['失眠了', '吴炜珂 Moske'], ['克卜勒', '孙燕姿'], ['雨爱', '杨丞琳'], ['夜空中最亮的星', '逃跑计划'], ['晚风心里吹', '阿梨粤'], ['悬溺', '葛东琪']
+      ];
+      const songRows = (queue = false) => songs.map((song, index) => `
+        <div class="mc-row${index === 0 ? ' mc-row-active' : ''}">
+          <span class="mc-row-num">${index === 0 ? '<i class="fas fa-volume-up"></i>' : index + 1}</span>
+          <div class="mc-row-info"><span class="mc-row-title">${song[0]}</span><span class="mc-row-artist">${song[1]}</span></div>
+          <button class="mc-row-like"><i class="far fa-heart"></i></button>
+          ${queue ? '<button class="mc-row-remove"><i class="fas fa-times"></i></button>' : ''}
+          <button class="mc-row-play"><i class="fas fa-play"></i></button>
+        </div>`).join('');
+
+      container.querySelector('#mc-v5-now-title').textContent = songs[0][0];
+      container.querySelector('#mc-v5-now-artist').textContent = songs[0][1];
+      container.querySelector('#mc-v5-now-lyric').textContent = '闭上眼，城市的灯还没有熄灭';
+      container.querySelector('#mc-v5-queue-size').textContent = `${songs.length} 首`;
+      container.querySelector('#mc-title').textContent = songs[0][0];
+      container.querySelector('#mc-sub').textContent = songs[0][1];
+      container.querySelector('#mc-lyric-preview').textContent = '闭上眼，城市的灯还没有熄灭';
+      container.querySelector('#mc-time-cur').textContent = '0:18';
+      container.querySelector('#mc-time-total').textContent = '4:14';
+      container.querySelector('#mc-prg-fill').style.width = '7%';
+      container.querySelector('#mc-v5-now-cover').innerHTML = '<div class="mc-now-cover-glow"></div><i class="fas fa-moon"></i>';
+
+      const queuePane = container.querySelector('#mc-pane-queue');
+      const queueHeader = (detail = false) => `
+        <div class="mc-pl-detail-header">
+          <button class="mc-pl-back"><i class="fas fa-arrow-left"></i></button>
+          <div class="mc-pl-detail-cover mc-pl-cover-ph"><i class="fas ${detail ? 'fa-heart' : 'fa-list'}"></i></div>
+          <div class="mc-pl-detail-info"><div class="mc-pl-detail-name">${detail ? '夜晚散步' : '播放队列'}</div><div class="mc-pl-detail-count">${songs.length} 首歌曲</div></div>
+          <div class="mc-pl-detail-actions"><button class="mc-pl-action-btn"><i class="fas fa-play"></i></button><button class="mc-pl-action-btn"><i class="fas fa-random"></i></button>${detail ? '' : '<button class="mc-pl-action-btn"><i class="fas fa-trash-alt"></i></button>'}</div>
+        </div>`;
+      queuePane.innerHTML = queueHeader(false) + songRows(true);
+
+      container.querySelector('#mc-pane-playlists').innerHTML = `
+        <div class="mc-page-heading"><div><span class="mc-page-eyebrow">YOUR LIBRARY</span><h2>我的歌单</h2></div><small>6 个歌单</small></div>
+        <div class="mc-fm-entry"><div class="mc-fm-entry-icon"><i class="fas fa-history"></i></div><div class="mc-fm-entry-text"><div class="mc-fm-entry-title">最近播放</div><div class="mc-fm-entry-desc">继续上一次的音乐</div></div><i class="fas fa-chevron-right"></i></div>
+        <div class="mc-pl-compact">${['我喜欢的音乐','夜晚散步','专注工作','城市民谣','华语收藏','周末公路'].map((name,index) => `<div class="mc-pl-row" data-demo-detail><div class="mc-pl-dot" style="background:${['#ff6b8a','#8b6cff','#64b4ff','#5cd8a8','#ffa65c','#d07cff'][index]}"></div><span class="mc-pl-label">${name}</span><span class="mc-pl-num">${[126,32,48,56,89,24][index]}</span><i class="fas fa-chevron-right mc-pl-chev"></i></div>`).join('')}</div>`;
+
+      container.querySelector('#mc-search-input').value = '失眠';
+      container.querySelector('#mc-search-results').innerHTML = `<div class="mc-page-heading"><div><span class="mc-page-eyebrow">RESULTS</span><h2>“失眠”的单曲</h2></div><small>找到 20 个结果</small></div>${songRows(false)}`;
+
+      function show(page) {
+        const panePage = page === 'playlist-detail' ? 'queue' : page;
+        panel.dataset.musicPage = page;
+        container.querySelectorAll('[data-mc-pane]').forEach(pane => pane.classList.toggle('active', pane.dataset.mcPane === panePage));
+        container.querySelectorAll('[data-mc-tab]').forEach(tab => {
+          const active = tab.dataset.mcTab === panePage || (page === 'playlist-detail' && tab.dataset.mcTab === 'playlists');
+          tab.classList.toggle('active', active);
+          tab.setAttribute('aria-selected', String(active));
+        });
+        if (page === 'playlist-detail') queuePane.innerHTML = queueHeader(true) + songRows(false);
+        if (page === 'queue') queuePane.innerHTML = queueHeader(false) + songRows(true);
+      }
+
+      container.querySelectorAll('[data-mc-tab]').forEach(tab => tab.addEventListener('click', () => show(tab.dataset.mcTab)));
+      container.querySelector('#mc-search-tab').addEventListener('click', () => show('search'));
+      container.querySelectorAll('[data-mc-open]').forEach(button => button.addEventListener('click', () => show(button.dataset.mcOpen)));
+      container.querySelector('#mc-pane-playlists').addEventListener('click', event => { if (event.target.closest('[data-demo-detail]')) show('playlist-detail'); });
+      const requested = new URLSearchParams(location.search).get('page');
+      show(['now-playing','queue','playlists','playlist-detail','search'].includes(requested) ? requested : 'now-playing');
+    })();
+  </script>
+</body>
+</html>

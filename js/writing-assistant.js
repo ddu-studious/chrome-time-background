@@ -785,8 +785,16 @@
     settingsBtn.dataset.bound = '1';
 
     settingsBtn.addEventListener('click', async () => {
+      const settingsReturnFocus = document.activeElement;
       let panel = document.getElementById('writing-ai-settings-panel');
-      if (panel) { panel.remove(); return; }
+      if (panel) {
+        panel.remove();
+        window.blogManager?._restoreProductPage?.();
+        settingsBtn.focus({ preventScroll: true });
+        return;
+      }
+
+      window.blogManager?._setProductPage?.('ai-assistant');
 
       let config = {};
       let ragConfig = {};
@@ -822,11 +830,14 @@
       panel = document.createElement('div');
       panel.id = 'writing-ai-settings-panel';
       panel.className = 'writing-ai-settings-panel';
+      panel.setAttribute('role', 'dialog');
+      panel.setAttribute('aria-modal', 'true');
+      panel.setAttribute('aria-labelledby', 'writing-ai-settings-title');
       panel.innerHTML = `
         <div class="writing-ai-settings-header">
-          <span>写作 AI 设置</span>
+          <span id="writing-ai-settings-title">写作 AI 设置</span>
           ${hasPost ? '<span style="font-size:0.65rem;opacity:0.6;margin-left:8px;">仅影响当前文章</span>' : ''}
-          <button class="writing-ai-settings-close">&times;</button>
+          <button type="button" class="writing-ai-settings-close" aria-label="关闭写作 AI 设置">&times;</button>
         </div>
         <div class="writing-ai-settings-body">
           <label class="writing-ai-field">
@@ -891,12 +902,20 @@
 
       const toolbar = document.getElementById('writing-ai-toolbar');
       (toolbar?.parentElement || document.body).appendChild(panel);
+      requestAnimationFrame(() => panel.querySelector('.writing-ai-settings-close')?.focus({ preventScroll: true }));
 
       const tempInput = panel.querySelector('#ws-temperature');
       const tempVal = panel.querySelector('#ws-temp-val');
       tempInput?.addEventListener('input', () => { tempVal.textContent = tempInput.value; });
 
-      panel.querySelector('.writing-ai-settings-close')?.addEventListener('click', () => panel.remove());
+      const closeSettings = () => {
+        panel.inert = true;
+        panel.remove();
+        window.blogManager?._restoreProductPage?.();
+        settingsReturnFocus?.focus?.({ preventScroll: true });
+      };
+
+      panel.querySelector('.writing-ai-settings-close')?.addEventListener('click', closeSettings);
 
       panel.querySelector('#ws-prompt-reset')?.addEventListener('click', () => {
         const promptArea = panel.querySelector('#ws-system-prompt');
@@ -955,7 +974,10 @@
             assistantClient.setEnabled(newConfig.enabled);
             const toggleBtn = document.getElementById('writing-ai-toggle');
             if (toggleBtn) toggleBtn.classList.toggle('active', newConfig.enabled);
-            setTimeout(() => panel.remove(), 800);
+            setTimeout(() => {
+              panel.remove();
+              window.blogManager?._restoreProductPage?.();
+            }, 800);
           }
         } catch (e) {
           const wsStatus = panel.querySelector('#ws-status');

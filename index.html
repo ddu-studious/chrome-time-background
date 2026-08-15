@@ -8,15 +8,15 @@
         html { overflow: hidden; height: 100%; }
         body { position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; overflow: hidden; margin: 0; padding: 0; background-size: cover; background-position: center; background-repeat: no-repeat; }
     </style>
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=14">
     <link rel="stylesheet" href="css/schedule.css">
     <link rel="stylesheet" href="css/weekview.css">
-    <link rel="stylesheet" href="css/blog.css">
+    <link rel="stylesheet" href="css/blog.css?v=3">
     <link rel="stylesheet" href="css/snake-game.css">
     <link rel="stylesheet" href="css/tetris-game.css">
     <link rel="stylesheet" href="css/tetris-3d-game.css">
-    <link rel="stylesheet" href="css/dock-manager.css">
-    <link rel="stylesheet" href="css/prompt-manager.css">
+    <link rel="stylesheet" href="css/dock-manager.css?v=3">
+    <link rel="stylesheet" href="css/prompt-manager.css?v=3">
     <link rel="stylesheet" href="css/bg-effects.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
@@ -115,8 +115,8 @@
     </div>
 
     <!-- 今日推荐阅读（Dock App 浮层） -->
-    <div class="reading-reco-wrapper" id="reading-reco-wrapper" style="display: none;">
-        <div class="reading-reco-container" id="reading-reco">
+    <div class="reading-reco-wrapper" id="reading-reco-wrapper" style="display: none;" aria-hidden="true">
+        <div class="reading-reco-container" id="reading-reco" role="dialog" aria-modal="true" aria-labelledby="reading-reco-title" tabindex="-1">
             <div class="reading-reco-header">
                 <span class="reading-reco-title">
                     <i class="fas fa-book-reader"></i>
@@ -215,30 +215,34 @@
 
     <!-- v3.0.0: 诗词电台 + 温情提示（迷你播放器） -->
     <div class="poetry-radio" id="poetry-radio">
-        <div class="pr-display">
+        <button class="pr-display" id="pr-open-workspace" type="button" aria-label="打开诗词全文">
             <span class="pr-icon" id="pr-icon">📜</span>
-            <div class="pr-text-wrap">
+            <span class="pr-text-wrap">
                 <span class="pr-text" id="pr-text"></span>
                 <span class="pr-author" id="pr-author"></span>
-            </div>
-        </div>
+                <span class="pr-progress" aria-hidden="true"><i id="pr-progress-bar"></i></span>
+                <span class="pr-progress-text" id="pr-progress-text"></span>
+            </span>
+        </button>
         <div class="pr-controls">
-            <button class="pr-btn" id="pr-prev" title="上一首"><i class="fas fa-step-backward"></i></button>
-            <button class="pr-btn pr-btn-play" id="pr-play" title="播放/暂停"><i class="fas fa-play"></i></button>
-            <button class="pr-btn" id="pr-next" title="下一首"><i class="fas fa-step-forward"></i></button>
-            <button class="pr-btn pr-btn-fav" id="pr-fav" title="收藏"><i class="far fa-heart"></i></button>
-            <select class="pr-speed" id="pr-speed" title="朗读速度">
+            <button class="pr-btn" id="pr-prev" type="button" title="上一首" aria-label="上一首诗词"><i class="fas fa-step-backward" aria-hidden="true"></i></button>
+            <button class="pr-btn pr-btn-play" id="pr-play" type="button" title="播放/暂停" aria-label="开始朗读" aria-pressed="false"><i class="fas fa-play" aria-hidden="true"></i></button>
+            <button class="pr-btn" id="pr-next" type="button" title="下一首" aria-label="下一首诗词"><i class="fas fa-step-forward" aria-hidden="true"></i></button>
+            <button class="pr-btn pr-btn-fav" id="pr-fav" type="button" title="收藏" aria-label="收藏当前诗词" aria-pressed="false"><i class="far fa-heart" aria-hidden="true"></i></button>
+            <select class="pr-speed" id="pr-speed" title="朗读速度" aria-label="朗读速度">
                 <option value="0.7">0.7x</option>
                 <option value="0.85">0.85x</option>
                 <option value="1" selected>1x</option>
                 <option value="1.2">1.2x</option>
                 <option value="1.5">1.5x</option>
             </select>
-            <button class="pr-btn pr-btn-mode" id="pr-mode" title="切换模式"><i class="fas fa-random"></i></button>
+            <button class="pr-btn pr-btn-mode" id="pr-mode" type="button" title="切换模式" aria-label="播放模式：随机播放"><i class="fas fa-random" aria-hidden="true"></i></button>
         </div>
+        <span class="pr-status" id="pr-status" role="status" aria-live="polite"></span>
     </div>
 
     <!-- 底部信息 -->
+    <button id="games-hub-dock-btn" type="button" hidden aria-hidden="true"></button>
     <div class="background-credit" id="background-credit">
         长城 - 慕田峪长城
     </div>
@@ -317,7 +321,7 @@
         </button>
     </div>
 
-    <div class="snake-game-panel" id="snake-game-panel">
+    <div class="snake-game-panel" id="snake-game-panel" role="dialog" aria-label="贪吃蛇" aria-hidden="true" tabindex="-1">
         <div class="snake-game-header">
             <span class="snake-game-title"><i class="fas fa-gamepad"></i> 贪吃蛇</span>
             <button class="snake-game-close" id="snake-game-close" aria-label="关闭">×</button>
@@ -336,7 +340,7 @@
         <div class="snake-game-hint">方向键 / WASD 控制移动，空格键暂停或继续。</div>
     </div>
 
-    <div class="tetris-game-panel" id="tetris-game-panel">
+    <div class="tetris-game-panel" id="tetris-game-panel" role="dialog" aria-label="俄罗斯方块" aria-hidden="true" tabindex="-1">
         <div class="tetris-game-header">
             <span class="tetris-game-title"><i class="fas fa-th"></i> 俄罗斯方块</span>
             <button class="tetris-game-close" id="tetris-game-close" aria-label="关闭">×</button>
@@ -356,7 +360,7 @@
         <div class="tetris-game-hint">← → / A D 平移，↑ / K / X 旋转，↓ / S 软降，C / End 硬降，空格暂停。</div>
     </div>
 
-    <div class="tetris-3d-game-panel" id="tetris-3d-game-panel" tabindex="-1" aria-label="立体方块游戏面板">
+    <div class="tetris-3d-game-panel" id="tetris-3d-game-panel" role="dialog" tabindex="-1" aria-label="立体方块游戏面板" aria-hidden="true">
         <div class="tetris-3d-game-header">
             <span class="tetris-3d-game-title"><i class="fas fa-cube"></i> 立体方块</span>
             <span class="tetris-3d-render-badge" id="tetris-3d-render-mode" title="渲染模式">—</span>
@@ -385,7 +389,7 @@
     <script src="vendor/fuse.browser.min.js"></script>
     <link rel="stylesheet" href="vendor/highlight-theme.css">
     <script src="js/markdown-renderer.js"></script>
-    <script src="js/chrome-shim.js"></script>
+    <script src="js/chrome-shim.js?v=4"></script>
     <script src="js/settings.js"></script>
     <script src="js/i18n.js"></script>
     <script src="js/lunar-lib.js"></script>
@@ -397,37 +401,46 @@
     <script src="js/bookmark-srs.js"></script>
     <script src="js/bookmark-rag.js"></script>
     <script src="js/activity-logger.js"></script>
-    <script src="js/memo.js"></script>
-    <script src="js/knowledge-wall.js"></script>
-    <script src="js/ticker.js"></script>
+    <script src="js/memo.js?v=10"></script>
+    <script src="js/knowledge-wall.js?v=11"></script>
+    <script src="js/ticker.js?v=3"></script>
     <script src="js/adaptive-overlay.js"></script>
-    <script src="js/music-controller.js"></script>
-    <script src="js/bilibili-controller.js"></script>
-    <script src="js/worklog.js"></script>
+    <script src="js/product-ui-v5.js?v=6"></script>
+    <script src="js/product-pages-v5.js?v=6"></script>
+    <script src="js/music-view.js?v=6"></script>
+    <script src="js/music-controller.js?v=12"></script>
+    <script src="js/bilibili-controller.js?v=10"></script>
+    <script src="js/worklog.js?v=7"></script>
+    <script src="js/today-overview.js?v=6"></script>
+    <script src="js/product-shell-v5.js?v=7"></script>
     <script src="js/hermes-writing-sync.js"></script>
-    <script src="js/blog.js"></script>
-    <script src="js/writing-assistant.js"></script>
-    <script src="js/schedule.js"></script>
+    <script src="js/blog.js?v=10"></script>
+    <script src="js/writing-assistant.js?v=7"></script>
+    <script src="js/schedule.js?v=7"></script>
     <script src="js/weekview.js"></script>
-    <link rel="stylesheet" href="css/cursor-bridge.css">
-    <link rel="stylesheet" href="css/chatbot.css">
+    <link rel="stylesheet" href="css/cursor-bridge.css?v=3">
+    <link rel="stylesheet" href="css/chatbot.css?v=4">
     <link rel="stylesheet" href="css/whitebox-observability.css">
-    <script src="js/cursor-bridge.js"></script>
-    <script src="js/chatbot.js"></script>
-    <script src="js/prompt-manager.js"></script>
+    <link rel="stylesheet" href="css/product-ui-v4.css?v=5">
+    <link rel="stylesheet" href="css/product-ui-v5.css?v=24">
+    <script src="js/cursor-bridge.js?v=4"></script>
+    <script src="js/chatbot.js?v=6"></script>
+    <script src="js/prompt-manager.js?v=7"></script>
     <script src="js/whitebox-observability.js"></script>
-    <script src="js/snake-game.js"></script>
+    <script src="js/snake-game.js?v=2"></script>
     <script src="js/tetris-effect-tiers.js"></script>
-    <script src="js/tetris-game.js"></script>
+    <script src="js/tetris-game.js?v=2"></script>
     <script src="js/webgl-capability-probe.js"></script>
     <script src="js/tetris-3d-voxel-mapper.js"></script>
     <script src="js/tetris-3d-fx.js"></script>
     <script src="js/tetris-3d-platform.js"></script>
     <script src="js/tetris-3d-renderer.js"></script>
-    <script src="js/tetris-3d-game.js"></script>
+    <script src="js/tetris-3d-game.js?v=2"></script>
     <script src="js/bg-effects.js"></script>
-    <script src="js/dock-manager.js"></script>
-    <script src="js/quick-nav.js"></script>
-    <script src="js/main.js"></script>
+    <script src="js/app-registry.js"></script>
+    <script src="js/dock-manager.js?v=11"></script>
+    <script src="js/games-v5.js?v=2"></script>
+    <script src="js/quick-nav.js?v=13"></script>
+    <script src="js/main.js?v=9"></script>
   </body>
 </html>

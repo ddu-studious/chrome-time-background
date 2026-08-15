@@ -11,6 +11,9 @@ class BlogManager {
         this._drawerEl = null;
         this._reopenChip = null;
         this._escHandler = null;
+        this._returnFocus = null;
+        this._backgroundInertSiblings = [];
+        this._drawerEventsAbort = null;
 
         this._currentView = 'list';     // list | editor | detail
         this._editingPost = null;
@@ -33,7 +36,7 @@ class BlogManager {
         ];
 
         this.STORAGE_KEY = 'blogPosts';
-        this._drawerVh = 62;
+        this._drawerVh = 88;
     }
 
     // ─── 初始化 ───
@@ -78,14 +81,20 @@ class BlogManager {
 
     async syncFromHermes(showToast = true) {
         if (!window.HermesWritingSync?.syncFromBridge) {
-            if (showToast) this._showToast('Hermes 同步模块未加载', 'warning');
-            return { ok: false };
+            const result = { ok: false, error: 'Hermes 同步模块未加载' };
+            if (showToast) this._showSyncError(result.error);
+            return result;
         }
-        const result = await window.HermesWritingSync.syncFromBridge({
-            scan: true,
-            forceScan: true,
-            showToast,
-        });
+        let result;
+        try {
+            result = await window.HermesWritingSync.syncFromBridge({
+                scan: true,
+                forceScan: true,
+                showToast,
+            });
+        } catch (error) {
+            result = { ok: false, error: error?.message || '无法连接 Hermes Bridge' };
+        }
         console.log('[Blog] Hermes 同步结果', result);
         if (result.ok) {
             await this._loadData();
@@ -99,6 +108,8 @@ class BlogManager {
                 this._renderSidebar?.();
                 this._renderTopbarStats?.();
             }
+        } else if (showToast) {
+            this._showSyncError(result.error || result.message || 'Hermes 数据源暂时不可用');
         }
         return result;
     }
@@ -108,7 +119,12 @@ class BlogManager {
         const data = await new Promise(r =>
             chrome.storage.local.get([this.STORAGE_KEY], r)
         );
-        this._posts = Array.isArray(data[this.STORAGE_KEY]) ? data[this.STORAGE_KEY] : [];
+        this._posts = Array.isArray(data[this.STORAGE_KEY])
+            ? data[this.STORAGE_KEY].map(post => ({
+                ...post,
+                versions: Array.isArray(post.versions) ? post.versions : [],
+            }))
+            : [];
     }
 
     async _savePosts() {
@@ -602,6 +618,7 @@ class BlogManager {
             pinned: data.pinned ?? false,
             aiConfig: data.aiConfig || null,
             source: data.source || null,
+            versions: Array.isArray(data.versions) ? data.versions : [],
         };
         this._posts.unshift(post);
         void this._savePosts();
@@ -636,6 +653,25 @@ class BlogManager {
     updatePost(id, data) {
         const post = this._posts.find(p => p.id === id);
         if (!post) return null;
+        const versionedFields = ['title', 'content', 'category', 'tags'];
+        const hasContentChange = versionedFields.some(field => {
+            if (data[field] === undefined) return false;
+            if (field === 'tags') return JSON.stringify(data.tags || []) !== JSON.stringify(post.tags || []);
+            return data[field] !== post[field];
+        });
+        if (hasContentChange) {
+            post.versions = Array.isArray(post.versions) ? post.versions : [];
+            post.versions.unshift({
+                id: `version_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                createdAt: post.updatedAt || post.createdAt || Date.now(),
+                title: post.title,
+                content: post.content,
+                category: post.category,
+                tags: [...(post.tags || [])],
+                wordCount: post.wordCount || this._wordCount(post.content),
+            });
+            post.versions = post.versions.slice(0, 50);
+        }
         if (data.title !== undefined) post.title = data.title;
         if (data.content !== undefined) {
             post.content = data.content;
@@ -817,10 +853,12 @@ class BlogManager {
 
     openDrawer() {
         if (this._drawerOpen) return;
+        this._returnFocus = document.activeElement;
         this._drawerOpen = true;
         this._currentView = 'list';
         this._editingPost = null;
         this._buildDrawer();
+        this._setProductPage('library');
     }
 
     closeDrawer() {
@@ -830,23 +868,67 @@ class BlogManager {
             document.removeEventListener('keydown', this._escHandler);
             this._escHandler = null;
         }
+        this._drawerEventsAbort?.abort();
+        this._drawerEventsAbort = null;
+        document.getElementById('blog-version-overlay')?.remove();
+        document.getElementById('blog-sync-error-overlay')?.remove();
+        document.getElementById('knowledge-wiki-overlay')?.remove();
+        document.getElementById('writing-ai-settings-panel')?.remove();
+        const dockBtn = document.getElementById('blog-dock-btn');
+        const visibleDockBtn = dockBtn?.getClientRects?.().length ? dockBtn : null;
+        const insideLaunchpad = this._returnFocus?.closest?.('#dock-launchpad');
+        const focusableReturn = this._returnFocus?.matches?.('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        const returnTarget = this._returnFocus?.isConnected && focusableReturn && !insideLaunchpad
+            ? this._returnFocus
+            : (visibleDockBtn || document.getElementById('dock-launchpad-btn'));
+        this._setBackgroundInert(false);
+        window.ProductUIV5?.setShellPage?.('home');
+        returnTarget?.focus?.({ preventScroll: true });
+        setTimeout(() => {
+            if (!this._drawerOpen) returnTarget?.focus?.({ preventScroll: true });
+        }, 120);
         if (this._drawerEl) {
+            this._drawerEl.inert = true;
             this._drawerEl.classList.remove('open');
             setTimeout(() => { this._drawerEl?.remove(); this._drawerEl = null; }, 400);
         }
         this._showReopenChip(false);
-        const btn = document.getElementById('blog-dock-btn');
-        if (btn) btn.classList.remove('active');
+        if (dockBtn) dockBtn.classList.remove('active');
+        this._returnFocus = null;
+    }
+
+    _setProductPage(page) {
+        window.ProductUIV5?.setBusinessPage?.('writing', page);
+    }
+
+    _baseProductPage() {
+        return { list: 'library', editor: 'editor', detail: 'preview' }[this._currentView] || 'library';
+    }
+
+    _restoreProductPage() {
+        this._setProductPage(this._baseProductPage());
     }
 
     _collapseDrawer() {
-        if (this._drawerEl) this._drawerEl.classList.remove('open');
+        if (this._drawerEl) {
+            this._drawerEl.classList.remove('open');
+            this._drawerEl.inert = true;
+        }
         this._showReopenChip(true);
+        requestAnimationFrame(() => this._reopenChip?.focus?.({ preventScroll: true }));
     }
 
     _expandDrawer() {
-        if (this._drawerEl) this._drawerEl.classList.add('open');
+        if (this._drawerEl) {
+            this._drawerEl.inert = false;
+            this._drawerEl.classList.add('open');
+        }
         this._showReopenChip(false);
+        const focusExpanded = () => (this._drawerEl?.querySelector('.blog-search-box input') || this._drawerEl?.querySelector('[data-action="new-post"]'))?.focus?.({ preventScroll: true });
+        requestAnimationFrame(focusExpanded);
+        setTimeout(() => {
+            if (this._drawerOpen && !this._drawerEl?.inert) focusExpanded();
+        }, 120);
     }
 
     _showReopenChip(show) {
@@ -871,6 +953,10 @@ class BlogManager {
 
         const drawer = document.createElement('div');
         drawer.className = 'blog-drawer';
+        drawer.setAttribute('role', 'dialog');
+        drawer.setAttribute('aria-modal', 'true');
+        drawer.setAttribute('aria-labelledby', 'blog-drawer-title');
+        drawer.tabIndex = -1;
         drawer.style.setProperty('--blog-drawer-h', this._drawerVh + 'vh');
         drawer.innerHTML = `
             <div class="blog-drawer-panel">
@@ -879,7 +965,7 @@ class BlogManager {
                 </div>
                 <div class="blog-topbar">
                     <div class="blog-topbar-left">
-                        <div class="blog-topbar-title"><i class="fas fa-pen-nib" style="color:#d4a843"></i> 写作空间</div>
+                        <div class="blog-topbar-title" id="blog-drawer-title"><i class="fas fa-pen-nib" style="color:#d4a843"></i> 写作空间</div>
                         <div class="blog-topbar-stats" id="blog-topbar-stats"></div>
                     </div>
                     <div class="blog-topbar-actions">
@@ -895,21 +981,64 @@ class BlogManager {
                 <div class="blog-body">
                     <div class="blog-sidebar" id="blog-sidebar"></div>
                     <div class="blog-content" id="blog-content"></div>
+                    <aside class="blog-assistant" aria-label="创作助手">
+                        <div class="blog-assistant-head">
+                            <span><i class="fas fa-sparkles"></i> 创作助手</span>
+                            <small>本地上下文</small>
+                        </div>
+                        <section class="blog-assistant-card">
+                            <strong>开始前</strong>
+                            <span>先确定读者、核心观点和希望读者采取的行动。</span>
+                            <button type="button" data-action="new-post"><i class="fas fa-plus"></i> 新建草稿</button>
+                        </section>
+                        <section class="blog-assistant-card">
+                            <strong>AI 写作工作台</strong>
+                            <span>配置文章级提示词、补全模型和历史文档联想。</span>
+                            <button type="button" data-action="assistant-ai"><i class="fas fa-magic"></i> 打开 AI 助手</button>
+                        </section>
+                        <section class="blog-assistant-card">
+                            <strong>引用与复用</strong>
+                            <span>从常用信息中查找素材，保留来源再写入文章。</span>
+                            <button type="button" data-action="assistant-knowledge"><i class="fas fa-brain"></i> 打开常用信息</button>
+                        </section>
+                        <section class="blog-assistant-card">
+                            <strong>结构提示</strong>
+                            <span>用角色与约束模板检查文章结构和输出格式。</span>
+                            <button type="button" data-action="assistant-prompt"><i class="fas fa-magic"></i> 打开 Prompt 管理</button>
+                        </section>
+                    </aside>
                 </div>
             </div>
         `;
         this._drawerEl = drawer;
         document.body.appendChild(drawer);
+        this._setBackgroundInert(true);
 
         this._renderTopbarStats();
         this._renderSidebar();
         this._renderContent();
         this._bindDrawerEvents();
 
-        requestAnimationFrame(() => requestAnimationFrame(() => drawer.classList.add('open')));
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+            drawer.classList.add('open');
+            (drawer.querySelector('.blog-search-box input') || drawer.querySelector('[data-action="new-post"]'))?.focus?.({ preventScroll: true });
+        }));
+        setTimeout(() => {
+            if (this._drawerOpen && !drawer.inert) (drawer.querySelector('.blog-search-box input') || drawer.querySelector('[data-action="new-post"]'))?.focus?.({ preventScroll: true });
+        }, 160);
 
         this._escHandler = (e) => {
+            if (e.key === 'Tab') {
+                this._trapFocus(this._activeFocusSurface(), e);
+                return;
+            }
             if (e.key === 'Escape') {
+                const surface = this._activeFocusSurface();
+                const dismiss = surface?.querySelector?.('[data-version-action="close"], [data-sync-action="keep-local"], [data-kw-action="close"], .writing-ai-settings-close');
+                if (surface !== this._drawerEl && dismiss) {
+                    dismiss.click();
+                    return;
+                }
                 if (this._currentView !== 'list') {
                     this._switchView('list');
                 } else {
@@ -924,9 +1053,47 @@ class BlogManager {
         this._showReopenChip(false);
     }
 
+    _setBackgroundInert(active) {
+        if (active) {
+            if (this._backgroundInertSiblings.length) return;
+            this._backgroundInertSiblings = [...document.body.children]
+                .filter(child => child !== this._drawerEl && child !== this._reopenChip && !child.inert);
+            this._backgroundInertSiblings.forEach(child => { child.inert = true; });
+            return;
+        }
+        this._backgroundInertSiblings.forEach(child => { child.inert = false; });
+        this._backgroundInertSiblings = [];
+    }
+
+    _activeFocusSurface() {
+        return document.getElementById('blog-version-overlay')
+            || document.getElementById('blog-sync-error-overlay')
+            || document.getElementById('knowledge-wiki-overlay')
+            || document.getElementById('writing-ai-settings-panel')
+            || this._drawerEl;
+    }
+
+    _trapFocus(container, event) {
+        const focusable = [...(container?.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [contenteditable="true"], [tabindex]:not([tabindex="-1"])') || [])]
+            .filter(element => !element.hidden && element.getAttribute('aria-hidden') !== 'true' && element.getClientRects().length);
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+        }
+    }
+
     _bindDrawerEvents() {
         const panel = this._drawerEl;
         if (!panel) return;
+        this._drawerEventsAbort?.abort();
+        this._drawerEventsAbort = new AbortController();
+        const eventOptions = { signal: this._drawerEventsAbort.signal };
 
         // 顶栏按钮
         panel.addEventListener('click', (e) => {
@@ -934,9 +1101,7 @@ class BlogManager {
             if (!btn) return;
             switch (btn.dataset.action) {
                 case 'hermes-sync':
-                    void this.syncFromHermes(true).catch((e) =>
-                        console.warn('[Blog] Hermes 同步异常:', e?.message || e)
-                    );
+                    void this.syncFromHermes(true);
                     break;
                 case 'hermes-manage':
                     this._openHermesManager();
@@ -947,6 +1112,17 @@ class BlogManager {
                 case 'new-post':
                     this._editingPost = null;
                     this._switchView('editor');
+                    break;
+                case 'assistant-knowledge':
+                    this._openKnowledgeWiki();
+                    break;
+                case 'assistant-ai':
+                    if (this._currentView !== 'editor') this._switchView('editor');
+                    this._setProductPage('ai-assistant');
+                    setTimeout(() => document.getElementById('writing-ai-settings-btn')?.click(), 80);
+                    break;
+                case 'assistant-prompt':
+                    document.getElementById('prompt-mgr-dock-btn')?.click();
                     break;
                 case 'collapse':
                     this._collapseDrawer();
@@ -959,7 +1135,7 @@ class BlogManager {
                     this.closeDrawer();
                     break;
             }
-        });
+        }, eventOptions);
 
         // 拖拽调高
         const dragZone = panel.querySelector('[data-role="drag"]');
@@ -987,7 +1163,7 @@ class BlogManager {
             document.addEventListener('pointermove', onMove);
             document.addEventListener('pointerup', onUp);
             e.preventDefault();
-        });
+        }, eventOptions);
     }
 
     // ─── 顶栏统计 ───
@@ -1084,6 +1260,24 @@ class BlogManager {
         this._currentView = view;
         if (postId) this._editingPost = this.getPost(postId);
         this._renderContent();
+        this._restoreProductPage();
+        requestAnimationFrame(() => {
+            const target = view === 'list'
+                ? this._drawerEl?.querySelector('.blog-search-box input')
+                : view === 'detail'
+                    ? this._drawerEl?.querySelector('.blog-detail-back')
+                    : this._drawerEl?.querySelector('#blog-ed-title');
+            target?.focus?.({ preventScroll: true });
+        });
+        setTimeout(() => {
+            if (!this._drawerOpen || this._activeFocusSurface() !== this._drawerEl) return;
+            const target = view === 'list'
+                ? this._drawerEl?.querySelector('.blog-search-box input')
+                : view === 'detail'
+                    ? this._drawerEl?.querySelector('.blog-detail-back')
+                    : this._drawerEl?.querySelector('#blog-ed-title');
+            target?.focus?.({ preventScroll: true });
+        }, 120);
     }
 
     // ─── 列表视图 — Jiayuan 风格 ───
@@ -1098,13 +1292,13 @@ class BlogManager {
             postsHtml = posts.map(p => {
                 const cat = this._getCategoryById(p.category);
                 return `
-                    <div class="blog-post-row" data-id="${p.id}">
+                    <button type="button" class="blog-post-row" data-id="${p.id}" aria-label="打开文章：${this._esc(p.title)}">
                         ${p.pinned ? '<i class="fas fa-thumbtack blog-post-pin"></i>' : ''}
                         <span class="blog-post-date">${this._formatDate(p.updatedAt)}</span>
                         <span class="blog-post-cat-dot" style="background:${cat.color}" title="${cat.name}"></span>
                         <span class="blog-post-link">${this._esc(p.title)}</span>
                         <span class="blog-post-words">${p.wordCount || 0} 字</span>
-                    </div>`;
+                    </button>`;
             }).join('');
         } else {
             postsHtml = `
@@ -1371,6 +1565,9 @@ class BlogManager {
                         <button type="button" class="blog-detail-act-btn" data-action="pin">
                             <i class="fas fa-thumbtack"></i> ${post.pinned ? '取消置顶' : '置顶'}
                         </button>
+                        <button type="button" class="blog-detail-act-btn" data-action="version-history">
+                            <i class="fas fa-history"></i> 版本 ${post.versions?.length || 0}
+                        </button>
                         <button type="button" class="blog-detail-act-btn danger" data-action="delete">
                             <i class="fas fa-trash-alt"></i> 删除
                         </button>
@@ -1415,6 +1612,9 @@ class BlogManager {
             this._renderContent();
             this._renderSidebar();
         });
+        container.querySelector('[data-action="version-history"]')?.addEventListener('click', () => {
+            this._showVersionHistory(post);
+        });
         container.querySelector('[data-action="delete"]')?.addEventListener('click', () => {
             if (confirm('确认删除这篇文章？')) {
                 this.deletePost(post.id);
@@ -1453,6 +1653,7 @@ class BlogManager {
                         <input type="text" class="blog-editor-tag-input" id="blog-ed-tags"
                                placeholder="标签（逗号分隔）" value="${this._esc(tags)}" />
                         <span class="blog-editor-wc" id="blog-ed-wc">${this._wordCount(content)} 字</span>
+                        ${post ? `<button type="button" class="blog-editor-history-btn" data-action="version-history"><i class="fas fa-history"></i> ${post.versions?.length || 0}</button>` : ''}
                     </div>
                 </div>
                 <div class="blog-editor-split">
@@ -1502,6 +1703,7 @@ class BlogManager {
         });
 
         container.querySelector('[data-action="save"]')?.addEventListener('click', () => this._saveFromEditor());
+        container.querySelector('[data-action="version-history"]')?.addEventListener('click', () => this._showVersionHistory(post));
 
         const bodyEl = container.querySelector('#blog-ed-body');
         const wcEl = container.querySelector('#blog-ed-wc');
@@ -1530,11 +1732,7 @@ class BlogManager {
 
         this._bindEditorEnhancements(container);
 
-        setTimeout(() => {
-            const titleInput = container.querySelector('#blog-ed-title');
-            if (titleInput && !titleInput.value) titleInput.focus();
-            else bodyEl?.focus();
-        }, 100);
+        setTimeout(() => container.querySelector('#blog-ed-title')?.focus({ preventScroll: true }), 100);
     }
 
     _saveFromEditor() {
@@ -2520,22 +2718,175 @@ class BlogManager {
         });
     }
 
+    // ─── 版本历史 / 同步异常 ───
+
+    _showVersionHistory(post = this._editingPost) {
+        if (!post) return;
+        document.getElementById('blog-version-overlay')?.remove();
+        const versionReturnFocus = document.activeElement;
+        const versions = Array.isArray(post.versions) ? post.versions : [];
+        const current = {
+            id: 'current',
+            createdAt: post.updatedAt,
+            title: post.title,
+            content: post.content,
+            category: post.category,
+            tags: [...(post.tags || [])],
+            wordCount: post.wordCount,
+        };
+        const snapshots = [current, ...versions];
+        const overlay = document.createElement('div');
+        overlay.id = 'blog-version-overlay';
+        overlay.className = 'blog-v5-overlay blog-version-overlay';
+        overlay.innerHTML = `
+            <section class="blog-v5-modal blog-version-modal" role="dialog" aria-modal="true" aria-labelledby="blog-version-title">
+                <header class="blog-v5-modal-head">
+                    <div>
+                        <span class="blog-v5-kicker">WRITING HISTORY</span>
+                        <h2 id="blog-version-title">版本历史</h2>
+                        <p>${this._esc(post.title)} · 共 ${versions.length} 个可恢复版本</p>
+                    </div>
+                    <button type="button" class="blog-v5-close" data-version-action="close" aria-label="关闭"><i class="fas fa-times"></i></button>
+                </header>
+                <div class="blog-version-layout">
+                    <nav class="blog-version-list" aria-label="文章版本">
+                        ${snapshots.map((version, index) => `
+                            <button type="button" class="blog-version-item ${index === 0 ? 'active' : ''}" data-version-id="${version.id}">
+                                <span class="blog-version-dot"></span>
+                                <strong>${index === 0 ? '当前版本' : `历史版本 ${versions.length - index + 1}`}</strong>
+                                <time>${this._formatDateTime(version.createdAt)}</time>
+                                <small>${version.wordCount ?? this._wordCount(version.content)} 字</small>
+                            </button>
+                        `).join('')}
+                    </nav>
+                    <article class="blog-version-preview">
+                        <div class="blog-version-preview-head">
+                            <div><span id="blog-version-preview-label">当前版本</span><strong id="blog-version-preview-title">${this._esc(current.title)}</strong></div>
+                            <button type="button" class="blog-v5-restore" data-version-action="restore" disabled><i class="fas fa-rotate-left"></i> 恢复此版本</button>
+                        </div>
+                        <div class="blog-article-body" id="blog-version-preview-body">${this._renderMarkdown(current.content)}</div>
+                    </article>
+                </div>
+            </section>`;
+        document.body.appendChild(overlay);
+        this._setProductPage('version-history');
+        requestAnimationFrame(() => {
+            if (this._drawerEl) this._drawerEl.inert = true;
+            overlay.classList.add('open');
+            overlay.querySelector('[data-version-action="close"]')?.focus({ preventScroll: true });
+        });
+
+        let selected = current;
+        const renderSelected = () => {
+            const index = snapshots.indexOf(selected);
+            overlay.querySelector('#blog-version-preview-label').textContent = index === 0 ? '当前版本' : `保存于 ${this._formatDateTime(selected.createdAt)}`;
+            overlay.querySelector('#blog-version-preview-title').textContent = selected.title || '无标题';
+            overlay.querySelector('#blog-version-preview-body').innerHTML = this._renderMarkdown(selected.content || '');
+            overlay.querySelector('[data-version-action="restore"]').disabled = selected.id === 'current';
+        };
+        const close = () => {
+            overlay.inert = true;
+            overlay.classList.remove('open');
+            if (this._drawerOpen && this._drawerEl) this._drawerEl.inert = false;
+            setTimeout(() => {
+                overlay.remove();
+                versionReturnFocus?.focus?.({ preventScroll: true });
+            }, 220);
+            this._restoreProductPage();
+        };
+        overlay.addEventListener('click', (event) => {
+            const versionButton = event.target.closest('[data-version-id]');
+            if (versionButton) {
+                selected = snapshots.find(item => item.id === versionButton.dataset.versionId) || current;
+                overlay.querySelectorAll('[data-version-id]').forEach(item => item.classList.toggle('active', item === versionButton));
+                renderSelected();
+                return;
+            }
+            const action = event.target.closest('[data-version-action]')?.dataset.versionAction;
+            if (action === 'close' || event.target === overlay) close();
+            if (action === 'restore' && selected.id !== 'current') {
+                this.updatePost(post.id, {
+                    title: selected.title,
+                    content: selected.content,
+                    category: selected.category,
+                    tags: [...(selected.tags || [])],
+                });
+                this._editingPost = this.getPost(post.id);
+                close();
+                this._switchView('detail', post.id);
+                this._renderSidebar();
+                this._renderTopbarStats();
+                this._showToast('已恢复历史版本，恢复前内容已自动留档', 'success');
+            }
+        });
+    }
+
+    _showSyncError(message) {
+        document.getElementById('blog-sync-error-overlay')?.remove();
+        const syncReturnFocus = document.activeElement;
+        const overlay = document.createElement('div');
+        overlay.id = 'blog-sync-error-overlay';
+        overlay.className = 'blog-v5-overlay blog-sync-error-overlay';
+        overlay.innerHTML = `
+            <section class="blog-v5-modal blog-sync-error-modal" role="alertdialog" aria-modal="true" aria-labelledby="blog-sync-error-title">
+                <div class="blog-sync-error-icon"><i class="fas fa-cloud-upload-alt"></i></div>
+                <span class="blog-v5-kicker">SYNC RECOVERY</span>
+                <h2 id="blog-sync-error-title">Hermes 暂时无法同步</h2>
+                <p>${this._esc(message || '数据源暂时不可用')}</p>
+                <div class="blog-sync-status-grid">
+                    <div><i class="fas fa-laptop"></i><span>本地文章</span><strong>${this._posts.length} 篇安全保留</strong></div>
+                    <div class="failed"><i class="fas fa-cloud"></i><span>远端数据源</span><strong>等待重新连接</strong></div>
+                </div>
+                <div class="blog-sync-actions">
+                    <button type="button" class="blog-v5-secondary" data-sync-action="keep-local">继续使用本地内容</button>
+                    <button type="button" class="blog-v5-primary" data-sync-action="retry"><i class="fas fa-rotate"></i> 重试同步</button>
+                </div>
+                <small>重试不会覆盖本地文章；Hermes 条目会按 externalId 去重。</small>
+            </section>`;
+        document.body.appendChild(overlay);
+        this._setProductPage('sync-error');
+        requestAnimationFrame(() => {
+            if (this._drawerEl) this._drawerEl.inert = true;
+            overlay.classList.add('open');
+            overlay.querySelector('[data-sync-action="keep-local"]')?.focus({ preventScroll: true });
+        });
+        const close = () => {
+            overlay.inert = true;
+            overlay.classList.remove('open');
+            if (this._drawerOpen && this._drawerEl) this._drawerEl.inert = false;
+            setTimeout(() => {
+                overlay.remove();
+                syncReturnFocus?.focus?.({ preventScroll: true });
+            }, 220);
+            this._restoreProductPage();
+        };
+        overlay.addEventListener('click', event => {
+            const action = event.target.closest('[data-sync-action]')?.dataset.syncAction;
+            if (action === 'keep-local' || event.target === overlay) close();
+            if (action === 'retry') {
+                close();
+                setTimeout(() => void this.syncFromHermes(true), 240);
+            }
+        });
+    }
+
     // ─── LLM-wiki 知识库面板 ───
 
     async _openKnowledgeWiki() {
         let overlay = document.getElementById('knowledge-wiki-overlay');
-        if (overlay) { overlay.remove(); return; }
+        if (overlay) { overlay.querySelector('[data-kw-action="close"]')?.click(); return; }
+        const knowledgeReturnFocus = document.activeElement;
 
         overlay = document.createElement('div');
         overlay.id = 'knowledge-wiki-overlay';
         overlay.className = 'kw-wiki-overlay';
         overlay.innerHTML = `
-            <div class="kw-panel">
+            <div class="kw-panel" role="dialog" aria-modal="true" aria-labelledby="kw-panel-title">
                 <div class="kw-header">
-                    <div class="kw-title"><i class="fas fa-project-diagram"></i> 知识图谱 · LLM-wiki</div>
+                    <div class="kw-title" id="kw-panel-title"><i class="fas fa-project-diagram"></i> 知识引用 · LLM-wiki</div>
                     <div class="kw-header-actions">
                         <button class="kw-btn" data-kw-action="index-all" title="索引全部未索引的故事"><i class="fas fa-magic"></i> 一键索引</button>
-                        <button class="kw-btn" data-kw-action="close"><i class="fas fa-times"></i></button>
+                        <button class="kw-btn" data-kw-action="close" aria-label="关闭知识引用"><i class="fas fa-times"></i></button>
                     </div>
                 </div>
                 <div class="kw-tabs">
@@ -2550,11 +2901,22 @@ class BlogManager {
             </div>
         `;
         document.body.appendChild(overlay);
-        requestAnimationFrame(() => overlay.classList.add('open'));
+        this._setProductPage('knowledge-citation');
+        requestAnimationFrame(() => {
+            if (this._drawerEl) this._drawerEl.inert = true;
+            overlay.classList.add('open');
+            overlay.querySelector('[data-kw-action="close"]')?.focus({ preventScroll: true });
+        });
 
         const closeWiki = () => {
+            overlay.inert = true;
             overlay.classList.remove('open');
-            overlay.addEventListener('transitionend', () => overlay.remove(), { once: true });
+            if (this._drawerOpen && this._drawerEl) this._drawerEl.inert = false;
+            setTimeout(() => {
+                overlay.remove();
+                knowledgeReturnFocus?.focus?.({ preventScroll: true });
+            }, 220);
+            this._restoreProductPage();
         };
         overlay.querySelector('[data-kw-action="close"]').onclick = closeWiki;
         overlay.querySelector('[data-kw-action="index-all"]').onclick = () => this._kwIndexAll(overlay);
@@ -2572,6 +2934,10 @@ class BlogManager {
         });
 
         await this._kwSwitchTab(overlay, 'overview');
+        if (overlay.isConnected) overlay.querySelector('[data-kw-action="close"]')?.focus({ preventScroll: true });
+        setTimeout(() => {
+            if (overlay.isConnected) overlay.querySelector('[data-kw-action="close"]')?.focus({ preventScroll: true });
+        }, 120);
     }
 
     async _kwSwitchTab(overlay, tab) {
@@ -2605,7 +2971,13 @@ class BlogManager {
                 }
             }
         } catch (err) {
-            body.innerHTML = `<div class="kw-empty"><i class="fas fa-exclamation-triangle"></i> ${err.message}</div>`;
+            body.innerHTML = `<div class="kw-empty">
+                <i class="fas fa-plug"></i>
+                <strong>知识服务未连接</strong>
+                <span>本地文章仍可正常编辑；启动 Bridge 后即可继续检索与引用。</span>
+                <button type="button" class="kw-btn" data-kw-action="retry"><i class="fas fa-redo"></i> 重新连接</button>
+            </div>`;
+            body.querySelector('[data-kw-action="retry"]')?.addEventListener('click', () => this._kwSwitchTab(overlay, tab));
         }
     }
 

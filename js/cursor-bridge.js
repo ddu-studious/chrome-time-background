@@ -8,6 +8,20 @@
     const BRIDGE_URL = 'http://127.0.0.1:19840';
     const HEALTH_INTERVAL = 15000;
 
+    const PRODUCT_RUN = {
+        id: 'RUN-0822',
+        name: '竞品研究周报',
+        environment: '本地工作区',
+        elapsed: '18m 42s',
+        tokens: '28.6K',
+        agents: [
+            { id: 'researcher', name: 'Researcher', role: '资料研究员', status: 'running', progress: 72, detail: '正在整理 12 个一手来源' },
+            { id: 'analyst', name: 'Analyst', role: '差异分析师', status: 'running', progress: 48, detail: '正在归纳核心能力差异' },
+            { id: 'writer', name: 'Writer', role: '周报撰稿人', status: 'waiting', progress: 0, detail: '等待 Analyst 交接上下文' },
+            { id: 'reviewer', name: 'Reviewer', role: '事实审核员', status: 'idle', progress: 0, detail: '将在草稿完成后启动' },
+        ],
+    };
+
     const AGENT_TEMPLATES = [
         {
             id: 'code-review', name: '代码审查', icon: 'fa-magnifying-glass-chart', color: '#f87171',
@@ -200,6 +214,13 @@
             this._agentTemplateMap = new Map();
             this._agentTaskProgress = new Map();
             this._agentDeps = new Map();
+            this._panelReturnFocus = null;
+            this._backgroundInertSiblings = [];
+            this._productRun = JSON.parse(JSON.stringify(PRODUCT_RUN));
+            this._productPage = 'overview';
+            this._runPaused = false;
+            this._handoffApproved = false;
+            this._panelKeydownHandler = event => this._handlePanelKeydown(event);
             this._restoreConvMap();
         }
 
@@ -330,6 +351,9 @@
             if (runningItem) runningItem.classList.toggle('active', running > 0);
             const emergencyBtn = this._panelEl?.querySelector('#cb-emergency-stop');
             if (emergencyBtn) emergencyBtn.classList.toggle('visible', running > 0);
+            if (this.isOpen && !this._panelEl?.querySelector('.cb-create-modal.open, .cb-collab-modal.open, #cb-wf-modal')) {
+                this._setProductPage(this._baseProductPage());
+            }
         }
 
         // ─── Project Switcher ───
@@ -824,6 +848,12 @@
             const panel = document.createElement('div');
             panel.className = 'cb-panel';
             panel.id = 'cb-panel';
+            panel.setAttribute('role', 'dialog');
+            panel.setAttribute('aria-modal', 'true');
+            panel.setAttribute('aria-label', 'Agent 矩阵');
+            panel.setAttribute('aria-hidden', 'true');
+            panel.tabIndex = -1;
+            panel.inert = true;
             panel.innerHTML = `
                 <div class="cb-panel-header">
                     <div class="cb-panel-title">
@@ -853,8 +883,8 @@
                         <button class="cb-btn cb-btn-icon" id="cb-refresh-btn" title="刷新">
                             <i class="fas fa-sync-alt"></i>
                         </button>
-                        <button class="cb-btn cb-btn-icon" id="cb-close-btn" title="关闭">
-                            <i class="fas fa-times"></i>
+                        <button class="cb-btn cb-btn-icon" id="cb-close-btn" title="关闭" aria-label="关闭 Agent 矩阵">
+                            <i class="fas fa-times" aria-hidden="true"></i>
                         </button>
                     </div>
                 </div>
@@ -909,6 +939,8 @@
 
                 <div class="cb-inline-panel-area" id="cb-inline-panel-area"></div>
 
+                <section class="cb-v6-workspace" id="cb-v6-workspace" aria-live="polite"></section>
+
                 <div class="cb-templates" id="cb-templates">
                     ${AGENT_TEMPLATES.map(t => `
                         <button class="cb-template-btn" data-template="${t.id}" title="${t.description}">
@@ -940,9 +972,9 @@
                     </div>
                 </div>
 
-                <div class="cb-create-modal" id="cb-create-modal">
-                    <div class="cb-modal-content">
-                        <h3>创建新 Agent</h3>
+                <div class="cb-create-modal" id="cb-create-modal" role="dialog" aria-modal="true" aria-labelledby="cb-create-title" aria-hidden="true">
+                    <div class="cb-modal-content" tabindex="-1">
+                        <h3 id="cb-create-title">创建新 Agent</h3>
                         <div class="cb-create-mode-switch">
                             <button class="cb-create-mode-btn active" data-mode="form"><i class="fas fa-list-check"></i> 表单模式</button>
                             <button class="cb-create-mode-btn" data-mode="chat"><i class="fas fa-comments"></i> 对话模式</button>
@@ -1008,11 +1040,11 @@
                     </div>
                 </div>
 
-                <div class="cb-collab-modal" id="cb-collab-modal">
-                    <div class="cb-collab-content">
+                <div class="cb-collab-modal" id="cb-collab-modal" role="dialog" aria-modal="true" aria-labelledby="cb-collab-title" aria-hidden="true">
+                    <div class="cb-collab-content" tabindex="-1">
                         <div class="cb-collab-header">
-                            <h3><i class="fas fa-users-gear"></i> 多角色协作</h3>
-                            <button class="cb-btn cb-btn-icon" id="cb-collab-close"><i class="fas fa-times"></i></button>
+                            <h3 id="cb-collab-title"><i class="fas fa-users-gear"></i> 多角色协作</h3>
+                            <button class="cb-btn cb-btn-icon" id="cb-collab-close" aria-label="关闭多角色协作"><i class="fas fa-times" aria-hidden="true"></i></button>
                         </div>
                         <div class="cb-collab-body">
                             <div class="cb-collab-step active" id="cb-collab-step-input">
@@ -1455,23 +1487,219 @@
                 }
                 if (e.key === 'Escape') {
                     if (this.isCmdOpen) { this.closeCmd(); return; }
-                    if (this.isOpen) {
-                        const modal = panel.querySelector('#cb-create-modal');
-                        if (modal?.classList.contains('open')) { this._hideCreateModal(); }
-                        else { this.togglePanel(); }
-                    }
                 }
             });
         }
 
         // ─── Panel toggle ───
 
+        _setProductPage(page) {
+            this._productPage = page || 'overview';
+            window.ProductUIV5?.setBusinessPage?.('agent', page);
+            this._renderProductWorkspace(this._productPage);
+        }
+
+        showProductPage(page) {
+            this._setProductPage(page);
+        }
+
+        _statusLabel(status) {
+            return ({ running: '运行中', waiting: '等待交接', idle: '未开始', error: '异常' })[status] || status;
+        }
+
+        _agentCard(agent, compact = false) {
+            return `<article class="cb-v6-agent ${compact ? 'is-compact' : ''}" data-status="${agent.status}">
+                <div class="cb-v6-agent-head">
+                    <span class="cb-v6-avatar">${agent.name.slice(0, 1)}</span>
+                    <div><strong>${agent.name}</strong><small>${agent.role}</small></div>
+                    <span class="cb-v6-state">${this._statusLabel(agent.status)}</span>
+                </div>
+                <p>${agent.detail}</p>
+                <div class="cb-v6-progress"><i style="width:${agent.progress}%"></i></div>
+                <footer><span>${agent.progress ? `${agent.progress}%` : '尚未消耗 Token'}</span><button data-v6-page="active">查看</button></footer>
+            </article>`;
+        }
+
+        _workspaceChrome(body, page) {
+            const connected = this.connected || this._previewMode;
+            return `<div class="cb-v6-context">
+                <div><span class="cb-v6-kicker">${PRODUCT_RUN.environment}</span><strong>${PRODUCT_RUN.name} · ${PRODUCT_RUN.id}</strong></div>
+                <nav aria-label="Agent 矩阵页面">
+                    ${[['overview','总览'],['active','执行中'],['flow-canvas','工作流'],['run-logs','日志'],['collaboration','协作']].map(([id,label]) => `<button class="${page === id ? 'active' : ''}" data-v6-page="${id}">${label}</button>`).join('')}
+                </nav>
+                <div class="cb-v6-resource"><span>${PRODUCT_RUN.elapsed}</span><span>${PRODUCT_RUN.tokens} tokens</span><span class="${connected ? 'ok' : 'bad'}">${connected ? 'Bridge 已连接' : 'Bridge 未连接'}</span></div>
+            </div>${body}`;
+        }
+
+        _renderProductWorkspace(page = 'overview') {
+            const root = this._panelEl?.querySelector('#cb-v6-workspace');
+            if (!root) return;
+            const normalized = ['overview','active','create','flow-canvas','run-logs','collaboration','connection-error'].includes(page) ? page : 'overview';
+            const renderers = {
+                overview: () => this._renderProductOverview(),
+                active: () => this._renderProductActive(),
+                create: () => this._renderProductCreate(),
+                'flow-canvas': () => this._renderProductFlow(),
+                'run-logs': () => this._renderProductLogs(),
+                collaboration: () => this._renderProductCollaboration(),
+                'connection-error': () => this._renderProductConnection(),
+            };
+            root.innerHTML = this._workspaceChrome(renderers[normalized](), normalized);
+            root.dataset.page = normalized;
+            this._bindProductWorkspace(root);
+        }
+
+        _renderProductOverview() {
+            return `<div class="cb-v6-page cb-v6-overview">
+                <header class="cb-v6-page-head"><div><span class="cb-v6-eyebrow">Agent Matrix</span><h2>多 Agent 协作，一眼看清全局</h2><p>配置状态与本次运行状态分开呈现，人工确认不会被当作错误。</p></div><button class="cb-v6-primary" data-v6-page="create"><i class="fas fa-plus"></i> 新建 Agent</button></header>
+                <section class="cb-v6-metrics"><div><small>Agent</small><strong>4</strong><span>2 个运行中</span></div><div><small>本次运行</small><strong>48%</strong><span>预计还需 12 分钟</span></div><div><small>资源消耗</small><strong>28.6K</strong><span>预算使用 38%</span></div><div><small>健康度</small><strong class="cb-v6-green">稳定</strong><span>1 项等待人工确认</span></div></section>
+                <div class="cb-v6-grid-main"><section><div class="cb-v6-section-title"><h3>执行团队</h3><button data-v6-page="active">进入运行视图 →</button></div><div class="cb-v6-agent-grid">${this._productRun.agents.map(a => this._agentCard(a)).join('')}</div></section>
+                <aside><section class="cb-v6-card"><div class="cb-v6-section-title"><h3>运行流水线</h3><span class="cb-v6-live">LIVE</span></div><ol class="cb-v6-pipeline"><li class="done">任务拆解 <span>完成</span></li><li class="active">资料收集 <span>12/16</span></li><li class="active">差异分析 <span>进行中</span></li><li>生成周报 <span>等待</span></li><li>事实校验 <span>等待</span></li></ol></section><section class="cb-v6-card cb-v6-approval"><i class="fas fa-hand"></i><div><strong>等待人工确认</strong><p>Analyst 请求使用本地竞品截图作为证据。</p></div><button data-v6-page="collaboration">处理</button></section></aside></div>
+                <div class="cb-v6-bottom-grid"><section class="cb-v6-card"><h3>最近产物</h3><ul class="cb-v6-artifacts"><li><i class="fas fa-file-lines"></i><span>source-notes.md<small>Researcher · 2 分钟前</small></span><b>18.4 KB</b></li><li><i class="fas fa-table"></i><span>feature-matrix.csv<small>Analyst · 刚刚更新</small></span><b>32 行</b></li></ul></section><section class="cb-v6-card"><h3>健康提示</h3><p class="cb-v6-health"><i class="fas fa-circle-check"></i> 所有运行记录与本地产物均已保存；断开连接不会清空。</p></section></div>
+            </div>`;
+        }
+
+        _renderProductActive() {
+            const current = this._productRun.agents[1];
+            return `<div class="cb-v6-page"><header class="cb-v6-page-head"><div><span class="cb-v6-eyebrow">ACTIVE RUN</span><h2>${PRODUCT_RUN.name}</h2><p>当前步骤 3 / 5 · Analyst 正在归纳关键差异</p></div><div class="cb-v6-head-actions"><button class="cb-v6-secondary" data-v6-action="cancel">取消运行</button><button class="cb-v6-primary" data-v6-action="pause"><i class="fas ${this._runPaused ? 'fa-play' : 'fa-pause'}"></i> ${this._runPaused ? '继续运行' : '暂停运行'}</button></div></header>
+                <div class="cb-v6-active-layout"><aside class="cb-v6-card cb-v6-agent-rail"><h3>协作成员</h3>${this._productRun.agents.map(a => this._agentCard(a, true)).join('')}</aside>
+                <main><section class="cb-v6-card cb-v6-stream"><div class="cb-v6-section-title"><div><span class="cb-v6-avatar">A</span><h3>${current.name}<small>${current.role} · claude-sonnet-4-6</small></h3></div><span class="cb-v6-live">${this._runPaused ? 'PAUSED' : 'STREAMING'}</span></div><div class="cb-v6-stepbar"><span class="done">读取输入</span><span class="done">建立维度</span><span class="active">归纳差异</span><span>输出结论</span></div><div class="cb-v6-output"><p><b>正在分析「多 Agent 协作」能力维度…</b></p><p>已从 12 个来源提取 36 条功能证据，当前聚类出 5 个核心维度：</p><ul><li>任务拆解与角色编排</li><li>上下文共享与交接透明度</li><li>人工审批与权限边界</li></ul><pre>tool: compare_evidence\nstatus: running\nitems: 36 / 48</pre><span class="cb-v6-caret"></span></div></section><section class="cb-v6-card cb-v6-toolcalls"><h3>工具调用</h3><div><i class="fas fa-globe"></i><span>browser.extract_sources<small>读取公开资料</small></span><b class="ok">完成 · 1.8s</b></div><div><i class="fas fa-code-compare"></i><span>compare_evidence<small>对齐功能证据</small></span><b>运行中 · 14s</b></div></section></main>
+                <aside><section class="cb-v6-card"><h3>上下文</h3><dl class="cb-v6-kv"><div><dt>输入</dt><dd>12 个来源 · 82 KB</dd></div><div><dt>窗口</dt><dd>64K / 200K</dd></div><div><dt>共享记忆</dt><dd>已同步</dd></div></dl></section><section class="cb-v6-card cb-v6-approval"><i class="fas fa-hand"></i><div><strong>等待你的确认</strong><p>允许读取本地截图文件夹？运行未失败。</p></div><button data-v6-page="collaboration">查看请求</button></section><section class="cb-v6-card"><h3>本次产物</h3><ul class="cb-v6-mini-list"><li>feature-matrix.csv <b>更新中</b></li><li>analysis-notes.md <b>6.2 KB</b></li></ul></section></aside></div>
+            </div>`;
+        }
+
+        _renderProductCreate() {
+            return `<div class="cb-v6-page"><header class="cb-v6-page-head"><div><span class="cb-v6-eyebrow">CREATE AGENT</span><h2>创建新的协作成员</h2><p>从职责开始，逐步校验模型、工具和权限边界。</p></div><button class="cb-v6-secondary" data-v6-page="overview">返回总览</button></header><div class="cb-v6-create-layout"><ol class="cb-v6-wizard"><li class="active"><b>1</b><span>选择模板<small>快速建立角色</small></span></li><li><b>2</b><span>角色与目标<small>定义成功标准</small></span></li><li><b>3</b><span>模型与工具<small>配置执行能力</small></span></li><li><b>4</b><span>权限范围<small>最小必要授权</small></span></li><li><b>5</b><span>测试并创建<small>验证后启用</small></span></li></ol><main class="cb-v6-card cb-v6-form"><div class="cb-v6-step-label">步骤 1 / 5</div><h3>这个 Agent 主要负责什么？</h3><p>模板只提供起点，所有配置都可以继续调整。</p><div class="cb-v6-template-grid">${[['R','资料研究员','搜索、筛选并整理可信来源'],['A','差异分析师','建立维度，归纳产品差异'],['W','内容撰稿人','把结构化结论写成周报'],['✓','事实审核员','检查引用、口径和遗漏']].map((x,i)=>`<button class="${i===1?'selected':''}" data-v6-template><span>${x[0]}</span><strong>${x[1]}</strong><small>${x[2]}</small><i class="fas fa-check"></i></button>`).join('')}</div><label>Agent 名称<input value="Analyst" aria-label="Agent 名称"></label><label>角色目标<textarea aria-label="角色目标">基于 Researcher 提供的证据，形成可追溯的竞品差异矩阵，并标出关键结论。</textarea></label><div class="cb-v6-config-row"><label>模型<select aria-label="模型"><option>claude-sonnet-4-6</option><option>gpt-5.4</option></select></label><label>工具范围<select aria-label="工具范围"><option>浏览器 + 本地只读文件</option><option>仅浏览器</option></select></label></div><fieldset><legend>权限范围</legend><label><input type="checkbox" checked> 读取共享运行上下文</label><label><input type="checkbox" checked> 写入本次运行产物目录</label><label><input type="checkbox"> 修改工作区源代码</label></fieldset><div class="cb-v6-test-result" id="cb-v6-test-result"><i class="fas fa-shield-halved"></i><span><strong>尚未测试</strong><small>创建前运行一次权限和连通性校验</small></span></div><footer><button class="cb-v6-secondary" data-v6-action="test-agent">运行测试</button><button class="cb-v6-primary" data-v6-action="create-agent">测试并创建 Agent</button></footer></main><aside class="cb-v6-card cb-v6-preview"><span class="cb-v6-eyebrow">LIVE PREVIEW</span><div class="cb-v6-avatar">A</div><h3>Analyst</h3><p>差异分析师</p><ul><li><i class="fas fa-check"></i> 共享上下文：只读</li><li><i class="fas fa-check"></i> 产物目录：可写</li><li><i class="fas fa-lock"></i> 源代码：不可修改</li></ul></aside></div></div>`;
+        }
+
+        _renderProductFlow() {
+            return `<div class="cb-v6-page"><header class="cb-v6-page-head"><div><span class="cb-v6-eyebrow">WORKFLOW CANVAS · v3</span><h2>竞品研究周报工作流</h2><p>节点输入输出、条件分支与运行预览在同一画布内可追溯。</p></div><button class="cb-v6-primary" data-v6-action="run-flow"><i class="fas fa-play"></i> 运行工作流</button></header><div class="cb-v6-flow-layout"><aside class="cb-v6-card"><h3>节点库</h3><label class="cb-v6-search"><i class="fas fa-search"></i><input placeholder="搜索节点"></label><h4>Agents</h4>${this._productRun.agents.map(a=>`<button class="cb-v6-node-item"><span>${a.name[0]}</span>${a.name}</button>`).join('')}<h4>Tools</h4><button class="cb-v6-node-item"><i class="fas fa-globe"></i>网页提取</button><button class="cb-v6-node-item"><i class="fas fa-code-compare"></i>证据对齐</button></aside><main class="cb-v6-flow-canvas"><div class="cb-v6-flow-node n1 active"><span>01</span><strong>Researcher</strong><small>输出 source bundle</small></div><div class="cb-v6-connector c1"></div><div class="cb-v6-flow-node n2"><span>02</span><strong>Analyst</strong><small>输出 feature matrix</small></div><div class="cb-v6-branch"><b>证据完整？</b><span>否 → 补充来源</span><span>是 → 继续</span></div><div class="cb-v6-connector c2"></div><div class="cb-v6-flow-node n3"><span>03</span><strong>Writer</strong><small>输出 weekly draft</small></div><div class="cb-v6-connector c3"></div><div class="cb-v6-flow-node n4"><span>04</span><strong>Reviewer</strong><small>输出 verified report</small></div><div class="cb-v6-run-preview"><span class="cb-v6-live">RUN PREVIEW</span><b>预计 31 分钟</b><span>4 Agents · 6 工具调用 · 75K Token 上限</span></div></main><aside class="cb-v6-card cb-v6-inspector"><h3>节点检查器</h3><span class="cb-v6-eyebrow">SELECTED NODE</span><h2>Researcher</h2><label>输入<select><option>竞品清单 + 研究范围</option></select></label><label>输出<select><option>source bundle / JSON</option></select></label><label>超时<input value="10 min"></label><label>失败策略<select><option>重试 2 次后暂停</option></select></label><div class="cb-v6-version"><b>版本 v3</b><span>8 分钟前保存</span></div></aside></div></div>`;
+        }
+
+        _renderProductLogs() {
+            return `<div class="cb-v6-page"><header class="cb-v6-page-head"><div><span class="cb-v6-eyebrow">RUN LOGS</span><h2>运行日志与故障上下文</h2><p>重试只作用于失败步骤，不会混入重新运行整条工作流。</p></div><div class="cb-v6-head-actions"><button class="cb-v6-secondary">导出日志</button><button class="cb-v6-primary" data-v6-action="retry-step"><i class="fas fa-rotate-right"></i> 重试失败步骤</button></div></header><div class="cb-v6-logs-layout"><aside class="cb-v6-card"><h3>运行记录</h3>${[['RUN-0822','运行中','18m'],['RUN-0821','已完成','29m'],['RUN-0819','步骤失败','14m'],['RUN-0818','已取消','6m']].map((x,i)=>`<button class="cb-v6-run-row ${i===0?'active':''}"><span><b>${x[0]}</b><small>${PRODUCT_RUN.name}</small></span><em>${x[1]}</em><time>${x[2]}</time></button>`).join('')}</aside><main><section class="cb-v6-card cb-v6-log-table"><div class="cb-v6-log-toolbar"><label><i class="fas fa-filter"></i><select><option>全部事件</option><option>工具调用</option><option>错误</option></select></label><input placeholder="筛选 Agent、步骤或消息"></div><div class="cb-v6-log-row head"><span>时间</span><span>Agent / 步骤</span><span>事件</span><span>耗时</span></div>${[['10:42:18','Researcher','source bundle 已写入','1.8s'],['10:42:21','Analyst','开始建立差异维度','—'],['10:43:09','Analyst','compare_evidence 调用','14s'],['10:43:23','Analyst','3 条证据格式不一致','—'],['10:43:25','System','等待人工确认','—']].map((x,i)=>`<div class="cb-v6-log-row ${i===3?'warn':''}">${x.map(y=>`<span>${y}</span>`).join('')}</div>`).join('')}</section><section class="cb-v6-card cb-v6-log-detail"><span class="cb-v6-eyebrow">EVENT DETAIL</span><h3>证据格式校验警告</h3><p>3 条证据缺少发布日期。当前步骤已保留上下文，可单独重试，不需要重新执行资料收集。</p><pre>{ "step": "compare_evidence", "retryable": true, "preserved": ["inputs", "artifacts", "context"] }</pre></section></main><aside><section class="cb-v6-card cb-v6-log-metrics"><h3>本次运行</h3><dl class="cb-v6-kv"><div><dt>Token</dt><dd>28,642</dd></div><div><dt>耗时</dt><dd>18m 42s</dd></div><div><dt>工具成功率</dt><dd>96.4%</dd></div><div><dt>重试</dt><dd>1 次</dd></div></dl></section><section class="cb-v6-card"><h3>错误上下文</h3><p class="cb-v6-health"><i class="fas fa-triangle-exclamation"></i> 可重试警告；运行记录和产物均已保留。</p></section></aside></div></div>`;
+        }
+
+        _renderProductCollaboration() {
+            return `<div class="cb-v6-page"><header class="cb-v6-page-head"><div><span class="cb-v6-eyebrow">COLLABORATION</span><h2>交接、共享上下文与人工确认</h2><p>审批是正常协作节点，不等同于错误或失败。</p></div><button class="cb-v6-primary" data-v6-action="approve-handoff"><i class="fas fa-check"></i> ${this._handoffApproved ? '已批准交接' : '批准交接'}</button></header><div class="cb-v6-handoff">${this._productRun.agents.map((a,i)=>`<div class="${i<2?'active':''}"><span>${a.name[0]}</span><strong>${a.name}</strong><small>${i===0?'已交接 12 个来源':i===1?'等待人工确认':'尚未接收'}</small></div>`).join('<i class="fas fa-arrow-right"></i>')}</div><div class="cb-v6-collab-layout"><aside><section class="cb-v6-card"><h3>协作关系</h3><ul class="cb-v6-relations"><li><b>Researcher</b><span>提供来源与证据</span></li><li class="active"><b>Analyst</b><span>请求读取本地截图</span></li><li><b>Writer</b><span>等待结构化矩阵</span></li><li><b>Reviewer</b><span>等待周报草稿</span></li></ul></section></aside><main><section class="cb-v6-card cb-v6-confirm"><span class="cb-v6-confirm-icon"><i class="fas fa-hand"></i></span><div><span class="cb-v6-eyebrow">HUMAN CONFIRMATION</span><h3>Analyst 请求扩展证据范围</h3><p>读取 <code>output/screenshots/competitors/</code> 下的 6 张本地截图，权限仅限读取，且仅在本次运行有效。</p><div class="cb-v6-permission"><span><i class="fas fa-folder"></i> 本地截图目录</span><b>只读 · 本次运行</b></div><footer><button class="cb-v6-secondary" data-v6-action="deny-handoff">拒绝</button><button class="cb-v6-primary" data-v6-action="approve-handoff">允许并继续</button></footer></div></section><section class="cb-v6-card"><h3>冲突与决策</h3><div class="cb-v6-conflict"><span>Analyst</span><p>“价格策略”应作为一级维度。</p><b>待对齐</b></div><div class="cb-v6-conflict"><span>Writer</span><p>建议合并进“商业化能力”以简化周报。</p><b>待对齐</b></div></section></main><aside><section class="cb-v6-card"><h3>共享上下文</h3><ul class="cb-v6-mini-list"><li>研究范围 <b>v2</b></li><li>来源清单 <b>12 项</b></li><li>差异矩阵 <b>更新中</b></li><li>决策记录 <b>3 条</b></li></ul></section><section class="cb-v6-card"><h3>团队消息</h3><div class="cb-v6-message"><b>Researcher</b><p>来源 7 的功能说明已补充官方文档。</p><time>2 分钟前</time></div><div class="cb-v6-message"><b>Analyst</b><p>需要截图确认桌面端交互差异。</p><time>刚刚</time></div></section></aside></div></div>`;
+        }
+
+        _renderProductConnection() {
+            return `<div class="cb-v6-page cb-v6-connection"><header class="cb-v6-page-head"><div><span class="cb-v6-eyebrow">CONNECTION DIAGNOSTICS</span><h2>Bridge 连接中断</h2><p>运行记录、共享上下文与本地产物都已保留；连接中断不会清空进度。</p></div><button class="cb-v6-primary" data-v6-action="reconnect"><i class="fas fa-rotate"></i> 重新连接</button></header><div class="cb-v6-diagnostic-grid"><main class="cb-v6-card"><h3>连接诊断</h3>${[['本地服务','127.0.0.1:19840','error','未响应'],['模型服务','Claude / GPT','unknown','等待 Bridge'],['工具通道','Browser / Files','unknown','等待 Bridge'],['本地数据','运行记录与产物','ok','可用']].map(x=>`<div class="cb-v6-check ${x[2]}"><i class="fas ${x[2]==='ok'?'fa-circle-check':x[2]==='error'?'fa-circle-xmark':'fa-circle-minus'}"></i><span><b>${x[0]}</b><small>${x[1]}</small></span><em>${x[3]}</em></div>`).join('')}<div class="cb-v6-recovery"><h4>建议恢复路径</h4><ol><li>确认 cursor-bridge 本地服务正在运行</li><li>检查端口 19840 是否被占用</li><li>重新连接后继续 RUN-0822，不会重新执行已完成步骤</li></ol></div></main><aside><section class="cb-v6-card"><h3>受影响范围</h3><ul class="cb-v6-mini-list"><li>运行中 Agent <b>暂时暂停</b></li><li>新工具调用 <b>不可用</b></li><li>实时输出 <b>停止刷新</b></li></ul></section><section class="cb-v6-card"><h3>仍然可用</h3><ul class="cb-v6-mini-list"><li>运行记录 <b class="ok">已保留</b></li><li>本地产物 <b class="ok">已保留</b></li><li>配置草稿 <b class="ok">已保留</b></li></ul></section><button class="cb-v6-secondary cb-v6-wide" data-v6-page="run-logs">查看离线日志</button></aside></div></div>`;
+        }
+
+        _bindProductWorkspace(root) {
+            root.querySelectorAll('[data-v6-page]').forEach(btn => btn.addEventListener('click', () => this._setProductPage(btn.dataset.v6Page)));
+            root.querySelector('[data-v6-action="pause"]')?.addEventListener('click', () => {
+                this._runPaused = !this._runPaused;
+                this._showToast(this._runPaused ? '已暂停本次运行（本地预览状态）' : '已继续本次运行（本地预览状态）', 'success');
+                this._renderProductWorkspace('active');
+            });
+            root.querySelector('[data-v6-action="cancel"]')?.addEventListener('click', () => this._showToast('取消与暂停是独立操作；未发送取消请求', 'warning'));
+            root.querySelectorAll('[data-v6-template]').forEach(btn => btn.addEventListener('click', () => {
+                root.querySelectorAll('[data-v6-template]').forEach(x => x.classList.remove('selected'));
+                btn.classList.add('selected');
+            }));
+            root.querySelector('[data-v6-action="test-agent"]')?.addEventListener('click', () => this._runProductAgentTest(root));
+            root.querySelector('[data-v6-action="create-agent"]')?.addEventListener('click', () => this._runProductAgentTest(root, true));
+            root.querySelector('[data-v6-action="run-flow"]')?.addEventListener('click', () => this._showToast(this.connected ? '工作流运行请求已准备' : 'Bridge 未连接，未发送运行请求', this.connected ? 'success' : 'warning'));
+            root.querySelector('[data-v6-action="retry-step"]')?.addEventListener('click', () => this._showToast('仅重试 compare_evidence 步骤；已完成步骤保持不变', 'success'));
+            root.querySelectorAll('[data-v6-action="approve-handoff"]').forEach(btn => btn.addEventListener('click', () => {
+                this._handoffApproved = true;
+                this._showToast('已批准只读访问，运行继续', 'success');
+                this._renderProductWorkspace('collaboration');
+            }));
+            root.querySelector('[data-v6-action="deny-handoff"]')?.addEventListener('click', () => this._showToast('已拒绝请求；运行保持等待确认', 'warning'));
+            root.querySelector('[data-v6-action="reconnect"]')?.addEventListener('click', () => this.checkHealth());
+        }
+
+        _runProductAgentTest(root, createAfter = false) {
+            const result = root.querySelector('#cb-v6-test-result');
+            if (result) {
+                result.classList.add('success');
+                result.innerHTML = '<i class="fas fa-circle-check"></i><span><strong>测试通过</strong><small>模型可用 · 工具 2/2 · 权限符合最小范围</small></span>';
+            }
+            this._showToast(createAfter ? '配置已验证；连接 Bridge 后可正式创建' : 'Agent 配置测试通过', 'success');
+        }
+
+        _baseProductPage() {
+            if (!this.connected) return 'connection-error';
+            return this.agents.some(agent => agent.status === 'running' || agent.status === 'streaming') ? 'active' : 'overview';
+        }
+
         togglePanel() {
-            this.isOpen = !this.isOpen;
+            const opening = !this.isOpen;
+            if (opening) this._panelReturnFocus = document.activeElement;
+            this.isOpen = opening;
             this._panelEl?.classList.toggle('open', this.isOpen);
             const dockBtn = document.getElementById('agent-dock-btn');
             if (dockBtn) dockBtn.classList.toggle('active', this.isOpen);
-            if (this.isOpen && this.connected) this.refreshAgents();
+            if (this.isOpen) {
+                this._panelEl.inert = false;
+                this._panelEl.setAttribute('aria-hidden', 'false');
+                this._setBackgroundInert(true);
+                document.addEventListener('keydown', this._panelKeydownHandler);
+                this._setProductPage(this._baseProductPage());
+                if (this.connected) this.refreshAgents();
+                requestAnimationFrame(() => this._panelEl?.querySelector('#cb-create-btn')?.focus({ preventScroll: true }));
+            } else {
+                document.removeEventListener('keydown', this._panelKeydownHandler);
+                this._panelEl?.setAttribute('aria-hidden', 'true');
+                if (this._panelEl) this._panelEl.inert = true;
+                this._setBackgroundInert(false);
+                window.ProductUIV5?.setShellPage?.('home');
+                const insideLaunchpad = this._panelReturnFocus?.closest?.('#dock-launchpad');
+                const usableReturn = this._panelReturnFocus?.isConnected
+                    && this._panelReturnFocus.matches?.('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
+                    && !insideLaunchpad;
+                const visibleDock = dockBtn?.getClientRects?.().length ? dockBtn : null;
+                (usableReturn ? this._panelReturnFocus : (visibleDock || document.getElementById('dock-launchpad-btn')))
+                    ?.focus?.({ preventScroll: true });
+                this._panelReturnFocus = null;
+            }
+        }
+
+        _setBackgroundInert(active) {
+            if (active) {
+                if (this._backgroundInertSiblings.length) return;
+                this._backgroundInertSiblings = [...document.body.children]
+                    .filter(child => child !== this._panelEl && child !== this._cmdEl && !child.inert);
+                this._backgroundInertSiblings.forEach(child => { child.inert = true; });
+                return;
+            }
+            this._backgroundInertSiblings.forEach(child => { child.inert = false; });
+            this._backgroundInertSiblings = [];
+        }
+
+        _activeFocusSurface() {
+            return this._panelEl?.querySelector('#cb-wf-modal')
+                || this._panelEl?.querySelector('#cb-create-modal.open')
+                || this._panelEl?.querySelector('#cb-collab-modal.open')
+                || this._panelEl;
+        }
+
+        _handlePanelKeydown(event) {
+            if (!this.isOpen || this.isCmdOpen) return;
+            if (event.key === 'Escape') {
+                const workflow = this._panelEl?.querySelector('#cb-wf-modal');
+                if (workflow) workflow.querySelector('#cb-wf-close')?.click();
+                else if (this._panelEl?.querySelector('#cb-create-modal.open')) this._hideCreateModal();
+                else if (this._panelEl?.querySelector('#cb-collab-modal.open')) this._hideCollabModal();
+                else if (this._historyOpen) this._toggleHistory(false);
+                else this.togglePanel();
+                event.preventDefault();
+                return;
+            }
+            if (event.key !== 'Tab') return;
+            const surface = this._activeFocusSurface();
+            const focusable = [...(surface?.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [contenteditable="true"], [tabindex]:not([tabindex="-1"])') || [])]
+                .filter(element => !element.hidden && element.getAttribute('aria-hidden') !== 'true' && element.getClientRects().length);
+            if (!focusable.length) { event.preventDefault(); surface?.focus?.(); return; }
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (!surface?.contains(document.activeElement)) { event.preventDefault(); first.focus(); }
+            else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
         }
 
         toggle() { this.togglePanel(); }
@@ -1961,7 +2189,8 @@
         // ─── Create modal (form mode) ───
 
         _showCreateModal(template) {
-            if (!this.connected) { this._showToast('cursor-bridge 服务未连接', 'error'); return; }
+            if (!this.connected) { this._setProductPage('connection-error'); this._showToast('cursor-bridge 服务未连接', 'error'); return; }
+            this._setProductPage('create');
             const modal = this._panelEl?.querySelector('#cb-create-modal');
             if (!modal) return;
             this._renderTemplateSelector(template);
@@ -1978,6 +2207,8 @@
             }
             this._switchCreateMode('form');
             modal.classList.add('open');
+            modal.setAttribute('aria-hidden', 'false');
+            requestAnimationFrame(() => this._panelEl?.querySelector('#cb-input-name')?.focus({ preventScroll: true }));
         }
 
         _buildFullPrompt(tpl) {
@@ -2095,13 +2326,17 @@
         }
 
         _hideCreateModal() {
-            this._panelEl?.querySelector('#cb-create-modal')?.classList.remove('open');
+            const modal = this._panelEl?.querySelector('#cb-create-modal');
+            modal?.classList.remove('open');
+            modal?.setAttribute('aria-hidden', 'true');
             ['#cb-input-name', '#cb-input-cwd', '#cb-input-desc', '#cb-input-prompt'].forEach(sel => {
                 const el = this._panelEl?.querySelector(sel);
                 if (el) el.value = '';
             });
             this._chatStep = 0;
             this._chatConfig = {};
+            this._setProductPage(this._baseProductPage());
+            this._panelEl?.querySelector('#cb-create-btn')?.focus({ preventScroll: true });
         }
 
         async _confirmCreate() {
@@ -2202,7 +2437,8 @@
         // ─── 工作流面板 ───
 
         async _showWorkflowPanel() {
-            if (!this.connected) { this._showToast('cursor-bridge 服务未连接', 'error'); return; }
+            if (!this.connected) { this._setProductPage('connection-error'); this._showToast('cursor-bridge 服务未连接', 'error'); return; }
+            this._setProductPage('flow-canvas');
             try {
                 const data = await this._api('/workflows');
                 const workflows = data?.workflows || [];
@@ -2213,6 +2449,7 @@
         }
 
         _renderWorkflowModal(workflows) {
+            this._setProductPage('flow-canvas');
             const cardsHtml = workflows.map(wf => {
                 const stepCount = wf.steps?.length || 0;
                 const isBuiltin = wf.is_builtin;
@@ -2235,11 +2472,11 @@
                 </div>`;
             }).join('');
 
-            const modalHtml = `<div class="cb-wf-modal-overlay" id="cb-wf-modal">
-                <div class="cb-wf-modal">
+            const modalHtml = `<div class="cb-wf-modal-overlay" id="cb-wf-modal" role="dialog" aria-modal="true" aria-labelledby="cb-wf-title">
+                <div class="cb-wf-modal" tabindex="-1">
                     <div class="cb-wf-modal-header">
-                        <h3><i class="fas fa-sitemap"></i> 工作流模板</h3>
-                        <button class="cb-btn cb-btn-icon" id="cb-wf-close"><i class="fas fa-times"></i></button>
+                        <h3 id="cb-wf-title"><i class="fas fa-sitemap"></i> 工作流模板</h3>
+                        <button class="cb-btn cb-btn-icon" id="cb-wf-close" aria-label="关闭工作流模板"><i class="fas fa-times" aria-hidden="true"></i></button>
                     </div>
                     <div class="cb-wf-modal-body">
                         ${cardsHtml || '<div class="cb-wf-empty">暂无工作流模板</div>'}
@@ -2252,8 +2489,10 @@
             this._panelEl?.insertAdjacentHTML('beforeend', modalHtml);
 
             const modal = this._panelEl?.querySelector('#cb-wf-modal');
-            modal?.querySelector('#cb-wf-close')?.addEventListener('click', () => modal.remove());
-            modal?.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+            const closeWorkflow = () => { modal?.remove(); this._setProductPage(this._baseProductPage()); this._panelEl?.querySelector('#cb-workflow-btn')?.focus({ preventScroll: true }); };
+            modal?.querySelector('#cb-wf-close')?.addEventListener('click', closeWorkflow);
+            modal?.addEventListener('click', e => { if (e.target === modal) closeWorkflow(); });
+            requestAnimationFrame(() => modal?.querySelector('[data-wf-run], #cb-wf-close')?.focus({ preventScroll: true }));
 
             modal?.querySelectorAll('[data-wf-run]').forEach(btn => {
                 btn.addEventListener('click', () => {
@@ -2645,6 +2884,9 @@
             if (dockBtn) {
                 const indicator = dockBtn.querySelector('.cb-dock-indicator');
                 if (indicator) indicator.className = `cb-dock-indicator ${this.connected ? 'connected' : 'disconnected'}`;
+            }
+            if (this.isOpen && !this._panelEl?.querySelector('.cb-create-modal.open, .cb-collab-modal.open, #cb-wf-modal')) {
+                this._setProductPage(this._baseProductPage());
             }
         }
 
@@ -3264,6 +3506,7 @@
         }
 
         _toggleObservability() {
+            this._setProductPage('run-logs');
             const agentOptions = this.agents.map(a => {
                 const short = (a.id || '').split('_').pop()?.substring(0, 8) || a.id;
                 return `<option value="${a.id}">${a.name || short}</option>`;
@@ -3296,6 +3539,7 @@
                 const a = this._panelEl?.querySelector('#cb-inline-panel-area');
                 if (a) { a.innerHTML = ''; delete a.dataset.activePanel; }
                 this._updateStatBtnActive(null);
+                this._setProductPage(this._baseProductPage());
             });
             obsPanel.querySelector('.cb-obs-clear').addEventListener('click', () => { this._traceLogs = []; this._updateObservabilityPanel(); });
             obsPanel.querySelector('.cb-obs-filter-type').addEventListener('change', e => { this._obsFilterType = e.target.value; this._updateObservabilityPanel(); });
@@ -3705,10 +3949,13 @@
         }
 
         _showCollabModal() {
-            if (!this.connected) { this._showToast('cursor-bridge 服务未连接', 'error'); return; }
+            if (!this.connected) { this._setProductPage('connection-error'); this._showToast('cursor-bridge 服务未连接', 'error'); return; }
+            this._setProductPage('collaboration');
             const modal = this._panelEl?.querySelector('#cb-collab-modal');
             if (!modal) return;
             modal.classList.add('open');
+            modal.setAttribute('aria-hidden', 'false');
+            requestAnimationFrame(() => modal.querySelector('#cb-collab-requirement')?.focus({ preventScroll: true }));
             this._loadCollabRoles().then(() => this._populateCollabModelPicker());
             this._bindCollabEvents();
             if (this._collabState?.taskId) {
@@ -3759,7 +4006,11 @@
         _hideCollabModal() {
             const req = this._panelEl?.querySelector('#cb-collab-requirement')?.value;
             if (req !== undefined && this._collabState) this._collabState._requirement = req;
-            this._panelEl?.querySelector('#cb-collab-modal')?.classList.remove('open');
+            const modal = this._panelEl?.querySelector('#cb-collab-modal');
+            modal?.classList.remove('open');
+            modal?.setAttribute('aria-hidden', 'true');
+            this._setProductPage(this._baseProductPage());
+            this._panelEl?.querySelector('#cb-collab-btn')?.focus({ preventScroll: true });
         }
 
         _bindCollabEvents() {

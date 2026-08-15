@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI 对话真实页面验收夹具</title>
+  <link rel="icon" href="data:,">
+  <style>html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#07101d}body{display:flex;justify-content:center}iframe{width:100%;height:100%;margin:0;border:0;background:#07101d}</style>
+</head>
+<body>
+  <iframe id="app" title="AI 对话本地验收页面"></iframe>
+  <script>
+    const frame = document.getElementById('app');
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+    const params = new URLSearchParams(location.search);
+    const requestedWidth = Number(params.get('width'));
+    if (requestedWidth > 0) frame.style.width = `${Math.min(innerWidth, requestedWidth)}px`;
+    const preserved = new Map();
+    for (const key of ['chatbotHistory', 'chatbotHistoryArchived', 'chatbotVipBrainConfig', 'chatbotAgentsConfig']) {
+      preserved.set(key, localStorage.getItem(key));
+      localStorage.removeItem(key);
+    }
+    addEventListener('beforeunload', () => preserved.forEach((value, key) => value == null ? localStorage.removeItem(key) : localStorage.setItem(key, value)), { once: true });
+    frame.addEventListener('load', async () => {
+      const win = frame.contentWindow;
+      for (let i = 0; i < 200 && !win.Chatbot; i += 1) await sleep(50);
+      const chat = win.Chatbot;
+      if (!chat) return;
+      const view = params.get('view') || 'default';
+      if (view === 'code-answer') {
+        chat.addLocalMessage('user', '请检查网易云播放器、队列与底栏的歌曲身份');
+        chat.addLocalMessage('assistant', '建议把 songId 作为三个渲染入口的唯一身份：\n\n```js\nconst currentSongId = state.songId;\nrenderQueue({ currentSongId });\nrenderBottomBar({ currentSongId });\n```\n\n引用：music-controller.js、music-view.js。应用前需要确认目标文件和请求时序。');
+      } else if (view === 'history') {
+        chat.addLocalMessage('user', '检查今天的 UI 回归');
+        chat.addLocalMessage('assistant', '已整理 6 个交互状态。');
+      } else if (view === 'error-recovery') {
+        chat.addLocalMessage('user', '继续生成验收报告');
+      }
+      chat.open();
+      if (view === 'history') chat.showHistory();
+      else if (view === 'multi-agent') chat.showMultiAgent();
+      else if (view === 'config-drawer') chat.toggleConfig();
+      else if (view === 'error-recovery') chat.showErrorRecovery('VIP Brain 暂时无法连接，请检查配置后重试。');
+      else if (view === 'streaming') chat.setPreviewStreaming(true);
+    });
+    frame.src = '../../index.html';
+  </script>
+</body>
+</html>

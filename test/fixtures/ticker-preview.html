@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>热榜资讯真实页面验收夹具</title>
+  <style>html,body,iframe{width:100%;height:100%;margin:0;border:0;overflow:hidden;background:#07101d}</style>
+</head>
+<body>
+  <iframe id="app" title="热榜资讯本地验收页面"></iframe>
+  <script>
+    const frame = document.getElementById('app');
+    const params = new URLSearchParams(location.search);
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+    frame.src = `../../index.html?fixtureRev=${encodeURIComponent(params.get('rev') || Date.now())}`;
+    frame.addEventListener('load', async () => {
+      const win = frame.contentWindow;
+      for (let i = 0; i < 200 && !win.techTicker; i += 1) await sleep(50);
+      const ticker = win.techTicker;
+      if (!ticker) return;
+      ticker.loadData = async () => {};
+      ticker.stopRotation?.();
+      ticker.stopAutoRefresh?.();
+      ticker.enabledSources = ['github', 'hackernews', 'zhihu'];
+      ticker.keywordAlertSettings = {
+        enabled: true,
+        keywords: [{ text: 'AI', enabled: true }],
+        scanInterval: 10,
+        quietHoursStart: '',
+        quietHoursEnd: '',
+        sources: ['github', 'zhihu']
+      };
+      ticker.tickerItems = [
+        { type: 'github', title: 'OpenAI Agents SDK 发布新版本', desc: '新增可观测性与工具编排能力。', url: 'https://github.com/openai/openai-agents-js', icon: '🔥', metric: '24.8k', metricType: 'stars' },
+        { type: 'hackernews', title: 'Designing accessible desktop workbenches', desc: '关于键盘焦点与多面板状态的实践讨论。', url: 'https://news.ycombinator.com/', icon: '📰', metric: '386', metricType: 'score' },
+        { type: 'github', title: 'Local-first music workspace', desc: '浏览器扩展中的本地优先音乐工作台。', url: 'https://github.com/', icon: '🔥', metric: '8.1k', metricType: 'stars' },
+        { type: 'zhihu', title: '如何评价 AI 工具的新交互方式', desc: '来自知乎热榜的交互设计讨论。', url: 'https://www.zhihu.com/', icon: '💭', metric: '125万热度', metricType: 'zhihu-hot' }
+      ];
+      ticker.currentIndex = 0;
+      ticker.renderCurrent();
+      ticker.renderMiniTrack();
+      ticker.localKeywordScan();
+      if (!win.document.getElementById('keyword-alert-panel')) ticker.createKeywordPanel();
+
+      const view = params.get('view') || 'compact';
+      if (view === 'expanded') ticker.toggleExpandPanel();
+      else if (view === 'sources') ticker.toggleSourcesPanel(true);
+      else if (view === 'keywords') ticker.toggleKeywordPanel(true);
+      else if (view === 'detail-favorite') ticker.showDetail(ticker.tickerItems[0], 0);
+      else if (view === 'loading-error') ticker.showLoadingError(new Error('三个已启用来源在本次刷新中均未返回内容。'));
+    });
+  </script>
+</body>
+</html>

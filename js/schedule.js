@@ -9,6 +9,7 @@ class ScheduleManager {
         this._plans = [];
         this._habitLog = {};
         this._settings = {};
+        this._reflections = {};
         this._panelOpen = false;
         this._viewMode = 'day'; // 'day' | 'week'
         this._currentDate = this._todayStr();
@@ -22,6 +23,9 @@ class ScheduleManager {
         this._copyDayBuffer = null;
         this._pasteMode = false;
         this._lastCreatedId = null;
+        this._returnFocus = null;
+        this._backgroundInertSiblings = [];
+        this._panelEventsAbort = null;
 
         this.CATEGORIES = [
             { id: 'work', name: '工作', color: '#60a5fa', icon: '💼' },
@@ -61,12 +65,13 @@ class ScheduleManager {
     // ─── 数据加载/保存 ───
     async _loadData() {
         const data = await new Promise(r =>
-            chrome.storage.local.get(['scheduleRoutines', 'schedulePlans', 'scheduleHabitLog', 'scheduleSettings'], r)
+            chrome.storage.local.get(['scheduleRoutines', 'schedulePlans', 'scheduleHabitLog', 'scheduleSettings', 'scheduleDailyReflections'], r)
         );
         this._routines = Array.isArray(data.scheduleRoutines) ? data.scheduleRoutines : [];
         this._plans = Array.isArray(data.schedulePlans) ? data.schedulePlans : [];
         this._habitLog = data.scheduleHabitLog || {};
         this._settings = data.scheduleSettings || {};
+        this._reflections = data.scheduleDailyReflections || {};
         this._cleanOldData();
     }
 
@@ -74,6 +79,7 @@ class ScheduleManager {
     async _savePlans() { await chrome.storage.local.set({ schedulePlans: this._plans }); }
     async _saveHabitLog() { await chrome.storage.local.set({ scheduleHabitLog: this._habitLog }); }
     async _saveSettings() { await chrome.storage.local.set({ scheduleSettings: this._settings }); }
+    async _saveReflections() { await chrome.storage.local.set({ scheduleDailyReflections: this._reflections }); }
 
     _cleanOldData() {
         const cutoff = new Date();
@@ -424,8 +430,24 @@ class ScheduleManager {
         if (this._panelOpen) this.closePanel(); else this.openPanel();
     }
 
+    _setProductPage(pageId) {
+        this._panelEl?.setAttribute('data-schedule-page', pageId);
+        window.ProductUIV5?.setBusinessPage?.('schedule', pageId);
+    }
+
+    _currentProductPage() {
+        if (this._viewMode === 'week') return 'week-view';
+        const summary = this.getDaySummary(this._currentDate);
+        return summary.totalItems > 0 && summary.completedItems === summary.totalItems ? 'completed-day' : 'day-view';
+    }
+
+    _restoreProductPage() {
+        this._setProductPage(this._currentProductPage());
+    }
+
     openPanel(mode) {
         if (this._panelOpen) return;
+        this._returnFocus = document.activeElement;
         this._panelOpen = true;
         this._viewMode = mode || 'day';
         this._currentDate = this._todayStr();
@@ -446,8 +468,24 @@ class ScheduleManager {
             document.removeEventListener('keydown', this._escHandler);
             this._escHandler = null;
         }
+        this._panelEventsAbort?.abort();
+        this._panelEventsAbort = null;
+        const dockBtn = document.getElementById('schedule-dock-btn');
+        const visibleDockBtn = dockBtn?.getClientRects?.().length ? dockBtn : null;
+        const insideLaunchpad = this._returnFocus?.closest?.('#dock-launchpad');
+        const focusableReturn = this._returnFocus?.matches?.('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        const returnTarget = this._returnFocus?.isConnected && focusableReturn && !insideLaunchpad
+            ? this._returnFocus
+            : (visibleDockBtn || document.getElementById('dock-launchpad-btn'));
+        this._setBackgroundInert(false);
+        window.ProductUIV5?.setShellPage?.('home');
+        returnTarget?.focus?.({ preventScroll: true });
+        setTimeout(() => {
+            if (!this._panelOpen) returnTarget?.focus?.({ preventScroll: true });
+        }, 120);
         if (this._overlayEl) this._overlayEl.classList.remove('sch-overlay-visible');
         if (this._panelEl) {
+            this._panelEl.inert = true;
             this._panelEl.classList.add('sch-panel-closing');
             setTimeout(() => {
                 this._panelEl?.remove();
@@ -456,8 +494,8 @@ class ScheduleManager {
                 this._overlayEl = null;
             }, 300);
         }
-        const dockBtn = document.getElementById('schedule-dock-btn');
         if (dockBtn) dockBtn.classList.remove('active');
+        this._returnFocus = null;
     }
 
     _switchView(mode) {
@@ -470,6 +508,7 @@ class ScheduleManager {
         if (this._panelEl) {
             this._panelEl.classList.toggle('sch-panel-wide', mode === 'week');
         }
+        this._restoreProductPage();
     }
 
     _startCurrentTimeTick() {
@@ -497,17 +536,24 @@ class ScheduleManager {
 
         const overlay = document.createElement('div');
         overlay.className = 'sch-overlay';
+        overlay.setAttribute('aria-hidden', 'true');
         overlay.addEventListener('click', () => this.closePanel());
         this._overlayEl = overlay;
 
         const panel = document.createElement('div');
         panel.className = 'sch-panel';
+        panel.setAttribute('role', 'dialog');
+        panel.setAttribute('aria-modal', 'true');
+        panel.setAttribute('aria-labelledby', 'schedule-panel-title');
+        panel.setAttribute('aria-hidden', 'false');
+        panel.tabIndex = -1;
         if (this._viewMode === 'week') panel.classList.add('sch-panel-wide');
         this._panelEl = panel;
 
         panel.innerHTML = this._viewMode === 'week' ? this._buildWeekHTML() : this._buildPanelHTML();
         document.body.appendChild(overlay);
         document.body.appendChild(panel);
+        this._setBackgroundInert(true);
 
         requestAnimationFrame(() => {
             overlay.classList.add('sch-overlay-visible');
@@ -516,20 +562,72 @@ class ScheduleManager {
 
         this._bindPanelEvents();
         if (this._viewMode === 'day') this._updateCurrentHighlight();
+        this._restoreProductPage();
 
         const dockBtn = document.getElementById('schedule-dock-btn');
         if (dockBtn) dockBtn.classList.add('active');
+        requestAnimationFrame(() => {
+            this._panelEl?.querySelector('.sch-view-tab-active')?.focus({ preventScroll: true });
+        });
+    }
+
+    _setBackgroundInert(active) {
+        if (active) {
+            if (this._backgroundInertSiblings.length) return;
+            this._backgroundInertSiblings = [...document.body.children]
+                .filter(child => child !== this._panelEl && child !== this._overlayEl && !child.inert);
+            this._backgroundInertSiblings.forEach(child => { child.inert = true; });
+            return;
+        }
+        this._backgroundInertSiblings.forEach(child => { child.inert = false; });
+        this._backgroundInertSiblings = [];
+    }
+
+    _activeFocusSurface() {
+        return document.querySelector('.sch-conflict-layer')
+            || [...(this._panelEl?.querySelectorAll('.sch-form-overlay') || [])].pop()
+            || document.querySelector('.sch-form-overlay-fixed')
+            || this._panelEl;
+    }
+
+    _trapFocus(container, event) {
+        const focusable = [...(container?.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])') || [])]
+            .filter(element => !element.hidden && element.getAttribute('aria-hidden') !== 'true');
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+        }
     }
 
     _refreshPanel() {
         if (!this._panelEl || !this._panelOpen) return;
         const scrollEl = this._panelEl.querySelector(this._viewMode === 'week' ? '.wv-grid-wrap' : '.sch-panel-body');
         const scrollTop = scrollEl?.scrollTop || 0;
+        const active = document.activeElement;
+        const focusKey = active && this._panelEl.contains(active) ? {
+            id: active.id || '',
+            action: active.dataset?.action || '',
+            itemId: active.dataset?.id || '',
+        } : null;
         this._panelEl.innerHTML = this._viewMode === 'week' ? this._buildWeekHTML() : this._buildPanelHTML();
         this._bindPanelEvents();
         if (this._viewMode === 'day') this._updateCurrentHighlight();
+        this._restoreProductPage();
         const newScrollEl = this._panelEl.querySelector(this._viewMode === 'week' ? '.wv-grid-wrap' : '.sch-panel-body');
         if (newScrollEl) newScrollEl.scrollTop = scrollTop;
+        if (focusKey) {
+            const candidates = [...this._panelEl.querySelectorAll('button, input, select, [tabindex]')];
+            const focusTarget = candidates.find(element => focusKey.id && element.id === focusKey.id)
+                || candidates.find(element => focusKey.action && element.dataset?.action === focusKey.action)
+                || candidates.find(element => focusKey.itemId && element.dataset?.id === focusKey.itemId);
+            focusTarget?.focus?.({ preventScroll: true });
+        }
     }
 
     _buildPanelHTML() {
@@ -545,7 +643,7 @@ class ScheduleManager {
             const streakClass = streak >= 7 ? 'sch-streak-hot' : '';
             const streakText = streak > 0 ? (streak >= 7 ? `🔥 连续${streak}天` : `连续${streak}天`) : '';
             return `
-                <div class="sch-routine-item${checked ? ' sch-checked' : ''}" data-id="${r.id}">
+                <div class="sch-routine-item${checked ? ' sch-checked' : ''}" data-id="${r.id}" role="button" tabindex="0" aria-label="${checked ? '取消完成' : '完成'}例行事项 ${this._escHtml(r.name)}">
                     <div class="sch-routine-cat-dot" style="background:${cat.color}"></div>
                     <div class="sch-routine-check"><i class="fas fa-check"></i></div>
                     <div class="sch-routine-info">
@@ -568,7 +666,7 @@ class ScheduleManager {
                 isActive ? 'sch-plan-active' : ''
             ].filter(Boolean).join(' ');
             return `
-                <div class="${classes}" data-id="${p.id}" data-start="${p.startTime}" data-end="${p.endTime}">
+                <div class="${classes}" data-id="${p.id}" data-start="${p.startTime}" data-end="${p.endTime}" role="button" tabindex="0" aria-label="${p.completed ? '取消完成' : '完成'}计划 ${this._escHtml(p.name)}">
                     <span class="sch-plan-time">${p.startTime} - ${p.endTime}</span>
                     <span class="sch-plan-name">${p.icon} ${this._escHtml(p.name)}</span>
                     <span class="sch-cat-tag" style="background:${cat.color}22;color:${cat.color}">${cat.name}</span>
@@ -581,13 +679,22 @@ class ScheduleManager {
             const min = summary.catTime[c.id] || 0;
             return min > 0 ? `<span class="sch-stat-cat"><span class="sch-stat-dot" style="background:${c.color}"></span>${c.name}${this._formatDuration(min)}</span>` : '';
         }).filter(Boolean).join('');
+        const completionPercent = summary.totalItems > 0 ? Math.round(summary.completedItems / summary.totalItems * 100) : 0;
+        const totalMinutes = Object.values(summary.catTime).reduce((sum, minutes) => sum + (Number(minutes) || 0), 0);
+        const completedDayPanel = completionPercent === 100 ? `
+            <section class="sch-completed-day" aria-label="今日计划已全部完成">
+                <div class="sch-completed-mark"><i class="fas fa-check"></i></div>
+                <div class="sch-completed-copy"><span>今日计划已全部完成</span><strong>${summary.completedItems}/${summary.totalItems} 项 · ${this._formatDuration(totalMinutes)}</strong><small>为今天写一句复盘，明天会更清晰。</small></div>
+                <label class="sch-reflection-field"><span>一句话复盘</span><input id="sch-daily-reflection" maxlength="80" placeholder="今天最值得保留的做法…" value="${this._escHtml(this._reflections[this._currentDate] || '')}"></label>
+                <button class="sch-btn sch-btn-primary" data-action="save-reflection"><i class="fas fa-check"></i> 完成今日复盘</button>
+            </section>` : '';
 
         return `
             <div class="sch-panel-header">
-                <div class="sch-panel-title"><i class="fas fa-calendar-check"></i> 计划</div>
-                <div class="sch-view-tabs">
-                    <button class="sch-view-tab sch-view-tab-active" data-action="switch-day"><i class="fas fa-calendar-day"></i> 日</button>
-                    <button class="sch-view-tab" data-action="switch-week"><i class="fas fa-calendar-week"></i> 周</button>
+                <div class="sch-panel-title" id="schedule-panel-title"><i class="fas fa-calendar-check"></i> 计划</div>
+                <div class="sch-view-tabs" role="tablist" aria-label="计划视图">
+                    <button class="sch-view-tab sch-view-tab-active" data-action="switch-day" role="tab" aria-selected="true"><i class="fas fa-calendar-day"></i> 日</button>
+                    <button class="sch-view-tab" data-action="switch-week" role="tab" aria-selected="false"><i class="fas fa-calendar-week"></i> 周</button>
                 </div>
                 <div class="sch-date-nav">
                     <button class="sch-nav-btn" data-action="prev-day" title="前一天"><i class="fas fa-chevron-left"></i></button>
@@ -598,31 +705,41 @@ class ScheduleManager {
                     <button class="sch-nav-btn" data-action="next-day" title="后一天"><i class="fas fa-chevron-right"></i></button>
                 </div>
                 <div class="sch-header-actions">
-                    <button class="sch-header-btn" data-action="manage-routines" title="管理习惯"><i class="fas fa-redo"></i></button>
-                    <button class="sch-header-btn" data-action="close" title="关闭"><i class="fas fa-times"></i></button>
+                    <button class="sch-header-btn" data-action="manage-routines" title="管理习惯" aria-label="管理习惯"><i class="fas fa-redo"></i></button>
+                    <button class="sch-header-btn" data-action="close" title="关闭" aria-label="关闭计划"><i class="fas fa-times"></i></button>
                 </div>
             </div>
             <div class="sch-panel-body">
-                <div class="sch-section">
-                    <div class="sch-section-label"><i class="fas fa-redo"></i> 每日例程 · 习惯打卡</div>
-                    ${routineItems || '<div class="sch-empty">暂无习惯，点击右上角 <i class="fas fa-redo"></i> 添加</div>'}
-                </div>
-                <div class="sch-divider"></div>
-                <div class="sch-section">
-                    <div class="sch-section-label"><i class="fas fa-clock"></i> 灵活计划 · 今日安排</div>
-                    ${planItems}
-                    <div class="sch-plan-actions">
-                        <button class="sch-add-plan-btn" data-action="add-plan"><i class="fas fa-plus"></i> 添加计划</button>
-                        ${this._hasPrevDayPlans() ? `<button class="sch-copy-prev-btn" data-action="copy-prev-day"><i class="fas fa-copy"></i> 复制${this._prevDayLabel()}日程</button>` : ''}
+                ${completedDayPanel}
+                <div class="sch-day-layout">
+                    <main class="sch-day-main">
+                        <div class="sch-section">
+                            <div class="sch-section-label"><i class="fas fa-clock"></i> 今日安排 <span>${plans.length} 项计划</span></div>
+                            ${planItems || '<div class="sch-empty"><i class="fas fa-calendar-plus"></i><strong>暂无计划</strong><span>添加一项有明确时间的安排</span></div>'}
+                            <div class="sch-plan-actions">
+                                <button class="sch-add-plan-btn" data-action="add-plan"><i class="fas fa-plus"></i> 添加计划</button>
+                                ${this._hasPrevDayPlans() ? `<button class="sch-copy-prev-btn" data-action="copy-prev-day"><i class="fas fa-copy"></i> 复制${this._prevDayLabel()}日程</button>` : ''}
+                            </div>
+                        </div>
+                    </main>
+                    <aside class="sch-day-aside">
+                        <section class="sch-summary-card">
+                            <div class="sch-summary-copy"><span>今日完成率</span><strong>${completionPercent}%</strong><small>${summary.completedItems}/${summary.totalItems} 已完成</small></div>
+                            <div class="sch-summary-ring" style="--sch-progress:${completionPercent * 3.6}deg"><span>${completionPercent}%</span></div>
+                        </section>
+                        <div class="sch-section sch-routines-section">
+                            <div class="sch-section-label"><i class="fas fa-redo"></i> 每日例程 <span>${summary.checkedRoutines}/${summary.routines}</span></div>
+                            ${routineItems || '<div class="sch-empty">暂无习惯，点击右上角添加</div>'}
+                        </div>
+                    </aside>
                     </div>
                 </div>
-            </div>
             <div class="sch-panel-footer">
                 <span class="sch-footer-stats">完成 ${summary.completedItems}/${summary.totalItems} ${catStats}</span>
                 ${summary.streak > 0 ? `<span class="sch-footer-streak"><i class="fas fa-fire"></i> 连续${summary.streak}天</span>` : ''}
                 <div class="sch-footer-progress">
                     <div class="sch-progress-bar">
-                        <div class="sch-progress-fill" style="width:${summary.totalItems > 0 ? Math.round(summary.completedItems / summary.totalItems * 100) : 0}%"></div>
+                        <div class="sch-progress-fill" style="width:${completionPercent}%"></div>
                     </div>
                 </div>
             </div>`;
@@ -635,15 +752,15 @@ class ScheduleManager {
         for (let h = 6; h <= 23; h++) HOURS.push(h);
         const PX = 72, MIN_H = 22;
 
-        const tabDay = `<button class="sch-view-tab" data-action="switch-day"><i class="fas fa-calendar-day"></i> 日</button>`;
-        const tabWeek = `<button class="sch-view-tab sch-view-tab-active" data-action="switch-week"><i class="fas fa-calendar-week"></i> 周</button>`;
+        const tabDay = `<button class="sch-view-tab" data-action="switch-day" role="tab" aria-selected="false"><i class="fas fa-calendar-day"></i> 日</button>`;
+        const tabWeek = `<button class="sch-view-tab sch-view-tab-active" data-action="switch-week" role="tab" aria-selected="true"><i class="fas fa-calendar-week"></i> 周</button>`;
         const legend = this.CATEGORIES.map(c => `<span class="wv-legend-item"><span class="wv-legend-dot" style="background:${c.color}"></span>${c.name}</span>`).join('');
 
         const pasteHint = this._pasteMode ? `<span class="wv-paste-hint"><i class="fas fa-paste"></i> 右键目标日期列头粘贴 · <button class="wv-paste-cancel" data-action="cancel-paste">取消</button></span>` : '';
 
         let header = `<div class="sch-panel-header">
-            <div class="sch-panel-title"><i class="fas fa-calendar-check"></i> 计划</div>
-            <div class="sch-view-tabs">${tabDay}${tabWeek}</div>
+            <div class="sch-panel-title" id="schedule-panel-title"><i class="fas fa-calendar-check"></i> 计划</div>
+            <div class="sch-view-tabs" role="tablist" aria-label="计划视图">${tabDay}${tabWeek}</div>
             <div class="wv-week-nav">
                 <button class="sch-nav-btn" data-action="prev-week"><i class="fas fa-chevron-left"></i></button>
                 <span class="wv-week-label">${this._escHtml(this._weekLabel())}</span>
@@ -652,7 +769,7 @@ class ScheduleManager {
             <button class="sch-nav-btn" data-action="go-today-week" style="padding:0 10px;font-size:11px;font-weight:600;color:#a78bfa">本周</button>
             <div class="wv-legend">${legend}</div>
             <div class="sch-header-actions">
-                <button class="sch-header-btn" data-action="close" title="关闭"><i class="fas fa-times"></i></button>
+                <button class="sch-header-btn" data-action="close" title="关闭" aria-label="关闭计划"><i class="fas fa-times"></i></button>
             </div>
         </div>
         <div class="wv-quick-bar">
@@ -714,9 +831,22 @@ class ScheduleManager {
     _bindPanelEvents() {
         const panel = this._panelEl;
         if (!panel) return;
+        this._panelEventsAbort?.abort();
+        this._panelEventsAbort = new AbortController();
+        const eventOptions = { signal: this._panelEventsAbort.signal };
 
+        if (this._escHandler) document.removeEventListener('keydown', this._escHandler);
         this._escHandler = (e) => {
+            if (e.key === 'Tab') {
+                this._trapFocus(this._activeFocusSurface(), e);
+                return;
+            }
             if (e.key === 'Escape') {
+                const conflictBack = this._panelEl?.querySelector('.sch-conflict-layer [data-conflict-action="back"]');
+                if (conflictBack) { conflictBack.click(); return; }
+                const activeSurface = this._activeFocusSurface();
+                const dismiss = activeSurface?.querySelector('#sch-rtf-cancel, #sch-form-cancel, #sch-mgr-close');
+                if (dismiss) { dismiss.click(); return; }
                 if (this._pasteMode) { this._exitPasteMode(); this._refreshPanel(); return; }
                 this.closePanel();
             }
@@ -728,6 +858,13 @@ class ScheduleManager {
             const action = target?.dataset.action;
 
             if (action === 'close') return this.closePanel();
+            if (action === 'save-reflection') {
+                const input = this._panelEl?.querySelector('#sch-daily-reflection');
+                this._reflections[this._currentDate] = input?.value.trim() || '';
+                await this._saveReflections();
+                if (target) target.innerHTML = '<i class="fas fa-check-circle"></i> 已保存复盘';
+                return;
+            }
             // Tab switching
             if (action === 'switch-day') return this._switchView('day');
             if (action === 'switch-week') return this._switchView('week');
@@ -824,18 +961,38 @@ class ScheduleManager {
                 this._refreshPanel();
                 return;
             }
-        });
+        }, eventOptions);
+
+        const bindCompletionAction = (selector, handler) => {
+            panel.querySelectorAll(selector).forEach(item => {
+                const run = async event => {
+                    if (event.target.closest('.sch-item-menu-btn')) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    await handler(item.dataset.id);
+                    this._refreshPanel();
+                };
+                item.addEventListener('click', run, eventOptions);
+                item.addEventListener('keydown', event => {
+                    if (event.key === 'Enter' || event.key === ' ') void run(event);
+                }, eventOptions);
+            });
+        };
+        if (this._viewMode === 'day') {
+            bindCompletionAction('.sch-routine-item', id => this.toggleRoutineCheck(id));
+            bindCompletionAction('.sch-plan-item', id => this.togglePlanComplete(id));
+        }
 
         // Week view: tooltip, dblclick, contextmenu, paste-mode click
         if (this._viewMode === 'week') {
             panel.addEventListener('mouseover', e => {
                 const b = e.target.closest('.wv-block');
                 if (b) this._showWeekTooltip(b);
-            });
+            }, eventOptions);
             panel.addEventListener('mouseout', e => {
                 const b = e.target.closest('.wv-block');
                 if (b && !b.contains(e.relatedTarget)) this._removeWeekTooltip();
-            });
+            }, eventOptions);
             panel.addEventListener('dblclick', e => {
                 const b = e.target.closest('.wv-block') || e.target.closest('.wv-day-col');
                 const dateStr = b?.dataset?.date;
@@ -843,7 +1000,7 @@ class ScheduleManager {
                     this._currentDate = dateStr;
                     this._switchView('day');
                 }
-            });
+            }, eventOptions);
             // Right-click context menu on event blocks and day headers
             panel.addEventListener('contextmenu', e => {
                 const block = e.target.closest('.wv-block');
@@ -857,7 +1014,7 @@ class ScheduleManager {
                     e.preventDefault();
                     this._showWeekDayMenu(dayHd.dataset.date, e);
                 }
-            });
+            }, eventOptions);
             // Quick input handler
             const quickInput = panel.querySelector('#wv-quick-input');
             if (quickInput) {
@@ -879,7 +1036,7 @@ class ScheduleManager {
                         quickInput.value = '';
                         quickInput.blur();
                     }
-                });
+                }, eventOptions);
             }
         }
     }
@@ -888,6 +1045,7 @@ class ScheduleManager {
     _showPlanForm(editPlan) {
         const isPreset = editPlan && editPlan._preset;
         const isEdit = !!editPlan && !isPreset;
+        const formReturnFocus = document.activeElement;
         this._panelEl?.querySelectorAll('.sch-form-overlay').forEach(el => el.remove());
         document.querySelectorAll('.sch-form-overlay-fixed').forEach(el => el.remove());
 
@@ -901,8 +1059,8 @@ class ScheduleManager {
         const overlay = document.createElement('div');
         overlay.className = 'sch-form-overlay';
         overlay.innerHTML = `
-            <div class="sch-form">
-                <div class="sch-form-title">${isEdit ? '编辑计划' : '添加计划'}</div>
+            <div class="sch-form" role="dialog" aria-modal="true" aria-labelledby="sch-plan-form-title">
+                <div class="sch-form-title" id="sch-plan-form-title">${isEdit ? '编辑计划' : '添加计划'}</div>
                 <div class="sch-form-row">
                     <label>名称</label>
                     <input type="text" class="sch-input" id="sch-plan-name" placeholder="做什么..." value="${this._escHtml(isEdit ? editPlan.name : '')}">
@@ -942,9 +1100,17 @@ class ScheduleManager {
         } else {
             this._panelEl.appendChild(overlay);
         }
+        this._setProductPage('create-edit');
         overlay.querySelector('#sch-plan-name')?.focus();
 
-        const removeForm = () => { overlay.remove(); };
+        const removeForm = () => {
+            overlay.remove();
+            this._restoreProductPage();
+            const target = formReturnFocus?.isConnected
+                ? formReturnFocus
+                : this._panelEl?.querySelector('[data-action="add-plan"]');
+            target?.focus?.({ preventScroll: true });
+        };
         overlay.querySelector('#sch-form-cancel').onclick = removeForm;
         overlay.addEventListener('click', (e) => { if (e.target === overlay) removeForm(); });
 
@@ -968,14 +1134,81 @@ class ScheduleManager {
                 note: overlay.querySelector('#sch-plan-note').value.trim(),
                 date: this._currentDate
             };
-            if (isEdit) {
-                await this.updatePlan(editPlan.id, data);
-            } else {
-                await this.addPlan(data);
+            const commit = async (nextData) => {
+                if (isEdit) await this.updatePlan(editPlan.id, nextData);
+                else await this.addPlan(nextData);
+                removeForm();
+                this._refreshPanel();
+            };
+            const conflicts = this._findPlanConflicts(data, isEdit ? editPlan.id : null);
+            if (conflicts.length) {
+                this._showConflictResolution(overlay, data, conflicts, commit);
+                return;
             }
-            removeForm();
-            this._refreshPanel();
+            await commit(data);
         };
+    }
+
+    _findPlanConflicts(data, excludeId) {
+        const plans = this._plans.filter(plan => plan.date === data.date && plan.id !== excludeId);
+        const routines = this._getActiveRoutines(data.date).map(routine => ({
+            id: routine.id,
+            name: routine.name,
+            icon: routine.icon,
+            startTime: routine.time,
+            endTime: this._minutesToTime(this._timeToMinutes(routine.time) + Number(routine.duration || 30)),
+            type: 'routine',
+        }));
+        return [...plans, ...routines].filter(item => data.startTime < item.endTime && data.endTime > item.startTime);
+    }
+
+    _timeToMinutes(value) {
+        const [hours, minutes] = String(value || '00:00').split(':').map(Number);
+        return (hours || 0) * 60 + (minutes || 0);
+    }
+
+    _minutesToTime(value) {
+        const safe = Math.max(0, Math.min(23 * 60 + 59, Number(value) || 0));
+        return `${String(Math.floor(safe / 60)).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`;
+    }
+
+    _suggestConflictSlot(data, conflicts) {
+        const duration = Math.max(15, this._timeToMinutes(data.endTime) - this._timeToMinutes(data.startTime));
+        const latestEnd = Math.max(...conflicts.map(item => this._timeToMinutes(item.endTime)));
+        const start = Math.min(latestEnd, 23 * 60 - duration);
+        return { ...data, startTime: this._minutesToTime(start), endTime: this._minutesToTime(start + duration) };
+    }
+
+    _showConflictResolution(overlay, data, conflicts, onConfirm) {
+        overlay.querySelector('.sch-conflict-layer')?.remove();
+        const suggestion = this._suggestConflictSlot(data, conflicts);
+        const layer = document.createElement('div');
+        layer.className = 'sch-conflict-layer';
+        layer.setAttribute('aria-label', '时间冲突处理');
+        layer.innerHTML = `
+            <div class="sch-conflict-dialog" role="alertdialog" aria-modal="true" aria-labelledby="sch-conflict-title">
+                <div class="sch-conflict-head"><div><span><i class="fas fa-exclamation-triangle"></i> 时间冲突</span><h3 id="sch-conflict-title">这项计划与 ${conflicts.length} 个安排重叠</h3></div><button type="button" data-conflict-action="back" aria-label="返回编辑"><i class="fas fa-times"></i></button></div>
+                <div class="sch-conflict-compare">
+                    <article><span>准备添加</span><strong>${this._escHtml(data.icon)} ${this._escHtml(data.name)}</strong><small>${data.startTime} – ${data.endTime}</small></article>
+                    ${conflicts.slice(0, 2).map(item => `<article class="conflicting"><span>已有安排</span><strong>${this._escHtml(item.icon || '📌')} ${this._escHtml(item.name)}</strong><small>${item.startTime} – ${item.endTime}</small></article>`).join('')}
+                </div>
+                <button class="sch-conflict-suggestion" type="button" data-conflict-action="suggest"><i class="fas fa-magic"></i><span><strong>采用建议时间 ${suggestion.startTime} – ${suggestion.endTime}</strong><small>保留原时长，移动到冲突结束后</small></span><i class="fas fa-chevron-right"></i></button>
+                <div class="sch-conflict-actions"><button class="sch-btn sch-btn-cancel" type="button" data-conflict-action="back">返回调整</button><button class="sch-btn sch-conflict-force" type="button" data-conflict-action="force">仍然保存</button></div>
+            </div>`;
+        overlay.appendChild(layer);
+        this._setProductPage('conflict');
+        const close = () => { layer.remove(); this._setProductPage('create-edit'); overlay.querySelector('#sch-plan-start')?.focus(); };
+        layer.addEventListener('click', async event => {
+            const action = event.target.closest('[data-conflict-action]')?.dataset.conflictAction;
+            if (action === 'back') close();
+            if (action === 'suggest') {
+                overlay.querySelector('#sch-plan-start').value = suggestion.startTime;
+                overlay.querySelector('#sch-plan-end').value = suggestion.endTime;
+                close();
+            }
+            if (action === 'force') await onConfirm(data);
+        });
+        layer.querySelector('[data-conflict-action="suggest"]')?.focus();
     }
 
     _hasPrevDayPlans() {
@@ -1015,6 +1248,7 @@ class ScheduleManager {
     _showRoutineManager() {
         const existing = this._panelEl?.querySelector('.sch-form-overlay');
         if (existing) existing.remove();
+        const managerReturnFocus = document.activeElement;
 
         const overlay = document.createElement('div');
         overlay.className = 'sch-form-overlay';
@@ -1031,14 +1265,14 @@ class ScheduleManager {
                             <div class="sch-mgr-meta">${r.time} · ${this._formatDuration(r.duration)} · ${freqText}</div>
                         </div>
                         <span class="sch-cat-tag" style="background:${cat.color}22;color:${cat.color}">${cat.name}</span>
-                        <button class="sch-mgr-edit" data-action="edit-routine" data-id="${r.id}"><i class="fas fa-pen"></i></button>
-                        <button class="sch-mgr-del" data-action="del-routine" data-id="${r.id}"><i class="fas fa-trash-alt"></i></button>
+                        <button class="sch-mgr-edit" data-action="edit-routine" data-id="${r.id}" aria-label="编辑习惯 ${this._escHtml(r.name)}"><i class="fas fa-pen"></i></button>
+                        <button class="sch-mgr-del" data-action="del-routine" data-id="${r.id}" aria-label="删除习惯 ${this._escHtml(r.name)}"><i class="fas fa-trash-alt"></i></button>
                     </div>`;
             }).join('');
 
             return `
-                <div class="sch-form sch-form-wide">
-                    <div class="sch-form-title">管理每日习惯</div>
+                <div class="sch-form sch-form-wide" role="dialog" aria-modal="true" aria-labelledby="sch-routine-manager-title">
+                    <div class="sch-form-title" id="sch-routine-manager-title">管理每日习惯</div>
                     <div class="sch-mgr-list">${items || '<div class="sch-empty">暂无习惯</div>'}</div>
                     <button class="sch-btn sch-btn-primary sch-btn-block" id="sch-mgr-add"><i class="fas fa-plus"></i> 添加习惯</button>
                     <button class="sch-btn sch-btn-cancel sch-btn-block" id="sch-mgr-close" style="margin-top:6px;">关闭</button>
@@ -1047,35 +1281,45 @@ class ScheduleManager {
 
         overlay.innerHTML = renderList();
         this._panelEl.appendChild(overlay);
+        this._setProductPage('routines');
 
+        const closeManager = () => {
+            overlay.remove();
+            this._refreshPanel();
+            this._restoreProductPage();
+            const target = managerReturnFocus?.isConnected
+                ? managerReturnFocus
+                : this._panelEl?.querySelector('[data-action="manage-routines"]');
+            target?.focus?.({ preventScroll: true });
+        };
         const bindMgrEvents = () => {
-            overlay.querySelector('#sch-mgr-close').onclick = () => { overlay.remove(); this._refreshPanel(); };
+            overlay.querySelector('#sch-mgr-close').onclick = closeManager;
             overlay.querySelector('#sch-mgr-add').onclick = () => this._showRoutineForm(overlay, null, () => {
-                overlay.querySelector('.sch-form').innerHTML = renderList().replace(/<div class="sch-form sch-form-wide">|<\/div>$/g, '');
-                // Re-render the manager
                 overlay.innerHTML = renderList();
                 bindMgrEvents();
-            });
-            overlay.addEventListener('click', (e) => {
-                if (e.target === overlay) { overlay.remove(); this._refreshPanel(); }
-                const editBtn = e.target.closest('[data-action="edit-routine"]');
-                if (editBtn) {
-                    const r = this._routines.find(r => r.id === editBtn.dataset.id);
-                    if (r) this._showRoutineForm(overlay, r, () => {
-                        overlay.innerHTML = renderList();
-                        bindMgrEvents();
-                    });
-                }
-                const delBtn = e.target.closest('[data-action="del-routine"]');
-                if (delBtn) {
-                    this.removeRoutine(delBtn.dataset.id).then(() => {
-                        overlay.innerHTML = renderList();
-                        bindMgrEvents();
-                    });
-                }
+                overlay.querySelector('#sch-mgr-add')?.focus({ preventScroll: true });
             });
         };
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) { closeManager(); return; }
+            const editBtn = e.target.closest('[data-action="edit-routine"]');
+            if (editBtn) {
+                const r = this._routines.find(r => r.id === editBtn.dataset.id);
+                if (r) this._showRoutineForm(overlay, r, () => {
+                    overlay.innerHTML = renderList();
+                    bindMgrEvents();
+                });
+            }
+            const delBtn = e.target.closest('[data-action="del-routine"]');
+            if (delBtn) {
+                this.removeRoutine(delBtn.dataset.id).then(() => {
+                    overlay.innerHTML = renderList();
+                    bindMgrEvents();
+                });
+            }
+        });
         bindMgrEvents();
+        overlay.querySelector('#sch-mgr-add')?.focus({ preventScroll: true });
     }
 
     _showRoutineForm(parentOverlay, editRoutine, onDone) {
@@ -1092,8 +1336,8 @@ class ScheduleManager {
         const form = document.createElement('div');
         form.className = 'sch-form-overlay';
         form.innerHTML = `
-            <div class="sch-form">
-                <div class="sch-form-title">${isEdit ? '编辑习惯' : '添加习惯'}</div>
+            <div class="sch-form" role="dialog" aria-modal="true" aria-labelledby="sch-routine-form-title">
+                <div class="sch-form-title" id="sch-routine-form-title">${isEdit ? '编辑习惯' : '添加习惯'}</div>
                 <div class="sch-form-row">
                     <label>名称</label>
                     <input type="text" class="sch-input" id="sch-rt-name" value="${this._escHtml(editRoutine?.name || '')}" placeholder="习惯名称">

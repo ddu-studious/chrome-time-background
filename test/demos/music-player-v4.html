@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>网易云音乐 v4 视觉回归</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="../../css/style.css">
+    <link rel="stylesheet" href="../../css/product-ui-v4.css">
+    <style>
+        body {
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            background:
+                radial-gradient(circle at 50% 30%, rgba(66, 87, 130, .32), transparent 42%),
+                linear-gradient(145deg, #111b31, #060913 70%);
+        }
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background-image:
+                radial-gradient(circle at 15% 20%, rgba(255,255,255,.45) 0 1px, transparent 1.5px),
+                radial-gradient(circle at 68% 12%, rgba(255,255,255,.35) 0 1px, transparent 1.5px),
+                radial-gradient(circle at 82% 55%, rgba(255,255,255,.3) 0 1px, transparent 1.5px);
+            background-size: 260px 220px, 340px 280px, 300px 260px;
+            opacity: .5;
+        }
+        .preview-title {
+            position: fixed;
+            top: 32px;
+            left: 50%;
+            translate: -50% 0;
+            color: var(--ui-text-2);
+            font: 500 14px/1.4 system-ui;
+            letter-spacing: .05em;
+        }
+        .music-island {
+            display: flex !important;
+            bottom: 50%;
+            transform: translate(-50%, 50%);
+            animation: none;
+        }
+        .mc-panel {
+            display: flex !important;
+        }
+        .mc-drawer-wrapper {
+            grid-template-rows: 1fr !important;
+        }
+        .mc-panel {
+            border-radius: var(--ui-radius-panel) var(--ui-radius-panel) 0 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="preview-title">网易云音乐 · v4 真实 DOM/CSS 视觉回归</div>
+    <script src="../../js/music-view.js"></script>
+    <script>
+        const { container, actionSheet, contextMenu } = window.MusicView.create();
+        document.body.append(actionSheet, contextMenu, container);
+        container.classList.add('mc-dock-open');
+
+        document.querySelector('#mc-panel').classList.remove('hidden');
+        document.querySelector('#mc-panel').classList.add('mc-panel-expanded');
+        document.querySelector('#mc-title').textContent = '失眠了';
+        document.querySelector('#mc-sub').textContent = '吴栩团 Moske · 网易云音乐';
+        document.querySelector('#mc-lyric-preview').textContent = '夜色很静，音乐继续';
+        document.querySelector('#mc-time-cur').textContent = '1:18';
+        document.querySelector('#mc-time-total').textContent = '4:14';
+        document.querySelector('#mc-prg-fill').style.width = '31%';
+        document.querySelector('#mc-play-icon').className = 'fas fa-pause';
+
+        document.querySelectorAll('.mc-tab').forEach(tab => {
+            const active = tab.dataset.mcTab === 'discover';
+            tab.classList.toggle('active', active);
+            tab.setAttribute('aria-selected', String(active));
+        });
+        document.querySelectorAll('.mc-pane').forEach(pane => pane.classList.toggle('active', pane.dataset.mcPane === 'discover'));
+        document.querySelector('#mc-pane-discover').innerHTML = `
+            <div class="mc-fm-container">
+                <div class="mc-fm-header">
+                    <div class="mc-fm-badge"><i class="fas fa-broadcast-tower"></i> 私人FM</div>
+                    <button class="mc-fm-exit"><i class="fas fa-arrow-left"></i><span>退出 FM</span></button>
+                </div>
+                <div class="mc-fm-reason">
+                    <div class="mc-fm-reason-icon"><i class="fas fa-magic"></i></div>
+                    <div>
+                        <div class="mc-fm-reason-title">根据你的音乐口味推荐</div>
+                        <div class="mc-fm-reason-desc">喜欢会优化后续推荐；不喜欢将跳过并减少相似内容。</div>
+                    </div>
+                </div>
+                <div class="mc-fm-controls">
+                    <button class="mc-fm-btn mc-fm-like"><i class="fas fa-heart"></i><span>喜欢</span></button>
+                    <button class="mc-fm-btn mc-fm-trash"><i class="fas fa-heart-broken"></i><span>不喜欢</span></button>
+                    <button class="mc-fm-btn mc-fm-next"><i class="fas fa-step-forward"></i><span>下一首</span></button>
+                </div>
+            </div>`;
+    </script>
+</body>
+</html>

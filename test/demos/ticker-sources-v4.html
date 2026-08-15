@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>热榜数据源面板 v4</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <link rel="stylesheet" href="../../css/style.css">
+  <link rel="stylesheet" href="../../css/product-ui-v4.css">
+  <style>
+    body { min-height: 100vh; margin: 0; background: radial-gradient(circle at 50% 0, #243754, #08101c 48%, #03060b); }
+    .ticker-sources-panel.open { top: 50%; right: 50%; opacity: 1; visibility: visible; pointer-events: auto; transform: translate(50%, -50%); }
+  </style>
+</head>
+<body>
+  <aside class="ticker-sources-panel open" id="ticker-sources-panel" aria-label="数据源管理">
+    <div class="tsp-header">
+      <div class="tsp-title"><i class="fas fa-sliders-h"></i><span><strong>数据源管理</strong><small>选择热榜中展示的内容来源</small></span><span class="tsp-count" id="tsp-count">8/12</span></div>
+      <div class="tsp-header-actions"><button class="tsp-reset-btn" aria-label="恢复默认"><i class="fas fa-undo"></i></button><button class="tsp-close-btn" aria-label="关闭"><i class="fas fa-times"></i></button></div>
+    </div>
+    <div class="tsp-toolbar">
+      <label class="tsp-search-wrap"><i class="fas fa-search"></i><input type="search" id="tsp-source-search" placeholder="搜索来源…" aria-label="搜索数据源"></label>
+      <div class="tsp-bulk-actions"><button type="button" id="tsp-select-all">全选</button><button type="button" id="tsp-clear-all">清空</button></div>
+    </div>
+    <div class="tsp-body" id="source-body"></div>
+    <div class="tsp-footer"><span id="tsp-selection-summary">已选择 8 个来源</span><button class="tsp-apply-btn"><i class="fas fa-check"></i> 应用并刷新</button></div>
+  </aside>
+  <script>
+    const groups = {
+      '综合资讯': [['微博热搜','🔥'],['知乎热榜','💭']],
+      '科技资讯': [['少数派','📱'],['36氪','💡']],
+      '开发社区': [['GitHub Trending','💻'],['Hacker News','📰']],
+      '视频娱乐': [['哔哩哔哩','📺'],['豆瓣电影','🎬']],
+      '设计灵感': [['Product Hunt','🚀'],['Dribbble','🎨']],
+      '国际资讯': [['Reuters','🌍'],['BBC','📻']],
+    };
+    const body = document.querySelector('#source-body');
+    body.innerHTML = Object.entries(groups).map(([name, items], groupIndex) => `<section class="tsp-category"><div class="tsp-category-header"><span class="tsp-category-name">${name}</span><label class="tsp-category-toggle"><input class="tsp-cat-check" type="checkbox"><span class="tsp-cat-label">全选</span></label></div><div class="tsp-source-list">${items.map(([label, icon], itemIndex) => `<label class="tsp-source-item"><input type="checkbox" ${groupIndex * 2 + itemIndex < 8 ? 'checked' : ''}><span class="tsp-source-icon">${icon}</span><span class="tsp-source-name">${label}</span></label>`).join('')}</div></section>`).join('') + '<div class="tsp-empty" id="tsp-empty" hidden>没有匹配的数据源</div>';
+    const checks = () => [...document.querySelectorAll('.tsp-source-item input')];
+    function sync() { const count = checks().filter(item => item.checked).length; document.querySelector('#tsp-count').textContent = `${count}/12`; document.querySelector('#tsp-selection-summary').textContent = `已选择 ${count} 个来源`; }
+    document.querySelector('#tsp-select-all').onclick = () => { checks().forEach(item => item.checked = true); sync(); };
+    document.querySelector('#tsp-clear-all').onclick = () => { checks().forEach(item => item.checked = false); sync(); };
+    checks().forEach(item => item.onchange = sync);
+    document.querySelector('#tsp-source-search').oninput = event => { const query = event.target.value.toLowerCase(); let count = 0; document.querySelectorAll('.tsp-source-item').forEach(item => { item.hidden = !item.textContent.toLowerCase().includes(query); if (!item.hidden) count += 1; }); document.querySelectorAll('.tsp-category').forEach(group => group.hidden = !group.querySelector('.tsp-source-item:not([hidden])')); document.querySelector('#tsp-empty').hidden = count > 0; };
+  </script>
+</body>
+</html>

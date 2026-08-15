@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>音乐艺人工作台 v5 视觉验收</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <link rel="stylesheet" href="../../css/product-ui-v5.css">
+  <style>
+    body{margin:0;min-height:100vh;background:radial-gradient(circle at 20% 0%,#241519,transparent 34%),#05070b;color:var(--v5-text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif}
+    .demo-note{position:fixed;top:12px;left:50%;z-index:10002;transform:translateX(-50%);padding:7px 12px;border:1px solid var(--v5-border);border-radius:9px;background:rgba(8,11,17,.84);color:var(--v5-text-muted);font-size:10px;backdrop-filter:blur(18px)}
+    .demo-cover{background:linear-gradient(145deg,#7a2d34,#21191d);display:grid;place-items:center;font-size:42px;color:#ffd7d9}
+    .demo-player{position:fixed;right:6vw;bottom:20px;left:6vw;z-index:10001;display:grid;grid-template-columns:52px minmax(0,1fr) auto;align-items:center;gap:12px;padding:10px 14px;border:1px solid var(--v5-border-strong);border-radius:14px;background:rgba(10,13,19,.94);box-shadow:var(--v5-shadow)}
+    .demo-player .demo-cover{width:52px;height:52px;border-radius:10px;font-size:19px}.demo-player strong,.demo-player small{display:block}.demo-player small{margin-top:3px;color:var(--v5-text-muted)}.demo-player em{color:var(--v5-success);font-size:10px;font-style:normal}
+  </style>
+</head>
+<body>
+  <div class="demo-note">视觉验收场景 · 使用生产 CSS · 不连接真实音乐账号</div>
+  <div class="mc-action-sheet-overlay mc-artist-workspace" aria-hidden="false">
+    <div class="mc-action-sheet-backdrop"></div>
+    <div class="mc-action-sheet" role="dialog" aria-label="音乐探索工作台">
+      <div class="mc-as-header">
+        <div class="mc-as-artist-header mc-as-artist-header-enhanced">
+          <div class="mc-as-artist-banner" style="background:radial-gradient(circle at 65% 35%,#7b343a,transparent 30%),linear-gradient(120deg,#201317,#080b10)"></div>
+          <div class="mc-as-artist-header-content">
+            <div class="mc-as-artist-avatar demo-cover">♪</div>
+            <div class="mc-as-artist-info">
+              <div class="mc-workspace-kicker">ARTIST SPACE</div>
+              <div class="mc-as-artist-name">林屿</div>
+              <div class="mc-as-artist-sub">热门歌曲 · 专辑 · 相似艺人</div>
+              <p class="mc-as-artist-desc">城市民谣与轻电子创作者。艺人内容在同一个工作台中浏览，开始播放后底部播放条与队列只认同一个 songId。</p>
+            </div>
+            <button class="mc-as-close"><span>←</span><span>返回播放</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="mc-as-tabs">
+        <button class="mc-as-tab active">● 热门歌曲</button>
+        <button class="mc-as-tab">◉ 专辑</button>
+        <button class="mc-as-tab">◎ 相似艺人</button>
+      </div>
+      <div class="mc-as-body">
+        <div class="mc-as-actions"><button class="mc-as-action-btn">▶ 播放全部</button><button class="mc-as-action-btn">＋ 全部加入队列</button></div>
+        <div class="mc-as-song-list">
+          <div class="mc-row mc-as-row mc-row-active"><span class="mc-row-num">♪</span><div class="mc-row-info"><span class="mc-row-title">晚风经过站台</span><span class="mc-row-artist">林屿 · 正在播放</span></div><button class="mc-row-add-queue">✓</button><button class="mc-row-play">▶</button></div>
+          <div class="mc-row mc-as-row"><span class="mc-row-num">2</span><div class="mc-row-info"><span class="mc-row-title">海岸线以北</span><span class="mc-row-artist">林屿</span></div><button class="mc-row-add-queue">＋</button><button class="mc-row-play">▶</button></div>
+          <div class="mc-row mc-as-row"><span class="mc-row-num">3</span><div class="mc-row-info"><span class="mc-row-title">没有寄出的明信片</span><span class="mc-row-artist">林屿</span></div><button class="mc-row-add-queue">＋</button><button class="mc-row-play">▶</button></div>
+          <div class="mc-row mc-as-row"><span class="mc-row-num">4</span><div class="mc-row-info"><span class="mc-row-title">凌晨两点的便利店</span><span class="mc-row-artist">林屿</span></div><button class="mc-row-add-queue">＋</button><button class="mc-row-play">▶</button></div>
+          <div class="mc-row mc-as-row"><span class="mc-row-num">5</span><div class="mc-row-info"><span class="mc-row-title">潮汐备忘录</span><span class="mc-row-artist">林屿</span></div><button class="mc-row-add-queue">＋</button><button class="mc-row-play">▶</button></div>
+          <div class="mc-row mc-as-row"><span class="mc-row-num">6</span><div class="mc-row-info"><span class="mc-row-title">白噪声旅馆</span><span class="mc-row-artist">林屿</span></div><button class="mc-row-add-queue">＋</button><button class="mc-row-play">▶</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <footer class="demo-player" data-song-id="demo-1001">
+    <div class="demo-cover">♪</div>
+    <div><strong>晚风经过站台</strong><small>林屿 · 队列第 1 首</small></div>
+    <em>✓ 与当前高亮歌曲一致</em>
+  </footer>
+</body>
+</html>

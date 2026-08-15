@@ -16,6 +16,9 @@ class WorkLogManager {
         this._escHandler = null;
         this._initialized = false;
         this._viewMode = 'list'; // 'list' | 'quadrant'
+        this._returnFocus = null;
+        this._backgroundInertSiblings = [];
+        this._panelEventsAbort = null;
 
         this.QUADRANTS = [
             { key: 'q1', label: '紧急且重要', hint: '立即做', icon: '🔴', urgency: true, importance: true },
@@ -122,6 +125,19 @@ class WorkLogManager {
 
     _genId(prefix) {
         return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    }
+
+    _setProductPage(page) {
+        window.ProductUIV5?.setBusinessPage?.('worklog', page);
+    }
+
+    _baseProductPage() {
+        if (this._timer) return 'active-timer';
+        return this._viewMode === 'quadrant' ? 'quadrant' : 'daily-list';
+    }
+
+    _restoreProductPage() {
+        this._setProductPage(this._baseProductPage());
     }
 
     _getProject(projectId) {
@@ -341,6 +357,7 @@ class WorkLogManager {
         this._startTimerTick();
         this._updateTimerUI();
         this._updateDockBadge(true);
+        this._setProductPage('active-timer');
     }
 
     async stopTimer() {
@@ -365,6 +382,7 @@ class WorkLogManager {
         await this._saveTimer();
         this._updateTimerUI();
         this._updateDockBadge(false);
+        this._restoreProductPage();
         return entry;
     }
 
@@ -559,11 +577,13 @@ class WorkLogManager {
 
     openPanel() {
         if (this._panelOpen) return;
+        this._returnFocus = document.activeElement;
         this._panelOpen = true;
         this._currentDate = this._todayStr();
         this._renderPanel();
         this._updateDockBadge(this.isTimerRunning());
         if (this._timer) this._startTimerTick();
+        this._restoreProductPage();
     }
 
     closePanel() {
@@ -573,10 +593,26 @@ class WorkLogManager {
             document.removeEventListener('keydown', this._escHandler);
             this._escHandler = null;
         }
+        this._panelEventsAbort?.abort();
+        this._panelEventsAbort = null;
+        const dockBtn = document.getElementById('worklog-dock-btn');
+        const visibleDockBtn = dockBtn?.getClientRects?.().length ? dockBtn : null;
+        const insideLaunchpad = this._returnFocus?.closest?.('#dock-launchpad');
+        const focusableReturn = this._returnFocus?.matches?.('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        const returnTarget = this._returnFocus?.isConnected && focusableReturn && !insideLaunchpad
+            ? this._returnFocus
+            : (visibleDockBtn || document.getElementById('dock-launchpad-btn'));
+        this._setBackgroundInert(false);
+        window.ProductUIV5?.setShellPage?.('home');
+        returnTarget?.focus?.({ preventScroll: true });
+        setTimeout(() => {
+            if (!this._panelOpen) returnTarget?.focus?.({ preventScroll: true });
+        }, 120);
         if (this._overlayEl) {
             this._overlayEl.classList.remove('wl-overlay-visible');
         }
         if (this._panelEl) {
+            this._panelEl.inert = true;
             this._panelEl.classList.add('wl-panel-closing');
             setTimeout(() => {
                 this._panelEl?.remove();
@@ -585,8 +621,8 @@ class WorkLogManager {
                 this._overlayEl = null;
             }, 300);
         }
-        const dockBtn = document.getElementById('worklog-dock-btn');
         if (dockBtn) dockBtn.classList.remove('active');
+        this._returnFocus = null;
     }
 
     // ─── 面板渲染 ───
@@ -596,16 +632,22 @@ class WorkLogManager {
 
         const overlay = document.createElement('div');
         overlay.className = 'wl-overlay';
+        overlay.setAttribute('aria-hidden', 'true');
         overlay.addEventListener('click', () => this.closePanel());
         this._overlayEl = overlay;
 
         const panel = document.createElement('div');
         panel.className = 'wl-panel';
+        panel.setAttribute('role', 'dialog');
+        panel.setAttribute('aria-modal', 'true');
+        panel.setAttribute('aria-labelledby', 'worklog-panel-title');
+        panel.tabIndex = -1;
         this._panelEl = panel;
 
         panel.innerHTML = this._buildPanelHTML();
         document.body.appendChild(overlay);
         document.body.appendChild(panel);
+        this._setBackgroundInert(true);
 
         requestAnimationFrame(() => {
             overlay.classList.add('wl-overlay-visible');
@@ -618,6 +660,45 @@ class WorkLogManager {
 
         const dockBtn = document.getElementById('worklog-dock-btn');
         if (dockBtn) dockBtn.classList.add('active');
+        requestAnimationFrame(() => {
+            const initial = this._timer
+                ? this._panelEl?.querySelector('.wl-timer-btn')
+                : this._panelEl?.querySelector('.wl-desc-input');
+            initial?.focus?.({ preventScroll: true });
+        });
+    }
+
+    _setBackgroundInert(active) {
+        if (active) {
+            if (this._backgroundInertSiblings.length) return;
+            this._backgroundInertSiblings = [...document.body.children]
+                .filter(child => child !== this._panelEl && child !== this._overlayEl && !child.inert);
+            this._backgroundInertSiblings.forEach(child => { child.inert = true; });
+            return;
+        }
+        this._backgroundInertSiblings.forEach(child => { child.inert = false; });
+        this._backgroundInertSiblings = [];
+    }
+
+    _activeFocusSurface() {
+        return this._panelEl?.querySelector('.wl-task-picker-overlay')
+            || [...(this._panelEl?.querySelectorAll('.wl-form-overlay') || [])].pop()
+            || this._panelEl;
+    }
+
+    _trapFocus(container, event) {
+        const focusable = [...(container?.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])') || [])]
+            .filter(element => !element.hidden && element.getAttribute('aria-hidden') !== 'true');
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+        }
     }
 
     _buildPanelHTML() {
@@ -629,6 +710,7 @@ class WorkLogManager {
         const projectOptions = projects.map(p =>
             `<option value="${p.id}" ${p.id === timerProjId ? 'selected' : ''} style="color:${p.color}">${p.name}</option>`
         ).join('');
+        const projectDigest = this._buildProjectDigest(summary);
 
         const quickDurBtns = this.QUICK_DURATIONS.map(d =>
             `<button class="wl-quick-dur-btn" data-minutes="${d.minutes}" title="快速添加 ${d.label}">${d.label}</button>`
@@ -636,7 +718,7 @@ class WorkLogManager {
 
         return `
             <div class="wl-panel-header">
-                <div class="wl-panel-title">
+                <div class="wl-panel-title" id="worklog-panel-title">
                     <i class="fas fa-clipboard-list"></i> 工作日志
                 </div>
                 <div class="wl-date-nav">
@@ -651,11 +733,14 @@ class WorkLogManager {
                         <i class="fas fa-chevron-right"></i>
                     </button>
                 </div>
-                <button class="wl-close-btn" data-action="close" title="关闭">
+                <button class="wl-close-btn" data-action="close" title="关闭" aria-label="关闭工作日志">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
 
+            <div class="wl-workbench-grid">
+            <aside class="wl-capture-pane">
+            <div class="wl-pane-heading"><span>快速记录</span><small>计时或补录</small></div>
             <div class="wl-quick-entry">
                 <div class="wl-quick-row-top">
                     <input type="text" class="wl-input wl-desc-input" placeholder="今天要做什么..."
@@ -676,10 +761,10 @@ class WorkLogManager {
                 </div>
                 <div class="wl-quick-row-bottom">
                     <div class="wl-priority-toggles">
-                        <button class="wl-pri-toggle wl-pri-urgent${this._timer?.urgency ? ' wl-pri-active' : ''}" data-pri="urgency" title="紧急">
+                        <button class="wl-pri-toggle wl-pri-urgent${this._timer?.urgency ? ' wl-pri-active' : ''}" data-pri="urgency" title="紧急" aria-pressed="${!!this._timer?.urgency}">
                             <i class="fas fa-bolt"></i> 紧急
                         </button>
-                        <button class="wl-pri-toggle wl-pri-important${this._timer?.importance ? ' wl-pri-active' : ''}" data-pri="importance" title="重要">
+                        <button class="wl-pri-toggle wl-pri-important${this._timer?.importance ? ' wl-pri-active' : ''}" data-pri="importance" title="重要" aria-pressed="${!!this._timer?.importance}">
                             <i class="fas fa-star"></i> 重要
                         </button>
                     </div>
@@ -703,17 +788,36 @@ class WorkLogManager {
                 <div class="wl-summary-right">
                     <span class="wl-summary-count">共 <strong>${summary.count}</strong> 条</span>
                     <div class="wl-view-toggle">
-                        <button class="wl-view-btn${this._viewMode === 'list' ? ' wl-view-active' : ''}" data-view="list" title="列表视图">
+                        <button class="wl-view-btn${this._viewMode === 'list' ? ' wl-view-active' : ''}" data-view="list" title="列表视图" aria-label="列表视图" aria-pressed="${this._viewMode === 'list'}">
                             <i class="fas fa-list"></i>
                         </button>
-                        <button class="wl-view-btn${this._viewMode === 'quadrant' ? ' wl-view-active' : ''}" data-view="quadrant" title="四象限视图">
+                        <button class="wl-view-btn${this._viewMode === 'quadrant' ? ' wl-view-active' : ''}" data-view="quadrant" title="四象限视图" aria-label="四象限视图" aria-pressed="${this._viewMode === 'quadrant'}">
                             <i class="fas fa-th-large"></i>
                         </button>
                     </div>
                 </div>
             </div>
+            </aside>
 
+            <main class="wl-log-pane">
+                <div class="wl-pane-heading"><span>当天记录</span><small>${summary.count} 条</small></div>
             <div class="wl-entries-container" id="wl-entries-container"></div>
+            </main>
+
+            <aside class="wl-insight-pane">
+                <div class="wl-pane-heading"><span>今日概览</span><small>8 小时目标</small></div>
+                <div class="wl-insight-metrics">
+                    <div><strong>${this._formatDuration(summary.totalMinutes)}</strong><span>累计工时</span></div>
+                    <div><strong>${progress.percentage}%</strong><span>目标进度</span></div>
+                    <div><strong>${Object.keys(summary.byProject).length}</strong><span>活跃项目</span></div>
+                </div>
+                <div class="wl-insight-section">
+                    <span class="wl-insight-label">项目分布</span>
+                    <div class="wl-insight-project-list">${projectDigest || '<div class="wl-insight-empty">记录后将在这里显示投入分布</div>'}</div>
+                </div>
+                <button class="wl-insight-report" data-action="week-report"><i class="fas fa-chart-line"></i> 查看本周回顾</button>
+            </aside>
+            </div>
 
             <div class="wl-panel-footer">
                 <button class="wl-footer-btn" data-action="copy-prev-day" title="复制前一天的任务到当前日期">
@@ -727,6 +831,20 @@ class WorkLogManager {
                 </button>
             </div>
         `;
+    }
+
+    _buildProjectDigest(summary) {
+        return Object.entries(summary.byProject)
+            .sort(([, a], [, b]) => b.total - a.total)
+            .slice(0, 5)
+            .map(([projectId, data]) => {
+                const project = this._getProject(projectId);
+                return `<div class="wl-insight-project">
+                    <span class="wl-project-dot" style="background:${project.color}"></span>
+                    <span>${this._escHtml(project.name)}</span>
+                    <strong>${this._formatDuration(data.total)}</strong>
+                </div>`;
+            }).join('');
     }
 
     _escHtml(str) {
@@ -981,6 +1099,15 @@ class WorkLogManager {
         }
         const progressText = this._panelEl.querySelector('.wl-progress-text');
         if (progressText) progressText.textContent = `${progress.percentage}%`;
+        const insightValues = this._panelEl.querySelectorAll('.wl-insight-metrics strong');
+        if (insightValues[0]) insightValues[0].textContent = this._formatDuration(summary.totalMinutes);
+        if (insightValues[1]) insightValues[1].textContent = `${progress.percentage}%`;
+        if (insightValues[2]) insightValues[2].textContent = Object.keys(summary.byProject).length;
+        const insightProjects = this._panelEl.querySelector('.wl-insight-project-list');
+        if (insightProjects) {
+            insightProjects.innerHTML = this._buildProjectDigest(summary)
+                || '<div class="wl-insight-empty">记录后将在这里显示投入分布</div>';
+        }
         this._renderDayView();
     }
 
@@ -988,6 +1115,9 @@ class WorkLogManager {
     _bindPanelEvents(overlay) {
         const panel = this._panelEl;
         if (!panel) return;
+        this._panelEventsAbort?.abort();
+        this._panelEventsAbort = new AbortController();
+        const eventOptions = { signal: this._panelEventsAbort.signal };
 
         panel.addEventListener('click', async (e) => {
             const btn = e.target.closest('[data-action]');
@@ -1054,18 +1184,19 @@ class WorkLogManager {
                     this._showCopyPrevDayDialog();
                     break;
             }
-        });
+        }, eventOptions);
 
         // 优先级切换按钮（计时中实时同步到 timer 持久化）
         panel.querySelectorAll('.wl-pri-toggle').forEach(btn => {
             btn.addEventListener('click', () => {
                 btn.classList.toggle('wl-pri-active');
+                btn.setAttribute('aria-pressed', String(btn.classList.contains('wl-pri-active')));
                 if (this._timer) {
                     this._timer.urgency = panel.querySelector('.wl-pri-toggle[data-pri="urgency"]')?.classList.contains('wl-pri-active') || false;
                     this._timer.importance = panel.querySelector('.wl-pri-toggle[data-pri="importance"]')?.classList.contains('wl-pri-active') || false;
                     this._saveTimer();
                 }
-            });
+            }, eventOptions);
         });
 
         // 快捷时长按钮
@@ -1092,7 +1223,7 @@ class WorkLogManager {
                     this._resetPriorityToggles();
                     this._refreshPanel();
                 }
-            });
+            }, eventOptions);
         });
 
         // 视图切换
@@ -1102,9 +1233,11 @@ class WorkLogManager {
                 if (view === this._viewMode) return;
                 this._viewMode = view;
                 panel.querySelectorAll('.wl-view-btn').forEach(b => b.classList.remove('wl-view-active'));
+                panel.querySelectorAll('.wl-view-btn').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
                 btn.classList.add('wl-view-active');
                 this._renderDayView();
-            });
+                this._restoreProductPage();
+            }, eventOptions);
         });
 
         const taskLinkBtn = panel.querySelector('.wl-task-link-btn');
@@ -1119,7 +1252,7 @@ class WorkLogManager {
                         this._saveTimer();
                     }
                 }, taskLinkBtn.dataset.memoId || null);
-            });
+            }, eventOptions);
         }
 
         const timerBtn = panel.querySelector('.wl-timer-btn');
@@ -1146,7 +1279,7 @@ class WorkLogManager {
                     const importance = panel.querySelector('.wl-pri-toggle[data-pri="importance"]')?.classList.contains('wl-pri-active') || false;
                     this.startTimer(projId, desc, memoId, urgency, importance);
                 }
-            });
+            }, eventOptions);
         }
 
         const descInput = panel.querySelector('.wl-desc-input');
@@ -1162,12 +1295,21 @@ class WorkLogManager {
                         this.startTimer(projId, desc, memoId, urgency, importance);
                     }
                 }
-            });
+            }, eventOptions);
         }
 
         if (this._escHandler) document.removeEventListener('keydown', this._escHandler);
         this._escHandler = (e) => {
-            if (e.key === 'Escape' && this._panelOpen) this.closePanel();
+            if (e.key === 'Tab') {
+                this._trapFocus(this._activeFocusSurface(), e);
+                return;
+            }
+            if (e.key === 'Escape' && this._panelOpen) {
+                const surface = this._activeFocusSurface();
+                const dismiss = surface?.querySelector('.wl-tp-close, #wl-form-cancel, #wl-week-close, #wl-proj-close, [data-copy-action="close"]');
+                if (dismiss) { dismiss.click(); return; }
+                this.closePanel();
+            }
         };
         document.addEventListener('keydown', this._escHandler);
     }
@@ -1246,6 +1388,7 @@ class WorkLogManager {
     _resetPriorityToggles() {
         this._panelEl?.querySelectorAll('.wl-pri-toggle').forEach(btn => {
             btn.classList.remove('wl-pri-active');
+            btn.setAttribute('aria-pressed', 'false');
         });
     }
 
@@ -1268,6 +1411,8 @@ class WorkLogManager {
     _showManualEntryForm(editEntry = null) {
         const existing = this._panelEl?.querySelector('.wl-form-overlay');
         if (existing) existing.remove();
+        const formReturnFocus = document.activeElement;
+        this._setProductPage('manual-entry');
 
         const projects = this.getActiveProjects();
         const projectOptions = projects.map(p =>
@@ -1284,8 +1429,8 @@ class WorkLogManager {
         const linkedMemo = editEntry?.memoId ? this._getMemoTitle(editEntry.memoId) : null;
 
         overlay.innerHTML = `
-            <div class="wl-form">
-                <div class="wl-form-title">${isEdit ? '编辑记录' : '添加工时记录'}</div>
+            <div class="wl-form" role="dialog" aria-modal="true" aria-labelledby="wl-manual-title">
+                <div class="wl-form-title" id="wl-manual-title">${isEdit ? '编辑记录' : '添加工时记录'}</div>
                 <div class="wl-form-group">
                     <label>做了什么</label>
                     <input type="text" class="wl-input" id="wl-form-desc" value="${this._escHtml(editEntry?.description || '')}" placeholder="工作内容描述..." autofocus>
@@ -1342,11 +1487,19 @@ class WorkLogManager {
         `;
 
         this._panelEl.appendChild(overlay);
-        requestAnimationFrame(() => overlay.classList.add('wl-form-visible'));
+        requestAnimationFrame(() => {
+            overlay.classList.add('wl-form-visible');
+            overlay.querySelector('#wl-form-desc')?.focus({ preventScroll: true });
+        });
 
         overlay.querySelector('#wl-form-cancel').addEventListener('click', () => {
             overlay.classList.remove('wl-form-visible');
-            setTimeout(() => overlay.remove(), 200);
+            setTimeout(() => {
+                overlay.remove();
+                const target = formReturnFocus?.isConnected ? formReturnFocus : this._panelEl?.querySelector('[data-action="manual-entry"]');
+                target?.focus?.({ preventScroll: true });
+            }, 200);
+            this._restoreProductPage();
         });
 
         const updatePriHint = () => {
@@ -1407,6 +1560,7 @@ class WorkLogManager {
             overlay.classList.remove('wl-form-visible');
             setTimeout(() => overlay.remove(), 200);
             this._refreshPanel();
+            this._restoreProductPage();
         });
 
         overlay.querySelector('#wl-form-desc').addEventListener('keydown', (e) => {
@@ -1430,6 +1584,8 @@ class WorkLogManager {
     _showWeekReport() {
         const existing = this._panelEl?.querySelector('.wl-form-overlay');
         if (existing) existing.remove();
+        const reportReturnFocus = document.activeElement;
+        this._setProductPage('weekly-report');
 
         const summary = this.getWeeklySummary(this._currentDate);
         const reportText = this.generateWeeklyReportText(this._currentDate);
@@ -1453,8 +1609,8 @@ class WorkLogManager {
         const overlay = document.createElement('div');
         overlay.className = 'wl-form-overlay';
         overlay.innerHTML = `
-            <div class="wl-form wl-week-report">
-                <div class="wl-form-title">
+            <div class="wl-form wl-week-report" role="dialog" aria-modal="true" aria-labelledby="wl-week-title">
+                <div class="wl-form-title" id="wl-week-title">
                     <i class="fas fa-calendar-week"></i>
                     周报回顾（${summary.start} ~ ${summary.end}）
                 </div>
@@ -1483,11 +1639,19 @@ class WorkLogManager {
         `;
 
         this._panelEl.appendChild(overlay);
-        requestAnimationFrame(() => overlay.classList.add('wl-form-visible'));
+        requestAnimationFrame(() => {
+            overlay.classList.add('wl-form-visible');
+            overlay.querySelector('#wl-week-close')?.focus({ preventScroll: true });
+        });
 
         overlay.querySelector('#wl-week-close').addEventListener('click', () => {
             overlay.classList.remove('wl-form-visible');
-            setTimeout(() => overlay.remove(), 200);
+            setTimeout(() => {
+                overlay.remove();
+                const target = reportReturnFocus?.isConnected ? reportReturnFocus : this._panelEl?.querySelector('[data-action="week-report"]');
+                target?.focus?.({ preventScroll: true });
+            }, 200);
+            this._restoreProductPage();
         });
 
         overlay.querySelector('#wl-week-copy').addEventListener('click', async () => {
@@ -1757,6 +1921,8 @@ class WorkLogManager {
     _showProjectManager() {
         const existing = this._panelEl?.querySelector('.wl-form-overlay');
         if (existing) existing.remove();
+        const projectReturnFocus = document.activeElement;
+        this._setProductPage('projects');
 
         const overlay = document.createElement('div');
         overlay.className = 'wl-form-overlay';
@@ -1780,8 +1946,8 @@ class WorkLogManager {
         };
 
         overlay.innerHTML = `
-            <div class="wl-form wl-proj-manager">
-                <div class="wl-form-title"><i class="fas fa-folder-open"></i> 管理项目</div>
+            <div class="wl-form wl-proj-manager" role="dialog" aria-modal="true" aria-labelledby="wl-project-title">
+                <div class="wl-form-title" id="wl-project-title"><i class="fas fa-folder-open"></i> 管理项目</div>
                 <div class="wl-proj-list">${renderProjectList()}</div>
                 <div class="wl-proj-add">
                     <input type="text" class="wl-input" id="wl-proj-name" placeholder="新项目名称...">
@@ -1799,7 +1965,10 @@ class WorkLogManager {
         `;
 
         this._panelEl.appendChild(overlay);
-        requestAnimationFrame(() => overlay.classList.add('wl-form-visible'));
+        requestAnimationFrame(() => {
+            overlay.classList.add('wl-form-visible');
+            overlay.querySelector('#wl-proj-name')?.focus({ preventScroll: true });
+        });
 
         let selectedColor = this.PROJECT_COLORS[0].hex;
         overlay.querySelector(`[data-color="${selectedColor}"]`)?.classList.add('wl-color-selected');
@@ -1853,7 +2022,12 @@ class WorkLogManager {
 
         overlay.querySelector('#wl-proj-close').addEventListener('click', () => {
             overlay.classList.remove('wl-form-visible');
-            setTimeout(() => overlay.remove(), 200);
+            setTimeout(() => {
+                overlay.remove();
+                const target = projectReturnFocus?.isConnected ? projectReturnFocus : this._panelEl?.querySelector('[data-action="manage-projects"]');
+                target?.focus?.({ preventScroll: true });
+            }, 200);
+            this._restoreProductPage();
         });
     }
 
@@ -1871,6 +2045,7 @@ class WorkLogManager {
     _showTaskPicker(onSelect, currentMemoId) {
         const existing = this._panelEl?.querySelector('.wl-task-picker-overlay');
         if (existing) existing.remove();
+        const pickerReturnFocus = document.activeElement;
 
         const tasks = this._getTasksForPicker('');
         const overlay = document.createElement('div');
@@ -1888,8 +2063,8 @@ class WorkLogManager {
         };
 
         overlay.innerHTML = `
-            <div class="wl-task-picker">
-                <div class="wl-tp-header">
+            <div class="wl-task-picker" role="dialog" aria-modal="true" aria-labelledby="wl-task-picker-title">
+                <div class="wl-tp-header" id="wl-task-picker-title">
                     <i class="fas fa-tasks"></i> 选择关联任务
                 </div>
                 <div class="wl-tp-search-wrap">
@@ -1927,18 +2102,18 @@ class WorkLogManager {
             const taskTitle = item.dataset.taskTitle;
             onSelect(taskId, taskTitle);
             overlay.classList.remove('wl-form-visible');
-            setTimeout(() => overlay.remove(), 200);
+            setTimeout(() => { overlay.remove(); pickerReturnFocus?.focus?.({ preventScroll: true }); }, 200);
         });
 
         overlay.querySelector('.wl-tp-clear').addEventListener('click', () => {
             onSelect(null, null);
             overlay.classList.remove('wl-form-visible');
-            setTimeout(() => overlay.remove(), 200);
+            setTimeout(() => { overlay.remove(); pickerReturnFocus?.focus?.({ preventScroll: true }); }, 200);
         });
 
         overlay.querySelector('.wl-tp-close').addEventListener('click', () => {
             overlay.classList.remove('wl-form-visible');
-            setTimeout(() => overlay.remove(), 200);
+            setTimeout(() => { overlay.remove(); pickerReturnFocus?.focus?.({ preventScroll: true }); }, 200);
         });
     }
 }

@@ -1,6 +1,6 @@
 # 文档总索引
 
-> 最后更新：2026-05-25  
+> 最后更新：2026-08-10
 > 文档管理规范：`.cursor/rules/05-docs-organization.mdc`
 
 ## 快速导航
@@ -17,6 +17,10 @@
 
 | 更新日期 | 类型 | 文档 | 标题 |
 |----------|------|------|------|
+| 2026-08-10 | 验收 | [product-ui-v5-r4-checklist.md](design/product-ui-v5-r4-checklist.md) | Product UI v5 真实 Chrome R4 逐页清单 |
+| 2026-08-10 | 验收 | [product-ui-v5-implementation-audit.md](design/product-ui-v5-implementation-audit.md) | Product UI v5 实现与验收审计 |
+| 2026-08-10 | 设计 | [product-ui-multi-screen-v5.md](design/product-ui-multi-screen-v5.md) | 中国风景时钟全产品多屏设计 v5 |
+| 2026-08-07 | 设计 | [product-ui-redesign-v4.md](design/product-ui-redesign-v4.md) | 中国风景时钟全产品 UI/UX 改版设计 v4 |
 | 2026-05-25 | 运营 | [ops-graphsphere-demo-script-brief-v0.1.md](requirements/ops-graphsphere-demo-script-brief-v0.1.md) | GraphSphere 5 分钟演示脚本与传播 Brief |
 | 2026-05-25 | ADR | [adr-graphsphere-tech-stack-architecture-v2.md](adr/adr-graphsphere-tech-stack-architecture-v2.md) | ADR-002 GraphSphere 技术选型（草案） |
 | 2026-05-25 | 技术 | [arch-graphsnapshot-schema-v1.md](technical/arch-graphsnapshot-schema-v1.md) | GraphSnapshot Schema v1（冻结） |

@@ -450,6 +450,7 @@
             this.toggleBtn = null;
             this.restartBtn = null;
             this.panel = null;
+            this._returnFocus = null;
         }
 
         init() {
@@ -514,6 +515,11 @@
 
             document.addEventListener('keydown', event => {
                 if (!this.isPanelOpen()) return;
+                if (event.code === 'Escape') {
+                    event.preventDefault();
+                    this.hidePanel();
+                    return;
+                }
                 const keyMapMove = {
                     ArrowLeft: -1,
                     ArrowRight: 1,
@@ -565,21 +571,30 @@
 
         togglePanel() {
             if (!this.panel) return;
-            this.panel.classList.toggle('open');
+            const willOpen = !this.isPanelOpen();
+            if (willOpen) this._returnFocus = document.activeElement;
+            this.panel.classList.toggle('open', willOpen);
+            this.panel.setAttribute('aria-hidden', willOpen ? 'false' : 'true');
             const dockBtn = document.getElementById('tetris-dock-btn');
             dockBtn?.classList.toggle('active', this.isPanelOpen());
             if (this.isPanelOpen()) {
                 this.render();
+                this.toggleBtn?.focus({ preventScroll: true });
             } else {
-                this.pause();
+                this.hidePanel();
             }
         }
 
         hidePanel() {
             if (!this.panel) return;
             this.panel.classList.remove('open');
+            this.panel.setAttribute('aria-hidden', 'true');
             document.getElementById('tetris-dock-btn')?.classList.remove('active');
             this.pause();
+            const dockBtn = document.getElementById('tetris-dock-btn');
+            const usableReturn = this._returnFocus?.isConnected && this._returnFocus.getClientRects?.().length;
+            (usableReturn ? this._returnFocus : dockBtn)?.focus?.({ preventScroll: true });
+            this._returnFocus = null;
         }
 
         getTickMs() {

@@ -280,6 +280,7 @@
             this.toggleBtn = null;
             this.restartBtn = null;
             this.soundToggleBtn = null;
+            this._returnFocus = null;
 
             /** @type {object|null} */
             this._lineClearAnim = null;
@@ -344,6 +345,11 @@
             });
 
             this._onKeyDown = event => {
+                if (this.isPanelOpen() && event.code === 'Escape') {
+                    event.preventDefault();
+                    this.hidePanel();
+                    return;
+                }
                 if (!shouldAcceptKeyboardInput(this.panel, document.activeElement)) {
                     return;
                 }
@@ -541,7 +547,9 @@
         async togglePanel() {
             if (!this.panel) return;
             const willOpen = !this.isPanelOpen();
+            if (willOpen) this._returnFocus = document.activeElement;
             this.panel.classList.toggle('open', willOpen);
+            this.panel.setAttribute('aria-hidden', willOpen ? 'false' : 'true');
             const dockBtn = document.getElementById('tetris-3d-dock-btn');
             dockBtn?.classList.toggle('active', willOpen);
 
@@ -561,10 +569,15 @@
             if (!this.panel) return;
             this._trackPanelAbort();
             this.panel.classList.remove('open');
+            this.panel.setAttribute('aria-hidden', 'true');
             document.getElementById('tetris-3d-dock-btn')?.classList.remove('active');
             this.pause();
             this.stopRenderLoop();
             this.destroyRenderer();
+            const dockBtn = document.getElementById('tetris-3d-dock-btn');
+            const usableReturn = this._returnFocus?.isConnected && this._returnFocus.getClientRects?.().length;
+            (usableReturn ? this._returnFocus : dockBtn)?.focus?.({ preventScroll: true });
+            this._returnFocus = null;
         }
 
         /**

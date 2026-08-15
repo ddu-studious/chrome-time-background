@@ -273,26 +273,28 @@
             }
         } catch (_) {}
 
-        if (!info.available.length) {
-            try {
-                const player = window.player;
+        try {
+            const player = window.player;
+            if (!info.available.length) {
                 if (player?.getQualityList) {
                     info.available = player.getQualityList() || [];
                 } else if (player?.getSupportedQualityList) {
                     info.available = player.getSupportedQualityList() || [];
                 }
-                if (player?.getQuality) info.current = player.getQuality() || info.current;
-            } catch (_) {}
-        }
-
-        if (!info.available.length) {
-            const domInfo = getQualityFromDOM();
-            if (domInfo.available.length) {
-                info.available = domInfo.available;
-                info.descriptions = domInfo.descriptions;
-                if (domInfo.current) info.current = domInfo.current;
             }
+            // __playinfo__.data.quality 是页面初始化时的请求值，切换或降级后可能已经过期。
+            // 播放器运行时 API 比初始化数据更接近当前实际画质。
+            if (player?.getQuality) info.current = player.getQuality() || info.current;
+        } catch (_) {}
+
+        // 最终以播放器当前可见的选中项/标签校准实际画质。B 站在网络或账号能力
+        // 降级时可能保留旧的 __playinfo__，但控制栏会显示真实生效值。
+        const domInfo = getQualityFromDOM();
+        if (!info.available.length && domInfo.available.length) {
+            info.available = domInfo.available;
         }
+        Object.assign(info.descriptions, domInfo.descriptions);
+        if (domInfo.current) info.current = domInfo.current;
 
         info.available.forEach(q => {
             if (!info.descriptions[q]) info.descriptions[q] = QUALITY_MAP[q] || String(q);

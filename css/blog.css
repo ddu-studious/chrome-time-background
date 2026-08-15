@@ -287,9 +287,15 @@
 /* 文章列表项 — Jiayuan 风格 */
 .blog-post-row {
     display: flex;
+    width: 100%;
     align-items: baseline;
     padding: 10px 0;
+    border: 0;
     border-bottom: 1px solid #eee;
+    color: inherit;
+    background: transparent;
+    text-align: left;
+    font: inherit;
     cursor: pointer;
     transition: background .1s;
     gap: 12px;
@@ -1860,6 +1866,10 @@
 }
 .kw-wiki-overlay.open {
     opacity: 1; visibility: visible;
+}
+.kw-wiki-overlay.open .kw-panel {
+    opacity: 1;
+    transform: scale(1);
 }
 .kw-panel {
     width: 1520px; max-width: 92vw; max-height: 82vh;

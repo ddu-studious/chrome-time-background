@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>Agent 矩阵真实页面验收夹具</title>
+  <style>html,body,iframe{width:100%;height:100%;margin:0;border:0;overflow:hidden;background:#07101d}</style>
+</head>
+<body>
+  <iframe id="app" title="Agent 矩阵本地验收页面"></iframe>
+  <script>
+    const frame = document.getElementById('app');
+    const params = new URLSearchParams(location.search);
+    const width = Number(params.get('width'));
+    if (width) {
+      frame.style.width = `${width}px`;
+      frame.style.margin = '0 auto';
+      frame.style.display = 'block';
+    }
+    frame.src = '../../index.html';
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+    frame.addEventListener('load', async () => {
+      const win = frame.contentWindow;
+      for (let i = 0; i < 240 && !win.cursorBridge; i += 1) await sleep(50);
+      const bridge = win.cursorBridge;
+      if (!bridge) return;
+      const view = params.get('view') || 'overview';
+      if (bridge._healthTimer) clearInterval(bridge._healthTimer);
+      bridge._previewMode = true;
+      bridge.connected = view !== 'connection-error';
+      bridge.serverInfo = { status: 'ok', version: 'preview', agents: 3 };
+      bridge.agents = [
+        { id: 'agent_review', name: '代码审查员', model: 'gpt-5.4', status: 'idle', cwd: '/workspace/app', totalTokens: 18240 },
+        { id: 'agent_frontend', name: '前端实现器', model: 'claude-sonnet-4-6', status: 'running', cwd: '/workspace/app', totalTokens: 9210 },
+        { id: 'agent_test', name: '测试工程师', model: 'composer-2', status: 'completed', cwd: '/workspace/app', totalTokens: 6830 }
+      ];
+      bridge.refreshAgents = async () => {
+        bridge._renderAgentCards();
+        bridge._updateStatsBar();
+      };
+      bridge.checkHealth = async () => view !== 'connection-error';
+      bridge._connectSSE = () => {};
+      bridge._loadCollabRoles = async () => {};
+      bridge._renderAgentCards();
+      bridge._updateStatsBar();
+      bridge._updateStatusUI();
+      if (!bridge.isOpen) bridge.togglePanel();
+      bridge.showProductPage(view);
+      const keepPreviewState = setInterval(() => {
+        bridge.connected = view !== 'connection-error';
+        bridge.serverInfo = bridge.connected ? { status: 'ok', version: 'preview', agents: bridge.agents.length } : null;
+        bridge.showProductPage(view);
+      }, 200);
+      setTimeout(() => clearInterval(keepPreviewState), 2400);
+    });
+  </script>
+</body>
+</html>

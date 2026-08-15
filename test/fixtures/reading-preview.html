@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>今日阅读真实页面验收夹具</title>
+  <style>
+    html, body, iframe { width: 100%; height: 100%; margin: 0; border: 0; overflow: hidden; background: #07101d; }
+  </style>
+</head>
+<body>
+  <iframe id="app" title="今日阅读本地验收页面"></iframe>
+  <script>
+    const frame = document.getElementById('app');
+    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    frame.addEventListener('load', async () => {
+      const win = frame.contentWindow;
+      for (let i = 0; i < 200 && (!win.memoManager?.initialized || !win.BookmarkSRS); i += 1) await sleep(50);
+      const manager = win.memoManager;
+      if (!manager) return;
+      await sleep(250);
+
+      const now = Date.now();
+      const day = 24 * 60 * 60 * 1000;
+      const makeSrs = (repetition, interval, lastOffset, nextOffset) => ({
+        template: 'regular', repetition, interval, easiness: 2.5,
+        lastReview: now + lastOffset * day, nextReview: now + nextOffset * day
+      });
+      const bookmarks = [
+        { id: 'r1', title: '设计系统不是组件库：让界面在真实状态下保持一致', url: 'https://ux.example.com/design-system', domain: 'ux.example.com', dateAdded: now - 9 * day, summary: '从信息层级、状态语义和组件边界三个角度，说明如何让复杂桌面产品在迭代中保持一致，并把设计评审变成可以复用的工程约束。', srs: makeSrs(4, 6, -3, -1) },
+        { id: 'r2', title: '如何设计可恢复的本地优先应用', url: 'https://engineering.example.com/local-first', domain: 'engineering.example.com', dateAdded: now - 16 * day, summary: '用离线状态、显式同步和冲突恢复构建更可靠的本地优先产品。', srs: makeSrs(2, 3, -5, 0) },
+        { id: 'r3', title: '间隔复习为什么适合稍后阅读', url: 'https://notes.example.com/spaced-reading', domain: 'notes.example.com', dateAdded: now - 4 * day, summary: '把书签从一次性收藏变成有节奏的阅读任务。', srs: makeSrs(1, 1, -1, 0) },
+        { id: 'n1', title: '桌面工作台的信息密度与注意力分配', url: 'https://product.example.com/workbench', domain: 'product.example.com', dateAdded: now - day, summary: '比较单栏内容流和多栏工作台在深度任务中的优缺点。' },
+        { id: 'h1', title: '无障碍焦点管理实践清单', url: 'https://a11y.example.com/focus', domain: 'a11y.example.com', dateAdded: now - 30 * day, summary: '对话框、焦点恢复和键盘闭环的工程检查项。', srs: makeSrs(6, 12, -2, 10) }
+      ];
+      let hasBookmarkPermission = !new URLSearchParams(location.search).has('noPermission');
+      const rag = {
+        settings: { enabled: true, folderIds: ['reading'], folderNames: ['稍后阅读'], reviewTemplate: 'regular' },
+        bookmarks,
+        getTodayReview: () => bookmarks.filter(item => item.srs && item.srs.nextReview <= now && item.status !== 'archived'),
+        getUnreviewed: limit => bookmarks.filter(item => !item.srs).slice(0, limit),
+        getReviewStats: () => ({ totalRepetitions: 13, inReview: 4, dueToday: 3, reviewed: 4, unreviewed: 1, averageEF: 2.5 }),
+        reviewBookmark: async () => null,
+        enableReview: async () => 0,
+        hasBookmarkPermission: async () => hasBookmarkPermission,
+        requestBookmarkPermission: async () => { hasBookmarkPermission = true; return true; },
+        getBookmarkFolders: async () => [
+          { id: 'reading', title: '稍后阅读', path: '书签栏 / 稍后阅读', totalBookmarks: 5 },
+          { id: 'design', title: '设计参考', path: '书签栏 / 设计参考', totalBookmarks: 18 },
+          { id: 'engineering', title: '工程文章', path: '书签栏 / 工程文章', totalBookmarks: 26 }
+        ],
+        saveSettings: async next => { rag.settings = { ...rag.settings, ...next }; },
+        syncBookmarks: async () => {},
+        startWatching: () => {},
+        _saveBookmarkCache: async () => {}
+      };
+
+      manager._bookmarkRAG = rag;
+      manager._readingReady = true;
+      manager._renderReadingHome();
+      manager._openReadingPanel();
+
+      const view = new URLSearchParams(location.search).get('view') || 'review-queue';
+      if (view === 'detail') manager._renderReadingDetail(bookmarks[0]);
+      if (view === 'permission') manager._renderReadingPermission();
+      if (view === 'complete-feedback') manager._renderReadingComplete(bookmarks[0], 3);
+      if (view === 'history-stats') manager._renderReadingHistoryStats();
+    });
+    frame.src = `../../index.html?readingPreview=${Date.now()}`;
+  </script>
+</body>
+</html>

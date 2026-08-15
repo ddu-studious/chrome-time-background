@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>任务工作台真实页面验收夹具</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; background: #090b13; color: #dfe3ee; font: 12px/1.4 system-ui, sans-serif; }
+    body { display: grid; grid-template-rows: 34px 1fr; }
+    .fixture-note { display: flex; align-items: center; justify-content: center; padding: 0 12px; background: #19172a; border-bottom: 1px solid rgba(167,139,250,.22); color: #bcb4d6; letter-spacing: .02em; }
+    iframe { width: 100%; height: 100%; border: 0; }
+  </style>
+</head>
+<body>
+  <div class="fixture-note">本地验收样例 · 6 条明确任务 · 只写入当前 HTTP 预览存储，不会写入 Chrome 扩展数据</div>
+  <iframe title="任务工作台" id="tasks-frame"></iframe>
+  <script>
+    (() => {
+      const key = '__chrome_storage__';
+      const previous = localStorage.getItem(key);
+      const day = offset => {
+        const date = new Date();
+        date.setDate(date.getDate() + offset);
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      };
+      const now = Date.now();
+      const memos = [
+        { id: 'qa-1', title: '完成网易云 UI 验收', text: '检查播放身份、队列高亮与发现页键盘流程。', priority: 'high', categoryId: 'product', progress: 65, startDate: day(-1), dueDate: day(1), createdAt: now - 600000, updatedAt: now - 300000, completed: false, subtasks: [{ id: 'qa-1-1', title: '核对播放器身份', completed: true }, { id: 'qa-1-2', title: '复核焦点返回', completed: false }] },
+        { id: 'qa-2', title: '整理设置页回归记录', text: '补齐七页证据和测试基线。', priority: 'medium', categoryId: 'product', progress: 100, startDate: day(-3), dueDate: day(-1), createdAt: now - 1200000, updatedAt: now - 200000, completed: true, completedAt: now - 180000, subtasks: [] },
+        { id: 'qa-3', title: '修复旧版筛选标签', text: '确认窄屏工具栏没有横向溢出。', priority: 'high', categoryId: 'bug', progress: 25, startDate: day(-5), dueDate: day(-2), createdAt: now - 2400000, updatedAt: now - 800000, completed: false, subtasks: [] },
+        { id: 'qa-4', title: '每周整理阅读队列', text: '清理已完成条目并安排下周内容。', priority: 'low', categoryId: 'routine', progress: 40, startDate: day(-2), dueDate: day(5), createdAt: now - 3600000, updatedAt: now - 900000, completed: false, recurrence: 'weekly', habit: { type: 'weekly', streak: 3 }, subtasks: [] },
+        { id: 'qa-5', title: '验证资讯在线刷新', text: '等待真实跨源接口环境恢复后再执行。', priority: 'medium', categoryId: 'blocked', progress: 10, startDate: day(-1), dueDate: day(3), createdAt: now - 4800000, updatedAt: now - 1000000, completed: false, status: 'waiting', subtasks: [] },
+        { id: 'qa-6', title: '补充快捷键说明', text: '确认列表与游戏方向键提示一致。', priority: 'none', categoryId: null, progress: null, startDate: null, dueDate: null, createdAt: now - 7200000, updatedAt: now - 2000000, completed: false, subtasks: [] }
+      ];
+      localStorage.setItem(key, JSON.stringify({
+        memos,
+        memosCategories: [
+          { id: 'product', name: '产品验收' },
+          { id: 'bug', name: '缺陷修复' },
+          { id: 'routine', name: '周期事项' },
+          { id: 'blocked', name: '外部阻塞' }
+        ],
+        memosTags: []
+      }));
+      addEventListener('beforeunload', () => {
+        if (previous == null) localStorage.removeItem(key);
+        else localStorage.setItem(key, previous);
+      }, { once: true });
+      const frame = document.querySelector('#tasks-frame');
+      const requestedWidth = Number(new URLSearchParams(location.search).get('width'));
+      if (Number.isFinite(requestedWidth) && requestedWidth >= 360 && requestedWidth <= 1280) {
+        frame.style.width = `${requestedWidth}px`;
+        frame.style.justifySelf = 'center';
+      }
+      frame.src = `../../tasks.html?fixtureRev=${Date.now()}`;
+    })();
+  </script>
+</body>
+</html>

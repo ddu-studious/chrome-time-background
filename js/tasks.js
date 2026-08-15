@@ -17,7 +17,16 @@ class TaskManager {
         this.pageSize = 20;
 
         // 当前视图
-        this.currentView = 'table'; // 'table' | 'card'
+        this.currentView = 'list';
+        this.pageBeforeOverlay = 'list';
+        this.calendarDate = new Date();
+        this._detailReturnFocus = null;
+        this._createReturnFocus = null;
+        this._categoryManagerReturnFocus = null;
+        this._backgroundInertSiblings = [];
+        this._editingTaskId = null;
+        this._recentlyCompletedIds = new Set();
+        this._undoTimer = null;
 
         // 筛选条件
         this.filters = {
@@ -42,6 +51,7 @@ class TaskManager {
         this.bindEvents();
         this.populateCategoryFilter();
         this.applyFilters();
+        this._setProductPage('list');
         this.render();
     }
 
@@ -96,6 +106,11 @@ class TaskManager {
                 subtasks: Array.isArray(memo.subtasks) ? memo.subtasks : [],
                 status: memo.status || null,
                 failedAt: memo.failedAt || null,
+                archived: !!memo.archived,
+                archivedAt: memo.archivedAt || null,
+                recurrencePaused: !!memo.recurrencePaused,
+                lastSkippedAt: memo.lastSkippedAt || null,
+                assignee: memo.assignee || '我',
             }));
 
             console.log(`加载了 ${this.memos.length} 个任务`);
@@ -110,6 +125,16 @@ class TaskManager {
     // ===================== 事件绑定 =====================
 
     bindEvents() {
+        document.getElementById('task-create-btn')?.addEventListener('click', () => this.openCreateTask());
+        document.getElementById('task-empty-create')?.addEventListener('click', () => this.openCreateTask());
+        document.getElementById('task-empty-clear')?.addEventListener('click', () => this.clearAllFilters());
+        document.getElementById('task-empty-archived')?.addEventListener('click', () => {
+            this.filters.status = 'archived';
+            document.getElementById('filter-status').value = 'archived';
+            this.applyFilters();
+            this.render();
+        });
+
         // 搜索
         const searchInput = document.getElementById('search-input');
         const searchClear = document.getElementById('search-clear');
@@ -153,18 +178,26 @@ class TaskManager {
             this.render();
         });
 
-        // 视图切换
-        document.querySelectorAll('.view-btn').forEach(btn => {
+        // 业务视图切换
+        document.querySelectorAll('.task-page-tab').forEach(btn => {
             btn.addEventListener('click', () => {
-                const view = btn.dataset.view;
-                if (view !== this.currentView) {
-                    this.currentView = view;
-                    document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    this.render();
-                }
+                this.switchView(btn.dataset.taskView);
             });
         });
+
+        document.getElementById('calendar-prev')?.addEventListener('click', () => {
+            this.calendarDate.setMonth(this.calendarDate.getMonth() - 1);
+            this.renderCalendar();
+        });
+        document.getElementById('calendar-next')?.addEventListener('click', () => {
+            this.calendarDate.setMonth(this.calendarDate.getMonth() + 1);
+            this.renderCalendar();
+        });
+
+        document.getElementById('task-create-close')?.addEventListener('click', () => this.closeCreateTask());
+        document.getElementById('task-create-cancel')?.addEventListener('click', () => this.closeCreateTask());
+        document.getElementById('task-create-overlay')?.addEventListener('click', () => this.closeCreateTask());
+        document.getElementById('task-create-form')?.addEventListener('submit', (event) => this.createTask(event));
 
         // 全选
         document.getElementById('select-all').addEventListener('change', (e) => {
@@ -174,6 +207,7 @@ class TaskManager {
         // 批量操作
         document.getElementById('batch-complete').addEventListener('click', () => this.batchComplete());
         document.getElementById('batch-uncomplete').addEventListener('click', () => this.batchUncomplete());
+        document.getElementById('batch-archive').addEventListener('click', () => this.batchArchive());
         document.getElementById('batch-delete').addEventListener('click', () => this.batchDelete());
         document.getElementById('batch-cancel').addEventListener('click', () => this.clearSelection());
 
@@ -201,9 +235,24 @@ class TaskManager {
         document.getElementById('detail-close').addEventListener('click', () => this.closeDetail());
         document.getElementById('detail-overlay').addEventListener('click', () => this.closeDetail());
 
-        // ESC 键关闭详情面板
+        // 模态弹层键盘闭环
         document.addEventListener('keydown', (e) => {
+            if (e.key === 'Tab') {
+                const surface = this._activeFocusSurface();
+                if (surface) this._trapFocus(surface, e);
+                return;
+            }
             if (e.key === 'Escape') {
+                const categoryManager = document.getElementById('task-category-manager');
+                if (categoryManager?.classList.contains('active')) {
+                    this._closeCategoryManager();
+                    return;
+                }
+                const createSheet = document.getElementById('task-create-sheet');
+                if (createSheet && !createSheet.classList.contains('hidden')) {
+                    this.closeCreateTask();
+                    return;
+                }
                 this.closeDetail();
             }
         });
@@ -214,6 +263,7 @@ class TaskManager {
     applyFilters() {
         const today = new Date().toISOString().split('T')[0];
         let tasks = [...this.memos];
+        if (this.filters.status !== 'archived') tasks = tasks.filter(task => !task.archived);
 
         // 高级搜索：多关键字 AND + 排除关键字
         if (this.filters.search) {
@@ -229,7 +279,7 @@ class TaskManager {
         // 状态筛选
         switch (this.filters.status) {
             case 'active':
-                tasks = tasks.filter(t => !t.completed && t.status !== 'failed');
+                tasks = tasks.filter(t => (!t.completed && t.status !== 'failed') || this._recentlyCompletedIds.has(t.id));
                 break;
             case 'completed':
                 tasks = tasks.filter(t => t.completed);
@@ -246,6 +296,12 @@ class TaskManager {
             case 'not_started':
                 tasks = tasks.filter(t => this.getTaskStatus(t).key === 'not_started');
                 break;
+            case 'waiting':
+                tasks = tasks.filter(t => this.getTaskStatus(t).key === 'waiting');
+                break;
+            case 'archived':
+                tasks = tasks.filter(t => t.archived);
+                break;
             case 'today':
                 tasks = tasks.filter(t => t.dueDate === today);
                 break;
@@ -261,6 +317,11 @@ class TaskManager {
             const matchIds = this.getCategoryAndChildIds(this.filters.category);
             tasks = tasks.filter(t => matchIds.includes(t.categoryId));
         }
+
+        this._recentlyCompletedIds.forEach(id => {
+            const recent = this.memos.find(task => task.id === id && !task.archived);
+            if (recent && !tasks.some(task => task.id === id)) tasks.push(recent);
+        });
 
         // 排序
         tasks = this.sortTasks(tasks);
@@ -295,7 +356,7 @@ class TaskManager {
     // ===================== 统计更新 =====================
 
     updateStats() {
-        const all = this.memos;
+        const all = this.memos.filter(task => !task.archived);
         const inProgress = all.filter(t => this.getTaskStatus(t).key === 'in_progress');
         const done = all.filter(t => t.completed);
         const overdue = all.filter(t => this.getTaskStatus(t).key === 'overdue');
@@ -311,10 +372,28 @@ class TaskManager {
 
     // ===================== 渲染 =====================
 
+    _setProductPage(page) {
+        window.ProductUIV5?.setBusinessPage?.('tasks', page);
+    }
+
+    switchView(view) {
+        const allowed = ['list', 'kanban', 'calendar', 'analytics', 'recurring-habits'];
+        if (!allowed.includes(view)) return;
+        this.currentView = view;
+        this.currentPage = 1;
+        document.querySelectorAll('.task-page-tab').forEach(button => {
+            const active = button.dataset.taskView === view;
+            button.classList.toggle('active', active);
+            button.setAttribute('aria-current', active ? 'page' : 'false');
+        });
+        this._setProductPage(view);
+        this.render();
+    }
+
     render() {
         const tableView = document.getElementById('table-view');
-        const cardView = document.getElementById('card-view');
         const emptyState = document.getElementById('empty-state');
+        const panels = document.querySelectorAll('.task-view-panel');
 
         // 分页
         const totalPages = Math.max(1, Math.ceil(this.filteredTasks.length / this.pageSize));
@@ -322,36 +401,256 @@ class TaskManager {
         const start = (this.currentPage - 1) * this.pageSize;
         const pageData = this.filteredTasks.slice(start, start + this.pageSize);
 
-        if (this.currentView === 'table') {
-            tableView.classList.remove('hidden');
-            cardView.classList.add('hidden');
+        panels.forEach(panel => panel.classList.toggle('hidden', panel.dataset.taskPanel !== this.currentView));
+        if (this.currentView === 'list') {
+            tableView?.classList.remove('hidden');
             this.renderTable(pageData);
-        } else {
-            tableView.classList.add('hidden');
-            cardView.classList.remove('hidden');
-            this.renderCards(pageData);
+        } else if (this.currentView === 'kanban') {
+            this.renderKanban();
+        } else if (this.currentView === 'calendar') {
+            this.renderCalendar();
+        } else if (this.currentView === 'analytics') {
+            this.renderAnalytics();
+        } else if (this.currentView === 'recurring-habits') {
+            this.renderRecurring();
         }
 
         // 空状态
         if (this.filteredTasks.length === 0) {
-            emptyState.classList.remove('hidden');
+            const searching = !!this.filters.search;
+            emptyState.classList.toggle('hidden', !searching && this.currentView !== 'list');
+            document.getElementById('empty-state-title').textContent = searching ? '没有找到匹配任务' : '暂无任务';
+            document.getElementById('empty-state-copy').textContent = searching
+                ? `没有与“${this.filters.search}”匹配的结果，试试减少关键词或清除筛选。`
+                : '创建你的第一个任务，开始高效推进工作';
+            document.getElementById('empty-state-icon').className = searching ? 'fas fa-search' : 'fas fa-clipboard-list';
+            if (searching) {
+                panels.forEach(panel => panel.classList.add('hidden'));
+                this._setProductPage('search-empty');
+            }
         } else {
             emptyState.classList.add('hidden');
+            this._setProductPage(this.currentView);
         }
+        this.renderEmptyStateContext();
 
         // 分页
         this.renderPagination(totalPages);
+        document.getElementById('pagination')?.classList.toggle('hidden', this.currentView !== 'list' || this.filteredTasks.length === 0);
 
         // 批量操作栏
         this.updateBatchBar();
     }
 
+    renderKanban() {
+        const root = document.getElementById('task-kanban');
+        if (!root) return;
+        const columns = [
+            { key: 'not_started', title: '待处理', icon: 'far fa-circle', color: '#94a3b8', limit: 8 },
+            { key: 'in_progress', title: '进行中', icon: 'fas fa-circle-notch', color: '#a78bfa', limit: 3 },
+            { key: 'waiting', title: '等待', icon: 'fas fa-pause-circle', color: '#fbbf24', limit: 5 },
+            { key: 'done', title: '已完成', icon: 'fas fa-check-circle', color: '#34d399', limit: null },
+        ];
+        const grouped = Object.fromEntries(columns.map(column => [column.key, []]));
+        this.filteredTasks.forEach(task => {
+            const statusKey = this.getTaskStatus(task).key;
+            const key = task.completed ? 'done' : (statusKey === 'waiting' ? 'waiting' : (statusKey === 'in_progress' ? 'in_progress' : 'not_started'));
+            (grouped[key] || grouped.not_started).push(task);
+        });
+        root.innerHTML = columns.map(column => `
+            <section class="kanban-column${column.limit && grouped[column.key].length > column.limit ? ' over-limit' : ''}" data-status="${column.key}" aria-label="${column.title}，${grouped[column.key].length} 项${column.limit ? `，上限 ${column.limit} 项` : ''}">
+                <header><span><i class="${column.icon}" style="color:${column.color}"></i>${column.title}</span><strong title="${column.limit ? `工作项上限 ${column.limit}` : '不限数量'}">${grouped[column.key].length}${column.limit ? `/${column.limit}` : ''}</strong></header>
+                <div class="kanban-stack">
+                    ${grouped[column.key].map(task => this.createKanbanCard(task)).join('') || '<div class="kanban-empty">暂无任务</div>'}
+                </div>
+            </section>
+        `).join('');
+        root.querySelectorAll('[data-kanban-detail]').forEach(button => {
+            button.addEventListener('click', () => this.openDetail(button.dataset.kanbanDetail));
+        });
+        root.querySelectorAll('[data-kanban-move]').forEach(select => select.addEventListener('change', () => this.moveTaskToStatus(select.dataset.kanbanMove, select.value)));
+        root.querySelectorAll('.kanban-card').forEach(card => {
+            card.addEventListener('dragstart', event => event.dataTransfer?.setData('text/task-id', card.dataset.taskId));
+        });
+        root.querySelectorAll('.kanban-stack').forEach(stack => {
+            stack.addEventListener('dragover', event => event.preventDefault());
+            stack.addEventListener('drop', event => {
+                event.preventDefault();
+                const taskId = event.dataTransfer?.getData('text/task-id');
+                if (taskId) this.moveTaskToStatus(taskId, stack.closest('.kanban-column')?.dataset.status);
+            });
+        });
+    }
+
+    createKanbanCard(task) {
+        const progress = task.progress == null ? (task.completed ? 100 : 0) : task.progress;
+        const status = task.completed ? 'done' : (this.getTaskStatus(task).key === 'waiting' ? 'waiting' : (this.getTaskStatus(task).key === 'in_progress' ? 'in_progress' : 'not_started'));
+        return `<article class="kanban-card${task.completed ? ' is-done' : ''}" data-task-id="${task.id}" draggable="true">
+            <div class="kanban-card-top">${this.renderPriorityBadge(task.priority)}<span>${task.dueDate ? this.escapeHtml(task.dueDate.slice(5)) : '无期限'}</span></div>
+            <button type="button" class="kanban-card-title" data-kanban-detail="${task.id}" aria-label="查看任务详情：${this.escapeHtml(task.title || '无标题')}"><h3>${this.escapeHtml(task.title || '无标题')}</h3></button>
+            ${task.text ? `<p>${this.escapeHtml(task.text.slice(0, 88))}</p>` : ''}
+            <div class="kanban-progress"><span style="width:${Math.max(0, Math.min(100, progress))}%"></span></div>
+            <footer><span>${this.escapeHtml(task.categoryId ? this.getCategoryName(task.categoryId) : '未分类')}</span><strong>${progress}%</strong></footer>
+            <label class="kanban-move"><span>移动到</span><select data-kanban-move="${task.id}" aria-label="移动任务：${this.escapeHtml(task.title || '无标题')}">${[['not_started','待处理'],['in_progress','进行中'],['waiting','等待'],['done','已完成']].map(([key,label]) => `<option value="${key}" ${status === key ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
+        </article>`;
+    }
+
+    renderCalendar() {
+        const root = document.getElementById('task-calendar');
+        if (!root) return;
+        const unscheduled = this.filteredTasks.filter(task => !task.dueDate);
+        const unscheduledRoot = document.getElementById('calendar-unscheduled');
+        if (unscheduledRoot) {
+            unscheduledRoot.innerHTML = `<span><i class="far fa-calendar-xmark"></i> 未安排日期</span><div>${unscheduled.slice(0, 6).map(task => `<button type="button" data-task-id="${task.id}">${this.escapeHtml(task.title || '无标题')}</button>`).join('') || '<small>当前没有无日期任务</small>'}${unscheduled.length > 6 ? `<small>+${unscheduled.length - 6} 项</small>` : ''}</div><button type="button" id="calendar-schedule-first" ${unscheduled.length ? '' : 'disabled'}>安排日期</button>`;
+            unscheduledRoot.querySelectorAll('[data-task-id]').forEach(button => button.addEventListener('click', () => this.openDetail(button.dataset.taskId)));
+            unscheduledRoot.querySelector('#calendar-schedule-first')?.addEventListener('click', () => this.openEditTask(unscheduled[0]?.id));
+        }
+        const year = this.calendarDate.getFullYear();
+        const month = this.calendarDate.getMonth();
+        const monthStart = new Date(year, month, 1);
+        const mondayOffset = (monthStart.getDay() + 6) % 7;
+        const gridStart = new Date(year, month, 1 - mondayOffset);
+        const todayKey = this._dateKey(new Date());
+        document.getElementById('calendar-title').textContent = `${year}年 ${month + 1}月`;
+        const names = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+        let html = names.map(name => `<div class="calendar-weekday">${name}</div>`).join('');
+        for (let index = 0; index < 42; index++) {
+            const date = new Date(gridStart);
+            date.setDate(gridStart.getDate() + index);
+            const key = this._dateKey(date);
+            const tasks = this.filteredTasks.filter(task => task.dueDate === key);
+            const load = tasks.length >= 4 ? 'high' : (tasks.length >= 2 ? 'medium' : (tasks.length ? 'low' : 'empty'));
+            html += `<div class="calendar-day load-${load}${date.getMonth() !== month ? ' outside' : ''}${key === todayKey ? ' today' : ''}" aria-label="${key}，${tasks.length} 项任务，负载${load === 'high' ? '高' : (load === 'medium' ? '中' : (load === 'low' ? '低' : '空'))}">
+                <span class="calendar-day-number">${date.getDate()}</span>
+                <div class="calendar-day-tasks">${tasks.slice(0, 3).map(task => `<button type="button" data-task-id="${task.id}" class="calendar-task${task.completed ? ' done' : ''}">${this.escapeHtml(task.title || '无标题')}</button>`).join('')}${tasks.length > 3 ? `<small>+${tasks.length - 3} 项</small>` : ''}</div>
+            </div>`;
+        }
+        root.innerHTML = html;
+        root.querySelectorAll('[data-task-id]').forEach(button => button.addEventListener('click', () => this.openDetail(button.dataset.taskId)));
+    }
+
+    renderAnalytics() {
+        const root = document.getElementById('task-analytics');
+        if (!root) return;
+        const analyticsTasks = this.memos.filter(task => !task.archived);
+        const total = analyticsTasks.length;
+        const done = analyticsTasks.filter(task => task.completed).length;
+        const active = analyticsTasks.filter(task => !task.completed && this.getTaskStatus(task).key === 'in_progress').length;
+        const overdue = analyticsTasks.filter(task => !task.completed && this.getTaskStatus(task).key === 'overdue').length;
+        const completion = total ? Math.round(done / total * 100) : 0;
+        const completedWithDue = analyticsTasks.filter(task => task.completed && task.dueDate && task.completedAt);
+        const onTime = completedWithDue.filter(task => this._dateKey(new Date(task.completedAt)) <= task.dueDate).length;
+        const onTimeRate = completedWithDue.length ? Math.round(onTime / completedWithDue.length * 100) : 0;
+        const priorities = ['high', 'medium', 'low', 'none'].map(key => ({ key, count: analyticsTasks.filter(task => task.priority === key).length }));
+        const maxPriority = Math.max(1, ...priorities.map(item => item.count));
+        const recentDays = Array.from({ length: 7 }, (_, reverseIndex) => {
+            const date = new Date();
+            date.setDate(date.getDate() - (6 - reverseIndex));
+            const key = this._dateKey(date);
+            return {
+                label: `${date.getMonth() + 1}/${date.getDate()}`,
+                count: analyticsTasks.filter(task => task.completedAt && this._dateKey(new Date(task.completedAt)) === key).length,
+            };
+        });
+        const maxDaily = Math.max(1, ...recentDays.map(item => item.count));
+        const categoryEffort = this.categories.map(category => ({
+            name: category.name,
+            count: analyticsTasks.filter(task => task.categoryId === category.id).length,
+        })).filter(item => item.count).sort((a, b) => b.count - a.count).slice(0, 5);
+        const overdueReasons = [
+            { label: '等待外部输入', count: analyticsTasks.filter(task => this.getTaskStatus(task).key === 'waiting').length },
+            { label: '截止日已过', count: overdue },
+            { label: '没有拆分子任务', count: analyticsTasks.filter(task => !task.completed && !(task.subtasks || []).length).length },
+        ];
+        root.innerHTML = `<div class="analytics-summary">
+            <article><span>全部任务</span><strong>${total}</strong><small>当前工作区</small></article>
+            <article><span>完成率</span><strong>${completion}%</strong><small>${done} 项已完成</small></article>
+            <article><span>进行中</span><strong>${active}</strong><small>正在推进</small></article>
+            <article><span>已逾期</span><strong>${overdue}</strong><small>需要重新规划</small></article>
+            <article><span>准时率</span><strong>${onTimeRate}%</strong><small>${onTime}/${completedWithDue.length} 项按时完成</small></article>
+        </div>
+        <div class="analytics-grid">
+            <section class="analytics-card"><header><div><span>最近 7 天</span><h2>完成趋势</h2></div><strong>${recentDays.reduce((sum, item) => sum + item.count, 0)} 项</strong></header>
+                <div class="analytics-bars">${recentDays.map(item => `<div><span style="height:${item.count ? Math.max(8, item.count / maxDaily * 100) : 0}%"></span><small>${item.label}</small></div>`).join('')}</div>
+            </section>
+            <section class="analytics-card"><header><div><span>任务结构</span><h2>优先级分布</h2></div></header>
+                <div class="priority-distribution">${priorities.map(item => `<div><span>${this.priorityConfig[item.key].name}</span><div><i class="${item.key}" style="width:${item.count / maxPriority * 100}%"></i></div><strong>${item.count}</strong></div>`).join('')}</div>
+            </section>
+            <section class="analytics-card analytics-compact"><header><div><span>项目投入</span><h2>分类任务量</h2></div></header><div class="analytics-ranked">${categoryEffort.map((item,index) => `<div><b>${index + 1}</b><span>${this.escapeHtml(item.name)}</span><strong>${item.count} 项</strong></div>`).join('') || '<p>还没有分类投入数据</p>'}</div></section>
+            <section class="analytics-card analytics-compact"><header><div><span>复盘提示</span><h2>逾期与阻塞原因</h2></div><button type="button" id="analytics-review">查看复盘</button></header><div class="analytics-ranked">${overdueReasons.map((item,index) => `<div><b>${index + 1}</b><span>${item.label}</span><strong>${item.count} 项</strong></div>`).join('')}</div></section>
+        </div>`;
+        root.querySelector('#analytics-review')?.addEventListener('click', () => {
+            this.filters.status = overdue ? 'overdue' : 'waiting';
+            document.getElementById('filter-status').value = this.filters.status;
+            this.applyFilters();
+            this.switchView('list');
+        });
+    }
+
+    renderRecurring() {
+        const root = document.getElementById('task-recurring');
+        if (!root) return;
+        const recurring = this.filteredTasks.filter(task => task.recurrence || task.habit || task.habitCard);
+        const done = recurring.filter(task => task.completed).length;
+        root.innerHTML = `<div class="recurring-hero"><div><span>ROUTINES</span><h2>周期任务与习惯</h2><p>让重复行动拥有清晰节奏，也保留每次完成的反馈。</p></div><div class="recurring-ring" style="--rate:${recurring.length ? Math.round(done / recurring.length * 100) : 0}"><strong>${done}/${recurring.length}</strong><span>本轮完成</span></div></div>
+        <div class="recurring-list">${recurring.map(task => `<article class="recurring-card${task.recurrencePaused ? ' paused' : ''}" data-task-id="${task.id}">
+            <button type="button" class="recurring-check${task.completed ? ' checked' : ''}" data-toggle-id="${task.id}" aria-label="${task.completed ? '取消完成' : '标记完成'}"><i class="fas fa-check"></i></button>
+            <button type="button" class="recurring-main" data-recurring-detail="${task.id}" aria-label="查看周期任务：${this.escapeHtml(task.title || '无标题')}"><span>${this.escapeHtml(this._recurrenceLabel(task.recurrence || task.habit || task.habitCard))} · 连续 ${Number(task.habit?.streak) || 0} 次</span><h3>${this.escapeHtml(task.title || '无标题')}</h3><p>${task.text ? this.escapeHtml(task.text.slice(0, 100)) : '持续记录，建立稳定节奏'}</p><small>下次实例：${task.recurrencePaused ? '已暂停' : this._nextRecurrenceText(task)}</small></button>
+            <aside><strong>${task.progress == null ? (task.completed ? 100 : 0) : task.progress}%</strong><span>当前进度</span><div><button type="button" data-recurring-pause="${task.id}">${task.recurrencePaused ? '继续' : '暂停'}</button><button type="button" data-recurring-skip="${task.id}">跳过本次</button></div></aside>
+        </article>`).join('') || '<div class="recurring-empty"><i class="fas fa-repeat"></i><h3>还没有周期任务</h3><p>新建任务时选择“每天、工作日、每周或每月”。</p><button type="button" id="recurring-create">创建第一个周期任务</button></div>'}</div>`;
+        root.querySelectorAll('[data-recurring-detail]').forEach(button => button.addEventListener('click', () => this.openDetail(button.dataset.recurringDetail)));
+        root.querySelectorAll('[data-toggle-id]').forEach(button => button.addEventListener('click', event => {
+            event.stopPropagation();
+            this.toggleTaskStatus(button.dataset.toggleId);
+        }));
+        root.querySelectorAll('[data-recurring-pause]').forEach(button => button.addEventListener('click', () => this.toggleRecurringPause(button.dataset.recurringPause)));
+        root.querySelectorAll('[data-recurring-skip]').forEach(button => button.addEventListener('click', () => this.skipRecurringOccurrence(button.dataset.recurringSkip)));
+        root.querySelector('#recurring-create')?.addEventListener('click', () => this.openCreateTask(true));
+    }
+
+    _dateKey(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    _recurrenceLabel(value) {
+        const raw = typeof value === 'string' ? value : (value?.type || value?.frequency || 'habit');
+        return ({ daily: '每天', weekdays: '工作日', weekly: '每周', monthly: '每月', habit: '习惯' })[raw] || '自定义周期';
+    }
+
+    _nextRecurrenceText(task) {
+        const next = new Date();
+        const raw = typeof task.recurrence === 'string' ? task.recurrence : task.recurrence?.type;
+        if (raw === 'monthly') next.setMonth(next.getMonth() + 1);
+        else if (raw === 'weekly') next.setDate(next.getDate() + 7);
+        else next.setDate(next.getDate() + 1);
+        return `${next.getMonth() + 1}月${next.getDate()}日`;
+    }
+
     renderTable(tasks) {
         const tbody = document.getElementById('task-table-body');
-        tbody.innerHTML = tasks.map(task => this.createTableRow(task)).join('');
+        const today = this._dateKey(new Date());
+        const soonDate = new Date();
+        soonDate.setDate(soonDate.getDate() + 7);
+        const soon = this._dateKey(soonDate);
+        const groups = [
+            { label: '今天', test: task => !task.completed && task.dueDate === today },
+            { label: '已逾期', test: task => !task.completed && task.dueDate && task.dueDate < today },
+            { label: '即将到期', test: task => !task.completed && task.dueDate && task.dueDate > today && task.dueDate <= soon },
+            { label: '以后与无日期', test: task => !task.completed && (!task.dueDate || task.dueDate > soon) },
+            { label: '已完成', test: task => task.completed },
+        ];
+        const renderedIds = new Set();
+        tbody.innerHTML = groups.map(group => {
+            const items = tasks.filter(task => !renderedIds.has(task.id) && group.test(task));
+            items.forEach(task => renderedIds.add(task.id));
+            return items.length ? `<tr class="task-group-row"><td colspan="9"><span>${group.label}</span><strong>${items.length}</strong></td></tr>${items.map(task => this.createTableRow(task)).join('')}` : '';
+        }).join('');
 
         // 绑定行事件
-        tbody.querySelectorAll('tr').forEach(row => {
+        tbody.querySelectorAll('tr[data-task-id]').forEach(row => {
             const taskId = row.dataset.taskId;
 
             // 复选框
@@ -411,6 +710,13 @@ class TaskManager {
             }
 
             // 删除按钮
+            const archiveBtn = row.querySelector('.btn-archive');
+            if (archiveBtn) {
+                archiveBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.archiveTask(taskId);
+                });
+            }
             const deleteBtn = row.querySelector('.btn-delete');
             if (deleteBtn) {
                 deleteBtn.addEventListener('click', (e) => {
@@ -435,10 +741,10 @@ class TaskManager {
                 </td>
                 <td class="col-status">
                     ${isFailed
-                        ? `<span class="status-icon failed" title="已失败 — 点击重新激活"><i class="fas fa-times-circle"></i></span>`
-                        : `<span class="status-icon ${task.completed ? 'completed' : 'active'}" title="${task.completed ? '标记为未完成' : '标记为已完成'}">
+                        ? `<button type="button" class="status-icon failed" title="已失败 — 点击重新激活" aria-label="重新激活任务：${this.escapeHtml(task.title || '无标题')}"><i class="fas fa-times-circle"></i></button>`
+                        : `<button type="button" class="status-icon ${task.completed ? 'completed' : 'active'}" title="${task.completed ? '标记为未完成' : '标记为已完成'}" aria-label="${task.completed ? '标记为未完成' : '标记为已完成'}：${this.escapeHtml(task.title || '无标题')}">
                             <i class="${task.completed ? 'fas fa-check-circle' : 'far fa-circle'}"></i>
-                        </span>`
+                        </button>`
                     }
                 </td>
                 <td class="col-priority">
@@ -447,6 +753,7 @@ class TaskManager {
                 <td class="col-title">
                     <div class="title-cell">
                         <span class="task-title-text">${this.escapeHtml(task.title || '无标题')}</span>
+                        <span class="task-assignee"><i class="far fa-user"></i> ${this.escapeHtml(task.assignee || '我')}</span>
                         ${task.text ? `<span class="task-desc-preview">${this.escapeHtml(task.text.substring(0, 80))}</span>` : ''}
                     </div>
                 </td>
@@ -465,13 +772,16 @@ class TaskManager {
                 <td class="col-actions">
                     <div class="action-btns">
                         ${isFailed
-                            ? `<button class="action-btn-sm btn-reactivate" title="重新激活"><i class="fas fa-redo"></i></button>`
-                            : `<button class="action-btn-sm btn-fail" title="标记为失败"><i class="fas fa-times-circle"></i></button>`
+                            ? `<button type="button" class="action-btn-sm btn-reactivate" title="重新激活" aria-label="重新激活任务：${this.escapeHtml(task.title || '无标题')}"><i class="fas fa-redo"></i></button>`
+                            : `<button type="button" class="action-btn-sm btn-fail" title="标记为失败" aria-label="标记任务为失败：${this.escapeHtml(task.title || '无标题')}"><i class="fas fa-times-circle"></i></button>`
                         }
-                        <button class="action-btn-sm btn-detail" title="查看详情">
+                        <button type="button" class="action-btn-sm btn-detail" title="查看详情" aria-label="查看任务详情：${this.escapeHtml(task.title || '无标题')}">
                             <i class="fas fa-eye"></i>
                         </button>
-                        <button class="action-btn-sm danger btn-delete" title="删除">
+                        <button type="button" class="action-btn-sm btn-archive" title="${task.archived ? '取消归档' : '归档'}" aria-label="${task.archived ? '取消归档' : '归档'}任务：${this.escapeHtml(task.title || '无标题')}">
+                            <i class="fas ${task.archived ? 'fa-box-open' : 'fa-box-archive'}"></i>
+                        </button>
+                        <button type="button" class="action-btn-sm danger btn-delete" title="删除" aria-label="删除任务：${this.escapeHtml(task.title || '无标题')}">
                             <i class="fas fa-trash-alt"></i>
                         </button>
                     </div>
@@ -595,9 +905,13 @@ class TaskManager {
         const task = this.memos.find(t => t.id === taskId);
         if (!task) return;
 
+        this.pageBeforeOverlay = this.currentView;
+        this._setProductPage('detail');
+
         const panel = document.getElementById('detail-panel');
         const overlay = document.getElementById('detail-overlay');
         const body = document.getElementById('detail-body');
+        if (panel.classList.contains('hidden')) this._detailReturnFocus = document.activeElement;
 
         body.innerHTML = this.createDetailContent(task);
         
@@ -619,14 +933,249 @@ class TaskManager {
         if (reactivateBtn) {
             reactivateBtn.addEventListener('click', () => this.reactivateTask(taskId));
         }
+        body.querySelector('[data-detail-edit]')?.addEventListener('click', () => this.openEditTask(taskId));
+        body.querySelector('[data-detail-archive]')?.addEventListener('click', () => this.archiveTask(taskId));
+        body.querySelector('[data-detail-delete]')?.addEventListener('click', () => this.deleteTask(taskId));
         
         panel.classList.remove('hidden');
+        panel.setAttribute('aria-hidden', 'false');
         overlay.classList.remove('hidden');
+        document.body.classList.add('task-modal-open');
+        this._setBackgroundInert(true, [panel, overlay]);
+        requestAnimationFrame(() => document.getElementById('detail-close')?.focus({ preventScroll: true }));
     }
 
-    closeDetail() {
-        document.getElementById('detail-panel').classList.add('hidden');
+    closeDetail({ restoreFocus = true } = {}) {
+        const panel = document.getElementById('detail-panel');
+        if (!panel || panel.classList.contains('hidden')) return;
+        panel.classList.add('hidden');
+        panel.setAttribute('aria-hidden', 'true');
         document.getElementById('detail-overlay').classList.add('hidden');
+        document.body.classList.remove('task-modal-open');
+        this._setBackgroundInert(false);
+        this._setProductPage(this.filters.search && this.filteredTasks.length === 0 ? 'search-empty' : this.pageBeforeOverlay);
+        const returnTarget = this._detailReturnFocus;
+        this._detailReturnFocus = null;
+        if (restoreFocus) requestAnimationFrame(() => {
+            if (this._isUsableFocusTarget(returnTarget)) returnTarget.focus({ preventScroll: true });
+            else document.querySelector(`.task-page-tab[data-task-view="${this.currentView}"]`)?.focus({ preventScroll: true });
+        });
+    }
+
+    openCreateTask(recurring = false) {
+        const returnTarget = document.activeElement;
+        this.closeDetail({ restoreFocus: false });
+        this._createReturnFocus = returnTarget;
+        this.pageBeforeOverlay = this.currentView;
+        const sheet = document.getElementById('task-create-sheet');
+        const overlay = document.getElementById('task-create-overlay');
+        const form = document.getElementById('task-create-form');
+        this._editingTaskId = null;
+        form?.reset();
+        document.getElementById('task-create-title').textContent = '新建任务';
+        document.getElementById('task-create-submit').innerHTML = '<i class="fas fa-plus"></i> 创建任务';
+        const today = this._dateKey(new Date());
+        const due = new Date();
+        due.setDate(due.getDate() + 1);
+        document.getElementById('task-create-start').value = today;
+        document.getElementById('task-create-due').value = this._dateKey(due);
+        document.getElementById('task-create-priority').value = 'medium';
+        document.getElementById('task-create-recurrence').value = recurring ? 'daily' : '';
+        document.getElementById('task-create-assignee').value = '我';
+        document.getElementById('task-create-error')?.classList.add('hidden');
+        sheet?.classList.remove('hidden');
+        sheet?.setAttribute('aria-hidden', 'false');
+        overlay?.classList.remove('hidden');
+        document.body.classList.add('task-modal-open');
+        this._setBackgroundInert(true, [sheet, overlay]);
+        this._setProductPage('create');
+        setTimeout(() => document.getElementById('task-create-name')?.focus(), 40);
+    }
+
+    openEditTask(taskId) {
+        const task = this.memos.find(item => item.id === taskId);
+        if (!task) return;
+        const returnTarget = document.activeElement;
+        this.closeDetail({ restoreFocus: false });
+        this._createReturnFocus = returnTarget;
+        this.pageBeforeOverlay = this.currentView;
+        this._editingTaskId = taskId;
+        document.getElementById('task-create-form')?.reset();
+        document.getElementById('task-create-title').textContent = '编辑任务';
+        document.getElementById('task-create-submit').innerHTML = '<i class="fas fa-save"></i> 保存修改';
+        document.getElementById('task-create-name').value = task.title || '';
+        document.getElementById('task-create-description').value = task.text || '';
+        document.getElementById('task-create-start').value = task.startDate || '';
+        document.getElementById('task-create-due').value = task.dueDate || '';
+        document.getElementById('task-create-priority').value = task.priority || 'medium';
+        document.getElementById('task-create-recurrence').value = task.recurrence || '';
+        document.getElementById('task-create-assignee').value = task.assignee || '我';
+        document.getElementById('task-create-progress').value = task.progress ?? 0;
+        document.getElementById('task-create-subtask').value = '';
+        const sheet = document.getElementById('task-create-sheet');
+        const overlay = document.getElementById('task-create-overlay');
+        sheet.classList.remove('hidden');
+        sheet.setAttribute('aria-hidden', 'false');
+        overlay.classList.remove('hidden');
+        document.body.classList.add('task-modal-open');
+        this._setBackgroundInert(true, [sheet, overlay]);
+        this._setProductPage('create');
+        requestAnimationFrame(() => document.getElementById('task-create-name')?.focus({ preventScroll: true }));
+    }
+
+    closeCreateTask() {
+        const sheet = document.getElementById('task-create-sheet');
+        if (!sheet || sheet.classList.contains('hidden')) return;
+        sheet.classList.add('hidden');
+        sheet.setAttribute('aria-hidden', 'true');
+        document.getElementById('task-create-overlay')?.classList.add('hidden');
+        document.body.classList.remove('task-modal-open');
+        this._setBackgroundInert(false);
+        this._setProductPage(this.filters.search && this.filteredTasks.length === 0 ? 'search-empty' : this.pageBeforeOverlay);
+        const returnTarget = this._createReturnFocus;
+        this._createReturnFocus = null;
+        requestAnimationFrame(() => {
+            if (this._isUsableFocusTarget(returnTarget)) returnTarget.focus({ preventScroll: true });
+            else document.getElementById('task-create-btn')?.focus({ preventScroll: true });
+        });
+    }
+
+    _setBackgroundInert(active, allowed = []) {
+        if (active) {
+            if (this._backgroundInertSiblings.length) return;
+            const allowedElements = new Set(allowed.filter(Boolean));
+            this._backgroundInertSiblings = [...document.body.children]
+                .filter(child => !allowedElements.has(child) && !child.inert);
+            this._backgroundInertSiblings.forEach(child => { child.inert = true; });
+            return;
+        }
+        this._backgroundInertSiblings.forEach(child => { child.inert = false; });
+        this._backgroundInertSiblings = [];
+    }
+
+    _activeFocusSurface() {
+        const categoryManager = document.getElementById('task-category-manager');
+        if (categoryManager?.classList.contains('active')) return categoryManager.querySelector('.task-catmgr-panel');
+        const createSheet = document.getElementById('task-create-sheet');
+        if (createSheet && !createSheet.classList.contains('hidden')) return createSheet;
+        const detailPanel = document.getElementById('detail-panel');
+        return detailPanel && !detailPanel.classList.contains('hidden') ? detailPanel : null;
+    }
+
+    _trapFocus(container, event) {
+        const focusable = [...container.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+            .filter(element => this._isUsableFocusTarget(element));
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+        }
+    }
+
+    _isUsableFocusTarget(element) {
+        return !!(element?.isConnected && !element.closest('.hidden') && element.getAttribute('aria-hidden') !== 'true');
+    }
+
+    async createTask(event) {
+        event.preventDefault();
+        const title = document.getElementById('task-create-name')?.value.trim();
+        if (!title) return;
+        const startDate = document.getElementById('task-create-start')?.value || null;
+        const dueDate = document.getElementById('task-create-due')?.value || null;
+        const recurrence = document.getElementById('task-create-recurrence')?.value || null;
+        const progress = Math.max(0, Math.min(100, Number(document.getElementById('task-create-progress')?.value) || 0));
+        const firstSubtask = document.getElementById('task-create-subtask')?.value.trim() || '';
+        const assignee = document.getElementById('task-create-assignee')?.value.trim() || '我';
+        const error = document.getElementById('task-create-error');
+        if (startDate && dueDate && startDate > dueDate) {
+            error.textContent = '截止日期不能早于开始日期。';
+            error.classList.remove('hidden');
+            document.getElementById('task-create-due')?.focus();
+            return;
+        }
+        const imageFiles = [...(document.getElementById('task-create-images')?.files || [])];
+        if (imageFiles.length > 3 || imageFiles.some(file => file.size > 1024 * 1024)) {
+            error.textContent = '附件最多 3 张，且每张不能超过 1MB。';
+            error.classList.remove('hidden');
+            document.getElementById('task-create-images')?.focus();
+            return;
+        }
+        const newImages = await Promise.all(imageFiles.map(file => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve({ thumbnail: reader.result, fullImage: reader.result, name: file.name });
+            reader.onerror = () => reject(reader.error);
+            reader.readAsDataURL(file);
+        })));
+        const now = Date.now();
+        if (this._editingTaskId) {
+            const task = this.memos.find(item => item.id === this._editingTaskId);
+            if (!task) return;
+            Object.assign(task, {
+                title,
+                text: document.getElementById('task-create-description')?.value.trim() || '',
+                updatedAt: now,
+                priority: document.getElementById('task-create-priority')?.value || 'medium',
+                startDate,
+                dueDate,
+                progress,
+                recurrence,
+                habit: recurrence ? { ...(task.habit || {}), type: recurrence, streak: Number(task.habit?.streak) || 0 } : null,
+                assignee,
+                images: [...(task.images || []), ...newImages],
+            });
+            if (firstSubtask) task.subtasks.push({ id: `st_${now}`, title: firstSubtask, completed: false });
+            const editedId = task.id;
+            this._editingTaskId = null;
+            await this.saveData();
+            this.applyFilters();
+            this.closeCreateTask();
+            this.render();
+            this.openDetail(editedId);
+            return;
+        }
+        const task = {
+            id: `memo_${now}_${Math.random().toString(36).slice(2, 8)}`,
+            title,
+            text: document.getElementById('task-create-description')?.value.trim() || '',
+            completed: false,
+            createdAt: now,
+            updatedAt: now,
+            completedAt: null,
+            categoryId: null,
+            tagIds: [],
+            priority: document.getElementById('task-create-priority')?.value || 'medium',
+            startDate,
+            dueDate,
+            images: newImages,
+            links: [],
+            progress,
+            recurrence,
+            habit: recurrence ? { type: recurrence, streak: 0 } : null,
+            habitCard: null,
+            subtasks: firstSubtask ? [{ id: `st_${now}`, title: firstSubtask, completed: false }] : [],
+            status: null,
+            failedAt: null,
+            archived: false,
+            archivedAt: null,
+            recurrencePaused: false,
+            lastSkippedAt: null,
+            assignee,
+        };
+        this.memos.unshift(task);
+        await this.saveData();
+        this.filters.search = '';
+        const search = document.getElementById('search-input');
+        if (search) search.value = '';
+        document.getElementById('search-clear')?.classList.remove('visible');
+        this.applyFilters();
+        this.closeCreateTask();
+        this.render();
+        this.openDetail(task.id);
     }
 
     bindDetailSubtaskEvents(body, task) {
@@ -760,6 +1309,7 @@ class TaskManager {
                     <span class="category-tag"><i class="fas fa-calendar-alt"></i> ${ageText}</span>
                     ${isFailed ? `<button class="detail-reactivate-btn" data-task-id="${task.id}"><i class="fas fa-redo"></i> 重新激活</button>` : ''}
                 </div>
+                <div class="detail-primary-actions"><button type="button" class="primary" data-detail-edit="${task.id}"><i class="fas fa-pen"></i> 编辑任务</button><button type="button" data-detail-archive="${task.id}"><i class="fas ${task.archived ? 'fa-box-open' : 'fa-box-archive'}"></i> ${task.archived ? '取消归档' : '归档'}</button><button type="button" class="danger" data-detail-delete="${task.id}"><i class="fas fa-trash"></i> 删除</button></div>
             </div>
 
             <!-- 进度 -->
@@ -890,6 +1440,8 @@ class TaskManager {
             </div>
             ` : ''}
 
+            <div class="detail-section detail-related"><div class="detail-section-title">关联与活动</div><div class="detail-related-grid"><article><i class="far fa-calendar-check"></i><strong>关联计划</strong><span>${task.startDate || task.dueDate ? `${task.startDate || '未设置'} → ${task.dueDate || '未设置'}` : '尚未关联计划'}</span></article><article><i class="fas fa-stopwatch"></i><strong>工作日志</strong><span>通过工作日志任务选择器记录投入</span></article><article><i class="far fa-comments"></i><strong>评论</strong><span>当前没有评论</span></article><article><i class="fas fa-history"></i><strong>最近活动</strong><span>${this.formatDate(task.updatedAt)} 更新</span></article></div></div>
+
             <!-- 操作 ID -->
             <div class="detail-section" style="opacity: 0.4;">
                 <div class="detail-section-title">任务 ID</div>
@@ -970,10 +1522,62 @@ class TaskManager {
 
     // ===================== 任务操作 =====================
 
+    clearAllFilters() {
+        this.filters = { search: '', status: 'all', priority: 'all', category: 'all', sort: this.filters.sort || 'newest' };
+        const search = document.getElementById('search-input');
+        if (search) search.value = '';
+        document.getElementById('search-clear')?.classList.remove('visible');
+        document.getElementById('filter-status').value = 'all';
+        document.getElementById('filter-priority').value = 'all';
+        this._categoryCombobox?.setValue?.('all');
+        this.applyFilters();
+        this.render();
+        requestAnimationFrame(() => search?.focus({ preventScroll: true }));
+    }
+
+    renderEmptyStateContext() {
+        const searching = this.filteredTasks.length === 0 && (!!this.filters.search || this.filters.status !== 'all' || this.filters.priority !== 'all' || this.filters.category !== 'all');
+        const context = document.getElementById('task-empty-context');
+        const create = document.getElementById('task-empty-create');
+        const clear = document.getElementById('task-empty-clear');
+        const archived = document.getElementById('task-empty-archived');
+        if (!context || !create || !clear || !archived) return;
+        context.classList.toggle('hidden', !searching);
+        clear.classList.toggle('hidden', !searching);
+        archived.classList.toggle('hidden', !searching || this.filters.status === 'archived');
+        create.classList.toggle('hidden', searching);
+        if (searching) {
+            const chips = [];
+            if (this.filters.search) chips.push(`查询“${this.escapeHtml(this.filters.search)}”`);
+            if (this.filters.status !== 'all') chips.push(`状态：${document.getElementById('filter-status')?.selectedOptions?.[0]?.textContent || this.filters.status}`);
+            if (this.filters.priority !== 'all') chips.push(`优先级：${document.getElementById('filter-priority')?.selectedOptions?.[0]?.textContent || this.filters.priority}`);
+            if (this.filters.category !== 'all') chips.push(`分类：${this.escapeHtml(this.getCategoryName(this.filters.category))}`);
+            context.innerHTML = `<strong>已用条件</strong><div>${chips.map(chip => `<span>${chip}</span>`).join('')}</div><small>检查拼写，或先清除一个条件扩大结果范围。</small>`;
+        }
+    }
+
+    showUndo(message, undo) {
+        clearTimeout(this._undoTimer);
+        const toast = document.getElementById('task-action-toast');
+        const label = document.getElementById('task-action-message');
+        const button = document.getElementById('task-action-undo');
+        if (!toast || !label || !button) return;
+        label.textContent = message;
+        toast.classList.remove('hidden');
+        button.onclick = async () => {
+            clearTimeout(this._undoTimer);
+            await undo();
+            toast.classList.add('hidden');
+        };
+        this._undoTimer = setTimeout(() => toast.classList.add('hidden'), 6500);
+    }
+
     async toggleTaskStatus(taskId) {
         const task = this.memos.find(t => t.id === taskId);
         if (!task) return;
 
+        const wasCompleted = task.completed;
+        const previousProgress = task.progress;
         task.completed = !task.completed;
         task.completedAt = task.completed ? Date.now() : null;
         task.updatedAt = Date.now();
@@ -984,8 +1588,142 @@ class TaskManager {
         }
 
         await this.saveData();
+        if (!wasCompleted && task.completed) {
+            this._recentlyCompletedIds.add(taskId);
+            this.showUndo(`已完成“${task.title || '无标题'}”`, async () => {
+                task.completed = false;
+                task.completedAt = null;
+                task.progress = previousProgress;
+                task.updatedAt = Date.now();
+                this._recentlyCompletedIds.delete(taskId);
+                await this.saveData();
+                this.applyFilters();
+                this.render();
+            });
+            setTimeout(() => {
+                this._recentlyCompletedIds.delete(taskId);
+                this.applyFilters();
+                this.render();
+            }, 6500);
+        }
         this.applyFilters();
         this.render();
+    }
+
+    async archiveTask(taskId) {
+        const task = this.memos.find(item => item.id === taskId);
+        if (!task) return;
+        const wasArchived = task.archived;
+        task.archived = !task.archived;
+        task.archivedAt = task.archived ? Date.now() : null;
+        task.updatedAt = Date.now();
+        await this.saveData();
+        this.applyFilters();
+        this.render();
+        this.closeDetail();
+        this.showUndo(`${task.archived ? '已归档' : '已取消归档'}“${task.title || '无标题'}”`, async () => {
+            task.archived = wasArchived;
+            task.archivedAt = wasArchived ? Date.now() : null;
+            task.updatedAt = Date.now();
+            await this.saveData();
+            this.applyFilters();
+            this.render();
+        });
+    }
+
+    async batchArchive() {
+        if (!this.selectedIds.size) return;
+        const ids = [...this.selectedIds];
+        this.memos.forEach(task => {
+            if (ids.includes(task.id)) { task.archived = true; task.archivedAt = Date.now(); task.updatedAt = Date.now(); }
+        });
+        await this.saveData();
+        this.clearSelection();
+        this.applyFilters();
+        this.render();
+        this.showUndo(`已归档 ${ids.length} 个任务`, async () => {
+            this.memos.forEach(task => { if (ids.includes(task.id)) { task.archived = false; task.archivedAt = null; } });
+            await this.saveData();
+            this.applyFilters();
+            this.render();
+        });
+    }
+
+    async moveTaskToStatus(taskId, status) {
+        const task = this.memos.find(item => item.id === taskId);
+        if (!task || !status) return;
+        const previous = {
+            completed: task.completed,
+            completedAt: task.completedAt,
+            status: task.status,
+            progress: task.progress,
+            startDate: task.startDate,
+            dueDate: task.dueDate,
+        };
+        const newlyCompleted = status === 'done' && !task.completed;
+        if (status === 'done') {
+            task.completed = true;
+            task.completedAt = Date.now();
+            task.status = null;
+            if (task.progress != null) task.progress = 100;
+        } else {
+            task.completed = false;
+            task.completedAt = null;
+            task.status = status === 'waiting' ? 'waiting' : null;
+            if (status === 'not_started') {
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                task.startDate = this._dateKey(tomorrow);
+                if (task.dueDate && task.dueDate < task.startDate) task.dueDate = task.startDate;
+            } else if (status === 'in_progress') {
+                task.startDate = this._dateKey(new Date());
+                if (task.dueDate && task.dueDate < task.startDate) task.dueDate = task.startDate;
+            }
+        }
+        task.updatedAt = Date.now();
+        if (newlyCompleted) this._recentlyCompletedIds.add(taskId);
+        await this.saveData();
+        this.applyFilters();
+        this.render();
+        if (newlyCompleted) {
+            this.showUndo(`已完成“${task.title || '无标题'}”`, async () => {
+                Object.assign(task, previous, { updatedAt: Date.now() });
+                this._recentlyCompletedIds.delete(taskId);
+                await this.saveData();
+                this.applyFilters();
+                this.render();
+            });
+            setTimeout(() => {
+                this._recentlyCompletedIds.delete(taskId);
+                this.applyFilters();
+                this.render();
+            }, 6500);
+        }
+    }
+
+    async toggleRecurringPause(taskId) {
+        const task = this.memos.find(item => item.id === taskId);
+        if (!task) return;
+        task.recurrencePaused = !task.recurrencePaused;
+        task.updatedAt = Date.now();
+        await this.saveData();
+        this.renderRecurring();
+    }
+
+    async skipRecurringOccurrence(taskId) {
+        const task = this.memos.find(item => item.id === taskId);
+        if (!task) return;
+        task.lastSkippedAt = Date.now();
+        task.completed = false;
+        task.completedAt = null;
+        task.updatedAt = Date.now();
+        await this.saveData();
+        this.renderRecurring();
+        this.showUndo(`已跳过“${task.title || '无标题'}”本次实例`, async () => {
+            task.lastSkippedAt = null;
+            await this.saveData();
+            this.renderRecurring();
+        });
     }
 
     async deleteTask(taskId) {
@@ -1000,8 +1738,10 @@ class TaskManager {
 
     async batchComplete() {
         if (this.selectedIds.size === 0) return;
+        const snapshots = [];
         this.memos.forEach(t => {
             if (this.selectedIds.has(t.id) && !t.completed) {
+                snapshots.push({ id: t.id, completed: t.completed, completedAt: t.completedAt, progress: t.progress, updatedAt: t.updatedAt });
                 t.completed = true;
                 t.completedAt = Date.now();
                 t.updatedAt = Date.now();
@@ -1011,10 +1751,28 @@ class TaskManager {
                 }
             }
         });
+        snapshots.forEach(snapshot => this._recentlyCompletedIds.add(snapshot.id));
         await this.saveData();
         this.clearSelection();
         this.applyFilters();
         this.render();
+        if (snapshots.length) {
+            this.showUndo(`已完成 ${snapshots.length} 个任务`, async () => {
+                snapshots.forEach(snapshot => {
+                    const task = this.memos.find(item => item.id === snapshot.id);
+                    if (task) Object.assign(task, snapshot, { updatedAt: Date.now() });
+                    this._recentlyCompletedIds.delete(snapshot.id);
+                });
+                await this.saveData();
+                this.applyFilters();
+                this.render();
+            });
+            setTimeout(() => {
+                snapshots.forEach(snapshot => this._recentlyCompletedIds.delete(snapshot.id));
+                this.applyFilters();
+                this.render();
+            }, 6500);
+        }
     }
 
     async batchUncomplete() {
@@ -1118,16 +1876,18 @@ class TaskManager {
             return list;
         };
 
+        let suppressNextFocusOpen = false;
         container.classList.add('category-combobox');
         container.innerHTML = `
             <div class="category-combobox-input-wrap">
                 <span class="category-combobox-color" id="combobox-color-dot"></span>
-                <input type="text" class="category-combobox-input" autocomplete="off" placeholder="${this.escapeHtml(placeholder)}" role="combobox" aria-expanded="false" aria-haspopup="listbox">
+                <input type="text" class="category-combobox-input" autocomplete="off" placeholder="${this.escapeHtml(placeholder)}" role="combobox" aria-label="按分类筛选" aria-expanded="false" aria-haspopup="listbox" aria-controls="task-category-filter-listbox">
                 <i class="fas fa-chevron-down category-combobox-arrow"></i>
             </div>
         `;
 
         const listbox = document.createElement('ul');
+        listbox.id = 'task-category-filter-listbox';
         listbox.className = 'category-combobox-list category-combobox-portal hidden';
         listbox.setAttribute('role', 'listbox');
         document.body.appendChild(listbox);
@@ -1172,7 +1932,7 @@ class TaskManager {
                 </li>`;
             }).join('');
             if (opts.showManageEntry !== false) {
-                listbox.innerHTML += `<li class="category-combobox-manage" role="option" data-action="manage"><i class="fas fa-cog"></i> 管理分类</li>`;
+                listbox.innerHTML += `<li role="none"><button type="button" class="category-combobox-manage" data-action="manage"><i class="fas fa-cog"></i> 管理分类</button></li>`;
             }
             highlightedIndex = filtered.length > 0 ? 0 : -1;
             listbox.querySelectorAll('.category-combobox-option').forEach((el, i) => {
@@ -1221,6 +1981,10 @@ class TaskManager {
         };
 
         input.addEventListener('focus', () => {
+            if (suppressNextFocusOpen) {
+                suppressNextFocusOpen = false;
+                return;
+            }
             if (listbox.classList.contains('hidden')) openList();
         });
         input.addEventListener('input', () => {
@@ -1288,6 +2052,11 @@ class TaskManager {
             getValue: () => value,
             setValue,
             setOptions,
+            focusWithoutOpening: () => {
+                closeList();
+                suppressNextFocusOpen = true;
+                input.focus({ preventScroll: true });
+            },
             destroy: () => {
                 document.removeEventListener('click', outsideClickHandler);
                 if (listbox.parentNode) listbox.parentNode.removeChild(listbox);
@@ -1309,32 +2078,71 @@ class TaskManager {
     }
 
     openCategoryManagerPopup() {
-        let popup = document.getElementById('task-category-manager');
-        if (popup) popup.remove();
-        
-        popup = document.createElement('div');
+        const existing = document.getElementById('task-category-manager');
+        if (existing) {
+            existing.querySelector('#task-catmgr-search')?.focus({ preventScroll: true });
+            return;
+        }
+
+        this._categoryManagerReturnFocus = document.activeElement;
+        const popup = document.createElement('div');
         popup.id = 'task-category-manager';
         popup.className = 'task-catmgr-overlay';
+        popup.setAttribute('role', 'dialog');
+        popup.setAttribute('aria-modal', 'true');
+        popup.setAttribute('aria-labelledby', 'task-catmgr-title');
+        popup.setAttribute('aria-describedby', 'task-catmgr-description');
+        popup.setAttribute('aria-hidden', 'false');
         popup.innerHTML = `
             <div class="task-catmgr-panel">
                 <div class="task-catmgr-header">
-                    <h3><i class="fas fa-folder-tree"></i> 分类管理</h3>
-                    <button class="task-catmgr-close" id="task-catmgr-close"><i class="fas fa-times"></i></button>
+                    <div>
+                        <span class="task-catmgr-kicker">TASK ORGANIZATION</span>
+                        <h3 id="task-catmgr-title"><i class="fas fa-folder-tree"></i> 分类管理</h3>
+                        <p id="task-catmgr-description">整理任务分类；已有任务不会因重命名而丢失。</p>
+                    </div>
+                    <button type="button" class="task-catmgr-close" id="task-catmgr-close" aria-label="关闭分类管理"><i class="fas fa-times"></i></button>
                 </div>
                 <div class="task-catmgr-body">
                     <div class="task-catmgr-search-row">
-                        <input type="text" class="task-catmgr-search" id="task-catmgr-search" placeholder="搜索或新建分类名称...">
-                        <button class="task-catmgr-add-btn" id="task-catmgr-add" title="新建一级分类"><i class="fas fa-plus"></i></button>
+                        <label for="task-catmgr-search">搜索或新建分类</label>
+                        <div>
+                            <input type="text" class="task-catmgr-search" id="task-catmgr-search" placeholder="输入分类名称" autocomplete="off">
+                            <button type="button" class="task-catmgr-add-btn" id="task-catmgr-add" aria-label="创建一级分类"><i class="fas fa-plus"></i><span>新建</span></button>
+                        </div>
                     </div>
-                    <div class="task-catmgr-list" id="task-catmgr-list">
+                    <div class="task-catmgr-list" id="task-catmgr-list" aria-live="polite">
                         ${this._renderCategoryManagerList()}
                     </div>
                 </div>
             </div>
         `;
         document.body.appendChild(popup);
-        requestAnimationFrame(() => popup.classList.add('active'));
+        document.body.classList.add('task-modal-open');
+        this._setBackgroundInert(true, [popup]);
+        requestAnimationFrame(() => {
+            popup.classList.add('active');
+            popup.querySelector('#task-catmgr-search')?.focus({ preventScroll: true });
+        });
         this._bindCategoryManagerEvents(popup);
+    }
+
+    _closeCategoryManager({ restoreFocus = true } = {}) {
+        const popup = document.getElementById('task-category-manager');
+        if (!popup) return;
+        popup.classList.remove('active');
+        popup.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('task-modal-open');
+        this._setBackgroundInert(false);
+        const returnTarget = this._categoryManagerReturnFocus;
+        this._categoryManagerReturnFocus = null;
+        if (this._categoryCombobox) this._categoryCombobox.setOptions();
+        setTimeout(() => popup.remove(), 180);
+        if (restoreFocus) requestAnimationFrame(() => {
+            if (returnTarget?.matches?.('.category-combobox-input')) this._categoryCombobox?.focusWithoutOpening();
+            else if (this._isUsableFocusTarget(returnTarget)) returnTarget.focus({ preventScroll: true });
+            else this._categoryCombobox?.focusWithoutOpening();
+        });
     }
     
     _renderCategoryManagerList(filter = '') {
@@ -1360,9 +2168,9 @@ class TaskManager {
                     <span class="task-catmgr-name">${this.escapeHtml(parent.name)}</span>
                     <span class="task-catmgr-count">${taskCount + childCount}</span>
                     <div class="task-catmgr-actions">
-                        <button class="task-catmgr-action" data-action="add-child" data-id="${parent.id}" title="添加子分类"><i class="fas fa-plus"></i></button>
-                        <button class="task-catmgr-action" data-action="edit" data-id="${parent.id}" title="编辑"><i class="fas fa-pen"></i></button>
-                        <button class="task-catmgr-action task-catmgr-danger" data-action="delete" data-id="${parent.id}" title="删除"><i class="fas fa-trash"></i></button>
+                        <button type="button" class="task-catmgr-action" data-action="add-child" data-id="${parent.id}" aria-label="为${this.escapeHtml(parent.name)}添加子分类"><i class="fas fa-plus"></i></button>
+                        <button type="button" class="task-catmgr-action" data-action="edit" data-id="${parent.id}" aria-label="重命名分类：${this.escapeHtml(parent.name)}"><i class="fas fa-pen"></i></button>
+                        <button type="button" class="task-catmgr-action task-catmgr-danger" data-action="delete" data-id="${parent.id}" aria-label="删除分类：${this.escapeHtml(parent.name)}"><i class="fas fa-trash"></i></button>
                     </div>
                 </div>`;
             
@@ -1375,8 +2183,8 @@ class TaskManager {
                     <span class="task-catmgr-name">— ${this.escapeHtml(ch.name)}</span>
                     <span class="task-catmgr-count">${chCount}</span>
                     <div class="task-catmgr-actions">
-                        <button class="task-catmgr-action" data-action="edit" data-id="${ch.id}" title="编辑"><i class="fas fa-pen"></i></button>
-                        <button class="task-catmgr-action task-catmgr-danger" data-action="delete" data-id="${ch.id}" title="删除"><i class="fas fa-trash"></i></button>
+                        <button type="button" class="task-catmgr-action" data-action="edit" data-id="${ch.id}" aria-label="重命名子分类：${this.escapeHtml(ch.name)}"><i class="fas fa-pen"></i></button>
+                        <button type="button" class="task-catmgr-action task-catmgr-danger" data-action="delete" data-id="${ch.id}" aria-label="删除子分类：${this.escapeHtml(ch.name)}"><i class="fas fa-trash"></i></button>
                     </div>
                 </div>`;
             });
@@ -1387,13 +2195,8 @@ class TaskManager {
     
     _bindCategoryManagerEvents(popup) {
         const closeBtn = popup.querySelector('#task-catmgr-close');
-        const closePopup = () => {
-            popup.classList.remove('active');
-            setTimeout(() => popup.remove(), 300);
-            if (this._categoryCombobox) this._categoryCombobox.setOptions();
-        };
-        closeBtn.addEventListener('click', closePopup);
-        popup.addEventListener('click', (e) => { if (e.target === popup) closePopup(); });
+        closeBtn.addEventListener('click', () => this._closeCategoryManager());
+        popup.addEventListener('click', (e) => { if (e.target === popup) this._closeCategoryManager(); });
         
         const search = popup.querySelector('#task-catmgr-search');
         search.addEventListener('input', () => {
@@ -1410,6 +2213,7 @@ class TaskManager {
         });
         search.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && search.value.trim()) {
+                e.preventDefault();
                 this._addCategory(search.value.trim(), null, popup);
                 search.value = '';
             }
@@ -1515,11 +2319,17 @@ class TaskManager {
     }
 
     getTaskStatus(task) {
+        if (task.archived) {
+            return { key: 'archived', label: '已归档', icon: 'fas fa-box-archive', color: '#94a3b8' };
+        }
         if (task.status === 'failed') {
             return { key: 'failed', label: '已失败', icon: 'fas fa-times-circle', color: '#747d8c' };
         }
         if (task.completed) {
             return { key: 'completed', label: '已完成', icon: 'fas fa-check-circle', color: '#2ed573' };
+        }
+        if (task.status === 'waiting') {
+            return { key: 'waiting', label: '等待', icon: 'fas fa-pause-circle', color: '#fbbf24' };
         }
         const today = new Date().toISOString().split('T')[0];
         const start = task.startDate || new Date(task.createdAt).toISOString().split('T')[0];
@@ -1529,7 +2339,7 @@ class TaskManager {
             return { key: 'overdue', label: '已逾期', icon: 'fas fa-exclamation-circle', color: '#ff4757' };
         }
         if (start > today) {
-            return { key: 'not_started', label: '未开始', icon: 'far fa-clock', color: '#a0a0a0' };
+            return { key: 'not_started', label: '待处理', icon: 'far fa-clock', color: '#a0a0a0' };
         }
         return { key: 'in_progress', label: '进行中', icon: 'fas fa-spinner', color: '#ffa502' };
     }
