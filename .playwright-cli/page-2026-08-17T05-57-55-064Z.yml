@@ -1,0 +1,200 @@
+- dialog "B站 UP 主主页预览" [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - strong [ref=e5]: ▣
+      - generic [ref=e6]: 哔哩哔哩
+    - generic [ref=e7]:
+      - textbox "搜索视频、课程、UP主..." [ref=e8]
+      - button "搜索" [ref=e9] [cursor=pointer]: ⌕
+    - generic [ref=e10]:
+      - button "推荐" [ref=e11] [cursor=pointer]
+      - button "课程" [ref=e12] [cursor=pointer]
+      - button "收藏" [ref=e13] [cursor=pointer]
+      - button "历史" [ref=e14] [cursor=pointer]
+    - button "关闭" [ref=e15] [cursor=pointer]: ×
+  - navigation [ref=e16]:
+    - generic [ref=e17]: 发现
+    - button "热门 全站趋势" [ref=e18] [cursor=pointer]:
+      - text: 热门
+      - generic [ref=e19]: 全站趋势
+    - button "排行榜 实时排行" [ref=e20] [cursor=pointer]:
+      - text: 排行榜
+      - generic [ref=e21]: 实时排行
+    - generic [ref=e23]: 我的
+    - button "稍后看 待看队列" [ref=e24] [cursor=pointer]:
+      - text: 稍后看
+      - generic [ref=e25]: 待看队列
+    - button "关注 UP 主工作台" [ref=e26] [cursor=pointer]:
+      - text: 关注
+      - generic [ref=e27]: UP 主工作台
+    - generic [ref=e28]: 8 项能力始终可见
+  - generic [ref=e32]:
+    - banner [ref=e33]:
+      - text: BILIBILI · CREATOR WORKBENCH
+      - heading "影视飓风的主页" [level=2] [ref=e34]
+    - generic [ref=e35]:
+      - img "影视飓风的头像" [ref=e37]
+      - generic [ref=e38]:
+        - text: UP 主 · HOME
+        - generic [ref=e39]:
+          - heading "影视飓风" [level=3] [ref=e40]
+          - generic [ref=e41]: ● 官方认证
+          - generic [ref=e42]: ♛ 大会员
+          - generic [ref=e43]: LV6
+        - paragraph [ref=e44]: 无限进步！这里集中展示 UP 主身份、最近投稿和 B 站内容指标，播放过程仍然留在当前 App 中。
+        - generic [ref=e45]:
+          - generic [ref=e46]:
+            - strong [ref=e47]: 12,460,000
+            - text: 粉丝
+          - generic [ref=e48]:
+            - strong [ref=e49]: "486"
+            - text: 投稿
+          - generic [ref=e50]:
+            - strong [ref=e51]: "218"
+            - text: 关注
+      - generic [ref=e52]:
+        - button "← 返回播放器" [ref=e53] [cursor=pointer]
+        - button "▶ 播放最新投稿" [ref=e54] [cursor=pointer]
+        - button "▣ 原站空间" [ref=e55] [cursor=pointer]
+    - generic [ref=e56]:
+      - generic [ref=e57]:
+        - generic [ref=e58]:
+          - generic [ref=e59]: RECENT UPDATES
+          - strong [ref=e60]: 最近投稿 · 12 个视频
+          - generic [ref=e61]: App 内浏览 · 点击卡片直接播放
+        - generic [ref=e62]:
+          - button "▦" [pressed] [ref=e63] [cursor=pointer]
+          - button "☷" [ref=e64] [cursor=pointer]
+      - generic [ref=e65]:
+        - article [ref=e66] [cursor=pointer]:
+          - generic [ref=e67]:
+            - generic [ref=e68]: ▶
+            - generic [ref=e69]: 8:20
+          - generic [ref=e70]:
+            - strong [ref=e71]: 我们造了一台能拍电影的机器 · 第 1 期
+            - generic [ref=e72]:
+              - generic [ref=e73]: ▶ 32万
+              - generic [ref=e74]: ◌ 1千
+              - generic [ref=e75]: 1天前
+          - button "↗" [ref=e76]
+        - article [ref=e77] [cursor=pointer]:
+          - generic [ref=e78]:
+            - generic [ref=e79]: ▶
+            - generic [ref=e80]: 9:21
+          - generic [ref=e81]:
+            - strong [ref=e82]: 一次关于影像与时间的实验 · 第 2 期
+            - generic [ref=e83]:
+              - generic [ref=e84]: ▶ 39万
+              - generic [ref=e85]: ◌ 2千
+              - generic [ref=e86]: 2天前
+          - button "↗" [ref=e87]
+        - article [ref=e88] [cursor=pointer]:
+          - generic [ref=e89]:
+            - generic [ref=e90]: ▶
+            - generic [ref=e91]: 10:22
+          - generic [ref=e92]:
+            - strong [ref=e93]: 在极端天气里拍摄是什么体验 · 第 3 期
+            - generic [ref=e94]:
+              - generic [ref=e95]: ▶ 46万
+              - generic [ref=e96]: ◌ 3千
+              - generic [ref=e97]: 3天前
+          - button "↗" [ref=e98]
+        - article [ref=e99] [cursor=pointer]:
+          - generic [ref=e100]:
+            - generic [ref=e101]: ▶
+            - generic [ref=e102]: 11:23
+          - generic [ref=e103]:
+            - strong [ref=e104]: 把工作室装进一辆车里 · 第 4 期
+            - generic [ref=e105]:
+              - generic [ref=e106]: ▶ 53万
+              - generic [ref=e107]: ◌ 4千
+              - generic [ref=e108]: 4天前
+          - button "↗" [ref=e109]
+        - article [ref=e110] [cursor=pointer]:
+          - generic [ref=e111]:
+            - generic [ref=e112]: ▶
+            - generic [ref=e113]: 12:24
+          - generic [ref=e114]:
+            - strong [ref=e115]: 我们造了一台能拍电影的机器 · 第 5 期
+            - generic [ref=e116]:
+              - generic [ref=e117]: ▶ 60万
+              - generic [ref=e118]: ◌ 5千
+              - generic [ref=e119]: 5天前
+          - button "↗" [ref=e120]
+        - article [ref=e121] [cursor=pointer]:
+          - generic [ref=e122]:
+            - generic [ref=e123]: ▶
+            - generic [ref=e124]: 13:25
+          - generic [ref=e125]:
+            - strong [ref=e126]: 一次关于影像与时间的实验 · 第 6 期
+            - generic [ref=e127]:
+              - generic [ref=e128]: ▶ 67万
+              - generic [ref=e129]: ◌ 6千
+              - generic [ref=e130]: 6天前
+          - button "↗" [ref=e131]
+        - article [ref=e132] [cursor=pointer]:
+          - generic [ref=e133]:
+            - generic [ref=e134]: ▶
+            - generic [ref=e135]: 14:20
+          - generic [ref=e136]:
+            - strong [ref=e137]: 在极端天气里拍摄是什么体验 · 第 7 期
+            - generic [ref=e138]:
+              - generic [ref=e139]: ▶ 74万
+              - generic [ref=e140]: ◌ 7千
+              - generic [ref=e141]: 7天前
+          - button "↗" [ref=e142]
+        - article [ref=e143] [cursor=pointer]:
+          - generic [ref=e144]:
+            - generic [ref=e145]: ▶
+            - generic [ref=e146]: 15:21
+          - generic [ref=e147]:
+            - strong [ref=e148]: 把工作室装进一辆车里 · 第 8 期
+            - generic [ref=e149]:
+              - generic [ref=e150]: ▶ 81万
+              - generic [ref=e151]: ◌ 8千
+              - generic [ref=e152]: 8天前
+          - button "↗" [ref=e153]
+        - article [ref=e154] [cursor=pointer]:
+          - generic [ref=e155]:
+            - generic [ref=e156]: ▶
+            - generic [ref=e157]: 16:22
+          - generic [ref=e158]:
+            - strong [ref=e159]: 我们造了一台能拍电影的机器 · 第 9 期
+            - generic [ref=e160]:
+              - generic [ref=e161]: ▶ 88万
+              - generic [ref=e162]: ◌ 9千
+              - generic [ref=e163]: 9天前
+          - button "↗" [ref=e164]
+        - article [ref=e165] [cursor=pointer]:
+          - generic [ref=e166]:
+            - generic [ref=e167]: ▶
+            - generic [ref=e168]: 17:23
+          - generic [ref=e169]:
+            - strong [ref=e170]: 一次关于影像与时间的实验 · 第 10 期
+            - generic [ref=e171]:
+              - generic [ref=e172]: ▶ 95万
+              - generic [ref=e173]: ◌ 10千
+              - generic [ref=e174]: 10天前
+          - button "↗" [ref=e175]
+        - article [ref=e176] [cursor=pointer]:
+          - generic [ref=e177]:
+            - generic [ref=e178]: ▶
+            - generic [ref=e179]: 18:24
+          - generic [ref=e180]:
+            - strong [ref=e181]: 在极端天气里拍摄是什么体验 · 第 11 期
+            - generic [ref=e182]:
+              - generic [ref=e183]: ▶ 102万
+              - generic [ref=e184]: ◌ 11千
+              - generic [ref=e185]: 11天前
+          - button "↗" [ref=e186]
+        - article [ref=e187] [cursor=pointer]:
+          - generic [ref=e188]:
+            - generic [ref=e189]: ▶
+            - generic [ref=e190]: 19:25
+          - generic [ref=e191]:
+            - strong [ref=e192]: 把工作室装进一辆车里 · 第 12 期
+            - generic [ref=e193]:
+              - generic [ref=e194]: ▶ 109万
+              - generic [ref=e195]: ◌ 12千
+              - generic [ref=e196]: 12天前
+          - button "↗" [ref=e197]

@@ -1,6 +1,6 @@
 # 文档总索引
 
-> 最后更新：2026-08-10
+> 最后更新：2026-08-16
 > 文档管理规范：`.cursor/rules/05-docs-organization.mdc`
 
 ## 快速导航
@@ -17,6 +17,10 @@
 
 | 更新日期 | 类型 | 文档 | 标题 |
 |----------|------|------|------|
+| 2026-08-16 | 技术 | [guide-youtube-oauth-setup.md](technical/guide-youtube-oauth-setup.md) | YouTube OAuth 配置与验收指南 |
+| 2026-08-16 | PRD | [prd-v3.20.0-youtube-workbench.md](requirements/prd-v3.20.0-youtube-workbench.md) | YouTube 工作台集成 |
+| 2026-08-16 | 调研 | [research-youtube-integration-2026.md](research/research-youtube-integration-2026.md) | YouTube Chrome 扩展集成调研（2026） |
+| 2026-08-16 | 设计 | [youtube-workbench-ui-v1.md](design/youtube-workbench-ui-v1.md) | YouTube 工作台 UI 设计 v1 |
 | 2026-08-10 | 验收 | [product-ui-v5-r4-checklist.md](design/product-ui-v5-r4-checklist.md) | Product UI v5 真实 Chrome R4 逐页清单 |
 | 2026-08-10 | 验收 | [product-ui-v5-implementation-audit.md](design/product-ui-v5-implementation-audit.md) | Product UI v5 实现与验收审计 |
 | 2026-08-10 | 设计 | [product-ui-multi-screen-v5.md](design/product-ui-multi-screen-v5.md) | 中国风景时钟全产品多屏设计 v5 |

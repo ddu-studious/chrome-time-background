@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>双平台播放器最近发布栏 v1</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../../css/product-ui-v5.css">
+  <link rel="stylesheet" href="../../css/youtube-workbench.css">
+  <style>
+    :root { color-scheme: dark; --v5-text:#f5f7fb; --v5-border:rgba(255,255,255,.1); --yt-red:#ff1744; --yt-border:rgba(255,255,255,.1); --yt-muted:#9299a8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; color: #f5f7fb; background: radial-gradient(circle at 80% 5%,rgba(255,23,68,.1),transparent 28%),radial-gradient(circle at 8% 80%,rgba(132,93,244,.14),transparent 30%),#060912; font-family: Inter,system-ui,-apple-system,"PingFang SC",sans-serif; }
+    main { width: min(1460px,100%); margin: auto; padding: 28px; }
+    .demo-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 20px; }
+    .demo-heading span,.platform-label { color: #ff7da4; font-size: 10px; font-weight: 850; letter-spacing: .16em; }
+    .demo-heading h1 { margin: 7px 0 0; font-size: clamp(28px,4vw,48px); }
+    .demo-heading p { max-width: 520px; margin: 0; color: #8f99aa; line-height: 1.65; }
+    .demo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .demo-panel { min-width: 0; overflow: hidden; border: 1px solid rgba(255,255,255,.1); border-radius: 18px; background: #090e18; box-shadow: 0 24px 70px rgba(0,0,0,.34); }
+    .demo-panel > header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,.07); }
+    .demo-panel > header strong { font-size: 13px; }
+    .fake-player { position: relative; display: grid; aspect-ratio: 16/8.5; place-items: center; overflow: hidden; background: radial-gradient(circle at 67% 34%,rgba(255,120,155,.32),transparent 22%),linear-gradient(135deg,#0f1a2c,#1e2032 54%,#5e243d); }
+    .fake-player::before { content:""; position:absolute; inset:0; opacity:.2; background-image:linear-gradient(rgba(255,255,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.08) 1px,transparent 1px); background-size:40px 40px; }
+    .fake-player > div { position: relative; text-align: center; }
+    .fake-player i { display: grid; width: 66px; height: 48px; margin: 0 auto 12px; place-items: center; border-radius: 14px; color:#fff; background:#fb7299; font-style:normal; }
+    .fake-player strong { display: block; font-size: 20px; }
+    .fake-player small { display: block; margin-top: 6px; color:#c2c8d3; }
+    .bili-playback-console { background:#090f1a; }
+    .bili-player-recent { grid-template-columns: 132px minmax(0,1fr) auto; }
+    .yt-player-recent { margin: 0; border-width: 1px 0 0; border-radius: 0; }
+    .demo-status { padding: 10px 14px; color:#7f8a9b; border-top:1px solid rgba(255,255,255,.06); font-size:9px; }
+    @media (max-width: 980px) { .demo-grid { grid-template-columns:1fr; } }
+    @media (max-width: 620px) { main { padding:14px; } .demo-heading { align-items:flex-start; flex-direction:column; } .bili-player-recent { grid-template-columns:1fr auto; } .bili-player-recent>header { grid-column:1; } .bili-recent-track { grid-column:1/-1; grid-row:2; } .bili-recent-actions { grid-column:2; grid-row:1; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="demo-heading"><div><span>PLAYER · RECENT PUBLISH RAIL</span><h1>播放器里，顺手切到刚发布的内容</h1></div><p>最近发布栏位于画面与控制区之间。点击卡片只切视频，不离开当前工作台；当前项同时使用图标、边框和可读状态。</p></header>
+    <div class="demo-grid">
+      <section class="demo-panel" data-demo-platform="bili">
+        <header><div><span class="platform-label">BILIBILI</span><strong>同屏重载 BVID</strong></div><small>公开投稿 → 动态降级</small></header>
+        <div class="fake-player"><div><i>▶</i><strong data-demo-title>一次关于影像与时间的实验</strong><small>影视飓风 · 正在播放</small></div></div>
+        <div class="bili-playback-console">
+          <section class="bili-player-recent" aria-label="B站最近发布">
+            <header><span>FRESH FROM UP</span><strong>影视飓风 · 最近发布</strong></header>
+            <div class="bili-recent-track" data-demo-track></div>
+            <div class="bili-recent-actions"><button aria-label="刷新">↻</button><button>▦<span>查看全部</span></button></div>
+          </section>
+        </div>
+        <div class="demo-status">切换后：复用当前工作台、更新标题与当前项、重新应用播放器偏好</div>
+      </section>
+      <section class="demo-panel" data-demo-platform="yt">
+        <header><div><span class="platform-label">YOUTUBE</span><strong>官方 IFrame API 原位切换</strong></div><small>Uploads playlist</small></header>
+        <div class="fake-player"><div><i style="background:#ff1744">▶</i><strong data-demo-title>Build with the newest model</strong><small>OpenAI · Official Player</small></div></div>
+        <section class="yt-player-recent" aria-label="YouTube 最近发布">
+          <header><div><span class="yt-eyebrow">FRESH FROM CHANNEL</span><strong>OpenAI · 最近发布</strong></div><div><button aria-label="刷新">↻</button><button>▦ 查看全部</button></div></header>
+          <div class="yt-recent-track" data-demo-track></div>
+        </section>
+        <div class="demo-status">切换后：调用 loadVideoById、自动重新应用 2×、保留原列表返回上下文</div>
+      </section>
+    </div>
+  </main>
+  <script>
+    const covers = ['capability-recommend-v1.png','capability-course-v1.png','capability-library-v1.png','capability-history-v1.png'];
+    const titles = ['一次关于影像与时间的实验','我们造了一台能拍电影的机器','极端天气拍摄实录','把工作室装进一辆车'];
+    document.querySelectorAll('[data-demo-platform]').forEach((panel, platformIndex) => {
+      const track = panel.querySelector('[data-demo-track]');
+      const isBili = platformIndex === 0;
+      track.innerHTML = titles.map((title,index) => isBili
+        ? `<button class="bili-recent-card${index===0?' active':''}" aria-current="${index===0}" data-title="${title}"><span class="bili-recent-thumb"><img src="../../assets/bilibili/${covers[index]}" alt=""><i>▶</i></span><span class="bili-recent-copy"><strong>${title}</strong><small>${index+1} 天前</small></span></button>`
+        : `<button class="yt-recent-card${index===0?' active':''}" aria-current="${index===0}" data-title="${['Build with the newest model','Realtime API demo','Agents SDK patterns','Designing reliable evals'][index]}"><span class="yt-recent-thumb"><img src="../../assets/bilibili/${covers[index]}" alt=""><i>▶</i></span><span><strong>${['Build with the newest model','Realtime API demo','Agents SDK patterns','Designing reliable evals'][index]}</strong><small>2026/8/${22-index}</small></span></button>`).join('');
+      track.addEventListener('click', event => {
+        const card = event.target.closest('button[data-title]');
+        if (!card) return;
+        track.querySelectorAll('button').forEach(item => { item.classList.remove('active'); item.setAttribute('aria-current','false'); });
+        card.classList.add('active'); card.setAttribute('aria-current','true');
+        panel.querySelector('[data-demo-title]').textContent = card.dataset.title;
+      });
+    });
+  </script>
+</body>
+</html>

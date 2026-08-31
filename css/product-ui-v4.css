@@ -457,7 +457,7 @@ textarea,
 .bili-search button { min-width: 46px; padding: 0 14px; }
 .bili-nav-pills { gap: 5px; }
 .bili-pill { min-height: 36px; padding: 0 13px; border-radius: 9px; color: var(--ui-text-2); font-size: 12px; }
-.bili-pill[data-tab="popular"], .bili-pill[data-tab="history"], .bili-pill[data-tab="watchlater"], .bili-pill[data-tab="ranking"] { display: none; }
+.bili-pill[hidden] { display: none; }
 .bili-sidebar-toggle, .bili-close-btn { width: 40px; height: 40px; padding: 0; }
 .bili-main { background: #070b14; }
 .bili-player-area { flex: 7; }

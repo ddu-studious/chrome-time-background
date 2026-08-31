@@ -167,6 +167,19 @@
   function injectShortcutsPage() {
     document.querySelector('.sp-main')?.insertAdjacentHTML('beforeend', `
       <section class="sp-page settings-v5-special" id="page-shortcuts">
+        <article class="settings-v5-card settings-v5-command-card">
+          <div class="settings-v5-card-title"><div><span>CHROME COMMANDS</span><h3>全局快捷键</h3></div><i class="fas fa-keyboard"></i></div>
+          <p>快捷键由 Chrome 统一管理。这里显示当前实际绑定；点击下方按钮可进入 Chrome 的快捷键设置进行修改。</p>
+          <div class="settings-v5-command-list" id="settings-v5-command-list" aria-live="polite">
+            <div><span>打开或关闭网站工作区</span><kbd id="settings-v5-command-open">读取中…</kbd></div>
+            <div><span>将当前标签加入网站工作区</span><kbd id="settings-v5-command-add">读取中…</kbd></div>
+          </div>
+          <div class="settings-v5-command-actions">
+            <button type="button" class="settings-v5-primary" id="settings-v5-open-command-settings"><i class="fas fa-arrow-up-right-from-square"></i>在 Chrome 中修改</button>
+            <button type="button" id="settings-v5-refresh-commands"><i class="fas fa-rotate"></i>刷新绑定</button>
+          </div>
+          <div class="settings-v5-inline-status">Chrome 不允许扩展直接改写快捷键，修改必须由你在浏览器设置页确认。</div>
+        </article>
         <div class="settings-v5-shortcuts">
           <article><kbd>⌘ / Ctrl</kbd><b>+</b><kbd>K</kbd><div><strong>上下文搜索</strong><span>音乐面板、任务面板和知识区使用当前上下文搜索。</span></div></article>
           <article><kbd>Esc</kbd><div><strong>关闭顶层浮层</strong><span>优先关闭菜单、抽屉、启动台或当前应用面板。</span></div></article>
@@ -174,6 +187,43 @@
           <article><kbd>↑ ↓ ← →</kbd><div><strong>游戏与列表导航</strong><span>三款本地游戏和部分选择列表支持方向键。</span></div></article>
         </div>
       </section>`);
+  }
+
+  async function loadCommandShortcuts() {
+    const bindings = {
+      'open-site-workspace': '未设置',
+      'add-current-tab-to-site-workspace': '未设置',
+    };
+    try {
+      const commands = await globalThis.chrome?.commands?.getAll?.();
+      for (const command of commands || []) {
+        if (command.name in bindings) bindings[command.name] = command.shortcut || '未设置';
+      }
+    } catch { /* local preview */ }
+    const open = document.querySelector('#settings-v5-command-open');
+    const add = document.querySelector('#settings-v5-command-add');
+    if (open) open.textContent = bindings['open-site-workspace'];
+    if (add) add.textContent = bindings['add-current-tab-to-site-workspace'];
+    return bindings;
+  }
+
+  function bindCommandShortcuts() {
+    document.querySelector('#settings-v5-open-command-settings')?.addEventListener('click', async () => {
+      try {
+        await globalThis.chrome?.tabs?.create?.({ url: 'chrome://extensions/shortcuts' });
+        status('已打开 Chrome 快捷键设置', 'success');
+      } catch {
+        status('请在地址栏打开 chrome://extensions/shortcuts', 'danger');
+      }
+    });
+    document.querySelector('#settings-v5-refresh-commands')?.addEventListener('click', async () => {
+      await loadCommandShortcuts();
+      status('已刷新快捷键绑定', 'success');
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) loadCommandShortcuts();
+    });
+    loadCommandShortcuts();
   }
 
   function injectDiagnosticsPage() {
@@ -444,6 +494,7 @@
     bindNavigation();
     bindDock();
     bindPrivacy();
+    bindCommandShortcuts();
     bindDiagnostics();
     await loadDockState();
     const hash = location.hash.slice(1);

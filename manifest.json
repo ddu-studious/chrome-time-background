@@ -1,10 +1,15 @@
 {
   "manifest_version": 3,
+  "minimum_chrome_version": "142",
   "name": "中国风景时钟",
   "version": "3.16.0",
   "description": "中国风景新标签页时钟，支持天气、备忘录、独立音乐播放器、哔哩哔哩集成(关注分组/UP主主页/已购课程/倍速画质控制/Cookie共享)、温情提示、扩展活动监控、热搜资讯、书签智能检索，含性能省电模式",
   "permissions": [
     "storage",
+    "sidePanel",
+    "tabGroups",
+    "favicon",
+    "identity",
     "unlimitedStorage",
     "geolocation",
     "tabs",
@@ -22,6 +27,12 @@
     "declarativeNetRequest",
     "nativeMessaging"
   ],
+  "oauth2": {
+    "client_id": "1007025986012-gsr45foqj45aueagb35osdi3hqmp38lg.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/youtube.readonly"
+    ]
+  },
   "optional_permissions": [
     "bookmarks"
   ],
@@ -49,9 +60,13 @@
     "https://api.deepseek.com/*",
     "https://api.openai.com/*",
     "https://generativelanguage.googleapis.com/*",
+    "https://www.googleapis.com/*",
+    "https://www.youtube.com/*",
+    "https://www.youtube-nocookie.com/*",
     "*://music.163.com/*",
     "*://*.music.163.com/*",
     "*://*.bilibili.com/*",
+    "*://*.bilivideo.com/*",
     "*://api.bilibili.com/*",
     "*://s.search.bilibili.com/*",
     "*://*.mashibing.com/*",
@@ -61,8 +76,27 @@
   "chrome_url_overrides": {
     "newtab": "index.html"
   },
+  "side_panel": {
+    "default_path": "site-workspace.html"
+  },
+  "commands": {
+    "open-site-workspace": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+U",
+        "mac": "Command+Shift+U"
+      },
+      "description": "打开或关闭网站工作区侧边栏"
+    },
+    "add-current-tab-to-site-workspace": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+Y",
+        "mac": "Command+Shift+Y"
+      },
+      "description": "将当前标签加入网站工作区"
+    }
+  },
   "action": {
-    "default_title": "中国风景时钟",
+    "default_title": "中国风景时钟（左键主页，右键打开网站工作区）",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",

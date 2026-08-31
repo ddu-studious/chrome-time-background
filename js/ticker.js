@@ -493,7 +493,11 @@ class TechTicker {
         
         const fetchers = sources.map(key => {
             const fn = this._getFetcherForSource(key);
-            return fn ? fn().catch(err => { console.warn(`[Ticker] ${key} 失败:`, err); return []; }) : Promise.resolve([]);
+            return fn ? fn().catch(err => {
+                // 单一外部数据源失败时其余来源仍会正常展示；这是可恢复降级，不应污染 warning 列表。
+                console.debug(`[Ticker] ${key} 暂不可用，已跳过:`, err?.message || err);
+                return [];
+            }) : Promise.resolve([]);
         });
         
         const results = await Promise.allSettled(fetchers);
@@ -564,9 +568,9 @@ class TechTicker {
 
             if (merged.length > 0) return merged.slice(0, 12);
 
-            console.warn('[Ticker] hotapi GitHub 无数据，回退 Search API');
+            console.debug('[Ticker] hotapi GitHub 无数据，已回退 Search API');
         } catch (err) {
-            console.warn('[Ticker] hotapi GitHub 请求失败，回退 Search API:', err);
+            console.debug('[Ticker] hotapi GitHub 请求失败，已回退 Search API:', err?.message || err);
         }
 
         return this._fetchGitHubFallback();

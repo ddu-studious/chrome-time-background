@@ -271,12 +271,31 @@
             <span class="quick-nav-item-name">${safeName}</span>
           </a>
           <button class="quick-nav-item-edit" type="button" data-id="${safeId}" title="编辑" aria-label="编辑 ${safeName}"><i class="fas fa-pen"></i></button>
+          <button class="quick-nav-item-workspace" type="button" data-id="${safeId}" title="在网站工作区打开" aria-label="在网站工作区打开 ${safeName}"><i class="fas fa-layer-group"></i></button>
           <button class="quick-nav-item-delete" type="button" data-id="${safeId}" title="删除" aria-label="删除 ${safeName}"><i class="fas fa-times"></i></button>
         </div>
       `;
       }).join('');
 
       grid.querySelectorAll('.quick-nav-item-open').forEach(link => link.addEventListener('click', () => this.close()));
+
+      grid.querySelectorAll('.quick-nav-item-workspace').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const link = this.links.find(item => item.id === btn.dataset.id);
+          if (!link) return;
+          const status = this.panelEl.querySelector('.quick-nav-search-status');
+          try {
+            if (!window.siteWorkspaceLauncher?.openUrl) throw new Error('网站工作区尚未就绪');
+            if (status) status.textContent = '正在加入工作区…';
+            await window.siteWorkspaceLauncher.openUrl(link.url);
+            this.close();
+          } catch (error) {
+            if (status) status.textContent = error?.message || '打开失败';
+          }
+        });
+      });
 
       grid.querySelectorAll('.quick-nav-item-delete').forEach(btn => {
         btn.addEventListener('click', (e) => {

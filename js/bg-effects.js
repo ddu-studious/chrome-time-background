@@ -105,6 +105,7 @@ window.bgEffectsManager = (() => {
   let _idleTimeout = null;
   let _isIdle = false;
   let _frameSkip = 0;
+  let _suspended = false;
   let _initialized = false;
 
   // ---- 各效果引擎的状态 ----
@@ -796,6 +797,8 @@ window.bgEffectsManager = (() => {
   function _animationLoop(now) {
     _raf = requestAnimationFrame(_animationLoop);
 
+    if (_suspended) return;
+
     if (_isIdle) {
       _frameSkip++;
       if (_frameSkip % 4 !== 0) return;
@@ -941,6 +944,7 @@ window.bgEffectsManager = (() => {
     window.addEventListener('resize', _onResize);
 
     _lastFrameTime = performance.now();
+    _suspended = document.body?.dataset?.backgroundMedia === 'video';
     _raf = requestAnimationFrame(_animationLoop);
     _resetIdleTimer();
 
@@ -985,11 +989,16 @@ window.bgEffectsManager = (() => {
     _saveConfig();
   }
 
+  function setSuspended(suspended) {
+    _suspended = Boolean(suspended);
+    if (!_suspended) _lastFrameTime = performance.now();
+  }
+
   function _saveConfig() {
     try {
       chrome.storage.local.set({ bgEffectsConfig: _cfg });
     } catch { /* ignore */ }
   }
 
-  return { init, destroy, setActiveEffects, getConfig, updateConfig };
+  return { init, destroy, setActiveEffects, getConfig, updateConfig, setSuspended };
 })();

@@ -485,7 +485,7 @@
 
     getDefaultConfig() {
       return {
-        version: 2,
+        version: 3,
         items: APP_REGISTRY.filter(a => a.defaultInDock).map(a => ({ type: 'app', appId: a.id })),
         hiddenApps: [],
         lastModified: Date.now(),
@@ -498,6 +498,7 @@
           const data = await chrome.storage.local.get(STORAGE_KEY);
           if (data[STORAGE_KEY]) {
             this.config = data[STORAGE_KEY];
+            await this._migrateConfig();
             return;
           }
         }
@@ -505,10 +506,29 @@
 
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) { this.config = JSON.parse(raw); return; }
+        if (raw) {
+          this.config = JSON.parse(raw);
+          await this._migrateConfig();
+          return;
+        }
       } catch { /* fallback */ }
 
       this.config = this.getDefaultConfig();
+    }
+
+    async _migrateConfig() {
+      if (!this.config || Number(this.config.version || 0) >= 3) return;
+      this.config.items = Array.isArray(this.config.items) ? this.config.items : [];
+      this.config.hiddenApps = Array.isArray(this.config.hiddenApps) ? this.config.hiddenApps : [];
+      const appId = 'site-workspace';
+      const alreadyPresent = this.config.items.some(item => item.type === 'app' && item.appId === appId)
+        || this.config.items.some(item => item.type === 'group' && Array.isArray(item.children) && item.children.includes(appId));
+      if (!alreadyPresent && !this.config.hiddenApps.includes(appId)) {
+        const quickNavIndex = this.config.items.findIndex(item => item.type === 'app' && item.appId === 'quick-nav');
+        this.config.items.splice(quickNavIndex >= 0 ? quickNavIndex + 1 : this.config.items.length, 0, { type: 'app', appId });
+      }
+      this.config.version = 3;
+      await this.saveConfig();
     }
 
     async saveConfig() {
@@ -1117,6 +1137,10 @@
     }
 
     _activateApp(appId) {
+      if (appId === 'site-workspace' && window.siteWorkspaceLauncher?.openPanel) {
+        window.siteWorkspaceLauncher.openPanel().catch(error => console.warn('[DockManager] 打开网站工作区失败:', error));
+        return true;
+      }
       if (appId === 'chatbot' && window.Chatbot?.open) {
         window.Chatbot.open();
         return true;

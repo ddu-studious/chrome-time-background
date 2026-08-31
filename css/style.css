@@ -20377,14 +20377,33 @@ body:not(.zen-mode) .dock-bar {
     opacity: 0;
     transition: opacity 0.15s, background 0.15s;
 }
+.quick-nav-item-workspace {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    width: 20px;
+    height: 20px;
+    border: none;
+    border-radius: 7px;
+    background: rgba(74, 222, 128, 0.16);
+    color: rgba(134, 239, 172, 0.88);
+    font-size: 8px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s;
+}
 .quick-nav-item:hover .quick-nav-item-edit,
-.quick-nav-item:focus-within .quick-nav-item-edit { opacity: 1; }
+.quick-nav-item:focus-within .quick-nav-item-edit,
+.quick-nav-item:hover .quick-nav-item-workspace,
+.quick-nav-item:focus-within .quick-nav-item-workspace { opacity: 1; }
 .quick-nav-item-edit:hover { background: rgba(99, 102, 241, 0.5); color: #fff; }
+.quick-nav-item-workspace:hover { background: rgba(34, 197, 94, 0.42); color: #fff; }
 .quick-nav-item:hover .quick-nav-item-delete,
 .quick-nav-item:focus-within .quick-nav-item-delete {
     opacity: 1;
 }
 .quick-nav-item-edit:focus-visible,
+.quick-nav-item-workspace:focus-visible,
 .quick-nav-item-delete:focus-visible,
 .quick-nav-header-actions button:focus-visible,
 .quick-nav-form-actions button:focus-visible,
@@ -20563,6 +20582,7 @@ body:not(.zen-mode) .dock-bar {
     }
     .quick-nav-item { padding: 13px 28px 12px; }
     .quick-nav-item-edit,
+    .quick-nav-item-workspace,
     .quick-nav-item-delete {
         width: 24px;
         height: 24px;

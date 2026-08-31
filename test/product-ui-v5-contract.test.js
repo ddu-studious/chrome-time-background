@@ -13,7 +13,7 @@ test('v5 状态层先于产品外壳和音乐工作台加载', () => {
   assert.ok(stateIndex >= 0);
   assert.ok(stateIndex < html.indexOf('js/music-view.js?v=6'));
   assert.ok(stateIndex < html.indexOf('js/product-shell-v5.js'));
-  assert.ok(html.includes('css/product-ui-v5.css?v=24'));
+  assert.ok(html.includes('css/product-ui-v5.css?v=36'));
 });
 
 test('共享视图状态严格限定 5 个外壳页面与 10 个音乐页面', () => {
@@ -76,25 +76,31 @@ test('产品外壳完整实现首页、概览、个性化、专注与离线五�
   assert.ok(shell.includes("setShellPage?.('offline')"));
   assert.ok(shell.includes("chrome.storage.local.set({ v5ShellPreferences"));
   assert.ok(shell.includes("window.addEventListener('offline'"));
+  for (const mode of ['island', 'side', 'auto']) {
+    assert.ok(shell.includes(`data-home-mode="${mode}"`), `缺少首页呈现模式: ${mode}`);
+  }
+  assert.ok(shell.includes('data-home-action="toggle-cards"'));
+  assert.ok(shell.includes("homeMode: 'island'"));
 });
 
-test('v5 页面注册表与设计矩阵保持 18 个业务、112 个唯一页面', () => {
+test('v5 页面注册表与设计矩阵保持 19 个业务、121 个唯一页面', () => {
   const source = read('js/product-pages-v5.js');
   const context = { window: {}, console };
   vm.runInNewContext(source, context);
   const registry = context.window.ProductPagesV5;
-  assert.equal(registry.totalBusinesses, 18);
-  assert.equal(registry.totalPages, 112);
-  assert.equal(new Set(registry.pages.map(page => page.key)).size, 112);
+  assert.equal(registry.totalBusinesses, 19);
+  assert.equal(registry.totalPages, 121);
+  assert.equal(new Set(registry.pages.map(page => page.key)).size, 121);
   assert.equal(registry.list('shell').length, 5);
   assert.equal(registry.list('music').length, 10);
   assert.equal(registry.list('tasks').length, 8);
+  assert.equal(registry.list('youtube').length, 9);
   assert.equal(registry.get('settings/about-diagnostics').name, '关于与诊断');
   assert.equal(registry.get('shell/offline').name, '离线状态');
   assert.ok(read('index.html').includes('js/product-pages-v5.js?v=6'));
 });
 
-test('真实 Chrome R4 清单逐页覆盖 112 个页面且不把部分验收计为完成', () => {
+test('真实 Chrome R4 清单逐页覆盖 121 个页面且不把部分验收计为完成', () => {
   const source = read('js/product-pages-v5.js');
   const context = { window: {}, console };
   vm.runInNewContext(source, context);
@@ -102,13 +108,13 @@ test('真实 Chrome R4 清单逐页覆盖 112 个页面且不把部分验收计�
   const checklist = read('docs/design/product-ui-v5-r4-checklist.md');
   const rows = checklist.split('\n').filter(line => /^\| (?:✅|⬜) \|/.test(line));
 
-  assert.equal(rows.length, 112);
+  assert.equal(rows.length, 121);
   for (const page of registry.pages) {
     assert.equal(rows.filter(line => line.includes(`| \`${page.key}\` |`)).length, 1, `R4 清单缺少或重复页面: ${page.key}`);
   }
-  assert.equal(rows.filter(line => line.includes('| R4 |')).length, 50);
+  assert.equal(rows.filter(line => line.includes('| R4 |')).length, 52);
   assert.equal(rows.filter(line => line.includes('| R4-partial |')).length, 1);
-  assert.equal(rows.filter(line => line.startsWith('| ✅ |')).length, 50);
+  assert.equal(rows.filter(line => line.startsWith('| ✅ |')).length, 52);
 });
 
 test('网易云工作台把现有真实功能映射为 10 个设计页面且复用唯一播放器控制器', () => {
@@ -155,4 +161,7 @@ test('v5 样式提供共享令牌、页面容器和响应式断点', () => {
   }
   assert.ok(css.includes('@media (max-width: 720px)'));
   assert.ok(css.includes('@media (prefers-reduced-motion: reduce)'));
+  assert.ok(css.includes('body[data-v5-home-layout="island"]'));
+  assert.ok(css.includes('body[data-v5-home-layout="side"]'));
+  assert.ok(css.includes('body[data-v5-home-layout="auto"]'));
 });

@@ -35,8 +35,12 @@ class AdaptiveOverlay {
             this.brightnessCache[imageUrl] = brightness;
             this._applyOverlay(brightness);
         } catch (err) {
-            console.warn('[AdaptiveOverlay] 亮度分析失败，使用默认值:', err.message);
-            this._applyOverlay(0.35);
+            // 图片本身仍由 CSS/视频 poster 展示；亮度分析只是可选增强。
+            // 缓存默认值，避免同一张受 CORS、超时或格式限制的图片反复请求并刷 warning。
+            const fallbackBrightness = 0.35;
+            this.brightnessCache[imageUrl] = fallbackBrightness;
+            console.debug('[AdaptiveOverlay] 亮度分析不可用，已使用默认值:', err.message);
+            this._applyOverlay(fallbackBrightness);
         }
     }
 

@@ -1,9 +1,10 @@
 # 需求文档索引
 
-> 最后更新：2026-08-05
+> 最后更新：2026-08-16
 
 | 更新日期 | 文档 | 标题 |
 |----------|------|------|
+| 2026-08-16 | [prd-v3.20.0-youtube-workbench.md](prd-v3.20.0-youtube-workbench.md) | YouTube 工作台集成 |
 | 2026-08-05 | [prd-v3.19.0-music-enhanced-features.md](prd-v3.19.0-music-enhanced-features.md) | 音乐播放器 — 网易云增强功能集 |
 | 2026-08-05 | [prd-v3.18.0-music-artist-album-navigation.md](prd-v3.18.0-music-artist-album-navigation.md) | 音乐播放器 — 歌手/专辑交互导航增强 |
 | 2026-05-25 | [ops-graphsphere-demo-script-brief-v0.1.md](ops-graphsphere-demo-script-brief-v0.1.md) | GraphSphere 5 分钟标准演示脚本与录屏/GIF 传播素材 Brief |

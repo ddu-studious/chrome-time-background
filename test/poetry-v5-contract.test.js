@@ -14,7 +14,7 @@ test('诗词电台五个页面复用同一播放状态', () => {
     assert.match(source, new RegExp(`['\"]${page}['\"]`));
   }
   assert.match(source, /window\.PoetryRadioV5 = \{ state, toggleMini, showPage: renderWorkspace/);
-  assert.match(html, /js\/main\.js\?v=9/);
+  assert.match(html, /js\/main\.js\?v=10/);
 });
 
 test('注释缺少来源时显示明确空态而不编造解释', () => {

@@ -1,6 +1,71 @@
-importScripts('background-provider.js', 'hermes-writing-sync.js');
+importScripts('background-provider.js', 'hermes-writing-sync.js', 'site-workspace-core.js');
 
 (function() {
+    const SITE_WORKSPACE_MENU_ID = 'site-workspace-add-current-tab';
+    const SITE_WORKSPACE_OPEN_MENU_ID = 'site-workspace-open-panel';
+    const SITE_WORKSPACE_COMMAND = 'add-current-tab-to-site-workspace';
+    const SITE_WORKSPACE_OPEN_COMMAND = 'open-site-workspace';
+    const openSiteWorkspaceWindows = new Set();
+    const siteWorkspacePanelPorts = new Map();
+    const siteWorkspaceService = self.SiteWorkspaceCore
+        ? new self.SiteWorkspaceCore.WorkspaceService(chrome)
+        : null;
+
+    function ensureContextMenu(id, options) {
+        chrome.contextMenus.create({ id, ...options }, () => {
+            void chrome.runtime.lastError;
+        });
+    }
+
+    function ensureExtensionContextMenus() {
+        ensureContextMenu('settings', { title: '设置', contexts: ['all'] });
+        ensureContextMenu(SITE_WORKSPACE_OPEN_MENU_ID, {
+            title: '打开网站工作区',
+            contexts: ['page', 'action'],
+        });
+        ensureContextMenu(SITE_WORKSPACE_MENU_ID, {
+            title: '加入网站工作区',
+            contexts: ['page'],
+            documentUrlPatterns: ['http://*/*', 'https://*/*'],
+        });
+    }
+
+    async function openSiteWorkspace(tab) {
+        const activeTab = tab?.windowId != null
+            ? tab
+            : (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
+        if (activeTab?.windowId == null) return false;
+        await chrome.sidePanel.open({ windowId: activeTab.windowId });
+        openSiteWorkspaceWindows.add(activeTab.windowId);
+        return true;
+    }
+
+    async function toggleSiteWorkspace(tab) {
+        const activeTab = tab?.windowId != null
+            ? tab
+            : (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
+        if (activeTab?.windowId == null) return false;
+        if (openSiteWorkspaceWindows.has(activeTab.windowId)) {
+            await chrome.sidePanel.close({ windowId: activeTab.windowId });
+            openSiteWorkspaceWindows.delete(activeTab.windowId);
+            return false;
+        }
+        await chrome.sidePanel.open({ windowId: activeTab.windowId });
+        openSiteWorkspaceWindows.add(activeTab.windowId);
+        return true;
+    }
+
+    async function addTabToSiteWorkspace(tab) {
+        if (!siteWorkspaceService || !tab?.id || !self.SiteWorkspaceCore.isManageableUrl(tab.url)) return false;
+        await Promise.all([
+            siteWorkspaceService.adoptTab(tab.id),
+            chrome.sidePanel.open({ windowId: tab.windowId }),
+        ]);
+        return true;
+    }
+
+    ensureExtensionContextMenus();
+
     // v3.16.0: 背景图片数据已迁移至 background-provider.js（多源 Provider 模块）
     const backgrounds = [
         {
@@ -1549,21 +1614,64 @@ importScripts('background-provider.js', 'hermes-writing-sync.js');
         chrome.tabs.create({ url: 'index.html' });
     });
 
-    chrome.contextMenus.onClicked.addListener((info) => {
+    chrome.contextMenus.onClicked.addListener((info, tab) => {
         if (info.menuItemId === "settings") {
             chrome.tabs.create({ url: 'settings.html' });
+            return;
         }
+        if (info.menuItemId === SITE_WORKSPACE_OPEN_MENU_ID) {
+            openSiteWorkspace(tab).catch(error => console.warn('[SiteWorkspace] 右键打开失败:', error));
+            return;
+        }
+        if (info.menuItemId === SITE_WORKSPACE_MENU_ID) {
+            addTabToSiteWorkspace(tab).catch(error => console.warn('[SiteWorkspace] 右键加入失败:', error));
+        }
+    });
+
+    chrome.commands.onCommand.addListener((command, tab) => {
+        if (command === SITE_WORKSPACE_OPEN_COMMAND) {
+            toggleSiteWorkspace(tab).catch(error => console.warn('[SiteWorkspace] 快捷键切换失败:', error));
+            return;
+        }
+        if (command !== SITE_WORKSPACE_COMMAND) return;
+        const resolveTab = tab?.id
+            ? Promise.resolve(tab)
+            : chrome.tabs.query({ active: true, currentWindow: true }).then(tabs => tabs[0]);
+        resolveTab
+            .then(activeTab => addTabToSiteWorkspace(activeTab))
+            .catch(error => console.warn('[SiteWorkspace] 快捷键加入失败:', error));
+    });
+
+    chrome.runtime.onConnect.addListener(port => {
+        if (port.name !== 'site-workspace-visible-panel') return;
+        let windowId = null;
+        port.onMessage.addListener(message => {
+            if (message?.type !== 'site-workspace-panel-visible' || !Number.isInteger(message.windowId)) return;
+            windowId = message.windowId;
+            openSiteWorkspaceWindows.add(windowId);
+            siteWorkspacePanelPorts.set(windowId, port);
+        });
+        port.onDisconnect.addListener(() => {
+            if (windowId == null || siteWorkspacePanelPorts.get(windowId) !== port) return;
+            siteWorkspacePanelPorts.delete(windowId);
+            openSiteWorkspaceWindows.delete(windowId);
+        });
+    });
+
+    chrome.sidePanel.onOpened?.addListener(info => {
+        openSiteWorkspaceWindows.add(info.windowId);
+    });
+
+    chrome.sidePanel.onClosed?.addListener(info => {
+        openSiteWorkspaceWindows.delete(info.windowId);
+        siteWorkspacePanelPorts.delete(info.windowId);
     });
 
     // 监听安装/更新事件
     chrome.runtime.onInstalled.addListener(async (details) => {
         console.log('Chrome Time Extension installed/updated:', details.reason);
         
-        chrome.contextMenus.create({
-            id: 'settings',
-            title: '设置',
-            contexts: ['all'] // 建议设为 all 方便测试
-        });
+        ensureExtensionContextMenus();
 
         try {
             chrome.runtime.setUninstallURL('https://ddu-studious.github.io/chrome-time-background/uninstall.html');
@@ -1904,17 +2012,26 @@ importScripts('background-provider.js', 'hermes-writing-sync.js');
         '/pugv/view/web/season',
         '/pugv/view/web/ep/list',
         '/x/web-interface/wbi/search/type',
+        '/x/web-interface/search/type',
         '/x/relation/followings',
         '/x/relation/tags',
         '/x/relation/tag',
         '/x/polymer/web-dynamic/v1/feed/all',
+        '/x/polymer/web-dynamic/v1/feed/space',
         '/x/space/wbi/arc/search',
+        '/x/space/wbi/acc/info',
+        '/x/relation/stat',
         '/x/v2/history/toview/add',
         '/x/v2/history/toview/del',
         '/x/web-interface/archive/like',
         '/x/v2/reply',
         '/x/v2/reply/reply',
         '/x/web-interface/view',
+        '/room/v1/room/get_user_recommend',
+        '/room/v1/Room/playUrl',
+        '/room/v3/area/getRoomList',
+        '/xlive/web-ucenter/v1/xfetter/GetWebList',
+        '/xlive/web-room/v2/index/getRoomPlayInfo',
     ];
 
     async function getBilibiliCookies() {
@@ -1934,32 +2051,49 @@ importScripts('background-provider.js', 'hermes-writing-sync.js');
         } catch { return ''; }
     }
 
-    const BILI_API_DNR_RULE_ID = 9010;
+    const BILI_API_DNR_RULE_IDS = [9010, 9011];
     let _biliApiDnrActive = false;
 
     async function ensureBiliApiDnr() {
         if (_biliApiDnrActive) return;
         try {
             const cookieStr = await getBilibiliCookies();
-            const ruleHeaders = [
+            const apiHeaders = [
                 { header: 'Origin', operation: 'set', value: 'https://www.bilibili.com' },
                 { header: 'Referer', operation: 'set', value: 'https://www.bilibili.com/' },
             ];
+            const liveHeaders = [
+                { header: 'Origin', operation: 'set', value: 'https://live.bilibili.com' },
+                { header: 'Referer', operation: 'set', value: 'https://live.bilibili.com/' },
+            ];
             if (cookieStr) {
-                ruleHeaders.push({ header: 'Cookie', operation: 'set', value: cookieStr });
+                apiHeaders.push({ header: 'Cookie', operation: 'set', value: cookieStr });
+                liveHeaders.push({ header: 'Cookie', operation: 'set', value: cookieStr });
             }
             await chrome.declarativeNetRequest.updateSessionRules({
-                removeRuleIds: [BILI_API_DNR_RULE_ID],
-                addRules: [{
-                    id: BILI_API_DNR_RULE_ID,
-                    priority: 2,
-                    action: { type: 'modifyHeaders', requestHeaders: ruleHeaders },
-                    condition: {
-                        urlFilter: '||api.bilibili.com/',
-                        resourceTypes: ['xmlhttprequest'],
-                        tabIds: [-1],
+                removeRuleIds: BILI_API_DNR_RULE_IDS,
+                addRules: [
+                    {
+                        id: 9010,
+                        priority: 2,
+                        action: { type: 'modifyHeaders', requestHeaders: apiHeaders },
+                        condition: {
+                            urlFilter: '||api.bilibili.com/',
+                            resourceTypes: ['xmlhttprequest'],
+                            tabIds: [-1],
+                        }
+                    },
+                    {
+                        id: 9011,
+                        priority: 2,
+                        action: { type: 'modifyHeaders', requestHeaders: liveHeaders },
+                        condition: {
+                            urlFilter: '||api.live.bilibili.com/',
+                            resourceTypes: ['xmlhttprequest'],
+                            tabIds: [-1],
+                        }
                     }
-                }]
+                ]
             });
             _biliApiDnrActive = true;
         } catch (e) {
@@ -1985,7 +2119,8 @@ importScripts('background-provider.js', 'hermes-writing-sync.js');
         };
 
         let fetchOpts = { method, headers };
-        const url = new URL(endpoint, 'https://api.bilibili.com');
+        const isLiveEndpoint = endpoint.startsWith('/room/') || endpoint.startsWith('/xlive/');
+        const url = new URL(endpoint, isLiveEndpoint ? 'https://api.live.bilibili.com' : 'https://api.bilibili.com');
 
         if (method === 'POST') {
             const csrf = await getBiliCsrf();
@@ -2016,6 +2151,134 @@ importScripts('background-provider.js', 'hermes-writing-sync.js');
             }
             throw e;
         }
+    }
+
+    // ==================== v3.20.0: YouTube 官方只读 API ====================
+
+    const YOUTUBE_READONLY_SCOPE = 'https://www.googleapis.com/auth/youtube.readonly';
+    const YOUTUBE_PLAYER_IDENTITY_RULE_ID = 9020;
+    const YOUTUBE_API_RESOURCES = new Set([
+        'channels', 'videos', 'search', 'subscriptions', 'playlists', 'playlistItems', 'commentThreads'
+    ]);
+
+    function youtubeOAuthConfigured() {
+        const oauth = chrome.runtime.getManifest()?.oauth2;
+        return Boolean(oauth?.client_id && Array.isArray(oauth.scopes) && oauth.scopes.includes(YOUTUBE_READONLY_SCOPE));
+    }
+
+    function youtubeOAuthSetupState() {
+        return {
+            configured: youtubeOAuthConfigured(),
+            extensionId: chrome.runtime.id,
+            requiredScope: YOUTUBE_READONLY_SCOPE,
+        };
+    }
+
+    function youtubeError(code, message, details = {}) {
+        return { code, message, ...details };
+    }
+
+    function getYouTubeAuthToken(interactive = false) {
+        return new Promise((resolve, reject) => {
+            if (!youtubeOAuthConfigured()) {
+                reject(youtubeError('oauth-not-configured', 'manifest 尚未配置 YouTube OAuth client_id'));
+                return;
+            }
+            chrome.identity.getAuthToken({ interactive, scopes: [YOUTUBE_READONLY_SCOPE] }, result => {
+                const lastError = chrome.runtime.lastError;
+                if (lastError) {
+                    reject(youtubeError(interactive ? 'auth-required' : 'not-connected', lastError.message));
+                    return;
+                }
+                const token = typeof result === 'string' ? result : result?.token;
+                if (!token) {
+                    reject(youtubeError(interactive ? 'auth-required' : 'not-connected', '未获得 Google OAuth token'));
+                    return;
+                }
+                resolve(token);
+            });
+        });
+    }
+
+    function removeYouTubeCachedToken(token) {
+        return new Promise(resolve => {
+            if (!token) { resolve(); return; }
+            chrome.identity.removeCachedAuthToken({ token }, () => resolve());
+        });
+    }
+
+    async function getYouTubeAuthStatus() {
+        const setup = youtubeOAuthSetupState();
+        if (!setup.configured) {
+            return { ...setup, connected: false, mode: 'oauth-not-configured' };
+        }
+        try {
+            await getYouTubeAuthToken(false);
+            return { ...setup, connected: true, mode: 'connected', scope: 'youtube.readonly' };
+        } catch (error) {
+            return { ...setup, connected: false, mode: 'authorization-required', error };
+        }
+    }
+
+    async function youtubeApiCall(resource, params = {}) {
+        if (!YOUTUBE_API_RESOURCES.has(resource)) {
+            throw youtubeError('resource-not-allowed', `不允许的 YouTube API 资源: ${resource}`);
+        }
+        const token = await getYouTubeAuthToken(false).catch(error => {
+            if (error.code === 'not-connected') throw youtubeError('auth-required', '请先连接 Google 账号');
+            throw error;
+        });
+        const url = new URL(`https://www.googleapis.com/youtube/v3/${resource}`);
+        Object.entries(params).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, String(value));
+        });
+        const startedAt = Date.now();
+        const response = await fetch(url.toString(), {
+            method: 'GET',
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        let payload = {};
+        try { payload = await response.json(); } catch { payload = {}; }
+        if (response.ok) {
+            logExtEvent('network', 'youtube-api', { durationMs: Date.now() - startedAt, context: resource });
+            return payload;
+        }
+
+        const reason = payload?.error?.errors?.[0]?.reason || '';
+        const message = payload?.error?.message || `YouTube API 请求失败: ${response.status}`;
+        let code = 'youtube-api-error';
+        if (response.status === 401) {
+            await removeYouTubeCachedToken(token);
+            code = 'auth-expired';
+        } else if (response.status === 403 && ['quotaExceeded', 'dailyLimitExceeded'].includes(reason)) {
+            code = 'quota-exceeded';
+        } else if (response.status === 403) {
+            code = 'permission-denied';
+        }
+        logExtEvent('network', 'youtube-api', { ok: false, durationMs: Date.now() - startedAt, context: resource, error: `${response.status}:${reason || code}` });
+        throw youtubeError(code, message, { status: response.status, reason });
+    }
+
+    async function ensureYouTubePlayerIdentity() {
+        const appId = chrome.runtime.id;
+        const referer = `https://${appId}/`;
+        await chrome.declarativeNetRequest.updateSessionRules({
+            removeRuleIds: [YOUTUBE_PLAYER_IDENTITY_RULE_ID],
+            addRules: [{
+                id: YOUTUBE_PLAYER_IDENTITY_RULE_ID,
+                priority: 3,
+                action: {
+                    type: 'modifyHeaders',
+                    requestHeaders: [{ header: 'Referer', operation: 'set', value: referer }],
+                },
+                condition: {
+                    urlFilter: '||www.youtube.com/embed/',
+                    resourceTypes: ['sub_frame'],
+                    initiatorDomains: [appId],
+                },
+            }],
+        });
+        return { appId, referer };
     }
 
     // 监听消息事件
@@ -2133,6 +2396,15 @@ importScripts('background-provider.js', 'hermes-writing-sync.js');
 
         // ========== v3.6.0: 哔哩哔哩 API 代理 ==========
 
+        if (message.action === 'bilibili_runtime_info') {
+            sendResponse({
+                ok: true,
+                apiRevision: 'bilibili-live-v5',
+                features: { bilibiliLive: true }
+            });
+            return false;
+        }
+
         if (message.action === 'bilibili_api') {
             (async () => {
                 try {
@@ -2142,6 +2414,53 @@ importScripts('background-provider.js', 'hermes-writing-sync.js');
                     sendResponse({ ok: false, error: e.message });
                 }
             })();
+            return true;
+        }
+
+        // ========== v3.20.0: YouTube OAuth 与只读 Data API ==========
+
+        if (message.action === 'youtube_auth_status') {
+            getYouTubeAuthStatus()
+                .then(data => sendResponse({ ok: true, data }))
+                .catch(error => sendResponse({ ok: false, error }));
+            return true;
+        }
+
+        if (message.action === 'youtube_connect') {
+            getYouTubeAuthToken(true)
+                .then(() => sendResponse({ ok: true, data: { ...youtubeOAuthSetupState(), connected: true, mode: 'connected' } }))
+                .catch(error => sendResponse({ ok: false, error }));
+            return true;
+        }
+
+        if (message.action === 'youtube_disconnect') {
+            getYouTubeAuthToken(false)
+                .then(token => removeYouTubeCachedToken(token))
+                .then(() => sendResponse({ ok: true }))
+                .catch(error => {
+                    if (['not-connected', 'oauth-not-configured'].includes(error.code)) sendResponse({ ok: true });
+                    else sendResponse({ ok: false, error });
+                });
+            return true;
+        }
+
+        if (message.action === 'youtube_api') {
+            youtubeApiCall(message.resource, message.params || {})
+                .then(data => sendResponse({ ok: true, data }))
+                .catch(error => sendResponse({ ok: false, error }));
+            return true;
+        }
+
+        if (message.action === 'youtube_prepare_player') {
+            ensureYouTubePlayerIdentity()
+                .then(data => {
+                    logExtEvent('youtube', 'player-identity', { ok: true });
+                    sendResponse({ ok: true, data });
+                })
+                .catch(error => {
+                    logExtEvent('youtube', 'player-identity', { ok: false, error: error.message });
+                    sendResponse({ ok: false, error: { code: 'player-identity-failed', message: error.message } });
+                });
             return true;
         }
 
@@ -2163,7 +2482,7 @@ importScripts('background-provider.js', 'hermes-writing-sync.js');
                         return;
                     }
 
-                    const BILI_DNR_RULE_IDS = [9001, 9002, 9003, 9004];
+                    const BILI_DNR_RULE_IDS = [9001, 9002, 9003, 9004, 9005];
 
                     await chrome.declarativeNetRequest.updateSessionRules({
                         removeRuleIds: BILI_DNR_RULE_IDS,
@@ -2219,6 +2538,19 @@ importScripts('background-provider.js', 'hermes-writing-sync.js');
                                     resourceTypes: ['sub_frame'],
                                     tabIds: [senderTabId],
                                 }
+                            },
+                            {
+                                id: 9005,
+                                priority: 1,
+                                action: {
+                                    type: 'modifyHeaders',
+                                    requestHeaders: [{ header: 'Cookie', operation: 'set', value: cookieStr }]
+                                },
+                                condition: {
+                                    urlFilter: '||www.bilibili.com/blackboard/live/live-activity-player.html',
+                                    resourceTypes: ['sub_frame', 'xmlhttprequest', 'script'],
+                                    tabIds: [senderTabId],
+                                }
                             }
                         ]
                     });
@@ -2238,7 +2570,7 @@ importScripts('background-provider.js', 'hermes-writing-sync.js');
             (async () => {
                 try {
                     await chrome.declarativeNetRequest.updateSessionRules({
-                        removeRuleIds: [9001, 9002, 9003, 9004]
+                        removeRuleIds: [9001, 9002, 9003, 9004, 9005]
                     });
                     sendResponse({ ok: true });
                 } catch (e) {

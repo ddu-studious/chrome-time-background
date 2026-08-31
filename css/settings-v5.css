@@ -206,6 +206,14 @@ body::before {
 .settings-v5-shortcuts strong { color: #dfe1e8; font-size: 11px; }
 .settings-v5-shortcuts span { color: #737b8f; font-size: 9px; line-height: 1.45; margin-top: 3px; }
 
+.settings-v5-command-card { margin-bottom: 14px; }
+.settings-v5-command-list { display: grid; gap: 8px; margin: 13px 0; }
+.settings-v5-command-list > div { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 11px 12px; border: 1px solid rgba(255,255,255,.06); border-radius: 10px; background: rgba(255,255,255,.025); }
+.settings-v5-command-list span { color: #d5d8e1; font-size: 11px; }
+.settings-v5-command-list kbd { min-width: 118px; padding: 7px 10px; border: 1px solid rgba(167,139,250,.22); border-bottom-width: 3px; border-radius: 8px; background: #141827; color: #cdbfff; font: 700 11px ui-monospace, SFMono-Regular, Menlo, monospace; text-align: center; }
+.settings-v5-command-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.settings-v5-command-actions button { display: inline-flex; align-items: center; gap: 7px; }
+
 .settings-v5-diagnostics { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin-bottom: 10px; }
 .settings-v5-diagnostics > div { padding: 13px; border: 1px solid var(--sp-border); border-radius: 12px; background: rgba(20,24,37,.72); }
 .settings-v5-diagnostics span, .settings-v5-diagnostics strong { display: block; }

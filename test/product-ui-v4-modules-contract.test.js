@@ -34,11 +34,12 @@ test('主应用初始化兼容 DOM 已完成的动态恢复场景且只执行一
   assert.ok(source.includes('void initApp()'));
 });
 
-test('B站一级导航只保留设计规定的四个入口', () => {
-  const css = read('css/product-ui-v4.css');
-  for (const tab of ['popular', 'history', 'watchlater', 'ranking']) {
-    assert.ok(css.includes(`.bili-pill[data-tab="${tab}"]`));
+test('B站九项能力都在常驻导航中直接可达', () => {
+  const source = read('js/bilibili-controller.js');
+  for (const tab of ['recommend', 'course', 'favorite', 'history', 'popular', 'live', 'ranking', 'watchlater', 'following']) {
+    assert.match(source, new RegExp(`class="bili-pill[^\"]*" data-tab="${tab}"`));
   }
+  assert.doesNotMatch(source, /bili-more-item/);
 });
 
 test('Prompt 管理右栏提供随输入更新的实时预览', () => {

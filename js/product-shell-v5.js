@@ -17,7 +17,9 @@
       this._focusRunning = false;
       this._focusStartedAt = 0;
       this._lastFocused = null;
+      this._homeIdleTimer = null;
       this._preferences = {
+        homeMode: 'island',
         density: 1,
         scale: 1,
         dim: 24,
@@ -74,7 +76,8 @@
           <div class="v5-home-player-cover" id="v5-home-player-cover"><i class="fas fa-music"></i></div>
           <div class="v5-home-player-copy"><span id="v5-home-player-status">音乐</span><strong id="v5-home-player-title">打开网易云音乐</strong><small id="v5-home-player-artist">选择一首歌开始今天</small></div>
           <div class="v5-home-player-action"><i class="fas fa-chevron-right"></i></div>
-        </article>`;
+        </article>
+        <button class="v5-home-expand" type="button" data-home-action="toggle-cards" aria-expanded="false" aria-label="展开首页卡片" title="展开首页卡片"><i class="fas fa-chevron-up"></i><span>展开</span></button>`;
       document.body.appendChild(this.home);
     }
 
@@ -110,6 +113,10 @@
             <button class="v5-template-card active" type="button" data-layout-template="balanced"><strong>均衡工作台</strong><small>专注、日程与音乐并重</small></button>
             <button class="v5-template-card" type="button" data-layout-template="focus"><strong>深度工作</strong><small>放大今日焦点，减少干扰</small></button>
             <button class="v5-template-card" type="button" data-layout-template="compact"><strong>紧凑总览</strong><small>一屏容纳更多信息</small></button>
+            <span class="v5-section-label">首页呈现</span>
+            <button class="v5-template-card v5-home-mode-card active" type="button" data-home-mode="island"><strong><i class="fas fa-grip-lines"></i> 轻触浮岛</strong><small>推荐 · 收成一条，需要时展开</small></button>
+            <button class="v5-template-card v5-home-mode-card" type="button" data-home-mode="side"><strong><i class="fas fa-columns"></i> 贴边卡片</strong><small>中心留白，信息靠右排列</small></button>
+            <button class="v5-template-card v5-home-mode-card" type="button" data-home-mode="auto"><strong><i class="fas fa-eye-slash"></i> 智能淡出</strong><small>保留完整布局，闲置后退隐</small></button>
             <div class="v5-config-note"><i class="fas fa-shield-alt"></i><span>布局偏好只保存在本机</span></div>
           </aside>
           <main class="v5-layout-preview" aria-label="首页布局预览">
@@ -214,6 +221,11 @@
 
     _bind() {
       document.addEventListener('click', event => {
+        const homeAction = event.target.closest('[data-home-action]')?.dataset.homeAction;
+        if (homeAction === 'toggle-cards') {
+          this._toggleHomeCards();
+          return;
+        }
         const opener = event.target.closest('[data-shell-open]');
         if (!opener) return;
         const page = opener.dataset.shellOpen;
@@ -249,6 +261,8 @@
         if (action === 'reset') this._resetPreferences();
         const template = event.target.closest('[data-layout-template]')?.dataset.layoutTemplate;
         if (template) this._applyTemplate(template);
+        const homeMode = event.target.closest('[data-home-mode]')?.dataset.homeMode;
+        if (homeMode) this._setHomeMode(homeMode);
       });
       this.personalize.addEventListener('input', event => {
         if (event.target.matches('[data-pref], [data-card-pref]')) this._readPreferenceControls();
@@ -264,6 +278,10 @@
           document.getElementById(ids[app])?.click();
         }
       });
+      this.home.addEventListener('pointerenter', () => this._wakeHome());
+      this.home.addEventListener('pointerleave', () => this._scheduleHomeIdle());
+      this.home.addEventListener('focusin', () => this._wakeHome());
+      this.home.addEventListener('focusout', () => this._scheduleHomeIdle());
       document.addEventListener('keydown', event => {
         if (event.key === 'Escape' && !this.personalize?.classList.contains('hidden')) this.closePersonalize();
         else if (event.key === 'Escape' && !this.offline?.classList.contains('hidden')) this.closeOffline();
@@ -426,6 +444,47 @@
       global.todayOverview?.panel?.classList?.add('hidden');
     }
 
+    _toggleHomeCards() {
+      if (this._preferences.homeMode !== 'island') return;
+      const expanded = this.home.classList.toggle('is-expanded');
+      const button = this.home.querySelector('[data-home-action="toggle-cards"]');
+      button?.setAttribute('aria-expanded', String(expanded));
+      button?.setAttribute('aria-label', expanded ? '收起首页卡片' : '展开首页卡片');
+      if (button) {
+        button.title = expanded ? '收起首页卡片' : '展开首页卡片';
+        button.innerHTML = `<i class="fas fa-chevron-${expanded ? 'down' : 'up'}"></i><span>${expanded ? '收起' : '展开'}</span>`;
+      }
+    }
+
+    _wakeHome() {
+      clearTimeout(this._homeIdleTimer);
+      this.home?.classList.remove('v5-home-idle');
+    }
+
+    _scheduleHomeIdle() {
+      clearTimeout(this._homeIdleTimer);
+      if (this._preferences.homeMode !== 'auto') return;
+      this._homeIdleTimer = setTimeout(() => {
+        if (!this.home?.contains(document.activeElement)) this.home?.classList.add('v5-home-idle');
+      }, 2200);
+    }
+
+    _setHomeMode(mode) {
+      if (!['island', 'side', 'auto'].includes(mode)) return;
+      this._preferences.homeMode = mode;
+      this.home?.classList.remove('is-expanded', 'v5-home-idle');
+      const expand = this.home?.querySelector('[data-home-action="toggle-cards"]');
+      if (expand) {
+        expand.setAttribute('aria-expanded', 'false');
+        expand.setAttribute('aria-label', '展开首页卡片');
+        expand.title = '展开首页卡片';
+        expand.innerHTML = '<i class="fas fa-chevron-up"></i><span>展开</span>';
+      }
+      this._applyPreferences();
+      this._writePreferenceControls();
+      this._scheduleHomeIdle();
+    }
+
     async _loadPreferences() {
       const { v5ShellPreferences } = await chrome.storage.local.get('v5ShellPreferences');
       if (v5ShellPreferences && typeof v5ShellPreferences === 'object') {
@@ -435,13 +494,16 @@
           cards: { ...this._preferences.cards, ...(v5ShellPreferences.cards || {}) },
         };
       }
+      if (!['island', 'side', 'auto'].includes(this._preferences.homeMode)) this._preferences.homeMode = 'island';
       this._applyPreferences();
       this._writePreferenceControls();
+      this._scheduleHomeIdle();
     }
 
     _readPreferenceControls() {
       const value = key => Number(this.personalize.querySelector(`[data-pref="${key}"]`)?.value);
       this._preferences = {
+        homeMode: this._preferences.homeMode,
         density: value('density'),
         scale: value('scale') / 100,
         dim: value('dim'),
@@ -461,6 +523,9 @@
       set('dim', this._preferences.dim);
       this.personalize?.querySelectorAll('[data-card-pref]').forEach(input => {
         input.checked = this._preferences.cards[input.dataset.cardPref] !== false;
+      });
+      this.personalize?.querySelectorAll('[data-home-mode]').forEach(button => {
+        button.classList.toggle('active', button.dataset.homeMode === this._preferences.homeMode);
       });
       this._writePreferenceLabels();
       this._applyPreferences();
@@ -485,6 +550,7 @@
       document.documentElement.style.setProperty('--v5-home-gap', `${densityGap}px`);
       document.documentElement.style.setProperty('--v5-background-dim', String(Math.max(0, Math.min(55, this._preferences.dim)) / 100));
       document.body.classList.toggle('v5-home-customized', this._preferences.dim > 0);
+      document.body.dataset.v5HomeLayout = this._preferences.homeMode;
       const map = { focus: '.v5-focus-card', agenda: '.v5-agenda-card', music: '.v5-home-player' };
       Object.entries(map).forEach(([key, selector]) => {
         this.home?.querySelector(selector)?.classList.toggle('v5-card-disabled', this._preferences.cards[key] === false);
@@ -492,6 +558,9 @@
       });
       this.personalize?.querySelector('.v5-preview-canvas')?.style.setProperty('--preview-scale', String(this._preferences.scale));
       this.personalize?.querySelector('.v5-preview-canvas')?.style.setProperty('--preview-gap', `${Math.max(5, densityGap / 2)}px`);
+      if (this.personalize?.querySelector('.v5-preview-canvas')) {
+        this.personalize.querySelector('.v5-preview-canvas').dataset.homeMode = this._preferences.homeMode;
+      }
     }
 
     async _savePreferences() {
@@ -504,7 +573,7 @@
     }
 
     _resetPreferences() {
-      this._preferences = { density: 1, scale: 1, dim: 24, cards: { focus: true, agenda: true, music: true } };
+      this._preferences = { homeMode: 'island', density: 1, scale: 1, dim: 24, cards: { focus: true, agenda: true, music: true } };
       this.personalize.querySelectorAll('[data-layout-template]').forEach(button => button.classList.toggle('active', button.dataset.layoutTemplate === 'balanced'));
       this._writePreferenceControls();
     }

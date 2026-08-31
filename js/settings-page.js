@@ -16,6 +16,7 @@
         enableTicker: true,
         enableMusic: true,
         enableBilibili: true,
+        enableYouTube: true,
         enableSystemMonitor: false,
         enableKeywordScan: false,
         enableWarmTip: true,
@@ -136,6 +137,7 @@
     const BG_PROVIDER_DEFAULTS = {
         enabledSources: ['wikimedia', 'bing'],
         apiKeys: { unsplash: '', pexels: '', pixabay: '', wallhaven: '', coverr: '', nasa: '' },
+        mediaMode: 'image',
         enableVideoBackground: false,
         settingsPageBackground: false,
     };
@@ -145,17 +147,23 @@
     async function loadBgProviderSettings() {
         try {
             const { backgroundProviderSettings } = await chrome.storage.sync.get('backgroundProviderSettings');
+            const stored = backgroundProviderSettings || {};
             bgProviderSettings = {
                 ...BG_PROVIDER_DEFAULTS,
-                ...(backgroundProviderSettings || {}),
-                apiKeys: { ...BG_PROVIDER_DEFAULTS.apiKeys, ...((backgroundProviderSettings || {}).apiKeys || {}) },
+                ...stored,
+                apiKeys: { ...BG_PROVIDER_DEFAULTS.apiKeys, ...(stored.apiKeys || {}) },
             };
+            bgProviderSettings.mediaMode = ['image', 'mixed', 'video'].includes(stored.mediaMode)
+                ? stored.mediaMode
+                : (stored.enableVideoBackground ? 'mixed' : 'image');
+            bgProviderSettings.enableVideoBackground = bgProviderSettings.mediaMode !== 'image';
         } catch { /* defaults */ }
         applyBgProviderUI();
     }
 
     async function saveBgProviderSettings() {
         try {
+            bgProviderSettings.enableVideoBackground = bgProviderSettings.mediaMode !== 'image';
             await chrome.storage.sync.set({ backgroundProviderSettings: bgProviderSettings });
         } catch (e) {
             console.error('保存背景设置失败:', e);
@@ -163,8 +171,8 @@
     }
 
     function applyBgProviderUI() {
-        const videoEl = document.getElementById('set-bgEnableVideo');
-        if (videoEl) videoEl.checked = !!bgProviderSettings.enableVideoBackground;
+        const mediaModeEl = document.getElementById('set-bgMediaMode');
+        if (mediaModeEl) mediaModeEl.value = bgProviderSettings.mediaMode || 'image';
 
         const settingsBgEl = document.getElementById('set-bgSettingsPage');
         if (settingsBgEl) settingsBgEl.checked = !!bgProviderSettings.settingsPageBackground;
@@ -187,10 +195,10 @@
     }
 
     function bindBgProviderEvents() {
-        const videoEl = document.getElementById('set-bgEnableVideo');
-        if (videoEl) {
-            videoEl.addEventListener('change', () => {
-                bgProviderSettings.enableVideoBackground = videoEl.checked;
+        const mediaModeEl = document.getElementById('set-bgMediaMode');
+        if (mediaModeEl) {
+            mediaModeEl.addEventListener('change', () => {
+                bgProviderSettings.mediaMode = mediaModeEl.value;
                 saveBgProviderSettings();
             });
         }

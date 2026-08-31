@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>网站工作区</title>
+  <link rel="stylesheet" href="css/site-workspace.css?v=1">
+</head>
+<body>
+  <main class="sw-shell">
+    <header class="sw-header">
+      <div>
+        <p class="sw-eyebrow">WEB WORKSPACE</p>
+        <h1>网站工作区</h1>
+        <p class="sw-subtitle">侧边管理，网页仍在真实标签中运行</p>
+      </div>
+      <button class="sw-icon-button" id="sw-refresh" type="button" title="刷新" aria-label="刷新工作区">↻</button>
+    </header>
+
+    <section class="sw-toolbar" aria-label="工作区操作">
+      <button class="sw-primary" id="sw-add-site" type="button">＋ 添加网站</button>
+      <button class="sw-secondary" id="sw-add-group" type="button">新建分组</button>
+    </section>
+
+    <section class="sw-adopt">
+      <label for="sw-adopt-group">将当前网页加入</label>
+      <div>
+        <select id="sw-adopt-group" aria-label="选择加入的分组"></select>
+        <button id="sw-adopt-tab" type="button">加入</button>
+      </div>
+    </section>
+
+    <div class="sw-status" id="sw-status" role="status" aria-live="polite"></div>
+    <section class="sw-groups" id="sw-groups" aria-label="网站与标签分组"></section>
+
+    <footer class="sw-footer">
+      Chrome 分组关闭或删除后，页面会作为“已关闭”记录保留。快速开关：按 <kbd>⌘⇧U</kbd>；网页或工具栏图标右键也可打开。快速加入：按 <kbd>⌘⇧Y</kbd>。
+    </footer>
+  </main>
+
+  <dialog class="sw-dialog" id="sw-site-dialog">
+    <form id="sw-site-form">
+      <header>
+        <h2 id="sw-site-dialog-title">添加网站</h2>
+        <button type="button" data-close-dialog="sw-site-dialog" aria-label="关闭">×</button>
+      </header>
+      <input id="sw-site-id" type="hidden">
+      <label>名称<input id="sw-site-name" maxlength="80" required placeholder="例如：马士兵课堂"></label>
+      <label>网址<input id="sw-site-url" type="url" required placeholder="https://example.com"></label>
+      <label>分组<select id="sw-site-group" required></select></label>
+      <p class="sw-form-error" id="sw-site-error" role="alert"></p>
+      <div class="sw-dialog-actions">
+        <button type="button" data-close-dialog="sw-site-dialog">取消</button>
+        <button class="sw-primary" type="submit">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="sw-dialog" id="sw-group-dialog">
+    <form id="sw-group-form">
+      <header>
+        <h2 id="sw-group-dialog-title">新建分组</h2>
+        <button type="button" data-close-dialog="sw-group-dialog" aria-label="关闭">×</button>
+      </header>
+      <input id="sw-group-id" type="hidden">
+      <label>分组名称<input id="sw-group-name" maxlength="40" required placeholder="例如：学习"></label>
+      <p class="sw-form-error" id="sw-group-error" role="alert"></p>
+      <div class="sw-dialog-actions">
+        <button type="button" data-close-dialog="sw-group-dialog">取消</button>
+        <button class="sw-primary" type="submit">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="sw-dialog" id="sw-page-dialog">
+    <form id="sw-page-form">
+      <header>
+        <h2>重命名工作区页面</h2>
+        <button type="button" data-close-dialog="sw-page-dialog" aria-label="关闭">×</button>
+      </header>
+      <input id="sw-page-id" type="hidden">
+      <label>页面名称<input id="sw-page-name" maxlength="200" required placeholder="输入便于识别的名称"></label>
+      <p class="sw-form-error" id="sw-page-error" role="alert"></p>
+      <div class="sw-dialog-actions">
+        <button type="button" data-close-dialog="sw-page-dialog">取消</button>
+        <button class="sw-primary" type="submit">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="js/site-workspace-core.js?v=1"></script>
+  <script src="js/site-workspace.js?v=1"></script>
+</body>
+</html>

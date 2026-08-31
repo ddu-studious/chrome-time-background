@@ -52,6 +52,16 @@ test('设置导航和异步反馈具备当前页与实时播报语义', () => {
   assert.match(source, /globalThis\.scrollTo/);
 });
 
+test('快捷键设置显示 Chrome 实际绑定并引导用户安全修改', () => {
+  const source = read('js/settings-v5.js');
+  assert.match(source, /chrome\?\.commands\?\.getAll/);
+  assert.match(source, /open-site-workspace/);
+  assert.match(source, /add-current-tab-to-site-workspace/);
+  assert.match(source, /chrome:\/\/extensions\/shortcuts/);
+  assert.match(source, /Chrome 不允许扩展直接改写快捷键/);
+  assert.match(source, /bindCommandShortcuts\(\)/);
+});
+
 test('设置字段、导入文件和重置确认具备可读名称与安全退场', () => {
   const html = read('settings.html');
   const source = read('js/settings-v5.js');

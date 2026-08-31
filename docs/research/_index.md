@@ -1,9 +1,11 @@
 # 调研文档索引
 
-> 最后更新：2026-08-05
+> 最后更新：2026-08-22
 
 | 更新日期 | 文档 | 标题 |
 |----------|------|------|
+| 2026-08-22 | [research-player-recent-publish-switch-2026.md](research-player-recent-publish-switch-2026.md) | B 站与 YouTube 播放器最近发布切换调研（2026） |
+| 2026-08-16 | [research-youtube-integration-2026.md](research-youtube-integration-2026.md) | YouTube Chrome 扩展集成调研（2026） |
 | 2026-08-05 | [research-music-netease-enhanced-features.md](research-music-netease-enhanced-features.md) | 网易云音乐增强功能 API 调研报告 |
 | 2026-08-05 | [research-music-artist-album-api.md](research-music-artist-album-api.md) | 网易云音乐歌手/专辑 API 调研报告 |
 | 2026-05-24 | [research-agent-capability-building.md](research-agent-capability-building.md) | Agent 能力建设调研 v1.2（+Skills/MCP安装使用推荐指南+Phase 4进度更新） |

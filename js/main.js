@@ -26,6 +26,7 @@
 
 let backgroundImages = [];
 let _bgAutoSwitchTimer = null;
+let _activeBackground = null;
 
 chrome.runtime.sendMessage({ action: 'getBackgrounds' }, function(response) {
     if (response && response.backgrounds) {
@@ -44,6 +45,8 @@ function _getVideoElement() {
         el.muted = true;
         el.loop = true;
         el.playsInline = true;
+        el.preload = 'metadata';
+        el.disablePictureInPicture = true;
         document.body.prepend(el);
     }
     return el;
@@ -51,21 +54,42 @@ function _getVideoElement() {
 
 function _applyBackground(background) {
     if (!background) return;
+    _activeBackground = background;
     const video = _getVideoElement();
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    const saveData = navigator.connection?.saveData === true;
+    const useVideo = background.mediaType === 'video' && background.videoUrl && !reduceMotion && !saveData;
 
-    if (background.mediaType === 'video' && background.videoUrl) {
+    const applyStaticFallback = () => {
+        video.onerror = null;
+        video.pause();
+        video.removeAttribute('src');
+        video.load?.();
+        video.style.display = 'none';
+        document.body.dataset.backgroundMedia = 'image';
+        const staticUrl = background.url || background.thumbnailUrl || '';
+        if (staticUrl) document.body.style.backgroundImage = `url(${staticUrl})`;
+        document.body.style.backgroundSize = 'cover';
+        document.body.style.backgroundPosition = 'center';
+        window.bgEffectsManager?.setSuspended?.(false);
+    };
+
+    if (useVideo) {
         document.body.style.backgroundImage = 'none';
+        video.onerror = () => {
+            if (_activeBackground === background) applyStaticFallback();
+        };
         video.src = background.videoUrl;
         video.poster = background.url || '';
         video.style.display = 'block';
-        video.play().catch(() => {});
+        document.body.dataset.backgroundMedia = 'video';
+        window.bgEffectsManager?.setSuspended?.(true);
+        video.play().catch(() => {
+            if (_activeBackground === background) applyStaticFallback();
+        });
     } else {
-        video.pause();
-        video.removeAttribute('src');
-        video.style.display = 'none';
-        document.body.style.backgroundImage = `url(${background.url})`;
-        document.body.style.backgroundSize = 'cover';
-        document.body.style.backgroundPosition = 'center';
+        video.onerror = null;
+        applyStaticFallback();
     }
 
     if (window.adaptiveOverlay && background.url) {
@@ -117,6 +141,10 @@ document.addEventListener('visibilitychange', () => {
     const video = document.getElementById('background-video');
     if (!video) return;
     if (document.hidden) { video.pause(); } else if (video.src) { video.play().catch(() => {}); }
+});
+
+window.matchMedia?.('(prefers-reduced-motion: reduce)')?.addEventListener?.('change', () => {
+    if (_activeBackground) _applyBackground(_activeBackground);
 });
 
 // 注意：时间显示已由 clock.js 模块处理，此处不再重复更新
@@ -272,6 +300,25 @@ async function initApp() {
     } else {
         console.log('哔哩哔哩模块已禁用（性能设置）');
         document.getElementById('bili-dock-btn')?.classList.add('hidden');
+    }
+
+    // YouTube 官方集成：访客可粘贴链接播放；账号数据只走 OAuth/Data API
+    if (sm.getSetting('enableYouTube') !== false) {
+        try {
+            if (window.youtubeController && typeof window.youtubeController.init === 'function') {
+                await window.youtubeController.init();
+            }
+            const youtubeDockBtn = document.getElementById('youtube-dock-btn');
+            if (youtubeDockBtn) {
+                youtubeDockBtn.addEventListener('click', () => window.youtubeController?.toggle());
+            }
+            console.log('YouTube 工作台初始化完成');
+        } catch (error) {
+            console.error('YouTube 工作台初始化失败:', error);
+        }
+    } else {
+        console.log('YouTube 模块已禁用（用户设置）');
+        document.getElementById('youtube-dock-btn')?.classList.add('hidden');
     }
 
     // 初始化每日计划

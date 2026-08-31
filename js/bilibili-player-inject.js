@@ -708,12 +708,14 @@
 
     function postTitleInfo() {
         const info = getVideoTitleInfo();
-        const key = `${info.title}|${info.episode}|${info.partIndex}`;
-        if (key === _lastReportedTitle && key !== '||0') return;
+        const bvid = getBvidFromUrl();
+        const key = `${bvid}|${info.title}|${info.episode}|${info.partIndex}`;
+        if (key === _lastReportedTitle && key !== '|||0') return;
         _lastReportedTitle = key;
         try {
             window.parent.postMessage({
                 type: MSG_PREFIX + 'title-info',
+                bvid,
                 title: info.title,
                 episode: info.episode,
                 partIndex: info.partIndex,

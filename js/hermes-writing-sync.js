@@ -187,6 +187,10 @@
         return res.json();
     }
 
+    function isBridgeUnavailableError(error) {
+        return error instanceof TypeError || /failed to fetch|networkerror|load failed/i.test(error?.message || '');
+    }
+
     function genPostId() {
         return 'post_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
     }
@@ -545,7 +549,12 @@
                 deduped: (dedupeBefore.removed || 0) + (dedupeAfter.removed || 0),
             };
         } catch (err) {
-            console.warn('[HermesSync]', err.message);
+            if (isBridgeUnavailableError(err)) {
+                // cursor-bridge 是可选本地服务；未启动时保留本地文章并静默等待下次同步。
+                console.debug('[HermesSync] 本地 Bridge 未启动，已跳过自动同步');
+            } else {
+                console.warn('[HermesSync]', err.message);
+            }
             const blog = getBlogManager();
             if (showToast && blog?._showToast) {
                 blog._showToast(

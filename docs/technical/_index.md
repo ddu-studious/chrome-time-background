@@ -1,9 +1,10 @@
 # 技术文档索引
 
-> 最后更新：2026-05-26
+> 最后更新：2026-08-16
 
 | 更新日期 | 文档 | 标题 |
 |----------|------|------|
+| 2026-08-16 | [guide-youtube-oauth-setup.md](guide-youtube-oauth-setup.md) | YouTube OAuth 配置与验收指南 |
 | 2026-05-26 | [plan-writing-rag-and-agent-capability-v2.md](plan-writing-rag-and-agent-capability-v2.md) | 写作空间 RAG 联想与 Agent 能力建设 v2 |
 | 2026-05-26 | [plan-dock-agent-capability-v1.md](plan-dock-agent-capability-v1.md) | Dock 优化与 Agent 能力建设功能落地文档 |
 | 2026-05-25 | [plan-graphsphere-execution-v0.2.md](plan-graphsphere-execution-v0.2.md) | GraphSphere Demo Sprint 执行计划 v0.2 |

@@ -13,7 +13,7 @@ test('热榜六个设计页面映射真实控制器入口', () => {
     assert.match(source, new RegExp(`['\"]${page}['\"]`));
   }
   assert.match(source, /setBusinessPage\?\.\('ticker', page\)/);
-  assert.match(html, /js\/ticker\.js\?v=3/);
+  assert.match(html, /js\/ticker\.js\?v=4/);
 });
 
 test('热榜主工作台和浮动设置面板管理可见语义与键盘焦点', () => {

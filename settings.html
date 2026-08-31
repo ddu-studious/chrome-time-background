@@ -186,13 +186,14 @@
                     </div>
                     <div class="sp-field">
                         <div class="sp-field-info">
-                            <span class="sp-field-label">启用视频背景</span>
-                            <span class="sp-field-hint">允许从 Pexels/Pixabay/Coverr 获取视频作为动态背景（耗流量）</span>
+                            <span class="sp-field-label">背景类型</span>
+                            <span class="sp-field-hint">动态背景最高选择 1080p；省流量或减少动态效果时自动回退图片。视频需要启用并配置 Pexels、Pixabay 或 Coverr。</span>
                         </div>
-                        <label class="sp-toggle">
-                            <input type="checkbox" id="set-bgEnableVideo">
-                            <span class="sp-toggle-slider"></span>
-                        </label>
+                        <select class="sp-select" id="set-bgMediaMode">
+                            <option value="image">静态图片（省电）</option>
+                            <option value="mixed">图片与动态混合</option>
+                            <option value="video">优先动态背景</option>
+                        </select>
                     </div>
                     <div class="sp-field">
                         <div class="sp-field-info">
@@ -507,6 +508,16 @@
                     </div>
                     <div class="sp-field">
                         <div class="sp-field-info">
+                            <span class="sp-field-label">YouTube</span>
+                            <span class="sp-field-hint">官方 OAuth、Data API 与嵌入播放器；本地稍后看和学习清单不会写入 YouTube</span>
+                        </div>
+                        <label class="sp-toggle">
+                            <input type="checkbox" name="enableYouTube" id="set-enableYouTube">
+                            <span class="sp-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info">
                             <span class="sp-field-label">系统资源监控</span>
                             <span class="sp-field-hint">CPU/内存/磁盘占用监控，后台定期采集</span>
                         </div>
@@ -792,7 +803,7 @@
     <script src="js/app-registry.js"></script>
     <script src="js/product-pages-v5.js?v=1"></script>
     <script src="js/product-ui-v5.js?v=2"></script>
-    <script src="js/settings-page.js?v=2"></script>
+    <script src="js/settings-page.js?v=3"></script>
     <script src="js/settings-v5.js?v=5"></script>
 </body>
 </html>

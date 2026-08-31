@@ -1,7 +1,7 @@
 /**
  * Product UI v5 implementation contract.
  *
- * The generated design matrix contains 18 businesses and 112 pages.  Keeping
+ * The generated design matrix contains 19 businesses and 121 pages.  Keeping
  * the contract in executable code prevents a polished representative screen
  * from being mistaken for a complete business page group.
  */
@@ -13,6 +13,7 @@
     ['music', '网易云音乐', ['now-playing:正在播放', 'queue:播放队列', 'playlist-library:歌单库', 'playlist-detail:歌单详情', 'lyrics-immersive:沉浸歌词', 'search:音乐搜索', 'discover-fm:发现与私人FM', 'artist-album:歌手与专辑', 'connection-error:连接异常', 'more-sleep-timer:更多与睡眠定时']],
     ['knowledge', '常用信息', ['card-wall:卡片墙', 'search-filter:搜索筛选', 'detail-inspector:详情检查器', 'create-edit:新建与编辑', 'timeline:时间线', 'graph-dashboard:图谱与仪表盘']],
     ['bilibili', 'B站', ['recommend:推荐', 'player:播放器', 'course:课程', 'library:收藏库', 'history-ranking:历史与排行', 'search:搜索', 'login-error:登录异常']],
+    ['youtube', 'YouTube', ['connect:连接', 'recommended:为你推荐', 'trending:兴趣趋势', 'player:播放器', 'subscriptions:订阅', 'library:资料库', 'local-queue:本地清单', 'search:搜索', 'error:异常恢复']],
     ['schedule', '计划管理', ['day-view:日视图', 'week-view:周视图', 'create-edit:新建与编辑', 'routines:例行计划', 'conflict:冲突处理', 'completed-day:完成日']],
     ['worklog', '工作日志', ['daily-list:每日列表', 'active-timer:活动计时', 'manual-entry:手动记录', 'quadrant:四象限', 'weekly-report:周报', 'projects:项目']],
     ['writing', '写作空间', ['library:文稿库', 'editor:编辑器', 'preview:预览', 'ai-assistant:AI助手', 'knowledge-citation:知识引用', 'version-history:版本历史', 'sync-error:同步异常']],

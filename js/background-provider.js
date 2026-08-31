@@ -35,9 +35,13 @@
 
     const CACHE_PREFIX = 'bgProvider_';
 
-    async function getCache(providerName, ttlMs) {
+    function getCacheKey(providerName, variant = 'default') {
+        return `${CACHE_PREFIX}${providerName}_${variant}`;
+    }
+
+    async function getCache(providerName, ttlMs, variant = 'default') {
         try {
-            const key = CACHE_PREFIX + providerName;
+            const key = getCacheKey(providerName, variant);
             const { [key]: cache } = await chrome.storage.local.get(key);
             if (!cache?.ts || !Array.isArray(cache.items) || cache.items.length === 0) return null;
             if (Date.now() - cache.ts > ttlMs) return null;
@@ -45,9 +49,9 @@
         } catch { return null; }
     }
 
-    async function setCache(providerName, items) {
+    async function setCache(providerName, items, variant = 'default') {
         try {
-            const key = CACHE_PREFIX + providerName;
+            const key = getCacheKey(providerName, variant);
             await chrome.storage.local.set({ [key]: { ts: Date.now(), items } });
         } catch { /* ignore */ }
     }
@@ -57,6 +61,7 @@
     const DEFAULT_PROVIDER_SETTINGS = Object.freeze({
         enabledSources: ['wikimedia', 'bing'],
         apiKeys: { unsplash: '', pexels: '', pixabay: '', wallhaven: '', coverr: '', nasa: '' },
+        mediaMode: 'image',
         enableVideoBackground: false,
         settingsPageBackground: false,
     });
@@ -64,8 +69,13 @@
     async function getProviderSettings() {
         try {
             const { backgroundProviderSettings } = await chrome.storage.sync.get('backgroundProviderSettings');
-            const merged = { ...DEFAULT_PROVIDER_SETTINGS, ...(backgroundProviderSettings || {}) };
+            const stored = backgroundProviderSettings || {};
+            const merged = { ...DEFAULT_PROVIDER_SETTINGS, ...stored };
             merged.apiKeys = { ...DEFAULT_PROVIDER_SETTINGS.apiKeys, ...(merged.apiKeys || {}) };
+            merged.mediaMode = ['image', 'mixed', 'video'].includes(stored.mediaMode)
+                ? stored.mediaMode
+                : (stored.enableVideoBackground ? 'mixed' : 'image');
+            merged.enableVideoBackground = merged.mediaMode !== 'image';
             return merged;
         } catch {
             return { ...DEFAULT_PROVIDER_SETTINGS, apiKeys: { ...DEFAULT_PROVIDER_SETTINGS.apiKeys } };
@@ -228,7 +238,8 @@
 
     async function fetchPexels(apiKey, includeVideo) {
         if (!apiKey) return [];
-        const cached = await getCache('pexels', 6 * 3600_000);
+        const cacheVariant = includeVideo ? 'mixed' : 'image';
+        const cached = await getCache('pexels', 6 * 3600_000, cacheVariant);
         if (cached) return cached;
 
         const query = 'landscape nature scenery';
@@ -267,9 +278,11 @@
                 if (res.ok) {
                     const data = await res.json();
                     for (const video of (data.videos || [])) {
-                        const hd = (video.video_files || [])
-                            .filter(f => f.quality === 'hd' || f.quality === 'sd')
-                            .sort((a, b) => (b.width || 0) - (a.width || 0))[0];
+                        const files = (video.video_files || [])
+                            .filter(f => f.link && (f.quality === 'hd' || f.quality === 'sd'));
+                        const bounded = files.filter(f => (f.width || 0) <= 1920 && (f.height || 0) <= 1080);
+                        const hd = (bounded.length ? bounded : files)
+                            .sort((a, b) => ((b.width || 0) * (b.height || 0)) - ((a.width || 0) * (a.height || 0)))[0];
                         if (!hd?.link) continue;
                         items.push(makeItem({
                             url: video.image || '',
@@ -281,6 +294,7 @@
                             licenseUrl: video.url || '',
                             width: hd.width || 0,
                             height: hd.height || 0,
+                            mime: hd.file_type || 'video/mp4',
                             mediaType: 'video',
                         }));
                     }
@@ -289,7 +303,7 @@
         }
 
         const valid = items.filter(it => it.url || it.videoUrl);
-        if (valid.length) await setCache('pexels', valid);
+        if (valid.length) await setCache('pexels', valid, cacheVariant);
         return valid;
     }
 
@@ -297,7 +311,8 @@
 
     async function fetchPixabay(apiKey, includeVideo) {
         if (!apiKey) return [];
-        const cached = await getCache('pixabay', 24 * 3600_000);
+        const cacheVariant = includeVideo ? 'mixed' : 'image';
+        const cached = await getCache('pixabay', 24 * 3600_000, cacheVariant);
         if (cached) return cached;
 
         const query = 'landscape+nature+scenery';
@@ -333,7 +348,10 @@
                 if (res.ok) {
                     const data = await res.json();
                     for (const hit of (data.hits || [])) {
-                        const best = hit.videos?.large || hit.videos?.medium;
+                        const choices = Object.values(hit.videos || {}).filter(item => item?.url);
+                        const bounded = choices.filter(item => (item.width || 0) <= 1920 && (item.height || 0) <= 1080);
+                        const best = (bounded.length ? bounded : choices)
+                            .sort((a, b) => ((b.width || 0) * (b.height || 0)) - ((a.width || 0) * (a.height || 0)))[0];
                         if (!best?.url) continue;
                         items.push(makeItem({
                             url: `https://i.vimeocdn.com/video/${hit.picture_id}_640x360.jpg`,
@@ -345,6 +363,7 @@
                             licenseUrl: hit.pageURL || '',
                             width: best.width || 0,
                             height: best.height || 0,
+                            mime: 'video/mp4',
                             mediaType: 'video',
                         }));
                     }
@@ -353,7 +372,7 @@
         }
 
         const valid = items.filter(it => it.url || it.videoUrl);
-        if (valid.length) await setCache('pixabay', valid);
+        if (valid.length) await setCache('pixabay', valid, cacheVariant);
         return valid;
     }
 
@@ -505,6 +524,7 @@
                     source: 'coverr',
                     license: 'Coverr License',
                     licenseUrl: v.url || '',
+                    mime: 'video/mp4',
                     mediaType: 'video',
                 });
             }).filter(Boolean);
@@ -587,7 +607,8 @@
         const settings = await getProviderSettings();
         const enabled = (settings.enabledSources || []).filter(s => PROVIDER_META[s]);
         const keys = settings.apiKeys || {};
-        const includeVideo = !!settings.enableVideoBackground;
+        const mediaMode = settings.mediaMode || (settings.enableVideoBackground ? 'mixed' : 'image');
+        const includeVideo = mediaMode !== 'image';
 
         if (enabled.length === 0) {
             return { backgrounds: FALLBACK_BACKGROUNDS, source: 'fallback' };
@@ -641,16 +662,24 @@
             const meta = PROVIDER_META[name];
             if (!meta) continue;
             const ttl = name === 'pixabay' || name === 'nasa' || name === 'bing' ? 24 * 3600_000 : 12 * 3600_000;
-            const cached = await getCache(name, ttl);
+            const cacheVariant = (name === 'pexels' || name === 'pixabay')
+                ? (includeVideo ? 'mixed' : 'image')
+                : 'default';
+            const cached = await getCache(name, ttl, cacheVariant);
             if (cached?.length) mergedItems.push(...cached);
         }
 
         if (mergedItems.length > 0) {
             const deduped = [...new Map(mergedItems.map(it => [it.url || it.videoUrl, it])).values()];
-            return { backgrounds: deduped, source: 'multi' };
+            const selected = mediaMode === 'video'
+                ? deduped.filter(item => item.mediaType === 'video' && item.videoUrl)
+                : mediaMode === 'image'
+                    ? deduped.filter(item => item.mediaType !== 'video')
+                    : deduped;
+            if (selected.length > 0) return { backgrounds: selected, source: 'multi', mediaMode };
         }
 
-        return { backgrounds: FALLBACK_BACKGROUNDS, source: 'fallback' };
+        return { backgrounds: FALLBACK_BACKGROUNDS, source: 'fallback', mediaMode, videoFallback: mediaMode === 'video' };
     }
 
     // 导出到 Service Worker 全局作用域

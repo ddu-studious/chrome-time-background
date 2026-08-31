@@ -41,8 +41,23 @@ shasum -a 256 vendor/three/three.module.min.js
 | `vendor/purify.min.js` | 同上 |
 | `vendor/highlight.min.js` | 同上 |
 
+## flv.js
+
+| 字段 | 值 |
+|------|-----|
+| **包名** | `flv.js` |
+| **版本** | `1.6.2` |
+| **许可证** | Apache-2.0 |
+| **用途** | B 站直播官方活动播放器不可用时的 App 内 FLV 降级播放 |
+| **路径** | `vendor/flv.min.js` |
+| **许可证路径** | `vendor/flv.js.LICENSE` |
+| **npm integrity** | `sha512-xre4gUbX1MPtgQRKj2pxJENp/RnaHaxYvy3YToVVCrSmAWUu85b9mug6pTXF6zakUjNP2lFWZ1rkSX7gxhB/2A==` |
+| **SHA256** | `733b9b325dbc59871a652c0a84f2f285a2cfd06cf2efcedcd87cb1e194cd1e8f` |
+| **字节数** | 144165 |
+
 ---
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
 | v1 | 2026-05-20 | 初版：锁定 three@0.170.0 |
+| v2 | 2026-08-29 | 锁定 flv.js@1.6.2，用于直播 FLV 降级播放 |

@@ -192,6 +192,7 @@ class BookmarkRAG {
     async getBookmarksInFolders(folderIds) {
         if (!chrome.bookmarks) return [];
         const all = [];
+        const missingFolderIds = new Set();
 
         for (const folderId of folderIds) {
             try {
@@ -211,8 +212,26 @@ class BookmarkRAG {
                 };
                 subtree.forEach(collect);
             } catch (e) {
-                console.warn(`[BookmarkRAG] Failed to read folder ${folderId}:`, e);
+                const message = e?.message || String(e);
+                if (/can't find bookmark for id/i.test(message)) {
+                    missingFolderIds.add(String(folderId));
+                } else {
+                    console.warn(`[BookmarkRAG] Failed to read folder ${folderId}:`, e);
+                }
             }
+        }
+
+        // 用户删除了曾经选中的目录时，Chrome 会留下失效 ID。同步清理配置，后续新标签页不再重试。
+        if (missingFolderIds.size > 0 && Array.isArray(this.settings?.folderIds)) {
+            const currentNames = Array.isArray(this.settings.folderNames) ? this.settings.folderNames : [];
+            const folderNames = [];
+            const validFolderIds = this.settings.folderIds.filter((id, index) => {
+                const valid = !missingFolderIds.has(String(id));
+                if (valid) folderNames.push(currentNames[index] || '');
+                return valid;
+            });
+            await this.saveSettings({ folderIds: validFolderIds, folderNames });
+            console.debug('[BookmarkRAG] 已清理失效书签目录:', [...missingFolderIds]);
         }
 
         return all;

@@ -28,6 +28,7 @@ class SettingsManager {
             enableKeywordScan: false,      // 关键字扫描（默认关闭）
             enableWarmTip: true,           // 诗词电台（原温情提示）
             enableBilibili: true,          // 哔哩哔哩集成
+            enableYouTube: true,           // YouTube 官方 OAuth/API/播放器集成
             enableKnowledgeWall: true,     // 知识墙
             enableTaskTicker: true,        // 任务提醒滚动条
             systemMonitorInterval: 5,      // 系统监控采集间隔（分钟），默认5min比之前1min降80%

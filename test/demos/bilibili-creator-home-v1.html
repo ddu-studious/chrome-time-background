@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>B站 UP 主主页 v1</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../../css/style.css">
+  <link rel="stylesheet" href="../../css/product-ui-v5.css">
+  <style>
+    :root { color-scheme: dark; --v5-text:#f5f7fb; --v5-text-muted:#8792a4; --v5-border:rgba(255,255,255,.1); }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; min-height: 100vh; overflow: hidden; background: #05070c; }
+    .bili-panel { --bili-viewport-height: 100vh; }
+  </style>
+</head>
+<body>
+  <div class="bili-panel visible bili-creator-view" role="dialog" aria-label="B站 UP 主主页预览">
+    <div class="bili-topbar">
+      <div class="bili-logo"><strong>▣</strong><span>哔哩哔哩</span></div>
+      <div class="bili-search"><input placeholder="搜索视频、课程、UP主..."><button aria-label="搜索">⌕</button></div>
+      <div class="bili-nav-pills"><button class="bili-pill active">推荐</button><button class="bili-pill">课程</button><button class="bili-pill">收藏</button><button class="bili-pill">历史</button></div>
+      <button class="bili-close-btn" aria-label="关闭">×</button>
+    </div>
+    <nav class="bili-subnav"><span class="bili-subnav-label">发现</span><button class="bili-pill">热门<small>全站趋势</small></button><button class="bili-pill">排行榜<small>实时排行</small></button><i class="bili-subnav-divider"></i><span class="bili-subnav-label">我的</span><button class="bili-pill">稍后看<small>待看队列</small></button><button class="bili-pill">关注<small>UP 主工作台</small></button><span class="bili-subnav-note">8 项能力始终可见</span></nav>
+    <div class="bili-main">
+      <div class="bili-player-area">
+        <div class="bili-player-frame">
+          <div class="bili-creator-home">
+            <header class="bili-creator-heading"><span>BILIBILI · CREATOR WORKBENCH</span><h2>影视飓风的主页</h2></header>
+            <section class="bili-creator-hero">
+              <div class="bili-creator-backdrop" style="background-image:url('../../assets/bilibili/capability-recommend-v1.png')"></div>
+              <img class="bili-creator-avatar" src="../../assets/bilibili/capability-recommend-v1.png" alt="影视飓风的头像">
+              <div class="bili-creator-copy">
+                <span class="bili-creator-eyebrow">UP 主 · HOME</span>
+                <div class="bili-creator-name"><h3>影视飓风</h3><span class="bili-creator-badge">● 官方认证</span><span class="bili-creator-vip">♛ 大会员</span><span class="bili-creator-level">LV6</span></div>
+                <p>无限进步！这里集中展示 UP 主身份、最近投稿和 B 站内容指标，播放过程仍然留在当前 App 中。</p>
+                <div class="bili-creator-stats"><span><strong>12,460,000</strong> 粉丝</span><span><strong>486</strong> 投稿</span><span><strong>218</strong> 关注</span></div>
+              </div>
+              <div class="bili-creator-actions"><button>← 返回播放器</button><button class="primary">▶ 播放最新投稿</button><button>▣ 原站空间</button></div>
+            </section>
+            <section class="bili-creator-content">
+              <header><div><span>RECENT UPDATES</span><strong>最近投稿 · 12 个视频</strong><small>App 内浏览 · 点击卡片直接播放</small></div><div class="bili-creator-layout"><button data-layout="grid" aria-pressed="true">▦</button><button data-layout="list" aria-pressed="false">☷</button></div></header>
+              <div class="bili-creator-grid" id="creator-grid"></div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const assets = ['capability-recommend-v1.png','capability-course-v1.png','capability-library-v1.png','capability-history-v1.png'];
+    const titles = ['我们造了一台能拍电影的机器','一次关于影像与时间的实验','在极端天气里拍摄是什么体验','把工作室装进一辆车里'];
+    document.querySelector('#creator-grid').innerHTML = Array.from({ length: 12 }, (_, index) => `<article class="bili-creator-video"><div class="bili-creator-video-media"><img src="../../assets/bilibili/${assets[index % assets.length]}" alt=""><span class="bili-creator-play">▶</span><span class="bili-creator-duration">${8 + index}:2${index % 6}</span></div><div class="bili-creator-video-copy"><strong>${titles[index % titles.length]} · 第 ${index + 1} 期</strong><div><span>▶ ${(32 + index * 7)}万</span><span>◌ ${(1 + index)}千</span><span>${index + 1}天前</span></div></div><button class="bili-creator-video-play-button" aria-label="播放第 ${index + 1} 期"></button><button class="bili-creator-video-open" aria-label="在原站打开第 ${index + 1} 期">↗</button></article>`).join('');
+    document.querySelectorAll('[data-layout]').forEach(button => button.addEventListener('click', () => {
+      const list = button.dataset.layout === 'list';
+      document.querySelector('.bili-creator-home').classList.toggle('is-list', list);
+      document.querySelectorAll('[data-layout]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+    }));
+  </script>
+</body>
+</html>
