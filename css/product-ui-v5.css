@@ -118,17 +118,19 @@ body[data-shell-page="offline"] .v5-shell-toolbar { opacity: 0; pointer-events: 
 
 .v5-home-card {
   min-width: 0;
-  border: 1px solid var(--v5-border);
+  border: 1px solid rgba(255, 255, 255, .1);
   border-radius: var(--v5-radius-md);
-  background: linear-gradient(145deg, rgba(18, 27, 45, .84), rgba(8, 14, 25, .88));
-  box-shadow: 0 14px 46px rgba(0, 0, 0, .34), inset 0 1px rgba(255, 255, 255, .04);
-  backdrop-filter: var(--v5-glass);
+  background: linear-gradient(135deg, rgba(255, 255, 255, .0175), rgba(255, 255, 255, .006));
+  box-shadow: 0 3px 9px rgba(0, 0, 0, .05), inset 0 1px rgba(255, 255, 255, .04);
+  -webkit-backdrop-filter: blur(1px) saturate(110%);
+  backdrop-filter: blur(1px) saturate(110%);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .48);
 }
 
 .v5-focus-card { grid-row: span 2; padding: 16px; }
 .v5-agenda-card { padding: 14px 16px 12px; }
 .v5-home-player { display: grid; grid-template-columns: 46px 1fr 32px; align-items: center; gap: 11px; padding: 10px 12px; cursor: pointer; }
-.v5-home-player:hover { border-color: var(--v5-border-strong); background: linear-gradient(145deg, rgba(27, 36, 58, .92), rgba(12, 18, 31, .92)); }
+.v5-home-player:hover { border-color: rgba(255, 255, 255, .16); background: linear-gradient(135deg, rgba(255, 255, 255, .0325), rgba(255, 255, 255, .0125)); }
 
 .v5-card-kicker {
   display: flex;
@@ -387,7 +389,7 @@ body[data-shell-page="offline"] .v5-shell-toolbar { opacity: 0; pointer-events: 
 .v5-sound-options button.active { border-color: var(--v5-border-strong); color: var(--v5-accent-bright); background: rgba(139, 108, 255, .13); }
 .v5-focus-footer { display: flex; min-height: 54px; align-items: center; justify-content: center; gap: 24px; color: var(--v5-text-muted); font-size: 9px; }
 .v5-focus-footer kbd { padding: 2px 6px; border: 1px solid var(--v5-border); border-radius: 5px; background: rgba(255, 255, 255, .05); }
-body.v5-focus-open > :not(#v5-focus-workspace):not(#background-video):not(#bg-effects-canvas) { pointer-events: none !important; }
+body.v5-focus-open > :not(#v5-focus-workspace):not(#background-video) { pointer-events: none !important; }
 
 /* ---------- 网易云 v5 工作台 ---------- */
 .music-island.music-workbench-v5 {
@@ -1727,6 +1729,25 @@ body.v5-focus-open > :not(#v5-focus-workspace):not(#background-video):not(#bg-ef
 }
 .v5-home-expand span { font-size: 9px; }
 .v5-home-expand:focus-visible { outline: 2px solid var(--v5-accent-bright); outline-offset: 3px; }
+
+/* 首页浮岛操作统一使用轻量毛玻璃，避免实色按钮压住背景。 */
+.v5-focus-card .v5-primary-btn,
+.v5-home-player-action,
+.v5-home-expand {
+  border: 1px solid rgba(255, 255, 255, .2);
+  color: rgba(255, 255, 255, .94);
+  background: linear-gradient(145deg, rgba(255, 255, 255, .17), rgba(139, 108, 255, .14));
+  box-shadow: inset 0 1px rgba(255, 255, 255, .16), 0 8px 24px rgba(0, 0, 0, .18);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(18px) saturate(150%);
+}
+.v5-focus-card .v5-primary-btn:hover,
+.v5-home-player:hover .v5-home-player-action,
+.v5-home-expand:hover {
+  border-color: rgba(197, 184, 255, .42);
+  background: linear-gradient(145deg, rgba(255, 255, 255, .23), rgba(139, 108, 255, .2));
+  box-shadow: inset 0 1px rgba(255, 255, 255, .2), 0 10px 28px rgba(0, 0, 0, .22);
+}
 
 body[data-v5-home-layout="island"] .v5-shell-home:not(.is-expanded) {
   bottom: 94px;

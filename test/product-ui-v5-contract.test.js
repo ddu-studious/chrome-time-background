@@ -13,7 +13,21 @@ test('v5 状态层先于产品外壳和音乐工作台加载', () => {
   assert.ok(stateIndex >= 0);
   assert.ok(stateIndex < html.indexOf('js/music-view.js?v=6'));
   assert.ok(stateIndex < html.indexOf('js/product-shell-v5.js'));
-  assert.ok(html.includes('css/product-ui-v5.css?v=36'));
+  assert.ok(html.includes('css/product-ui-v5.css?v=40'));
+});
+
+test('首页浮岛按钮统一为毛玻璃材质', () => {
+  const style = read('css/product-ui-v5.css');
+
+  assert.match(style, /\.v5-focus-card \.v5-primary-btn,[\s\S]*?\.v5-home-player-action,[\s\S]*?\.v5-home-expand \{[\s\S]*?backdrop-filter: blur\(18px\) saturate\(150%\)/);
+  assert.match(style, /background: linear-gradient\(145deg, rgba\(255, 255, 255, \.17\), rgba\(139, 108, 255, \.14\)\)/);
+});
+
+test('首页三张信息卡遮罩和模糊再次减半以显露背景细节', () => {
+  const style = read('css/product-ui-v5.css');
+
+  assert.match(style, /\.v5-home-card \{[\s\S]*?background: linear-gradient\(135deg, rgba\(255, 255, 255, \.0175\), rgba\(255, 255, 255, \.006\)\)[\s\S]*?backdrop-filter: blur\(6px\) saturate\(110%\)[\s\S]*?text-shadow:/);
+  assert.match(style, /\.v5-home-player:hover \{[^}]*background: linear-gradient\(135deg, rgba\(255, 255, 255, \.0325\), rgba\(255, 255, 255, \.0125\)\)/);
 });
 
 test('共享视图状态严格限定 5 个外壳页面与 10 个音乐页面', () => {

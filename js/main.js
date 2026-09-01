@@ -71,7 +71,6 @@ function _applyBackground(background) {
         if (staticUrl) document.body.style.backgroundImage = `url(${staticUrl})`;
         document.body.style.backgroundSize = 'cover';
         document.body.style.backgroundPosition = 'center';
-        window.bgEffectsManager?.setSuspended?.(false);
     };
 
     if (useVideo) {
@@ -83,7 +82,6 @@ function _applyBackground(background) {
         video.poster = background.url || '';
         video.style.display = 'block';
         document.body.dataset.backgroundMedia = 'video';
-        window.bgEffectsManager?.setSuspended?.(true);
         video.play().catch(() => {
             if (_activeBackground === background) applyStaticFallback();
         });
@@ -457,20 +455,6 @@ async function initApp() {
     } else {
         console.log('温情提示已禁用（性能设置）');
         document.getElementById('poetry-dock-btn')?.classList.add('hidden');
-    }
-
-    // 初始化背景交互特效
-    if (sm.getSetting('enableBgEffects') !== false) {
-        try {
-            if (window.bgEffectsManager && typeof window.bgEffectsManager.init === 'function') {
-                await window.bgEffectsManager.init();
-            }
-            console.log('背景特效初始化完成');
-        } catch (error) {
-            console.error('背景特效初始化失败:', error);
-        }
-    } else {
-        console.log('背景特效已禁用（性能设置）');
     }
 
     // 极简模式初始化

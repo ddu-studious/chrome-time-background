@@ -35,14 +35,20 @@ test('视频 Provider 隔离图片缓存并限制候选分辨率', () => {
 test('视频背景在省流量、减少动态效果和播放失败时回退静态图片', () => {
   const html = read('index.html');
   const main = read('js/main.js');
-  const effects = read('js/bg-effects.js');
 
   assert.ok(html.includes('preload="metadata"'));
   assert.ok(main.includes("matchMedia?.('(prefers-reduced-motion: reduce)')"));
   assert.ok(main.includes('navigator.connection?.saveData === true'));
   assert.ok(main.includes('const applyStaticFallback'));
   assert.ok(main.includes('video.onerror = () =>'));
-  assert.ok(main.includes('setSuspended?.(true)'));
-  assert.ok(effects.includes('function setSuspended(suspended)'));
-  assert.ok(effects.includes('if (_suspended) return;'));
+});
+
+test('首页不再加载粒子和星座背景点缀', () => {
+  const html = read('index.html');
+  const main = read('js/main.js');
+
+  assert.ok(!html.includes('bg-effects-canvas'));
+  assert.ok(!html.includes('css/bg-effects.css'));
+  assert.ok(!html.includes('js/bg-effects.js'));
+  assert.ok(!main.includes('bgEffectsManager'));
 });

@@ -119,5 +119,5 @@ test('连接异常在 v5 工作台中是可见、聚焦且会隔离背景的状�
   assert.match(controllerSource, /guide\.dataset\.guideReason = reason/);
   assert.match(controllerSource, /automatic && \['no-cookie', 'api-error'\]\.includes\(guide\.dataset\.guideReason\)/);
   assert.match(controllerSource, /if \(this\.state\.title\) this\._hideMetaGuide\(true\)/);
-  assert.ok(indexSource.includes('css/product-ui-v5.css?v=36'));
+  assert.ok(indexSource.includes('css/product-ui-v5.css?v=40'));
 });
