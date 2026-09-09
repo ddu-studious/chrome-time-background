@@ -96,7 +96,7 @@
     }
   },
   "action": {
-    "default_title": "中国风景时钟（左键主页，右键打开网站工作区）",
+    "default_title": "中国风景时钟（左键主页，右键快捷播放与工作区）",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",

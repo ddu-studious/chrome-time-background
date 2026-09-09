@@ -9,7 +9,9 @@
         body { position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; overflow: hidden; margin: 0; padding: 0; background-size: cover; background-position: center; background-repeat: no-repeat; }
     </style>
     <link rel="stylesheet" href="css/style.css?v=14">
+    <link rel="stylesheet" href="css/background-experience.css?v=1">
     <link rel="stylesheet" href="css/schedule.css">
+    <link rel="stylesheet" href="css/alarm-center.css?v=1">
     <link rel="stylesheet" href="css/weekview.css">
     <link rel="stylesheet" href="css/blog.css?v=3">
     <link rel="stylesheet" href="css/snake-game.css">
@@ -23,6 +25,23 @@
 <body>
     <!-- 视频背景层（v3.16.0 多源背景支持） -->
     <video id="background-video" autoplay muted loop playsinline preload="metadata" disablepictureinpicture></video>
+    <!-- 背景体验层：v2 视觉皮肤 + v3 手势物理世界 -->
+    <div id="background-experience-root" class="bgx-root" aria-hidden="true">
+        <div id="background-experience-tone" class="bgx-tone"></div>
+        <div id="background-experience-detail" class="bgx-detail"></div>
+        <div id="background-experience-time" class="bgx-time"></div>
+        <canvas id="background-experience-canvas"></canvas>
+        <div class="bgx-grain"></div>
+    </div>
+    <button id="background-experience-toggle" class="bgx-toggle" type="button" aria-pressed="false" title="唤醒背景玩法" hidden>
+        <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i>
+        <span class="sr-only">唤醒背景玩法</span>
+    </button>
+    <div id="background-experience-hud" class="bgx-hud" aria-hidden="true">
+        <div><span>WORLD ENERGY</span><b id="background-experience-energy">00</b></div>
+        <i><span id="background-experience-energy-fill"></span></i>
+        <p id="background-experience-status" role="status" aria-live="polite">点击、拖动、长按、甩动或双击</p>
+    </div>
     <!-- 主布局容器（单栏） -->
     <div class="main-layout">
         <main class="main-content">
@@ -276,6 +295,10 @@
             <i class="fas fa-calendar-check"></i>
         </button>
         <div class="dock-divider" aria-hidden="true"></div>
+        <button class="dock-btn" id="alarm-dock-btn" title="闹钟">
+            <i class="fas fa-bell"></i>
+        </button>
+        <div class="dock-divider" aria-hidden="true"></div>
         <button class="dock-btn" id="worklog-dock-btn" title="工作日志">
             <i class="fas fa-clipboard-list"></i>
         </button>
@@ -391,7 +414,7 @@
     <script src="vendor/fuse.browser.min.js"></script>
     <link rel="stylesheet" href="vendor/highlight-theme.css">
     <script src="js/markdown-renderer.js"></script>
-    <script src="js/chrome-shim.js?v=4"></script>
+    <script src="js/chrome-shim.js?v=5"></script>
     <script src="js/settings.js"></script>
     <script src="js/i18n.js"></script>
     <script src="js/lunar-lib.js"></script>
@@ -413,7 +436,7 @@
     <script src="js/music-controller.js?v=12"></script>
     <script src="vendor/flv.min.js"></script>
     <script src="js/bilibili-controller.js?v=29"></script>
-    <script src="js/youtube-controller.js?v=11"></script>
+    <script src="js/youtube-controller.js?v=12"></script>
     <script src="js/worklog.js?v=7"></script>
     <script src="js/today-overview.js?v=6"></script>
     <script src="js/product-shell-v5.js?v=9"></script>
@@ -421,12 +444,14 @@
     <script src="js/blog.js?v=10"></script>
     <script src="js/writing-assistant.js?v=7"></script>
     <script src="js/schedule.js?v=7"></script>
+    <script src="js/alarm-core.js?v=1"></script>
+    <script src="js/alarm-center.js?v=1"></script>
     <script src="js/weekview.js"></script>
     <link rel="stylesheet" href="css/cursor-bridge.css?v=3">
     <link rel="stylesheet" href="css/chatbot.css?v=4">
     <link rel="stylesheet" href="css/whitebox-observability.css">
     <link rel="stylesheet" href="css/product-ui-v4.css?v=6">
-    <link rel="stylesheet" href="css/product-ui-v5.css?v=40">
+    <link rel="stylesheet" href="css/product-ui-v5.css?v=43">
     <script src="js/cursor-bridge.js?v=4"></script>
     <script src="js/chatbot.js?v=6"></script>
     <script src="js/prompt-manager.js?v=7"></script>
@@ -446,6 +471,7 @@
     <script src="js/site-workspace-launcher.js?v=1"></script>
     <script src="js/games-v5.js?v=2"></script>
     <script src="js/quick-nav.js?v=13"></script>
-    <script src="js/main.js?v=10"></script>
+    <script src="js/background-experience.js?v=3"></script>
+    <script src="js/main.js?v=11"></script>
   </body>
 </html>

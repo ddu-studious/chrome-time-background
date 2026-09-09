@@ -31,6 +31,60 @@
         };
     }
 
+    // 用户背景内容偏好：不展示日本相关景观。只检查图片自身的地点、描述和
+    // 资源 URL，不根据摄影师姓名判断，避免误伤日本摄影师拍摄的其他地区。
+    const EXCLUDED_JAPAN_TERMS = Object.freeze([
+        '日本', 'japan', 'japanese',
+        '东京', '東京', 'tokyo',
+        '京都', 'kyoto',
+        '大阪', 'osaka',
+        '北海道', 'hokkaido',
+        '冲绳', '沖縄', 'okinawa',
+        '富士山', 'mount fuji', 'mt fuji', 'mt. fuji', 'fujiyama',
+        '奈良', 'nara',
+        '名古屋', 'nagoya',
+        '横滨', '横浜', 'yokohama',
+        '札幌', 'sapporo',
+        '神户', '神戸', 'kobe',
+        '广岛', '広島', 'hiroshima',
+        '福冈', '福岡', 'fukuoka',
+        '涩谷', '渋谷', 'shibuya',
+        '新宿', 'shinjuku',
+        '镰仓', '鎌倉', 'kamakura',
+        '日光市', 'nikko',
+        '本州', 'honshu',
+        '九州', 'kyushu',
+        '四国', 'shikoku',
+    ]);
+
+    function normalizeSearchText(value) {
+        let text = String(value || '');
+        try { text = decodeURIComponent(text); } catch { /* 保留原始文本 */ }
+        return text
+            .normalize('NFKC')
+            .toLocaleLowerCase('en-US')
+            .replace(/[._%+\-]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    function isBackgroundAllowed(item) {
+        if (!item || typeof item !== 'object') return false;
+        const searchable = normalizeSearchText([
+            item.location,
+            item.description,
+            item.url,
+            item.thumbnailUrl,
+            item.videoUrl,
+            item.licenseUrl,
+        ].join(' '));
+        return !EXCLUDED_JAPAN_TERMS.some(term => searchable.includes(normalizeSearchText(term)));
+    }
+
+    function filterAllowedBackgrounds(items) {
+        return (Array.isArray(items) ? items : []).filter(isBackgroundAllowed);
+    }
+
     // ======================== 缓存层 ========================
 
     const CACHE_PREFIX = 'bgProvider_';
@@ -97,7 +151,6 @@
         { title: 'Category:Featured_pictures_of_Iceland', label: 'Iceland' },
         { title: 'Category:Featured_pictures_of_Switzerland', label: 'Switzerland' },
         { title: 'Category:Featured_pictures_of_New_Zealand', label: 'New Zealand' },
-        { title: 'Category:Featured_pictures_of_Japan', label: 'Japan' },
         { title: 'Category:National_parks', label: 'National Parks' },
     ]);
 
@@ -671,11 +724,14 @@
 
         if (mergedItems.length > 0) {
             const deduped = [...new Map(mergedItems.map(it => [it.url || it.videoUrl, it])).values()];
+            // Provider 缓存可能早于过滤规则生成，因此必须在合并后统一过滤，
+            // 不能只依赖请求分类或搜索关键词。
+            const allowed = filterAllowedBackgrounds(deduped);
             const selected = mediaMode === 'video'
-                ? deduped.filter(item => item.mediaType === 'video' && item.videoUrl)
+                ? allowed.filter(item => item.mediaType === 'video' && item.videoUrl)
                 : mediaMode === 'image'
-                    ? deduped.filter(item => item.mediaType !== 'video')
-                    : deduped;
+                    ? allowed.filter(item => item.mediaType !== 'video')
+                    : allowed;
             if (selected.length > 0) return { backgrounds: selected, source: 'multi', mediaMode };
         }
 
@@ -689,5 +745,6 @@
         PROVIDER_META,
         FALLBACK_BACKGROUNDS,
         DEFAULT_PROVIDER_SETTINGS,
+        isBackgroundAllowed,
     };
 })();

@@ -144,6 +144,90 @@
 
     let bgProviderSettings = { ...BG_PROVIDER_DEFAULTS, apiKeys: { ...BG_PROVIDER_DEFAULTS.apiKeys } };
 
+    const BG_EXPERIENCE_DEFAULTS = {
+        enabled: true,
+        visualEffect: 'depth',
+        intensity: 65,
+        playgroundEnabled: true,
+        soundEnabled: false,
+        autoCalmSeconds: 12,
+    };
+    const BG_VISUAL_EFFECTS = new Set(['none', 'depth', 'weather', 'memory', 'liquid', 'time']);
+    let bgExperienceSettings = { ...BG_EXPERIENCE_DEFAULTS };
+
+    function normalizeBgExperienceSettings(value) {
+        const stored = value && typeof value === 'object' ? value : {};
+        return {
+            enabled: stored.enabled !== false,
+            visualEffect: BG_VISUAL_EFFECTS.has(stored.visualEffect) ? stored.visualEffect : BG_EXPERIENCE_DEFAULTS.visualEffect,
+            intensity: Math.max(10, Math.min(100, Number(stored.intensity) || BG_EXPERIENCE_DEFAULTS.intensity)),
+            playgroundEnabled: stored.playgroundEnabled !== false,
+            soundEnabled: stored.soundEnabled === true,
+            autoCalmSeconds: [0, 8, 12, 20].includes(Number(stored.autoCalmSeconds))
+                ? Number(stored.autoCalmSeconds)
+                : BG_EXPERIENCE_DEFAULTS.autoCalmSeconds,
+        };
+    }
+
+    async function loadBgExperienceSettings() {
+        try {
+            const result = await chrome.storage.sync.get('backgroundExperienceSettings');
+            bgExperienceSettings = normalizeBgExperienceSettings(result.backgroundExperienceSettings);
+        } catch {
+            bgExperienceSettings = { ...BG_EXPERIENCE_DEFAULTS };
+        }
+        applyBgExperienceUI();
+    }
+
+    async function saveBgExperienceSettings() {
+        try {
+            await chrome.storage.sync.set({ backgroundExperienceSettings: bgExperienceSettings });
+        } catch (error) {
+            console.error('保存背景体验设置失败:', error);
+        }
+    }
+
+    function applyBgExperienceUI() {
+        const enabled = document.getElementById('set-bgExperienceEnabled');
+        const visual = document.getElementById('set-bgVisualEffect');
+        const intensity = document.getElementById('set-bgEffectIntensity');
+        const intensityOutput = document.getElementById('set-bgEffectIntensityOutput');
+        const playground = document.getElementById('set-bgPlaygroundEnabled');
+        const sound = document.getElementById('set-bgExperienceSound');
+        const autoCalm = document.getElementById('set-bgAutoCalmSeconds');
+        if (enabled) enabled.checked = bgExperienceSettings.enabled;
+        if (visual) visual.value = bgExperienceSettings.visualEffect;
+        if (intensity) intensity.value = String(bgExperienceSettings.intensity);
+        if (intensityOutput) intensityOutput.value = `${bgExperienceSettings.intensity}%`;
+        if (playground) playground.checked = bgExperienceSettings.playgroundEnabled;
+        if (sound) sound.checked = bgExperienceSettings.soundEnabled;
+        if (autoCalm) autoCalm.value = String(bgExperienceSettings.autoCalmSeconds);
+    }
+
+    function bindBgExperienceEvents() {
+        const bindings = [
+            ['set-bgExperienceEnabled', 'enabled', element => element.checked],
+            ['set-bgVisualEffect', 'visualEffect', element => element.value],
+            ['set-bgPlaygroundEnabled', 'playgroundEnabled', element => element.checked],
+            ['set-bgExperienceSound', 'soundEnabled', element => element.checked],
+            ['set-bgAutoCalmSeconds', 'autoCalmSeconds', element => Number(element.value)],
+        ];
+        for (const [id, key, read] of bindings) {
+            const element = document.getElementById(id);
+            element?.addEventListener('change', () => {
+                bgExperienceSettings[key] = read(element);
+                saveBgExperienceSettings();
+            });
+        }
+        const intensity = document.getElementById('set-bgEffectIntensity');
+        const output = document.getElementById('set-bgEffectIntensityOutput');
+        intensity?.addEventListener('input', () => {
+            bgExperienceSettings.intensity = Math.max(10, Math.min(100, Number(intensity.value) || 65));
+            if (output) output.value = `${bgExperienceSettings.intensity}%`;
+        });
+        intensity?.addEventListener('change', saveBgExperienceSettings);
+    }
+
     async function loadBgProviderSettings() {
         try {
             const { backgroundProviderSettings } = await chrome.storage.sync.get('backgroundProviderSettings');
@@ -280,5 +364,6 @@
         bindEvents();
         bindGuideEvents();
         loadBgProviderSettings().then(bindBgProviderEvents);
+        loadBgExperienceSettings().then(bindBgExperienceEvents);
     });
 })();

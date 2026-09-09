@@ -1,0 +1,5 @@
+.garden-photo {
+  background-image:
+    linear-gradient(135deg, rgba(2, 7, 15, .28), rgba(1, 7, 14, .55)),
+    url('https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1920&q=90');
+}

@@ -1,10 +1,18 @@
-importScripts('background-provider.js', 'hermes-writing-sync.js', 'site-workspace-core.js');
+importScripts('alarm-core.js', 'background-provider.js', 'hermes-writing-sync.js', 'site-workspace-core.js');
 
 (function() {
     const SITE_WORKSPACE_MENU_ID = 'site-workspace-add-current-tab';
     const SITE_WORKSPACE_OPEN_MENU_ID = 'site-workspace-open-panel';
     const SITE_WORKSPACE_COMMAND = 'add-current-tab-to-site-workspace';
     const SITE_WORKSPACE_OPEN_COMMAND = 'open-site-workspace';
+    const MUSIC_MENU_ID = 'music-quick-play';
+    const MUSIC_PERSONAL_FM_MENU_ID = 'music-play-personal-fm';
+    const MUSIC_DAILY_RECOMMEND_MENU_ID = 'music-play-daily-recommend';
+    const MUSIC_OPEN_MENU_ID = 'music-open-workbench';
+    const EXTENSION_MENU_ID = 'extension-navigation';
+    const EXTENSION_HOME_MENU_ID = 'extension-open-home';
+    const EXTENSION_SETTINGS_MENU_ID = 'settings';
+    const SITE_WORKSPACE_GROUP_MENU_ID = 'site-workspace-actions';
     const openSiteWorkspaceWindows = new Set();
     const siteWorkspacePanelPorts = new Map();
     const siteWorkspaceService = self.SiteWorkspaceCore
@@ -18,15 +26,84 @@ importScripts('background-provider.js', 'hermes-writing-sync.js', 'site-workspac
     }
 
     function ensureExtensionContextMenus() {
-        ensureContextMenu('settings', { title: '设置', contexts: ['all'] });
+        // 图标右键菜单只保留高频动作；Chrome 自带的“移除/管理扩展”等项目由浏览器控制，扩展无法隐藏。
+        ensureContextMenu(MUSIC_MENU_ID, {
+            title: '网易云音乐',
+            contexts: ['action'],
+        });
+        ensureContextMenu(MUSIC_PERSONAL_FM_MENU_ID, {
+            parentId: MUSIC_MENU_ID,
+            title: '播放私人 FM',
+            contexts: ['action'],
+        });
+        ensureContextMenu(MUSIC_DAILY_RECOMMEND_MENU_ID, {
+            parentId: MUSIC_MENU_ID,
+            title: '播放每日推荐',
+            contexts: ['action'],
+        });
+        ensureContextMenu(MUSIC_OPEN_MENU_ID, {
+            parentId: MUSIC_MENU_ID,
+            title: '打开音乐工作台',
+            contexts: ['action'],
+        });
+        ensureContextMenu(SITE_WORKSPACE_GROUP_MENU_ID, {
+            title: '网站工作区',
+            contexts: ['page', 'action'],
+        });
         ensureContextMenu(SITE_WORKSPACE_OPEN_MENU_ID, {
+            parentId: SITE_WORKSPACE_GROUP_MENU_ID,
             title: '打开网站工作区',
             contexts: ['page', 'action'],
         });
         ensureContextMenu(SITE_WORKSPACE_MENU_ID, {
+            parentId: SITE_WORKSPACE_GROUP_MENU_ID,
             title: '加入网站工作区',
             contexts: ['page'],
             documentUrlPatterns: ['http://*/*', 'https://*/*'],
+        });
+        ensureContextMenu('extension-navigation-separator', {
+            contexts: ['action'],
+            type: 'separator',
+        });
+        ensureContextMenu(EXTENSION_MENU_ID, {
+            title: '主页与设置',
+            contexts: ['action'],
+        });
+        ensureContextMenu(EXTENSION_HOME_MENU_ID, {
+            parentId: EXTENSION_MENU_ID,
+            title: '打开主页',
+            contexts: ['action'],
+        });
+        ensureContextMenu(EXTENSION_SETTINGS_MENU_ID, {
+            parentId: EXTENSION_MENU_ID,
+            title: '设置',
+            contexts: ['action'],
+        });
+    }
+
+    async function resetExtensionContextMenus() {
+        // 右键菜单在扩展升级时可能保留旧的层级和 contexts；先清空才能让已有菜单项迁移到新分组。
+        try {
+            await chrome.contextMenus.removeAll();
+        } catch {
+            // 初次安装和部分预览环境可能没有可清理的菜单。
+        }
+        ensureExtensionContextMenus();
+    }
+
+    async function openMusicWorkbench(tab) {
+        const indexUrl = chrome.runtime.getURL('index.html');
+        const currentWindowTabs = await chrome.tabs.query({ currentWindow: true });
+        const homeTab = currentWindowTabs.find(candidate => candidate.url?.startsWith(indexUrl));
+
+        if (homeTab?.id != null) {
+            await chrome.tabs.update(homeTab.id, { active: true, url: indexUrl });
+            return;
+        }
+        await chrome.tabs.create({
+            ...(tab?.windowId != null ? { windowId: tab.windowId } : {}),
+            active: true,
+            url: indexUrl,
         });
     }
 
@@ -63,8 +140,6 @@ importScripts('background-provider.js', 'hermes-writing-sync.js', 'site-workspac
         ]);
         return true;
     }
-
-    ensureExtensionContextMenus();
 
     // v3.16.0: 背景图片数据已迁移至 background-provider.js（多源 Provider 模块）
     const backgrounds = [
@@ -166,7 +241,6 @@ importScripts('background-provider.js', 'hermes-writing-sync.js', 'site-workspac
         { title: 'Category:Featured_pictures_of_Iceland', label: 'Iceland' },
         { title: 'Category:Featured_pictures_of_Switzerland', label: 'Switzerland' },
         { title: 'Category:Featured_pictures_of_New_Zealand', label: 'New Zealand' },
-        { title: 'Category:Featured_pictures_of_Japan', label: 'Japan' },
         { title: 'Category:National_parks', label: 'National Parks' },
     ]);
 
@@ -420,12 +494,17 @@ importScripts('background-provider.js', 'hermes-writing-sync.js', 'site-workspac
     let _offscreenCreating = null;
 
     async function ensureOffscreen() {
-        if (await chrome.offscreen.hasDocument?.()) return;
+        const offscreenUrl = chrome.runtime.getURL('offscreen.html');
+        const contexts = await chrome.runtime.getContexts({
+            contextTypes: ['OFFSCREEN_DOCUMENT'],
+            documentUrls: [offscreenUrl]
+        });
+        if (contexts.length > 0) return;
         if (_offscreenCreating) { await _offscreenCreating; return; }
         _offscreenCreating = chrome.offscreen.createDocument({
             url: 'offscreen.html',
             reasons: ['AUDIO_PLAYBACK'],
-            justification: 'Playing music via NetEase Cloud Music API with cookie auth'
+            justification: 'Playing user-requested music and local alarm sounds in the background'
         });
         try { await _offscreenCreating; } finally { _offscreenCreating = null; }
     }
@@ -437,6 +516,570 @@ importScripts('background-provider.js', 'hermes-writing-sync.js', 'site-workspac
                 resolve(resp || { ok: false });
             });
         });
+    }
+
+    // ==================== 用户闹钟（本机、声音 + 通知 + 视觉动作）====================
+
+    const USER_ALARM_NOTIFICATION_PREFIX = 'user-alarm:';
+    const USER_ALARM_MISSED_PREFIX = 'user-alarm-missed:';
+    const USER_ALARM_HISTORY_LIMIT = 120;
+
+    async function loadUserAlarmState() {
+        const data = await chrome.storage.local.get([AlarmCore.STORAGE_KEY, AlarmCore.RUNTIME_KEY]);
+        return {
+            alarms: (Array.isArray(data[AlarmCore.STORAGE_KEY]) ? data[AlarmCore.STORAGE_KEY] : [])
+                .map(item => AlarmCore.normalizeAlarm(item)),
+            runtime: {
+                handled: {},
+                pendingSnoozes: [],
+                recent: [],
+                activeSession: null,
+                dispatch: null,
+                ...(data[AlarmCore.RUNTIME_KEY] || {})
+            }
+        };
+    }
+
+    function trimUserAlarmRuntime(runtime) {
+        const handledEntries = Object.entries(runtime.handled || {})
+            .sort((a, b) => Number(b[1]?.updatedAt || 0) - Number(a[1]?.updatedAt || 0))
+            .slice(0, USER_ALARM_HISTORY_LIMIT);
+        runtime.handled = Object.fromEntries(handledEntries);
+        runtime.recent = (Array.isArray(runtime.recent) ? runtime.recent : [])
+            .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))
+            .slice(0, 40);
+        return runtime;
+    }
+
+    async function saveUserAlarmState(alarms, runtime) {
+        await chrome.storage.local.set({
+            [AlarmCore.STORAGE_KEY]: alarms,
+            [AlarmCore.RUNTIME_KEY]: trimUserAlarmRuntime(runtime)
+        });
+    }
+
+    async function setUserAlarmBadge(active) {
+        await chrome.action.setBadgeBackgroundColor({ color: active ? '#ef4444' : '#64748b' });
+        await chrome.action.setBadgeText({ text: active ? '!' : '' });
+        await chrome.action.setTitle({
+            title: active ? '闹钟正在响铃，点击打开' : '中国风景时钟（左键主页，右键快捷播放与工作区）'
+        });
+    }
+
+    async function broadcastUserAlarmState(session = null) {
+        try {
+            await chrome.runtime.sendMessage({ action: 'user_alarm_state_changed', session });
+        } catch (_) {
+            // 没有已打开的扩展页面时，系统通知和声音仍继续工作。
+        }
+    }
+
+    function sessionSummary(session) {
+        const labels = session.occurrences.map(item => item.label).filter(Boolean);
+        if (labels.length <= 1) return labels[0] || '时间到了';
+        return `${labels[0]}，另有 ${labels.length - 1} 个闹钟`;
+    }
+
+    async function showUserAlarmNotification(session, missed = false) {
+        const notificationId = `${missed ? USER_ALARM_MISSED_PREFIX : USER_ALARM_NOTIFICATION_PREFIX}${session.id}`;
+        const lateMinutes = Math.max(0, Math.round((Date.now() - session.scheduledAt) / 60000));
+        const options = {
+            type: 'basic',
+            iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+            title: missed ? '错过的闹钟' : '⏰ 时间到了',
+            message: missed
+                ? `${sessionSummary(session)} · 原定 ${new Date(session.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                : `${sessionSummary(session)}${lateMinutes > 0 ? ` · 晚了 ${lateMinutes} 分钟` : ''}`,
+            priority: missed ? 1 : 2,
+            requireInteraction: !missed,
+            silent: true
+        };
+        if (!missed) {
+            options.buttons = [{ title: '停止' }, { title: '贪睡' }];
+        }
+        try {
+            await chrome.notifications.create(notificationId, options);
+        } catch (error) {
+            delete options.buttons;
+            await chrome.notifications.create(notificationId, options);
+        }
+        return notificationId;
+    }
+
+    async function requestUserAlarmAttention(session) {
+        try {
+            const lastWindow = await chrome.windows.getLastFocused();
+            if (lastWindow?.id != null) {
+                await chrome.windows.update(lastWindow.id, { drawAttention: true });
+            }
+        } catch (_) {}
+
+        if (!session.occurrences.some(item => item.intensity === 'important' && item.openWindow)) return;
+        try {
+            const ringUrl = chrome.runtime.getURL('alarm-ring.html');
+            const tabs = await chrome.tabs.query({ url: `${ringUrl}*` });
+            if (tabs[0]?.windowId != null) {
+                await chrome.windows.update(tabs[0].windowId, { focused: true });
+            } else {
+                await chrome.windows.create({
+                    url: ringUrl,
+                    type: 'popup',
+                    width: 440,
+                    height: 590,
+                    focused: true
+                });
+            }
+        } catch (error) {
+            console.warn('[Alarm] 打开重要提醒窗口失败:', error?.message || error);
+        }
+    }
+
+    async function startUserAlarmSession(session) {
+        const strongest = session.occurrences.find(item => item.intensity === 'important') || session.occurrences[0];
+        const results = await Promise.allSettled([
+            sendToOffscreen({
+                command: 'alarmPlay',
+                sessionId: session.id,
+                soundId: strongest.soundId,
+                volume: strongest.volume,
+                fadeSeconds: strongest.fadeSeconds
+            }),
+            showUserAlarmNotification(session),
+            setUserAlarmBadge(true),
+            requestUserAlarmAttention(session),
+            broadcastUserAlarmState(session)
+        ]);
+        const audioResult = results[0];
+        if (audioResult.status === 'rejected' || audioResult.value?.ok === false) {
+            const error = audioResult.status === 'rejected' ? audioResult.reason : audioResult.value?.error;
+            console.warn('[Alarm] 声音播放失败，已降级为通知和视觉提醒:', error?.message || error);
+            logExtEvent('alarm', 'user-alarm-audio-fallback', { ok: false, error: error?.message || String(error || 'unknown') });
+        }
+        logExtEvent('alarm', 'user-alarm-fired', {
+            context: session.occurrences.map(item => item.alarmId).join(','),
+            durationMs: Math.max(0, Date.now() - session.startedAt)
+        });
+    }
+
+    async function markMissedUserAlarmSession(session, runtime) {
+        const now = Date.now();
+        for (const item of session.occurrences) {
+            runtime.handled[item.occurrenceId] = { state: 'missed', updatedAt: now };
+            runtime.recent.push({
+                occurrenceId: item.occurrenceId,
+                alarmId: item.alarmId,
+                label: item.label,
+                state: 'missed',
+                scheduledAt: item.scheduledAt,
+                updatedAt: now
+            });
+        }
+        runtime.activeSession = null;
+        await showUserAlarmNotification(session, true);
+    }
+
+    async function reconcileUserAlarmSchedule(options = {}) {
+        const recoverDue = options.recoverDue !== false;
+        const now = Date.now();
+        const { alarms, runtime } = await loadUserAlarmState();
+
+        if (recoverDue && runtime.activeSession?.occurrences?.length) {
+            if (now - Number(runtime.activeSession.startedAt || now) <= AlarmCore.MISSED_GRACE_MS) {
+                await startUserAlarmSession(runtime.activeSession);
+            } else {
+                for (const item of runtime.activeSession.occurrences) {
+                    runtime.handled[item.occurrenceId] = { state: 'timed-out', updatedAt: now };
+                    runtime.recent.push({ ...item, state: 'timed-out', updatedAt: now });
+                }
+                runtime.activeSession = null;
+                await Promise.allSettled([
+                    sendToOffscreen({ command: 'alarmStop' }),
+                    setUserAlarmBadge(false),
+                    broadcastUserAlarmState(null)
+                ]);
+            }
+        }
+
+        // 浏览器休眠/退出期间，持久化的 dispatcher 是恢复重复闹钟“刚刚错过的那一次”的唯一凭据。
+        if (recoverDue && runtime.dispatch?.fireAt <= now) {
+            const hasUnhandledRef = runtime.dispatch.refs?.some(ref => !runtime.handled[ref.occurrenceId]);
+            if (hasUnhandledRef) {
+                await fireUserAlarmDispatch(runtime.dispatch);
+                return { nextFireAt: runtime.dispatch.fireAt, recovered: true };
+            }
+        }
+
+        runtime.pendingSnoozes = runtime.pendingSnoozes.filter(item =>
+            alarms.some(alarm => alarm.id === item.alarmId) && !runtime.handled[item.occurrenceId]
+        );
+        const dispatch = AlarmCore.nextDispatch(alarms, runtime, now);
+        runtime.dispatch = dispatch;
+        await saveUserAlarmState(alarms, runtime);
+        await chrome.alarms.clear(AlarmCore.DISPATCH_NAME);
+
+        if (!dispatch) return { nextFireAt: null };
+        if (dispatch.fireAt <= now && recoverDue) {
+            await fireUserAlarmDispatch(dispatch);
+            return { nextFireAt: dispatch.fireAt, recovered: true };
+        }
+        if (dispatch.fireAt > now) {
+            await chrome.alarms.create(AlarmCore.DISPATCH_NAME, { when: dispatch.fireAt });
+        }
+        return { nextFireAt: dispatch.fireAt };
+    }
+
+    let userAlarmDispatchPromise = null;
+
+    async function fireUserAlarmDispatch(dispatchOverride = null) {
+        if (userAlarmDispatchPromise) return userAlarmDispatchPromise;
+        userAlarmDispatchPromise = runUserAlarmDispatch(dispatchOverride);
+        try {
+            return await userAlarmDispatchPromise;
+        } finally {
+            userAlarmDispatchPromise = null;
+        }
+    }
+
+    async function runUserAlarmDispatch(dispatchOverride = null) {
+        const now = Date.now();
+        const { alarms, runtime } = await loadUserAlarmState();
+        const dispatch = dispatchOverride || runtime.dispatch;
+        if (!dispatch?.refs?.length) {
+            await reconcileUserAlarmSchedule({ recoverDue: false });
+            return;
+        }
+        // 顶层恢复与 onAlarm 可能紧邻发生；若 dispatcher 已推进到未来，旧事件不得提前触发它。
+        if (!dispatchOverride && dispatch.fireAt > now + 2000) return;
+
+        const alarmMap = new Map(alarms.map(alarm => [alarm.id, alarm]));
+        const occurrences = dispatch.refs
+            .filter(ref => !runtime.handled[ref.occurrenceId])
+            .map(ref => {
+                const alarm = alarmMap.get(ref.alarmId);
+                if (!alarm) return null;
+                return {
+                    ...ref,
+                    label: alarm.label,
+                    soundId: alarm.soundId,
+                    volume: alarm.volume,
+                    fadeSeconds: alarm.fadeSeconds,
+                    snoozeMinutes: alarm.snoozeMinutes,
+                    snoozeLimit: alarm.snoozeLimit,
+                    intensity: alarm.intensity,
+                    openWindow: alarm.openWindow
+                };
+            })
+            .filter(Boolean);
+
+        if (!occurrences.length) {
+            runtime.dispatch = null;
+            await saveUserAlarmState(alarms, runtime);
+            await reconcileUserAlarmSchedule({ recoverDue: false });
+            return;
+        }
+
+        const sessionId = `ring_${now}_${Math.random().toString(36).slice(2, 7)}`;
+        let session = {
+            id: sessionId,
+            startedAt: now,
+            scheduledAt: Math.min(...occurrences.map(item => item.scheduledAt)),
+            occurrences
+        };
+        if (runtime.activeSession?.occurrences?.length) {
+            session = {
+                ...runtime.activeSession,
+                scheduledAt: Math.min(runtime.activeSession.scheduledAt, session.scheduledAt),
+                occurrences: [...runtime.activeSession.occurrences, ...occurrences]
+            };
+        }
+
+        for (const item of occurrences) {
+            runtime.handled[item.occurrenceId] = { state: 'firing', updatedAt: now };
+            if (item.kind === 'base') {
+                const alarm = alarmMap.get(item.alarmId);
+                if (alarm?.repeat === 'once') alarm.enabled = false;
+            }
+        }
+        runtime.pendingSnoozes = runtime.pendingSnoozes.filter(item =>
+            !occurrences.some(occurrence => occurrence.occurrenceId === item.occurrenceId)
+        );
+        runtime.dispatch = null;
+        runtime.activeSession = session;
+
+        const lateBy = now - session.scheduledAt;
+        if (lateBy > AlarmCore.MISSED_GRACE_MS) {
+            await markMissedUserAlarmSession(session, runtime);
+            await saveUserAlarmState(alarms, runtime);
+        } else {
+            await saveUserAlarmState(alarms, runtime);
+            await startUserAlarmSession(session);
+        }
+        await reconcileUserAlarmSchedule({ recoverDue: false });
+    }
+
+    async function stopUserAlarmSession(action, requestedMinutes = null) {
+        const { alarms, runtime } = await loadUserAlarmState();
+        const session = runtime.activeSession;
+        if (!session?.occurrences?.length) {
+            await sendToOffscreen({ command: 'alarmStop' }).catch(() => {});
+            await setUserAlarmBadge(false);
+            return { ok: true, empty: true };
+        }
+
+        const now = Date.now();
+        if (action === 'snooze') {
+            for (const item of session.occurrences) {
+                const nextCount = Number(item.snoozeCount || 0) + 1;
+                if (nextCount > Number(item.snoozeLimit || 0)) {
+                    runtime.handled[item.occurrenceId] = { state: 'dismissed', updatedAt: now };
+                    continue;
+                }
+                const minutes = Math.max(1, Math.min(60, Number(requestedMinutes) || Number(item.snoozeMinutes) || 10));
+                const scheduledAt = now + minutes * 60000;
+                runtime.pendingSnoozes.push({
+                    kind: 'snooze',
+                    alarmId: item.alarmId,
+                    scheduledAt,
+                    occurrenceId: AlarmCore.occurrenceId(item.alarmId, scheduledAt, `s${nextCount}`),
+                    snoozeCount: nextCount
+                });
+                runtime.handled[item.occurrenceId] = { state: 'snoozed', updatedAt: now };
+                runtime.recent.push({ ...item, state: 'snoozed', updatedAt: now });
+            }
+        } else {
+            for (const item of session.occurrences) {
+                runtime.handled[item.occurrenceId] = { state: 'dismissed', updatedAt: now };
+                runtime.recent.push({ ...item, state: 'dismissed', updatedAt: now });
+            }
+        }
+        runtime.activeSession = null;
+        await saveUserAlarmState(alarms, runtime);
+
+        await Promise.allSettled([
+            sendToOffscreen({ command: 'alarmStop', sessionId: session.id }),
+            chrome.notifications.clear(`${USER_ALARM_NOTIFICATION_PREFIX}${session.id}`),
+            setUserAlarmBadge(false),
+            broadcastUserAlarmState(null)
+        ]);
+        await reconcileUserAlarmSchedule({ recoverDue: false });
+        return { ok: true };
+    }
+
+    async function saveUserAlarm(input) {
+        const { alarms, runtime } = await loadUserAlarmState();
+        const index = alarms.findIndex(item => item.id === input?.id);
+        const previous = index >= 0 ? alarms[index] : null;
+        const normalized = AlarmCore.normalizeAlarm({
+            ...previous,
+            ...input,
+            id: previous?.id || input?.id,
+            createdAt: previous?.createdAt,
+            updatedAt: Date.now(),
+            revision: Number(previous?.revision || 0) + 1
+        });
+        if (normalized.repeat === 'once' && (!normalized.fireAt || normalized.fireAt <= Date.now())) {
+            throw new Error('一次性闹钟必须设置为未来时间');
+        }
+        if (normalized.repeat === 'custom' && normalized.days.length === 0) {
+            throw new Error('自定义重复至少选择一天');
+        }
+        if (index >= 0) alarms[index] = normalized;
+        else alarms.push(normalized);
+        alarms.sort((a, b) => (AlarmCore.getNextOccurrence(a, Date.now()) || Infinity) - (AlarmCore.getNextOccurrence(b, Date.now()) || Infinity));
+        await saveUserAlarmState(alarms, runtime);
+        const schedule = await reconcileUserAlarmSchedule({ recoverDue: false });
+        return { alarm: normalized, ...schedule };
+    }
+
+    async function deleteUserAlarm(alarmId) {
+        const { alarms, runtime } = await loadUserAlarmState();
+        const nextAlarms = alarms.filter(item => item.id !== alarmId);
+        runtime.pendingSnoozes = runtime.pendingSnoozes.filter(item => item.alarmId !== alarmId);
+        await saveUserAlarmState(nextAlarms, runtime);
+        await reconcileUserAlarmSchedule({ recoverDue: false });
+        return { ok: nextAlarms.length !== alarms.length };
+    }
+
+    async function toggleUserAlarm(alarmId, enabled) {
+        const { alarms, runtime } = await loadUserAlarmState();
+        const alarm = alarms.find(item => item.id === alarmId);
+        if (!alarm) return { ok: false, error: '闹钟不存在' };
+        if (enabled && alarm.repeat === 'once' && alarm.fireAt <= Date.now()) {
+            return { ok: false, error: '这个一次性闹钟已经过期，请编辑时间后再开启' };
+        }
+        alarm.enabled = enabled;
+        alarm.updatedAt = Date.now();
+        alarm.revision += 1;
+        if (!enabled) runtime.pendingSnoozes = runtime.pendingSnoozes.filter(item => item.alarmId !== alarmId);
+        await saveUserAlarmState(alarms, runtime);
+        await reconcileUserAlarmSchedule({ recoverDue: false });
+        return { ok: true };
+    }
+
+    async function getUserAlarmViewState() {
+        const { alarms, runtime } = await loadUserAlarmState();
+        const next = AlarmCore.nextDispatch(alarms, runtime, Date.now());
+        let notificationPermission = 'unknown';
+        try {
+            notificationPermission = await chrome.notifications.getPermissionLevel();
+        } catch (_) {}
+        return {
+            alarms,
+            runtime,
+            nextFireAt: next?.fireAt || null,
+            notificationPermission
+        };
+    }
+
+    // 图标右键的音乐快捷播放不应打断用户正在浏览的页面。这里在 Service Worker 中
+    // 获取推荐、维护队列，并交给 Offscreen Document 播放；主页只是稍后查看和控制的界面。
+    let silentMusicPlayback = null;
+
+    function normalizeSilentMusicSong(song, index) {
+        const rawArtists = song?.artists || song?.ar || [];
+        const artists = rawArtists.map(artist => ({ id: artist.id, name: artist.name }));
+        const rawAlbum = song?.album || song?.al || {};
+        return {
+            songId: song?.id,
+            title: song?.name || '',
+            artist: artists.map(artist => artist.name).join('/'),
+            artists,
+            albumId: rawAlbum.id || null,
+            album: rawAlbum.name || '',
+            cover: rawAlbum.picUrl ? `${rawAlbum.picUrl}?param=200y200` : '',
+            duration: song?.duration || song?.dt || 0,
+            index,
+        };
+    }
+
+    async function getSilentMusicSongUrl(songId) {
+        const strategies = [
+            { endpoint: '/api/song/enhance/player/url/v1', params: { ids: `[${songId}]`, level: 'exhigh', encodeType: 'mp3' }, extract: data => data?.data?.[0]?.url },
+            { endpoint: '/api/song/enhance/player/url', params: { ids: `[${songId}]`, br: 320000 }, extract: data => data?.data?.[0]?.url },
+            { endpoint: '/api/song/url/v1', params: { id: songId, level: 'standard' }, extract: data => data?.data?.[0]?.url },
+        ];
+        for (const strategy of strategies) {
+            try {
+                const data = await neteaseApiCall(strategy.endpoint, strategy.params);
+                const url = strategy.extract(data);
+                if (url) return url;
+            } catch { /* 尝试下一种可用音质接口 */ }
+        }
+        return '';
+    }
+
+    async function persistSilentMusicPlayback(song) {
+        const playback = silentMusicPlayback;
+        if (!playback || !song) return;
+        const playlist = playback.songs.map((item, index) => ({
+            ...item,
+            index,
+            isActive: index === playback.index,
+        }));
+        await chrome.storage.local.set({
+            musicPlaylistCache: {
+                playlist,
+                playlistId: null,
+                playlistName: playback.name,
+                savedAt: Date.now(),
+            },
+            lastMusicState: {
+                isPlaying: true,
+                title: song.title,
+                artist: song.artist,
+                cover: song.cover,
+                album: song.album,
+                duration: Number(song.duration || 0) / 1000,
+                platform: 'netease',
+                songId: song.songId,
+                playlistName: playback.name,
+                savedAt: Date.now(),
+            },
+        });
+    }
+
+    async function playSilentMusicCurrent() {
+        const playback = silentMusicPlayback;
+        const song = playback?.songs?.[playback.index];
+        if (!song?.songId) return false;
+        const playbackId = playback.id;
+        const url = await getSilentMusicSongUrl(song.songId);
+        if (!silentMusicPlayback || silentMusicPlayback.id !== playbackId) return false;
+        if (!url) return advanceSilentMusicPlayback();
+
+        const response = await sendToOffscreen({
+            command: 'play',
+            url,
+            songId: song.songId,
+            title: song.title,
+            artist: song.artist,
+            cover: song.cover,
+            album: song.album,
+        });
+        if (!response?.ok) return advanceSilentMusicPlayback();
+        await persistSilentMusicPlayback(song);
+        logExtEvent('music', 'silent-quick-play', { context: `${playback.mode}:${song.songId}` });
+        return true;
+    }
+
+    async function refillSilentPersonalFM(playback) {
+        const data = await neteaseApiCall('/api/v1/radio/get');
+        const songs = Array.isArray(data?.data)
+            ? data.data.map(normalizeSilentMusicSong).filter(song => song.songId)
+            : [];
+        if (songs.length === 0 || silentMusicPlayback?.id !== playback.id) return false;
+        playback.songs = songs;
+        playback.index = 0;
+        return true;
+    }
+
+    async function advanceSilentMusicPlayback(direction = 1) {
+        const playback = silentMusicPlayback;
+        if (!playback) return false;
+        const nextIndex = playback.index + direction;
+        if (nextIndex >= 0 && nextIndex < playback.songs.length) {
+            playback.index = nextIndex;
+            return playSilentMusicCurrent();
+        }
+        if (playback.mode === 'personal-fm' && direction > 0 && await refillSilentPersonalFM(playback)) {
+            return playSilentMusicCurrent();
+        }
+        if (direction > 0) silentMusicPlayback = null;
+        return false;
+    }
+
+    async function openNeteaseLogin(tab) {
+        await chrome.tabs.create({
+            ...(tab?.windowId != null ? { windowId: tab.windowId } : {}),
+            active: true,
+            url: 'https://music.163.com/',
+        });
+    }
+
+    async function startSilentNeteaseQuickPlay(mode, tab) {
+        const cookieStr = await getNeteaseCookies();
+        if (!cookieStr || !cookieStr.includes('MUSIC_U')) {
+            // 未登录时给出明确去处；登录完成后用户重新选择右键播放即可。
+            await openNeteaseLogin(tab);
+            return false;
+        }
+        const isPersonalFM = mode === 'personal-fm';
+        const endpoint = isPersonalFM ? '/api/v1/radio/get' : '/api/v3/discovery/recommend/songs';
+        const data = await neteaseApiCall(endpoint);
+        const rawSongs = isPersonalFM ? data?.data : (data?.data?.dailySongs || data?.dailySongs);
+        const songs = Array.isArray(rawSongs)
+            ? rawSongs.map(normalizeSilentMusicSong).filter(song => song.songId)
+            : [];
+        if (songs.length === 0) throw new Error(isPersonalFM ? '私人FM暂无推荐' : '每日推荐暂无可播放歌曲');
+
+        silentMusicPlayback = {
+            id: Date.now(),
+            mode,
+            name: isPersonalFM ? '私人FM' : '每日推荐',
+            songs,
+            index: 0,
+        };
+        return playSilentMusicCurrent();
     }
 
     async function _sendMusicControl(msg) {
@@ -656,6 +1299,17 @@ importScripts('background-provider.js', 'hermes-writing-sync.js', 'site-workspac
      */
     async function initAlarms() {
         console.log('初始化任务提醒闹钟...');
+
+        // 只清理由本模块管理的系统/任务 alarm。用户闹钟由独立调度器维护，禁止 clearAll 误删。
+        const managedSystemAlarmNames = new Set([
+            'daily-summary', 'check-overdue', 'check-backup-reminder', 'reset-daily-habits',
+            'warm-tip', 'system-monitor', 'worklog-smart-check', 'worklog-reminder',
+            'keyword-scan', 'hermes-writing-sync'
+        ]);
+        const existingAlarms = await chrome.alarms.getAll();
+        await Promise.all(existingAlarms
+            .filter(alarm => managedSystemAlarmNames.has(alarm.name) || alarm.name.startsWith('task-reminder-'))
+            .map(alarm => chrome.alarms.clear(alarm.name)));
         
         // 获取任务提醒设置
         const { dailyTaskSettings } = await chrome.storage.sync.get('dailyTaskSettings');
@@ -669,9 +1323,6 @@ importScripts('background-provider.js', 'hermes-writing-sync.js', 'site-workspac
             console.log('通知已禁用，跳过闹钟初始化');
             return;
         }
-        
-        // 清除旧闹钟
-        await chrome.alarms.clearAll();
         
         // 解析默认提醒时间
         const [hour, minute] = (settings.defaultReminderTime || '09:00').split(':').map(Number);
@@ -1615,8 +2266,24 @@ importScripts('background-provider.js', 'hermes-writing-sync.js', 'site-workspac
     });
 
     chrome.contextMenus.onClicked.addListener((info, tab) => {
-        if (info.menuItemId === "settings") {
+        if (info.menuItemId === EXTENSION_SETTINGS_MENU_ID) {
             chrome.tabs.create({ url: 'settings.html' });
+            return;
+        }
+        if (info.menuItemId === EXTENSION_HOME_MENU_ID) {
+            chrome.tabs.create({ url: 'index.html' });
+            return;
+        }
+        if (info.menuItemId === MUSIC_OPEN_MENU_ID) {
+            openMusicWorkbench(tab).catch(error => console.warn('[Music] 打开工作台失败:', error));
+            return;
+        }
+        if (info.menuItemId === MUSIC_PERSONAL_FM_MENU_ID) {
+            startSilentNeteaseQuickPlay('personal-fm', tab).catch(error => console.warn('[Music] 静默启动私人FM失败:', error));
+            return;
+        }
+        if (info.menuItemId === MUSIC_DAILY_RECOMMEND_MENU_ID) {
+            startSilentNeteaseQuickPlay('daily-recommend', tab).catch(error => console.warn('[Music] 静默启动每日推荐失败:', error));
             return;
         }
         if (info.menuItemId === SITE_WORKSPACE_OPEN_MENU_ID) {
@@ -1671,7 +2338,7 @@ importScripts('background-provider.js', 'hermes-writing-sync.js', 'site-workspac
     chrome.runtime.onInstalled.addListener(async (details) => {
         console.log('Chrome Time Extension installed/updated:', details.reason);
         
-        ensureExtensionContextMenus();
+        await resetExtensionContextMenus();
 
         try {
             chrome.runtime.setUninstallURL('https://ddu-studious.github.io/chrome-time-background/uninstall.html');
@@ -1700,6 +2367,7 @@ importScripts('background-provider.js', 'hermes-writing-sync.js', 'site-workspac
         }
         
         await initAlarms();
+        await reconcileUserAlarmSchedule({ recoverDue: true });
 
         try {
             await chrome.declarativeNetRequest.updateDynamicRules({
@@ -1715,12 +2383,18 @@ importScripts('background-provider.js', 'hermes-writing-sync.js', 'site-workspac
     chrome.runtime.onStartup.addListener(async () => {
         console.log('浏览器启动，重新初始化闹钟...');
         await initAlarms();
+        await reconcileUserAlarmSchedule({ recoverDue: true });
     });
 
     // 监听闹钟事件
     chrome.alarms.onAlarm.addListener(async (alarm) => {
         console.log('闹钟触发:', alarm.name);
         const _alarmStart = Date.now();
+
+        if (alarm.name === AlarmCore.DISPATCH_NAME) {
+            await fireUserAlarmDispatch();
+            return;
+        }
         
         switch (alarm.name) {
             case 'daily-summary':
@@ -1774,6 +2448,12 @@ importScripts('background-provider.js', 'hermes-writing-sync.js', 'site-workspac
     // 监听通知按钮点击
     chrome.notifications.onButtonClicked.addListener(async (notificationId, buttonIndex) => {
         console.log('通知按钮点击:', notificationId, buttonIndex);
+
+        if (notificationId.startsWith(USER_ALARM_NOTIFICATION_PREFIX)) {
+            if (buttonIndex === 0) await stopUserAlarmSession('dismiss');
+            else await stopUserAlarmSession('snooze');
+            return;
+        }
         
         if (notificationId.startsWith('task-')) {
             const taskId = notificationId.replace('task-', '');
@@ -1825,6 +2505,23 @@ importScripts('background-provider.js', 'hermes-writing-sync.js', 'site-workspac
     // 监听通知点击
     chrome.notifications.onClicked.addListener(async (notificationId) => {
         console.log('通知点击:', notificationId);
+
+        if (notificationId.startsWith(USER_ALARM_NOTIFICATION_PREFIX) || notificationId.startsWith(USER_ALARM_MISSED_PREFIX)) {
+            const indexUrl = chrome.runtime.getURL('index.html');
+            const tabs = await chrome.tabs.query({ url: `${indexUrl}*` });
+            if (tabs[0]?.id != null) {
+                await chrome.tabs.update(tabs[0].id, { active: true });
+                if (tabs[0].windowId != null) await chrome.windows.update(tabs[0].windowId, { focused: true });
+                await chrome.runtime.sendMessage({ action: 'user_alarm_open_center' }).catch(() => {});
+            } else {
+                await chrome.storage.local.set({ pendingAction: 'openAlarmCenter' });
+                await chrome.tabs.create({ url: `${indexUrl}?alarmAction=open`, active: true });
+            }
+            if (notificationId.startsWith(USER_ALARM_MISSED_PREFIX)) {
+                await chrome.notifications.clear(notificationId);
+            }
+            return;
+        }
 
         // 关键字监控通知 - 跳转到热搜链接
         if (notificationId.startsWith('keyword-alert-')) {
@@ -2283,6 +2980,60 @@ importScripts('background-provider.js', 'hermes-writing-sync.js', 'site-workspac
 
     // 监听消息事件
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        const userAlarmActions = new Set([
+            'user_alarm_list', 'user_alarm_save', 'user_alarm_delete', 'user_alarm_toggle',
+            'user_alarm_dismiss', 'user_alarm_snooze', 'user_alarm_test', 'user_alarm_test_stop',
+            'user_alarm_reconcile'
+        ]);
+        if (userAlarmActions.has(message.action)) {
+            (async () => {
+                try {
+                    let result;
+                    switch (message.action) {
+                        case 'user_alarm_list':
+                            result = await getUserAlarmViewState();
+                            break;
+                        case 'user_alarm_save':
+                            result = await saveUserAlarm(message.alarm || {});
+                            break;
+                        case 'user_alarm_delete':
+                            result = await deleteUserAlarm(String(message.alarmId || ''));
+                            break;
+                        case 'user_alarm_toggle':
+                            result = await toggleUserAlarm(String(message.alarmId || ''), message.enabled === true);
+                            break;
+                        case 'user_alarm_dismiss':
+                            result = await stopUserAlarmSession('dismiss');
+                            break;
+                        case 'user_alarm_snooze':
+                            result = await stopUserAlarmSession('snooze', message.minutes);
+                            break;
+                        case 'user_alarm_test':
+                            result = await sendToOffscreen({
+                                command: 'alarmPlay',
+                                sessionId: 'alarm-test',
+                                soundId: message.soundId || 'chime',
+                                volume: Number(message.volume) || 0.8,
+                                fadeSeconds: 1,
+                                autoStopAfterMs: 6500
+                            });
+                            break;
+                        case 'user_alarm_test_stop':
+                            result = await sendToOffscreen({ command: 'alarmStop', sessionId: 'alarm-test' });
+                            break;
+                        case 'user_alarm_reconcile':
+                            result = await reconcileUserAlarmSchedule({ recoverDue: true });
+                            break;
+                    }
+                    sendResponse({ ok: true, ...result });
+                } catch (error) {
+                    console.error('[Alarm] 消息处理失败:', error);
+                    sendResponse({ ok: false, error: error?.message || '闹钟操作失败' });
+                }
+            })();
+            return true;
+        }
+
         if (message.action === 'getBackgrounds') {
             (async () => {
                 try {
@@ -2586,6 +3337,8 @@ importScripts('background-provider.js', 'hermes-writing-sync.js', 'site-workspac
             (async () => {
                 const _t = Date.now();
                 try {
+                    // 用户已在主页中主动控制播放器，后续切歌交还给 MusicController。
+                    silentMusicPlayback = null;
                     const resp = await sendToOffscreen({
                         command: 'play',
                         url: message.url,
@@ -2628,11 +3381,20 @@ importScripts('background-provider.js', 'hermes-writing-sync.js', 'site-workspac
 
         if (message.action === 'offscreen_track_ended') {
             logExtEvent('music', 'track-ended');
+            if (silentMusicPlayback && String(message.songId) === String(silentMusicPlayback.songs[silentMusicPlayback.index]?.songId)) {
+                advanceSilentMusicPlayback().catch(error => console.warn('[Music] 静默续播失败:', error));
+                return false;
+            }
             _sendMusicControl({ action: 'music_track_ended', songId: message.songId });
             return false;
         }
 
         if (message.action === 'offscreen_media_action') {
+            if (silentMusicPlayback) {
+                const direction = message.command === 'prev' ? -1 : 1;
+                advanceSilentMusicPlayback(direction).catch(error => console.warn('[Music] 静默媒体控制失败:', error));
+                return false;
+            }
             _sendMusicControl({
                 action: 'music_media_action',
                 command: message.command
@@ -2642,6 +3404,10 @@ importScripts('background-provider.js', 'hermes-writing-sync.js', 'site-workspac
 
         if (message.action === 'offscreen_error') {
             logExtEvent('music', 'playback-error', { ok: false, error: message.error, context: `code=${message.code}` });
+            if (silentMusicPlayback && String(message.songId) === String(silentMusicPlayback.songs[silentMusicPlayback.index]?.songId)) {
+                advanceSilentMusicPlayback().catch(error => console.warn('[Music] 静默跳过失败歌曲失败:', error));
+                return false;
+            }
             _sendMusicControl({
                 action: 'music_playback_error',
                 error: message.error,
@@ -2836,5 +3602,10 @@ importScripts('background-provider.js', 'hermes-writing-sync.js', 'site-workspac
                 logExtEvent('storage', 'local-write', { context: key });
             }
         }
+    });
+
+    // Service Worker 可能在任意时刻被 Chrome 回收；每次重新加载都从持久化状态恢复调度。
+    void reconcileUserAlarmSchedule({ recoverDue: true }).catch(error => {
+        console.warn('[Alarm] 后台启动对账失败:', error?.message || error);
     });
 })();

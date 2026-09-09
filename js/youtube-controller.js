@@ -4,10 +4,11 @@
     const STORAGE_KEYS = Object.freeze({
         queue: 'youtubeLocalQueue',
         learning: 'youtubeLearningList',
+        history: 'youtubeWatchHistory',
         settings: 'youtubeSettings',
     });
     const VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
-    const VIEWS = new Set(['recommended', 'trending', 'subscriptions', 'playlists', 'likes', 'local-queue', 'learning']);
+    const VIEWS = new Set(['recommended', 'trending', 'subscriptions', 'playlists', 'likes', 'history', 'local-queue', 'learning']);
     const LAYOUTS = new Set(['grid', 'list']);
     const TREND_CATEGORIES = Object.freeze([
         { id: 'culture', label: '文化', icon: 'fas fa-landmark', queries: {
@@ -70,6 +71,7 @@
     const YOUTUBE_PLAYER_ORIGIN = 'https://www.youtube.com';
     const DEFAULT_PLAYBACK_RATES = [0.75, 1, 1.25, 1.5, 2];
     const AUTO_PLAYBACK_RATE = 2;
+    const WATCH_HISTORY_LIMIT = 100;
 
     function escapeHtml(value = '') {
         return String(value).replace(/[&<>'"]/g, character => ({
@@ -208,6 +210,14 @@
         return result;
     }
 
+    function mergeWatchHistory(items = [], item = {}, watchedAt = new Date().toISOString()) {
+        if (!VIDEO_ID_PATTERN.test(String(item.id || ''))) return [...items];
+        return [
+            { ...item, kind: 'video', watchedAt },
+            ...items.filter(entry => entry?.id !== item.id),
+        ].slice(0, WATCH_HISTORY_LIMIT);
+    }
+
     function storageGet(defaults) {
         return new Promise(resolve => chrome.storage.local.get(defaults, result => resolve(result || defaults)));
     }
@@ -256,6 +266,7 @@
             this.auth = { configured: false, connected: false, mode: 'checking', extensionId: '' };
             this.queue = [];
             this.learning = [];
+            this.history = [];
             this.settings = {};
             this.layout = 'grid';
             this.items = [];
@@ -272,6 +283,7 @@
             this.playerRecentItems = [];
             this.playerRecentChannelKey = '';
             this.playerRecentRequestId = 0;
+            this.historyRecordedVideoId = '';
             this.remoteRequestId = 0;
             this.returnFocus = null;
             this.backgroundInertSiblings = [];
@@ -284,9 +296,10 @@
             if (this.initialized) return;
             this._injectPanel();
             this._bindEvents();
-            const stored = await storageGet({ [STORAGE_KEYS.queue]: [], [STORAGE_KEYS.learning]: [], [STORAGE_KEYS.settings]: {} });
+            const stored = await storageGet({ [STORAGE_KEYS.queue]: [], [STORAGE_KEYS.learning]: [], [STORAGE_KEYS.history]: [], [STORAGE_KEYS.settings]: {} });
             this.queue = Array.isArray(stored[STORAGE_KEYS.queue]) ? stored[STORAGE_KEYS.queue] : [];
             this.learning = Array.isArray(stored[STORAGE_KEYS.learning]) ? stored[STORAGE_KEYS.learning] : [];
+            this.history = Array.isArray(stored[STORAGE_KEYS.history]) ? stored[STORAGE_KEYS.history] : [];
             this.settings = stored[STORAGE_KEYS.settings] && typeof stored[STORAGE_KEYS.settings] === 'object' ? stored[STORAGE_KEYS.settings] : {};
             this.layout = LAYOUTS.has(this.settings.layout) ? this.settings.layout : 'grid';
             const hasCurrentTrendPreference = this.settings.trendPreferenceVersion === TREND_PREFERENCE_VERSION
@@ -383,6 +396,7 @@
                         <button type="button" data-youtube-view="playlists"><i class="fas fa-list"></i><span>播放列表</span></button>
                         <button type="button" data-youtube-view="likes"><i class="fas fa-thumbs-up"></i><span>喜欢</span></button>
                         <div class="yt-nav-label">LOCAL</div>
+                        <button type="button" data-youtube-view="history"><i class="fas fa-history"></i><span>观看历史</span><em data-yt-count="history">0</em></button>
                         <button type="button" data-youtube-view="local-queue"><i class="far fa-clock"></i><span>稍后看</span><em data-yt-count="queue">0</em></button>
                         <button type="button" data-youtube-view="learning"><i class="fas fa-graduation-cap"></i><span>学习清单</span><em data-yt-count="learning">0</em></button>
                     </nav>
@@ -464,6 +478,7 @@
             if (action === 'add-learning' && item) await this._addLocal('learning', item);
             if (action === 'remove-queue' && item) await this._removeLocal('queue', item.id);
             if (action === 'remove-learning' && item) await this._removeLocal('learning', item.id);
+            if (action === 'remove-history' && item) await this._removeLocal('history', item.id);
             if (action === 'clear-local') await this._prepareOrClearLocal(actionButton);
             if (action === 'open' && item) window.open(`https://www.youtube.com/watch?v=${encodeURIComponent(item.id)}`, '_blank', 'noopener,noreferrer');
             if (action === 'copy' && item) {
@@ -555,9 +570,21 @@
             this.listContext = null;
             this._syncNav();
             window.ProductUIV5?.setBusinessPage?.('youtube', this._pageForView(view));
-            if (view === 'local-queue' || view === 'learning') {
-                this.items = view === 'local-queue' ? [...this.queue] : [...this.learning];
-                this._renderList(this.items, view === 'local-queue' ? '本地稍后看' : '本地学习清单', true);
+            if (view === 'history' || view === 'local-queue' || view === 'learning') {
+                if (view === 'history') {
+                    this.items = [...this.history];
+                    this._renderList(this.items, '本地观看历史', true, {
+                        localType: 'history',
+                        dateField: 'watchedAt',
+                        playerReturnLabel: '观看历史',
+                        note: `仅记录扩展内实际开始播放的视频 · 最多 ${WATCH_HISTORY_LIMIT} 条`,
+                        emptyTitle: '还没有观看记录',
+                        emptyDescription: '在本工作台开始播放视频后，会自动记录到这里。',
+                    });
+                } else {
+                    this.items = view === 'local-queue' ? [...this.queue] : [...this.learning];
+                    this._renderList(this.items, view === 'local-queue' ? '本地稍后看' : '本地学习清单', true);
+                }
                 return;
             }
             if (!this.auth.connected) {
@@ -1024,6 +1051,7 @@
             }
             if (!message || typeof message !== 'object') return;
             const wasReady = this.playerBridge.ready;
+            const previousPlayerState = this.playerBridge.playerState;
             if (message.event === 'onReady') this.playerBridge.ready = true;
             if (message.event === 'onStateChange') {
                 this.playerBridge.ready = true;
@@ -1039,6 +1067,9 @@
                 if (Array.isArray(info.availablePlaybackRates) && info.availablePlaybackRates.length) {
                     this.playerBridge.availableRates = info.availablePlaybackRates.map(Number).filter(Number.isFinite);
                 }
+            }
+            if (previousPlayerState !== 1 && this.playerBridge.playerState === 1 && this.currentVideo) {
+                void this._recordWatchHistory(this.currentVideo);
             }
             if (!wasReady && this.playerBridge.ready) {
                 if (this.playerBridgeTimer) window.clearInterval(this.playerBridgeTimer);
@@ -1278,6 +1309,7 @@
             }
             this.remoteRequestId++;
             this.currentVideo = { ...item };
+            this.historyRecordedVideoId = '';
             this.playerBridge.currentTime = 0;
             this.playerBridge.duration = 0;
             this.playerBridge.playbackRate = AUTO_PLAYBACK_RATE;
@@ -1436,6 +1468,7 @@
             this._detachPlayerBridge();
             this.playerOrigin = origin;
             this.currentVideo = { ...item };
+            this.historyRecordedVideoId = '';
             window.ProductUIV5?.setBusinessPage?.('youtube', 'player');
             this.panel.querySelector('.yt-view-title').textContent = '播放器';
             this._renderLoading('正在识别视频与创作者…');
@@ -1467,9 +1500,21 @@
 
         _renderActiveView() {
             this._syncNav();
-            if (['local-queue', 'learning'].includes(this.activeView)) {
-                this.items = this.activeView === 'local-queue' ? [...this.queue] : [...this.learning];
-                this._renderList(this.items, this.activeView === 'local-queue' ? '本地稍后看' : '本地学习清单', true);
+            if (['history', 'local-queue', 'learning'].includes(this.activeView)) {
+                if (this.activeView === 'history') {
+                    this.items = [...this.history];
+                    this._renderList(this.items, '本地观看历史', true, {
+                        localType: 'history',
+                        dateField: 'watchedAt',
+                        playerReturnLabel: '观看历史',
+                        note: `仅记录扩展内实际开始播放的视频 · 最多 ${WATCH_HISTORY_LIMIT} 条`,
+                        emptyTitle: '还没有观看记录',
+                        emptyDescription: '在本工作台开始播放视频后，会自动记录到这里。',
+                    });
+                } else {
+                    this.items = this.activeView === 'local-queue' ? [...this.queue] : [...this.learning];
+                    this._renderList(this.items, this.activeView === 'local-queue' ? '本地稍后看' : '本地学习清单', true);
+                }
             } else if (!this.auth.connected) this._renderConnect(this.activeView);
             else this._showView(this.activeView, true);
         }
@@ -1480,7 +1525,7 @@
             const label = { recommended: '为你推荐', trending: '兴趣趋势', subscriptions: '订阅', playlists: '播放列表', likes: '喜欢的视频' }[view] || 'YouTube';
             this.panel.querySelector('.yt-view-title').textContent = label;
             const setup = configured ? '' : `<ol class="yt-setup-steps"><li>在 Google Cloud 启用 YouTube Data API v3</li><li>配置 OAuth 权限请求页面</li><li>创建 Chrome 扩展客户端并绑定 <code>${escapeHtml(extensionId)}</code></li><li>把 client_id 写入 manifest 后重新加载扩展</li></ol>`;
-            this.stage.innerHTML = `<div class="yt-connect-state"><div class="yt-connect-copy"><span class="yt-eyebrow">${configured ? 'READ ONLY ACCESS' : 'OAUTH SETUP REQUIRED'}</span><h3>${configured ? '连接 Google 账号以加载你的 YouTube 数据' : '当前扩展尚未配置 Google OAuth'}</h3><p>${configured ? '只申请 YouTube 只读权限。订阅、播放列表与喜欢的视频不会被修改。' : '你登录 YouTube 网页，只代表浏览器持有 youtube.com Cookie；扩展不会读取该 Cookie，必须单独配置并完成 Google OAuth 授权。'}</p>${setup}<div class="yt-connect-actions"><button class="yt-primary" type="button" data-yt-action="connect">${configured ? '连接 YouTube' : '查看当前配置'}</button><button class="yt-secondary" type="button" data-youtube-view="local-queue">打开本地稍后看</button></div></div><div class="yt-direct-card"><strong>直接播放</strong><p>粘贴 youtube.com/watch、youtu.be、Shorts 链接或视频 ID。</p><form class="yt-direct-form"><label for="yt-direct-input">视频链接或 ID</label><div><input id="yt-direct-input" autocomplete="off" placeholder="https://youtu.be/…"><button type="submit">播放</button></div></form><small>不读取浏览器 YouTube Cookie，不同步观看历史。</small><button class="yt-data-clear" type="button" data-yt-action="clear-local"><i class="far fa-trash-alt"></i> 清空 YouTube 本地数据</button></div></div>`;
+            this.stage.innerHTML = `<div class="yt-connect-state"><div class="yt-connect-copy"><span class="yt-eyebrow">${configured ? 'READ ONLY ACCESS' : 'OAUTH SETUP REQUIRED'}</span><h3>${configured ? '连接 Google 账号以加载你的 YouTube 数据' : '当前扩展尚未配置 Google OAuth'}</h3><p>${configured ? '只申请 YouTube 只读权限。订阅、播放列表与喜欢的视频不会被修改。' : '你登录 YouTube 网页，只代表浏览器持有 youtube.com Cookie；扩展不会读取该 Cookie，必须单独配置并完成 Google OAuth 授权。'}</p>${setup}<div class="yt-connect-actions"><button class="yt-primary" type="button" data-yt-action="connect">${configured ? '连接 YouTube' : '查看当前配置'}</button><button class="yt-secondary" type="button" data-youtube-view="local-queue">打开本地稍后看</button></div></div><div class="yt-direct-card"><strong>直接播放</strong><p>粘贴 youtube.com/watch、youtu.be、Shorts 链接或视频 ID。</p><form class="yt-direct-form"><label for="yt-direct-input">视频链接或 ID</label><div><input id="yt-direct-input" autocomplete="off" placeholder="https://youtu.be/…"><button type="submit">播放</button></div></form><small>不读取浏览器 YouTube Cookie；观看记录仅保存在本扩展，不同步 YouTube 官方历史。</small><button class="yt-data-clear" type="button" data-yt-action="clear-local"><i class="far fa-trash-alt"></i> 清空 YouTube 本地数据</button></div></div>`;
             const form = this.stage.querySelector('.yt-direct-form');
             form?.addEventListener('submit', event => {
                 event.preventDefault();
@@ -1503,7 +1548,8 @@
                 const isVideo = item.kind === 'video';
                 const isChannel = item.kind === 'channel';
                 const isPlaylist = item.kind === 'playlist';
-                const date = item.publishedAt ? new Date(item.publishedAt).toLocaleDateString('zh-CN') : '';
+                const dateValue = options.dateField ? item[options.dateField] : item.publishedAt;
+                const date = dateValue ? new Date(dateValue).toLocaleDateString('zh-CN') : '';
                 const verb = isVideo ? '播放' : (isChannel ? '查看频道最近更新' : (isPlaylist ? '打开播放列表' : '查看'));
                 const circleBadge = item.trendCircleLabel ? `<span class="yt-circle-badge" data-circle="${escapeHtml(item.trendCircle)}">${escapeHtml(item.trendCircleLabel)}</span>` : '';
                 const thumbnail = `${item.thumbnail ? `<img src="${escapeHtml(item.thumbnail)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="yt-card-placeholder"><i class="fab fa-youtube"></i></span>'}${circleBadge}${isVideo ? '<span class="yt-play-badge"><i class="fas fa-play"></i></span>' : ((isChannel || isPlaylist) ? '<span class="yt-play-badge"><i class="fas fa-arrow-right"></i></span>' : '')}`;
@@ -1514,7 +1560,8 @@
                     ? `data-yt-channel="${item.id}"`
                     : (isPlaylist ? `data-yt-playlist="${item.id}"` : 'disabled');
                 const cardOpen = isVideo ? '' : `<button class="yt-card-open" type="button" ${cardTarget} aria-label="${verb} ${escapeHtml(item.title)}"></button>`;
-                return `<article class="yt-card" role="listitem">${media}<div class="yt-card-copy"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.channel)}${date ? ` · ${date}` : ''}</span></div>${isVideo ? `<div class="yt-card-actions"><button type="button" data-yt-action="${local ? `remove-${this.activeView === 'learning' ? 'learning' : 'queue'}` : 'add-queue'}" data-video-id="${item.id}" title="${local ? '从清单移除' : '加入稍后看'}" aria-label="${local ? `从清单移除 ${escapeHtml(item.title)}` : `将 ${escapeHtml(item.title)} 加入稍后看`}"><i class="${local ? 'fas fa-times' : 'far fa-clock'}"></i></button><button type="button" data-yt-action="open" data-video-id="${item.id}" title="在 YouTube 打开" aria-label="在 YouTube 打开 ${escapeHtml(item.title)}"><i class="fas fa-external-link-alt"></i></button></div>` : cardOpen}</article>`;
+                const localType = options.localType || (this.activeView === 'learning' ? 'learning' : 'queue');
+                return `<article class="yt-card" role="listitem">${media}<div class="yt-card-copy"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.channel)}${date ? ` · ${date}` : ''}</span></div>${isVideo ? `<div class="yt-card-actions"><button type="button" data-yt-action="${local ? `remove-${localType}` : 'add-queue'}" data-video-id="${item.id}" title="${local ? '从列表移除' : '加入稍后看'}" aria-label="${local ? `从列表移除 ${escapeHtml(item.title)}` : `将 ${escapeHtml(item.title)} 加入稍后看`}"><i class="${local ? 'fas fa-times' : 'far fa-clock'}"></i></button><button type="button" data-yt-action="open" data-video-id="${item.id}" title="在 YouTube 打开" aria-label="在 YouTube 打开 ${escapeHtml(item.title)}"><i class="fas fa-external-link-alt"></i></button></div>` : cardOpen}</article>`;
             }).join('')}</div>`;
         }
 
@@ -1591,18 +1638,31 @@
             });
             this.panel.querySelector('[data-yt-count="queue"]').textContent = this.queue.length;
             this.panel.querySelector('[data-yt-count="learning"]').textContent = this.learning.length;
+            this.panel.querySelector('[data-yt-count="history"]').textContent = this.history.length;
         }
 
         _pageForView(view) {
             if (view === 'recommended') return this.auth.connected ? 'recommended' : 'connect';
             if (view === 'subscriptions') return 'subscriptions';
-            if (view === 'local-queue' || view === 'learning') return 'local-queue';
+            if (view === 'history' || view === 'local-queue' || view === 'learning') return 'local-queue';
             if (view === 'playlists' || view === 'likes') return 'library';
             return view === 'trending' ? (this.auth.connected ? 'trending' : 'connect') : 'connect';
         }
 
         _findItem(id) {
-            return [...this.items, ...this.playerRecentItems, ...this.queue, ...this.learning].find(item => item.id === id) || null;
+            return [...this.items, ...this.playerRecentItems, ...this.history, ...this.queue, ...this.learning].find(item => item.id === id) || null;
+        }
+
+        async _recordWatchHistory(item) {
+            if (!item?.id || this.historyRecordedVideoId === item.id) return;
+            this.historyRecordedVideoId = item.id;
+            this.history = mergeWatchHistory(this.history, item);
+            this._syncNav();
+            try {
+                await storageSet({ [STORAGE_KEYS.history]: this.history });
+            } catch (error) {
+                console.debug('YouTube 本地观看历史保存失败', error);
+            }
         }
 
         async _addLocal(type, item) {
@@ -1615,12 +1675,14 @@
         }
 
         async _removeLocal(type, id) {
-            const key = type === 'learning' ? 'learning' : 'queue';
-            if (key === 'learning') this.learning = this.learning.filter(item => item.id !== id);
+            const key = type === 'history' ? 'history' : (type === 'learning' ? 'learning' : 'queue');
+            if (key === 'history') this.history = this.history.filter(item => item.id !== id);
+            else if (key === 'learning') this.learning = this.learning.filter(item => item.id !== id);
             else this.queue = this.queue.filter(item => item.id !== id);
-            await storageSet({ [STORAGE_KEYS[key]]: key === 'learning' ? this.learning : this.queue });
+            const list = key === 'history' ? this.history : (key === 'learning' ? this.learning : this.queue);
+            await storageSet({ [STORAGE_KEYS[key]]: list });
             this._renderActiveView();
-            this._setStatus('已从本地清单移除');
+            this._setStatus(key === 'history' ? '已从观看历史移除' : '已从本地清单移除');
         }
 
         async _prepareOrClearLocal(button) {
@@ -1629,7 +1691,7 @@
                 this.clearLocalArmedUntil = now + 5000;
                 button.textContent = '再次点击确认清空';
                 button.classList.add('is-armed');
-                this._setStatus('将删除本地稍后看、学习清单和 YouTube 偏好；5 秒内再次点击确认');
+                this._setStatus('将删除本地观看历史、稍后看、学习清单和 YouTube 偏好；5 秒内再次点击确认');
                 setTimeout(() => {
                     if (!button.isConnected || Date.now() <= this.clearLocalArmedUntil) return;
                     button.innerHTML = '<i class="far fa-trash-alt"></i> 清空 YouTube 本地数据';
@@ -1639,6 +1701,7 @@
             }
             this.queue = [];
             this.learning = [];
+            this.history = [];
             this.settings = {};
             this.trendCategoryId = DEFAULT_TREND_CATEGORY_ID;
             this.trendCache.clear();
@@ -1646,6 +1709,7 @@
             await storageSet({
                 [STORAGE_KEYS.queue]: [],
                 [STORAGE_KEYS.learning]: [],
+                [STORAGE_KEYS.history]: [],
                 [STORAGE_KEYS.settings]: {},
             });
             this._syncNav();
@@ -1660,6 +1724,6 @@
         }
     }
 
-    window.YouTubeWorkbench = Object.freeze({ parseYouTubeVideoId, extractYouTubeVideoId, normalizeYouTubeChannelUrl, getYouTubeChannelLookup, parseIso8601DurationSeconds, isLongFormTrendVideo, mergeSearchVideoIds, selectHighQualityTrendVideos, STORAGE_KEYS });
+    window.YouTubeWorkbench = Object.freeze({ parseYouTubeVideoId, extractYouTubeVideoId, normalizeYouTubeChannelUrl, getYouTubeChannelLookup, parseIso8601DurationSeconds, isLongFormTrendVideo, mergeSearchVideoIds, selectHighQualityTrendVideos, mergeWatchHistory, STORAGE_KEYS });
     window.youtubeController = new YouTubeController();
 })();

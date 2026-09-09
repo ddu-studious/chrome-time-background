@@ -485,7 +485,7 @@
 
     getDefaultConfig() {
       return {
-        version: 3,
+        version: 4,
         items: APP_REGISTRY.filter(a => a.defaultInDock).map(a => ({ type: 'app', appId: a.id })),
         hiddenApps: [],
         lastModified: Date.now(),
@@ -517,17 +517,20 @@
     }
 
     async _migrateConfig() {
-      if (!this.config || Number(this.config.version || 0) >= 3) return;
+      if (!this.config || Number(this.config.version || 0) >= 4) return;
       this.config.items = Array.isArray(this.config.items) ? this.config.items : [];
       this.config.hiddenApps = Array.isArray(this.config.hiddenApps) ? this.config.hiddenApps : [];
-      const appId = 'site-workspace';
-      const alreadyPresent = this.config.items.some(item => item.type === 'app' && item.appId === appId)
+      const hasApp = appId => this.config.items.some(item => item.type === 'app' && item.appId === appId)
         || this.config.items.some(item => item.type === 'group' && Array.isArray(item.children) && item.children.includes(appId));
-      if (!alreadyPresent && !this.config.hiddenApps.includes(appId)) {
+      if (Number(this.config.version || 0) < 3 && !hasApp('site-workspace') && !this.config.hiddenApps.includes('site-workspace')) {
         const quickNavIndex = this.config.items.findIndex(item => item.type === 'app' && item.appId === 'quick-nav');
-        this.config.items.splice(quickNavIndex >= 0 ? quickNavIndex + 1 : this.config.items.length, 0, { type: 'app', appId });
+        this.config.items.splice(quickNavIndex >= 0 ? quickNavIndex + 1 : this.config.items.length, 0, { type: 'app', appId: 'site-workspace' });
       }
-      this.config.version = 3;
+      if (!hasApp('alarm') && !this.config.hiddenApps.includes('alarm')) {
+        const scheduleIndex = this.config.items.findIndex(item => item.type === 'app' && item.appId === 'schedule');
+        this.config.items.splice(scheduleIndex >= 0 ? scheduleIndex + 1 : this.config.items.length, 0, { type: 'app', appId: 'alarm' });
+      }
+      this.config.version = 4;
       await this.saveConfig();
     }
 

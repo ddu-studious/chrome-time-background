@@ -1,0 +1,393 @@
+.alarm-center-overlay,
+.alarm-ringing-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .24s ease, visibility .24s ease;
+  color: #f8fafc;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.alarm-center-overlay.open,
+.alarm-ringing-overlay.open {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.alarm-center-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 6, 23, .64);
+  backdrop-filter: blur(18px) saturate(118%);
+}
+
+.alarm-center {
+  position: absolute;
+  inset: clamp(20px, 5vh, 56px) clamp(20px, 6vw, 92px);
+  max-width: 1180px;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 78% 0%, rgba(251, 146, 60, .16), transparent 34%),
+    radial-gradient(circle at 12% 90%, rgba(56, 189, 248, .12), transparent 32%),
+    rgba(10, 16, 31, .9);
+  box-shadow: 0 36px 100px rgba(0, 0, 0, .48), inset 0 1px 0 rgba(255, 255, 255, .08);
+  transform: translateY(18px) scale(.985);
+  transition: transform .28s cubic-bezier(.2, .8, .2, 1);
+}
+
+.alarm-center-overlay.open .alarm-center { transform: none; }
+
+.alarm-center-header,
+.alarm-section-heading,
+.alarm-next-card,
+.alarm-editor-actions,
+.alarm-ringing-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.alarm-center-header {
+  padding: 24px 28px 16px;
+}
+
+.alarm-center-header h2 {
+  margin: 3px 0;
+  font-size: 28px;
+  letter-spacing: -.03em;
+}
+
+.alarm-center-header h2 i { color: #fb923c; font-size: 22px; margin-right: 8px; }
+.alarm-center-header p { margin: 0; color: #94a3b8; font-size: 13px; }
+.alarm-kicker { color: #fbbf24; font-size: 10px; font-weight: 800; letter-spacing: .2em; }
+
+.alarm-icon-button,
+.alarm-item-actions button {
+  width: 36px;
+  height: 36px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .06);
+  color: #cbd5e1;
+  cursor: pointer;
+}
+
+.alarm-icon-button:hover,
+.alarm-item-actions button:hover { background: rgba(255, 255, 255, .12); color: #fff; }
+
+.alarm-next-card {
+  margin: 0 28px;
+  padding: 20px 22px;
+  border: 1px solid rgba(251, 146, 60, .22);
+  border-radius: 20px;
+  background: linear-gradient(125deg, rgba(251, 146, 60, .14), rgba(245, 158, 11, .04));
+}
+
+.alarm-next-card > div { display: grid; gap: 4px; }
+.alarm-next-card span { color: #fdba74; font-size: 12px; }
+.alarm-next-card strong { font-size: 22px; font-weight: 720; }
+.alarm-next-card small { color: #94a3b8; }
+
+.alarm-primary-button,
+.alarm-secondary-button,
+.alarm-snooze-button,
+.alarm-stop-button {
+  min-height: 42px;
+  padding: 0 17px;
+  border: 0;
+  border-radius: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.alarm-primary-button {
+  color: #1c1007;
+  background: linear-gradient(135deg, #fdba74, #fb923c);
+  box-shadow: 0 10px 30px rgba(251, 146, 60, .2);
+}
+
+.alarm-secondary-button {
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, .08);
+  border: 1px solid rgba(255, 255, 255, .12);
+}
+
+.alarm-quick-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px 28px 8px;
+}
+
+.alarm-quick-row > span { margin-right: 5px; color: #94a3b8; font-size: 12px; }
+.alarm-quick-row button,
+.alarm-text-button {
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .05);
+  color: #cbd5e1;
+  cursor: pointer;
+}
+.alarm-quick-row button { padding: 7px 12px; font-size: 12px; }
+.alarm-quick-row button:hover { border-color: rgba(251, 146, 60, .5); color: #fed7aa; }
+
+.alarm-health {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 7px 28px 15px;
+}
+
+.alarm-health-item {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: rgba(34, 197, 94, .09);
+  color: #86efac;
+  font-size: 11px;
+}
+.alarm-health-item.warning { background: rgba(245, 158, 11, .1); color: #fcd34d; }
+
+.alarm-workspace {
+  min-height: 0;
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(330px, .82fr);
+  gap: 18px;
+  padding: 0 28px 28px;
+}
+
+.alarm-list-section,
+.alarm-editor {
+  min-height: 0;
+  overflow: auto;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 20px;
+  background: rgba(15, 23, 42, .62);
+}
+
+.alarm-editor[hidden] { display: none; }
+.alarm-editor[hidden] + * { display: none; }
+.alarm-workspace:has(.alarm-editor[hidden]) { grid-template-columns: 1fr; }
+.alarm-section-heading { margin-bottom: 14px; }
+.alarm-section-heading h3 { margin: 0; font-size: 16px; }
+.alarm-section-heading small { color: #64748b; font-size: 11px; }
+.alarm-text-button { padding: 7px 10px; }
+
+.alarm-list { display: grid; gap: 9px; }
+.alarm-item {
+  display: grid;
+  grid-template-columns: auto 76px minmax(0, 1fr) auto;
+  gap: 13px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .035);
+  transition: opacity .2s ease, border-color .2s ease, transform .2s ease;
+}
+.alarm-item:hover { transform: translateY(-1px); border-color: rgba(251, 146, 60, .25); }
+.alarm-item.disabled { opacity: .48; }
+.alarm-item-time { font-size: 25px; font-weight: 760; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.alarm-item-copy { min-width: 0; display: grid; gap: 3px; }
+.alarm-item-copy strong,
+.alarm-item-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.alarm-item-copy strong { font-size: 13px; }
+.alarm-item-copy span { color: #94a3b8; font-size: 11px; }
+.alarm-item-actions { display: flex; gap: 5px; }
+.alarm-item-actions button { width: 31px; height: 31px; border-radius: 10px; }
+
+.alarm-switch input { position: absolute; opacity: 0; }
+.alarm-switch span {
+  position: relative;
+  display: block;
+  width: 36px;
+  height: 21px;
+  border-radius: 999px;
+  background: #334155;
+  cursor: pointer;
+}
+.alarm-switch span::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform .2s ease;
+}
+.alarm-switch input:checked + span { background: #f97316; }
+.alarm-switch input:checked + span::after { transform: translateX(15px); }
+
+.alarm-empty {
+  min-height: 190px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 7px;
+  color: #64748b;
+}
+.alarm-empty i { font-size: 38px; color: #475569; }
+.alarm-empty strong { color: #cbd5e1; }
+.alarm-empty span { font-size: 12px; }
+
+.alarm-editor { display: flex; flex-direction: column; gap: 12px; }
+.alarm-field,
+.alarm-range-field { display: grid; gap: 6px; }
+.alarm-field > span,
+.alarm-range-field > span { color: #94a3b8; font-size: 11px; font-weight: 650; }
+.alarm-field input,
+.alarm-field select {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  box-sizing: border-box;
+  padding: 0 11px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 11px;
+  outline: 0;
+  background: rgba(2, 6, 23, .55);
+  color: #f8fafc;
+}
+.alarm-field input:focus,
+.alarm-field select:focus { border-color: rgba(251, 146, 60, .7); box-shadow: 0 0 0 3px rgba(251, 146, 60, .1); }
+.alarm-field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.alarm-range-field > span { display: flex; justify-content: space-between; }
+.alarm-range-field input { accent-color: #fb923c; }
+
+.alarm-day-picker { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+.alarm-day-picker[hidden] { display: none; }
+.alarm-day-picker input { position: absolute; opacity: 0; }
+.alarm-day-picker span {
+  display: grid;
+  place-items: center;
+  height: 32px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 10px;
+  color: #94a3b8;
+  cursor: pointer;
+}
+.alarm-day-picker input:checked + span { border-color: #fb923c; background: rgba(251, 146, 60, .14); color: #fed7aa; }
+
+.alarm-checkbox { display: flex; gap: 9px; align-items: flex-start; }
+.alarm-checkbox input { margin-top: 3px; accent-color: #fb923c; }
+.alarm-checkbox span { display: grid; gap: 2px; }
+.alarm-checkbox b { font-size: 12px; }
+.alarm-checkbox small { color: #64748b; font-size: 10px; }
+.alarm-checkbox:has(input:disabled) { opacity: .45; }
+.alarm-editor-error { min-height: 16px; color: #fca5a5; font-size: 11px; }
+.alarm-editor-actions { margin-top: auto; gap: 9px; }
+.alarm-editor-actions button { flex: 1; }
+
+.alarm-ringing-overlay {
+  z-index: 14000;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(251, 146, 60, .26), transparent 28%),
+    rgba(2, 6, 23, .88);
+  backdrop-filter: blur(20px);
+}
+
+.alarm-ringing-glow {
+  position: absolute;
+  width: min(62vw, 650px);
+  aspect-ratio: 1;
+  border: 1px solid rgba(251, 146, 60, .28);
+  border-radius: 50%;
+  box-shadow: 0 0 100px rgba(251, 146, 60, .16), inset 0 0 80px rgba(251, 146, 60, .08);
+  animation: alarm-breathe 2.4s ease-in-out infinite;
+}
+
+.alarm-ringing-glow::before,
+.alarm-ringing-glow::after {
+  content: '';
+  position: absolute;
+  inset: 12%;
+  border: 1px solid rgba(253, 186, 116, .2);
+  border-radius: inherit;
+}
+.alarm-ringing-glow::after { inset: 25%; }
+
+.alarm-ringing-card {
+  position: relative;
+  z-index: 1;
+  width: min(520px, calc(100vw - 40px));
+  box-sizing: border-box;
+  padding: 42px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 30px;
+  text-align: center;
+  background: rgba(15, 23, 42, .78);
+  box-shadow: 0 36px 100px rgba(0, 0, 0, .46);
+}
+.alarm-ringing-kicker { color: #fdba74; font-size: 11px; font-weight: 800; letter-spacing: .28em; }
+.alarm-ringing-card time { display: block; margin: 12px 0 2px; font-size: clamp(56px, 10vw, 88px); font-weight: 780; letter-spacing: -.065em; font-variant-numeric: tabular-nums; }
+.alarm-ringing-card h1,
+.alarm-ringing-card h2 { margin: 0; font-size: 25px; }
+.alarm-ringing-card p { margin: 8px 0 28px; color: #94a3b8; }
+.alarm-ringing-actions { gap: 10px; }
+.alarm-ringing-actions button { flex: 1; min-height: 50px; }
+.alarm-snooze-button { color: #e2e8f0; background: rgba(255, 255, 255, .09); border: 1px solid rgba(255, 255, 255, .13); }
+.alarm-stop-button { color: #230d08; background: linear-gradient(135deg, #fdba74, #f97316); }
+
+.alarm-toast {
+  position: fixed;
+  z-index: 15000;
+  left: 50%;
+  bottom: 42px;
+  transform: translate(-50%, 14px);
+  padding: 11px 16px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, .94);
+  color: #f8fafc;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .35);
+  opacity: 0;
+  transition: .22s ease;
+}
+.alarm-toast.show { opacity: 1; transform: translate(-50%, 0); }
+.alarm-toast.error { border-color: rgba(248, 113, 113, .4); color: #fecaca; }
+
+@keyframes alarm-breathe {
+  0%, 100% { transform: scale(.92); opacity: .6; }
+  50% { transform: scale(1.05); opacity: 1; }
+}
+
+@media (max-width: 780px) {
+  .alarm-center { inset: 12px; border-radius: 22px; }
+  .alarm-center-header { padding: 19px 18px 13px; }
+  .alarm-next-card { margin: 0 18px; align-items: flex-start; gap: 14px; }
+  .alarm-next-card { flex-direction: column; }
+  .alarm-quick-row, .alarm-health { padding-left: 18px; padding-right: 18px; }
+  .alarm-workspace { grid-template-columns: 1fr; padding: 0 18px 18px; }
+  .alarm-workspace:has(.alarm-editor:not([hidden])) .alarm-list-section { display: none; }
+  .alarm-item { grid-template-columns: auto 68px minmax(0, 1fr); }
+  .alarm-item-actions { grid-column: 2 / -1; justify-content: flex-end; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .alarm-center-overlay,
+  .alarm-ringing-overlay,
+  .alarm-center,
+  .alarm-item,
+  .alarm-switch span::after,
+  .alarm-toast { transition: none; }
+  .alarm-ringing-glow { animation: none; opacity: .8; }
+}

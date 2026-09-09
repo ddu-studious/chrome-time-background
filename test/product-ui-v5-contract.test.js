@@ -13,7 +13,7 @@ test('v5 状态层先于产品外壳和音乐工作台加载', () => {
   assert.ok(stateIndex >= 0);
   assert.ok(stateIndex < html.indexOf('js/music-view.js?v=6'));
   assert.ok(stateIndex < html.indexOf('js/product-shell-v5.js'));
-  assert.ok(html.includes('css/product-ui-v5.css?v=40'));
+  assert.ok(html.includes('css/product-ui-v5.css?v=43'));
 });
 
 test('首页浮岛按钮统一为毛玻璃材质', () => {
@@ -23,11 +23,22 @@ test('首页浮岛按钮统一为毛玻璃材质', () => {
   assert.match(style, /background: linear-gradient\(145deg, rgba\(255, 255, 255, \.17\), rgba\(139, 108, 255, \.14\)\)/);
 });
 
-test('首页三张信息卡遮罩和模糊再次减半以显露背景细节', () => {
+test('首页三张信息卡使用 3.5% 到 1.75% 的轻遮罩', () => {
   const style = read('css/product-ui-v5.css');
 
-  assert.match(style, /\.v5-home-card \{[\s\S]*?background: linear-gradient\(135deg, rgba\(255, 255, 255, \.0175\), rgba\(255, 255, 255, \.006\)\)[\s\S]*?backdrop-filter: blur\(6px\) saturate\(110%\)[\s\S]*?text-shadow:/);
+  assert.match(style, /\.v5-home-card \{[\s\S]*?background: linear-gradient\(135deg, rgba\(255, 255, 255, \.035\), rgba\(255, 255, 255, \.0175\)\)[\s\S]*?backdrop-filter: blur\(1px\) saturate\(110%\)[\s\S]*?text-shadow:/);
   assert.match(style, /\.v5-home-player:hover \{[^}]*background: linear-gradient\(135deg, rgba\(255, 255, 255, \.0325\), rgba\(255, 255, 255, \.0125\)\)/);
+});
+
+test('极简模式隐藏新版首页模块并把快捷操作区放到左上对角位', () => {
+  const style = read('css/product-ui-v5.css');
+
+  assert.match(style, /\.v5-shell-toolbar \{[\s\S]*?left: 22px;[\s\S]*?right: auto;/);
+  assert.match(style, /body\.zen-mode :is\([\s\S]*?\.v5-shell-home,[\s\S]*?\.v5-shell-toolbar[\s\S]*?\) \{[\s\S]*?opacity: 0 !important;[\s\S]*?animation: zen-stagger-shrink \.62s cubic-bezier\(\.34, 1\.4, \.64, 1\)/);
+  assert.match(style, /@keyframes zen-stagger-shrink \{[\s\S]*?58% \{ opacity: \.72; scale: \.86;[\s\S]*?100% \{ opacity: 0; scale: \.56; filter: blur\(3px\); \}/);
+  assert.match(style, /body\.zen-mode \.v5-shell-home \{ --zen-stagger-delay: 40ms; \}/);
+  assert.match(style, /body\.zen-mode \.v5-shell-toolbar \{ --zen-stagger-delay: 140ms; \}/);
+  assert.match(style, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?animation: none !important;/);
 });
 
 test('共享视图状态严格限定 5 个外壳页面与 10 个音乐页面', () => {

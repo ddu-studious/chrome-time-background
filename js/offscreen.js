@@ -18,6 +18,109 @@ let currentState = {
     songId: null,
 };
 let playGeneration = 0;
+let alarmAudioContext = null;
+let alarmMasterGain = null;
+let alarmSchedulerTimer = null;
+let alarmAutoStopTimer = null;
+let alarmSessionId = null;
+let alarmMusicDucked = false;
+
+const ALARM_TONES = Object.freeze({
+    chime: { cycle: 2.4, notes: [[659, 0, .24], [784, .34, .24], [988, .7, .5]] },
+    rise: { cycle: 2.8, notes: [[392, 0, .32], [494, .4, .32], [587, .8, .32], [784, 1.2, .65]] },
+    urgent: { cycle: 1.6, notes: [[880, 0, .22], [880, .3, .22], [1047, .65, .38]] },
+    water: { cycle: 3.2, notes: [[523, 0, .45], [659, .55, .4], [784, 1.15, .7]] },
+});
+
+function effectiveMusicVolume() {
+    return Math.max(0, Math.min(1, currentState.volume * (alarmMusicDucked ? 0.2 : 1)));
+}
+
+function setMusicDuck(ducked) {
+    alarmMusicDucked = ducked;
+    player.volume = effectiveMusicVolume();
+}
+
+function scheduleAlarmNote(frequency, startsIn, duration) {
+    if (!alarmAudioContext || !alarmMasterGain) return;
+    const startAt = alarmAudioContext.currentTime + startsIn;
+    const oscillator = alarmAudioContext.createOscillator();
+    const noteGain = alarmAudioContext.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(frequency, startAt);
+    noteGain.gain.setValueAtTime(0.0001, startAt);
+    noteGain.gain.exponentialRampToValueAtTime(0.72, startAt + 0.025);
+    noteGain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+    oscillator.connect(noteGain);
+    noteGain.connect(alarmMasterGain);
+    oscillator.start(startAt);
+    oscillator.stop(startAt + duration + 0.04);
+}
+
+function scheduleAlarmPattern(soundId) {
+    const profile = ALARM_TONES[soundId] || ALARM_TONES.chime;
+    for (const [frequency, offset, duration] of profile.notes) {
+        scheduleAlarmNote(frequency, offset, duration);
+    }
+    return profile.cycle;
+}
+
+async function stopAlarmTone(requestedSessionId = null) {
+    if (requestedSessionId && alarmSessionId && requestedSessionId !== alarmSessionId) {
+        return { ok: false, error: 'session-mismatch', sessionId: alarmSessionId };
+    }
+    clearInterval(alarmSchedulerTimer);
+    clearTimeout(alarmAutoStopTimer);
+    alarmSchedulerTimer = null;
+    alarmAutoStopTimer = null;
+    alarmSessionId = null;
+    setMusicDuck(false);
+    if (alarmAudioContext) {
+        try { await alarmAudioContext.close(); } catch (_) {}
+    }
+    alarmAudioContext = null;
+    alarmMasterGain = null;
+    return { ok: true };
+}
+
+async function startAlarmTone(options) {
+    const sessionId = String(options.sessionId || `alarm_${Date.now()}`);
+    if (alarmSessionId === sessionId && alarmAudioContext?.state !== 'closed') {
+        return { ok: true, alreadyPlaying: true, sessionId };
+    }
+    await stopAlarmTone();
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return { ok: false, error: 'audio-context-unavailable' };
+
+    alarmAudioContext = new AudioContextClass();
+    alarmMasterGain = alarmAudioContext.createGain();
+    alarmMasterGain.connect(alarmAudioContext.destination);
+    const volume = Math.max(0.05, Math.min(1, Number(options.volume) || 0.8));
+    const fadeSeconds = Math.max(0, Math.min(60, Number(options.fadeSeconds) || 0));
+    const now = alarmAudioContext.currentTime;
+    alarmMasterGain.gain.setValueAtTime(fadeSeconds > 0 ? 0.0001 : volume, now);
+    if (fadeSeconds > 0) {
+        alarmMasterGain.gain.exponentialRampToValueAtTime(volume, now + fadeSeconds);
+    }
+    alarmSessionId = sessionId;
+    setMusicDuck(true);
+    try {
+        await alarmAudioContext.resume();
+    } catch (error) {
+        await stopAlarmTone(sessionId);
+        throw error;
+    }
+
+    const cycleSeconds = scheduleAlarmPattern(options.soundId);
+    alarmSchedulerTimer = setInterval(() => scheduleAlarmPattern(options.soundId), cycleSeconds * 1000);
+    const autoStopAfterMs = Math.max(1000, Math.min(15 * 60 * 1000, Number(options.autoStopAfterMs) || 15 * 60 * 1000));
+    alarmAutoStopTimer = setTimeout(() => {
+        stopAlarmTone(sessionId).then(() => {
+            chrome.runtime.sendMessage({ action: 'offscreen_alarm_timeout', sessionId }).catch(() => {});
+        });
+    }, autoStopAfterMs);
+    return { ok: true, sessionId };
+}
 
 player.addEventListener('timeupdate', () => {
     currentState.currentTime = player.currentTime;
@@ -117,7 +220,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
                 currentState.cover = cover || '';
                 currentState.songId = songId || null;
                 player.src = url;
-                player.volume = currentState.volume;
+                player.volume = effectiveMusicVolume();
                 player.play().then(() => {
                     if (generation !== playGeneration) return;
                     updateMediaSession();
@@ -168,11 +271,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             break;
         case 'setVolume': {
             const vol = Math.max(0, Math.min(1, msg.value));
-            player.volume = vol;
             currentState.volume = vol;
+            player.volume = effectiveMusicVolume();
             sendResponse({ ok: true });
             break;
         }
+        case 'alarmPlay':
+            startAlarmTone(msg).then(sendResponse).catch(error => {
+                sendResponse({ ok: false, error: error?.message || 'alarm-play-failed' });
+            });
+            return true;
+        case 'alarmStop':
+            stopAlarmTone(msg.sessionId || null).then(sendResponse);
+            return true;
         case 'getState':
             currentState.currentTime = player.currentTime;
             currentState.duration = player.duration || 0;

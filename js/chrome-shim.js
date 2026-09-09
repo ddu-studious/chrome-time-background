@@ -83,8 +83,22 @@
     (() => ({ name: '中国风景时钟（本地预览）', version: 'preview' }));
   globalThis.chrome.runtime.sendMessage =
     globalThis.chrome.runtime.sendMessage ||
-    ((_msg, cb) => {
-      cb && cb({});
+    ((msg, cb) => {
+      const response = msg?.action === 'getBackgrounds'
+        ? {
+            source: 'local-preview',
+            backgrounds: [{
+              url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1920&q=88',
+              location: 'Yosemite Valley',
+              description: 'Local preview landscape',
+              photographer: 'Unsplash',
+              source: 'fallback',
+              mediaType: 'image',
+            }],
+          }
+        : {};
+      cb && cb(response);
+      return Promise.resolve(response);
     });
 
   globalThis.chrome.alarms = globalThis.chrome.alarms || {

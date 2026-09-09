@@ -1,0 +1,193 @@
+:root {
+    --bgx-x: 50%;
+    --bgx-y: 50%;
+    --bgx-depth-x: 0px;
+    --bgx-depth-y: 0px;
+    --bgx-intensity: .65;
+    --bgx-depth-opacity: .4;
+    --bgx-grain-opacity: .05;
+    --bgx-tone-opacity: .45;
+    --bgx-time-opacity: .45;
+    --bgx-reveal-radius: 177px;
+    --bgx-color-1: 112, 205, 255;
+    --bgx-color-2: 170, 111, 255;
+    --bgx-color-3: 79, 239, 194;
+}
+
+.bgx-root {
+    position: fixed;
+    inset: 0;
+    z-index: 2;
+    overflow: hidden;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .45s ease;
+}
+
+.bgx-root.enabled { opacity: 1; }
+
+.bgx-tone,
+.bgx-detail,
+.bgx-time,
+.bgx-grain,
+#background-experience-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.bgx-tone { z-index: 1; opacity: 0; transition: opacity .5s ease, background .5s ease; }
+
+.bgx-detail {
+    z-index: 2;
+    inset: -24px;
+    width: auto;
+    height: auto;
+    background-position: center;
+    background-size: cover;
+    opacity: 0;
+    will-change: transform, mask-image;
+}
+
+#background-experience-canvas { z-index: 3; }
+.bgx-time { z-index: 2; opacity: 0; mix-blend-mode: screen; transition: opacity .5s ease, background .5s ease; }
+
+.bgx-grain {
+    z-index: 4;
+    opacity: 0;
+    mix-blend-mode: soft-light;
+    background-image:
+        repeating-radial-gradient(circle at 18% 22%, rgba(255,255,255,.28) 0 .45px, transparent .55px 2.6px),
+        repeating-radial-gradient(circle at 72% 66%, rgba(0,0,0,.28) 0 .5px, transparent .7px 3.1px);
+    background-size: 7px 7px, 11px 11px;
+    animation: bgx-grain-shift .24s steps(2) infinite;
+}
+
+@keyframes bgx-grain-shift {
+    50% { transform: translate(1%, -1%); }
+}
+
+/* v2：活体景深 */
+.bgx-root[data-visual="depth"] .bgx-detail {
+    opacity: var(--bgx-depth-opacity);
+    filter: brightness(1.1) saturate(1.16) contrast(1.03);
+    transform: translate3d(var(--bgx-depth-x), var(--bgx-depth-y), 0) scale(1.07);
+    -webkit-mask-image: radial-gradient(circle 190px at var(--bgx-x) var(--bgx-y), #000 0 38%, rgba(0,0,0,.8) 58%, transparent 78%);
+    mask-image: radial-gradient(circle 190px at var(--bgx-x) var(--bgx-y), #000 0 38%, rgba(0,0,0,.8) 58%, transparent 78%);
+}
+.bgx-root[data-visual="depth"] .bgx-grain { opacity: var(--bgx-grain-opacity); }
+
+/* v2：天气导演 */
+.bgx-root[data-visual="weather"] .bgx-tone {
+    opacity: var(--bgx-tone-opacity);
+    background: radial-gradient(circle 230px at var(--bgx-x) var(--bgx-y), transparent 0 30%, rgba(170,198,218,.08) 68%, rgba(132,160,184,.16));
+}
+.bgx-root[data-weather="clear"] .bgx-tone {
+    background: radial-gradient(circle at 72% 12%, rgba(255,211,142,.25), transparent 48%);
+    mix-blend-mode: screen;
+}
+.bgx-root[data-weather="night"] .bgx-tone { background: linear-gradient(180deg, rgba(20,31,83,.25), rgba(2,8,24,.22)); }
+
+/* v2：记忆显影 */
+.bgx-root[data-visual="memory"] .bgx-tone {
+    opacity: var(--bgx-tone-opacity);
+    background: rgba(5, 12, 23, .5);
+    backdrop-filter: grayscale(.95) sepia(.12) hue-rotate(165deg) saturate(.62) brightness(.78);
+}
+.bgx-root[data-visual="memory"] .bgx-detail {
+    opacity: 1;
+    filter: saturate(1.15) brightness(1.02);
+    transform: scale(1.045);
+    -webkit-mask-image: radial-gradient(circle var(--bgx-reveal-radius) at var(--bgx-x) var(--bgx-y), #000 0 56%, rgba(0,0,0,.72) 74%, transparent 100%);
+    mask-image: radial-gradient(circle var(--bgx-reveal-radius) at var(--bgx-x) var(--bgx-y), #000 0 56%, rgba(0,0,0,.72) 74%, transparent 100%);
+}
+
+/* v2：液态色场 */
+.bgx-root[data-visual="liquid"] #background-experience-canvas {
+    mix-blend-mode: screen;
+    filter: blur(7px) saturate(1.45);
+}
+.bgx-root[data-visual="liquid"] .bgx-tone { opacity: .2; background: linear-gradient(145deg, rgba(47,21,105,.25), rgba(5,34,49,.18)); }
+
+/* v2：时间光色 */
+.bgx-root[data-visual="time"] .bgx-time { opacity: var(--bgx-time-opacity); }
+
+.bgx-toggle {
+    position: fixed;
+    right: 18px;
+    bottom: 82px;
+    z-index: 88;
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border: 1px solid rgba(255,255,255,.18);
+    border-radius: 50%;
+    color: rgba(239,246,255,.82);
+    background: linear-gradient(145deg, rgba(10,16,28,.72), rgba(13,18,31,.45));
+    box-shadow: 0 12px 32px rgba(0,0,0,.28), inset 0 1px rgba(255,255,255,.08);
+    backdrop-filter: blur(16px) saturate(135%);
+    cursor: pointer;
+    transition: transform .25s ease, color .25s ease, border-color .25s ease, background .25s ease;
+}
+.bgx-toggle[hidden] { display: none; }
+.bgx-toggle .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+.bgx-toggle:hover { transform: translateY(-2px); color: #fff; border-color: rgba(157,211,255,.48); }
+.bgx-toggle[aria-pressed="true"] {
+    color: #fff;
+    border-color: rgba(139,207,255,.55);
+    background: linear-gradient(135deg, rgba(var(--bgx-color-1),.34), rgba(var(--bgx-color-2),.3));
+    box-shadow: 0 0 28px rgba(var(--bgx-color-1),.28), inset 0 1px rgba(255,255,255,.12);
+}
+
+.bgx-hud {
+    position: fixed;
+    right: 66px;
+    bottom: 78px;
+    z-index: 87;
+    width: 210px;
+    padding: 10px 12px;
+    border: 1px solid rgba(255,255,255,.13);
+    border-radius: 15px;
+    color: #fff;
+    background: linear-gradient(145deg, rgba(7,12,22,.78), rgba(9,14,25,.5));
+    box-shadow: 0 16px 42px rgba(0,0,0,.25), inset 0 1px rgba(255,255,255,.07);
+    backdrop-filter: blur(18px) saturate(135%);
+    opacity: 0;
+    transform: translateX(8px) scale(.97);
+    pointer-events: none;
+    transition: opacity .25s ease, transform .25s ease;
+}
+.bgx-hud.visible { opacity: 1; transform: translateX(0) scale(1); }
+.bgx-hud > div { display: flex; align-items: center; justify-content: space-between; }
+.bgx-hud > div span { color: rgba(226,237,255,.5); font-size: 8px; letter-spacing: .14em; }
+.bgx-hud > div b { font-size: 19px; }
+.bgx-hud > i { display: block; height: 3px; margin-top: 5px; overflow: hidden; border-radius: 99px; background: rgba(255,255,255,.08); }
+.bgx-hud > i span { display: block; width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, rgb(var(--bgx-color-1)), rgb(var(--bgx-color-2)), rgb(var(--bgx-color-3))); transition: width .2s ease; }
+.bgx-hud p { margin: 7px 0 0; overflow: hidden; color: rgba(231,240,255,.65); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+
+body.zen-mode .bgx-toggle,
+body.zen-mode .bgx-hud { opacity: 0; pointer-events: none; }
+
+@media (prefers-reduced-motion: reduce) {
+    .bgx-grain { animation: none; }
+    .bgx-detail { transform: scale(1.045) !important; }
+}
+
+@media (max-width: 680px) {
+    .bgx-toggle { right: 12px; bottom: 76px; }
+    .bgx-hud { right: 58px; bottom: 72px; width: 178px; }
+}

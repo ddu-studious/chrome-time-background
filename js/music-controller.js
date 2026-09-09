@@ -2781,14 +2781,10 @@ class MusicController {
             const songsEl = pane.querySelector('#mc-discover-songs');
             if (!songsEl || isStale()) return false;
             try {
-                const resp = await this._neteaseApi('/api/v3/discovery/recommend/songs');
+                const dailySongs = await this._fetchDailyRecommendationSongs();
                 if (isStale()) return false;
-                const dailySongs = resp?.ok ? (resp?.data?.data?.dailySongs || resp?.data?.dailySongs) : null;
                 if (dailySongs?.length > 0) {
-                    this._recommendSongs = dailySongs.map((s, i) => {
-                        const ar = (s.ar || []).map(a => ({ id: a.id, name: a.name }));
-                        return { title: s.name, artist: ar.map(a => a.name).join('/'), artists: ar, albumId: s.al?.id || null, songId: s.id, index: i };
-                    });
+                    this._recommendSongs = dailySongs;
                     if (!isStale()) { songsEl.innerHTML = ''; this._renderRecommend(songsEl, this._recommendSongs, '每日推荐'); }
                     return true;
                 }
@@ -2842,6 +2838,25 @@ class MusicController {
             pane.querySelector('#mc-discover-newsongs')?.innerHTML === '') {
             pane.innerHTML = '<div class="mc-empty">加载失败，请切换 Tab 后重试</div>';
         }
+    }
+
+    async _fetchDailyRecommendationSongs() {
+        const resp = await this._neteaseApi('/api/v3/discovery/recommend/songs');
+        const dailySongs = resp?.ok ? (resp?.data?.data?.dailySongs || resp?.data?.dailySongs) : [];
+        return Array.isArray(dailySongs) ? dailySongs.map((song, index) => {
+            const artists = (song.ar || []).map(artist => ({ id: artist.id, name: artist.name }));
+            return {
+                title: song.name || '',
+                artist: artists.map(artist => artist.name).join('/'),
+                artists,
+                albumId: song.al?.id || null,
+                cover: song.al?.picUrl ? `${song.al.picUrl}?param=200y200` : '',
+                album: song.al?.name || '',
+                duration: song.dt || song.duration || 0,
+                songId: song.id,
+                index,
+            };
+        }).filter(song => song.songId) : [];
     }
 
     async _loadRecommendPlaylists(pane, hasSongs) {

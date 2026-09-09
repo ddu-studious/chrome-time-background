@@ -28,7 +28,7 @@ test('工作台接入 Dock、启动流程、设置和 v5 页面注册表', () =>
   const settingsHtml = read('settings.html');
   assert.ok(index.includes('id="youtube-dock-btn"'));
   assert.ok(index.includes('css/youtube-workbench.css?v=3'));
-  assert.ok(index.includes('js/youtube-controller.js?v=11'));
+  assert.ok(index.includes('js/youtube-controller.js?v=12'));
   assert.ok(main.includes("getSetting('enableYouTube')"));
   assert.ok(main.includes('await window.youtubeController.init()'));
   assert.ok(settings.includes('enableYouTube: true'));
@@ -59,6 +59,143 @@ test('YouTube 默认展示订阅推荐，并明确区别于官方首页算法', 
     '非 YouTube 首页算法',
   ]) assert.ok(source.includes(contract), `缺少订阅推荐契约: ${contract}`);
   assert.equal(source.includes('YouTube 官方为你推荐'), false, '不能把扩展整理结果冒充 YouTube 官方首页推荐');
+});
+
+test('左侧观看历史只记录扩展播放器内真正开始播放的视频', () => {
+  const source = read('js/youtube-controller.js');
+  for (const contract of [
+    "history: 'youtubeWatchHistory'",
+    "data-youtube-view=\"history\"",
+    '<span>观看历史</span>',
+    'previousPlayerState !== 1',
+    "this.playerBridge.playerState === 1",
+    'this._recordWatchHistory(this.currentVideo)',
+    "localType: 'history'",
+    '不同步 YouTube 官方历史',
+  ]) assert.ok(source.includes(contract), `缺少本地观看历史契约: ${contract}`);
+  assert.equal(source.includes("resource: 'watchHistory'"), false, '不能把本地观看历史伪装成 YouTube Data API 能力');
+
+  const context = { window: {}, URL, console };
+  vm.runInNewContext(source, context);
+  const merge = context.window.YouTubeWorkbench.mergeWatchHistory;
+  const first = { id: 'AAA00000001', title: '第一次观看', kind: 'video' };
+  const second = { id: 'AAA00000002', title: '第二个视频', kind: 'video' };
+  let history = merge([], first, '2026-09-09T08:00:00.000Z');
+  history = merge(history, second, '2026-09-09T09:00:00.000Z');
+  history = merge(history, { ...first, title: '再次观看' }, '2026-09-09T10:00:00.000Z');
+  assert.deepEqual(Array.from(history, item => item.id), ['AAA00000001', 'AAA00000002']);
+  assert.equal(history[0].title, '再次观看');
+  assert.equal(history[0].watchedAt, '2026-09-09T10:00:00.000Z');
+  assert.equal(merge(history, { id: 'invalid' }).length, 2);
+  const oversized = Array.from({ length: 100 }, (_, index) => ({ id: `AAA${String(index).padStart(8, '0')}` }));
+  assert.equal(merge(oversized, { id: 'ZZZ00000000' }).length, 100);
+});
+
+test('播放器只有收到 playing 状态才写入本地观看历史', async () => {
+  const writes = [];
+  const frameWindow = {};
+  const context = {
+    URL,
+    console,
+    chrome: {
+      runtime: {},
+      storage: {
+        local: {
+          set(values, callback) {
+            writes.push(values);
+            callback();
+          },
+        },
+      },
+    },
+    window: {},
+  };
+  vm.runInNewContext(read('js/youtube-controller.js'), context);
+  const controller = context.window.youtubeController;
+  controller.currentVideo = { id: 'AAA00000001', title: '真实播放', channel: '测试频道', kind: 'video' };
+  controller.playerBridge = {
+    frame: { contentWindow: frameWindow },
+    ready: false,
+    autoRatePending: false,
+    playerState: -1,
+  };
+  controller._syncNav = () => {};
+  controller._schedulePlayerControlUpdate = () => {};
+
+  controller._handlePlayerMessage({
+    origin: 'https://www.youtube.com',
+    source: frameWindow,
+    data: JSON.stringify({ event: 'onStateChange', info: 2 }),
+  });
+  assert.equal(controller.history.length, 0, '暂停状态不能写入观看历史');
+
+  controller._handlePlayerMessage({
+    origin: 'https://www.youtube.com',
+    source: frameWindow,
+    data: JSON.stringify({ event: 'onStateChange', info: 1 }),
+  });
+  await Promise.resolve();
+  assert.equal(controller.history.length, 1);
+  assert.equal(writes.length, 1);
+
+  controller._handlePlayerMessage({
+    origin: 'https://www.youtube.com',
+    source: frameWindow,
+    data: JSON.stringify({ event: 'onStateChange', info: 1 }),
+  });
+  await Promise.resolve();
+  assert.equal(writes.length, 1, '同一次播放会话不能重复写入');
+});
+
+test('播放器通过 infoDelivery 上报 playing 时也会写入观看历史', async () => {
+  const writes = [];
+  const frameWindow = {};
+  const context = {
+    URL,
+    console,
+    chrome: {
+      runtime: {},
+      storage: {
+        local: {
+          set(values, callback) {
+            writes.push(values);
+            callback();
+          },
+        },
+      },
+    },
+    window: {},
+  };
+  vm.runInNewContext(read('js/youtube-controller.js'), context);
+  const controller = context.window.youtubeController;
+  controller.currentVideo = { id: 'AAA00000002', title: 'infoDelivery 播放', channel: '测试频道', kind: 'video' };
+  controller.playerBridge = {
+    frame: { contentWindow: frameWindow },
+    ready: true,
+    autoRatePending: false,
+    playerState: -1,
+    availableRates: [1, 2],
+  };
+  controller._syncNav = () => {};
+  controller._schedulePlayerControlUpdate = () => {};
+
+  controller._handlePlayerMessage({
+    origin: 'https://www.youtube.com',
+    source: frameWindow,
+    data: JSON.stringify({ event: 'infoDelivery', info: { playerState: 1, currentTime: 0.5, duration: 300 } }),
+  });
+  await Promise.resolve();
+  assert.equal(controller.history.length, 1);
+  assert.equal(controller.history[0].id, 'AAA00000002');
+  assert.equal(writes.length, 1);
+
+  controller._handlePlayerMessage({
+    origin: 'https://www.youtube.com',
+    source: frameWindow,
+    data: JSON.stringify({ event: 'infoDelivery', info: { playerState: 1, currentTime: 1, duration: 300 } }),
+  });
+  await Promise.resolve();
+  assert.equal(writes.length, 1, '连续状态推送不能重复写入');
 });
 
 test('趋势按用户选择的公开视频分类过滤并持久化选择', () => {

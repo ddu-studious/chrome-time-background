@@ -94,6 +94,8 @@ function _applyBackground(background) {
         window.adaptiveOverlay.analyzeAndApply(background.url);
     }
 
+    window.backgroundExperience?.setBackground(background);
+
     const creditElement = document.getElementById('background-credit');
     if (creditElement) {
         const licenseHtml = background.licenseUrl
@@ -341,6 +343,17 @@ async function initApp() {
     } else {
         console.log('每日计划已禁用（用户设置）');
         document.getElementById('schedule-dock-btn')?.classList.add('hidden');
+    }
+
+    // 初始化桌面闹钟：独立于任务提醒，支持离线声音、贪睡和视觉提醒。
+    try {
+        if (window.alarmCenter && typeof window.alarmCenter.init === 'function') {
+            await window.alarmCenter.init();
+        }
+        document.getElementById('alarm-dock-btn')?.addEventListener('click', () => window.alarmCenter?.toggle());
+        console.log('闹钟中心初始化完成');
+    } catch (error) {
+        console.error('闹钟中心初始化失败:', error);
     }
 
     // 初始化工作日志
@@ -1584,8 +1597,16 @@ async function setupKeyboardShortcuts() {
                     if (backupBtn) backupBtn.click();
                 }, 500);
             }
+            if (pendingAction === 'openAlarmCenter' && window.alarmCenter) {
+                setTimeout(() => window.alarmCenter.open('notification'), 220);
+            }
         }
     } catch { /* ignore */ }
+
+    if (new URLSearchParams(window.location.search).get('alarmAction') === 'open') {
+        setTimeout(() => window.alarmCenter?.open('notification'), 220);
+        history.replaceState({}, '', window.location.pathname);
+    }
 }
 
 // 检查是否有输入框聚焦

@@ -93,7 +93,8 @@ body.v5-home-customized #background-video { filter: brightness(calc(1 - var(--v5
 .v5-shell-toolbar {
   position: fixed;
   top: 140px;
-  right: 22px;
+  left: 22px;
+  right: auto;
   z-index: 44;
   display: flex;
   gap: 5px;
@@ -104,6 +105,7 @@ body.v5-home-customized #background-video { filter: brightness(calc(1 - var(--v5
   background: rgba(8, 14, 25, .78);
   box-shadow: 0 12px 34px rgba(0, 0, 0, .28);
   backdrop-filter: var(--v5-glass);
+  transform-origin: top left;
   transition: opacity .2s ease, transform .2s ease;
 }
 .v5-shell-toolbar button { display: inline-flex; min-height: 32px; align-items: center; gap: 7px; padding: 0 10px; border: 0; border-radius: 8px; color: inherit; background: transparent; cursor: pointer; font-size: 10px; }
@@ -116,11 +118,68 @@ body[data-shell-page="focus"] .v5-shell-toolbar,
 body[data-shell-page="personalize"] .v5-shell-toolbar,
 body[data-shell-page="offline"] .v5-shell-toolbar { opacity: 0; pointer-events: none; transform: translateY(-8px); }
 
+/* 极简模式：新版首页外壳与旧桌面模块错峰缩小退场，只保留时间和背景。 */
+body.zen-mode :is(
+  .ticker-sticky-wrapper,
+  .weather-wrapper,
+  .reading-reco-wrapper,
+  .poetry-radio,
+  .background-credit,
+  .keyboard-hint,
+  .urgent-bubble,
+  .sys-monitor,
+  .music-island,
+  .dock-bar,
+  .v5-shell-home,
+  .v5-shell-toolbar
+) {
+  opacity: 0 !important;
+  scale: .56;
+  filter: blur(3px);
+  pointer-events: none !important;
+  animation: zen-stagger-shrink .62s cubic-bezier(.34, 1.4, .64, 1) var(--zen-stagger-delay, 0ms) both;
+}
+
+body.zen-mode .v5-shell-home { --zen-stagger-delay: 40ms; }
+body.zen-mode .ticker-sticky-wrapper,
+body.zen-mode .weather-wrapper { --zen-stagger-delay: 90ms; }
+body.zen-mode .v5-shell-toolbar { --zen-stagger-delay: 140ms; }
+body.zen-mode .dock-bar,
+body.zen-mode .music-island,
+body.zen-mode .poetry-radio { --zen-stagger-delay: 220ms; }
+
+@keyframes zen-stagger-shrink {
+  0% { opacity: 1; scale: 1; filter: blur(0); }
+  58% { opacity: .72; scale: .86; filter: blur(0); }
+  100% { opacity: 0; scale: .56; filter: blur(3px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.zen-mode :is(
+    .ticker-sticky-wrapper,
+    .weather-wrapper,
+    .reading-reco-wrapper,
+    .poetry-radio,
+    .background-credit,
+    .keyboard-hint,
+    .urgent-bubble,
+    .sys-monitor,
+    .music-island,
+    .dock-bar,
+    .v5-shell-home,
+    .v5-shell-toolbar
+  ) {
+    scale: 1;
+    filter: none;
+    animation: none !important;
+  }
+}
+
 .v5-home-card {
   min-width: 0;
   border: 1px solid rgba(255, 255, 255, .1);
   border-radius: var(--v5-radius-md);
-  background: linear-gradient(135deg, rgba(255, 255, 255, .0175), rgba(255, 255, 255, .006));
+  background: linear-gradient(135deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .0175));
   box-shadow: 0 3px 9px rgba(0, 0, 0, .05), inset 0 1px rgba(255, 255, 255, .04);
   -webkit-backdrop-filter: blur(1px) saturate(110%);
   backdrop-filter: blur(1px) saturate(110%);

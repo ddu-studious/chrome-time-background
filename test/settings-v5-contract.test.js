@@ -16,8 +16,8 @@ test('设置中心映射七个设计页面并复用现有设置表单', () => {
   for (const legacy of ['time', 'weather', 'info', 'schedule', 'worklog', 'background', 'performance', 'about']) {
     assert.ok(source.includes(`'${legacy}'`), `未复用现有设置区 ${legacy}`);
   }
-  assert.match(html, /js\/settings-v5\.js\?v=5/);
-  assert.match(html, /css\/settings-v5\.css\?v=5/);
+  assert.match(html, /js\/settings-v5\.js\?v=6/);
+  assert.match(html, /css\/settings-v5\.css\?v=6/);
 });
 
 test('导入必须先暂存再确认，重置不清空业务数据', () => {
@@ -83,7 +83,7 @@ test('设置字段、导入文件和重置确认具备可读名称与安全退�
   assert.match(source, /if \(!file\) \{/);
   assert.match(css, /\.sp-toggle input:focus-visible \+ \.sp-toggle-slider/);
   assert.doesNotMatch(css, /#settings-v5-status\s*\{\s*display:\s*none/);
-  assert.match(html, /js\/settings-v5\.js\?v=5/);
+  assert.match(html, /js\/settings-v5\.js\?v=6/);
 });
 
 test('设置中心验收夹具隔离 Dock 样例并支持窄屏视口', () => {

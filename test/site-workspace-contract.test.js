@@ -13,7 +13,7 @@ test('Manifest 声明侧边栏、标签组、favicon 与 Chrome 142 边界', () 
   for (const permission of ['sidePanel', 'tabGroups', 'favicon', 'tabs', 'storage']) {
     assert.ok(manifest.permissions.includes(permission), `missing permission ${permission}`);
   }
-  assert.match(manifest.action.default_title, /右键打开网站工作区/);
+  assert.match(manifest.action.default_title, /右键快捷播放与工作区/);
   assert.equal(manifest.commands['open-site-workspace'].suggested_key.default, 'Ctrl+Shift+U');
   assert.equal(manifest.commands['open-site-workspace'].suggested_key.mac, 'Command+Shift+U');
   assert.equal(manifest.commands['add-current-tab-to-site-workspace'].suggested_key.default, 'Ctrl+Shift+Y');

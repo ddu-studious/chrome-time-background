@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="css/settings-page.css">
     <link rel="stylesheet" href="css/product-ui-v4.css">
-    <link rel="stylesheet" href="css/settings-v5.css?v=5">
+    <link rel="stylesheet" href="css/settings-v5.css?v=6">
 </head>
 <body>
     <div class="sp-layout">
@@ -119,6 +119,44 @@
                             <input type="checkbox" name="showHolidays" id="set-showHolidays">
                             <span class="sp-toggle-slider"></span>
                         </label>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 背景体验（v2 视觉 + v3 玩法） -->
+            <section class="sp-page" id="page-background-experience">
+                <div class="sp-page-header">
+                    <h2>背景体验</h2>
+                    <p>组合 v2 视觉氛围与 v3 手势物理世界</p>
+                </div>
+                <div class="sp-card" id="sp-background-experience-card">
+                    <h3 class="sp-card-title">视觉与玩法</h3>
+                    <p class="sp-card-desc">v2 负责视觉氛围，v3 负责可主动唤醒的手势物理世界。玩法只响应背景空白区域，不影响 Dock、卡片和输入控件。</p>
+                    <div class="sp-field">
+                        <div class="sp-field-info"><span class="sp-field-label">启用背景体验</span><span class="sp-field-hint">关闭后只保留原始壁纸或视频</span></div>
+                        <label class="sp-toggle"><input type="checkbox" id="set-bgExperienceEnabled" checked><span class="sp-toggle-slider"></span></label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info"><span class="sp-field-label">v2 视觉风格</span><span class="sp-field-hint">一次只启用一种主视觉，避免互相抢夺注意力</span></div>
+                        <select class="sp-select" id="set-bgVisualEffect">
+                            <option value="depth">活体景深</option><option value="weather">天气导演</option><option value="memory">记忆显影</option><option value="liquid">液态色场</option><option value="time">时间光色</option><option value="none">关闭视觉皮肤</option>
+                        </select>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info"><span class="sp-field-label">效果强度</span><span class="sp-field-hint">降低强度会同时减少光效、运动幅度和对象数量</span></div>
+                        <div class="sp-bg-experience-range"><input type="range" id="set-bgEffectIntensity" min="10" max="100" step="5" value="65"><output id="set-bgEffectIntensityOutput">65%</output></div>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info"><span class="sp-field-label">启用 v3 手势世界</span><span class="sp-field-hint">首页右下角出现唤醒按钮；12 秒无操作后自动休眠</span></div>
+                        <label class="sp-toggle"><input type="checkbox" id="set-bgPlaygroundEnabled" checked><span class="sp-toggle-slider"></span></label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info"><span class="sp-field-label">手势声音</span><span class="sp-field-hint">默认关闭；启用后仍需点击唤醒按钮才会创建声音上下文</span></div>
+                        <label class="sp-toggle"><input type="checkbox" id="set-bgExperienceSound"><span class="sp-toggle-slider"></span></label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info"><span class="sp-field-label">自动休眠</span><span class="sp-field-hint">离开背景后自动收起 HUD 并停止玩法反馈</span></div>
+                        <select class="sp-select" id="set-bgAutoCalmSeconds"><option value="8">8 秒</option><option value="12" selected>12 秒</option><option value="20">20 秒</option><option value="0">不自动休眠</option></select>
                     </div>
                 </div>
             </section>
@@ -800,10 +838,11 @@
         </main>
     </div>
 
+    <script src="js/chrome-shim.js?v=5"></script>
     <script src="js/app-registry.js"></script>
     <script src="js/product-pages-v5.js?v=1"></script>
     <script src="js/product-ui-v5.js?v=2"></script>
-    <script src="js/settings-page.js?v=3"></script>
-    <script src="js/settings-v5.js?v=5"></script>
+    <script src="js/settings-page.js?v=4"></script>
+    <script src="js/settings-v5.js?v=6"></script>
 </body>
 </html>

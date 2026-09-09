@@ -21,11 +21,11 @@ test('应用注册表覆盖全部入口并提供摘要', () => {
   vm.runInNewContext(source, context);
   const registry = context.window.ProductAppRegistry;
 
-  assert.equal(registry.apps.length, 22);
+  assert.equal(registry.apps.length, 23);
   assert.ok(registry.apps.every(app => app.id && app.name && app.summary && app.category && app.dockBtnId));
   assert.deepEqual(
     Array.from(registry.apps.filter(app => app.defaultInDock), app => app.id),
-    ['knowledge', 'schedule', 'worklog', 'quick-nav', 'site-workspace', 'music', 'agent', 'memo']
+    ['knowledge', 'schedule', 'alarm', 'worklog', 'quick-nav', 'site-workspace', 'music', 'agent', 'memo']
   );
 });
 
@@ -42,10 +42,11 @@ test('启动台具备分类、最近使用、空状态和固定语义', () => {
   }
 });
 
-test('Dock v3 默认固定网站工作区并为既有配置提供增量迁移', () => {
+test('Dock v4 默认固定网站工作区与闹钟并为既有配置提供增量迁移', () => {
   const source = read('js/dock-manager.js');
-  assert.match(source, /version:\s*3/);
+  assert.match(source, /version:\s*4/);
   assert.match(source, /APP_REGISTRY\.filter\(a => a\.defaultInDock\)/);
   assert.match(source, /_migrateConfig\(\)/);
-  assert.match(source, /const appId = 'site-workspace'/);
+  assert.match(source, /hasApp\('site-workspace'\)/);
+  assert.match(source, /hasApp\('alarm'\)/);
 });

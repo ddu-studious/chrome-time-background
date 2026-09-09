@@ -8,6 +8,7 @@
     { id: 'bilibili', name: '哔哩哔哩', summary: '视频、音频与稍后观看工作区', icon: 'fab fa-bilibili', category: 'media', dockBtnId: 'bili-dock-btn', defaultOrder: 3 },
     { id: 'youtube', name: 'YouTube', summary: '订阅推荐、跨圈层兴趣趋势与本地学习清单', icon: 'fab fa-youtube', category: 'media', dockBtnId: 'youtube-dock-btn', defaultOrder: 3.2 },
     { id: 'schedule', name: '计划管理', summary: '安排日程、课程和专注时间', icon: 'fas fa-calendar-check', category: 'productivity', dockBtnId: 'schedule-dock-btn', defaultOrder: 4, defaultInDock: true },
+    { id: 'alarm', name: '闹钟', summary: '声音、通知与视觉动作协同提醒', icon: 'fas fa-bell', category: 'productivity', dockBtnId: 'alarm-dock-btn', defaultOrder: 4.2, defaultInDock: true },
     { id: 'worklog', name: '工作日志', summary: '记录进展并生成工作复盘', icon: 'fas fa-clipboard-list', category: 'productivity', dockBtnId: 'worklog-dock-btn', defaultOrder: 5, defaultInDock: true },
     { id: 'blog', name: '写作空间', summary: '沉浸写作、整理和发布内容', icon: 'fas fa-pen-nib', category: 'productivity', dockBtnId: 'blog-dock-btn', defaultOrder: 6 },
     { id: 'quick-nav', name: '快捷导航', summary: '集中访问常用网站与工具', icon: 'fas fa-compass', category: 'tools', dockBtnId: 'quick-nav-dock-btn', defaultOrder: 6.5, defaultInDock: true },

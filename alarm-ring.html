@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>时间到了 - 中国风景时钟</title>
+  <link rel="stylesheet" href="css/alarm-center.css?v=1">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style>
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #020617; }
+    .alarm-ringing-overlay { visibility: visible; opacity: 1; pointer-events: auto; }
+    .alarm-ringing-card { width: calc(100vw - 32px); padding: 32px 24px; }
+    .alarm-ringing-card time { font-size: 62px; }
+    .alarm-ringing-glow { width: 540px; }
+  </style>
+</head>
+<body>
+  <main class="alarm-ringing-overlay open" aria-hidden="false">
+    <div class="alarm-ringing-glow" aria-hidden="true"></div>
+    <section class="alarm-ringing-card" role="alertdialog" aria-labelledby="alarm-popup-label">
+      <span class="alarm-ringing-kicker">IMPORTANT ALARM</span>
+      <time id="alarm-popup-time"></time>
+      <h1 id="alarm-popup-label">时间到了</h1>
+      <p id="alarm-popup-meta">重要提醒正在响铃</p>
+      <div class="alarm-ringing-actions">
+        <button type="button" class="alarm-snooze-button" id="alarm-popup-snooze"><i class="fas fa-clock"></i> 贪睡 <span id="alarm-popup-snooze-minutes">10</span> 分钟</button>
+        <button type="button" class="alarm-stop-button" id="alarm-popup-dismiss"><i class="fas fa-stop"></i> 停止</button>
+      </div>
+    </section>
+  </main>
+  <script src="js/chrome-shim.js?v=5"></script>
+  <script src="js/alarm-ring.js?v=2"></script>
+</body>
+</html>

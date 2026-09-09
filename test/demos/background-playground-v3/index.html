@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>背景可玩性实验室 v3</title>
+  <link rel="stylesheet" href="playground.css">
+</head>
+<body>
+  <main id="world" class="world" aria-label="背景可玩性实验场">
+    <div class="world-photo"></div>
+    <div class="world-grade"></div>
+    <canvas id="world-canvas"></canvas>
+    <div class="world-grain"></div>
+    <div class="world-vignette"></div>
+    <div id="resonance-flash" class="resonance-flash"></div>
+  </main>
+
+  <header class="topbar">
+    <div class="brand"><span>PLAY<br>LAB</span><div><b>背景可玩性实验室</b><small>GESTURE PHYSICS · V3</small></div></div>
+    <nav aria-label="实验控制">
+      <a href="../background-effects-v2/index.html">返回 v2</a>
+      <a href="../background-echo-garden-v4/index.html">进入 v4</a>
+      <button id="sound-toggle" type="button" aria-pressed="false">声音：关</button>
+      <button id="calm-toggle" type="button" aria-pressed="false">安静模式</button>
+      <button id="reset-world" type="button">重置世界</button>
+    </nav>
+  </header>
+
+  <section class="intro-card" id="intro-card">
+    <p>PLAYABLE BACKGROUND · EXPERIMENT 01</p>
+    <h1>不要只是看。<br>改变这个世界。</h1>
+    <span>点击、拖动、长按、快速甩动或双击。每种手势都会遵循不同的物理规则，并留下属于你的痕迹。</span>
+    <button id="start-play" type="button">进入可玩层</button>
+  </section>
+
+  <aside class="gesture-panel" aria-label="手势发现">
+    <header><span>手势发现</span><b id="discovery-count">0 / 5</b></header>
+    <ol>
+      <li data-discovery="pulse"><i>01</i><div><b>脉冲</b><span>点击空白处</span></div><em>未发现</em></li>
+      <li data-discovery="weave"><i>02</i><div><b>织光</b><span>按住并拖动</span></div><em>未发现</em></li>
+      <li data-discovery="core"><i>03</i><div><b>引力核心</b><span>长按 0.55 秒</span></div><em>未发现</em></li>
+      <li data-discovery="flick"><i>04</i><div><b>彗光</b><span>快速甩动后松开</span></div><em>未发现</em></li>
+      <li data-discovery="vortex"><i>05</i><div><b>旋涡</b><span>双击空白处</span></div><em>未发现</em></li>
+    </ol>
+  </aside>
+
+  <aside class="energy-panel">
+    <div class="energy-head"><span>WORLD ENERGY</span><b id="energy-value">00</b></div>
+    <div class="energy-track"><i id="energy-fill"></i></div>
+    <div class="combo-line"><span id="combo-label">世界处于安静状态</span><b id="combo-count">×0</b></div>
+    <div class="palette-row" aria-label="世界配色">
+      <button class="active" data-palette="aurora" aria-label="极光配色"></button>
+      <button data-palette="ember" aria-label="余烬配色"></button>
+      <button data-palette="tide" aria-label="潮蓝配色"></button>
+      <button data-palette="mono" aria-label="月白配色"></button>
+    </div>
+    <button id="demo-combo" class="combo-demo" type="button">自动演示一套组合技</button>
+  </aside>
+
+  <div id="gesture-status" class="gesture-status" role="status" aria-live="polite">点击“进入可玩层”开始</div>
+  <div class="calm-note" id="calm-note">可玩层已休眠 · 移动鼠标唤醒</div>
+
+  <script src="playground.js?v=2"></script>
+</body>
+</html>

@@ -202,3 +202,29 @@ test('默认空态只覆盖正在播放页，不遮挡队列和发现页', () =>
     assert.equal(hidden, 2);
     assert.equal(shown, 0, '已有正在播放空态时不应重复创建');
 });
+
+test('图标右键菜单按音乐、网站工作区和主页设置分组', () => {
+    assert.match(backgroundSource, /const MUSIC_MENU_ID = 'music-quick-play'/);
+    assert.match(backgroundSource, /title: '网易云音乐'/);
+    assert.match(backgroundSource, /title: '播放私人 FM'/);
+    assert.match(backgroundSource, /title: '播放每日推荐'/);
+    assert.match(backgroundSource, /title: '打开音乐工作台'/);
+    assert.match(backgroundSource, /title: '主页与设置'/);
+    assert.match(backgroundSource, /startSilentNeteaseQuickPlay\('personal-fm', tab\)/);
+    assert.match(backgroundSource, /startSilentNeteaseQuickPlay\('daily-recommend', tab\)/);
+    assert.match(backgroundSource, /async function startSilentNeteaseQuickPlay\(mode, tab\)/);
+    assert.match(backgroundSource, /cookieStr\.includes\('MUSIC_U'\)/);
+    assert.match(backgroundSource, /await openNeteaseLogin\(tab\)/);
+    assert.match(backgroundSource, /url: 'https:\/\/music\.163\.com\/'/);
+    assert.match(backgroundSource, /command: 'play',[\s\S]*?songId: song\.songId/);
+    assert.match(backgroundSource, /async function advanceSilentMusicPlayback\(direction = 1\)/);
+    assert.match(backgroundSource, /if \(silentMusicPlayback && String\(message\.songId\)/);
+    assert.match(backgroundSource, /await chrome\.contextMenus\.removeAll\(\)/);
+    const silentQuickPlaySource = backgroundSource.slice(
+        backgroundSource.indexOf('async function startSilentNeteaseQuickPlay'),
+        backgroundSource.indexOf('async function _sendMusicControl')
+    );
+    assert.doesNotMatch(silentQuickPlaySource, /chrome\.tabs\.(?:create|update)/);
+    assert.match(backgroundSource, /musicPlaylistCache/);
+    assert.match(backgroundSource, /lastMusicState/);
+});

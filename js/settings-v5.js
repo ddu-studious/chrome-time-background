@@ -5,7 +5,7 @@
     appearance: {
       title: '外观', eyebrow: 'LOOK & FEEL',
       desc: '统一时间、天气与界面主题的显示方式。',
-      icon: 'fa-wand-magic-sparkles', targets: ['time', 'weather', 'appearance'],
+      icon: 'fa-wand-magic-sparkles', targets: ['time', 'background-experience', 'weather', 'appearance'],
     },
     homepage: {
       title: '首页', eyebrow: 'HOME SURFACE',
@@ -449,7 +449,7 @@
       collapseResetConfirmation({ focus: true, announce: true });
     });
     confirmReset?.addEventListener('click', async () => {
-      await areaRemove('sync', ['settings', 'backgroundProviderSettings']);
+      await areaRemove('sync', ['settings', 'backgroundProviderSettings', 'backgroundExperienceSettings']);
       await areaRemove('local', Object.values(storageKeys));
       status('界面配置已重置；业务内容未删除', 'success');
       collapseResetConfirmation({ focus: true });

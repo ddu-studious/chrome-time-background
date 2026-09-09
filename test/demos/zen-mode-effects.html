@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>极简模式退场动效 · 4 套方案</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, "PingFang SC", system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body { color: #fff; background: #0b111c; }
+    button { font: inherit; }
+    .scene { position: fixed; inset: 0; overflow: hidden; background: #44525b; }
+    .scene::before {
+      content: "";
+      position: absolute;
+      inset: -20px;
+      background:
+        linear-gradient(180deg, rgba(8, 15, 24, .06), rgba(7, 10, 16, .42)),
+        url("https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=1920&q=86") center / cover;
+      transform: scale(1.025);
+    }
+    .scene::after { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 50% 42%, transparent 20%, rgba(4, 8, 15, .18) 82%); }
+    .clock { position: absolute; z-index: 2; top: 44%; left: 50%; translate: -50% -50%; text-align: center; text-shadow: 0 3px 18px rgba(0, 0, 0, .35); }
+    .clock strong { display: block; font-size: clamp(56px, 7vw, 100px); letter-spacing: -.04em; }
+    .clock span { font-size: 22px; font-weight: 650; }
+    .clock small { display: block; margin-top: 24px; font-size: 17px; }
+    .module { z-index: 3; border: 1px solid rgba(255,255,255,.14); background: linear-gradient(145deg, rgba(16,24,38,.66), rgba(7,12,22,.74)); box-shadow: 0 18px 52px rgba(0,0,0,.28), inset 0 1px rgba(255,255,255,.08); backdrop-filter: blur(20px) saturate(130%); }
+    .toolbar { position: absolute; top: 138px; left: 22px; display: flex; gap: 3px; padding: 5px; border-radius: 13px; transform-origin: top left; }
+    .toolbar span { padding: 9px 10px; color: rgba(236,240,255,.78); font-size: 10px; white-space: nowrap; }
+    .toolbar i { color: #b29aff; font-style: normal; }
+    .island { position: absolute; left: 50%; bottom: 72px; display: grid; width: min(970px, calc(100vw - 64px)); grid-template-columns: 1.15fr 1fr .85fr 46px; gap: 8px; translate: -50% 0; transform-origin: bottom center; }
+    .card { min-height: 68px; padding: 11px 14px; border-radius: 16px; }
+    .card b { display: block; margin-bottom: 6px; color: #b29aff; font-size: 10px; }
+    .card strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+    .card small { color: rgba(235,240,255,.56); font-size: 9px; }
+    .expand { display: grid; place-items: center; border-radius: 14px; color: #b29aff; }
+    .dock { position: absolute; z-index: 3; right: 24px; bottom: 18px; display: flex; gap: 8px; padding: 7px 12px; border-radius: 16px; }
+    .dock span { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,.72); }
+    .chooser { position: fixed; z-index: 10; top: 18px; left: 50%; display: flex; align-items: center; gap: 6px; max-width: calc(100vw - 32px); padding: 6px; border: 1px solid rgba(255,255,255,.15); border-radius: 999px; background: rgba(6,11,20,.82); box-shadow: 0 18px 60px rgba(0,0,0,.32); backdrop-filter: blur(24px); translate: -50% 0; }
+    .chooser button { min-height: 34px; padding: 0 13px; border: 0; border-radius: 999px; color: rgba(237,241,255,.68); background: transparent; cursor: pointer; font-size: 11px; white-space: nowrap; }
+    .chooser button[aria-pressed="true"] { color: #fff; background: rgba(139,108,255,.24); box-shadow: inset 0 0 0 1px rgba(178,154,255,.32); }
+    .chooser .replay { color: #0b1020; background: #b29aff; font-weight: 750; }
+    .caption { position: fixed; z-index: 10; left: 24px; bottom: 20px; max-width: 380px; color: rgba(239,243,255,.75); font-size: 12px; line-height: 1.65; text-shadow: 0 2px 12px rgba(0,0,0,.65); }
+    .caption b { display: block; color: #fff; font-size: 15px; }
+
+    .scene.playing .module { pointer-events: none; }
+    .scene[data-effect="gather"].playing .module { animation: gather .66s cubic-bezier(.22,1,.36,1) both; animation-delay: var(--delay); }
+    .scene[data-effect="depth"].playing .module { animation: depth .72s cubic-bezier(.16,1,.3,1) both; animation-delay: var(--delay); }
+    .scene[data-effect="stagger"].playing .module { animation: stagger .62s cubic-bezier(.34,1.4,.64,1) both; animation-delay: var(--delay); }
+    .scene[data-effect="drop"].playing .module { animation: drop .7s cubic-bezier(.4,0,.2,1) both; animation-delay: var(--delay); }
+    .toolbar { --delay: 140ms; }
+    .island { --delay: 40ms; }
+    .dock { --delay: 220ms; }
+    @keyframes gather { to { opacity: 0; scale: .68; filter: blur(5px); } }
+    @keyframes depth { to { opacity: 0; scale: .82; filter: blur(14px) brightness(.65); } }
+    @keyframes stagger { 58% { opacity: .72; scale: .86; } 100% { opacity: 0; scale: .56; filter: blur(3px); } }
+    @keyframes drop { to { opacity: 0; translate: 0 34px; scale: .74; filter: blur(4px); } }
+    .island.card-burst .card:nth-child(1) { animation-delay: 0ms; }
+    .island.card-burst .card:nth-child(2) { animation-delay: 70ms; }
+    .island.card-burst .card:nth-child(3) { animation-delay: 140ms; }
+    @media (max-width: 720px) {
+      .chooser { top: 10px; overflow-x: auto; justify-content: flex-start; }
+      .toolbar { top: 70px; left: 10px; }
+      .toolbar span:nth-child(n+3) { display: none; }
+      .island { bottom: 74px; width: calc(100vw - 20px); grid-template-columns: 1fr 1fr 40px; }
+      .island .card:nth-child(3) { display: none; }
+      .caption { right: 16px; left: 16px; bottom: 14px; font-size: 10px; }
+      .dock { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="scene" data-effect="gather">
+    <div class="clock"><strong>17:08:43</strong><span>2026年9月9日 星期三</span><small>农历丙午年七月廿八</small></div>
+    <nav class="module toolbar"><span><i>☀</i> 今日概览</span><span><i>☷</i> 个性化</span><span><i>◎</i> 专注</span><span><i>⌁</i> 网络正常</span></nav>
+    <section class="module island">
+      <article class="card"><b>◎ 今日焦点</b><strong>让 Codex 成为我的面试官及老师</strong></article>
+      <article class="card"><b>☷ 今日概览</b><strong>12 项 · 当前任务进行中</strong></article>
+      <article class="card"><b>▣ 最近播放</b><strong>花香</strong><small>周传雄</small></article>
+      <div class="expand">⌃</div>
+    </section>
+    <div class="module dock"><span></span><span></span><span></span><span></span></div>
+  </main>
+  <div class="chooser" role="group" aria-label="极简模式动效方案">
+    <button type="button" data-effect="gather" aria-pressed="true">01 中心收束</button>
+    <button type="button" data-effect="depth" aria-pressed="false">02 景深退场</button>
+    <button type="button" data-effect="stagger" aria-pressed="false">03 错峰缩隐</button>
+    <button type="button" data-effect="drop" aria-pressed="false">04 轻盈坠落</button>
+    <button type="button" class="replay">播放</button>
+  </div>
+  <p class="caption"><b id="caption-title">01 · 中心收束</b><span id="caption-copy">整体向中心缩小，干净克制，最符合“极简”语义。</span></p>
+  <script>
+    const scene = document.querySelector('.scene');
+    const title = document.getElementById('caption-title');
+    const copy = document.getElementById('caption-copy');
+    const descriptions = {
+      gather: ['01 · 中心收束', '整体向中心缩小，干净克制，最符合“极简”语义。'],
+      depth: ['02 · 景深退场', '模块像镜头失焦一样退入背景，柔和、有电影感。'],
+      stagger: ['03 · 错峰缩隐', '底部卡片、顶部工具栏、Dock 依次缩小，层次最清楚。'],
+      drop: ['04 · 轻盈坠落', '缩小的同时轻微下沉，动作感更明显但仍然克制。']
+    };
+    function play() {
+      scene.classList.remove('playing');
+      void scene.offsetWidth;
+      scene.classList.add('playing');
+    }
+    document.querySelector('.chooser').addEventListener('click', event => {
+      const button = event.target.closest('button');
+      if (!button) return;
+      if (button.classList.contains('replay')) { play(); return; }
+      scene.dataset.effect = button.dataset.effect;
+      document.querySelectorAll('[data-effect]').forEach(item => {
+        if (item.tagName === 'BUTTON') item.setAttribute('aria-pressed', String(item === button));
+      });
+      [title.textContent, copy.textContent] = descriptions[button.dataset.effect];
+      play();
+    });
+  </script>
+</body>
+</html>

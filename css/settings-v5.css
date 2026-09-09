@@ -248,3 +248,12 @@ body.sp-has-bg .sp-sidebar, body.sp-has-bg .sp-card { background-color: rgba(13,
   .settings-v5-shortcuts, .settings-v5-app-grid { grid-template-columns: 1fr; }
   .settings-v5-boundary { align-items: flex-start; }
 }
+.sp-bg-experience-range {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(260px, 46%);
+}
+.sp-bg-experience-range input { flex: 1; accent-color: var(--sp-accent); }
+.sp-bg-experience-range output { min-width: 36px; color: var(--sp-text-secondary); font-size: 12px; text-align: right; }
+@media (max-width: 680px) { .sp-bg-experience-range { width: 100%; } }
