@@ -1,0 +1,49 @@
+- generic [ref=f1e1]:
+  - paragraph [ref=f1e2]: 隔离验收页面：使用真实 UI 和离线解析；存储、通知和模型由测试替身提供。
+  - dialog [ref=f1e5]:
+    - banner [ref=f1e6]:
+      - generic [ref=f1e7]:
+        - text: TIME KEEPER
+        - heading "闹钟" [level=2] [ref=f1e8]
+        - paragraph [ref=f1e9]: 说一句，记住接下来要做的事
+      - button "关闭闹钟中心" [ref=f1e10] [cursor=pointer]
+    - generic [ref=f1e11]:
+      - generic [ref=f1e12]:
+        - generic [ref=f1e13]: 一句话，记住接下来要做的事
+        - generic [ref=f1e14]:
+          - textbox "一句话，记住接下来要做的事" [active] [ref=f1e15]:
+            - /placeholder: 补充时间，例如：明天下午三点
+          - button "设置闹钟 ↵" [ref=f1e16] [cursor=pointer]
+      - generic [ref=f1e17]:
+        - generic [ref=f1e18]: 试着说
+        - button "20 分钟后休息" [ref=f1e19] [cursor=pointer]
+        - button "每周一三五运动" [ref=f1e20] [cursor=pointer]
+      - status [ref=f1e49]: 你说的是早上还是晚上 7 点？请补充“早上 7 点”或“晚上 7 点”。
+      - button "重新输入一条提醒" [ref=f1e50] [cursor=pointer]
+      - group [ref=f1e21]:
+        - generic "本地 AI 简单时间可离线识别" [ref=f1e22] [cursor=pointer]
+    - generic [ref=f1e23]:
+      - generic [ref=f1e24]:
+        - generic [ref=f1e25]: 下一次提醒
+        - strong [ref=f1e26]: 暂无已开启闹钟
+        - generic [ref=f1e27]: 创建一个闹钟，让时间主动来找你
+      - button "手动设置" [ref=f1e28] [cursor=pointer]
+    - generic "快速创建倒计时" [ref=f1e29]:
+      - generic [ref=f1e30]: 快速开始
+      - button "10 分钟" [ref=f1e31] [cursor=pointer]
+      - button "25 分钟" [ref=f1e32] [cursor=pointer]
+      - button "1 小时" [ref=f1e33] [cursor=pointer]
+      - button "下个整点" [ref=f1e34] [cursor=pointer]
+    - generic [ref=f1e35]:
+      - generic [ref=f1e36]: 离线声音就绪
+      - generic [ref=f1e37]: 扩展环境中检测系统通知
+      - generic [ref=f1e38]: 电脑睡眠时无法准点唤醒
+    - generic [ref=f1e40]:
+      - generic [ref=f1e41]:
+        - generic [ref=f1e42]:
+          - heading "我的闹钟" [level=3] [ref=f1e43]
+          - text: 0 个已开启 · 共 0 个
+        - button "检查提醒" [ref=f1e44] [cursor=pointer]
+      - generic [ref=f1e46]:
+        - strong [ref=f1e47]: 还没有闹钟
+        - generic [ref=f1e48]: 可以从上面的快捷时间开始

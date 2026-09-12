@@ -9,6 +9,7 @@
   const STORAGE_KEY = 'dockManagerConfig';
   const DOCK_EFFECT_KEY = 'dockEffectConfig';
   const RECENT_APPS_KEY = 'dockManagerRecentApps';
+  const DOCK_SHELL_KEY = 'dockShellConfig';
 
   const DOCK_EFFECTS = {
     magnify: { name: '经典放大', desc: 'macOS 风格图标放大', maxScale: 1.5, range: 100 },
@@ -36,6 +37,12 @@
       this._launchpadReturnFocus = null;
       this._launchpadBackgroundInert = [];
       this._contextReturnFocus = null;
+      this._shellState = { pinned: true };
+      this._dockCollapsed = false;
+      this._dockCollapseTimer = null;
+      this._dockRevealTimer = null;
+      this._dockRevealLockTimer = null;
+      this._dockInteractionLockedUntil = 0;
     }
 
     async init() {
@@ -50,12 +57,14 @@
 
       await this.loadConfig();
       await this._loadEffectConfig();
+      await this._loadShellState();
       this.render();
       this._createLaunchpad();
       this._bindDragEvents();
       this._bindDockEffects();
       this._bindContextMenu();
       this._bindQuickDismiss();
+      this._bindDockShell();
     }
 
     _backupOriginalButtons() {
@@ -96,6 +105,124 @@
       try {
         localStorage.setItem(DOCK_EFFECT_KEY, JSON.stringify(this._effectConfig));
       } catch { /* ignore */ }
+    }
+
+    async _loadShellState() {
+      let saved = null;
+      try {
+        if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+          const data = await chrome.storage.local.get(DOCK_SHELL_KEY);
+          saved = data[DOCK_SHELL_KEY];
+        }
+      } catch { /* fallback */ }
+      if (!saved) {
+        try { saved = JSON.parse(localStorage.getItem(DOCK_SHELL_KEY) || 'null'); } catch { /* fallback */ }
+      }
+      this._shellState = { pinned: saved?.pinned !== false };
+      this._dockCollapsed = !this._shellState.pinned;
+    }
+
+    async _saveShellState() {
+      const value = { pinned: this._shellState.pinned };
+      try {
+        if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+          await chrome.storage.local.set({ [DOCK_SHELL_KEY]: value });
+        }
+      } catch { /* fallback */ }
+      try { localStorage.setItem(DOCK_SHELL_KEY, JSON.stringify(value)); } catch { /* ignore */ }
+    }
+
+    _bindDockShell() {
+      if (!this.dockEl) return;
+      this.dockEl.addEventListener('click', event => {
+        if (event.target.closest('[data-dock-shell-action]')) return;
+        if (Date.now() >= this._dockInteractionLockedUntil) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+      }, true);
+      this.dockEl.addEventListener('click', event => {
+        const action = event.target.closest('[data-dock-shell-action]')?.dataset.dockShellAction;
+        if (!action) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (action === 'reveal') this._setDockCollapsed(false);
+        if (action === 'collapse') {
+          this._shellState.pinned = false;
+          void this._saveShellState();
+          this._setDockCollapsed(true);
+        }
+        if (action === 'pin') this._setDockPinned(!this._shellState.pinned);
+      });
+      this.dockEl.addEventListener('pointerenter', () => {
+        clearTimeout(this._dockCollapseTimer);
+        clearTimeout(this._dockRevealTimer);
+        if (!this._shellState.pinned && this._dockCollapsed) {
+          this._dockRevealTimer = setTimeout(() => {
+            if (this.dockEl?.matches(':hover')) this._setDockCollapsed(false, { fromHover: true });
+          }, 90);
+        }
+      });
+      this.dockEl.addEventListener('pointerleave', () => {
+        clearTimeout(this._dockRevealTimer);
+        this._scheduleDockCollapse(160, true);
+      });
+      this.dockEl.addEventListener('focusin', () => {
+        clearTimeout(this._dockCollapseTimer);
+      });
+      this.dockEl.addEventListener('focusout', event => {
+        if (!this.dockEl.contains(event.relatedTarget)) this._scheduleDockCollapse();
+      });
+      this._applyDockShellState();
+    }
+
+    _setDockPinned(pinned) {
+      this._shellState.pinned = Boolean(pinned);
+      void this._saveShellState();
+      this._setDockCollapsed(false);
+      if (!this._shellState.pinned) this._scheduleDockCollapse();
+    }
+
+    _setDockCollapsed(collapsed, { fromHover = false } = {}) {
+      clearTimeout(this._dockCollapseTimer);
+      this._dockCollapsed = Boolean(collapsed) && !this._shellState.pinned;
+      clearTimeout(this._dockRevealLockTimer);
+      if (!this._dockCollapsed && fromHover) {
+        this._dockInteractionLockedUntil = Date.now() + 360;
+        this.dockEl?.classList.add('dock-is-revealing');
+        this._dockRevealLockTimer = setTimeout(() => {
+          this.dockEl?.classList.remove('dock-is-revealing');
+          this._dockInteractionLockedUntil = 0;
+        }, 360);
+      } else {
+        this._dockInteractionLockedUntil = 0;
+        this.dockEl?.classList.remove('dock-is-revealing');
+      }
+      this._applyDockShellState();
+    }
+
+    _scheduleDockCollapse(delay = 160, force = false) {
+      clearTimeout(this._dockCollapseTimer);
+      if (this._shellState.pinned) return;
+      this._dockCollapseTimer = setTimeout(() => {
+        if (!this.dockEl?.matches(':hover') && (force || !this.dockEl?.contains(document.activeElement))) {
+          this._setDockCollapsed(true);
+        }
+      }, delay);
+    }
+
+    _applyDockShellState() {
+      if (!this.dockEl) return;
+      this.dockEl.classList.add('dock-shell-v5');
+      this.dockEl.classList.toggle('dock-is-pinned', this._shellState.pinned);
+      this.dockEl.classList.toggle('dock-is-collapsed', this._dockCollapsed);
+      this.dockEl.setAttribute('aria-label', this._dockCollapsed ? 'Dock 已收起，鼠标靠近或点击展开' : '应用 Dock');
+      const pin = this.dockEl.querySelector('[data-dock-shell-action="pin"]');
+      if (pin) {
+        pin.classList.toggle('active', this._shellState.pinned);
+        pin.setAttribute('aria-pressed', String(this._shellState.pinned));
+        pin.title = this._shellState.pinned ? '取消固定，离开后自动收起' : '固定 Dock';
+      }
     }
 
     // ─── Dock Hover Effects (Apple-style magnification) ───
@@ -322,7 +449,12 @@
       menu.setAttribute('aria-label', 'Dock 悬浮效果与布局');
       menu.tabIndex = -1;
 
-      let html = '<div class="dock-context-menu-title">Dock 悬浮效果</div>';
+      let html = '<div class="dock-context-menu-title">Dock 行为</div>';
+      html += `<button class="dock-context-menu-item${this._shellState.pinned ? ' active' : ''}" data-shell-action="pin" role="menuitemcheckbox" aria-checked="${this._shellState.pinned}">
+        <i class="fas fa-thumbtack"></i><span>${this._shellState.pinned ? '已固定在底部' : '固定在底部'}</span>
+      </button>`;
+      html += '<button class="dock-context-menu-item" data-shell-action="collapse" role="menuitem"><i class="fas fa-chevron-down"></i><span>收起 Dock</span></button>';
+      html += '<div class="dock-context-menu-divider"></div><div class="dock-context-menu-title">Dock 悬浮效果</div>';
       for (const [key, cfg] of Object.entries(DOCK_EFFECTS)) {
         const active = this._effectConfig.effect === key;
         html += `<button class="dock-context-menu-item${active ? ' active' : ''}" data-effect="${key}" role="menuitemradio" aria-checked="${active}">
@@ -386,6 +518,17 @@
           this._resetEffect();
           this._closeContextMenu();
         });
+      });
+
+      menu.querySelector('[data-shell-action="pin"]')?.addEventListener('click', () => {
+        this._setDockPinned(!this._shellState.pinned);
+        this._closeContextMenu();
+      });
+      menu.querySelector('[data-shell-action="collapse"]')?.addEventListener('click', () => {
+        this._shellState.pinned = false;
+        void this._saveShellState();
+        this._setDockCollapsed(true);
+        this._closeContextMenu(false);
       });
 
       menu.querySelector('[data-action="reset"]')?.addEventListener('click', () => {
@@ -551,10 +694,20 @@
 
       this.dockEl.querySelectorAll('.dock-btn, .dock-divider, .dock-group').forEach(el => {
         el.style.display = 'none';
+        el.classList.remove('dock-mobile-overflow');
       });
 
       const items = this.config?.items || [];
       const frag = document.createDocumentFragment();
+      let dockSlotCount = 0;
+
+      const shellControls = document.createElement('div');
+      shellControls.className = 'dock-shell-controls dock-managed';
+      shellControls.innerHTML = `
+        <button class="dock-shell-btn dock-shell-reveal" type="button" data-dock-shell-action="reveal" title="展开 Dock" aria-label="展开 Dock"><i class="fas fa-chevron-up"></i></button>
+        <button class="dock-shell-btn dock-shell-pin" type="button" data-dock-shell-action="pin" aria-label="固定 Dock" aria-pressed="${this._shellState.pinned}"><i class="fas fa-thumbtack"></i></button>
+        <button class="dock-shell-btn dock-shell-collapse" type="button" data-dock-shell-action="collapse" title="收起 Dock" aria-label="收起 Dock"><i class="fas fa-chevron-down"></i></button>`;
+      frag.appendChild(shellControls);
 
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
@@ -569,6 +722,8 @@
 
         if (item.type === 'group') {
           const groupEl = this._createGroupButton(item, i);
+          if (dockSlotCount >= 6) groupEl.classList.add('dock-mobile-overflow');
+          dockSlotCount += 1;
           frag.appendChild(groupEl);
           if (i < items.length - 1) {
             const div = document.createElement('div');
@@ -589,11 +744,14 @@
             orig.el.setAttribute('draggable', 'true');
             orig.el.dataset.dockAppId = item.appId;
             orig.el.dataset.dockIndex = i;
+            if (dockSlotCount >= 6) orig.el.classList.add('dock-mobile-overflow');
             frag.appendChild(orig.el);
           } else {
             const btn = this._createAppButton(app, i);
+            if (dockSlotCount >= 6) btn.classList.add('dock-mobile-overflow');
             frag.appendChild(btn);
           }
+          dockSlotCount += 1;
 
           if (i < items.length - 1) {
             const div = document.createElement('div');
@@ -620,6 +778,7 @@
 
       this.dockEl.querySelectorAll('.dock-managed').forEach(el => el.remove());
       this.dockEl.appendChild(frag);
+      this._applyDockShellState();
     }
 
     _createAppButton(app, index) {

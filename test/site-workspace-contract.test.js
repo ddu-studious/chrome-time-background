@@ -18,6 +18,12 @@ test('Manifest 声明侧边栏、标签组、favicon 与 Chrome 142 边界', () 
   assert.equal(manifest.commands['open-site-workspace'].suggested_key.mac, 'Command+Shift+U');
   assert.equal(manifest.commands['add-current-tab-to-site-workspace'].suggested_key.default, 'Ctrl+Shift+Y');
   assert.equal(manifest.commands['add-current-tab-to-site-workspace'].suggested_key.mac, 'Command+Shift+Y');
+  assert.equal(manifest.commands['music-toggle-playback'].suggested_key, 'MediaPlayPause');
+  assert.equal(manifest.commands['music-next-track'].suggested_key, 'MediaNextTrack');
+  assert.equal(manifest.commands['music-previous-track'].suggested_key, undefined);
+  assert.equal(manifest.commands['music-play-personal-fm'].suggested_key, undefined);
+  assert.equal(manifest.commands['music-play-daily-recommend'].suggested_key, undefined);
+  assert.equal(Object.values(manifest.commands).filter(command => command.suggested_key).length, 4);
 });
 
 test('网站工作区注册为独立 App 并接入启动台与 Dock', () => {

@@ -166,7 +166,7 @@ class WeatherService {
                     longitude: position.coords.longitude.toFixed(4)
                 }),
                 error => {
-                    console.warn('Geolocation error:', { code: error.code, message: error.message });
+                    console.debug('[Weather] 自动定位不可用:', { code: error.code, message: error.message });
                     let errorMessage = '无法获取您的位置';
                     
                     // 根据错误代码提供更具体的错误消息
@@ -392,13 +392,13 @@ class WeatherService {
                     location = await this.getLocation();
                     this.cacheLocation(location);
                 } catch (error) {
-                    console.warn('Location error:', error);
+                    console.debug('[Weather] 自动定位失败，尝试缓存:', error?.message || error);
                     const cached = await this.getCachedLocation();
                     if (cached) {
                         location = cached;
                     } else {
                         // 自动定位失败且无缓存，也无手动城市 → 隐藏天气区域
-                        console.warn('无法获取位置，且未设置手动城市，隐藏天气区域');
+                        console.debug('[Weather] 无缓存位置，已隐藏天气区域');
                         this.hideWeatherArea();
                         return;
                     }

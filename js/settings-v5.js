@@ -168,9 +168,14 @@
     document.querySelector('.sp-main')?.insertAdjacentHTML('beforeend', `
       <section class="sp-page settings-v5-special" id="page-shortcuts">
         <article class="settings-v5-card settings-v5-command-card">
-          <div class="settings-v5-card-title"><div><span>CHROME COMMANDS</span><h3>全局快捷键</h3></div><i class="fas fa-keyboard"></i></div>
-          <p>快捷键由 Chrome 统一管理。这里显示当前实际绑定；点击下方按钮可进入 Chrome 的快捷键设置进行修改。</p>
+          <div class="settings-v5-card-title"><div><span>CHROME COMMANDS</span><h3>Chrome 快捷键</h3></div><i class="fas fa-keyboard"></i></div>
+          <p>快捷键由 Chrome 统一管理。音乐播放控制不会打开或切换页面；这里显示当前实际绑定，也可进入 Chrome 的快捷键设置修改。</p>
           <div class="settings-v5-command-list" id="settings-v5-command-list" aria-live="polite">
+            <div><span>网易云播放 / 暂停（未播放时启动私人 FM）</span><kbd id="settings-v5-command-music-toggle">读取中…</kbd></div>
+            <div><span>网易云下一首（未播放时启动私人 FM）</span><kbd id="settings-v5-command-music-next">读取中…</kbd></div>
+            <div><span>网易云上一首</span><kbd id="settings-v5-command-music-prev">读取中…</kbd></div>
+            <div><span>播放网易云私人 FM</span><kbd id="settings-v5-command-music-fm">读取中…</kbd></div>
+            <div><span>播放网易云每日推荐</span><kbd id="settings-v5-command-music-daily">读取中…</kbd></div>
             <div><span>打开或关闭网站工作区</span><kbd id="settings-v5-command-open">读取中…</kbd></div>
             <div><span>将当前标签加入网站工作区</span><kbd id="settings-v5-command-add">读取中…</kbd></div>
           </div>
@@ -191,6 +196,11 @@
 
   async function loadCommandShortcuts() {
     const bindings = {
+      'music-toggle-playback': '未设置',
+      'music-next-track': '未设置',
+      'music-previous-track': '未设置',
+      'music-play-personal-fm': '未设置',
+      'music-play-daily-recommend': '未设置',
       'open-site-workspace': '未设置',
       'add-current-tab-to-site-workspace': '未设置',
     };
@@ -202,6 +212,16 @@
     } catch { /* local preview */ }
     const open = document.querySelector('#settings-v5-command-open');
     const add = document.querySelector('#settings-v5-command-add');
+    const musicToggle = document.querySelector('#settings-v5-command-music-toggle');
+    const musicNext = document.querySelector('#settings-v5-command-music-next');
+    const musicPrev = document.querySelector('#settings-v5-command-music-prev');
+    const musicFm = document.querySelector('#settings-v5-command-music-fm');
+    const musicDaily = document.querySelector('#settings-v5-command-music-daily');
+    if (musicToggle) musicToggle.textContent = bindings['music-toggle-playback'];
+    if (musicNext) musicNext.textContent = bindings['music-next-track'];
+    if (musicPrev) musicPrev.textContent = bindings['music-previous-track'];
+    if (musicFm) musicFm.textContent = bindings['music-play-personal-fm'];
+    if (musicDaily) musicDaily.textContent = bindings['music-play-daily-recommend'];
     if (open) open.textContent = bindings['open-site-workspace'];
     if (add) add.textContent = bindings['add-current-tab-to-site-workspace'];
     return bindings;

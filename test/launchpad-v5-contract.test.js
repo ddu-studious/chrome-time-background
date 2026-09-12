@@ -13,7 +13,7 @@ test('应用启动台五个页面映射现有分类搜索与 Dock 操作', () =>
     assert.match(source, new RegExp(`['\"]${page}['\"]`));
   }
   assert.match(source, /setBusinessPage\?\.\('launchpad'/);
-  assert.match(html, /js\/dock-manager\.js\?v=11/);
+  assert.match(html, /js\/dock-manager\.js\?v=13/);
 });
 
 test('关闭启动台和 Dock 菜单会恢复产品外壳', () => {
@@ -24,11 +24,33 @@ test('关闭启动台和 Dock 菜单会恢复产品外壳', () => {
 test('启动台关闭态不会残留在无障碍树或键盘焦点中', () => {
   assert.match(css, /\.dock-launchpad\s*\{[\s\S]*?visibility:\s*hidden/);
   assert.match(css, /\.dock-launchpad\.open\s*\{[\s\S]*?visibility:\s*visible/);
-  assert.match(html, /css\/dock-manager\.css\?v=3/);
+  assert.match(html, /css\/dock-manager\.css\?v=10/);
   assert.match(source, /hideLaunchpad\(restoreFocus = true, restoreShell = true\)/);
   assert.match(source, /_setLaunchpadBackgroundInert\(true\)/);
   assert.match(source, /_handleLaunchpadKeydown/);
-  assert.match(html, /js\/dock-manager\.js\?v=11/);
+  assert.match(html, /js\/dock-manager\.js\?v=13/);
+});
+
+test('Dock 使用烟熏透明外壳并支持固定、离开收起与靠近安全唤出', () => {
+  assert.match(source, /const DOCK_SHELL_KEY = 'dockShellConfig'/);
+  assert.match(source, /data-dock-shell-action="pin"/);
+  assert.match(source, /data-dock-shell-action="collapse"/);
+  assert.match(source, /data-dock-shell-action="reveal"/);
+  assert.match(source, /_scheduleDockCollapse\(\)/);
+  assert.match(source, /pointerenter[\s\S]*?_setDockCollapsed\(false, \{ fromHover: true \}\)/);
+  assert.match(source, /_scheduleDockCollapse\(160, true\)/);
+  assert.match(source, /_dockInteractionLockedUntil = Date\.now\(\) \+ 360/);
+  assert.match(source, /stopImmediatePropagation\(\)/);
+  assert.match(source, /Dock 已收起，鼠标靠近或点击展开/);
+  assert.match(css, /\.dock-bar\.dock-shell-v5\s*\{[\s\S]*?rgba\(255, 255, 255, 0\.012\)/);
+  assert.match(css, /backdrop-filter: blur\(0\.75px\) saturate\(104%\)/);
+  assert.match(css, /\.dock-bar\.dock-shell-v5 \.dock-btn i[\s\S]*?drop-shadow/);
+  assert.match(css, /\.dock-bar\.dock-shell-v5\.dock-is-collapsed/);
+  assert.match(css, /\.dock-bar\.dock-shell-v5\.dock-is-collapsed::after/);
+  assert.match(css, /\.dock-bar\.dock-shell-v5\.dock-is-revealing/);
+  assert.match(css, /\.dock-shell-pin\.active/);
+  assert.match(source, /if \(dockSlotCount >= 6\)[\s\S]*?dock-mobile-overflow/);
+  assert.match(css, /@media \(max-width: 720px\)[\s\S]*?\.dock-mobile-overflow/);
 });
 
 test('启动台可以打开未固定且没有 Dock 按钮的应用', () => {

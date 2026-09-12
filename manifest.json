@@ -71,7 +71,8 @@
     "*://s.search.bilibili.com/*",
     "*://*.mashibing.com/*",
     "http://127.0.0.1:19840/*",
-    "http://localhost:19840/*"
+    "http://localhost:19840/*",
+    "http://127.0.0.1:19841/*"
   ],
   "chrome_url_overrides": {
     "newtab": "index.html"
@@ -93,6 +94,23 @@
         "mac": "Command+Shift+Y"
       },
       "description": "将当前标签加入网站工作区"
+    },
+    "music-toggle-playback": {
+      "suggested_key": "MediaPlayPause",
+      "description": "网易云音乐：播放或暂停；尚未播放时启动私人 FM"
+    },
+    "music-next-track": {
+      "suggested_key": "MediaNextTrack",
+      "description": "网易云音乐：下一首；尚未播放时启动私人 FM"
+    },
+    "music-previous-track": {
+      "description": "网易云音乐：上一首"
+    },
+    "music-play-personal-fm": {
+      "description": "网易云音乐：播放私人 FM"
+    },
+    "music-play-daily-recommend": {
+      "description": "网易云音乐：播放每日推荐"
     }
   },
   "action": {

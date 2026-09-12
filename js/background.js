@@ -1,4 +1,4 @@
-importScripts('alarm-core.js', 'background-provider.js', 'hermes-writing-sync.js', 'site-workspace-core.js');
+importScripts('alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-client.js', 'background-provider.js', 'hermes-writing-sync.js', 'site-workspace-core.js');
 
 (function() {
     const SITE_WORKSPACE_MENU_ID = 'site-workspace-add-current-tab';
@@ -8,12 +8,22 @@ importScripts('alarm-core.js', 'background-provider.js', 'hermes-writing-sync.js
     const MUSIC_MENU_ID = 'music-quick-play';
     const MUSIC_PERSONAL_FM_MENU_ID = 'music-play-personal-fm';
     const MUSIC_DAILY_RECOMMEND_MENU_ID = 'music-play-daily-recommend';
+    const MUSIC_TOGGLE_PLAYBACK_ID = 'music-toggle-playback';
+    const MUSIC_PREVIOUS_TRACK_ID = 'music-previous-track';
+    const MUSIC_NEXT_TRACK_ID = 'music-next-track';
     const MUSIC_OPEN_MENU_ID = 'music-open-workbench';
     const EXTENSION_MENU_ID = 'extension-navigation';
     const EXTENSION_HOME_MENU_ID = 'extension-open-home';
     const EXTENSION_SETTINGS_MENU_ID = 'settings';
     const SITE_WORKSPACE_GROUP_MENU_ID = 'site-workspace-actions';
     const openSiteWorkspaceWindows = new Set();
+    const desktopAlarm = new self.AlarmDesktop(chrome.runtime, async message => {
+        if (message.sessionId.startsWith('desktop-test-')) {
+            desktopAlarm.hide(message.sessionId);
+            return { ok: true };
+        }
+        return stopUserAlarmSession(message.action, message.action === 'snooze' ? message.minutes : null, message.sessionId);
+    });
     const siteWorkspacePanelPorts = new Map();
     const siteWorkspaceService = self.SiteWorkspaceCore
         ? new self.SiteWorkspaceCore.WorkspaceService(chrome)
@@ -40,6 +50,31 @@ importScripts('alarm-core.js', 'background-provider.js', 'hermes-writing-sync.js
             parentId: MUSIC_MENU_ID,
             title: '播放每日推荐',
             contexts: ['action'],
+        });
+        ensureContextMenu('music-playback-separator', {
+            parentId: MUSIC_MENU_ID,
+            contexts: ['action'],
+            type: 'separator',
+        });
+        ensureContextMenu(MUSIC_TOGGLE_PLAYBACK_ID, {
+            parentId: MUSIC_MENU_ID,
+            title: '播放 / 暂停',
+            contexts: ['action'],
+        });
+        ensureContextMenu(MUSIC_PREVIOUS_TRACK_ID, {
+            parentId: MUSIC_MENU_ID,
+            title: '上一首',
+            contexts: ['action'],
+        });
+        ensureContextMenu(MUSIC_NEXT_TRACK_ID, {
+            parentId: MUSIC_MENU_ID,
+            title: '下一首',
+            contexts: ['action'],
+        });
+        ensureContextMenu('music-workbench-separator', {
+            parentId: MUSIC_MENU_ID,
+            contexts: ['action'],
+            type: 'separator',
         });
         ensureContextMenu(MUSIC_OPEN_MENU_ID, {
             parentId: MUSIC_MENU_ID,
@@ -608,6 +643,14 @@ importScripts('alarm-core.js', 'background-provider.js', 'hermes-writing-sync.js
 
     async function requestUserAlarmAttention(session) {
         try {
+            await desktopAlarm.show(session);
+            return; // Native panel stays on the current desktop; do not focus Chrome as well.
+        } catch (error) {
+            console.debug('[Alarm] 桌面组件不可用，继续使用系统通知:', error?.message || error);
+        }
+        const latest = await loadUserAlarmState();
+        if (latest.runtime.activeSession?.id !== session.id) return;
+        try {
             const lastWindow = await chrome.windows.getLastFocused();
             if (lastWindow?.id != null) {
                 await chrome.windows.update(lastWindow.id, { drawAttention: true });
@@ -662,6 +705,7 @@ importScripts('alarm-core.js', 'background-provider.js', 'hermes-writing-sync.js
     }
 
     async function markMissedUserAlarmSession(session, runtime) {
+        desktopAlarm.hide(session.id);
         const now = Date.now();
         for (const item of session.occurrences) {
             runtime.handled[item.occurrenceId] = { state: 'missed', updatedAt: now };
@@ -687,6 +731,7 @@ importScripts('alarm-core.js', 'background-provider.js', 'hermes-writing-sync.js
             if (now - Number(runtime.activeSession.startedAt || now) <= AlarmCore.MISSED_GRACE_MS) {
                 await startUserAlarmSession(runtime.activeSession);
             } else {
+                desktopAlarm.hide(runtime.activeSession.id);
                 for (const item of runtime.activeSession.occurrences) {
                     runtime.handled[item.occurrenceId] = { state: 'timed-out', updatedAt: now };
                     runtime.recent.push({ ...item, state: 'timed-out', updatedAt: now });
@@ -817,9 +862,10 @@ importScripts('alarm-core.js', 'background-provider.js', 'hermes-writing-sync.js
         await reconcileUserAlarmSchedule({ recoverDue: false });
     }
 
-    async function stopUserAlarmSession(action, requestedMinutes = null) {
+    async function stopUserAlarmSession(action, requestedMinutes = null, expectedSessionId = null) {
         const { alarms, runtime } = await loadUserAlarmState();
         const session = runtime.activeSession;
+        if (expectedSessionId && session?.id !== expectedSessionId) return { ok: false, error: '这条提醒已结束，请处理当前闹钟' };
         if (!session?.occurrences?.length) {
             await sendToOffscreen({ command: 'alarmStop' }).catch(() => {});
             await setUserAlarmBadge(false);
@@ -854,6 +900,7 @@ importScripts('alarm-core.js', 'background-provider.js', 'hermes-writing-sync.js
         }
         runtime.activeSession = null;
         await saveUserAlarmState(alarms, runtime);
+        desktopAlarm.hide(session.id);
 
         await Promise.allSettled([
             sendToOffscreen({ command: 'alarmStop', sessionId: session.id }),
@@ -865,8 +912,20 @@ importScripts('alarm-core.js', 'background-provider.js', 'hermes-writing-sync.js
         return { ok: true };
     }
 
-    async function saveUserAlarm(input) {
+    let userAlarmSaveQueue = Promise.resolve();
+    function saveUserAlarm(input) {
+        const operation = userAlarmSaveQueue.then(() => persistUserAlarm(input));
+        userAlarmSaveQueue = operation.catch(() => {});
+        return operation;
+    }
+
+    async function persistUserAlarm(input) {
         const { alarms, runtime } = await loadUserAlarmState();
+        if (input.smartInput) {
+            const duplicate = alarms.find(item => item.enabled && item.label === input.label && item.time === input.time && item.repeat === input.repeat &&
+                (item.repeat === 'once' ? item.fireAt === input.fireAt : JSON.stringify(item.days) === JSON.stringify(input.days || [])));
+            if (duplicate) return { alarm: duplicate, duplicate: true };
+        }
         const index = alarms.findIndex(item => item.id === input?.id);
         const previous = index >= 0 ? alarms[index] : null;
         const normalized = AlarmCore.normalizeAlarm({
@@ -889,6 +948,28 @@ importScripts('alarm-core.js', 'background-provider.js', 'hermes-writing-sync.js
         await saveUserAlarmState(alarms, runtime);
         const schedule = await reconcileUserAlarmSchedule({ recoverDue: false });
         return { alarm: normalized, ...schedule };
+    }
+
+    function renameUserAlarm(input) {
+        const operation = userAlarmSaveQueue.then(async () => {
+            const { alarms, runtime } = await loadUserAlarmState();
+            const label = typeof input.label === 'string' ? input.label.trim() : '';
+            if (!label || label.length > 80) throw new Error('新名称应为 1 至 80 字');
+            const matches = alarms.filter(alarm => alarm.repeat === 'once' && alarm.date === input.selector?.date && alarm.time === input.selector?.time);
+            if (!matches.length) throw new Error('未找到这个日期和时间的一次性闹钟，请检查时间；不会自动新建');
+            if (!input.alarmId && matches.length > 1) return { status: 'choose', candidates: matches.map(({ id, label, date, time, revision }) => ({ id, label, date, time, revision })) };
+            const previous = input.alarmId ? matches.find(alarm => alarm.id === input.alarmId) : matches[0];
+            if (!previous) throw new Error('该闹钟已被修改或删除，请重新输入');
+            if (input.expectedRevision != null && input.expectedRevision !== previous.revision) throw new Error('该闹钟已变化，请重新输入后选择');
+            if (previous.label === label) return { status: 'renamed', alarm: previous };
+            const updated = { ...previous, label, revision: Number(previous.revision || 0) + 1, updatedAt: Date.now() };
+            alarms[alarms.findIndex(alarm => alarm.id === previous.id)] = updated;
+            // Renaming preserves time, disabled/expired state, runtime and pending snoozes.
+            await saveUserAlarmState(alarms, runtime);
+            return { status: 'renamed', alarm: updated };
+        });
+        userAlarmSaveQueue = operation.catch(() => {});
+        return operation;
     }
 
     async function deleteUserAlarm(alarmId) {
@@ -1045,6 +1126,86 @@ importScripts('alarm-core.js', 'background-provider.js', 'hermes-writing-sync.js
             return playSilentMusicCurrent();
         }
         if (direction > 0) silentMusicPlayback = null;
+        return false;
+    }
+
+    async function hasOpenMusicWorkbench() {
+        const indexUrl = chrome.runtime.getURL('index.html');
+        try {
+            const tabs = await chrome.tabs.query({});
+            return tabs.some(tab => !tab.discarded && tab.url?.startsWith(indexUrl));
+        } catch {
+            return false;
+        }
+    }
+
+    async function restoreSilentMusicPlayback(songId) {
+        if (songId == null || songId === '') return false;
+        const { musicPlaylistCache } = await chrome.storage.local.get('musicPlaylistCache');
+        const playlist = musicPlaylistCache?.playlist;
+        const cacheAge = Date.now() - Number(musicPlaylistCache?.savedAt || 0);
+        if (!Array.isArray(playlist) || playlist.length === 0 || cacheAge >= 24 * 60 * 60 * 1000) return false;
+
+        const index = playlist.findIndex(song => String(song.songId) === String(songId));
+        if (index < 0) return false;
+        const name = musicPlaylistCache.playlistName || '网易云队列';
+        silentMusicPlayback = {
+            id: Date.now(),
+            mode: name === '私人FM' ? 'personal-fm' : (name === '每日推荐' ? 'daily-recommend' : 'cached-queue'),
+            name,
+            songs: playlist.map((song, songIndex) => ({ ...song, index: songIndex })),
+            index,
+        };
+        return true;
+    }
+
+    async function advanceNeteaseMusic(direction, currentSongId = null) {
+        const activeSongId = silentMusicPlayback?.songs?.[silentMusicPlayback.index]?.songId;
+        if (silentMusicPlayback && (currentSongId == null || String(currentSongId) === String(activeSongId))) {
+            return advanceSilentMusicPlayback(direction);
+        }
+
+        // 工作台打开时由 MusicController 维护 FM/循环/随机等完整播放语义。
+        if (await hasOpenMusicWorkbench()) {
+            _sendMusicControl({ action: 'music_media_action', command: direction < 0 ? 'prev' : 'next' });
+            return true;
+        }
+
+        let songId = currentSongId;
+        if (songId == null) {
+            const state = await sendToOffscreen({ command: 'getState' });
+            songId = state?.data?.songId;
+        }
+        if (await restoreSilentMusicPlayback(songId)) {
+            return advanceSilentMusicPlayback(direction);
+        }
+        return false;
+    }
+
+    async function controlNeteaseMusic(action, tab) {
+        if (action === 'personal-fm' || action === 'daily-recommend') {
+            return startSilentNeteaseQuickPlay(action, tab);
+        }
+
+        const state = await sendToOffscreen({ command: 'getState' });
+        const currentSongId = state?.data?.songId;
+        if (action === 'toggle') {
+            if (currentSongId != null && currentSongId !== '') {
+                const response = await sendToOffscreen({ command: 'togglePlay' });
+                if (response?.ok) return true;
+            }
+            return startSilentNeteaseQuickPlay('personal-fm', tab);
+        }
+        if (action === 'next') {
+            if (currentSongId == null || currentSongId === '') {
+                return startSilentNeteaseQuickPlay('personal-fm', tab);
+            }
+            return advanceNeteaseMusic(1, currentSongId);
+        }
+        if (action === 'prev') {
+            if (currentSongId == null || currentSongId === '') return false;
+            return advanceNeteaseMusic(-1, currentSongId);
+        }
         return false;
     }
 
@@ -2286,6 +2447,18 @@ importScripts('alarm-core.js', 'background-provider.js', 'hermes-writing-sync.js
             startSilentNeteaseQuickPlay('daily-recommend', tab).catch(error => console.warn('[Music] 静默启动每日推荐失败:', error));
             return;
         }
+        if (info.menuItemId === MUSIC_TOGGLE_PLAYBACK_ID) {
+            controlNeteaseMusic('toggle', tab).catch(error => console.warn('[Music] 播放暂停失败:', error));
+            return;
+        }
+        if (info.menuItemId === MUSIC_PREVIOUS_TRACK_ID) {
+            controlNeteaseMusic('prev', tab).catch(error => console.warn('[Music] 上一首失败:', error));
+            return;
+        }
+        if (info.menuItemId === MUSIC_NEXT_TRACK_ID) {
+            controlNeteaseMusic('next', tab).catch(error => console.warn('[Music] 下一首失败:', error));
+            return;
+        }
         if (info.menuItemId === SITE_WORKSPACE_OPEN_MENU_ID) {
             openSiteWorkspace(tab).catch(error => console.warn('[SiteWorkspace] 右键打开失败:', error));
             return;
@@ -2296,6 +2469,17 @@ importScripts('alarm-core.js', 'background-provider.js', 'hermes-writing-sync.js
     });
 
     chrome.commands.onCommand.addListener((command, tab) => {
+        const musicCommands = {
+            [MUSIC_TOGGLE_PLAYBACK_ID]: 'toggle',
+            [MUSIC_PREVIOUS_TRACK_ID]: 'prev',
+            [MUSIC_NEXT_TRACK_ID]: 'next',
+            [MUSIC_PERSONAL_FM_MENU_ID]: 'personal-fm',
+            [MUSIC_DAILY_RECOMMEND_MENU_ID]: 'daily-recommend',
+        };
+        if (musicCommands[command]) {
+            controlNeteaseMusic(musicCommands[command], tab).catch(error => console.warn('[Music] 快捷键执行失败:', error));
+            return;
+        }
         if (command === SITE_WORKSPACE_OPEN_COMMAND) {
             toggleSiteWorkspace(tab).catch(error => console.warn('[SiteWorkspace] 快捷键切换失败:', error));
             return;
@@ -2981,20 +3165,35 @@ importScripts('alarm-core.js', 'background-provider.js', 'hermes-writing-sync.js
     // 监听消息事件
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const userAlarmActions = new Set([
-            'user_alarm_list', 'user_alarm_save', 'user_alarm_delete', 'user_alarm_toggle',
+            'user_alarm_list', 'user_alarm_save', 'user_alarm_rename', 'user_alarm_delete', 'user_alarm_toggle',
             'user_alarm_dismiss', 'user_alarm_snooze', 'user_alarm_test', 'user_alarm_test_stop',
-            'user_alarm_reconcile'
+            'user_alarm_reconcile', 'user_alarm_desktop_status', 'user_alarm_desktop_test'
         ]);
         if (userAlarmActions.has(message.action)) {
             (async () => {
                 try {
                     let result;
                     switch (message.action) {
+                        case 'user_alarm_desktop_status':
+                        case 'user_alarm_desktop_test': {
+                            if (sender.id !== chrome.runtime.id || !sender.url?.startsWith(chrome.runtime.getURL(''))) throw new Error('仅扩展页面可测试桌面提醒');
+                            if (message.action === 'user_alarm_desktop_status') result = await desktopAlarm.status();
+                            else {
+                                const { runtime } = await loadUserAlarmState();
+                                if (runtime.activeSession) throw new Error('有闹钟正在响铃，请先处理后再测试');
+                                result = await desktopAlarm.show({ id: `desktop-test-${Date.now()}`, scheduledAt: Date.now(), occurrences: [{ label: '桌面提醒测试（不会修改闹钟）', snoozeMinutes: 10, snoozeLimit: 1, snoozeCount: 0 }] });
+                            }
+                            break;
+                        }
                         case 'user_alarm_list':
                             result = await getUserAlarmViewState();
                             break;
                         case 'user_alarm_save':
                             result = await saveUserAlarm(message.alarm || {});
+                            break;
+                        case 'user_alarm_rename':
+                            if (sender.id !== chrome.runtime.id || !sender.url?.startsWith(chrome.runtime.getURL(''))) throw new Error('仅扩展页面可修改闹钟');
+                            result = await renameUserAlarm(message);
                             break;
                         case 'user_alarm_delete':
                             result = await deleteUserAlarm(String(message.alarmId || ''));
@@ -3381,24 +3580,24 @@ importScripts('alarm-core.js', 'background-provider.js', 'hermes-writing-sync.js
 
         if (message.action === 'offscreen_track_ended') {
             logExtEvent('music', 'track-ended');
-            if (silentMusicPlayback && String(message.songId) === String(silentMusicPlayback.songs[silentMusicPlayback.index]?.songId)) {
-                advanceSilentMusicPlayback().catch(error => console.warn('[Music] 静默续播失败:', error));
-                return false;
+            const activeSongId = silentMusicPlayback?.songs?.[silentMusicPlayback.index]?.songId;
+            if (silentMusicPlayback) {
+                // 快速切歌时旧音频也可能晚到 ended；身份不一致必须直接忽略。
+                if (String(message.songId) === String(activeSongId)) {
+                    advanceSilentMusicPlayback().catch(error => console.warn('[Music] 静默续播失败:', error));
+                }
+            } else {
+                hasOpenMusicWorkbench().then(isOpen => {
+                    if (isOpen) _sendMusicControl({ action: 'music_track_ended', songId: message.songId });
+                    else advanceNeteaseMusic(1, message.songId).catch(error => console.warn('[Music] 后台续播失败:', error));
+                });
             }
-            _sendMusicControl({ action: 'music_track_ended', songId: message.songId });
             return false;
         }
 
         if (message.action === 'offscreen_media_action') {
-            if (silentMusicPlayback) {
-                const direction = message.command === 'prev' ? -1 : 1;
-                advanceSilentMusicPlayback(direction).catch(error => console.warn('[Music] 静默媒体控制失败:', error));
-                return false;
-            }
-            _sendMusicControl({
-                action: 'music_media_action',
-                command: message.command
-            });
+            const direction = message.command === 'prev' ? -1 : 1;
+            advanceNeteaseMusic(direction).catch(error => console.warn('[Music] 媒体控制失败:', error));
             return false;
         }
 

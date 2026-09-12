@@ -102,7 +102,7 @@ class MusicController {
             const stateAge = Date.now() - (lastMusicState?.savedAt || 0);
             const hasFreshMusicState = Boolean(lastMusicState?.title && stateAge < 30 * 60 * 1000);
             if (hasFreshMusicState) {
-                this.state = { ...this.state, ...lastMusicState };
+                this.state = { ...this.state, ...lastMusicState, isPlaying: false };
                 this.platform = lastMusicState.platform || null;
                 this._lastUpdateTs = Date.now();
                 if (lastMusicState.songId != null) this._currentSongId = lastMusicState.songId;
@@ -146,6 +146,7 @@ class MusicController {
                 const trimmed = (this._playlist || []).slice(0, 300).map(s => ({
                     title: s.title, artist: s.artist, songId: s.songId, index: s.index,
                     artists: s.artists || undefined, albumId: s.albumId || undefined,
+                    album: s.album || undefined, cover: s.cover || undefined, duration: s.duration || undefined,
                 }));
                 chrome.storage.local.set({
                     musicPlaylistCache: {
@@ -921,6 +922,17 @@ class MusicController {
     // ===================== UI 更新 =====================
 
     _updateUI() {
+        window.ProductUIV5?.updatePlayer?.({
+            isPlaying: Boolean(this.state.isPlaying),
+            title: this.state.title || '',
+            artist: this.state.artist || '',
+            cover: this.state.cover || '',
+            currentTime: Number(this.state.currentTime || 0),
+            duration: Number(this.state.duration || 0),
+            volume: Number(this.state.volume ?? 1),
+            playMode: this._playMode,
+            queueLength: this._playlist.length,
+        });
         const el = this._el;
         if (!el) return;
 
@@ -1025,17 +1037,7 @@ class MusicController {
         if (v5Source) v5Source.textContent = playbackSource;
         if (v5QueueSize) v5QueueSize.textContent = `${this._playlist.length} 首`;
 
-        window.ProductUIV5?.updatePlayer?.({
-            isPlaying: Boolean(this.state.isPlaying),
-            title: this.state.title || '',
-            artist: this.state.artist || '',
-            cover: this.state.cover || '',
-            currentTime: Number(this.state.currentTime || 0),
-            duration: Number(this.state.duration || 0),
-            volume: Number(this.state.volume ?? 1),
-            playMode: this._playMode,
-            queueLength: this._playlist.length,
-        });
+
 
         // 恢复同一首歌或收到乱序的 offscreen 状态时，也不能残留空态引导。
         if (this.state.title) this._hideMetaGuide(true);

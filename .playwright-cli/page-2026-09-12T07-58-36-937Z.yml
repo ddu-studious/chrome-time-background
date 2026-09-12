@@ -1,0 +1,48 @@
+- generic [active] [ref=e1]:
+  - paragraph [ref=e2]: 隔离验收页面：使用真实 UI 和离线解析；存储、通知和模型由测试替身提供。
+  - dialog [ref=e5]:
+    - banner [ref=e6]:
+      - generic [ref=e7]:
+        - text: TIME KEEPER
+        - heading "闹钟" [level=2] [ref=e8]
+        - paragraph [ref=e9]: 说一句，记住接下来要做的事
+      - button "关闭闹钟中心" [ref=e10] [cursor=pointer]
+    - generic [ref=e11]:
+      - generic [ref=e12]:
+        - generic [ref=e13]: 一句话，记住接下来要做的事
+        - generic [ref=e14]:
+          - textbox "一句话，记住接下来要做的事" [ref=e15]:
+            - /placeholder: 明天下午三点提醒我开会
+          - button "设置闹钟 ↵" [ref=e16] [cursor=pointer]
+      - generic [ref=e17]:
+        - generic [ref=e18]: 试着说
+        - button "20 分钟后休息" [ref=e19] [cursor=pointer]
+        - button "每周一三五运动" [ref=e20] [cursor=pointer]
+      - status [ref=e49]: 已撤销本次创建
+      - group [ref=e21]:
+        - generic "本地 AI 简单时间可离线识别" [ref=e22] [cursor=pointer]
+    - generic [ref=e23]:
+      - generic [ref=e24]:
+        - generic [ref=e25]: 下一次提醒
+        - strong [ref=e26]: Invalid Date
+        - generic [ref=e27]: 约 Infinity 小时 NaN 分钟后
+      - button "手动设置" [ref=e28] [cursor=pointer]
+    - generic "快速创建倒计时" [ref=e29]:
+      - generic [ref=e30]: 快速开始
+      - button "10 分钟" [ref=e31] [cursor=pointer]
+      - button "25 分钟" [ref=e32] [cursor=pointer]
+      - button "1 小时" [ref=e33] [cursor=pointer]
+      - button "下个整点" [ref=e34] [cursor=pointer]
+    - generic [ref=e35]:
+      - generic [ref=e36]: 离线声音就绪
+      - generic [ref=e37]: 扩展环境中检测系统通知
+      - generic [ref=e38]: 电脑睡眠时无法准点唤醒
+    - generic [ref=e40]:
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - heading "我的闹钟" [level=3] [ref=e43]
+          - text: 0 个已开启 · 共 0 个
+        - button "检查提醒" [ref=e44] [cursor=pointer]
+      - generic [ref=e64]:
+        - strong [ref=e65]: 还没有闹钟
+        - generic [ref=e66]: 可以从上面的快捷时间开始

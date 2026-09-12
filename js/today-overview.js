@@ -12,6 +12,14 @@
       if (document.getElementById('today-overview')) return;
       this._build();
       this._bind();
+      window.ProductUIV5?.subscribe?.((state, reason) => {
+        if (reason !== 'player') return;
+        const player = state.player;
+        const signature = JSON.stringify([player.title, player.artist, player.cover, player.isPlaying]);
+        if (signature === this._musicSignature) return;
+        this._musicSignature = signature;
+        void this.refresh();
+      });
       await this.refresh();
       this._refreshTimer = setInterval(() => this.refresh(), 60 * 1000);
       chrome.storage?.onChanged?.addListener?.((changes, area) => {
@@ -86,8 +94,7 @@
       const workProgress = Math.min(100, Math.round(minutes / 480 * 100));
       const bookmarks = data.bookmarkCache?.items || [];
       const reading = bookmarks.filter(item => item.status !== 'archived').slice(0, 3);
-      const storedSong = data.lastMusicState;
-      const song = storedSong?.title && Date.now() - (storedSong.savedAt || 0) < 30 * 60 * 1000 ? storedSong : null;
+      const song = window.ProductUIV5?.getDisplayPlayer?.(data.lastMusicState) || null;
 
       const completedPlans = plans.filter(item => item.completed).length;
       const completedTasks = (data.memos || []).filter(item => item.completed && !item.deleted).length;
@@ -122,7 +129,7 @@
         </article>
         <article class="to-card to-music-card" data-open="music">
           <div class="to-music-cover">${song?.cover ? `<img src="${this._esc(song.cover)}" alt="">` : '<i class="fas fa-music"></i>'}</div>
-          <div class="to-music-copy"><span>${song?.isPlaying ? '正在播放' : song ? '最近播放' : '音乐'}</span><strong>${this._esc(song?.title || '打开网易云音乐')}</strong><small>${this._esc(song?.artist || '选择一首歌开始今天')}</small></div>
+          <div class="to-music-copy"><span>${song?.isPlaying ? '正在播放' : song?.title ? '最近播放' : '音乐'}</span><strong>${this._esc(song?.title || '打开网易云音乐')}</strong><small>${this._esc(song?.artist || '选择一首歌开始今天')}</small></div>
           <i class="fas fa-chevron-right"></i>
         </article>`;
     }

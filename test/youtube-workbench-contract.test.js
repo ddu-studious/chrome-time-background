@@ -27,7 +27,7 @@ test('工作台接入 Dock、启动流程、设置和 v5 页面注册表', () =>
   const settingsPage = read('js/settings-page.js');
   const settingsHtml = read('settings.html');
   assert.ok(index.includes('id="youtube-dock-btn"'));
-  assert.ok(index.includes('css/youtube-workbench.css?v=3'));
+  assert.ok(index.includes('css/youtube-workbench.css?v=4'));
   assert.ok(index.includes('js/youtube-controller.js?v=12'));
   assert.ok(main.includes("getSetting('enableYouTube')"));
   assert.ok(main.includes('await window.youtubeController.init()'));
@@ -196,6 +196,80 @@ test('播放器通过 infoDelivery 上报 playing 时也会写入观看历史', 
   });
   await Promise.resolve();
   assert.equal(writes.length, 1, '连续状态推送不能重复写入');
+});
+
+test('所有 YouTube 视频入口共享本地观影进度并过滤片头与已看完状态', () => {
+  const source = read('js/youtube-controller.js');
+  const css = read('css/youtube-workbench.css');
+  for (const contract of [
+    "progress: 'youtubeWatchProgress'",
+    'mergeWatchProgress(this.watchProgress, videoId, bridge.currentTime, bridge.duration)',
+    'this._getWatchResumeTime(item.id)',
+    'startSeconds: resumeTime',
+    '`&start=${resumeTime}`',
+    '看到 ${formatPlaybackTime(watchState.time)}',
+    'yt-watch-progress',
+  ]) assert.ok(source.includes(contract), `缺少 YouTube 续播契约: ${contract}`);
+  assert.ok(css.includes('.yt-watch-progress'));
+
+  const context = { window: {}, URL, console };
+  vm.runInNewContext(source, context);
+  const { mergeWatchProgress, getWatchResumeTime, isWatchProgressComplete } = context.window.YouTubeWorkbench;
+  let progress = mergeWatchProgress({}, 'AAA00000001', 4, 300, 1000);
+  assert.equal(getWatchResumeTime(progress, 'AAA00000001'), 0, '片头几秒不应形成续播点');
+  progress = mergeWatchProgress(progress, 'AAA00000001', 42.9, 300, 2000);
+  assert.equal(progress.AAA00000001.time, 42);
+  assert.equal(progress.AAA00000001.duration, 300);
+  assert.equal(getWatchResumeTime(progress, 'AAA00000001'), 42);
+  assert.equal(isWatchProgressComplete(285, 300), true);
+  progress = mergeWatchProgress(progress, 'AAA00000001', 285, 300, 3000);
+  assert.equal(getWatchResumeTime(progress, 'AAA00000001'), 0, '已看完视频下次应从头播放');
+});
+
+test('YouTube 播放状态上报会落盘进度，移除历史时同步清除观影状态', async () => {
+  const writes = [];
+  const frameWindow = {};
+  const context = {
+    URL,
+    console,
+    chrome: {
+      runtime: {},
+      storage: { local: { set(values, callback) { writes.push(values); callback(); } } },
+    },
+    window: {},
+  };
+  vm.runInNewContext(read('js/youtube-controller.js'), context);
+  const controller = context.window.youtubeController;
+  controller.currentVideo = { id: 'AAA00000001', title: '续播测试', channel: '测试频道', kind: 'video' };
+  controller.playerBridge = {
+    frame: { contentWindow: frameWindow }, ready: true, autoRatePending: false,
+    playerState: 1, availableRates: [1, 2], currentTime: 0, duration: 0,
+  };
+  controller._syncNav = () => {};
+  controller._schedulePlayerControlUpdate = () => {};
+  controller._handlePlayerMessage({
+    origin: 'https://www.youtube.com',
+    source: frameWindow,
+    data: JSON.stringify({ event: 'infoDelivery', info: { playerState: 1, currentTime: 42, duration: 300 } }),
+  });
+  await Promise.resolve();
+  assert.equal(controller.watchProgress.AAA00000001.time, 42);
+  assert.ok(writes.some(write => write.youtubeWatchProgress?.AAA00000001?.time === 42));
+
+  controller.playerBridge.currentTime = 0;
+  controller._captureWatchProgress(true, true);
+  await Promise.resolve();
+  assert.equal(controller.watchProgress.AAA00000001, undefined, '明确拖回片头后应清除旧续播点');
+  controller.playerBridge.currentTime = 42;
+  controller._captureWatchProgress(true);
+  await Promise.resolve();
+
+  controller.history = [{ ...controller.currentVideo }];
+  controller._renderActiveView = () => {};
+  controller._setStatus = () => {};
+  await controller._removeLocal('history', 'AAA00000001');
+  assert.equal(controller.watchProgress.AAA00000001, undefined);
+  assert.ok(writes.some(write => write.youtubeWatchHistory?.length === 0 && Object.keys(write.youtubeWatchProgress || {}).length === 0));
 });
 
 test('趋势按用户选择的公开视频分类过滤并持久化选择', () => {

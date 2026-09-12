@@ -75,14 +75,19 @@ test('可恢复外部依赖降级不再记入 warning', () => {
   const ticker = read('js/ticker.js');
   const bilibili = read('js/bilibili-controller.js');
   const hermes = read('js/hermes-writing-sync.js');
+  const weather = read('js/weather.js');
   const index = read('index.html');
 
   assert.ok(ticker.includes('console.debug(`[Ticker] ${key} 暂不可用，已跳过:`'));
   assert.ok(ticker.includes('hotapi GitHub 无数据，已回退 Search API'));
   assert.ok(bilibili.includes('UP 主投稿接口不可用，已切换动态流'));
   assert.ok(hermes.includes('本地 Bridge 未启动，已跳过自动同步'));
+  assert.ok(weather.includes("console.debug('[Weather] 自动定位不可用:'"));
+  assert.ok(weather.includes("console.debug('[Weather] 自动定位失败，尝试缓存:'"));
+  assert.doesNotMatch(weather, /console\.warn\('(?:Geolocation error:|Location error:|无法获取位置，且未设置手动城市)/);
   for (const resource of [
     'js/bookmark-rag.js?v=1',
+    'js/weather.js?v=1',
     'js/ticker.js?v=4',
     'js/adaptive-overlay.js?v=1',
     'js/bilibili-controller.js?v=29',

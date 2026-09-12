@@ -539,8 +539,8 @@ textarea,
 :where(.snake-game-hint, .tetris-game-hint, .tetris-3d-game-hint) { color: var(--ui-text-3); font-size: 12px; line-height: 1.6; }
 @media (max-width: 520px) { :where(.snake-game-panel, .tetris-game-panel, .tetris-3d-game-panel) { right: 12px; bottom: 76px; width: calc(100vw - 24px); } }
 
-/* Dock 与应用启动台 v4 */
-.dock-bar {
+/* Dock 与应用启动台 v4：新版 Dock 使用自身的玻璃材质。 */
+.dock-bar:not(.dock-shell-v5) {
     padding: 8px 10px;
     border-color: var(--ui-border) !important;
     background: rgba(10, 15, 26, 0.78) !important;

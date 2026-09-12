@@ -9,17 +9,18 @@
         body { position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; overflow: hidden; margin: 0; padding: 0; background-size: cover; background-position: center; background-repeat: no-repeat; }
     </style>
     <link rel="stylesheet" href="css/style.css?v=14">
-    <link rel="stylesheet" href="css/background-experience.css?v=1">
+    <link rel="stylesheet" href="css/background-experience.css?v=3">
     <link rel="stylesheet" href="css/schedule.css">
     <link rel="stylesheet" href="css/alarm-center.css?v=1">
+    <link rel="stylesheet" href="css/smart-alarm.css?v=3">
     <link rel="stylesheet" href="css/weekview.css">
     <link rel="stylesheet" href="css/blog.css?v=3">
     <link rel="stylesheet" href="css/snake-game.css">
     <link rel="stylesheet" href="css/tetris-game.css">
     <link rel="stylesheet" href="css/tetris-3d-game.css">
-    <link rel="stylesheet" href="css/dock-manager.css?v=3">
+    <link rel="stylesheet" href="css/dock-manager.css?v=10">
     <link rel="stylesheet" href="css/prompt-manager.css?v=3">
-    <link rel="stylesheet" href="css/youtube-workbench.css?v=3">
+    <link rel="stylesheet" href="css/youtube-workbench.css?v=4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
@@ -32,15 +33,6 @@
         <div id="background-experience-time" class="bgx-time"></div>
         <canvas id="background-experience-canvas"></canvas>
         <div class="bgx-grain"></div>
-    </div>
-    <button id="background-experience-toggle" class="bgx-toggle" type="button" aria-pressed="false" title="唤醒背景玩法" hidden>
-        <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i>
-        <span class="sr-only">唤醒背景玩法</span>
-    </button>
-    <div id="background-experience-hud" class="bgx-hud" aria-hidden="true">
-        <div><span>WORLD ENERGY</span><b id="background-experience-energy">00</b></div>
-        <i><span id="background-experience-energy-fill"></span></i>
-        <p id="background-experience-status" role="status" aria-live="polite">点击、拖动、长按、甩动或双击</p>
     </div>
     <!-- 主布局容器（单栏） -->
     <div class="main-layout">
@@ -150,17 +142,18 @@
         </div>
     </div>
 
-    <!-- 紧急任务浮动提醒气泡 -->
-    <div class="urgent-bubble" id="urgent-bubble" style="display:none;">
+    <!-- 右侧快捷操作区：任务提醒 + 背景玩法 -->
+    <aside class="v5-right-floating-rail" id="v5-right-floating-rail" aria-label="右侧快捷操作">
+      <div class="urgent-bubble" id="urgent-bubble" style="display:none;">
         <!-- 悬浮简易摘要条（收缩状态时显示） -->
-        <div class="urgent-mini-bar" id="urgent-mini-bar">
+        <button class="urgent-mini-bar" id="urgent-mini-bar" type="button" aria-label="展开任务提醒">
             <span class="urgent-mini-dot"></span>
             <span class="urgent-mini-text" id="urgent-mini-text"></span>
-        </div>
-        <div class="urgent-bubble-dot" id="urgent-bubble-dot">
+        </button>
+        <button class="urgent-bubble-dot" id="urgent-bubble-dot" type="button" aria-label="展开任务提醒">
             <span class="urgent-bubble-ring"></span>
             <span class="urgent-bubble-num" id="urgent-bubble-num">0</span>
-        </div>
+        </button>
         <div class="urgent-bubble-panel" id="urgent-bubble-panel">
             <div class="urgent-panel-header">
                 <i class="fas fa-fire urgent-panel-icon"></i>
@@ -172,7 +165,20 @@
                 <a href="tasks.html" class="urgent-panel-link">查看全部任务 <i class="fas fa-arrow-right"></i></a>
             </div>
         </div>
-    </div>
+      </div>
+      <div class="v5-background-orb-slot">
+        <div id="background-experience-hud" class="bgx-hud" aria-hidden="true">
+            <div><span>WORLD ENERGY</span><b id="background-experience-energy">00</b></div>
+            <i><span id="background-experience-energy-fill"></span></i>
+            <p id="background-experience-status" role="status" aria-live="polite">点击、拖动、长按、甩动或双击</p>
+        </div>
+        <button id="background-experience-toggle" class="bgx-toggle" type="button" aria-pressed="false" title="唤醒背景玩法" hidden>
+            <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i>
+            <span class="bgx-tooltip" aria-hidden="true">背景玩法</span>
+            <span class="sr-only">唤醒背景玩法</span>
+        </button>
+      </div>
+    </aside>
 
     <!-- v3.2.1: 扩展活动监控面板（挂载在 dock 旁） -->
     <div class="sys-monitor" id="sys-monitor">
@@ -420,7 +426,7 @@
     <script src="js/lunar-lib.js"></script>
     <script src="js/lunar.js"></script>
     <script src="js/clock.js"></script>
-    <script src="js/weather.js"></script>
+    <script src="js/weather.js?v=1"></script>
     <script src="js/holidays.js"></script>
     <script src="js/tinyurl.js"></script>
     <script src="js/bookmark-srs.js"></script>
@@ -445,13 +451,14 @@
     <script src="js/writing-assistant.js?v=7"></script>
     <script src="js/schedule.js?v=7"></script>
     <script src="js/alarm-core.js?v=1"></script>
-    <script src="js/alarm-center.js?v=1"></script>
+    <script src="js/smart-alarm-ui.js?v=3"></script>
+    <script src="js/alarm-center.js?v=4"></script>
     <script src="js/weekview.js"></script>
     <link rel="stylesheet" href="css/cursor-bridge.css?v=3">
     <link rel="stylesheet" href="css/chatbot.css?v=4">
     <link rel="stylesheet" href="css/whitebox-observability.css">
-    <link rel="stylesheet" href="css/product-ui-v4.css?v=6">
-    <link rel="stylesheet" href="css/product-ui-v5.css?v=43">
+    <link rel="stylesheet" href="css/product-ui-v4.css?v=7">
+    <link rel="stylesheet" href="css/product-ui-v5.css?v=52">
     <script src="js/cursor-bridge.js?v=4"></script>
     <script src="js/chatbot.js?v=6"></script>
     <script src="js/prompt-manager.js?v=7"></script>
@@ -467,7 +474,7 @@
     <script src="js/tetris-3d-game.js?v=2"></script>
     <script src="js/site-workspace-core.js?v=1"></script>
     <script src="js/app-registry.js"></script>
-    <script src="js/dock-manager.js?v=11"></script>
+    <script src="js/dock-manager.js?v=13"></script>
     <script src="js/site-workspace-launcher.js?v=1"></script>
     <script src="js/games-v5.js?v=2"></script>
     <script src="js/quick-nav.js?v=13"></script>

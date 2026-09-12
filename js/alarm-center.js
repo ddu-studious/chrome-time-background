@@ -30,6 +30,7 @@
       this.editingId = null;
       this.initialized = false;
       this.returnFocus = null;
+      this.ringReturnFocus = null;
       this.inerted = [];
       this.ringInerted = [];
     }
@@ -38,6 +39,7 @@
       if (this.initialized) return;
       this.initialized = true;
       this._createShell();
+      window.mountSmartAlarm?.(this);
       this._bindEvents();
       await this.refresh();
 
@@ -60,6 +62,7 @@
       this.root.className = 'alarm-center-overlay';
       this.root.id = 'alarm-center-overlay';
       this.root.setAttribute('aria-hidden', 'true');
+      this.root.inert = true;
       this.root.innerHTML = `
         <div class="alarm-center-backdrop" data-alarm-close></div>
         <section class="alarm-center" role="dialog" aria-modal="true" aria-labelledby="alarm-center-title" tabindex="-1">
@@ -67,7 +70,7 @@
             <div>
               <span class="alarm-kicker">TIME KEEPER</span>
               <h2 id="alarm-center-title"><i class="fas fa-bell"></i> 闹钟</h2>
-              <p>声音、通知与视觉动作协同提醒</p>
+              <p>说一句，记住接下来要做的事</p>
             </div>
             <button class="alarm-icon-button" type="button" data-alarm-close aria-label="关闭闹钟中心"><i class="fas fa-times"></i></button>
           </header>
@@ -78,7 +81,7 @@
               <strong id="alarm-next-time">暂无已开启闹钟</strong>
               <small id="alarm-next-countdown">创建一个闹钟，让时间主动来找你</small>
             </div>
-            <button class="alarm-primary-button" type="button" id="alarm-new-button"><i class="fas fa-plus"></i> 新建闹钟</button>
+            <button class="alarm-secondary-button" type="button" id="alarm-new-button"><i class="fas fa-plus"></i> 手动设置</button>
           </div>
 
           <div class="alarm-quick-row" aria-label="快速创建倒计时">
@@ -90,6 +93,7 @@
           </div>
 
           <div class="alarm-health" id="alarm-health">
+            <button type="button" class="alarm-text-button" id="alarm-desktop-test">测试桌面提醒</button>
             <span class="alarm-health-item" data-health="sound"><i class="fas fa-volume-high"></i> 离线声音就绪</span>
             <span class="alarm-health-item" data-health="notification"><i class="fas fa-bell"></i> 通知检测中</span>
             <span class="alarm-health-item warning"><i class="fas fa-moon"></i> 电脑睡眠时无法准点唤醒</span>
@@ -99,7 +103,7 @@
             <section class="alarm-list-section">
               <div class="alarm-section-heading">
                 <div><h3>我的闹钟</h3><small id="alarm-list-summary">0 个已开启</small></div>
-                <button type="button" class="alarm-text-button" id="alarm-refresh-button"><i class="fas fa-rotate"></i> 对账</button>
+                <button type="button" class="alarm-text-button" id="alarm-refresh-button"><i class="fas fa-rotate"></i> 检查提醒</button>
               </div>
               <div class="alarm-list" id="alarm-list"></div>
             </section>
@@ -117,7 +121,7 @@
               <label class="alarm-field"><span>重复</span>
                 <select name="repeat">
                   <option value="once">仅一次</option><option value="daily">每天</option>
-                  <option value="weekdays">工作日</option><option value="custom">自定义星期</option>
+                  <option value="weekdays">周一至周五</option><option value="custom">自定义星期</option>
                 </select>
               </label>
               <div class="alarm-day-picker" data-custom-days hidden aria-label="选择重复星期">
@@ -148,6 +152,7 @@
       this.ringRoot.className = 'alarm-ringing-overlay';
       this.ringRoot.id = 'alarm-ringing-overlay';
       this.ringRoot.setAttribute('aria-hidden', 'true');
+      this.ringRoot.inert = true;
       this.ringRoot.innerHTML = `
         <div class="alarm-ringing-glow" aria-hidden="true"></div>
         <section class="alarm-ringing-card" role="alertdialog" aria-modal="true" aria-labelledby="alarm-ringing-label">
@@ -164,6 +169,12 @@
     }
 
     _bindEvents() {
+      this.root.querySelector('#alarm-desktop-test').addEventListener('click', async event => {
+        event.target.disabled = true;
+        const result = await send('user_alarm_desktop_test');
+        this._toast(result.ok ? '桌面卡片已打开，可切换到其他应用查看' : '桌面组件未连接：请先安装组件，再重新加载扩展');
+        event.target.disabled = false;
+      });
       this.root.querySelectorAll('[data-alarm-close]').forEach(button => button.addEventListener('click', () => this.close()));
       this.root.querySelector('#alarm-new-button').addEventListener('click', () => this.openEditor());
       this.root.querySelector('#alarm-editor-close').addEventListener('click', () => this.closeEditor());
@@ -264,7 +275,7 @@
     _repeatLabel(alarm) {
       if (alarm.repeat === 'once') return alarm.date ? new Date(`${alarm.date}T00:00:00`).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }) : '仅一次';
       if (alarm.repeat === 'daily') return '每天';
-      if (alarm.repeat === 'weekdays') return '工作日';
+      if (alarm.repeat === 'weekdays') return '周一至周五';
       return (alarm.days || []).map(day => `周${DAY_LABELS[day]}`).join(' · ') || '自定义';
     }
 
@@ -277,7 +288,7 @@
         list.innerHTML = '<div class="alarm-empty"><i class="far fa-clock"></i><strong>还没有闹钟</strong><span>可以从上面的快捷时间开始</span></div>';
         return;
       }
-      list.innerHTML = alarms.map(alarm => `
+      const renderAlarm = alarm => `
         <article class="alarm-item${alarm.enabled ? '' : ' disabled'}" data-alarm-id="${escapeHtml(alarm.id)}">
           <label class="alarm-switch" aria-label="${alarm.enabled ? '关闭' : '开启'}${escapeHtml(alarm.label)}">
             <input type="checkbox" data-alarm-toggle ${alarm.enabled ? 'checked' : ''}><span></span>
@@ -291,7 +302,11 @@
             <button type="button" data-alarm-action="edit" aria-label="编辑${escapeHtml(alarm.label)}"><i class="fas fa-pen"></i></button>
             <button type="button" data-alarm-action="delete" aria-label="删除${escapeHtml(alarm.label)}"><i class="fas fa-trash"></i></button>
           </div>
-        </article>`).join('');
+        </article>`;
+      const archived = alarms.filter(alarm => !alarm.enabled);
+      const expanded = list.querySelector('details')?.open;
+      list.innerHTML = alarms.filter(alarm => alarm.enabled).map(renderAlarm).join('') +
+        (archived.length ? `<details class="alarm-archived" ${expanded ? 'open' : ''}><summary>已关闭或结束（${archived.length}）</summary><div class="alarm-list">${archived.map(renderAlarm).join('')}</div></details>` : '');
     }
 
     open(source = 'dock') {
@@ -302,8 +317,9 @@
       this.returnFocus = document.activeElement;
       this.inerted = [...document.body.children].filter(element => element !== this.root && element !== this.ringRoot && !element.inert);
       this.inerted.forEach(element => { element.inert = true; });
-      this.root.classList.add('open');
       this.root.setAttribute('aria-hidden', 'false');
+      this.root.inert = false;
+      this.root.classList.add('open');
       this.root.querySelector('.alarm-center').focus({ preventScroll: true });
       window.ProductUIV5?.setBusinessPage?.('alarm', source);
       void this.refresh();
@@ -312,11 +328,14 @@
     close() {
       if (!this.root.classList.contains('open')) return;
       this.closeEditor();
+      const activeElement = document.activeElement;
+      if (activeElement && this.root.contains(activeElement)) activeElement.blur();
+      this.root.inert = true;
       this.root.classList.remove('open');
-      this.root.setAttribute('aria-hidden', 'true');
       this.inerted.forEach(element => { element.inert = false; });
       this.inerted = [];
       this.returnFocus?.focus?.({ preventScroll: true });
+      this.root.setAttribute('aria-hidden', 'true');
       this.returnFocus = null;
     }
 
@@ -363,7 +382,10 @@
 
     closeEditor() {
       const form = this.root?.querySelector('#alarm-editor');
-      if (form) form.hidden = true;
+      if (form) {
+        if (form.contains(document.activeElement)) this.root.querySelector('#alarm-new-button')?.focus({ preventScroll: true });
+        form.hidden = true;
+      }
       this.editingId = null;
       void send('user_alarm_test_stop');
     }
@@ -491,19 +513,26 @@
       const canSnooze = Number(primary.snoozeCount || 0) < Number(primary.snoozeLimit || 0);
       this.ringRoot.querySelector('[data-ring-action="snooze"]').hidden = !canSnooze;
       if (!this.ringRoot.classList.contains('open')) {
+        this.ringReturnFocus = document.activeElement;
         this.ringInerted = [...document.body.children].filter(element => element !== this.ringRoot && !element.inert);
         this.ringInerted.forEach(element => { element.inert = true; });
       }
-      this.ringRoot.classList.add('open');
       this.ringRoot.setAttribute('aria-hidden', 'false');
+      this.ringRoot.inert = false;
+      this.ringRoot.classList.add('open');
       this.ringRoot.querySelector('[data-ring-action="dismiss"]').focus({ preventScroll: true });
     }
 
     hideRinging() {
+      const activeElement = document.activeElement;
+      if (activeElement && this.ringRoot.contains(activeElement)) activeElement.blur();
+      this.ringRoot.inert = true;
       this.ringRoot.classList.remove('open');
-      this.ringRoot.setAttribute('aria-hidden', 'true');
       this.ringInerted.forEach(element => { element.inert = false; });
       this.ringInerted = [];
+      this.ringReturnFocus?.focus?.({ preventScroll: true });
+      this.ringRoot.setAttribute('aria-hidden', 'true');
+      this.ringReturnFocus = null;
       delete this.ringRoot.dataset.sessionId;
     }
 

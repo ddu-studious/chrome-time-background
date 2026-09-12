@@ -5,6 +5,7 @@
         queue: 'youtubeLocalQueue',
         learning: 'youtubeLearningList',
         history: 'youtubeWatchHistory',
+        progress: 'youtubeWatchProgress',
         settings: 'youtubeSettings',
     });
     const VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
@@ -72,6 +73,11 @@
     const DEFAULT_PLAYBACK_RATES = [0.75, 1, 1.25, 1.5, 2];
     const AUTO_PLAYBACK_RATE = 2;
     const WATCH_HISTORY_LIMIT = 100;
+    const WATCH_PROGRESS_LIMIT = 200;
+    const WATCH_PROGRESS_MIN_SECONDS = 5;
+    const WATCH_PROGRESS_SAVE_INTERVAL_MS = 10_000;
+    const WATCH_PROGRESS_COMPLETION_RATIO = 0.95;
+    const WATCH_PROGRESS_COMPLETION_REMAINING_SECONDS = 15;
 
     function escapeHtml(value = '') {
         return String(value).replace(/[&<>'"]/g, character => ({
@@ -218,6 +224,43 @@
         ].slice(0, WATCH_HISTORY_LIMIT);
     }
 
+    function isWatchProgressComplete(currentTime, duration) {
+        const current = Number(currentTime);
+        const total = Number(duration);
+        if (!Number.isFinite(current) || !Number.isFinite(total) || total <= 0) return false;
+        const remaining = Math.max(0, total - current);
+        return current / total >= WATCH_PROGRESS_COMPLETION_RATIO
+            || (total >= 120 && remaining <= WATCH_PROGRESS_COMPLETION_REMAINING_SECONDS);
+    }
+
+    function mergeWatchProgress(entries = {}, videoId, currentTime, duration, updatedAt = Date.now()) {
+        if (!VIDEO_ID_PATTERN.test(String(videoId || ''))) return { ...entries };
+        const current = Math.max(0, Math.floor(Number(currentTime) || 0));
+        const total = Math.max(0, Math.floor(Number(duration) || 0));
+        const next = { ...entries };
+        if (isWatchProgressComplete(current, total)) {
+            delete next[videoId];
+            return next;
+        }
+        if (current < WATCH_PROGRESS_MIN_SECONDS) return next;
+        next[videoId] = { time: current, duration: total, updatedAt: Number(updatedAt) || Date.now() };
+        const ids = Object.keys(next);
+        if (ids.length > WATCH_PROGRESS_LIMIT) {
+            ids.sort((left, right) => Number(next[right]?.updatedAt || 0) - Number(next[left]?.updatedAt || 0));
+            ids.slice(WATCH_PROGRESS_LIMIT).forEach(id => { delete next[id]; });
+        }
+        return next;
+    }
+
+    function getWatchResumeTime(entries = {}, videoId) {
+        const entry = entries?.[videoId];
+        if (!entry) return 0;
+        const current = Math.max(0, Math.floor(Number(entry.time) || 0));
+        const duration = Math.max(0, Math.floor(Number(entry.duration) || 0));
+        if (current < WATCH_PROGRESS_MIN_SECONDS || isWatchProgressComplete(current, duration)) return 0;
+        return current;
+    }
+
     function storageGet(defaults) {
         return new Promise(resolve => chrome.storage.local.get(defaults, result => resolve(result || defaults)));
     }
@@ -267,6 +310,7 @@
             this.queue = [];
             this.learning = [];
             this.history = [];
+            this.watchProgress = {};
             this.settings = {};
             this.layout = 'grid';
             this.items = [];
@@ -284,6 +328,8 @@
             this.playerRecentChannelKey = '';
             this.playerRecentRequestId = 0;
             this.historyRecordedVideoId = '';
+            this.lastProgressSaveAt = 0;
+            this.lastProgressSaveVideoId = '';
             this.remoteRequestId = 0;
             this.returnFocus = null;
             this.backgroundInertSiblings = [];
@@ -296,10 +342,13 @@
             if (this.initialized) return;
             this._injectPanel();
             this._bindEvents();
-            const stored = await storageGet({ [STORAGE_KEYS.queue]: [], [STORAGE_KEYS.learning]: [], [STORAGE_KEYS.history]: [], [STORAGE_KEYS.settings]: {} });
+            const stored = await storageGet({ [STORAGE_KEYS.queue]: [], [STORAGE_KEYS.learning]: [], [STORAGE_KEYS.history]: [], [STORAGE_KEYS.progress]: {}, [STORAGE_KEYS.settings]: {} });
             this.queue = Array.isArray(stored[STORAGE_KEYS.queue]) ? stored[STORAGE_KEYS.queue] : [];
             this.learning = Array.isArray(stored[STORAGE_KEYS.learning]) ? stored[STORAGE_KEYS.learning] : [];
             this.history = Array.isArray(stored[STORAGE_KEYS.history]) ? stored[STORAGE_KEYS.history] : [];
+            this.watchProgress = stored[STORAGE_KEYS.progress] && typeof stored[STORAGE_KEYS.progress] === 'object' && !Array.isArray(stored[STORAGE_KEYS.progress])
+                ? stored[STORAGE_KEYS.progress]
+                : {};
             this.settings = stored[STORAGE_KEYS.settings] && typeof stored[STORAGE_KEYS.settings] === 'object' ? stored[STORAGE_KEYS.settings] : {};
             this.layout = LAYOUTS.has(this.settings.layout) ? this.settings.layout : 'grid';
             const hasCurrentTrendPreference = this.settings.trendPreferenceVersion === TREND_PREFERENCE_VERSION
@@ -343,6 +392,7 @@
 
         close() {
             if (!this.panel) return;
+            this._captureWatchProgress(true);
             this.isOpen = false;
             this.panel.hidden = true;
             this.panel.setAttribute('inert', '');
@@ -993,13 +1043,13 @@
             </section>`;
         }
 
-        _attachPlayerBridge(frame) {
+        _attachPlayerBridge(frame, resumeTime = 0) {
             this._detachPlayerBridge();
             this.playerBridge = {
                 frame,
                 loaded: false,
                 ready: false,
-                currentTime: 0,
+                currentTime: resumeTime,
                 duration: 0,
                 playbackRate: AUTO_PLAYBACK_RATE,
                 playerState: -1,
@@ -1029,6 +1079,7 @@
         }
 
         _detachPlayerBridge() {
+            this._captureWatchProgress(true);
             if (this.playerBridgeTimer) window.clearInterval(this.playerBridgeTimer);
             if (this.playerControlUpdateFrame) window.cancelAnimationFrame(this.playerControlUpdateFrame);
             this.playerBridgeTimer = 0;
@@ -1071,6 +1122,7 @@
             if (previousPlayerState !== 1 && this.playerBridge.playerState === 1 && this.currentVideo) {
                 void this._recordWatchHistory(this.currentVideo);
             }
+            this._captureWatchProgress(message.event === 'onStateChange' && this.playerBridge.playerState !== 1);
             if (!wasReady && this.playerBridge.ready) {
                 if (this.playerBridgeTimer) window.clearInterval(this.playerBridgeTimer);
                 this.playerBridgeTimer = 0;
@@ -1136,6 +1188,7 @@
             const seconds = Number(event.target.value);
             this.playerBridge.currentTime = seconds;
             this.playerProgressDragging = false;
+            this._captureWatchProgress(true, true);
             this._postPlayerMessage({ event: 'command', func: 'seekTo', args: [seconds, true] });
             this._updatePlayerControls();
         }
@@ -1144,6 +1197,7 @@
             if (!this.playerBridge?.ready) return;
             const seconds = Math.min(Math.max(0, this.playerBridge.currentTime + delta), this.playerBridge.duration || Number.MAX_SAFE_INTEGER);
             this.playerBridge.currentTime = seconds;
+            this._captureWatchProgress(true, true);
             this._postPlayerMessage({ event: 'command', func: 'seekTo', args: [seconds, true] });
             this._updatePlayerControls();
         }
@@ -1307,19 +1361,21 @@
                 await this._play(item, this.playerOrigin);
                 return;
             }
+            this._captureWatchProgress(true);
             this.remoteRequestId++;
             this.currentVideo = { ...item };
             this.historyRecordedVideoId = '';
-            this.playerBridge.currentTime = 0;
+            const resumeTime = this._getWatchResumeTime(item.id);
+            this.playerBridge.currentTime = resumeTime;
             this.playerBridge.duration = 0;
             this.playerBridge.playbackRate = AUTO_PLAYBACK_RATE;
             this.playerBridge.playerState = -1;
             this.playerBridge.autoRatePending = true;
-            this._postPlayerMessage({ event: 'command', func: 'loadVideoById', args: [item.id, 0] });
+            this._postPlayerMessage({ event: 'command', func: 'loadVideoById', args: [{ videoId: item.id, startSeconds: resumeTime }] });
             this._updatePlayerVideoMeta();
             this._renderPlayerRecent();
             this._schedulePlayerControlUpdate();
-            this._setStatus(`已切换到 ${item.title}`);
+            this._setStatus(resumeTime > 0 ? `已从 ${formatPlaybackTime(resumeTime)} 继续播放` : `已切换到 ${item.title}`);
         }
 
         async _hydrateVideoDetails(item) {
@@ -1463,6 +1519,7 @@
 
         async _play(item, origin = null) {
             if (!VIDEO_ID_PATTERN.test(item.id)) return;
+            const resumeTime = this._getWatchResumeTime(item.id);
             const requestId = ++this.remoteRequestId;
             this.busy = false;
             this._detachPlayerBridge();
@@ -1482,7 +1539,8 @@
                 this._setStatus('播放器客户端标识配置失败');
                 return;
             }
-            const src = `https://www.youtube.com/embed/${encodeURIComponent(item.id)}?autoplay=0&playsinline=1&rel=0&enablejsapi=1&origin=${encodeURIComponent(location.origin)}`;
+            const startParam = resumeTime > 0 ? `&start=${resumeTime}` : '';
+            const src = `https://www.youtube.com/embed/${encodeURIComponent(item.id)}?autoplay=0&playsinline=1&rel=0&enablejsapi=1&origin=${encodeURIComponent(location.origin)}${startParam}`;
             this.stage.innerHTML = `
                 <div class="yt-player-layout">
                     <section class="yt-player-column">
@@ -1493,9 +1551,9 @@
                         <div class="yt-player-meta"><div><span class="yt-eyebrow">NOW PLAYING</span><h2 data-yt-current-title>${escapeHtml(this.currentVideo.title)}</h2><p data-yt-current-channel>${escapeHtml(this.currentVideo.channel || 'YouTube')}</p></div><div class="yt-actions"><button type="button" data-yt-action="add-queue"><i class="far fa-clock"></i> 稍后看</button><button type="button" data-yt-action="add-learning"><i class="fas fa-graduation-cap"></i> 学习清单</button><button type="button" data-yt-action="copy"><i class="far fa-copy"></i> 复制链接</button><button type="button" data-yt-action="open"><i class="fas fa-external-link-alt"></i> 原站打开</button></div></div>
                     </section>
                 </div>`;
-            this._attachPlayerBridge(this.stage.querySelector('.yt-player-frame'));
+            this._attachPlayerBridge(this.stage.querySelector('.yt-player-frame'), resumeTime);
             this._loadPlayerRecentVideos();
-            this._setStatus('官方播放器已就绪');
+            this._setStatus(resumeTime > 0 ? `已定位到上次观看的 ${formatPlaybackTime(resumeTime)}` : '官方播放器已就绪');
         }
 
         _renderActiveView() {
@@ -1507,7 +1565,7 @@
                         localType: 'history',
                         dateField: 'watchedAt',
                         playerReturnLabel: '观看历史',
-                        note: `仅记录扩展内实际开始播放的视频 · 最多 ${WATCH_HISTORY_LIMIT} 条`,
+                        note: `仅记录扩展内实际开始播放的视频 · 自动保存续播点 · 最多 ${WATCH_HISTORY_LIMIT} 条`,
                         emptyTitle: '还没有观看记录',
                         emptyDescription: '在本工作台开始播放视频后，会自动记录到这里。',
                     });
@@ -1552,7 +1610,9 @@
                 const date = dateValue ? new Date(dateValue).toLocaleDateString('zh-CN') : '';
                 const verb = isVideo ? '播放' : (isChannel ? '查看频道最近更新' : (isPlaylist ? '打开播放列表' : '查看'));
                 const circleBadge = item.trendCircleLabel ? `<span class="yt-circle-badge" data-circle="${escapeHtml(item.trendCircle)}">${escapeHtml(item.trendCircleLabel)}</span>` : '';
-                const thumbnail = `${item.thumbnail ? `<img src="${escapeHtml(item.thumbnail)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="yt-card-placeholder"><i class="fab fa-youtube"></i></span>'}${circleBadge}${isVideo ? '<span class="yt-play-badge"><i class="fas fa-play"></i></span>' : ((isChannel || isPlaylist) ? '<span class="yt-play-badge"><i class="fas fa-arrow-right"></i></span>' : '')}`;
+                const watchState = isVideo ? this._getWatchState(item.id) : null;
+                const progressBar = watchState ? `<span class="yt-watch-progress" aria-label="已观看 ${watchState.percent}%"><span style="width:${watchState.percent}%"></span></span>` : '';
+                const thumbnail = `${item.thumbnail ? `<img src="${escapeHtml(item.thumbnail)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="yt-card-placeholder"><i class="fab fa-youtube"></i></span>'}${circleBadge}${progressBar}${isVideo ? '<span class="yt-play-badge"><i class="fas fa-play"></i></span>' : ((isChannel || isPlaylist) ? '<span class="yt-play-badge"><i class="fas fa-arrow-right"></i></span>' : '')}`;
                 const media = isVideo
                     ? `<button class="yt-card-media" type="button" data-yt-play="${item.id}" aria-label="${verb} ${escapeHtml(item.title)}">${thumbnail}</button>`
                     : `<div class="yt-card-media">${thumbnail}</div>`;
@@ -1561,7 +1621,8 @@
                     : (isPlaylist ? `data-yt-playlist="${item.id}"` : 'disabled');
                 const cardOpen = isVideo ? '' : `<button class="yt-card-open" type="button" ${cardTarget} aria-label="${verb} ${escapeHtml(item.title)}"></button>`;
                 const localType = options.localType || (this.activeView === 'learning' ? 'learning' : 'queue');
-                return `<article class="yt-card" role="listitem">${media}<div class="yt-card-copy"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.channel)}${date ? ` · ${date}` : ''}</span></div>${isVideo ? `<div class="yt-card-actions"><button type="button" data-yt-action="${local ? `remove-${localType}` : 'add-queue'}" data-video-id="${item.id}" title="${local ? '从列表移除' : '加入稍后看'}" aria-label="${local ? `从列表移除 ${escapeHtml(item.title)}` : `将 ${escapeHtml(item.title)} 加入稍后看`}"><i class="${local ? 'fas fa-times' : 'far fa-clock'}"></i></button><button type="button" data-yt-action="open" data-video-id="${item.id}" title="在 YouTube 打开" aria-label="在 YouTube 打开 ${escapeHtml(item.title)}"><i class="fas fa-external-link-alt"></i></button></div>` : cardOpen}</article>`;
+                const watchLabel = watchState ? ` · 看到 ${formatPlaybackTime(watchState.time)}` : '';
+                return `<article class="yt-card" role="listitem">${media}<div class="yt-card-copy"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.channel)}${date ? ` · ${date}` : ''}${watchLabel}</span></div>${isVideo ? `<div class="yt-card-actions"><button type="button" data-yt-action="${local ? `remove-${localType}` : 'add-queue'}" data-video-id="${item.id}" title="${local ? '从列表移除' : '加入稍后看'}" aria-label="${local ? `从列表移除 ${escapeHtml(item.title)}` : `将 ${escapeHtml(item.title)} 加入稍后看`}"><i class="${local ? 'fas fa-times' : 'far fa-clock'}"></i></button><button type="button" data-yt-action="open" data-video-id="${item.id}" title="在 YouTube 打开" aria-label="在 YouTube 打开 ${escapeHtml(item.title)}"><i class="fas fa-external-link-alt"></i></button></div>` : cardOpen}</article>`;
             }).join('')}</div>`;
         }
 
@@ -1653,6 +1714,45 @@
             return [...this.items, ...this.playerRecentItems, ...this.history, ...this.queue, ...this.learning].find(item => item.id === id) || null;
         }
 
+        _getWatchResumeTime(videoId) {
+            return getWatchResumeTime(this.watchProgress, videoId);
+        }
+
+        _getWatchState(videoId) {
+            const time = this._getWatchResumeTime(videoId);
+            if (!time) return null;
+            const duration = Math.max(0, Number(this.watchProgress?.[videoId]?.duration) || 0);
+            return {
+                time,
+                duration,
+                percent: duration > 0 ? Math.min(94, Math.max(1, Math.round(time / duration * 100))) : 0,
+            };
+        }
+
+        _captureWatchProgress(force = false, clearAtStart = false) {
+            const videoId = this.currentVideo?.id;
+            const bridge = this.playerBridge;
+            if (!videoId || !bridge) return;
+            const before = this.watchProgress?.[videoId];
+            const next = mergeWatchProgress(this.watchProgress, videoId, bridge.currentTime, bridge.duration);
+            if (clearAtStart && Number(bridge.currentTime) < WATCH_PROGRESS_MIN_SECONDS) delete next[videoId];
+            const after = next[videoId];
+            const changed = before?.time !== after?.time || before?.duration !== after?.duration || Boolean(before) !== Boolean(after);
+            if (!changed && !force) return;
+            if (changed) this.watchProgress = next;
+            const now = Date.now();
+            const completed = Boolean(before) && !after;
+            if (!changed && !after) return;
+            const shouldSave = force || completed || this.lastProgressSaveVideoId !== videoId
+                || now - this.lastProgressSaveAt >= WATCH_PROGRESS_SAVE_INTERVAL_MS;
+            if (!shouldSave) return;
+            this.lastProgressSaveAt = now;
+            this.lastProgressSaveVideoId = videoId;
+            void storageSet({ [STORAGE_KEYS.progress]: this.watchProgress }).catch(error => {
+                console.debug('YouTube 本地观看进度保存失败', error);
+            });
+        }
+
         async _recordWatchHistory(item) {
             if (!item?.id || this.historyRecordedVideoId === item.id) return;
             this.historyRecordedVideoId = item.id;
@@ -1680,7 +1780,10 @@
             else if (key === 'learning') this.learning = this.learning.filter(item => item.id !== id);
             else this.queue = this.queue.filter(item => item.id !== id);
             const list = key === 'history' ? this.history : (key === 'learning' ? this.learning : this.queue);
-            await storageSet({ [STORAGE_KEYS[key]]: list });
+            if (key === 'history') delete this.watchProgress[id];
+            await storageSet(key === 'history'
+                ? { [STORAGE_KEYS.history]: list, [STORAGE_KEYS.progress]: this.watchProgress }
+                : { [STORAGE_KEYS[key]]: list });
             this._renderActiveView();
             this._setStatus(key === 'history' ? '已从观看历史移除' : '已从本地清单移除');
         }
@@ -1702,6 +1805,7 @@
             this.queue = [];
             this.learning = [];
             this.history = [];
+            this.watchProgress = {};
             this.settings = {};
             this.trendCategoryId = DEFAULT_TREND_CATEGORY_ID;
             this.trendCache.clear();
@@ -1710,6 +1814,7 @@
                 [STORAGE_KEYS.queue]: [],
                 [STORAGE_KEYS.learning]: [],
                 [STORAGE_KEYS.history]: [],
+                [STORAGE_KEYS.progress]: {},
                 [STORAGE_KEYS.settings]: {},
             });
             this._syncNav();
@@ -1724,6 +1829,6 @@
         }
     }
 
-    window.YouTubeWorkbench = Object.freeze({ parseYouTubeVideoId, extractYouTubeVideoId, normalizeYouTubeChannelUrl, getYouTubeChannelLookup, parseIso8601DurationSeconds, isLongFormTrendVideo, mergeSearchVideoIds, selectHighQualityTrendVideos, mergeWatchHistory, STORAGE_KEYS });
+    window.YouTubeWorkbench = Object.freeze({ parseYouTubeVideoId, extractYouTubeVideoId, normalizeYouTubeChannelUrl, getYouTubeChannelLookup, parseIso8601DurationSeconds, isLongFormTrendVideo, mergeSearchVideoIds, selectHighQualityTrendVideos, mergeWatchHistory, mergeWatchProgress, getWatchResumeTime, isWatchProgressComplete, STORAGE_KEYS });
     window.youtubeController = new YouTubeController();
 })();

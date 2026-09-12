@@ -30,6 +30,27 @@ test('播放器继续复用真实嵌入播放器与观看记忆', () => {
   assert.ok(source.includes('bilibili.com/video/${item.bvid}'));
 });
 
+test('B站所有视频列表共享本地续播点并避免从片尾恢复', () => {
+  const source = read('js/bilibili-controller.js');
+  for (const contract of [
+    'if (item.bvid)',
+    'const memoryIsNewer = mem &&',
+    'item.progressSec = mem.time',
+    '_isWatchMemoryComplete(currentTime, duration)',
+    'this._flushCurrentWatchMemory()',
+    '_saveWatchMemory(state.bvid, state.page, Math.floor(state.currentTime)',
+  ]) assert.ok(source.includes(contract), `缺少 B站统一续播契约: ${contract}`);
+
+  const controller = createBilibiliController();
+  controller._saveWatchMemory('BV1resumeTest', 1, 42, 300);
+  assert.equal(controller._getWatchMemory('BV1resumeTest').time, 42);
+  controller._saveWatchMemory('BV1resumeTest', 1, 0, 300);
+  assert.equal(controller._getWatchMemory('BV1resumeTest'), null, '明确拖回片头后应清除旧续播点');
+  controller._saveWatchMemory('BV1resumeTest', 1, 42, 300);
+  controller._saveWatchMemory('BV1resumeTest', 1, 290, 300);
+  assert.equal(controller._getWatchMemory('BV1resumeTest'), null, '接近片尾时不应继续恢复');
+});
+
 test('登录异常页提供重登、重试和本地进度保护说明', () => {
   const source = read('js/bilibili-controller.js');
   assert.ok(source.includes('_renderLoginError(tab)'));
@@ -452,7 +473,7 @@ test('B站播放器展示当前 UP 主最近发布并可在工作台内即时切
   for (const contract of ['.bili-player-recent', '.bili-recent-track', '.bili-recent-card.active']) {
     assert.ok(style.includes(contract), `缺少最近发布样式: ${contract}`);
   }
-  assert.ok(index.includes('css/product-ui-v5.css?v=43'));
+  assert.ok(index.includes('css/product-ui-v5.css?v=48'));
 });
 
 test('B站播放器进入和自动连播新视频时都会自动应用 2 倍速', () => {

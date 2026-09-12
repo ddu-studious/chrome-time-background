@@ -53,10 +53,18 @@ test('设置导航和异步反馈具备当前页与实时播报语义', () => {
 });
 
 test('快捷键设置显示 Chrome 实际绑定并引导用户安全修改', () => {
+  const html = read('settings.html');
   const source = read('js/settings-v5.js');
   assert.match(source, /chrome\?\.commands\?\.getAll/);
   assert.match(source, /open-site-workspace/);
   assert.match(source, /add-current-tab-to-site-workspace/);
+  assert.match(source, /music-toggle-playback/);
+  assert.match(source, /music-next-track/);
+  assert.match(source, /music-previous-track/);
+  assert.match(source, /music-play-personal-fm/);
+  assert.match(source, /music-play-daily-recommend/);
+  assert.match(html, /MediaPlayPause/);
+  assert.match(html, /MediaNextTrack/);
   assert.match(source, /chrome:\/\/extensions\/shortcuts/);
   assert.match(source, /Chrome 不允许扩展直接改写快捷键/);
   assert.match(source, /bindCommandShortcuts\(\)/);

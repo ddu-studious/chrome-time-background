@@ -208,6 +208,9 @@ test('图标右键菜单按音乐、网站工作区和主页设置分组', () =>
     assert.match(backgroundSource, /title: '网易云音乐'/);
     assert.match(backgroundSource, /title: '播放私人 FM'/);
     assert.match(backgroundSource, /title: '播放每日推荐'/);
+    assert.match(backgroundSource, /title: '播放 \/ 暂停'/);
+    assert.match(backgroundSource, /title: '上一首'/);
+    assert.match(backgroundSource, /title: '下一首'/);
     assert.match(backgroundSource, /title: '打开音乐工作台'/);
     assert.match(backgroundSource, /title: '主页与设置'/);
     assert.match(backgroundSource, /startSilentNeteaseQuickPlay\('personal-fm', tab\)/);
@@ -218,7 +221,13 @@ test('图标右键菜单按音乐、网站工作区和主页设置分组', () =>
     assert.match(backgroundSource, /url: 'https:\/\/music\.163\.com\/'/);
     assert.match(backgroundSource, /command: 'play',[\s\S]*?songId: song\.songId/);
     assert.match(backgroundSource, /async function advanceSilentMusicPlayback\(direction = 1\)/);
-    assert.match(backgroundSource, /if \(silentMusicPlayback && String\(message\.songId\)/);
+    assert.match(backgroundSource, /async function controlNeteaseMusic\(action, tab\)/);
+    assert.match(backgroundSource, /async function restoreSilentMusicPlayback\(songId\)/);
+    assert.match(backgroundSource, /musicCommands\[command\]/);
+    assert.match(backgroundSource, /command: 'togglePlay'/);
+    assert.match(backgroundSource, /command: 'getState'/);
+    assert.match(backgroundSource, /if \(silentMusicPlayback\)[\s\S]*?String\(message\.songId\) === String\(activeSongId\)/);
+    assert.match(backgroundSource, /身份不一致必须直接忽略/);
     assert.match(backgroundSource, /await chrome\.contextMenus\.removeAll\(\)/);
     const silentQuickPlaySource = backgroundSource.slice(
         backgroundSource.indexOf('async function startSilentNeteaseQuickPlay'),

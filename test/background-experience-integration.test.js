@@ -18,7 +18,12 @@ test('正式首页加载独立背景体验层并保持在业务内容之下', ()
   ]) {
     assert.ok(html.includes(`id="${id}"`), id);
   }
-  assert.ok(html.includes('css/background-experience.css?v=1'));
+  assert.ok(html.includes('css/background-experience.css?v=3'));
+  assert.match(html, /class="bgx-tooltip" aria-hidden="true">背景玩法<\/span>/);
+  assert.match(html, /id="v5-right-floating-rail"[\s\S]*?id="background-experience-hud"[\s\S]*?id="background-experience-toggle"/);
+  assert.match(css, /\.bgx-toggle \.bgx-tooltip[\s\S]*?right: calc\(100% \+ 8px\)/);
+  assert.match(css, /\.bgx-toggle::before[\s\S]*?radial-gradient/);
+  assert.match(css, /\.bgx-toggle:hover,[\s\S]*?scale\(1\.045\)/);
   assert.ok(html.includes('js/background-experience.js?v=3'));
   assert.match(css, /\.bgx-root \{[\s\S]*?z-index: 2;[\s\S]*?pointer-events: none;/);
   assert.match(read('css/style.css'), /\.main-layout \{[\s\S]*?z-index: 3;/);

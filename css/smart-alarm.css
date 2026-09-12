@@ -1,0 +1,34 @@
+.alarm-center { max-height: min(920px, calc(100dvh - 40px)); overflow-y: auto; }
+.alarm-center > * { flex-shrink: 0; }
+.alarm-center .alarm-workspace { flex: 1 0 auto; min-height: 180px; overflow: visible; }
+.smart-alarm { margin: 0 28px 20px; }
+.smart-alarm-form > label { display: block; margin-bottom: 12px; color: #f8fafc; font-size: clamp(16px, 2vw, 22px); font-weight: 650; letter-spacing: -.025em; }
+.smart-alarm-input-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.smart-alarm input { flex: 1; min-width: 160px; border: 1px solid #475569; background: #0b1425; border-radius: 14px; padding: 16px; color: #f8fafc; font: inherit; }
+.smart-alarm input::placeholder { color: #94a3b8; }
+.smart-alarm input:focus-visible { outline: 2px solid #fb923c; outline-offset: 3px; }
+.smart-alarm button:focus-visible, .smart-alarm summary:focus-visible { outline: 2px solid #fb923c; outline-offset: 3px; }
+.smart-alarm button:disabled { opacity: .5; cursor: wait; }
+.smart-alarm-examples { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; color: #94a3b8; font-size: 12px; }
+.smart-alarm-examples button { border: 0; background: #1c293d; border-radius: 20px; padding: 7px 12px; color: #cbd5e1; cursor: pointer; }
+.smart-alarm-result { margin-top: 14px; padding: 12px 16px; background: rgba(52, 211, 153, .09); color: #a7f3d0; border-radius: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.smart-alarm-result.error { color: #fed7aa; background: rgba(251,146,60,.1); }
+.smart-alarm-result-actions { margin-top: 6px; }
+.smart-alarm-choices { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.smart-alarm-choices:empty { display: none; }
+.smart-alarm-choices button { white-space: normal; overflow-wrap: anywhere; }
+.smart-alarm-settings { margin-top: 14px; color: #94a3b8; font-size: 12px; }
+.smart-alarm-settings summary { cursor: pointer; padding: 4px 0; }
+.smart-alarm-settings summary span { margin-left: 12px; color: #cbd5e1; }
+.smart-alarm-settings p { line-height: 1.6; }
+.smart-alarm-settings input { padding: 10px 12px; }
+.smart-alarm-reasoning { display: flex; align-items: center; gap: 12px; margin: 12px 0; flex-wrap: wrap; }
+.smart-alarm-reasoning select { max-width: 100%; padding: 9px 12px; background: #0b1425; color: #f8fafc; border: 1px solid #475569; border-radius: 10px; font: inherit; }
+.smart-alarm-reasoning select:focus-visible { outline: 2px solid #fb923c; outline-offset: 3px; }
+.smart-alarm [hidden] { display: none !important; }
+.alarm-archived summary { padding: 12px 0; color: #94a3b8; cursor: pointer; font-size: 13px; }
+@media (max-width: 600px) {
+  .smart-alarm { margin: 0 18px 18px; }
+  .smart-alarm-form .smart-alarm-input-row { align-items: stretch; flex-direction: column; }
+  .smart-alarm input { min-width: 0; }
+}

@@ -114,8 +114,8 @@
             <button class="v5-template-card" type="button" data-layout-template="focus"><strong>深度工作</strong><small>放大今日焦点，减少干扰</small></button>
             <button class="v5-template-card" type="button" data-layout-template="compact"><strong>紧凑总览</strong><small>一屏容纳更多信息</small></button>
             <span class="v5-section-label">首页呈现</span>
-            <button class="v5-template-card v5-home-mode-card active" type="button" data-home-mode="island"><strong><i class="fas fa-grip-lines"></i> 轻触浮岛</strong><small>推荐 · 收成一条，需要时展开</small></button>
-            <button class="v5-template-card v5-home-mode-card" type="button" data-home-mode="side"><strong><i class="fas fa-columns"></i> 贴边卡片</strong><small>中心留白，信息靠右排列</small></button>
+            <button class="v5-template-card v5-home-mode-card active" type="button" data-home-mode="island"><strong><i class="fas fa-grip-lines"></i> 左侧浮岛</strong><small>推荐 · 三个功能纵向贴左，背景充分透出</small></button>
+            <button class="v5-template-card v5-home-mode-card" type="button" data-home-mode="side"><strong><i class="fas fa-columns"></i> 右侧卡片</strong><small>中心留白，信息靠右排列</small></button>
             <button class="v5-template-card v5-home-mode-card" type="button" data-home-mode="auto"><strong><i class="fas fa-eye-slash"></i> 智能淡出</strong><small>保留完整布局，闲置后退隐</small></button>
             <div class="v5-config-note"><i class="fas fa-shield-alt"></i><span>布局偏好只保存在本机</span></div>
           </aside>
@@ -311,9 +311,7 @@
       this.home.querySelector('#v5-agenda-count').textContent = `${plans.length + tasks.length} 项`;
       this.home.querySelector('#v5-agenda-list').innerHTML = agenda.length ? agenda.map(item => `
         <div class="v5-agenda-row"><i class="fas ${item.icon}"></i><span class="v5-agenda-time">${this._esc(item.meta)}</span><strong>${this._esc(item.title)}</strong><i class="fas fa-chevron-right"></i></div>`).join('') : '<div class="v5-home-empty"><i class="fas fa-check-circle"></i><span>今天没有待处理事项</span></div>';
-      const storedPlayer = data.lastMusicState;
-      const storedPlayerFresh = Boolean(storedPlayer?.title && Date.now() - (storedPlayer.savedAt || 0) < 30 * 60 * 1000);
-      this._renderMusic(storedPlayerFresh ? storedPlayer : (global.ProductUIV5?.getState?.().player || {}));
+      this._renderMusic(global.ProductUIV5?.getDisplayPlayer?.(data.lastMusicState) || {});
     }
 
     _renderMusic(player) {

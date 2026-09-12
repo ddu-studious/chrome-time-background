@@ -22,6 +22,7 @@
     more: 'more-sleep-timer',
   });
   const subscribers = new Set();
+  let playerReceived = false;
   const state = {
     shellPage: 'home',
     musicPage: 'now-playing',
@@ -97,11 +98,21 @@
 
   function updatePlayer(patch) {
     if (!patch || typeof patch !== 'object') return;
+    const firstUpdate = !playerReceived;
+    playerReceived = true;
     const next = { ...state.player, ...patch };
     const changed = Object.keys(next).some(key => next[key] !== state.player[key]);
-    if (!changed) return;
+    if (!changed && !firstUpdate) return;
     state.player = next;
     notify('player');
+  }
+
+  // 缓存仅供展示最近歌曲，不能证明音频仍在播放。
+  function getDisplayPlayer(cached) {
+    if (playerReceived) return { ...state.player };
+    const age = Date.now() - (cached?.savedAt || 0);
+    return cached?.title && age >= 0 && age < 30 * 60 * 1000
+      ? { ...cached, isPlaying: false } : { ...state.player };
   }
 
   function subscribe(listener) {
@@ -133,6 +144,7 @@
     normalizeMusicPage,
     setBusinessPage,
     updatePlayer,
+    getDisplayPlayer,
     subscribe,
     formatDuration,
     escapeHtml,

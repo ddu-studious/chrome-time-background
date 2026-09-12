@@ -86,7 +86,7 @@ test('闹钟界面、启动台与重要提醒窗口完整接入', () => {
   const center = read('js/alarm-center.js');
   assert.ok(html.includes('css/alarm-center.css?v=1'));
   assert.ok(html.includes('id="alarm-dock-btn"'));
-  assert.ok(html.indexOf('js/alarm-core.js?v=1') < html.indexOf('js/alarm-center.js?v=1'));
+  assert.ok(html.indexOf('js/alarm-core.js?v=1') < html.indexOf('js/alarm-center.js?v=4'));
   assert.match(registrySource, /id: 'alarm'.*defaultInDock: true/);
   for (const contract of ['data-alarm-quick="10"', 'user_alarm_snooze', 'user_alarm_dismiss', 'prefers-reduced-motion']) {
     const sources = `${center}\n${read('css/alarm-center.css')}`;
@@ -95,4 +95,26 @@ test('闹钟界面、启动台与重要提醒窗口完整接入', () => {
   assert.match(center, /element\.inert = true/);
   assert.match(center, /_trapFocus\(container, event\)/);
   assert.ok(read('alarm-ring.html').includes('alarm-popup-dismiss'));
+});
+
+test('闹钟弹层退场时先释放焦点和启用 inert 再写入 aria-hidden', () => {
+  const center = read('js/alarm-center.js');
+  const closeBlock = center.slice(center.indexOf('    close() {'), center.indexOf('    toggle() {'));
+  const hideRingingBlock = center.slice(center.indexOf('    hideRinging() {'), center.indexOf('    _trapFocus('));
+  const closeEditorBlock = center.slice(center.indexOf('    closeEditor() {'), center.indexOf('    _syncEditorVisibility()'));
+
+  for (const [name, block, surface] of [
+    ['闹钟中心', closeBlock, 'this.root'],
+    ['响铃遮罩', hideRingingBlock, 'this.ringRoot'],
+  ]) {
+    const blurIndex = block.indexOf('activeElement.blur()');
+    const inertIndex = block.indexOf(`${surface}.inert = true`);
+    const ariaHiddenIndex = block.indexOf(`${surface}.setAttribute('aria-hidden', 'true')`);
+    assert.ok(blurIndex >= 0, `${name}退场前必须释放内部焦点`);
+    assert.ok(inertIndex > blurIndex, `${name}必须在释放焦点后启用 inert`);
+    assert.ok(ariaHiddenIndex > inertIndex, `${name}必须最后再写 aria-hidden`);
+  }
+  assert.match(closeEditorBlock, /form\.contains\(document\.activeElement\)[\s\S]*?#alarm-new-button'[\s\S]*?form\.hidden = true/);
+  assert.match(center, /this\.ringReturnFocus = document\.activeElement/);
+  assert.match(hideRingingBlock, /this\.ringReturnFocus\?\.focus\?\.\(\{ preventScroll: true \}\)/);
 });

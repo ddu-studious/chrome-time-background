@@ -13,7 +13,7 @@ test('v5 状态层先于产品外壳和音乐工作台加载', () => {
   assert.ok(stateIndex >= 0);
   assert.ok(stateIndex < html.indexOf('js/music-view.js?v=6'));
   assert.ok(stateIndex < html.indexOf('js/product-shell-v5.js'));
-  assert.ok(html.includes('css/product-ui-v5.css?v=43'));
+  assert.ok(html.includes('css/product-ui-v5.css?v=52'));
 });
 
 test('首页浮岛按钮统一为毛玻璃材质', () => {
@@ -30,10 +30,34 @@ test('首页三张信息卡使用 3.5% 到 1.75% 的轻遮罩', () => {
   assert.match(style, /\.v5-home-player:hover \{[^}]*background: linear-gradient\(135deg, rgba\(255, 255, 255, \.0325\), rgba\(255, 255, 255, \.0125\)\)/);
 });
 
-test('极简模式隐藏新版首页模块并把快捷操作区放到左上对角位', () => {
+test('首页左侧浮岛使用安全展开区且右侧提醒形成统一信息胶囊', () => {
+  const style = read('css/product-ui-v5.css');
+  const shell = read('js/product-shell-v5.js');
+
+  assert.match(style, /body\[data-v5-home-layout="island"\] \.v5-shell-home \{[\s\S]*?top: 50%;[\s\S]*?left: 24px;[\s\S]*?width: min\(330px,[\s\S]*?grid-template-columns: 1fr;[\s\S]*?translateY\(-50%\)/);
+  assert.match(style, /body\[data-v5-home-layout="island"\] \.v5-shell-home\.is-expanded \{[\s\S]*?top: clamp\(76px, 14vh, 126px\);[\s\S]*?bottom: 82px;[\s\S]*?overflow-y: auto;/);
+  assert.match(style, /body\[data-v5-home-layout="island"\] \.v5-shell-home\.is-expanded \.v5-home-expand \{[\s\S]*?position: sticky;[\s\S]*?order: -1;[\s\S]*?width: 100%;/);
+  assert.match(style, /\.v5-shell-home\.is-expanded ~ \.v5-shell-toolbar \{[\s\S]*?opacity: 0;[\s\S]*?pointer-events: none;/);
+  assert.match(style, /\.v5-right-floating-rail \{[\s\S]*?top: 50%;[\s\S]*?right: 18px;[\s\S]*?flex-direction: column;[\s\S]*?gap: 12px;/);
+  assert.match(style, /\.v5-right-floating-rail::after[\s\S]*?right: calc\(var\(--v5-orb-size\) \/ 2 \+ var\(--v5-rail-orb-inset\)\);[\s\S]*?height: 18px;/);
+  assert.match(style, /\.urgent-bubble \{[\s\S]*?position: relative;[\s\S]*?display: flex;[\s\S]*?width: min\(300px,/);
+  assert.match(style, /\.urgent-bubble:not\(\.expanded\) \{[\s\S]*?border-radius: 22px;[\s\S]*?backdrop-filter: blur\(12px\)/);
+  assert.match(style, /\.urgent-mini-bar \{[\s\S]*?position: relative;[\s\S]*?flex: 1 1 auto;[\s\S]*?background: transparent;/);
+  assert.match(read('index.html'), /<button class="urgent-mini-bar"[\s\S]*?<button class="urgent-bubble-dot"/);
+  assert.match(style, /--v5-orb-size: 40px/);
+  assert.match(style, /\.urgent-bubble-dot::after[\s\S]*?radial-gradient/);
+  assert.match(style, /\.urgent-bubble-dot:hover,[\s\S]*?scale\(1\.045\)/);
+  assert.match(style, /\.today-overview-trigger \{ display: none !important; \}/);
+  assert.match(style, /@media \(max-width: 720px\)[\s\S]*?\.v5-shell-toolbar \{ top: 200px; left: 10px; right: auto; flex-direction: column; \}/);
+  assert.match(style, /\.v5-right-floating-rail \{ top: 132px; right: 12px; gap: 10px; transform: none; \}/);
+  assert.ok(shell.includes('左侧浮岛'));
+  assert.ok(shell.includes('三个功能纵向贴左，背景充分透出'));
+});
+
+test('极简模式隐藏新版首页模块并保留左侧操作栈定位', () => {
   const style = read('css/product-ui-v5.css');
 
-  assert.match(style, /\.v5-shell-toolbar \{[\s\S]*?left: 22px;[\s\S]*?right: auto;/);
+  assert.match(style, /\.v5-shell-toolbar \{[\s\S]*?top: calc\(50% - 162px\);[\s\S]*?left: 22px;[\s\S]*?right: auto;/);
   assert.match(style, /body\.zen-mode :is\([\s\S]*?\.v5-shell-home,[\s\S]*?\.v5-shell-toolbar[\s\S]*?\) \{[\s\S]*?opacity: 0 !important;[\s\S]*?animation: zen-stagger-shrink \.62s cubic-bezier\(\.34, 1\.4, \.64, 1\)/);
   assert.match(style, /@keyframes zen-stagger-shrink \{[\s\S]*?58% \{ opacity: \.72; scale: \.86;[\s\S]*?100% \{ opacity: 0; scale: \.56; filter: blur\(3px\); \}/);
   assert.match(style, /body\.zen-mode \.v5-shell-home \{ --zen-stagger-delay: 40ms; \}/);

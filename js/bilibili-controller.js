@@ -130,9 +130,17 @@ class BilibiliController {
         } catch {}
     }
 
-    _saveWatchMemory(bvid, page, currentTime) {
+    _isWatchMemoryComplete(currentTime, duration) {
+        const current = Number(currentTime);
+        const total = Number(duration);
+        if (!Number.isFinite(current) || !Number.isFinite(total) || total <= 0) return false;
+        return current / total >= 0.95 || (total >= 120 && total - current <= 15);
+    }
+
+    _saveWatchMemory(bvid, page, currentTime, duration = 0) {
         if (!bvid) return;
-        this._watchMemory[bvid] = { page, time: currentTime, ts: Date.now() };
+        if (Number(currentTime) < 5 || this._isWatchMemoryComplete(currentTime, duration)) delete this._watchMemory[bvid];
+        else this._watchMemory[bvid] = { page, time: currentTime, duration, ts: Date.now() };
         const keys = Object.keys(this._watchMemory);
         if (keys.length > 200) {
             const sorted = keys.sort((a, b) => (this._watchMemory[a].ts || 0) - (this._watchMemory[b].ts || 0));
@@ -142,7 +150,14 @@ class BilibiliController {
     }
 
     _getWatchMemory(bvid) {
-        return bvid ? (this._watchMemory[bvid] || null) : null;
+        const memory = bvid ? (this._watchMemory[bvid] || null) : null;
+        return memory && !this._isWatchMemoryComplete(memory.time, memory.duration) ? memory : null;
+    }
+
+    _flushCurrentWatchMemory() {
+        const state = this._playerState;
+        if (!state?.bvid || !(state.currentTime > 5)) return;
+        this._saveWatchMemory(state.bvid, state.page || 1, Math.floor(state.currentTime), Math.floor(Number(state.duration) || 0));
     }
 
     // ===================== API =====================
@@ -1874,10 +1889,11 @@ class BilibiliController {
 
         if (state.bvid && state.page > 0 && state.currentTime > 5) {
             const memKey = `${state.bvid}:${state.page}`;
-            if (memKey !== this._lastMemKey || Date.now() - (this._lastMemTs || 0) > 15000) {
+            const completed = this._isWatchMemoryComplete(state.currentTime, state.duration);
+            if (completed || memKey !== this._lastMemKey || Date.now() - (this._lastMemTs || 0) > 15000) {
                 this._lastMemKey = memKey;
                 this._lastMemTs = Date.now();
-                this._saveWatchMemory(state.bvid, state.page, Math.floor(state.currentTime));
+                this._saveWatchMemory(state.bvid, state.page, Math.floor(state.currentTime), Math.floor(Number(state.duration) || 0));
             }
         }
     }
@@ -1935,6 +1951,9 @@ class BilibiliController {
         }
         const progress = Math.max(0, Math.min(1000, Number(value) || 0));
         const target = duration * progress / 1000;
+        if (target < 5 && this._currentVideo?.bvid) {
+            this._saveWatchMemory(this._currentVideo.bvid, this._playerState?.page || 1, target, duration);
+        }
         this._sendPlayerMsg({ type: 'bili-ext-seek', time: target });
         this._showBiliToast(`跳转到 ${this._fmtDuration(target)}`, 'info');
     }
@@ -3374,6 +3393,7 @@ class BilibiliController {
     }
 
     async _playItem(item) {
+        this._flushCurrentWatchMemory();
         this._el.classList.remove('bili-live-mode');
         this._destroyLiveFallback();
         clearTimeout(this._liveFallbackTimer);
@@ -3383,11 +3403,14 @@ class BilibiliController {
         this._creatorReturn = null;
         this._creatorItems = [];
         this._setCreatorMode(false);
-        if (!item.watchPage && item.bvid) {
+        if (item.bvid) {
             const mem = this._getWatchMemory(item.bvid);
-            if (mem && mem.page > 1) {
+            const itemPage = item.watchPage || 1;
+            const itemProgress = Number(item.progressSec) || 0;
+            const memoryIsNewer = mem && (mem.page > itemPage || (mem.page === itemPage && mem.time > itemProgress));
+            if (memoryIsNewer) {
                 item.watchPage = mem.page;
-                if (!item.progressSec && mem.time > 0) item.progressSec = mem.time;
+                item.progressSec = mem.time;
             }
         }
 
@@ -3682,6 +3705,7 @@ class BilibiliController {
 
     hide() {
         if (!this._el) return;
+        this._flushCurrentWatchMemory();
         this._destroyAllIframes();
         clearTimeout(this._qualityVerifyTimer);
         clearTimeout(this._biliToastTimer);
