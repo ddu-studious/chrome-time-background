@@ -19,6 +19,7 @@
       this.bindStaticActions();
       this.bindChromeEvents();
       await this.render();
+      window.WorkspaceMatcher?.mount(this);
     }
 
     bindPanelLifecycle() {

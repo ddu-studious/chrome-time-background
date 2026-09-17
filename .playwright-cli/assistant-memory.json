@@ -1,0 +1,17 @@
+{
+  "ok": true,
+  "version": 1,
+  "revision": 4,
+  "enabled": true,
+  "rememberArtists": true,
+  "preferences": [
+    {
+      "key": "artistDefaultAction",
+      "value": "browse",
+      "source": "在我的记忆页面明确设置",
+      "sourceId": null,
+      "updatedAt": 1789616908659
+    }
+  ],
+  "artists": []
+}

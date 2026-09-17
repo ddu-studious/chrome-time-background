@@ -602,6 +602,27 @@
       return { tab, page, reused: false };
     }
 
+    async openGroup(groupId) {
+      const snapshot = await this.getSnapshot();
+      if (!snapshot.config.groups.some(group => group.id === groupId)) throw new Error('工作区分组不存在');
+      const pages = snapshot.config.pages.filter(page => page.groupId === groupId);
+      const sites = snapshot.config.sites.filter(site => site.groupId === groupId && !pages.some(page => page.siteId === site.id));
+      const seen = new Set(), targets = [];
+      for (const page of pages) { const url = normalizeHttpUrl(page.url); if (!seen.has(url)) { seen.add(url); targets.push({ id: page.id, page: true }); } }
+      for (const site of sites) { const url = normalizeHttpUrl(site.startUrl); if (!seen.has(url)) { seen.add(url); targets.push({ id: site.id, page: false }); } }
+      if (targets.length > 100) throw new Error('分组超过100个入口，请分批打开');
+      const results = [];
+      for (const target of targets) {
+        try {
+          const latest = await this.loadConfig();
+          const entry = (target.page ? latest.pages : latest.sites).find(item => item.id === target.id);
+          if (!entry || entry.groupId !== groupId) throw new Error('工作区入口已变化');
+          const result = target.page ? await this.openSavedPage(target.id) : await this.openSite(target.id); results.push({id:target.id,ok:true,reused:Boolean(result.reused)}); }
+        catch (error) { results.push({id:target.id,ok:false,error:error.message}); }
+      }
+      return { results, opened: results.filter(result => result.ok).length, failed: results.filter(result => !result.ok).length };
+    }
+
     async openSavedPage(pageId) {
       const snapshot = await this.getSnapshot();
       const liveTab = snapshot.tabs.find(tab => tab.pageId === pageId);

@@ -604,10 +604,6 @@
     }
 
     _dismissAllPanels() {
-      // Agent 面板
-      const bridge = window.cursorBridge || window.CursorBridge;
-      if (bridge?.isOpen) bridge.togglePanel();
-
       // Launchpad
       this.hideLaunchpad();
 
@@ -1299,14 +1295,15 @@
     }
 
     _activateApp(appId) {
+      if (appId === 'quick-assistant' && window.quickAssistantLauncher?.open) {
+        window.quickAssistantLauncher.open().catch(error => console.warn('[DockManager] 打开快捷助手失败:', error.message));
+        return true;
+      }
       if (appId === 'site-workspace' && window.siteWorkspaceLauncher?.openPanel) {
         window.siteWorkspaceLauncher.openPanel().catch(error => console.warn('[DockManager] 打开网站工作区失败:', error));
         return true;
       }
-      if (appId === 'chatbot' && window.Chatbot?.open) {
-        window.Chatbot.open();
-        return true;
-      }
+
       if (appId === 'quick-nav' && window.quickNavManager?.open) {
         window.quickNavManager.open();
         return true;

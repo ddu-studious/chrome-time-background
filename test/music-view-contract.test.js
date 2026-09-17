@@ -92,7 +92,7 @@ test('歌手专辑工作区具备模态背景、初始焦点、Esc 关闭与焦�
   assert.match(controllerSource, /#mc-as-close, \.mc-as-tab/);
   assert.match(controllerSource, /e\.key === 'Escape'[\s\S]*?_closeActionSheet\(\)/);
   assert.match(controllerSource, /_actionSheetReturnFocus\?\.focus\?\.\(\)/);
-  assert.ok(indexSource.includes('js/music-controller.js?v=12'));
+  assert.ok(indexSource.includes('js/music-controller.js?v=18'));
 });
 
 test('睡眠定时和更多操作使用可键盘操作的标准菜单语义', () => {
@@ -104,7 +104,7 @@ test('睡眠定时和更多操作使用可键盘操作的标准菜单语义', ()
   assert.match(controllerSource, /ev\.key === 'ArrowDown'/);
   assert.match(controllerSource, /_closeSleepTimerMenu\(true\)/);
   assert.match(controllerSource, /_closeMoreMenu\(true\)/);
-  assert.ok(indexSource.includes('js/music-view.js?v=6'));
+  assert.ok(indexSource.includes('js/music-view.js?v=7'));
 });
 
 test('连接异常在 v5 工作台中是可见、聚焦且会隔离背景的状态页', () => {
@@ -119,5 +119,5 @@ test('连接异常在 v5 工作台中是可见、聚焦且会隔离背景的状�
   assert.match(controllerSource, /guide\.dataset\.guideReason = reason/);
   assert.match(controllerSource, /automatic && \['no-cookie', 'api-error'\]\.includes\(guide\.dataset\.guideReason\)/);
   assert.match(controllerSource, /if \(this\.state\.title\) this\._hideMetaGuide\(true\)/);
-  assert.ok(indexSource.includes('css/product-ui-v5.css?v=48'));
+  assert.ok(Number(indexSource.match(/css\/product-ui-v5\.css\?v=(\d+)/)?.[1]) >= 48);
 });

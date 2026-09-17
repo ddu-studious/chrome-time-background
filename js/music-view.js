@@ -73,7 +73,7 @@
                         </section>
 
                         <section class="mc-pane mc-search-page" data-mc-pane="search" id="mc-pane-search" role="tabpanel" aria-label="搜索音乐">
-                            <div class="mc-page-heading"><div><span class="mc-page-eyebrow">SEARCH</span><h2>搜索音乐</h2></div><small>优先展示单曲结果</small></div>
+                            <div class="mc-page-heading"><div><span class="mc-page-eyebrow">SEARCH</span><h2>搜索音乐</h2></div><small>综合查找歌曲、歌手与歌单</small></div>
                             <div class="mc-search-bar">
                                 <div class="mc-search-wrap">
                                     <i class="fas fa-search"></i>
@@ -81,7 +81,8 @@
                                     <button class="mc-search-clear-btn hidden" id="mc-search-clear" type="button" title="清除搜索" aria-label="清除搜索"><i class="fas fa-times-circle"></i></button>
                                 </div>
                                 <div class="mc-search-type-tabs" id="mc-search-type-tabs" role="tablist" aria-label="搜索类型">
-                                    <button class="mc-search-type active" data-type="1" type="button">单曲</button>
+                                    <button class="mc-search-type active" data-type="0" type="button">综合</button>
+                                    <button class="mc-search-type" data-type="1" type="button">单曲</button>
                                     <button class="mc-search-type" data-type="100" type="button">歌手</button>
                                     <button class="mc-search-type" data-type="1000" type="button">歌单</button>
                                 </div>

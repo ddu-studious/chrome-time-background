@@ -348,3 +348,16 @@ test('工作区页面别名独立于网站标题并在刷新后保留', async ()
   assert.equal(page.customTitle, '我的 AI 学习路线');
   assert.equal(page.title, '网站后来修改的标题');
 });
+
+test('打开分组复用已保存页面，去重网址并报告部分失败', async () => {
+  const service = new Core.WorkspaceService({});
+  const config = { groups:[{id:'g'}], pages:[{id:'p1',groupId:'g',siteId:'s1',url:'https://example.com/'},{id:'p2',groupId:'g',url:'https://example.com/'}], sites:[{id:'s1',groupId:'g',startUrl:'https://example.com/'},{id:'s2',groupId:'g',startUrl:'https://other.example/'}] };
+  service.getSnapshot=async()=>({config});service.loadConfig=async()=>config;const calls=[];
+  service.openSavedPage=async id=>{calls.push(id);return {reused:true};};service.openSite=async id=>{calls.push(id);throw new Error('失败');};
+  const result=await service.openGroup('g');assert.deepEqual(calls,['p1','s2']);assert.equal(result.opened,1);assert.equal(result.failed,1);assert.equal(result.results[0].reused,true);
+});
+test('分组打开过程中已移走的入口不能被打开', async () => {
+  const service=new Core.WorkspaceService({});const config={groups:[{id:'g'}],pages:[{id:'p',groupId:'g',url:'https://example.com/'}],sites:[]};
+  service.getSnapshot=async()=>({config});service.loadConfig=async()=>({...config,pages:[{...config.pages[0],groupId:'other'}]});service.openSavedPage=async()=>assert.fail('不能打开已移动入口');
+  assert.equal((await service.openGroup('g')).failed,1);
+});

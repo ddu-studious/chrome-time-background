@@ -40,13 +40,6 @@ check_deps() {
     cd "$SCRIPT_DIR" && npm install
   fi
 
-  if [ ! -f "$SCRIPT_DIR/.env" ] && [ ! -n "${CURSOR_API_KEY:-}" ]; then
-    echo -e "${RED}[✗] Missing .env file or CURSOR_API_KEY environment variable.${NC}"
-    echo "  Create .env from template:"
-    echo "    cp .env.example .env"
-    echo "    # then set CURSOR_API_KEY=your_key"
-    exit 1
-  fi
 }
 
 start_dev() {

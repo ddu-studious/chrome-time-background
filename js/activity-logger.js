@@ -12,13 +12,6 @@ class ActivityLogger {
         this.WEEKLY_CACHE_KEY = 'activityWeeklySummaryCache';
         this._log = null;
 
-        this.AI_PROVIDERS = {
-            qwen: { baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', defaultModel: 'qwen-plus' },
-            deepseek: { baseUrl: 'https://api.deepseek.com/v1', defaultModel: 'deepseek-chat' },
-            openai: { baseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini' },
-            gemini: { baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', defaultModel: 'gemini-2.0-flash' },
-            custom: { baseUrl: '', defaultModel: '' }
-        };
     }
 
     // ===================== 存储 =====================
@@ -534,79 +527,16 @@ class ActivityLogger {
         if (review.stats.bookmarks > 0) report += `| 书签收藏 | ${review.stats.bookmarks} |\n`;
         if (review.stats.ticker > 0) report += `| 热榜资讯 | ${review.stats.ticker} |\n`;
 
-        const settings = await this._getAISettings();
-        if (settings.aiApiKey) {
-            try {
-                const provider = this._resolveProvider(settings);
-                if (provider?.baseUrl && provider?.model) {
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 30000);
-                    try {
-                        const resp = await fetch(`${provider.baseUrl}/chat/completions`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${provider.apiKey}` },
-                            body: JSON.stringify({
-                                model: provider.model,
-                                messages: [
-                                    { role: 'system', content: '你是一个智能助手，擅长从活动数据中生成月度回顾洞察。请用中文回复，3-5 句话，关键词加粗。' },
-                                    { role: 'user', content: `以下是${review.monthLabel}的活动摘要数据：\n${report}\n请生成一段简洁的月度回顾总结和建议。` }
-                                ],
-                                temperature: 0.4, max_tokens: 600
-                            }),
-                            signal: controller.signal
-                        });
-                        if (resp.ok) {
-                            const json = await resp.json();
-                            const aiContent = json.choices?.[0]?.message?.content;
-                            if (aiContent) report += `\n## AI 洞察\n\n${aiContent}\n`;
-                        }
-                    } finally {
-                        clearTimeout(timeoutId);
-                    }
-                }
-            } catch { /* AI optional */ }
-        }
+        let aiError = null;
+        try {
+            const result = await window.SceneAI.run('activity.summary', { period: 'month', label: review.monthLabel, overview: report.slice(0, 2000), items: [] });
+            report += `\n## AI 洞察\n\n${result.summary}\n`;
+        } catch (error) { aiError = error.message; }
 
-        return { ok: true, report, review };
+        return { ok: true, report, review, aiError };
     }
 
     // ===================== AI 周报摘要 =====================
-
-    async _getAISettings() {
-        try {
-            return await new Promise((resolve, reject) => {
-                if (typeof chrome === 'undefined' || !chrome.storage?.sync) {
-                    return resolve({});
-                }
-                chrome.storage.sync.get('bookmarkSettings', (result) => {
-                    if (chrome.runtime.lastError) {
-                        reject(chrome.runtime.lastError);
-                    } else {
-                        resolve(result.bookmarkSettings || {});
-                    }
-                });
-            });
-        } catch (e) {
-            console.warn('[ActivityLogger] _getAISettings failed:', e);
-            return {};
-        }
-    }
-
-    _resolveProvider(settings) {
-        const providerKey = settings.aiProvider || 'qwen';
-        const providerConfig = this.AI_PROVIDERS[providerKey];
-        if (!providerConfig) return null;
-
-        let baseUrl = providerConfig.baseUrl;
-        let model = providerConfig.defaultModel;
-
-        if (providerKey === 'custom') {
-            baseUrl = settings.aiBaseUrl || '';
-            model = settings.aiModel || '';
-        }
-
-        return { baseUrl, model, apiKey: settings.aiApiKey };
-    }
 
     async generateWeeklySummary(weekOffset = 0, options = {}) {
         const cards = options.cards || [];
@@ -616,115 +546,23 @@ class ActivityLogger {
             return { ok: false, error: '本周暂无活动记录', timeline };
         }
 
-        const settings = await this._getAISettings();
-        if (!settings.aiApiKey) {
-            return {
-                ok: false,
-                error: '未配置 AI API Key，请在书签设置中配置',
-                timeline,
-                fallback: this._buildPlainSummary(timeline)
-            };
-        }
-
-        const provider = this._resolveProvider(settings);
-        if (!provider?.baseUrl || !provider?.model) {
-            return {
-                ok: false,
-                error: 'AI 服务配置不完整',
-                timeline,
-                fallback: this._buildPlainSummary(timeline)
-            };
-        }
-
-        const prompt = this._buildSummaryPrompt(timeline);
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), options.timeout || 30000);
-
+        const allItems = timeline.days.flatMap(day => day.items.map(item => ({
+            day: `${day.dayLabel} ${day.weekDay}`.slice(0, 40),
+            title: String(item.title || '').slice(0, 100), detail: String(item.targetTitle || item.meta?.detail || '').slice(0, 100)
+        })));
+        const items = allItems.slice(0, 20).map((item, index) => ({ ...item, id: `activity-${index + 1}` }));
         try {
-            const resp = await fetch(`${provider.baseUrl}/chat/completions`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${provider.apiKey}`
-                },
-                body: JSON.stringify({
-                    model: provider.model,
-                    messages: [
-                        {
-                            role: 'system',
-                            content: '你是一个智能工作助手，擅长从用户的活动日志中提取关键信息，生成简洁、有洞察力的周报摘要。请用中文回复，风格简洁专业。'
-                        },
-                        { role: 'user', content: prompt }
-                    ],
-                    temperature: 0.4,
-                    max_tokens: 800
-                }),
-                signal: controller.signal
-            });
-
-            if (!resp.ok) {
-                const errText = await resp.text().catch(() => '');
-                throw new Error(`API ${resp.status}: ${errText.slice(0, 200)}`);
-            }
-
-            const json = await resp.json();
-            const content = json.choices?.[0]?.message?.content;
-            if (!content) {
-                throw new Error('AI 返回空内容');
-            }
-
-            const result = {
-                ok: true,
-                summary: content,
-                timeline,
-                generatedAt: Date.now(),
-                model: provider.model
-            };
-
-            this._cacheWeeklySummary(weekOffset, result);
-            return result;
-
-        } catch (e) {
-            console.error('[ActivityLogger] AI summary failed:', e);
-            return {
-                ok: false,
-                error: `AI 生成失败: ${e.message}`,
-                timeline,
-                fallback: this._buildPlainSummary(timeline)
-            };
-        } finally {
-            clearTimeout(timeoutId);
+            const result = await window.SceneAI.run('activity.summary', {
+                period: 'week', label: String(timeline.weekLabel).slice(0, 100),
+                overview: this._buildPlainSummary(timeline).slice(0, 2000), items
+            }, { signal: options.signal });
+            const response = { ok: true, summary: result.summary, sources: result.sources, timeline, generatedAt: Date.now(), model: result.model, sampledItems: items.length, totalItems: timeline.totalItems };
+            if (allItems.length > items.length) response.summary += `\n\n（基于本周统计与前 ${items.length} 条活动记录生成）`;
+            await this._cacheWeeklySummary(weekOffset, response);
+            return response;
+        } catch (error) {
+            return { ok: false, error: `AI 生成失败: ${error.message}`, timeline, fallback: this._buildPlainSummary(timeline) };
         }
-    }
-
-    _buildSummaryPrompt(timeline) {
-        let activitiesText = '';
-        timeline.days.forEach(day => {
-            activitiesText += `\n## ${day.dayLabel} ${day.weekDay}\n`;
-            day.items.forEach(item => {
-                const time = new Date(item.ts).toTimeString().slice(0, 5);
-                const moduleLabel = this._moduleLabel(item.module);
-                activitiesText += `- [${time}] [${moduleLabel}] ${item.title}`;
-                if (item.targetTitle) activitiesText += ` — "${item.targetTitle}"`;
-                if (item.meta?.detail) activitiesText += ` (${item.meta.detail})`;
-                activitiesText += '\n';
-            });
-        });
-
-        return `请根据以下活动日志，生成本周工作/学习周报摘要。
-
-**周期**: ${timeline.weekLabel}
-**活动统计**: 共 ${timeline.totalItems} 条活动（笔记 ${timeline.stats.notes}、任务 ${timeline.stats.tasks}、书签 ${timeline.stats.bookmarks}、热榜 ${timeline.stats.ticker}）
-
-**活动详情**:
-${activitiesText}
-
-**要求**:
-1. 用 3-5 句话概括本周的主要工作/学习内容
-2. 提炼关键成果和进展（用 **加粗** 标注关键词）
-3. 如有待办或待读内容，简要提及
-4. 语气专业简洁，像同事之间的工作沟通
-5. 直接输出摘要内容，不要加标题或前缀`;
     }
 
     _moduleLabel(module) {

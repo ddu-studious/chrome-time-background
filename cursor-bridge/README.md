@@ -1,52 +1,7 @@
-# cursor-bridge
+# 本地写作 Bridge
 
-本地 Node.js 桥接服务，将 Cursor SDK 的 Agent 能力暴露为 HTTP/SSE API。
+保留原目录与19840端口，提供写作、RAG、Prompt管理及历史数据接口。Cursor SDK智能体功能已移除，不再需要Cursor API Key。
 
-## 快速开始
+先启动项目的local-ai控制面，再执行 `npm run build` 和 `npm start`。模型、预算和开关统一在AI控制台设置。
 
-```bash
-# 安装依赖
-npm install
-
-# 配置
-cp .env.example .env
-# 编辑 .env 填入 CURSOR_API_KEY
-
-# 开发模式
-npm run dev
-```
-
-服务默认监听 `http://127.0.0.1:19840`。
-
-## API
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | /health | 健康检查 |
-| GET | /agents | 列出所有 Agent |
-| POST | /agents | 创建 Agent |
-| POST | /agents/:id/send | 发送 prompt |
-| POST | /agents/:id/cancel | 取消当前 run |
-| DELETE | /agents/:id | 销毁 Agent |
-| GET | /agents/:id/stream | SSE 实时输出 |
-| GET | /models | 可用模型列表 |
-
-## 环境变量
-
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| CURSOR_API_KEY | (必填) | Cursor API Key |
-| BRIDGE_PORT | 19840 | 服务端口 |
-| BRIDGE_HOST | 127.0.0.1 | 监听地址 |
-| BRIDGE_MAX_AGENTS | 10 | Agent 池上限 |
-| BRIDGE_DEFAULT_MODEL | composer-2 | 默认模型 |
-
-## 已知问题
-
-**sqlite3 架构不兼容**：如果 `npm install` 时的 Node.js 架构与运行时不同（如 Rosetta x64 Node + arm64 prebuild），需要手动重建：
-
-```bash
-cd node_modules/sqlite3 && npx node-gyp rebuild
-```
-
-`postinstall` 脚本会自动尝试重建。
+可选环境变量：`BRIDGE_HOST`（默认127.0.0.1）、`BRIDGE_PORT`（默认19840）、`LOCAL_AI_TOKEN_FILE`（默认项目local-ai/.local/token）、`CURSOR_BRIDGE_DATA_DIR`（兼容原数据目录配置）。历史数据库保持原位。

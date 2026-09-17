@@ -1,6 +1,7 @@
-importScripts('alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-client.js', 'background-provider.js', 'hermes-writing-sync.js', 'site-workspace-core.js');
+importScripts('music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'music-search.js', 'alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-client.js', 'background-provider.js', 'hermes-writing-sync.js', 'site-workspace-core.js', '../vendor/pinyin-match/pinyin-match.js', 'assistant-match.js', 'assistant-memory.js', 'assistant-contract.js', 'assistant-engine.js', 'assistant-music.js', 'assistant-management.js', 'assistant-tools.js', 'assistant-background.js');
 
 (function() {
+    let assistantMusicRevision = 0;
     const SITE_WORKSPACE_MENU_ID = 'site-workspace-add-current-tab';
     const SITE_WORKSPACE_OPEN_MENU_ID = 'site-workspace-open-panel';
     const SITE_WORKSPACE_COMMAND = 'add-current-tab-to-site-workspace';
@@ -36,6 +37,7 @@ importScripts('alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-
     }
 
     function ensureExtensionContextMenus() {
+        ensureContextMenu('quick-assistant-open', { title: '快捷助手 · @ 应用 / 动作', contexts: ['action'] });
         // 图标右键菜单只保留高频动作；Chrome 自带的“移除/管理扩展”等项目由浏览器控制，扩展无法隐藏。
         ensureContextMenu(MUSIC_MENU_ID, {
             title: '网易云音乐',
@@ -544,14 +546,26 @@ importScripts('alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-
         try { await _offscreenCreating; } finally { _offscreenCreating = null; }
     }
 
-    async function sendToOffscreen(msg) {
+    async function sendToOffscreen(msg, guard) {
         await ensureOffscreen();
+        guard?.();
         return new Promise((resolve) => {
             chrome.runtime.sendMessage({ ...msg, target: 'offscreen' }, (resp) => {
                 resolve(resp || { ok: false });
             });
         });
     }
+
+    const musicSleep = MusicSleep.create({ storage: chrome.storage.local, alarms: chrome.alarms, pause: () => sendToOffscreen({ command: 'pause' }) });
+    chrome.alarms.onAlarm.addListener(alarm => { void musicSleep.fire(alarm.name).catch(error => console.warn('[MusicSleep]', error.message)); });
+    void musicSleep.restore().catch(error => console.warn('[MusicSleep]', error.message));
+    chrome.runtime.onMessage.addListener((message, sender, respond) => {
+        if (!['music_sleep_set', 'music_sleep_get', 'music_sleep_expire'].includes(message.action)) return;
+        if (sender.id !== chrome.runtime.id || !sender.url?.startsWith(chrome.runtime.getURL(''))) { respond({ ok: false, error: '仅扩展页面可设置音乐定时' }); return; }
+        (message.action === 'music_sleep_set' ? musicSleep.set(message.minutes) : message.action === 'music_sleep_expire' ? musicSleep.finish(message.fireAt) : musicSleep.get().then(timer => ({ ok: true, timer })))
+            .then(respond).catch(error => respond({ ok: false, error: error.message }));
+        return true;
+    });
 
     // ==================== 用户闹钟（本机、声音 + 通知 + 视觉动作）====================
 
@@ -913,13 +927,13 @@ importScripts('alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-
     }
 
     let userAlarmSaveQueue = Promise.resolve();
-    function saveUserAlarm(input) {
-        const operation = userAlarmSaveQueue.then(() => persistUserAlarm(input));
+    function saveUserAlarm(input, options = {}) {
+        const operation = userAlarmSaveQueue.then(() => persistUserAlarm(input, options));
         userAlarmSaveQueue = operation.catch(() => {});
         return operation;
     }
 
-    async function persistUserAlarm(input) {
+    async function persistUserAlarm(input, options = {}) {
         const { alarms, runtime } = await loadUserAlarmState();
         if (input.smartInput) {
             const duplicate = alarms.find(item => item.enabled && item.label === input.label && item.time === input.time && item.repeat === input.repeat &&
@@ -928,6 +942,8 @@ importScripts('alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-
         }
         const index = alarms.findIndex(item => item.id === input?.id);
         const previous = index >= 0 ? alarms[index] : null;
+        if (options.expectedRevision != null && (!previous || previous.revision !== options.expectedRevision)) throw new Error('提醒已被修改或删除，请重新查询');
+        if (options.expectedSnapshot && JSON.stringify(previous) !== options.expectedSnapshot) throw new Error('提醒状态已变化，请重新查询');
         const normalized = AlarmCore.normalizeAlarm({
             ...previous,
             ...input,
@@ -942,6 +958,7 @@ importScripts('alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-
         if (normalized.repeat === 'custom' && normalized.days.length === 0) {
             throw new Error('自定义重复至少选择一天');
         }
+        options.guard?.();
         if (index >= 0) alarms[index] = normalized;
         else alarms.push(normalized);
         alarms.sort((a, b) => (AlarmCore.getNextOccurrence(a, Date.now()) || Infinity) - (AlarmCore.getNextOccurrence(b, Date.now()) || Infinity));
@@ -972,8 +989,15 @@ importScripts('alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-
         return operation;
     }
 
-    async function deleteUserAlarm(alarmId) {
+    function deleteUserAlarm(alarmId, options = {}) {
+        const operation = userAlarmSaveQueue.then(() => persistDeleteUserAlarm(alarmId, options));
+        userAlarmSaveQueue = operation.catch(() => {}); return operation;
+    }
+    async function persistDeleteUserAlarm(alarmId, options) {
         const { alarms, runtime } = await loadUserAlarmState();
+        if (options.expectedRevision != null && !alarms.some(a => a.id === alarmId && a.revision === options.expectedRevision)) throw new Error('提醒已被修改或删除，请重新查询');
+        if (options.expectedSnapshot && JSON.stringify(alarms.find(a => a.id === alarmId)) !== options.expectedSnapshot) throw new Error('提醒状态已变化，请重新查询');
+        options.guard?.();
         const nextAlarms = alarms.filter(item => item.id !== alarmId);
         runtime.pendingSnoozes = runtime.pendingSnoozes.filter(item => item.alarmId !== alarmId);
         await saveUserAlarmState(nextAlarms, runtime);
@@ -981,10 +1005,17 @@ importScripts('alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-
         return { ok: nextAlarms.length !== alarms.length };
     }
 
-    async function toggleUserAlarm(alarmId, enabled) {
+    function toggleUserAlarm(alarmId, enabled, options = {}) {
+        const operation = userAlarmSaveQueue.then(() => persistToggleUserAlarm(alarmId, enabled, options));
+        userAlarmSaveQueue = operation.catch(() => {}); return operation;
+    }
+    async function persistToggleUserAlarm(alarmId, enabled, options) {
         const { alarms, runtime } = await loadUserAlarmState();
         const alarm = alarms.find(item => item.id === alarmId);
         if (!alarm) return { ok: false, error: '闹钟不存在' };
+        if (options.expectedRevision != null && alarm.revision !== options.expectedRevision) throw new Error('提醒已被修改，请重新查询');
+        if (options.expectedSnapshot && JSON.stringify(alarm) !== options.expectedSnapshot) throw new Error('提醒状态已变化，请重新查询');
+        options.guard?.();
         if (enabled && alarm.repeat === 'once' && alarm.fireAt <= Date.now()) {
             return { ok: false, error: '这个一次性闹钟已经过期，请编辑时间后再开启' };
         }
@@ -1015,6 +1046,7 @@ importScripts('alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-
     // 图标右键的音乐快捷播放不应打断用户正在浏览的页面。这里在 Service Worker 中
     // 获取推荐、维护队列，并交给 Offscreen Document 播放；主页只是稍后查看和控制的界面。
     let silentMusicPlayback = null;
+    let lastPlaybackSaveAt = 0;
 
     function normalizeSilentMusicSong(song, index) {
         const rawArtists = song?.artists || song?.ar || [];
@@ -1049,7 +1081,7 @@ importScripts('alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-
         return '';
     }
 
-    async function persistSilentMusicPlayback(song) {
+    async function persistSilentMusicPlayback(song, source) {
         const playback = silentMusicPlayback;
         if (!playback || !song) return;
         const playlist = playback.songs.map((item, index) => ({
@@ -1063,6 +1095,7 @@ importScripts('alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-
                 playlistId: null,
                 playlistName: playback.name,
                 savedAt: Date.now(),
+                ...(source ? { source, assistantRevision: crypto.randomUUID() } : {}),
             },
             lastMusicState: {
                 isPlaying: true,
@@ -1075,18 +1108,21 @@ importScripts('alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-
                 songId: song.songId,
                 playlistName: playback.name,
                 savedAt: Date.now(),
+                ...(source ? { source, assistantRevision: crypto.randomUUID() } : {}),
             },
         });
     }
 
-    async function playSilentMusicCurrent() {
+    async function playSilentMusicCurrent(attempts = 0) {
         const playback = silentMusicPlayback;
         const song = playback?.songs?.[playback.index];
-        if (!song?.songId) return false;
+        if (!song?.songId || attempts >= Math.min(playback.songs.length, 5)) return false;
         const playbackId = playback.id;
+        const requestId = playback.requestId = (playback.requestId || 0) + 1;
+        const isCurrent = () => silentMusicPlayback?.id === playbackId && playback.requestId === requestId;
         const url = await getSilentMusicSongUrl(song.songId);
-        if (!silentMusicPlayback || silentMusicPlayback.id !== playbackId) return false;
-        if (!url) return advanceSilentMusicPlayback();
+        if (!isCurrent()) return false;
+        if (!url) return advanceSilentMusicPlayback(1, false, attempts + 1);
 
         const response = await sendToOffscreen({
             command: 'play',
@@ -1097,7 +1133,8 @@ importScripts('alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-
             cover: song.cover,
             album: song.album,
         });
-        if (!response?.ok) return advanceSilentMusicPlayback();
+        if (!isCurrent()) return false;
+        if (!response?.ok) return advanceSilentMusicPlayback(1, false, attempts + 1);
         await persistSilentMusicPlayback(song);
         logExtEvent('music', 'silent-quick-play', { context: `${playback.mode}:${song.songId}` });
         return true;
@@ -1114,26 +1151,33 @@ importScripts('alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-
         return true;
     }
 
-    async function advanceSilentMusicPlayback(direction = 1) {
+    async function advanceSilentMusicPlayback(direction = 1, ended = false, attempts = 0) {
         const playback = silentMusicPlayback;
         if (!playback) return false;
-        const nextIndex = playback.index + direction;
+        const { musicPlayMode } = await chrome.storage.local.get('musicPlayMode');
+        if (silentMusicPlayback !== playback) return false;
+        playback.playMode = musicPlayMode || 'sequence';
+        const nextIndex = playback.mode === 'personal-fm' ? playback.index + direction : MusicQueuePolicy.nextIndex(playback, direction, { ended });
         if (nextIndex >= 0 && nextIndex < playback.songs.length) {
             playback.index = nextIndex;
-            return playSilentMusicCurrent();
+            return playSilentMusicCurrent(attempts);
         }
         if (playback.mode === 'personal-fm' && direction > 0 && await refillSilentPersonalFM(playback)) {
-            return playSilentMusicCurrent();
+            return playSilentMusicCurrent(attempts);
         }
         if (direction > 0) silentMusicPlayback = null;
         return false;
     }
 
+    function isMusicWorkbenchTab(tab) {
+        return !tab.discarded && (tab.url?.startsWith(chrome.runtime.getURL('index.html'))
+            || tab.url === 'chrome://newtab/');
+    }
+
     async function hasOpenMusicWorkbench() {
-        const indexUrl = chrome.runtime.getURL('index.html');
         try {
             const tabs = await chrome.tabs.query({});
-            return tabs.some(tab => !tab.discarded && tab.url?.startsWith(indexUrl));
+            return tabs.some(isMusicWorkbenchTab);
         } catch {
             return false;
         }
@@ -1159,16 +1203,16 @@ importScripts('alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-
         return true;
     }
 
-    async function advanceNeteaseMusic(direction, currentSongId = null) {
-        const activeSongId = silentMusicPlayback?.songs?.[silentMusicPlayback.index]?.songId;
-        if (silentMusicPlayback && (currentSongId == null || String(currentSongId) === String(activeSongId))) {
-            return advanceSilentMusicPlayback(direction);
+    async function advanceNeteaseMusic(direction, currentSongId = null, ended = false) {
+        // URL 加载期间真实音频仍是上一首，但队列索引已经前进；连续快捷键继续推进同一队列。
+        // 主页接管播放时 offscreen_play 会清除 silentMusicPlayback。
+        if (silentMusicPlayback) {
+            return advanceSilentMusicPlayback(direction, ended);
         }
 
         // 工作台打开时由 MusicController 维护 FM/循环/随机等完整播放语义。
         if (await hasOpenMusicWorkbench()) {
-            _sendMusicControl({ action: 'music_media_action', command: direction < 0 ? 'prev' : 'next' });
-            return true;
+            return _sendMusicControl({ action: 'music_media_action', command: direction < 0 ? 'prev' : 'next' });
         }
 
         let songId = currentSongId;
@@ -1177,7 +1221,7 @@ importScripts('alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-
             songId = state?.data?.songId;
         }
         if (await restoreSilentMusicPlayback(songId)) {
-            return advanceSilentMusicPlayback(direction);
+            return advanceSilentMusicPlayback(direction, ended);
         }
         return false;
     }
@@ -1189,22 +1233,37 @@ importScripts('alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-
 
         const state = await sendToOffscreen({ command: 'getState' });
         const currentSongId = state?.data?.songId;
+        if (action === 'toggle' && currentSongId != null && currentSongId !== '') {
+            const response = await sendToOffscreen({ command: 'togglePlay' });
+            if (response?.ok) return true;
+        }
+        // 空播放器只是后台被回收，不代表用户选择了私人 FM。
+        if (!silentMusicPlayback && await hasOpenMusicWorkbench()) {
+            return _sendMusicControl({ action: 'music_media_action', command: action });
+        }
+        if (action === 'next' || action === 'prev') {
+            if (silentMusicPlayback || currentSongId != null) {
+                return advanceNeteaseMusic(action === 'prev' ? -1 : 1, currentSongId);
+            }
+        }
+        const { lastMusicState } = await chrome.storage.local.get('lastMusicState');
+        const saved = lastMusicState && Date.now() - Number(lastMusicState.savedAt || 0) < 24 * 60 * 60 * 1000
+            ? lastMusicState : null;
+        const songId = currentSongId ?? saved?.songId;
+        if (songId == null || songId === '') return false;
+        if (!await restoreSilentMusicPlayback(songId)) return false;
+        if (action === 'next' || action === 'prev') {
+            return advanceSilentMusicPlayback(action === 'prev' ? -1 : 1);
+        }
         if (action === 'toggle') {
-            if (currentSongId != null && currentSongId !== '') {
-                const response = await sendToOffscreen({ command: 'togglePlay' });
-                if (response?.ok) return true;
-            }
-            return startSilentNeteaseQuickPlay('personal-fm', tab);
-        }
-        if (action === 'next') {
-            if (currentSongId == null || currentSongId === '') {
-                return startSilentNeteaseQuickPlay('personal-fm', tab);
-            }
-            return advanceNeteaseMusic(1, currentSongId);
-        }
-        if (action === 'prev') {
-            if (currentSongId == null || currentSongId === '') return false;
-            return advanceNeteaseMusic(-1, currentSongId);
+            // 恢复原曲时不自动跳过，避免一次恢复操作改变歌曲。
+            const playback = silentMusicPlayback;
+            const song = playback.songs[playback.index];
+            const url = await getSilentMusicSongUrl(songId);
+            if (!url || silentMusicPlayback !== playback || String(playback.songs[playback.index]?.songId) !== String(songId)) return false;
+            const currentTime = Number(currentSongId != null ? state.data.currentTime : saved?.currentTime) || 0;
+            const response = await sendToOffscreen({ command: 'play', ...song, url, startTime: currentTime });
+            return Boolean(response?.ok);
         }
         return false;
     }
@@ -1244,7 +1303,16 @@ importScripts('alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-
     }
 
     async function _sendMusicControl(msg) {
-        chrome.runtime.sendMessage(msg).catch(() => {});
+        // 执行命令只交给一个主页；播放状态仍广播给所有展示入口。
+        const tabs = await chrome.tabs.query({});
+        const candidates = tabs.filter(isMusicWorkbenchTab);
+        candidates.sort((a, b) => Number(b.active) - Number(a.active)
+            || (b.lastAccessed || 0) - (a.lastAccessed || 0));
+        if (!candidates.length) return false;
+        try {
+            await chrome.runtime.sendMessage({ ...msg, targetTabId: candidates[0].id });
+            return true;
+        } catch { return false; }
     }
 
     // ==================== 温情提示内置数据库（v3.0.0）====================
@@ -2469,6 +2537,10 @@ importScripts('alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-
     });
 
     chrome.commands.onCommand.addListener((command, tab) => {
+        if (command === QuickAssistant.COMMAND) {
+            quickAssistant.open(true, tab).catch(error => console.warn('[QuickAssistant]', error.message));
+            return;
+        }
         const musicCommands = {
             [MUSIC_TOGGLE_PLAYBACK_ID]: 'toggle',
             [MUSIC_PREVIOUS_TRACK_ID]: 'prev',
@@ -2477,6 +2549,7 @@ importScripts('alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-
             [MUSIC_DAILY_RECOMMEND_MENU_ID]: 'daily-recommend',
         };
         if (musicCommands[command]) {
+            assistantMusicRevision++;
             controlNeteaseMusic(musicCommands[command], tab).catch(error => console.warn('[Music] 快捷键执行失败:', error));
             return;
         }
@@ -3164,6 +3237,7 @@ importScripts('alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-
 
     // 监听消息事件
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        if (message.action === 'offscreen_play' || (message.action === 'offscreen_command' && ['play', 'pause', 'resume', 'togglePlay', 'stop', 'seekTo', 'setVolume'].includes(message.command))) assistantMusicRevision++;
         const userAlarmActions = new Set([
             'user_alarm_list', 'user_alarm_save', 'user_alarm_rename', 'user_alarm_delete', 'user_alarm_toggle',
             'user_alarm_dismiss', 'user_alarm_snooze', 'user_alarm_test', 'user_alarm_test_stop',
@@ -3561,6 +3635,10 @@ importScripts('alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-
             (async () => {
                 try {
                     const { action: _, ...payload } = message;
+                    if (payload.command === 'stop') {
+                        silentMusicPlayback = null;
+                        await chrome.storage.local.remove('lastMusicState');
+                    }
                     const resp = await sendToOffscreen(payload);
                     sendResponse(resp);
                 } catch (e) {
@@ -3571,6 +3649,11 @@ importScripts('alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-
         }
 
         if (message.action === 'offscreen_state_update') {
+            const data = message.data;
+            if (data?.songId != null && (!data.isPlaying || Date.now() - lastPlaybackSaveAt >= 5000)) {
+                lastPlaybackSaveAt = Date.now();
+                chrome.storage.local.set({ lastMusicState: { ...data, platform: 'netease', savedAt: Date.now() } }).catch(() => {});
+            }
             chrome.runtime.sendMessage({
                 action: 'music_state_from_offscreen',
                 data: message.data
@@ -3584,12 +3667,12 @@ importScripts('alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-
             if (silentMusicPlayback) {
                 // 快速切歌时旧音频也可能晚到 ended；身份不一致必须直接忽略。
                 if (String(message.songId) === String(activeSongId)) {
-                    advanceSilentMusicPlayback().catch(error => console.warn('[Music] 静默续播失败:', error));
+                    advanceSilentMusicPlayback(1, true).catch(error => console.warn('[Music] 静默续播失败:', error));
                 }
             } else {
                 hasOpenMusicWorkbench().then(isOpen => {
                     if (isOpen) _sendMusicControl({ action: 'music_track_ended', songId: message.songId });
-                    else advanceNeteaseMusic(1, message.songId).catch(error => console.warn('[Music] 后台续播失败:', error));
+                    else advanceNeteaseMusic(1, message.songId, true).catch(error => console.warn('[Music] 后台续播失败:', error));
                 });
             }
             return false;
@@ -3795,12 +3878,257 @@ importScripts('alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-
             logExtEvent('storage', 'memos-write', { context: `${oldLen}→${newLen}` });
         }
 
-        const ignoredKeys = new Set(['extEventLog', 'sysMonitorHistory', 'lastMusicState']);
+        const ignoredKeys = new Set(['extEventLog', 'sysMonitorHistory', 'lastMusicState', 'quickAssistantTaskV1', 'quickAssistantDraftV1']);
         for (const key of Object.keys(changes)) {
             if (!ignoredKeys.has(key) && area === 'local' && key !== 'memos') {
                 logExtEvent('storage', 'local-write', { context: key });
             }
         }
+    });
+
+    async function waitAssistantPlayback(test, ctx, revision) {
+        const deadline = Date.now() + 10000;
+        while (Date.now() < deadline) {
+            ctx.guard();
+            if (revision !== assistantMusicRevision) throw new Error('播放器已被手动操作，助手已停止后续步骤');
+            const response = await sendToOffscreen({ command: 'getState' });
+            if (response?.ok && test(response.data)) return response.data;
+            await new Promise(resolve => setTimeout(resolve, 250));
+        }
+        throw new Error('播放器未确认目标状态，请检查登录或歌曲是否可播放');
+    }
+
+    async function readAssistantMusicState(ctx) {
+        ctx.guard();
+        const epoch = assistantMusicRevision;
+        const audio = await sendToOffscreen({ command: 'getState' });
+        const stored = await chrome.storage.local.get(['musicPlaylistCache', 'musicPlayMode', 'musicSleepTimerV1']);
+        ctx.guard();
+        if (epoch !== assistantMusicRevision) throw new Error('播放器状态正在变化，请重试');
+        if (!audio?.ok || !audio.data) throw new Error('暂时无法读取播放器状态；不会当作空队列处理');
+        const cache = stored.musicPlaylistCache;
+        const sourceSongs = silentMusicPlayback?.songs || cache?.playlist || [];
+        if (!Array.isArray(sourceSongs)) throw new Error('当前队列格式无效，请先在播放器核对');
+        const validSongs = sourceSongs.filter(s => s && /^\d+$/.test(String(s.songId)));
+        const songs = validSongs.slice(0, 300).map(s => ({ ...s, songId: String(s.songId) }));
+        const unsupportedQueue = validSongs.length !== sourceSongs.length || sourceSongs.length > 300;
+        const current = audio.data;
+        const liveMatch = current.songId != null && songs.some(s => s.songId === String(current.songId));
+        const stale = !silentMusicPlayback && songs.length > 0 && !liveMatch && Date.now() - Number(cache?.savedAt || 0) >= 86400000;
+        const status = unsupportedQueue ? 'unavailable' : stale ? 'stale' : current.songId != null && !liveMatch ? 'unavailable' : songs.length ? 'ready' : 'empty';
+        const mode = MusicQueuePolicy.modes.includes(stored.musicPlayMode) ? stored.musicPlayMode : 'sequence';
+        const material = JSON.stringify([epoch, cache?.savedAt || 0, cache?.assistantRevision || '', silentMusicPlayback?.id || '', songs.map(s => s.songId), current.songId, mode]);
+        const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(material));
+        ctx.guard();
+        if (epoch !== assistantMusicRevision) throw new Error('播放器状态正在变化，请重试');
+        const revision = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
+        return { status, revision, mode, isPlaying: Boolean(current.isPlaying), currentSong: current.songId == null ? null : { title: String(current.title || '').slice(0, 180), artist: String(current.artist || '').slice(0, 180) },
+            currentTime: Number(current.currentTime) || 0, duration: Number(current.duration) || 0, volume: current.volume,
+            count: sourceSongs.length, source: silentMusicPlayback ? 'background' : liveMatch ? 'live-cache' : 'cache', readAt: Date.now(),
+            timer: stored.musicSleepTimerV1?.status === 'pending' ? { fireAt: stored.musicSleepTimerV1.fireAt } : null,
+            cacheStamp: JSON.stringify([cache?.savedAt, cache?.assistantRevision, cache?.playlist]), songs, currentSongId: current.songId == null ? null : String(current.songId) };
+    }
+    async function assertAssistantMusicRevision(expected, ctx) {
+        const state = await readAssistantMusicState(ctx);
+        if (state.revision !== expected) throw new Error('队列或播放状态已变化，已停止旧操作，请重新发起');
+        if (!['ready', 'empty'].includes(state.status)) throw new Error('当前队列不可用或已过期，请先在播放器核对');
+        return state;
+    }
+    async function setAssistantMusicMode(mode, expected, ctx) {
+        await assertAssistantMusicRevision(expected, ctx); ctx.guard();
+        if (!MusicQueuePolicy.modes.includes(mode)) throw new Error('播放模式无效');
+        if (silentMusicPlayback?.mode === 'personal-fm') throw new Error('私人FM使用独立续播模式，请先选择普通队列');
+        await chrome.storage.local.set({ musicPlayMode: mode });
+        if (silentMusicPlayback) { silentMusicPlayback.playMode = mode; delete silentMusicPlayback.shuffleKey; }
+        return readAssistantMusicState(ctx);
+    }
+    async function playAssistantQueue(expected, songId, ctx, mode) {
+        let state = await assertAssistantMusicRevision(expected, ctx);
+        if (!state.songs.length) throw new Error('当前队列为空，请先搜索并选择歌曲或歌单');
+        if (silentMusicPlayback?.mode === 'personal-fm') throw new Error('私人FM请使用继续播放或下一首');
+        if (mode != null && mode !== state.mode) { state = await setAssistantMusicMode(mode, expected, ctx); expected = state.revision; }
+        const current = state.songs.findIndex(s => s.songId === state.currentSongId);
+        const index = songId ? state.songs.findIndex(s => s.songId === songId) : state.mode === 'shuffle' ? Math.floor(Math.random() * state.songs.length) : Math.max(0, current);
+        if (index < 0) throw new Error('该歌曲已不在当前队列');
+        const guarded = { ...ctx, checkMusicRevision: () => assertAssistantMusicRevision(expected, ctx) };
+        await playAssistantMusic(state.songs[index], guarded, state.songs);
+        return readAssistantMusicState(ctx);
+    }
+    async function applyAssistantQueue(songs, { mode, startPlayback, expectedRevision, title }, ctx) {
+        if (!['append', 'replace'].includes(mode) || typeof startPlayback !== 'boolean') throw new Error('队列应用参数无效');
+        const state = await assertAssistantMusicRevision(expectedRevision, ctx);
+        const merged = [...new Map([...(mode === 'append' ? state.songs : []), ...songs].map(s => [String(s.songId), { ...s, songId: String(s.songId) }])).values()];
+        if (!merged.length || merged.length > 300) throw new Error('队列必须包含1至300首歌曲，原队列未更改');
+        if (startPlayback) {
+            const guarded = { ...ctx, checkMusicRevision: () => assertAssistantMusicRevision(expectedRevision, ctx) };
+            let played = false;
+            for (const song of songs.slice(0, 5)) {
+                try { await playAssistantMusic(song, guarded, merged, title); played = true; break; }
+                catch (error) { if (error.code !== 'unavailable') throw error; }
+            }
+            if (!played) throw new Error('前5首曲目暂不可播放，原队列未更改');
+        } else {
+            if (mode === 'replace' && state.currentSongId && !merged.some(s => s.songId === state.currentSongId)) throw new Error('仅替换队列会移除当前歌曲，请明确要求替换并播放，或使用追加');
+            await assertAssistantMusicRevision(expectedRevision, ctx); ctx.guard();
+            await chrome.storage.local.set({ musicPlaylistCache: { playlist: merged, playlistName: title || '播放队列', playlistId: null, savedAt: Date.now(), source: 'quick-assistant', assistantRevision: crypto.randomUUID() } });
+            if (silentMusicPlayback) { silentMusicPlayback.songs = merged; silentMusicPlayback.index = merged.findIndex(s => s.songId === state.currentSongId); }
+        }
+        return readAssistantMusicState(ctx);
+    }
+
+    async function seekAssistantMusic(seconds, expectedRevision, ctx) {
+        const state = await assertAssistantMusicRevision(expectedRevision, ctx);
+        if (!state.currentSongId || !state.duration || !Number.isFinite(seconds) || seconds < 0 || seconds >= state.duration) throw new Error('请指定当前曲目时长以内的秒数');
+        const epoch = assistantMusicRevision;
+        const result = await sendToOffscreen({ command: 'seekTo', value: seconds }, () => { ctx.guard(); if (epoch !== assistantMusicRevision) throw new Error('播放器已被手动操作'); });
+        if (!result?.ok) throw new Error('播放器未接受进度调整');
+        await waitAssistantPlayback(data => String(data.songId) === state.currentSongId && Math.abs(data.currentTime - seconds) < 3, ctx, epoch);
+        return readAssistantMusicState(ctx);
+    }
+    async function editAssistantMusicQueue(action, songId, expectedRevision, ctx) {
+        const state = await assertAssistantMusicRevision(expectedRevision, ctx);
+        if (!['remove', 'clear'].includes(action)) throw new Error('队列操作无效');
+        if (action === 'remove' && !state.songs.some(s => s.songId === songId)) throw new Error('歌曲已不在当前队列');
+        const songs = action === 'clear' ? [] : state.songs.filter(s => s.songId !== songId);
+        const epoch = assistantMusicRevision;
+        if (action === 'clear' || songId === state.currentSongId) {
+            const result = await sendToOffscreen({ command: 'stop' }, () => { ctx.guard(); if (epoch !== assistantMusicRevision) throw new Error('播放器已被手动操作'); });
+            if (!result?.ok) throw new Error('播放器没有确认停止，队列未修改');
+            await waitAssistantPlayback(data => !data.isPlaying && data.songId == null, ctx, epoch);
+            await chrome.storage.local.remove('lastMusicState');
+        }
+        ctx.guard(); if (epoch !== assistantMusicRevision) throw new Error('播放器已被手动操作，队列未修改');
+        const latest = await chrome.storage.local.get('musicPlaylistCache'); ctx.guard();
+        if (epoch !== assistantMusicRevision) throw new Error('播放器已被手动操作，队列未修改');
+        if (state.cacheStamp !== JSON.stringify([latest.musicPlaylistCache?.savedAt, latest.musicPlaylistCache?.assistantRevision, latest.musicPlaylistCache?.playlist])) throw new Error('队列已被修改，请重新查询');
+        // No automatic next song when removing the playing item: stop is part of the reviewed action.
+        await chrome.storage.local.set({ musicPlaylistCache: { ...latest.musicPlaylistCache, playlist: songs, savedAt: Date.now(), source: 'quick-assistant', assistantRevision: crypto.randomUUID() } });
+        if (silentMusicPlayback) {
+            if (!songs.length || songId === state.currentSongId) silentMusicPlayback = null;
+            else { silentMusicPlayback.songs = songs; silentMusicPlayback.index = songs.findIndex(s => s.songId === state.currentSongId); }
+        }
+        return readAssistantMusicState(ctx);
+    }
+
+    const quickAssistant = QuickAssistant.install({
+        storage: chrome.storage.local,
+        async connectionStatus(platform, ctx) {
+            ctx.guard();
+            if (platform === 'youtube') { const s = await getYouTubeAuthStatus(); ctx.guard(); return { platform, connected: s.connected, status: s.mode }; }
+            if (platform === 'alarm') { const s = await getUserAlarmViewState(); ctx.guard(); return { platform, local: true, notificationPermission: s.notificationPermission }; }
+            if (platform === 'music') {
+                const cookies = await getNeteaseCookies(); ctx.guard();
+                if (!cookies || !cookies.includes('MUSIC_U')) return { platform, connected: false, status: 'login-required' };
+                const data = await neteaseApiCall('/api/nuser/account/get'); ctx.guard();
+                if (data.code != null && data.code !== 200) throw new Error('账号状态接口暂不可用');
+                return { platform, connected: Boolean(data.account?.id), status: data.account?.id ? 'connected' : 'login-required' };
+            }
+            const data = await bilibiliApiCall('/x/web-interface/nav'); ctx.guard();
+            if (data.code !== 0 && data.code !== -101) throw new Error('账号状态接口暂不可用');
+            return { platform, connected: Boolean(data.data?.isLogin), status: data.data?.isLogin ? 'connected' : 'login-required' };
+        },
+        readMusicState: readAssistantMusicState, setMusicMode: setAssistantMusicMode,
+        playCurrentQueue: playAssistantQueue, applyMusicQueue: applyAssistantQueue,
+        ai: message => LocalAIBridge.request(message),
+        netease: neteaseApiCall, bilibili: bilibiliApiCall, youtube: youtubeApiCall,
+        sleepMusic: minutes => musicSleep.set(minutes),
+        listAlarms: getUserAlarmViewState, saveAlarm: saveUserAlarm,
+        async mutateAlarm({ action, id, expectedRevision, expectedSnapshot, patch, enabled }, ctx) {
+            const options = { expectedRevision, expectedSnapshot, guard: () => ctx.guard() };
+            if (action === 'delete') return deleteUserAlarm(id, options);
+            if (action === 'toggle') return toggleUserAlarm(id, enabled, options);
+            if (action === 'update') return saveUserAlarm({ ...patch, id }, options);
+            throw new Error('提醒操作无效');
+        },
+        editMusicQueue: editAssistantMusicQueue, seekMusic: seekAssistantMusic,
+        openURL: url => chrome.tabs.create({ url, active: true }),
+        async controlMusic(intent, ctx) {
+            ctx.guard(); const before = await sendToOffscreen({ command: 'getState' }); ctx.guard();
+            const revision = ++assistantMusicRevision;
+            let result, expected, message;
+            if (intent.action === 'volume') {
+                const value = Math.max(0, Math.min(1, intent.value ?? ((before.data?.volume ?? 1) + intent.delta)));
+                result = await sendToOffscreen({ command: 'setVolume', value }, () => { ctx.guard(); if (revision !== assistantMusicRevision) throw new Error('播放器已被手动操作'); });
+                expected = data => Math.abs(data.volume - value) < .01; message = `音量已调整为 ${Math.round(value * 100)}%`;
+            } else if (intent.action === 'pause' || intent.action === 'resume') {
+                result = await sendToOffscreen({ command: intent.action }, () => { ctx.guard(); if (revision !== assistantMusicRevision) throw new Error('播放器已被手动操作'); });
+                expected = data => data.isPlaying === (intent.action === 'resume'); message = intent.action === 'pause' ? '音乐已暂停' : '已继续播放音乐';
+            } else {
+                if (!['next', 'previous'].includes(intent.action)) throw new Error('音乐动作尚未接入');
+                if (silentMusicPlayback?.mode === 'personal-fm') throw new Error('私人FM请使用播放器的专用切歌控制，不会修改FM队列');
+                const stored = await chrome.storage.local.get('musicPlaylistCache'); ctx.guard();
+                if (revision !== assistantMusicRevision) throw new Error('播放器已被手动操作');
+                const queue = silentMusicPlayback?.songs || stored.musicPlaylistCache?.playlist || [];
+                const index = queue.findIndex(song => String(song.songId) === String(before.data?.songId));
+                const { musicPlayMode } = await chrome.storage.local.get('musicPlayMode'); ctx.guard();
+                const policy = silentMusicPlayback || { songs: queue, index };
+                policy.playMode = musicPlayMode || 'sequence';
+                const targetIndex = policy.mode === 'personal-fm' ? index + (intent.action === 'next' ? 1 : -1) : MusicQueuePolicy.nextIndex(policy, intent.action === 'next' ? 1 : -1);
+                const target = index >= 0 ? queue[targetIndex] : null;
+                if (!target) throw new Error(intent.action === 'next' ? '当前队列中没有下一首，请选择歌曲' : '当前队列中没有上一首');
+                await playAssistantMusic({ ...target, songId: String(target.songId) }, ctx);
+                return { ok: true, message: `${intent.action === 'next' ? '已播放下一首' : '已播放上一首'}：${target.title}` };
+            }
+            if (!result?.ok) throw new Error('当前没有可执行的播放状态，请先选择歌曲');
+            await waitAssistantPlayback(expected, ctx, revision);
+            return { ok: true, message };
+        },
+        async playQueue(songs, ctx, name) {
+            for (let i = 0; i < Math.min(songs.length, 5); i++) {
+                ctx.guard();
+                try { const result = await playAssistantMusic(songs[i], ctx, songs, name); return { ...result, skipped: i }; }
+                catch (error) { if (error.code !== 'unavailable') throw error; }
+            }
+            throw new Error('歌单开头的歌曲暂不可播放，当前队列未更改');
+        },
+        async enqueueMusic(songs, ctx) {
+            const stored = await chrome.storage.local.get('musicPlaylistCache'); ctx.guard();
+            const queue = [...(stored.musicPlaylistCache?.playlist || [])];
+            const known = new Set(queue.map(song => String(song.songId)));
+            const added = songs.filter(song => { const id = String(song.songId); if (!/^\d+$/.test(id)) throw new Error('歌曲编号无效'); if (known.has(id)) return false; known.add(id); return true; });
+            if (queue.length + added.length > 300) throw new Error('队列已满，请先整理当前队列');
+            queue.push(...added);
+            await chrome.storage.local.set({ musicPlaylistCache: { ...stored.musicPlaylistCache, playlist: queue, source: 'quick-assistant', assistantRevision: crypto.randomUUID(), savedAt: Date.now() } });
+            if (silentMusicPlayback) for (const song of added) if (!silentMusicPlayback.songs.some(item => String(item.songId) === String(song.songId))) silentMusicPlayback.songs.push(song);
+            return { added: added.length, message: added.length ? `已加入${added.length}首，跳过${songs.length - added.length}首重复曲目；当前播放保持不变。` : '曲目已全部在队列中，没有重复添加。' };
+        },
+        playMusic: playAssistantMusic
+    });
+    async function playAssistantMusic(song, ctx, selectedQueue, queueName) {
+        if (!/^\d+$/.test(song.songId)) throw new Error('歌曲编号无效');
+        const trace = (name, title, input, fn) => ctx.trace ? ctx.trace(name, title, input, fn) : fn();
+        const revision = assistantMusicRevision;
+        const url = await trace('music.playback.prepare', '检查歌曲是否可播放', { songId: song.songId, title: song.title }, () => getSilentMusicSongUrl(song.songId)); ctx.guard();
+        if (revision !== assistantMusicRevision) throw new Error('播放器已被手动操作，请重新选择歌曲');
+        if (!url) throw Object.assign(new Error('这首歌暂不可播放，请选择其他版本'), { code: 'unavailable' });
+        const { musicPlaylistCache } = await chrome.storage.local.get('musicPlaylistCache'); ctx.guard();
+        if (revision !== assistantMusicRevision) throw new Error('播放器已被手动操作，请重新选择歌曲');
+        const songs = (selectedQueue || musicPlaylistCache?.playlist || []).filter(item => /^\d+$/.test(String(item.songId))).slice(0, 300);
+        let index = songs.findIndex(item => String(item.songId) === song.songId);
+        if (index < 0) {
+            if (songs.length >= 300) throw new Error('当前队列已满，请整理后再加入单曲');
+            index = songs.length; songs.push(song);
+        } else songs[index] = song;
+        if (ctx.checkMusicRevision) await ctx.checkMusicRevision();
+        ctx.guard();
+        const previousPlayback = silentMusicPlayback;
+        const playback = silentMusicPlayback = { ...(selectedQueue ? {} : previousPlayback || {}), id: Date.now(), mode: 'assistant', name: queueName || musicPlaylistCache?.playlistName || '播放队列', songs, index };
+        let result;
+        try {
+            result = await trace('music.playback.dispatch', '提交播放请求', { songId: song.songId, title: song.title }, () => sendToOffscreen({ command: 'play', ...song, url }, () => { ctx.guard(); if (revision !== assistantMusicRevision) throw new Error('播放器已被手动操作，请重新选择歌曲'); }));
+        } catch (error) {
+            if (silentMusicPlayback === playback) silentMusicPlayback = previousPlayback;
+            throw error;
+        }
+        if (!result?.ok) { if (silentMusicPlayback === playback) silentMusicPlayback = previousPlayback; throw new Error('播放请求失败'); }
+        await trace('music.playback.confirm', '等待播放器确认开始播放', { songId: song.songId }, async () => { await waitAssistantPlayback(data => data.isPlaying && String(data.songId) === song.songId, ctx, revision); return { confirmed: true, songId: song.songId }; });
+        ctx.guard(); if (silentMusicPlayback !== playback) throw new Error('播放队列已变化');
+        await trace('music.queue.persist', '保存播放队列和当前曲目', { mode: selectedQueue ? 'replace' : 'append', songId: song.songId, count: songs.length }, async () => { await persistSilentMusicPlayback(song, 'quick-assistant'); return { saved: true, count: songs.length, currentSong: song.title }; });
+        return { ok: true, song: { songId: song.songId, title: song.title, artist: song.artist }, queueLength: songs.length };
+    }
+    chrome.contextMenus.onClicked.addListener((info, tab) => {
+        if ([MUSIC_TOGGLE_PLAYBACK_ID, MUSIC_PREVIOUS_TRACK_ID, MUSIC_NEXT_TRACK_ID, MUSIC_PERSONAL_FM_MENU_ID, MUSIC_DAILY_RECOMMEND_MENU_ID].includes(info.menuItemId)) assistantMusicRevision++;
+        if (info.menuItemId === 'quick-assistant-open') quickAssistant.open(false, tab).catch(error => console.warn('[QuickAssistant]', error.message));
     });
 
     // Service Worker 可能在任意时刻被 Chrome 回收；每次重新加载都从持久化状态恢复调度。

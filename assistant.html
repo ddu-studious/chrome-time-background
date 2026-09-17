@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>快捷助手 · 中国风景时钟</title>
+  <link rel="stylesheet" href="css/assistant.css">
+</head>
+<body>
+  <main class="assistant" aria-label="快捷助手">
+    <header><h1><span class="status-dot" aria-hidden="true"></span>快捷助手 <small id="session-label"></small></h1><div><button id="edit-task" class="quiet" type="button" hidden>编辑输入</button><button id="new-task" class="quiet" type="button">新需求</button><button id="hide" class="quiet" type="button" aria-label="收起输入条">Esc 收起</button></div></header>
+    <form id="compose">
+      <div class="search-line"><span class="search-icon" aria-hidden="true">⌕</span><div id="tokens" aria-label="已选择的应用与动作"></div>
+      <label class="sr-only" for="request">输入你的需求</label>
+      <textarea id="request" role="combobox" aria-autocomplete="list" aria-controls="suggestions" aria-expanded="false" maxlength="500" rows="1" placeholder="输入 @ 选择应用，或说说你想做什么…" autocomplete="off" spellcheck="false" autofocus></textarea><button id="submit" class="primary" type="submit" aria-label="执行需求">↵</button></div>
+      <div class="toolbar"><div><button id="apps" type="button">@ 应用</button><button id="skills" type="button">/ 动作</button><label class="ai-choice"><span>模型</span><select id="assistant-model" aria-label="选择本次请求的模型" disabled><option value="">读取中…</option></select></label><label class="ai-choice"><span>思考</span><select id="assistant-reasoning" aria-label="选择本次请求的思考强度" disabled><option value="">默认</option></select></label><span id="session-memory"></span></div><div><span id="submit-mode"></span><span id="new-request-shortcut"></span><button id="cancel" type="button" hidden>停止执行</button></div></div>
+    </form>
+    <section id="discovery" aria-label="应用与动作建议"><h2 id="menu-title">试试这样说</h2><div id="suggestions" role="listbox" aria-label="应用、动作与示例"></div></section>
+    <section id="session-receipt" hidden><button id="receipt-toggle" type="button" aria-expanded="false" aria-controls="session-workspace"><span class="receipt-check" aria-hidden="true">✓</span><span id="receipt-title"></span><span id="receipt-label">查看本次对话 ⌄</span></button></section>
+    <div id="session-workspace" hidden>
+    <section id="task" aria-label="当前任务" hidden>
+      <div class="task-heading"><h2 id="task-title">当前任务</h2><span id="task-state"></span></div>
+      <div id="conversation-messages" aria-label="本次对话"></div>
+      <p id="message" role="status" aria-live="polite"></p>
+      <section id="playback-feedback" role="status" aria-live="polite" hidden><strong id="playback-title"></strong><p id="playback-message"></p></section>
+      <div id="music-view" hidden></div><div id="music-filters" hidden><nav id="music-types" aria-label="音乐结果类型"></nav><input id="result-filter" aria-label="筛选当前音乐结果，支持拼音" placeholder="拼音筛选当前结果"></div><div id="choices"></div>
+      <div id="records"></div>
+      <details id="steps"><summary>执行步骤</summary><ol id="step-list"></ol></details>
+    </section>
+    <aside id="execution-panel" aria-label="执行过程">
+      <button id="trace-toggle" type="button" aria-expanded="true" aria-controls="trace-body"><span><span class="trace-dot" aria-hidden="true"></span><strong id="trace-title">执行过程</strong></span><span id="trace-toggle-label">收起过程 ⌃</span></button>
+      <div id="trace-body"><p id="trace-meta"></p><div id="trace-list" aria-label="执行动作时间线"></div><p id="trace-note"></p><a class="trace-history" href="settings.html#ai-control" target="_blank" rel="noopener">查看完整留存记录 ↗</a></div>
+    </aside>
+    </div>
+    <p id="error" role="alert" hidden></p>
+    <footer><button id="examples" class="quiet" type="button">示例</button><span id="shortcut">正在读取快捷键…</span><button id="shortcut-settings" class="quiet" type="button">设置快捷键</button><a href="settings.html#ai-control" target="_blank" rel="noopener">AI 设置</a><a href="assistant-memory.html" target="_blank" rel="noopener">我的记忆</a><span class="keyboard-tip">↑↓ 选择 · Tab 补全</span></footer>
+  </main>
+  <script src="vendor/pinyin-match/pinyin-match.js"></script><script src="js/assistant-match.js"></script>
+  <script src="js/music-intent.js"></script><script src="js/assistant-memory.js"></script><script src="js/assistant-contract.js"></script>
+  <script src="js/assistant-timeline.js"></script>
+  <script src="js/assistant.js"></script>
+</body>
+</html>

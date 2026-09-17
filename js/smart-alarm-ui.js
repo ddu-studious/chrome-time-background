@@ -5,6 +5,9 @@
     const container = document.createElement('section');
     container.className = 'smart-alarm';
     container.innerHTML = `
+      <div class="assistant-session-bar"><strong data-session-state>新提醒</strong><button type="button" class="alarm-text-button" data-session-edit>编辑当前需求</button><button type="button" class="alarm-text-button" data-session-end>结束本次</button></div>
+      <p data-session-summary></p>
+      <details class="assistant-transcript"><summary>本次对话</summary><div data-session-history></div></details>
       <form class="smart-alarm-form">
         <label for="smart-alarm-text">一句话，记住接下来要做的事</label>
         <div class="smart-alarm-input-row">
@@ -14,17 +17,21 @@
       </form>
       <div class="smart-alarm-examples"><span>试着说</span><button type="button" data-example="20分钟后提醒我休息">20 分钟后休息</button><button type="button" data-example="每周一三五晚上八点提醒我运动">每周一三五运动</button></div>
       <div class="smart-alarm-result" role="status" aria-live="polite" hidden></div>
-      <div class="smart-alarm-choices" aria-label="选择要改名的闹钟"></div>
-      <div class="smart-alarm-result-actions" hidden>
-        <button type="button" class="alarm-text-button" data-smart-edit>修改</button>
-        <button type="button" class="alarm-text-button" data-smart-undo>撤销创建</button>
+      <div class="smart-alarm-choices" aria-label="补充提醒或选择闹钟"></div>
+      <div class="smart-alarm-toolbar">
+        <button type="button" class="alarm-text-button" data-smart-confirm hidden>确认设置</button>
+        <button type="button" class="alarm-text-button" data-smart-reset hidden>新建另一条</button>
+        <div class="smart-alarm-result-actions" hidden>
+          <button type="button" class="alarm-text-button" data-smart-edit>修改此闹钟</button>
+          <button type="button" class="alarm-text-button" data-smart-undo>撤销创建</button>
+        </div>
+        <button type="button" class="alarm-text-button" data-smart-cancel hidden>停止解析，保留会话</button>
       </div>
-      <button type="button" class="alarm-text-button" data-smart-reset hidden>重新输入一条提醒</button>
       <details class="smart-alarm-settings">
         <summary>本地 AI <span data-ai-summary>简单时间可离线识别</span></summary>
         <p>复杂口语交给电脑上的 Qwen。先在项目的 local-ai 目录运行 npm start，再粘贴 .local/token 文件内容。</p>
-        <label class="smart-alarm-reasoning">推理等级 <select data-ai-reasoning aria-label="推理等级"><option value="off">关闭 · off（默认）</option><option value="low">低 · low</option></select></label>
-        <p>检查状态后显示当前模型支持的等级。修改后点击“保存设置”，从下一条复杂口语请求生效；等级越高，通常等待越久。</p>
+        <label class="smart-alarm-reasoning">推理等级 <select data-ai-reasoning disabled aria-label="推理等级（由 AI 控制台管理）"><option value="off">关闭 · off（默认）</option><option value="low">低 · low</option></select></label>
+        <p>推理等级由统一控制台管理。<a href="settings.html#ai-control" target="_blank" rel="noopener">打开 AI 控制台</a> 修改模型、推理等级和调用策略。</p>
         <div class="smart-alarm-input-row"><input type="password" data-ai-token autocomplete="off" aria-label="本地 AI 连接令牌" placeholder="粘贴本地服务连接令牌"><button class="alarm-secondary-button" type="button" data-ai-save>保存设置</button><button class="alarm-secondary-button" type="button" data-ai-check>检查状态</button></div>
         <p data-ai-status role="status">连接仅保存在这台设备上，提醒不会自动转发到云端。</p>
       </details>`;
@@ -35,6 +42,52 @@
     const actions = container.querySelector('.smart-alarm-result-actions');
     const choices = container.querySelector('.smart-alarm-choices');
     const reset = container.querySelector('[data-smart-reset]');
+    const cancel = container.querySelector('[data-smart-cancel]');
+    let activeJob = null, ready = null, saving = false;
+    let storage; try { storage = window.sessionStorage; } catch {}
+    const session = AssistantSession.create('alarm', storage, { history: event => send('ai_history_write', { body: { operation: 'event', event } }) });
+    function editing() {
+      session.set({ editingText: input.value });
+      if (ready) { ready = null; session.set({ ready: null, state: 'waiting' }); feedback('修改尚未发送，请点击“发送补充”更新本次提醒'); renderSession(); }
+    }
+    input.addEventListener('input', editing);
+    const confirm = container.querySelector('[data-smart-confirm]');
+    const sessionState = container.querySelector('[data-session-state]');
+    function renderSession() {
+      const d = session.data;
+      const labels = { idle: '新提醒', active: '本次会话 · 正在理解', waiting: '本次会话 · 待补充', review: '本次会话 · 待确认，可继续修改', error: '本次会话 · 可继续补充或重试', completed: '本次会话 · 已设置并结束', cancelled: '本次会话 · 已结束，未保存' };
+      sessionState.textContent = labels[d.state] + (d.historyWarning ? ' · ' + d.historyWarning : '');
+      container.querySelector('[data-session-summary]').textContent = d.draft ? AlarmIntent.draftSummary(d.draft) : '';
+      const history = container.querySelector('[data-session-history]'); history.replaceChildren();
+      for (const turn of d.turns) { const row = document.createElement('p'); row.textContent = `${turn.role === 'user' ? '你' : '助手'}：${turn.content}`; history.append(row); }
+      submit.textContent = session.open ? '发送补充 ↵' : '设置闹钟 ↵';
+      input.placeholder = session.open ? '继续补充，或修正当前提醒' : '明天下午三点提醒我开会';
+      reset.hidden = false; reset.disabled = saving;
+      container.querySelector('.smart-alarm-examples').hidden = session.open;
+      confirm.hidden = !ready;
+      container.querySelector('[data-session-edit]').disabled = !session.open || busy;
+      container.querySelector('[data-session-end]').disabled = !session.open || saving;
+    }
+    function endSession() {
+      if (saving) return;
+      generation++; cancelJob(activeJob); activeJob = null; busy = false; ready = null;
+      session.end('cancelled'); choices.replaceChildren(); actions.hidden = true; cancel.hidden = true;
+      submit.disabled = input.disabled = reset.disabled = false; input.value = '';
+      feedback('本次会话已结束，未保存提醒。下一次输入会开启新会话。'); renderSession();
+    }
+    container.querySelector('[data-session-end]').addEventListener('click', endSession);
+    container.querySelector('[data-session-edit]').addEventListener('click', () => {
+      if (busy || !session.open) return;
+      const d = session.data.draft;
+      input.value = d ? `${d.kind === 'relative' ? `${d.delayMinutes}分钟后` : `${d.date || (d.kind === 'daily' ? '每天' : '')}${d.clockHour != null ? `${d.period || ''}${d.clockHour}点${d.minute || 0}分` : d.hour != null ? `${String(d.hour).padStart(2,'0')}:${String(d.minute || 0).padStart(2,'0')}` : ''}`}提醒我${d.label || ''}` : session.data.turns.filter(t => t.role === 'user').map(t => t.content).join('，');
+      editing(); input.focus();
+    });
+    const cancelJob = jobId => { if (jobId) void send('ai_job_cancel', { jobId }).catch(() => {}); };
+    cancel.addEventListener('click', () => {
+      generation++; cancelJob(activeJob); activeJob = null; busy = false;
+      cancel.hidden = true; submit.disabled = false; input.disabled = false; reset.disabled = false; reset.hidden = false;
+      session.set({ state: 'error' }); input.value = session.data.pendingText || input.value; feedback('已停止解析，会话仍保留，可以继续补充或重试'); renderSession(); input.focus();
+    });
     const reasoningSelect = container.querySelector('[data-ai-reasoning]');
     const reasoningLabels = { off: '关闭 · off（默认）', low: '低 · low', medium: '中 · medium', high: '高 · high', xhigh: '极高 · xhigh', on: '开启 · on（模型策略）' };
     function renderReasoning(options, selected) {
@@ -59,11 +112,17 @@
         void checkConnection();
       }
     });
-    let turns = [], anchor = null, busy = false, saved = null, generation = 0;
+    let turns = session.data.turns, anchor = session.data.anchor, busy = false, saved = null, generation = 0;
     function feedback(text, error = false) {
       result.hidden = false; result.textContent = text; result.classList.toggle('error', error);
     }
-    function startNew() { turns = []; anchor = null; saved = null; generation++; choices.replaceChildren(); actions.hidden = true; reset.hidden = true; result.hidden = true; input.value = ''; input.placeholder = '明天下午三点提醒我开会'; input.focus(); }
+    function startNew() {
+      if (saving) return;
+      cancelJob(activeJob); activeJob = null; busy = false; ready = null;
+      session.start(); turns = []; anchor = null; saved = null; generation++;
+      choices.replaceChildren(); actions.hidden = true; result.hidden = true; cancel.hidden = true;
+      submit.disabled = input.disabled = reset.disabled = false; input.value = ''; renderSession(); input.focus();
+    }
     async function commitRename(draft, candidate) {
       const stored = await send('user_alarm_rename', {
         selector: draft.selector, label: draft.label,
@@ -79,17 +138,17 @@
           button.textContent = `${item.date} ${item.time} · ${item.label}`;
           button.addEventListener('click', async () => {
             if (busy) return;
-            busy = true; submit.disabled = true; reset.disabled = true; input.disabled = true;
+            busy = saving = true; renderSession(); submit.disabled = true; reset.disabled = true; input.disabled = true;
             try { await commitRename(draft, item); }
             catch (error) { choices.replaceChildren(); feedback(error.message, true); }
-            finally { busy = false; submit.disabled = false; reset.disabled = false; input.disabled = false; }
+            finally { busy = saving = false; renderSession(); submit.disabled = false; reset.disabled = false; input.disabled = false; }
           });
           choices.append(button);
         }
         return;
       }
       if (stored.status !== 'renamed' || !stored.alarm) throw new Error('未收到改名成功回执');
-      saved = stored.alarm; turns = []; anchor = null; input.value = ''; reset.hidden = true;
+      saved = stored.alarm; turns = []; anchor = null; input.value = ''; session.end(); renderSession();
       feedback(`已修改名称：${saved.date} ${saved.time} · ${saved.label}`);
       actions.hidden = false; container.querySelector('[data-smart-undo]').hidden = true;
       await center.refresh();
@@ -131,40 +190,79 @@
       event.preventDefault();
       if (busy || !input.value.trim()) return;
       busy = true; submit.disabled = true; input.disabled = true; reset.disabled = true;
-      generation++; saved = null; actions.hidden = true;
+      const version = ++generation; saved = null; actions.hidden = true; cancel.hidden = false; activeJob = null;
       choices.replaceChildren();
-      const text = input.value.trim(); anchor ??= Date.now();
+      const text = input.value.trim();
+      if (!session.open) { session.start(); anchor = null; turns = []; }
+      anchor ??= Date.now();
+      ready = null; confirm.hidden = true;
+      let request;
+      try { request = session.request(text); } catch (error) { busy = false; submit.disabled = input.disabled = reset.disabled = false; cancel.hidden = true; feedback(error.message, true); renderSession(); return; }
+      session.set({ anchor }); renderSession();
       feedback('正在理解时间…复杂口语首次使用时可能需要加载本地模型。');
       try {
         const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        let response = await send('smart_alarm_interpret', { text, now: anchor, timeZone: zone, turns });
+        if (session.data.timeZone && session.data.timeZone !== zone) throw new Error('时区已变化，请新建另一条提醒以确认时间；原对话仍保留');
+        session.set({ timeZone: zone });
+        let response = await send('smart_alarm_interpret', { text, now: anchor, currentNow: Date.now(), timeZone: zone, ...request, conversation: true });
+        if (version !== generation) { cancelJob(response.jobId); return; }
+        activeJob = response.jobId || null;
         const deadline = Date.now() + 100000;
         while (response.ok && response.status === 'pending') {
           if (Date.now() > deadline) throw new Error('模型响应超时，尚未创建闹钟，请重试或手动设置');
           await new Promise(resolve => setTimeout(resolve, 1200));
-          response = await send('smart_alarm_result', { jobId: response.jobId });
+          if (version !== generation) return;
+          response = await send('smart_alarm_result', { jobId: activeJob });
+          if (version !== generation) return;
         }
         if (!response.ok) throw new Error(response.error || '解析失败');
+        session.set({ currentSource: response.source || null });
+        cancel.hidden = true;
         if (response.status === 'needs_clarification') {
-          if (turns.length >= 8) { turns = []; anchor = null; throw new Error('请重新输入完整的提醒事项、日期和时间'); }
-          turns.push({ role: 'user', content: text }, { role: 'assistant', content: response.question });
-          feedback(response.question); input.value = ''; input.placeholder = '补充时间，例如：明天下午三点'; reset.hidden = false;
+          session.reply(text, response.question, 'waiting', response.draft ?? session.data.draft); turns = session.data.turns;
+          feedback(response.question); input.value = ''; renderSession();
+          for (const option of response.options || []) {
+            const button = document.createElement('button'); button.type = 'button'; button.className = 'alarm-secondary-button'; button.textContent = option;
+            button.addEventListener('click', () => { if (!busy) { input.value = option; container.querySelector('form').requestSubmit(); } }); choices.append(button);
+          }
           return;
         }
         if (response.timeZone !== zone) throw new Error('时区已变化，请重新输入提醒');
         if (response.status === 'ready' && response.intent === 'rename') {
-          await commitRename(response);
+          saving = true; renderSession();
+          try { await commitRename(response); if (session.open) session.set({state:'waiting'}); } finally { saving = false; }
           return;
         }
         if (response.status !== 'ready' || !response.alarm) throw new Error('未得到有效时间，请手动设置');
-        const stored = await send('user_alarm_save', { alarm: { ...response.alarm, id: `smart_${crypto.randomUUID()}`, smartInput: true } });
-        if (!stored.ok || !stored.alarm) throw new Error(stored.error || '保存失败，尚未创建闹钟');
-        saved = stored.alarm; turns = []; anchor = null; input.value = ''; reset.hidden = true;
-        feedback(`${stored.duplicate ? '已有相同提醒' : '已设置'}：${response.displayText}`);
-        actions.hidden = false; container.querySelector('[data-smart-undo]').hidden = Boolean(stored.duplicate);
-        await center.refresh();
-      } catch (error) { feedback(error.message || '暂时无法创建，请重试或手动设置', true); reset.hidden = false; }
-      finally { busy = false; submit.disabled = false; input.disabled = false; reset.disabled = false; if (center.root.classList.contains('open')) input.focus({ preventScroll: true }); }
+        ready = response;
+        session.reply(text, `待确认：${response.displayText}。可继续修改，确认后才会保存。`, 'review', response.draft ?? session.data.draft);
+        session.set({ ready }); turns = session.data.turns; input.value = '';
+        feedback(`待确认：${response.displayText}。点击“确认设置”，或继续输入修改。`); renderSession();
+
+      } catch (error) { if (version === generation) { cancelJob(activeJob); session.reply(text, error.message || '解析失败，请重试', 'error'); turns = session.data.turns; feedback(error.message || '暂时无法创建，请重试或手动设置', true); renderSession(); } }
+      finally { if (version === generation) { activeJob = null; cancel.hidden = true; busy = false; submit.disabled = false; input.disabled = false; reset.disabled = false; renderSession(); if (center.root.classList.contains('open')) input.focus({ preventScroll: true }); } }
     });
+    confirm.addEventListener('click', async () => {
+      if (!ready || busy || saving) return;
+      const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (ready.timeZone !== zone || (ready.alarm.fireAt && ready.alarm.fireAt <= Date.now())) {
+        ready = null; session.set({ state: 'waiting', ready: null }); feedback('时间已过或时区已变化，请继续补充新的日期和时间', true); renderSession(); return;
+      }
+      saving = busy = true; confirm.disabled = submit.disabled = input.disabled = reset.disabled = true; renderSession();
+      try {
+        const stored = await send('user_alarm_save', { alarm: { ...ready.alarm, id: `smart_${session.data.id}`, smartInput: true } });
+        if (!stored.ok || !stored.alarm) throw new Error(stored.error || '保存失败，请重试');
+        saved = stored.alarm; ready = null; session.end();
+        feedback(`${stored.duplicate ? '已有相同提醒' : '已设置'}：${saved.date || '重复提醒'} ${saved.time} · ${saved.label}`);
+        actions.hidden = false; container.querySelector('[data-smart-undo]').hidden = Boolean(stored.duplicate); await center.refresh();
+      } catch (error) { feedback(error.message, true); }
+      finally { saving = busy = false; confirm.disabled = submit.disabled = input.disabled = reset.disabled = false; renderSession(); }
+    });
+    if (session.open) {
+      ready = session.data.state === 'review' ? session.data.ready || null : null;
+      input.value = session.data.editingText || session.data.pendingText || '';
+      feedback(ready ? `待确认：${ready.displayText}` : session.data.turns.at(-1)?.content || '已恢复未完成的会话，请继续补充');
+    }
+    renderSession();
   };
 })();

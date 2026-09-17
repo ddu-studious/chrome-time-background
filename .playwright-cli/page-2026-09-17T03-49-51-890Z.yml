@@ -1,0 +1,49 @@
+- main [ref=f1e2]:
+  - generic [ref=f1e3]:
+    - generic [ref=f1e4]:
+      - paragraph [ref=f1e5]: 快捷助手 / 个人设置
+      - heading "我的记忆" [level=1] [ref=f1e6]
+      - paragraph [ref=f1e7]: 把你明确的习惯记下来，让下一次少解释一点。
+    - link "返回助手 ↗" [ref=f1e8] [cursor=pointer]:
+      - /url: assistant.html
+  - status [ref=f1e9]: 已连接本机记忆。修改会影响下一次请求。
+  - region [ref=f1e10]:
+    - heading "音乐偏好" [level=2] [ref=f1e11]
+    - paragraph [ref=f1e12]: 本次说“先别播放”或“只搜索”始终优先。未保存偏好时，热门歌曲默认播放，并保留原队列。
+    - generic [ref=f1e13]:
+      - generic [ref=f1e14]:
+        - generic [ref=f1e15]:
+          - generic [ref=f1e16]: 省略动词的歌手热门歌曲
+          - combobox "省略动词的歌手热门歌曲" [ref=f1e17]:
+            - option "找到明确歌手后播放"
+            - option "先展示，由我选择播放" [selected]
+        - generic [ref=f1e18]: 来源：在我的记忆页面明确设置 · 2026/9/17 11:48:28
+        - button "删除偏好，恢复默认" [ref=f1e19] [cursor=pointer]
+      - generic [ref=f1e20]:
+        - generic [ref=f1e21]:
+          - generic [ref=f1e22]: 自然语言播放歌手热门歌曲
+          - combobox "自然语言播放歌手热门歌曲" [ref=f1e23]:
+            - option "保留原队列，加入热门歌曲并播放" [selected]
+            - option "替换为热门歌曲并播放"
+        - generic [ref=f1e24]: 当前为默认规则，尚未保存个人偏好。
+  - region [ref=f1e25]:
+    - heading "我选过的歌手 （0）" [level=2] [ref=f1e26]
+    - paragraph [ref=f1e27]: 同名结果需要你选择时，记住你选的是哪一位。下次仍会核对最新搜索结果。
+    - paragraph [ref=f1e29]: 还没有歌手记忆。你主动选择歌手后，会出现在这里。
+  - region [ref=f1e30]:
+    - heading "由你掌握" [level=2] [ref=f1e31]
+    - generic [ref=f1e32]:
+      - checkbox "使用已保存的个人记忆" [checked] [ref=f1e33]
+      - text: 使用已保存的个人记忆
+    - generic [ref=f1e34]:
+      - checkbox "记住我主动选择的歌手" [checked] [ref=f1e35]
+      - text: 记住我主动选择的歌手
+    - paragraph [ref=f1e36]: 记忆保存在本机，与对话正文留存分开。删除对话时，会一并删除由该对话保存的记忆；在此页面保存的偏好不受影响。暂停使用后按默认规则处理。
+    - generic [ref=f1e37]:
+      - button "刷新" [ref=f1e38] [cursor=pointer]
+      - button "导出记忆" [ref=f1e39] [cursor=pointer]
+      - button "清空已保存记忆" [ref=f1e40] [cursor=pointer]
+  - generic [ref=f1e41]:
+    - text: 也可以对助手说：“记住：以后歌手热门歌曲先展示，不自动播放”。
+    - link "本机 AI 连接设置 ↗" [ref=f1e42] [cursor=pointer]:
+      - /url: settings.html#ai-control

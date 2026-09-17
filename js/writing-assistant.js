@@ -844,23 +844,7 @@
             <span class="writing-ai-label">启用 AI 补全</span>
             <input type="checkbox" id="ws-enabled" ${config.enabled ? 'checked' : ''}>
           </label>
-          <label class="writing-ai-field">
-            <span class="writing-ai-label">模型</span>
-            <select id="ws-model">
-              <option value="qwen-turbo-latest" ${config.model === 'qwen-turbo-latest' ? 'selected' : ''}>Qwen Turbo (最快)</option>
-              <option value="qwen3-235b-a22b" ${config.model === 'qwen3-235b-a22b' || !config.model ? 'selected' : ''}>Qwen 3 235B</option>
-              <option value="qwen-plus" ${config.model === 'qwen-plus' ? 'selected' : ''}>Qwen Plus</option>
-              <option value="qwen-max" ${config.model === 'qwen-max' ? 'selected' : ''}>Qwen Max</option>
-            </select>
-          </label>
-          <label class="writing-ai-field">
-            <span class="writing-ai-label">温度 <small id="ws-temp-val">${config.temperature ?? 0.3}</small></span>
-            <input type="range" id="ws-temperature" min="0" max="1.5" step="0.1" value="${config.temperature ?? 0.3}">
-          </label>
-          <label class="writing-ai-field">
-            <span class="writing-ai-label">最大 Token</span>
-            <input type="number" id="ws-max-tokens" min="50" max="4096" step="50" value="${config.maxTokens ?? 80}">
-          </label>
+          <p>模型、温度和输出预算由统一 AI 控制台管理。<a href="settings.html#ai-control" target="_blank" rel="noopener">打开控制台</a></p>
 
           <div class="writing-ai-divider" style="border-top:1px solid rgba(255,255,255,0.1);margin:12px 0;"></div>
           <div class="writing-ai-label" style="font-weight:600;margin-bottom:8px;">系统提示词 ${hasPost ? '<small style="opacity:0.5;font-weight:normal;">（与当前文章绑定）</small>' : ''}</div>
@@ -933,9 +917,6 @@
 
         const newConfig = {
           enabled: panel.querySelector('#ws-enabled')?.checked ?? false,
-          model: panel.querySelector('#ws-model')?.value || 'qwen-turbo-latest',
-          temperature: parseFloat(panel.querySelector('#ws-temperature')?.value || '0.3'),
-          maxTokens: parseInt(panel.querySelector('#ws-max-tokens')?.value || '80'),
           systemPrompt: newSystemPrompt,
         };
 
@@ -948,9 +929,6 @@
           _saveCurrentPostAiConfig({
             systemPrompt: newSystemPrompt,
             completionPrompt: newCompletionPrompt,
-            model: newConfig.model,
-            temperature: newConfig.temperature,
-            maxTokens: newConfig.maxTokens,
           });
         }
 

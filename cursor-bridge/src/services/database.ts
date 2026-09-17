@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { mkdirSync } from 'node:fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = resolve(__dirname, '..', '..', 'data');
+const DATA_DIR = process.env.CURSOR_BRIDGE_DATA_DIR ? resolve(process.env.CURSOR_BRIDGE_DATA_DIR) : resolve(__dirname, '..', '..', 'data');
 const DB_PATH = resolve(DATA_DIR, 'cursor-bridge.db');
 
 let db: Database.Database;

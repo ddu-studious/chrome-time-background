@@ -436,7 +436,7 @@
                 <header class="yt-topbar">
                     <div class="yt-brand"><span class="yt-logo" aria-hidden="true"><i class="fab fa-youtube"></i></span><div><strong id="yt-workbench-title">YouTube 工作台</strong><small>官方播放器 · 本地学习流</small></div></div>
                     <form class="yt-search" role="search"><label class="sr-only" for="yt-search-input">搜索或粘贴 YouTube 链接</label><input id="yt-search-input" type="search" autocomplete="off" placeholder="搜索视频，或粘贴 YouTube 链接 / 视频 ID"><button type="submit" aria-label="搜索或播放"><i class="fas fa-search"></i></button></form>
-                    <div class="yt-account"><span class="yt-account-state">正在检测账号</span><button class="yt-connect" type="button" disabled>连接账号</button><button class="yt-close" type="button" aria-label="关闭 YouTube 工作台"><i class="fas fa-times"></i></button></div>
+                    <div class="yt-account"><a href="content-digest.html?kind=transcript" target="_blank" rel="noopener">字幕提要</a><span class="yt-account-state">正在检测账号</span><button class="yt-connect" type="button" disabled>连接账号</button><button class="yt-close" type="button" aria-label="关闭 YouTube 工作台"><i class="fas fa-times"></i></button></div>
                 </header>
                 <div class="yt-body">
                     <nav class="yt-nav" aria-label="YouTube 工作台导航">

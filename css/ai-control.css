@@ -1,0 +1,43 @@
+/* AI 控制台复用设置页的主题、卡片和按钮，仅补充表单布局。 */
+#page-ai-control { min-width: 0; }
+#page-ai-control p { color: var(--sp-text-secondary); line-height: 1.7; overflow-wrap: anywhere; }
+#page-ai-control form { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
+#page-ai-control label { display: grid; gap: 8px; flex: 1; min-width: 0; font-size: 13px; }
+#page-ai-control input:not([type=checkbox]), #page-ai-control select {
+  width: 100%; min-width: 0; padding: 10px 12px; border: 1px solid var(--sp-border);
+  border-radius: 8px; background: var(--sp-bg); color: var(--sp-text); font: inherit;
+}
+#page-ai-control button { cursor: pointer; }
+#page-ai-control form > button:not([type=button]), #page-ai-control fieldset > button {
+  background: var(--sp-accent-light); border-color: rgba(167,139,250,.35); color: #d7c9ff;
+}
+#page-ai-control button:disabled, #page-ai-control fieldset:disabled { opacity: .5; }
+#page-ai-control button:disabled { cursor: default; }
+#page-ai-control :is(input,select,button):focus-visible { outline: 2px solid var(--sp-accent); outline-offset: 3px; }
+#page-ai-control fieldset { border: 0; padding: 0; margin: 0; width: 100%; min-width: 0; }
+#page-ai-control .toggle { display: flex; align-items: center; gap: 10px; margin: 12px 0; }
+#page-ai-control .toggle input { width: 18px; height: 18px; accent-color: var(--sp-accent); }
+#page-ai-control small { font-size: 12px; font-weight: normal; color: var(--sp-text-secondary); }
+#page-ai-control #notice { padding: 14px 18px; border: 1px solid var(--sp-border); border-radius: 10px; background: var(--sp-accent-light); }
+#page-ai-control #notice.error { background: rgba(203,68,76,.12); color: #f0a1a6; }
+#page-ai-control :is(#history,#jobs) { display: flex; gap: 10px; flex-wrap: wrap; }
+#page-ai-control .table-wrap { overflow: auto; }
+#page-ai-control table { width: 100%; border-collapse: collapse; text-align: left; white-space: nowrap; }
+#page-ai-control :is(th,td) { padding: 12px 10px; border-bottom: 1px solid var(--sp-border); font-size: 13px; }
+#page-ai-control li { color: var(--sp-text-secondary); line-height: 1.9; }
+#page-ai-control .parameters { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; margin: 20px 0; }
+#page-ai-control .history-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 16px 0; }
+#page-ai-control .history-groups { display: grid; gap: 8px; }
+#page-ai-control .history-groups > button { display: grid; gap: 8px; text-align: left; width: 100%; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+#page-ai-control .history-detail { margin-top: 20px; border-top: 1px solid var(--sp-border); padding-top: 16px; }
+#page-ai-control .history-detail pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.7; max-height: 480px; overflow: auto; padding: 12px; background: var(--sp-bg); border-radius: 8px; }
+#page-ai-control .history-detail summary { cursor: pointer; overflow-wrap: anywhere; padding: 12px 0; }
+#page-ai-control .history-tool { border-left: 3px solid var(--sp-accent); padding-left: 10px; margin: 8px 0; }
+#page-ai-control .history-tool-child { margin-left: 12px; border-color: var(--sp-border); }
+#page-ai-control .history-tool[data-status=failed] { border-color: #e16a73; }
+#page-ai-control .history-tool:is([data-status=cancelled],[data-status=interrupted]) { border-color: #d6a959; }
+@media(max-width:560px) {
+  #page-ai-control .parameters { grid-template-columns: 1fr; }
+  #page-ai-control form { align-items: stretch; }
+  #page-ai-control form > label { flex-basis: 100%; }
+}

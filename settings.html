@@ -7,7 +7,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="css/settings-page.css">
     <link rel="stylesheet" href="css/product-ui-v4.css">
-    <link rel="stylesheet" href="css/settings-v5.css?v=6">
+    <link rel="stylesheet" href="css/settings-v5.css?v=7">
+    <link rel="stylesheet" href="css/ai-control.css?v=4">
 </head>
 <body>
     <div class="sp-layout">
@@ -837,6 +838,18 @@
                     </div>
                 </div>
             </section>
+            <section class="sp-page settings-v5-special" id="page-ai-control">
+  <p id="notice" role="status" aria-live="polite">正在读取连接设置…</p>
+  <article class="sp-card"><h2 class="sp-card-title">本机连接</h2><p>连接到本机 AI 服务。令牌保存在扩展本地存储，不会回显。</p><form id="connection"><label>连接令牌<input id="token" type="password" autocomplete="off" placeholder="已保存时可留空" maxlength="64"></label><button>保存连接</button><button type="button" id="refresh">刷新状态</button></form><p id="health">尚未检查模型状态</p></article>
+  <article class="sp-card"><h2 class="sp-card-title">调用策略 <small id="revision"></small></h2><form id="policy"><fieldset disabled id="policy-fields"><label class="toggle"><input type="checkbox" id="model-enabled">允许调用本地模型</label><p>关闭后停止模型请求，规则识别和手动操作继续可用。保存策略会取消尚未消费的旧请求。</p><div id="scenes"></div><div class="parameters"><label>每日请求预算<input id="daily-limit" type="number" min="1" max="10000" required></label><label>连续失败阈值<input id="failure-limit" type="number" min="1" max="20" required></label><label>熔断冷却（秒）<input id="cooldown" type="number" min="1" max="3600" required></label><label>本地模型<select id="model"><option value="">服务默认模型</option></select></label><label>向量模型<input id="embedding-model" maxlength="160" required></label><label>推理等级<select id="reasoning"><option>off</option><option>low</option><option>medium</option><option>high</option><option>xhigh</option><option>on</option></select></label><label>超时（秒）<input id="timeout" type="number" min="5" max="90" required></label><label>输出预算（token）<input id="budget" type="number" min="64" max="4096" required></label></div><p>模型列表来自本机服务。推理等级按模型能力校验，不支持时明确报错。闹钟关闭推理时最多 650 token；内容场景使用配置预算。</p><button>保存策略</button></fieldset></form></article>
+  <article class="sp-card"><h2 class="sp-card-title">配置版本</h2><p>回滚会创建一个新版本，保留最近 20 个历史版本。</p><div id="history">连接后可查看</div></article>
+  <article class="sp-card"><h2 class="sp-card-title">音乐定时状态</h2><p id="music-timer">尚未读取</p></article>
+  <article class="sp-card"><h2 class="sp-card-title">正在处理</h2><div id="jobs">暂无任务</div></article>
+  <article class="sp-card"><h2 class="sp-card-title">今日 AI 使用</h2><p id="ai-usage"></p><div id="ai-scenes-usage"></div></article>
+  <article class="sp-card" id="ai-history"><h2 class="sp-card-title">对话与调用历史</h2><p>正在读取本机历史记录…</p></article>
+  <details class="sp-card"><summary>最近运行记录（服务内存）</summary><p>最近 100 条解析记录。长期记录请查看上方历史；解析成功不代表业务动作已经执行。</p><div class="table-wrap"><table><thead><tr><th>时间</th><th>场景</th><th>状态</th><th>耗时</th></tr></thead><tbody id="records"></tbody></table></div></details>
+  <article class="sp-card"><h2 class="sp-card-title">集成验收状态</h2><p>代码入口已迁移，以下实机验收仍未完成。</p><ul><li>真实麦克风移至下一期；部分新增页面等待本期验收</li></ul></article>
+            </section>
         </main>
     </div>
 
@@ -845,6 +858,8 @@
     <script src="js/product-pages-v5.js?v=1"></script>
     <script src="js/product-ui-v5.js?v=2"></script>
     <script src="js/settings-page.js?v=4"></script>
-    <script src="js/settings-v5.js?v=6"></script>
+    <script src="js/settings-v5.js?v=7"></script>
+    <script src="js/ai-control.js?v=3"></script>
+    <script src="js/ai-history.js?v=2"></script>
 </body>
 </html>

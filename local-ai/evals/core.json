@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "cases": [
+    {"id":"music-pause","scene":"music.intent","input":{"text":"暂停"},"equals":{"source":"rules","intent.action":"pause"}},
+    {"id":"music-artist","scene":"music.intent","input":{"text":"播放许嵩的有何不可"},"equals":{"intent.action":"search","intent.artist":"许嵩","intent.title":"有何不可"}},
+    {"id":"music-colloquial-volume","scene":"music.intent","input":{"text":"把音乐声音稍微降低一些"},"equals":{"intent.action":"volume"},"negative":["intent.delta"]},
+    {"id":"alarm-advance","scene":"alarm.interpret","input":{"text":"明天下午三点开会，提前十分钟提醒我","now":1798682400000,"timeZone":"Asia/Shanghai"},"equals":{"alarm.time":"14:50"}},
+    {"id":"task-year-boundary","scene":"task.draft","input":{"text":"明天完成周报，优先级高","today":"2026-12-31"},"equals":{"data.dueDate":"2027-01-01","data.priority":"high"},"nonEmpty":["data.title"]},
+    {"id":"schedule-duration","scene":"schedule.draft","input":{"text":"明天下午三点开会一小时","today":"2026-12-31","selectedDate":"2026-12-31"},"equals":{"data.date":"2027-01-01","data.startTime":"15:00","data.endTime":"16:00"}},
+    {"id":"schedule-ambiguous","scene":"schedule.draft","input":{"text":"明天七点开会","today":"2026-12-31","selectedDate":"2026-12-31"},"nonEmpty":["data.question"]},
+    {"id":"knowledge-grounded","scene":"knowledge.answer","input":{"question":"行锁作用于什么？","sources":[{"id":"a","title":"测试资料","url":"https://example.com/a","content":"行锁作用于记录，可以减少并发事务之间的冲突。"}]},"equals":{"data.insufficient":false},"nonEmpty":["data.answer","data.citations"]},
+    {"id":"knowledge-insufficient","scene":"knowledge.answer","input":{"question":"作者的出生日期是什么？","sources":[{"id":"a","title":"测试资料","url":"https://example.com/a","content":"这份资料讨论数据库事务和行锁。"}]},"equals":{"data.insufficient":true}},
+    {"id":"workspace-match","scene":"workspace.match","input":{"query":"打开Java开发用的网站","groups":[{"id":"java","name":"Java开发","entries":"Java文档、接口调试"},{"id":"music","name":"音乐","entries":"网易云音乐"}]},"equals":{"data.groupId":"java"}},
+    {"id":"trending-exact","scene":"trending.cluster","input":{"items":[{"title":"项目发布新版","source":"a","url":"https://example.com/a"},{"title":"项目发布新版","source":"b","url":"https://example.com/b"}]},"equals":{"source":"rules","data.total":2,"data.unassigned":0}},
+    {"id":"digest-no-body","scene":"content.digest","input":{"kind":"article","title":"仅有标题","text":""},"errorIncludes":"正文或字幕"}
+  ]
+}

@@ -461,7 +461,7 @@ class ScheduleManager {
         this._stopCurrentTimeTick();
         this._removeWeekTooltip();
         this._exitPasteMode();
-        document.querySelectorAll('.sch-form-overlay-fixed').forEach(el => el.remove());
+        document.querySelectorAll('.sch-form-overlay-fixed').forEach(el => { el._scheduleDraftCleanup?.(); el.remove(); });
         document.querySelectorAll('.sch-ctx-fixed').forEach(el => el.remove());
         if (this._weekNowTick) { clearInterval(this._weekNowTick); this._weekNowTick = null; }
         if (this._escHandler) {
@@ -1046,8 +1046,8 @@ class ScheduleManager {
         const isPreset = editPlan && editPlan._preset;
         const isEdit = !!editPlan && !isPreset;
         const formReturnFocus = document.activeElement;
-        this._panelEl?.querySelectorAll('.sch-form-overlay').forEach(el => el.remove());
-        document.querySelectorAll('.sch-form-overlay-fixed').forEach(el => el.remove());
+        this._panelEl?.querySelectorAll('.sch-form-overlay').forEach(el => { el._scheduleDraftCleanup?.(); el.remove(); });
+        document.querySelectorAll('.sch-form-overlay-fixed').forEach(el => { el._scheduleDraftCleanup?.(); el.remove(); });
 
         const presetStart = isPreset ? editPlan.startTime : null;
         const presetEnd = isPreset ? editPlan.endTime : null;
@@ -1065,6 +1065,7 @@ class ScheduleManager {
                     <label>名称</label>
                     <input type="text" class="sch-input" id="sch-plan-name" placeholder="做什么..." value="${this._escHtml(isEdit ? editPlan.name : '')}">
                 </div>
+                <div class="sch-form-row"><label for="sch-plan-date">日期</label><input type="date" class="sch-input" id="sch-plan-date" value="${this._escHtml(editPlan?.date || this._currentDate)}"></div>
                 <div class="sch-form-row">
                     <label>图标</label>
                     <input type="text" class="sch-input sch-input-sm" id="sch-plan-icon" placeholder="emoji" value="${isEdit ? (editPlan.icon || '📌') : '📌'}" maxlength="4">
@@ -1101,9 +1102,11 @@ class ScheduleManager {
             this._panelEl.appendChild(overlay);
         }
         this._setProductPage('create-edit');
+        if (!isEdit) window.ScheduleDraft?.mount(overlay);
         overlay.querySelector('#sch-plan-name')?.focus();
 
         const removeForm = () => {
+            overlay._scheduleDraftCleanup?.();
             overlay.remove();
             this._restoreProductPage();
             const target = formReturnFocus?.isConnected
@@ -1132,7 +1135,7 @@ class ScheduleManager {
                 endTime: overlay.querySelector('#sch-plan-end').value,
                 category: overlay.querySelector('#sch-plan-cat').value,
                 note: overlay.querySelector('#sch-plan-note').value.trim(),
-                date: this._currentDate
+                date: overlay.querySelector('#sch-plan-date').value || this._currentDate
             };
             const commit = async (nextData) => {
                 if (isEdit) await this.updatePlan(editPlan.id, nextData);

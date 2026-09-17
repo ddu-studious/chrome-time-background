@@ -1,20 +1,20 @@
 /**
- * Writing RAG Service — 基于千问 Embedding API 的文档检索增强
+ * Writing RAG Service — 基于统一 AI 控制面的文档检索增强
  *
  * 核心能力：
  *   1. 文档索引：将用户文档分 chunk 后生成 embedding 向量
  *   2. 语义检索：用户输入时检索相关历史文档片段
  *   3. 上下文注入：将检索结果注入 LLM 补全上下文
  *
- * 使用千问 text-embedding-v3 模型（OpenAI 兼容接口）
+ * 模型、向量空间与预算由本地控制面管理
  * 向量存储在内存 + SQLite 中，支持持久化
  */
 
-import OpenAI from 'openai';
+import { getQwenClient } from './qwen-client.js';
 import { getDb } from '../../services/database.js';
 
-const EMBEDDING_MODEL = 'text-embedding-v3';
-const EMBEDDING_DIMENSIONS = 512;
+const EMBEDDING_MODEL = '由 AI 控制台管理';
+const EMBEDDING_DIMENSIONS = 0;
 const CHUNK_SIZE = 200;
 const CHUNK_OVERLAP = 50;
 const TOP_K = 3;
@@ -25,6 +25,7 @@ interface DocumentChunk {
   docTitle: string;
   text: string;
   embedding: number[];
+  space: string;
   createdAt: number;
 }
 
@@ -44,60 +45,33 @@ let _config: RAGConfig = {
   minScore: 0.3,
 };
 
-let _embeddingClient: OpenAI | null = null;
 const _vectorStore: DocumentChunk[] = [];
+const _documentVersions = new Map<string, number>();
+let _generation = 0;
 
-function getEmbeddingClient(): OpenAI {
-  if (!_embeddingClient) {
-    const apiKey = process.env.DASHSCOPE_API_KEY;
-    if (!apiKey) throw new Error('DASHSCOPE_API_KEY not configured');
-    _embeddingClient = new OpenAI({
-      apiKey,
-      baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    });
-  }
-  return _embeddingClient;
-}
-
-function splitTextToChunks(text: string, chunkSize = CHUNK_SIZE, overlap = CHUNK_OVERLAP): string[] {
-  const paragraphs = text.split(/\n\s*\n/);
+export function splitTextToChunks(text: string, chunkSize = CHUNK_SIZE, overlap = CHUNK_OVERLAP): string[] {
+  if (!Number.isInteger(chunkSize) || chunkSize <= 0 || overlap < 0 || overlap >= chunkSize) throw new Error('分块配置无效');
   const chunks: string[] = [];
-  let buffer = '';
-
-  for (const para of paragraphs) {
-    if (buffer.length + para.length > chunkSize && buffer.length > 0) {
-      chunks.push(buffer.trim());
-      const overlapStart = Math.max(0, buffer.length - overlap);
-      buffer = buffer.slice(overlapStart) + '\n' + para;
-    } else {
-      buffer += (buffer ? '\n' : '') + para;
-    }
+  for (let start = 0; start < text.length; start += chunkSize - overlap) {
+    const chunk = text.slice(start, start + chunkSize).trim();
+    if (chunk) chunks.push(chunk);
+    if (start + chunkSize >= text.length) break;
   }
-  if (buffer.trim()) chunks.push(buffer.trim());
   return chunks;
 }
 
-async function generateEmbedding(text: string): Promise<number[]> {
-  const client = getEmbeddingClient();
-  const res = await client.embeddings.create({
-    model: _config.model,
-    input: text,
-    dimensions: _config.dimensions,
-  } as any);
-  return res.data[0].embedding;
-}
-
-async function generateEmbeddings(texts: string[]): Promise<number[][]> {
-  const client = getEmbeddingClient();
-  const res = await client.embeddings.create({
-    model: _config.model,
-    input: texts,
-    dimensions: _config.dimensions,
-  } as any);
-  return res.data.map(d => d.embedding);
+async function generateEmbeddings(texts: string[], purpose: 'document' | 'query'): Promise<{vectors: number[][]; space: string}> {
+  const vectors: number[][] = []; let space = '';
+  for (let offset = 0; offset < texts.length; offset += 5) {
+    const result = await getQwenClient().runScene('writing.embed', {texts:texts.slice(offset, offset+5),purpose});
+    if (space && space !== result.space) throw new Error('向量模型已变化，请重新构建索引');
+    space = result.space; vectors.push(...result.vectors);
+  }
+  return {vectors,space};
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length !== b.length) return 0;
   let dot = 0, normA = 0, normB = 0;
   for (let i = 0; i < a.length; i++) {
     dot += a[i] * b[i];
@@ -110,33 +84,22 @@ function cosineSimilarity(a: number[], b: number[]): number {
 export async function indexDocument(docId: string, title: string, content: string): Promise<{ chunks: number }> {
   if (!_config.enabled) return { chunks: 0 };
 
-  removeDocumentChunks(docId);
-
+  if (!docId || content.length > 100000) throw new Error('文档无效或超过索引长度限制');
+  const version = (_documentVersions.get(docId) || 0) + 1; _documentVersions.set(docId, version);
+  const generation = _generation;
   const chunks = splitTextToChunks(content);
-  if (chunks.length === 0) return { chunks: 0 };
-
-  const embeddings = await generateEmbeddings(chunks);
-
-  const db = getDb();
-  const stmt = db.prepare(`
-    INSERT OR REPLACE INTO writing_rag_chunks (id, doc_id, doc_title, text, embedding, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
-
+  const generated = chunks.length ? await generateEmbeddings(chunks, 'document') : {vectors:[],space:''};
+  if (generation !== _generation || _documentVersions.get(docId) !== version) return {chunks:0};
   const now = Date.now();
-  for (let i = 0; i < chunks.length; i++) {
-    const chunkId = `${docId}_chunk_${i}`;
-    const chunk: DocumentChunk = {
-      id: chunkId,
-      docId,
-      docTitle: title,
-      text: chunks[i],
-      embedding: embeddings[i],
-      createdAt: now,
-    };
-    _vectorStore.push(chunk);
-    stmt.run(chunkId, docId, title, chunks[i], JSON.stringify(embeddings[i]), now);
-  }
+  const replacements: DocumentChunk[] = chunks.map((text, i) => ({id:`${docId}_chunk_${i}`,docId,docTitle:title,text,embedding:generated.vectors[i],space:generated.space,createdAt:now}));
+  const db = getDb();
+  const insert = db.prepare('INSERT OR REPLACE INTO writing_rag_chunks (id,doc_id,doc_title,text,embedding,space,created_at) VALUES (?,?,?,?,?,?,?)');
+  db.transaction(() => {
+    db.prepare('DELETE FROM writing_rag_chunks WHERE doc_id = ?').run(docId);
+    for (const row of replacements) insert.run(row.id,row.docId,row.docTitle,row.text,JSON.stringify(row.embedding),row.space,row.createdAt);
+  })();
+  for (let i = _vectorStore.length - 1; i >= 0; i--) if (_vectorStore[i].docId === docId) _vectorStore.splice(i,1);
+  _vectorStore.push(...replacements);
 
   return { chunks: chunks.length };
 }
@@ -150,10 +113,11 @@ export async function retrieveRelevant(
   const topK = options?.topK || _config.topK;
   const minScore = options?.minScore || _config.minScore;
 
-  const queryEmbedding = await generateEmbedding(query);
+  const generated = await generateEmbeddings([query.slice(0, 2000)], 'query');
+  const queryEmbedding = generated.vectors[0];
 
   const scored = _vectorStore
-    .filter(c => !options?.excludeDocId || c.docId !== options.excludeDocId)
+    .filter(c => c.space === generated.space && (!options?.excludeDocId || c.docId !== options.excludeDocId))
     .map(chunk => ({
       docTitle: chunk.docTitle,
       text: chunk.text,
@@ -166,25 +130,13 @@ export async function retrieveRelevant(
   return scored;
 }
 
-function removeDocumentChunks(docId: string) {
-  const indices: number[] = [];
-  for (let i = _vectorStore.length - 1; i >= 0; i--) {
-    if (_vectorStore[i].docId === docId) indices.push(i);
-  }
-  for (const idx of indices) _vectorStore.splice(idx, 1);
-
-  try {
-    const db = getDb();
-    db.prepare('DELETE FROM writing_rag_chunks WHERE doc_id = ?').run(docId);
-  } catch { /* table may not exist yet */ }
-}
-
 export function getRAGConfig(): RAGConfig {
   return { ..._config };
 }
 
 export function updateRAGConfig(partial: Partial<RAGConfig>): RAGConfig {
-  _config = { ..._config, ...partial };
+  const { model: _model, dimensions: _dimensions, ...preferences } = partial;
+  _config = { ..._config, ...preferences };
   return { ..._config };
 }
 
@@ -193,11 +145,12 @@ export function getRAGStats(): { totalChunks: number; totalDocs: number; storeSi
   return {
     totalChunks: _vectorStore.length,
     totalDocs: docIds.size,
-    storeSize: _vectorStore.length * _config.dimensions * 4,
+    storeSize: _vectorStore.reduce((size, chunk) => size + chunk.embedding.length * 4, 0),
   };
 }
 
 export function clearRAGStore() {
+  _generation++;
   _vectorStore.length = 0;
   try {
     const db = getDb();
@@ -219,6 +172,8 @@ export function initRAGTables() {
     CREATE INDEX IF NOT EXISTS idx_rag_chunks_doc ON writing_rag_chunks(doc_id);
   `);
 
+  const columns = db.prepare('PRAGMA table_info(writing_rag_chunks)').all() as Array<{name:string}>;
+  if (!columns.some(column => column.name === 'space')) db.exec("ALTER TABLE writing_rag_chunks ADD COLUMN space TEXT NOT NULL DEFAULT ''");
   loadVectorStoreFromDb();
 }
 
@@ -234,6 +189,7 @@ function loadVectorStoreFromDb() {
         docTitle: row.doc_title,
         text: row.text,
         embedding: JSON.parse(row.embedding),
+        space: row.space || '',
         createdAt: row.created_at,
       });
     }

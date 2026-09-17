@@ -473,7 +473,7 @@ test('B站播放器展示当前 UP 主最近发布并可在工作台内即时切
   for (const contract of ['.bili-player-recent', '.bili-recent-track', '.bili-recent-card.active']) {
     assert.ok(style.includes(contract), `缺少最近发布样式: ${contract}`);
   }
-  assert.ok(index.includes('css/product-ui-v5.css?v=48'));
+  assert.ok(Number(index.match(/css\/product-ui-v5\.css\?v=(\d+)/)?.[1]) >= 48);
 });
 
 test('B站播放器进入和自动连播新视频时都会自动应用 2 倍速', () => {

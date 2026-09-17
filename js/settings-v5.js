@@ -27,6 +27,11 @@
       desc: '配置壁纸来源、API Key 与可选网络能力。',
       icon: 'fa-plug', targets: ['background'],
     },
+    'ai-control': {
+      title: 'AI 控制台', eyebrow: 'LOCAL AI',
+      desc: '统一管理模型连接、调用策略、预算与运行记录。',
+      icon: 'fa-brain', targets: ['ai-control'],
+    },
     shortcuts: {
       title: '快捷键', eyebrow: 'KEYBOARD',
       desc: '集中查看当前代码实际支持的键盘操作与使用说明。',
@@ -101,7 +106,7 @@
     sidebar.setAttribute('aria-label', '设置导航');
     sidebar.querySelectorAll('.sp-nav-section').forEach(section => section.remove());
     sidebar.insertAdjacentHTML('beforeend', `
-      <div class="sp-v5-nav-meta"><span>设置中心</span><small>7 个配置域</small></div>
+      <div class="sp-v5-nav-meta"><span>设置中心</span><small>${Object.keys(pages).length} 个配置域</small></div>
       <div class="sp-nav-section sp-v5-nav">${Object.entries(pages).map(([id, page]) => `
         <a class="sp-nav-item" data-page="${id}" href="#${id}" aria-label="${escapeHtml(page.title)}" title="${escapeHtml(page.title)}">
           <i class="fas ${page.icon}"></i><span>${page.title}</span><i class="fas fa-chevron-right"></i>
@@ -171,6 +176,7 @@
           <div class="settings-v5-card-title"><div><span>CHROME COMMANDS</span><h3>Chrome 快捷键</h3></div><i class="fas fa-keyboard"></i></div>
           <p>快捷键由 Chrome 统一管理。音乐播放控制不会打开或切换页面；这里显示当前实际绑定，也可进入 Chrome 的快捷键设置修改。</p>
           <div class="settings-v5-command-list" id="settings-v5-command-list" aria-live="polite">
+            <div><span>唤出或收起快捷助手 · @ 应用 / 动作</span><kbd id="settings-v5-command-assistant">读取中…</kbd></div>
             <div><span>网易云播放 / 暂停（未播放时启动私人 FM）</span><kbd id="settings-v5-command-music-toggle">读取中…</kbd></div>
             <div><span>网易云下一首（未播放时启动私人 FM）</span><kbd id="settings-v5-command-music-next">读取中…</kbd></div>
             <div><span>网易云上一首</span><kbd id="settings-v5-command-music-prev">读取中…</kbd></div>
@@ -196,6 +202,7 @@
 
   async function loadCommandShortcuts() {
     const bindings = {
+      'toggle-quick-assistant': '未设置',
       'music-toggle-playback': '未设置',
       'music-next-track': '未设置',
       'music-previous-track': '未设置',
@@ -211,6 +218,8 @@
       }
     } catch { /* local preview */ }
     const open = document.querySelector('#settings-v5-command-open');
+    const assistant = document.querySelector('#settings-v5-command-assistant');
+    if (assistant) assistant.textContent = bindings['toggle-quick-assistant'];
     const add = document.querySelector('#settings-v5-command-add');
     const musicToggle = document.querySelector('#settings-v5-command-music-toggle');
     const musicNext = document.querySelector('#settings-v5-command-music-next');

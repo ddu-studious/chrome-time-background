@@ -13,7 +13,11 @@
 .smart-alarm-examples button { border: 0; background: #1c293d; border-radius: 20px; padding: 7px 12px; color: #cbd5e1; cursor: pointer; }
 .smart-alarm-result { margin-top: 14px; padding: 12px 16px; background: rgba(52, 211, 153, .09); color: #a7f3d0; border-radius: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .smart-alarm-result.error { color: #fed7aa; background: rgba(251,146,60,.1); }
-.smart-alarm-result-actions { margin-top: 6px; }
+.smart-alarm-toolbar, .smart-alarm-result-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+.smart-alarm-toolbar { margin-top:10px; }
+.smart-alarm-toolbar [data-smart-reset] { background:rgba(251,146,60,.1); color:#fed7aa; border-color:rgba(251,146,60,.2); }
+.smart-alarm-toolbar [data-smart-undo] { margin-left:8px; border-color:transparent; background:transparent; color:#94a3b8; }
+.smart-alarm-toolbar [data-smart-undo]:hover { color:#fed7aa; background:rgba(251,146,60,.06); }
 .smart-alarm-choices { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .smart-alarm-choices:empty { display: none; }
 .smart-alarm-choices button { white-space: normal; overflow-wrap: anywhere; }
@@ -32,3 +36,8 @@
   .smart-alarm-form .smart-alarm-input-row { align-items: stretch; flex-direction: column; }
   .smart-alarm input { min-width: 0; }
 }
+.smart-alarm .assistant-session-bar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; color:#cbd5e1; font-size:13px; }
+.smart-alarm [data-session-summary] { color:#fdba74; font-size:13px; line-height:1.6; overflow-wrap:anywhere; }
+.smart-alarm .assistant-transcript { margin-bottom:14px; color:#94a3b8; font-size:13px; }
+.smart-alarm [data-session-history] { max-height:200px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; }
+.smart-alarm [data-smart-confirm] { margin-top:0; background:#fb923c; color:#111827; padding:10px 18px; border-radius:10px; font-weight:650; }

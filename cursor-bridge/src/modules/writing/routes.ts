@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { isQwenConfigured } from './qwen-client.js';
+import { isQwenConfigured, withWritingSignal } from './qwen-client.js';
 import {
   streamComplete,
   streamRewrite,
@@ -88,6 +88,10 @@ async function handleStreamRoute(
   model: string,
   reqLogger?: any,
 ) {
+  const controller = new AbortController();
+  const onClose = () => controller.abort();
+  raw.once('close', onClose);
+  try { await withWritingSignal(controller.signal, async () => {
   const t0 = Date.now();
   const rlog = reqLogger || log;
   rlog.info(`📝 开始流式 ${action}`, { model });
@@ -106,6 +110,7 @@ async function handleStreamRoute(
   let tokenCount = 0;
 
   for await (const chunk of generator) {
+    if (controller.signal.aborted || raw.destroyed) return;
     if (chunk.type === 'token') {
       fullContent += chunk.content;
       tokenCount++;
@@ -134,6 +139,8 @@ async function handleStreamRoute(
 
   sendSSE(raw, 'done', { content: fullContent, usage });
   raw.end();
+  }); } finally { raw.off('close', onClose); }
+
 }
 
 export async function writingRoutes(fastify: FastifyInstance) {
@@ -146,7 +153,7 @@ export async function writingRoutes(fastify: FastifyInstance) {
       log.error('Qwen 未配置');
       return reply.code(503).send({
         error: 'Writing assistant not configured',
-        message: 'Set DASHSCOPE_API_KEY in cursor-bridge/.env',
+        message: '请启动本地 AI 控制面，并配置 LOCAL_AI_TOKEN_FILE 或使用默认连接令牌文件',
       });
     }
 
@@ -174,7 +181,7 @@ export async function writingRoutes(fastify: FastifyInstance) {
     if (!isQwenConfigured()) {
       return reply.code(503).send({
         error: 'Writing assistant not configured',
-        message: 'Set DASHSCOPE_API_KEY in cursor-bridge/.env',
+        message: '请启动本地 AI 控制面，并配置 LOCAL_AI_TOKEN_FILE 或使用默认连接令牌文件',
       });
     }
 
@@ -200,7 +207,7 @@ export async function writingRoutes(fastify: FastifyInstance) {
     if (!isQwenConfigured()) {
       return reply.code(503).send({
         error: 'Writing assistant not configured',
-        message: 'Set DASHSCOPE_API_KEY in cursor-bridge/.env',
+        message: '请启动本地 AI 控制面，并配置 LOCAL_AI_TOKEN_FILE 或使用默认连接令牌文件',
       });
     }
 
@@ -226,7 +233,7 @@ export async function writingRoutes(fastify: FastifyInstance) {
     if (!isQwenConfigured()) {
       return reply.code(503).send({
         error: 'Writing assistant not configured',
-        message: 'Set DASHSCOPE_API_KEY in cursor-bridge/.env',
+        message: '请启动本地 AI 控制面，并配置 LOCAL_AI_TOKEN_FILE 或使用默认连接令牌文件',
       });
     }
 
@@ -252,7 +259,7 @@ export async function writingRoutes(fastify: FastifyInstance) {
     if (!isQwenConfigured()) {
       return reply.code(503).send({
         error: 'Writing assistant not configured',
-        message: 'Set DASHSCOPE_API_KEY in cursor-bridge/.env',
+        message: '请启动本地 AI 控制面，并配置 LOCAL_AI_TOKEN_FILE 或使用默认连接令牌文件',
       });
     }
 

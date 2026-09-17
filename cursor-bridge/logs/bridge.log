@@ -9701,3 +9701,4 @@
 {"level":30,"time":1782028621622,"pid":20893,"hostname":"MacBook-Pro-23.local","reqId":"req-k0r","method":"POST","url":"/writing/hermes/repair-titles","statusCode":200,"responseTime":13,"msg":"request completed"}
 {"level":30,"time":1782028621623,"pid":20893,"hostname":"MacBook-Pro-23.local","reqId":"req-k0s","method":"GET","url":"/writing/hermes/title-map","msg":"incoming request"}
 {"level":30,"time":1782028621623,"pid":20893,"hostname":"MacBook-Pro-23.local","reqId":"req-k0s","method":"GET","url":"/writing/hermes/title-map","statusCode":200,"responseTime":0,"msg":"request completed"}
+{"level":30,"time":1789229132928,"pid":2037,"hostname":"MacBook-Pro-23.local","msg":"Server listening at http://127.0.0.1:19849"}

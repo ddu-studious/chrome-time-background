@@ -1,0 +1,48 @@
+- main [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - paragraph [ref=e5]: 快捷助手 / 个人设置
+      - heading "我的记忆" [level=1] [ref=e6]
+      - paragraph [ref=e7]: 把你明确的习惯记下来，让下一次少解释一点。
+    - link "返回助手 ↗" [ref=e8] [cursor=pointer]:
+      - /url: assistant.html
+  - status [ref=e9]: 已连接本机记忆。修改会影响下一次请求。
+  - region [ref=e10]:
+    - heading "音乐偏好" [level=2] [ref=e11]
+    - paragraph [ref=e12]: 本次说“先别播放”或“只搜索”始终优先。未保存偏好时，热门歌曲默认播放，并保留原队列。
+    - generic [ref=e13]:
+      - generic [ref=e14]:
+        - generic [ref=e15]:
+          - generic [ref=e16]: 省略动词的歌手热门歌曲
+          - combobox "省略动词的歌手热门歌曲" [ref=e17]:
+            - option "找到明确歌手后播放" [selected]
+            - option "先展示，由我选择播放"
+        - generic [ref=e18]: 当前为默认规则，尚未保存个人偏好。
+      - generic [ref=e19]:
+        - generic [ref=e20]:
+          - generic [ref=e21]: 自然语言播放歌手热门歌曲
+          - combobox "自然语言播放歌手热门歌曲" [ref=e22]:
+            - option "保留原队列，加入热门歌曲并播放" [selected]
+            - option "替换为热门歌曲并播放"
+        - generic [ref=e23]: 当前为默认规则，尚未保存个人偏好。
+  - region [ref=e24]:
+    - heading "我选过的歌手 （0）" [level=2] [ref=e25]
+    - paragraph [ref=e26]: 同名结果需要你选择时，记住你选的是哪一位。下次仍会核对最新搜索结果。
+    - paragraph [ref=e28]: 还没有歌手记忆。你主动选择歌手后，会出现在这里。
+  - region [ref=e29]:
+    - heading "由你掌握" [level=2] [ref=e30]
+    - generic [ref=e31]:
+      - checkbox "使用已保存的个人记忆" [checked] [ref=e32]
+      - text: 使用已保存的个人记忆
+    - generic [ref=e33]:
+      - checkbox "记住我主动选择的歌手" [checked] [ref=e34]
+      - text: 记住我主动选择的歌手
+    - paragraph [ref=e35]: 记忆保存在本机，与对话正文留存分开。删除对话时，会一并删除由该对话保存的记忆；在此页面保存的偏好不受影响。暂停使用后按默认规则处理。
+    - generic [ref=e36]:
+      - button "刷新" [ref=e37] [cursor=pointer]
+      - button "导出记忆" [ref=e38] [cursor=pointer]
+      - button "清空已保存记忆" [ref=e39] [cursor=pointer]
+  - generic [ref=e40]:
+    - text: 也可以对助手说：“记住：以后歌手热门歌曲先展示，不自动播放”。
+    - link "本机 AI 连接设置 ↗" [ref=e41] [cursor=pointer]:
+      - /url: settings.html#ai-control

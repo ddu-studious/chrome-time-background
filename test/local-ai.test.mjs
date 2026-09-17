@@ -85,6 +85,21 @@ test('推理默认 off，按请求选择，不支持的等级拒绝发送，思�
   await assert.rejects(provider.generateObject({ instructions: '', input: {}, reasoning: 'xhigh' }), /不支持/);
   assert.equal(sent.length, 3); assert.equal(provider.busy, false);
 });
+test('供应商兼容文本工具调用外壳，格式错误使用跨场景文案且不提闹钟', async () => {
+  const provider = new LMStudioProvider();
+  provider.models = async () => [{ id: provider.model, reasoningOptions: ['off'] }];
+  provider.request = async () => ({ output: [{ type: 'message', content: '<tool_call>\n{"tools.load":{"group":"music.queue"}}' }] });
+  assert.deepEqual(await provider.generateObject({ instructions: 'test', input: {} }), { 'tools.load': { group: 'music.queue' } });
+  provider.request = async () => ({ output: [{ type: 'message', content: '不是 JSON' }] });
+  await assert.rejects(provider.generateObject({ instructions: 'test', input: {} }), error => {
+    assert.equal(error.code, 'MODEL_OUTPUT_FORMAT_INVALID');
+    assert.match(error.message, /本次操作未执行/); assert.doesNotMatch(error.message, /闹钟|提醒/); return true;
+  });
+  provider.request = async () => ({ output: [{ type: 'tool_call', name: 'tools.load', arguments: '{}' }] });
+  await assert.rejects(provider.generateObject({ instructions: 'test', input: {} }), error => {
+    assert.equal(error.code, 'MODEL_OUTPUT_FORMAT_INVALID'); assert.doesNotMatch(error.message, /闹钟|提醒/); return true;
+  });
+});
 test('等级经过闹钟接口传入供应商并在响应中回显；非法等级拒绝', async () => {
   let received;
   const provider = { model: 'fixture', reasoning: 'low', async generateObject({ reasoning }) { received = reasoning; return { status: 'needs_clarification', question: '几点？' }; } };

@@ -5,6 +5,7 @@
   "version": "3.16.0",
   "description": "中国风景新标签页时钟，支持天气、备忘录、独立音乐播放器、哔哩哔哩集成(关注分组/UP主主页/已购课程/倍速画质控制/Cookie共享)、温情提示、扩展活动监控、热搜资讯、书签智能检索，含性能省电模式",
   "permissions": [
+    "activeTab",
     "storage",
     "sidePanel",
     "tabGroups",
@@ -81,6 +82,9 @@
     "default_path": "site-workspace.html"
   },
   "commands": {
+    "toggle-quick-assistant": {
+      "description": "唤出或收起快捷助手：@ 应用 / 动作"
+    },
     "open-site-workspace": {
       "suggested_key": {
         "default": "Ctrl+Shift+U",
@@ -126,6 +130,7 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
+  "web_accessible_resources": [{ "resources": ["assistant.html"], "matches": ["http://*/*", "https://*/*"] }],
   "content_scripts": [
     {
       "matches": ["*://player.bilibili.com/*", "*://www.bilibili.com/video/*", "*://www.bilibili.com/bangumi/*"],

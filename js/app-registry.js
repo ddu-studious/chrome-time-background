@@ -2,6 +2,7 @@
   'use strict';
 
   const apps = [
+    { id: 'quick-assistant', name: '快捷助手', summary: '@ 应用、/ 动作，一句话执行需求', icon: 'fas fa-terminal', category: 'ai', dockBtnId: 'assistant-dock-btn', defaultOrder: 1.5, defaultInDock: true },
     { id: 'zen-mode', name: '极简模式', summary: '隐藏干扰，只保留时间与背景', icon: 'fas fa-eye-slash', category: 'system', dockBtnId: 'zen-mode-btn', isSystem: true, defaultOrder: 0 },
     { id: 'sys-monitor', name: '扩展监控', summary: '查看扩展运行状态与异常', icon: 'fas fa-heartbeat', category: 'system', dockBtnId: 'sys-monitor-toggle', isSystem: true, defaultOrder: 1 },
     { id: 'knowledge', name: '常用信息', summary: '收藏、检索和复习常用知识', icon: 'fas fa-brain', category: 'tools', dockBtnId: 'kw-dock-btn', defaultOrder: 2, defaultInDock: true },
@@ -20,8 +21,6 @@
     { id: 'music', name: '网易云音乐', summary: '播放队列、歌单、歌词与私人 FM', icon: 'fas fa-music', category: 'media', dockBtnId: 'music-dock-btn', defaultOrder: 8.6, defaultInDock: true },
     { id: 'reading', name: '今日阅读', summary: '阅读收藏内容并记录进度', icon: 'fas fa-book-reader', category: 'media', dockBtnId: 'reading-dock-btn', defaultOrder: 8.7 },
     { id: 'poetry', name: '诗词电台', summary: '每日诗词与沉浸朗读', icon: 'fas fa-feather-alt', category: 'media', dockBtnId: 'poetry-dock-btn', defaultOrder: 8.8 },
-    { id: 'agent', name: 'Agent 矩阵', summary: '连接并管理桌面智能体', icon: 'fas fa-robot', category: 'ai', dockBtnId: 'agent-dock-btn', defaultOrder: 9, hasIndicator: true, defaultInDock: true },
-    { id: 'chatbot', name: 'AI 对话', summary: '多模型对话与上下文协作', icon: 'fas fa-terminal', category: 'ai', dockBtnId: 'chatbot-dock-btn', defaultOrder: 9.2 },
     { id: 'prompt-manager', name: 'Prompt 管理', summary: '管理模板、变量与常用提示词', icon: 'fas fa-magic', category: 'ai', dockBtnId: 'prompt-mgr-dock-btn', defaultOrder: 9.5 },
     { id: 'settings', name: '设置', summary: '外观、首页、数据和集成设置', icon: 'fas fa-cog', category: 'system', dockBtnId: 'settings-dock-btn', isSystem: true, defaultOrder: 10 },
     { id: 'memo', name: '任务面板', summary: '任务、看板、日历与统计', icon: 'fas fa-tasks', category: 'productivity', dockBtnId: 'memo-toggle-btn', defaultOrder: 11, defaultInDock: true },

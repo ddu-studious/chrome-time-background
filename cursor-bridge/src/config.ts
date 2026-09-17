@@ -26,7 +26,6 @@ loadEnvFile();
 export const config = {
   port: parseInt(process.env.BRIDGE_PORT || '19840', 10),
   host: process.env.BRIDGE_HOST || '127.0.0.1',
-  apiKey: process.env.CURSOR_API_KEY || '',
   maxAgents: parseInt(process.env.BRIDGE_MAX_AGENTS || '10', 10),
   defaultModel: process.env.BRIDGE_DEFAULT_MODEL || 'composer-2',
   logLevel: (process.env.BRIDGE_LOG_LEVEL || 'info') as 'debug' | 'info' | 'warn' | 'error',
@@ -36,10 +35,5 @@ export const config = {
 };
 
 export function validateConfig() {
-  if (!config.apiKey) {
-    console.error('[cursor-bridge] CURSOR_API_KEY is required.');
-    console.error('  Set via environment variable or create a .env file:');
-    console.error('  CURSOR_API_KEY=your_api_key_here');
-    process.exit(1);
-  }
+  if (!Number.isInteger(config.port) || config.port < 1 || config.port > 65535) throw new Error('Bridge 端口无效');
 }

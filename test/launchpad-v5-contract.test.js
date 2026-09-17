@@ -55,7 +55,7 @@ test('Dock 使用烟熏透明外壳并支持固定、离开收起与靠近安全
 
 test('启动台可以打开未固定且没有 Dock 按钮的应用', () => {
   assert.match(source, /_activateApp\(appId\)/);
-  assert.match(source, /appId === 'chatbot'[\s\S]*?window\.Chatbot\.open\(\)/);
+  assert.doesNotMatch(source, /window\.Chatbot/);
   assert.match(source, /appId === 'quick-nav'[\s\S]*?window\.quickNavManager\.open\(\)/);
   assert.match(source, /this\._activateApp\(appId\);[\s\S]*?this\.hideLaunchpad\(false, false\)/);
   assert.match(source, /aria-label', '应用启动台'/);

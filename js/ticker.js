@@ -2082,6 +2082,7 @@ class TechTicker {
 
         this._renderExpandFilterBar(panel);
         this._renderExpandCurrentView(panel);
+        window.TrendingCluster?.mount(panel, () => this._getExpandFiltered());
 
         panel.querySelector('#tep-close').addEventListener('click', () => {
             panel.classList.remove('open');

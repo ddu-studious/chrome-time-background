@@ -167,10 +167,17 @@ player.addEventListener('error', () => {
     }).catch(() => {});
 });
 
+// 同一毫秒内也保持严格递增，广播和主动快照共用一个顺序。
+let stateVersion = Date.now();
+function snapshotState() {
+    stateVersion = Math.max(Date.now(), stateVersion + 1);
+    return { ...currentState, stateVersion };
+}
+
 function broadcastState() {
     chrome.runtime.sendMessage({
         action: 'offscreen_state_update',
-        data: { ...currentState }
+        data: snapshotState()
     }).catch(() => {});
 }
 
@@ -220,6 +227,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
                 currentState.cover = cover || '';
                 currentState.songId = songId || null;
                 player.src = url;
+                if (Number(msg.startTime) > 0) player.currentTime = Number(msg.startTime);
                 player.volume = effectiveMusicVolume();
                 player.play().then(() => {
                     if (generation !== playGeneration) return;
@@ -240,9 +248,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             return true;
         }
         case 'resume':
-            player.play().catch(() => {});
-            sendResponse({ ok: true });
-            break;
+            if (!player.src || player.src === location.href) { sendResponse({ ok: false, error: 'no-src' }); return false; }
+            player.play().then(() => sendResponse({ ok: true })).catch(() => sendResponse({ ok: false, error: 'play-failed' }));
+            return true;
         case 'pause':
             player.pause();
             sendResponse({ ok: true });
@@ -288,7 +296,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             currentState.currentTime = player.currentTime;
             currentState.duration = player.duration || 0;
             currentState.isPlaying = !player.paused && !player.ended;
-            sendResponse({ ok: true, data: { ...currentState } });
+            sendResponse({ ok: true, data: snapshotState() });
             return true;
         case 'updateMeta': {
             const { title, artist, cover, album, songId } = msg;
@@ -310,7 +318,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
                 isPlaying: false, title: '', artist: '', album: '', cover: '',
                 currentTime: 0, duration: 0, volume: currentState.volume, songId: null,
             };
-            broadcastState();
+            chrome.runtime.sendMessage({ action: 'offscreen_state_update', data: { ...snapshotState(), stopped: true } }).catch(() => {});
             sendResponse({ ok: true });
             break;
         default:

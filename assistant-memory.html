@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>我的记忆 · 快捷助手</title><link rel="stylesheet" href="css/assistant-memory.css"></head>
+<body><main>
+  <header><div><p class="eyebrow">快捷助手 / 个人设置</p><h1>我的记忆</h1><p>把你明确的习惯记下来，让下一次少解释一点。</p></div><a href="assistant.html">返回助手 ↗</a></header>
+  <p id="notice" role="status" aria-live="polite">正在连接本机记忆…</p>
+  <section aria-labelledby="preferences-title"><h2 id="preferences-title">音乐偏好</h2><p>本次说“先别播放”或“只搜索”始终优先。未保存偏好时，热门歌曲默认播放，并保留原队列。</p><div id="preferences"></div></section>
+  <section aria-labelledby="artists-title"><h2 id="artists-title">我选过的歌手 <span id="artist-count"></span></h2><p>同名结果需要你选择时，记住你选的是哪一位。下次仍会核对最新搜索结果。</p><div id="artists"></div></section>
+  <section aria-labelledby="controls-title"><h2 id="controls-title">由你掌握</h2>
+    <label class="toggle"><input type="checkbox" id="enabled" disabled>使用已保存的个人记忆</label>
+    <label class="toggle"><input type="checkbox" id="remember-artists" disabled>记住我主动选择的歌手</label>
+    <p>记忆保存在本机，与对话正文留存分开。删除对话时，会一并删除由该对话保存的记忆；在此页面保存的偏好不受影响。暂停使用后按默认规则处理。</p>
+    <div class="actions"><button id="refresh" type="button">刷新</button><button id="export" type="button" disabled>导出记忆</button><button id="clear" type="button" class="danger" disabled>清空已保存记忆</button></div>
+  </section>
+  <footer>也可以对助手说：“记住：以后歌手热门歌曲先展示，不自动播放”。<a href="settings.html#ai-control">本机 AI 连接设置 ↗</a></footer>
+</main><script src="js/assistant-memory.js"></script><script src="js/assistant-memory-page.js"></script></body></html>

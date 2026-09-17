@@ -235,4 +235,5 @@
     nextDispatch,
     formatNext,
   });
+  if (typeof module === 'object' && module.exports) module.exports = root.AlarmCore;
 })(typeof self !== 'undefined' ? self : globalThis);

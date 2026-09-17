@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import intent from '../js/alarm-intent.js';
+import musicIntent from '../js/music-intent.js';
 const coreContext = { self: {}, Date, Math, Set, Object, Number, String, Array };
 vm.runInNewContext(readFileSync(new URL('../js/alarm-core.js', import.meta.url), 'utf8'), coreContext);
 
@@ -10,7 +11,7 @@ function bridge(fetchImpl = async () => { throw new TypeError('offline'); }) {
   let listener;
   const values = {};
   const chrome = { runtime: { id: 'a'.repeat(32), getURL: () => `chrome-extension://${'a'.repeat(32)}/`, onMessage: { addListener(fn) { listener = fn; } } }, storage: { local: { async get() { return values; }, async set(value) { Object.assign(values, value); } } } };
-  vm.runInNewContext(readFileSync(new URL('../js/local-ai-client.js', import.meta.url), 'utf8'), { chrome, AlarmIntent: intent, fetch: fetchImpl, AbortSignal, Set, Number, String });
+  vm.runInNewContext(readFileSync(new URL('../js/local-ai-client.js', import.meta.url), 'utf8'), { chrome, AlarmIntent: intent, MusicIntent: musicIntent, fetch: fetchImpl, AbortSignal, Set, Number, String });
   return { values, call: (message, url = chrome.runtime.getURL() + 'index.html') => new Promise(resolve => listener(message, { id: chrome.runtime.id, url }, resolve)) };
 }
 test('扩展入口拒绝网页 content script，离线规则不需要凭证和网络', async () => {
@@ -56,7 +57,7 @@ test('改名在已有澄清上下文中仍走本地路径，不要求模型令�
 test('改名只更新唯一目标名称，保留已过期关闭状态，无匹配不新建，多匹配须选择', async () => {
   const source = readFileSync(new URL('../js/background.js', import.meta.url), 'utf8');
   const start = source.indexOf('    let userAlarmSaveQueue =');
-  const end = source.indexOf('    async function deleteUserAlarm', start);
+  const end = source.indexOf('    function deleteUserAlarm', start);
   let records = [{ id: 'a', label: '截止', date: '2026-09-12', time: '16:26', fireAt: 1, enabled: false, repeat: 'once', revision: 1, soundId: 'water', volume: .4 }];
   let writes = 0;
   const runtime = { pendingSnoozes: [{ alarmId: 'a' }] };
@@ -79,7 +80,7 @@ test('改名只更新唯一目标名称，保留已过期关闭状态，无匹�
 test('闹钟保存串行避免并发覆盖，重复智能创建返回原记录，过期提醒拒绝', async () => {
   const source = readFileSync(new URL('../js/background.js', import.meta.url), 'utf8');
   const start = source.indexOf('    let userAlarmSaveQueue =');
-  const end = source.indexOf('    async function deleteUserAlarm', start);
+  const end = source.indexOf('    function deleteUserAlarm', start);
   let stored = [];
   const context = {
     AlarmCore: coreContext.self.AlarmCore,
@@ -94,4 +95,41 @@ test('闹钟保存串行避免并发覆盖，重复智能创建返回原记录�
   const duplicate = await context.saveUserAlarm({ ...alarm, id: 'c' });
   assert.equal(duplicate.duplicate, true); assert.equal(duplicate.alarm.id, 'a');
   await assert.rejects(context.saveUserAlarm({ ...alarm, id: 'd', fireAt: Date.now() - 1000 }), /未来时间/);
+});
+
+test('音乐规则离线执行，复杂请求固定场景且禁止网页调用', async () => {
+  let seen;
+  const b = bridge(async (url, options) => { seen = { url, body: JSON.parse(options.body) }; return { ok: true, json: async () => ({ ok: true, status: 'pending', jobId: 'b'.repeat(32) }) }; });
+  const local = await b.call({ action: 'music_ai_interpret', text: '暂停' });
+  assert.equal(local.intent.action, 'pause'); assert.equal(seen, undefined);
+  assert.equal((await b.call({ action: 'music_ai_interpret', text: '暂停' }, 'https://example.com')).ok, false);
+  await b.call({ action: 'local_ai_configure', token: 'a'.repeat(64) });
+  await b.call({ action: 'music_ai_interpret', text: '帮我找适合学习的音乐', model: 'evil', url: 'http://evil', selection:{model:'qwen/selected',reasoning:'medium'} });
+  assert.equal(seen.url, 'http://127.0.0.1:19841/v1/ai/interpret');
+  assert.deepEqual({ scene: seen.body.scene, input: seen.body.input }, { scene: 'music.intent', input: { text: '帮我找适合学习的音乐' } });
+  assert.deepEqual(seen.body.selection,{model:'qwen/selected',reasoning:'medium'});
+  assert.equal(seen.body.trace.conversationId, seen.body.trace.turnId);
+  assert.equal(typeof seen.body.trace.startedAt, 'number');
+});
+test('模型覆盖只接受白名单字段和本地模型标识',async()=>{
+ const b=bridge();await b.call({action:'local_ai_configure',token:'a'.repeat(64)});
+ assert.equal((await b.call({action:'ai_scene_submit',scene:'assistant.plan',input:{text:'test'},selection:{model:'https://evil.test'}})).ok,false);
+ assert.equal((await b.call({action:'ai_scene_submit',scene:'assistant.plan',input:{text:'test'},selection:{reasoning:'low',token:'secret'}})).ok,false);
+});
+
+test('新版闹钟通过扩展桥接连续补齐，不需要模型连接',async()=>{
+ const b=bridge();let draft=null;const sessionId='same-session';const turns=[];
+ for(const text of ['设置一个11点的闹钟，提醒我带外卖','上午','明天']){
+  const r=await b.call({action:'smart_alarm_interpret',text,now:Date.now(),currentNow:Date.now(),timeZone:'Asia/Shanghai',conversation:true,draft,turns,sessionId});
+  assert.equal(r.ok,true);assert.equal(r.source,'rules');draft=r.draft;
+  if(text==='明天'){assert.equal(r.alarm.label,'带外卖');assert.equal(r.alarm.time,'11:00');}
+  else turns.push({role:'user',content:text},{role:'assistant',content:r.question});
+ }
+});
+test('音乐扩展桥接传递续答历史和已知需求，不把短句当成独立输入',async()=>{
+ let sent;const b=bridge(async(_url,options)=>{sent=JSON.parse(options.body);return {ok:true,json:async()=>({ok:true,status:'pending'})};});
+ await b.call({action:'local_ai_configure',token:'a'.repeat(64)});
+ const turns=[{role:'user',content:'播放晴天'},{role:'assistant',content:'哪位歌手？'}],draft={action:'search',kind:'song',query:'晴天',title:'晴天'};
+ await b.call({action:'music_ai_interpret',text:'周杰伦',turns,draft});
+ assert.deepEqual(sent.input,{text:'周杰伦',turns,draft});
 });

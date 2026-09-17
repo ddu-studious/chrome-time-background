@@ -5,9 +5,6 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config, validateConfig } from './config.js';
 import { healthRoutes } from './routes/health.js';
-import { agentRoutes } from './routes/agents.js';
-import { streamRoutes } from './routes/stream.js';
-import { uiRoutes } from './routes/ui.js';
 import { fsRoutes } from './routes/fs.js';
 import { projectRoutes } from './routes/projects.js';
 import { conversationRoutes } from './routes/conversations.js';
@@ -20,29 +17,19 @@ import { promptVersionRoutes } from './routes/prompt-versions.js';
 import { abTestRoutes } from './routes/ab-test.js';
 import { promptEditorUIRoutes } from './routes/prompt-editor-ui.js';
 import { sessionPanelUIRoutes } from './routes/session-panel-ui.js';
-import { agentPool } from './services/agent-pool.js';
 import { closeDb, getActivePromptVersion } from './services/database.js';
 import { registerAuthHook } from './services/auth-middleware.js';
 import { setPromptVersionResolver } from './services/enterprise-roles.js';
-import { getDashboardData, getLocalUsage, getAuthStatus, setSessionToken } from './services/dashboard.js';
 import { selfLoopVerify } from './services/self-loop-verify.js';
 import type { VerificationConfig, TestCase } from './services/self-loop-verify.js';
 import { webSearch, getInstantAnswer, enrichWithSearch, isSearchConfigured, getSearchProviders } from './services/web-search.js';
 
 // ─── Isolated Feature Modules ───
 import { writingRoutes, initWritingTables, initRAGTables, initHermesImportTables } from './modules/writing/index.js';
-import {
-  multiRoleRoutes,
-  a2aRoutes,
-  agentRegistryRoutes,
-  collaborationRoutes,
-  initMultiRoleTables,
-  initAgentRegistry,
-  initCollaborationTables,
-} from './modules/multi-role/index.js';
+
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PID_FILE = resolve(__dirname, '..', '.bridge.pid');
+const PID_FILE = process.env.BRIDGE_PID_FILE || resolve(__dirname, '..', '.bridge.pid');
 const VERSION = '1.0.0';
 
 validateConfig();
@@ -60,17 +47,7 @@ function cleanupPidFile() {
 }
 
 function buildLoggerOpts() {
-  const opts: Record<string, unknown> = {
-    level: config.logLevel,
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        translateTime: 'SYS:yyyy-mm-dd HH:MM:ss.l',
-        ignore: 'pid,hostname',
-        colorize: true,
-      },
-    },
-  };
+  const opts: Record<string, unknown> = { level: config.logLevel };
 
   if (config.logFile) {
     const logPath = resolve(__dirname, '..', config.logFile);
@@ -115,10 +92,7 @@ await fastify.register(cors, {
 
 registerAuthHook(fastify);
 
-await fastify.register(uiRoutes);
 await fastify.register(healthRoutes);
-await fastify.register(agentRoutes);
-await fastify.register(streamRoutes);
 await fastify.register(fsRoutes);
 await fastify.register(projectRoutes);
 await fastify.register(conversationRoutes);
@@ -131,24 +105,6 @@ await fastify.register(promptVersionRoutes);
 await fastify.register(abTestRoutes);
 await fastify.register(promptEditorUIRoutes);
 await fastify.register(sessionPanelUIRoutes);
-
-// ─── Dashboard Usage Routes ───
-fastify.get('/dashboard', async (req) => {
-  const { since } = req.query as { since?: string };
-  return getDashboardData(since ? Number(since) : undefined);
-});
-fastify.get('/dashboard/usage', async (req) => {
-  const { since } = req.query as { since?: string };
-  return getLocalUsage(since ? Number(since) : undefined);
-});
-fastify.get('/dashboard/auth-status', async () => {
-  return getAuthStatus();
-});
-fastify.put<{ Body: { sessionToken: string } }>('/dashboard/session-token', async (req) => {
-  const { sessionToken } = req.body || {};
-  if (sessionToken) setSessionToken(sessionToken);
-  return { success: true, authStatus: getAuthStatus() };
-});
 
 // ─── Web Search Tool (shared service for all AI modules) ───
 fastify.post<{ Body: { query: string; maxResults?: number; provider?: string; timeLimit?: string } }>(
@@ -195,18 +151,11 @@ fastify.post<{ Body: { config: VerificationConfig; testCases: TestCase[] } }>(
 );
 
 // ─── Module: Multi-Role Collaboration ───
-await fastify.register(multiRoleRoutes);
-await fastify.register(a2aRoutes);
-await fastify.register(agentRegistryRoutes);
-await fastify.register(collaborationRoutes);
 
 // ─── Module: Writing AI ───
 await fastify.register(writingRoutes);
 
 // ─── Init Tables ───
-initMultiRoleTables();
-initAgentRegistry();
-initCollaborationTables();
 initWritingTables();
 initRAGTables();
 initHermesImportTables();
@@ -216,7 +165,6 @@ setPromptVersionResolver(getActivePromptVersion);
 const shutdown = async () => {
   console.log('\n[cursor-bridge] Shutting down...');
   cleanupPidFile();
-  await agentPool.disposeAll();
   closeDb();
   await fastify.close();
   process.exit(0);
@@ -231,7 +179,6 @@ try {
   console.log(`\n  cursor-bridge v${VERSION}`);
   console.log(`  Listening on http://${config.host}:${config.port}`);
   console.log(`  PID: ${process.pid}`);
-  console.log(`  Agents: ${agentPool.size}/${config.maxAgents}\n`);
 } catch (err) {
   fastify.log.error(err);
   process.exit(1);

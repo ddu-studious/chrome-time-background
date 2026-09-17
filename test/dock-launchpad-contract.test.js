@@ -21,11 +21,11 @@ test('应用注册表覆盖全部入口并提供摘要', () => {
   vm.runInNewContext(source, context);
   const registry = context.window.ProductAppRegistry;
 
-  assert.equal(registry.apps.length, 23);
+  assert.equal(registry.apps.length, 22);
   assert.ok(registry.apps.every(app => app.id && app.name && app.summary && app.category && app.dockBtnId));
   assert.deepEqual(
     Array.from(registry.apps.filter(app => app.defaultInDock), app => app.id),
-    ['knowledge', 'schedule', 'alarm', 'worklog', 'quick-nav', 'site-workspace', 'music', 'agent', 'memo']
+    ['quick-assistant', 'knowledge', 'schedule', 'alarm', 'worklog', 'quick-nav', 'site-workspace', 'music', 'memo']
   );
 });
 

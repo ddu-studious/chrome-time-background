@@ -10,7 +10,7 @@ class BookmarkRAG {
     static DB_VERSION = 1;
     static STORE_VECTORS = 'vectors';
     static STORE_QUERY_CACHE = 'queryCache';
-    static BATCH_SIZE = 25;
+    static BATCH_SIZE = 5;
     static BATCH_DELAY_MS = 300;
 
     constructor() {
@@ -21,59 +21,7 @@ class BookmarkRAG {
         this._db = null;
         this._vectorMap = new Map();
 
-        this.AI_PROVIDERS = {
-            qwen: {
-                name: '通义千问（推荐）',
-                baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-                defaultModel: 'qwen-plus',
-                embeddingModel: 'text-embedding-v4',
-                dimension: 1024,
-                pricing: '约 ¥0.0005/千Token，100万免费额度',
-                desc: '国内最佳，中文优化，100+语种，免费额度大',
-                keyUrl: 'https://bailian.console.aliyun.com/?apiKey=1#/api-key'
-            },
-            deepseek: {
-                name: 'DeepSeek（仅 Chat）',
-                baseUrl: 'https://api.deepseek.com/v1',
-                defaultModel: 'deepseek-chat',
-                embeddingModel: '',
-                embeddingUnsupported: true,
-                dimension: 0,
-                pricing: '约 ¥0.001/千Token',
-                desc: '推理能力强，不支持 Embedding（仅用于 AI 精排）',
-                keyUrl: 'https://platform.deepseek.com/api_keys'
-            },
-            openai: {
-                name: 'OpenAI',
-                baseUrl: 'https://api.openai.com/v1',
-                defaultModel: 'gpt-4o-mini',
-                embeddingModel: 'text-embedding-3-small',
-                dimension: 1536,
-                pricing: '约 ¥0.015/千Token',
-                desc: '最稳定、全球可用',
-                keyUrl: 'https://platform.openai.com/api-keys'
-            },
-            gemini: {
-                name: 'Google Gemini',
-                baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-                defaultModel: 'gemini-2.0-flash',
-                embeddingModel: 'text-embedding-004',
-                dimension: 768,
-                pricing: '免费额度充足',
-                desc: '免费额度大、Google 生态',
-                keyUrl: 'https://aistudio.google.com/apikey'
-            },
-            custom: {
-                name: '自定义（OpenAI 兼容）',
-                baseUrl: '',
-                defaultModel: '',
-                embeddingModel: '',
-                dimension: 1024,
-                pricing: '-',
-                desc: '支持 Ollama 等本地模型',
-                keyUrl: ''
-            }
-        };
+
     }
 
     async init() {
@@ -96,11 +44,6 @@ class BookmarkRAG {
                     folderIds: [],
                     folderNames: [],
                     dailyReviewLimit: 5,
-                    aiProvider: 'qwen',
-                    aiApiKey: '',
-                    aiBaseUrl: '',
-                    aiModel: '',
-                    embeddingModel: '',
                     reviewTemplate: 'regular',
                     lastProcessTime: 0
                 });
@@ -118,8 +61,6 @@ class BookmarkRAG {
     isConfigured() {
         return this.settings &&
             this.settings.enabled &&
-            this.settings.aiProvider &&
-            this.settings.aiApiKey &&
             this.settings.folderIds.length > 0;
     }
 
@@ -434,46 +375,6 @@ class BookmarkRAG {
 
     // ========== AI 服务验证 ==========
 
-    async verifyApiKey(provider, apiKey, baseUrl = '') {
-        const config = this.AI_PROVIDERS[provider];
-        if (!config) return { ok: false, error: '未知的 AI 服务商' };
-
-        const url = baseUrl || config.baseUrl;
-        if (!url || !apiKey) return { ok: false, error: '请填写 API 地址和密钥' };
-
-        const headers = { 'Authorization': `Bearer ${apiKey}` };
-
-        try {
-            const modelsResp = await fetch(`${url}/models`, { headers });
-            if (modelsResp.ok) return { ok: true };
-            if (modelsResp.status === 401 || modelsResp.status === 403) {
-                return { ok: false, error: 'API Key 无效或无权限' };
-            }
-        } catch { /* /models 不可用，降级到 chat 探测 */ }
-
-        try {
-            const chatResp = await fetch(`${url}/chat/completions`, {
-                method: 'POST',
-                headers: { ...headers, 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model: config.defaultModel || 'gpt-4o-mini',
-                    messages: [{ role: 'user', content: 'hi' }],
-                    max_tokens: 1
-                })
-            });
-            if (chatResp.ok) return { ok: true };
-            if (chatResp.status === 401 || chatResp.status === 403) {
-                return { ok: false, error: 'API Key 无效或无权限' };
-            }
-            const errBody = await chatResp.text().catch(() => '');
-            if (chatResp.status === 400 && errBody.includes('model')) {
-                return { ok: true };
-            }
-            return { ok: false, error: `服务返回 ${chatResp.status}` };
-        } catch (e) {
-            return { ok: false, error: `连接失败: ${e.message}` };
-        }
-    }
 
     // ========== 书签变化监听 ==========
 
@@ -582,8 +483,11 @@ class BookmarkRAG {
             });
             this._vectorMap.clear();
             for (const item of all) {
-                this._vectorMap.set(item.id, new Float32Array(item.embedding));
+                if (typeof item.space !== 'string') continue;
+                const vector = new Float32Array(item.embedding); vector.space = item.space;
+                this._vectorMap.set(item.id, vector);
             }
+            this.bookmarks.forEach(bookmark => { bookmark.embeddingDone = this._vectorMap.has(bookmark.id); });
             console.log(`[BookmarkRAG] Loaded ${this._vectorMap.size} vectors from IndexedDB`);
         } catch (e) {
             console.warn('[BookmarkRAG] Failed to load vectors from IndexedDB:', e);
@@ -596,15 +500,17 @@ class BookmarkRAG {
             const tx = db.transaction(BookmarkRAG.STORE_VECTORS, 'readwrite');
             const store = tx.objectStore(BookmarkRAG.STORE_VECTORS);
             for (const { id, embedding, text } of vectors) {
-                store.put({ id, embedding: Array.from(embedding), text, ts: Date.now() });
-                this._vectorMap.set(id, embedding);
+                store.put({ id, embedding: Array.from(embedding), space: embedding.space, text, ts: Date.now() });
+
             }
             await new Promise((resolve, reject) => {
                 tx.oncomplete = resolve;
                 tx.onerror = () => reject(tx.error);
             });
+            for (const { id, embedding } of vectors) this._vectorMap.set(id, embedding);
         } catch (e) {
             console.warn('[BookmarkRAG] Failed to save vectors:', e);
+            throw e;
         }
     }
 
@@ -629,8 +535,8 @@ class BookmarkRAG {
                 req.onsuccess = () => resolve(req.result);
                 req.onerror = () => reject(req.error);
             });
-            if (result && Date.now() - result.ts < 24 * 60 * 60 * 1000) {
-                return new Float32Array(result.embedding);
+            if (result?.space?.startsWith(this._embeddingPrefix) && Date.now() - result.ts < 24 * 60 * 60 * 1000) {
+                const vector = new Float32Array(result.embedding); vector.space = result.space; return vector;
             }
             return null;
         } catch {
@@ -644,7 +550,7 @@ class BookmarkRAG {
             const tx = db.transaction(BookmarkRAG.STORE_QUERY_CACHE, 'readwrite');
             tx.objectStore(BookmarkRAG.STORE_QUERY_CACHE).put({
                 query: query.trim().toLowerCase(),
-                embedding: Array.from(embedding),
+                embedding: Array.from(embedding), space: embedding.space,
                 ts: Date.now()
             });
         } catch (e) {
@@ -663,60 +569,23 @@ class BookmarkRAG {
         return parts.join(' ').trim();
     }
 
-    async _callEmbeddingAPI(texts) {
-        if (!this.settings?.aiApiKey) throw new Error('未配置 API Key');
+    async _refreshEmbeddingSpace() {
+        const control = await window.SceneAI.control();
+        this._embeddingPrefix = control.policy.embeddingModel + ':retrieval-v1:';
+    }
 
-        const provider = this.AI_PROVIDERS[this.settings.aiProvider];
-        if (!provider) throw new Error('未知的 AI 服务商');
-
-        if (provider.embeddingUnsupported) {
-            throw new Error(`${provider.name} 不支持 Embedding，请切换到通义千问或 OpenAI 等支持 Embedding 的服务商`);
-        }
-
-        const baseUrl = this._resolveBaseUrl();
-        const model = this.settings.aiProvider === 'custom'
-            ? (this.settings.embeddingModel || provider.embeddingModel)
-            : (provider.embeddingModel || this.settings.embeddingModel);
-        if (!model) throw new Error(`${provider.name} 未配置 Embedding 模型`);
-
-        const dimension = provider.dimension || 1024;
-
-        const body = { model, input: texts };
-        // 支持 dimensions 参数的模型：qwen text-embedding-v3/v4、OpenAI text-embedding-3-*
-        // Gemini text-embedding-004 不支持 dimensions 参数
-        const supportsDimensions = ['qwen', 'openai', 'custom'].includes(this.settings.aiProvider);
-        if (supportsDimensions && dimension) {
-            body.dimensions = dimension;
-        }
-
-        const resp = await fetch(`${baseUrl}/embeddings`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${this.settings.aiApiKey}`
-            },
-            body: JSON.stringify(body)
-        });
-
-        if (!resp.ok) {
-            const errText = await resp.text().catch(() => '');
-            throw new Error(`Embedding API ${resp.status}: ${errText.slice(0, 200)}`);
-        }
-
-        const json = await resp.json();
-        return json.data.map(d => {
-            let vec = d.embedding;
-            if (vec.length > dimension) vec = vec.slice(0, dimension);
-            return new Float32Array(vec);
-        });
+    async _callEmbeddingAPI(texts, purpose = 'document') {
+        const result = await window.SceneAI.run('bookmark.embed', { texts: texts.map(text => String(text).slice(0, 2000)), purpose });
+        return result.vectors.map(values => { const vector = new Float32Array(values); vector.space = result.space; return vector; });
     }
 
     async processBookmarks(onProgress) {
         if (this.isProcessing) return { processed: 0, failed: 0 };
         this.isProcessing = true;
+        try { await this._refreshEmbeddingSpace(); } catch (error) { this.isProcessing = false; throw error; }
 
         const unprocessed = this.bookmarks.filter(b =>
-            b.status === 'active' && !b.embeddingDone
+            b.status === 'active' && (!b.embeddingDone || !this._vectorMap.get(b.id)?.space?.startsWith(this._embeddingPrefix))
         );
 
         if (unprocessed.length === 0) {
@@ -741,11 +610,11 @@ class BookmarkRAG {
 
                     for (let j = 0; j < batch.length; j++) {
                         const bm = batch[j];
-                        bm.embeddingDone = true;
                         vectors.push({ id: bm.id, embedding: embeddings[j], text: texts[j] });
                     }
 
                     await this._saveVectorsToDB(vectors);
+                    batch.forEach(bookmark => { bookmark.embeddingDone = true; });
                     processed += batch.length;
                 } catch (e) {
                     console.error(`[BookmarkRAG] Batch embedding failed:`, e);
@@ -774,12 +643,12 @@ class BookmarkRAG {
     }
 
     async processNewBookmark(bookmark) {
-        if (!this.settings?.aiApiKey || bookmark.embeddingDone) return;
+        if (!this.settings?.enabled) return;
         const text = this._buildEmbeddingText(bookmark);
         try {
             const [embedding] = await this._callEmbeddingAPI([text]);
-            bookmark.embeddingDone = true;
             await this._saveVectorsToDB([{ id: bookmark.id, embedding, text }]);
+            bookmark.embeddingDone = true;
             await this._saveBookmarkCache(this.bookmarks);
         } catch (e) {
             console.warn(`[BookmarkRAG] Incremental embedding failed for ${bookmark.id}:`, e);
@@ -814,7 +683,7 @@ class BookmarkRAG {
         for (const bm of this.bookmarks) {
             if (bm.status !== 'active') continue;
             const vec = this._vectorMap.get(bm.id);
-            if (!vec) continue;
+            if (!vec || !queryEmbedding.space || vec.space !== queryEmbedding.space) continue;
             const score = this._cosineSimilarity(queryEmbedding, vec);
             if (score > threshold) {
                 results.push({ ...bm, _vectorScore: score, _matchType: 'semantic' });
@@ -833,13 +702,14 @@ class BookmarkRAG {
         const hasEmbeddings = this._vectorMap.size > 0;
         let semanticResults = [];
 
-        if (hasEmbeddings && this.settings?.aiApiKey) {
+        if (hasEmbeddings && this.settings?.enabled) {
             try {
+                await this._refreshEmbeddingSpace();
                 const semanticQuery = this._buildSemanticQuery(query);
                 const cacheKey = semanticQuery || query.trim();
                 let queryVec = await this._getCachedQueryVector(cacheKey);
                 if (!queryVec) {
-                    const [vec] = await this._callEmbeddingAPI([cacheKey]);
+                    const [vec] = await this._callEmbeddingAPI([cacheKey], 'query');
                     queryVec = vec;
                     await this._cacheQueryVector(cacheKey, vec);
                 }
@@ -929,91 +799,16 @@ class BookmarkRAG {
 
     // ========== LLM 重排序 (v2.2.0) ==========
 
-    _resolveBaseUrl() {
-        const provider = this.AI_PROVIDERS[this.settings.aiProvider];
-        if (!provider) return this.settings.aiBaseUrl || '';
-        if (this.settings.aiProvider === 'custom') {
-            return this.settings.aiBaseUrl || provider.baseUrl;
-        }
-        return provider.baseUrl;
-    }
-
-    async _callChatAPI(prompt, options = {}) {
-        if (!this.settings?.aiApiKey) throw new Error('未配置 API Key');
-
-        const provider = this.AI_PROVIDERS[this.settings.aiProvider];
-        if (!provider) throw new Error('未知的 AI 服务商');
-
-        const baseUrl = this._resolveBaseUrl();
-        const model = this.settings.aiProvider === 'custom'
-            ? (this.settings.aiModel || provider.defaultModel)
-            : (provider.defaultModel || this.settings.aiModel);
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), options.timeout || 15000);
-
-        try {
-            const resp = await fetch(`${baseUrl}/chat/completions`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.settings.aiApiKey}`
-                },
-                body: JSON.stringify({
-                    model,
-                    messages: [{ role: 'user', content: prompt }],
-                    temperature: options.temperature ?? 0.3,
-                    max_tokens: options.maxTokens || 1000,
-                    response_format: options.jsonMode ? { type: 'json_object' } : undefined
-                }),
-                signal: controller.signal
-            });
-
-            if (!resp.ok) {
-                const errText = await resp.text().catch(() => '');
-                throw new Error(`Chat API ${resp.status}: ${errText.slice(0, 200)}`);
-            }
-
-            const json = await resp.json();
-            return json.choices?.[0]?.message?.content || '';
-        } finally {
-            clearTimeout(timeoutId);
-        }
-    }
-
     async rerank(query, candidates, limit = 15) {
         if (!candidates?.length || candidates.length < 3) return candidates;
 
         const startTime = Date.now();
-        const candidateList = candidates.slice(0, 30).map((c, i) => {
-            let line = `${i + 1}. ${c.title} (${c.domain})`;
-            if (c.summary) line += `\n   摘要: ${c.summary}`;
-            return line;
-        }).join('\n');
-
-        const prompt = `你是一个搜索结果排序专家。用户搜索了"${query}"。
-
-请根据搜索意图，从以下书签中选出最相关的结果，按相关度从高到低排序。
-
-评判标准：
-1. 与搜索意图的语义匹配度
-2. 内容的权威性和实用性
-3. 标题和摘要的信息密度
-
-书签列表：
-${candidateList}
-
-请以 JSON 格式返回，只包含相关的书签（最多 ${limit} 条）：
-{"results": [{"index": 序号, "score": 0到100的整数, "reason": "一句话理由"}]}`;
-
         try {
-            const responseText = await this._callChatAPI(prompt, {
-                timeout: 15000,
-                jsonMode: true,
-                maxTokens: 800
+            const response = await window.SceneAI.run('bookmark.rerank', {
+                query: String(query).slice(0, 500), limit: Math.min(30, Math.max(1, limit)),
+                candidates: candidates.slice(0, 30).map(c => ({ title: String(c.title || '').slice(0, 200), domain: String(c.domain || '').slice(0, 200), summary: String(c.summary || '').slice(0, 300) }))
             });
-
-            const parsed = this._parseRerankResponse(responseText);
+            const parsed = response.results;
             if (!parsed?.length) return candidates.slice(0, limit);
 
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -1121,38 +916,11 @@ ${candidateList}
     }
 
     async _generateSummary(title, content) {
-        const prompt = `请为以下网页内容生成摘要和关键词标签。
-
-标题：${title}
-描述：${content.description || '无'}
-正文（节选）：${content.bodyText.substring(0, 2000)}
-
-要求：
-1. 摘要：50-100 字中文，概括页面核心内容
-2. 关键词：5-10 个，涵盖主题、技术栈、领域、用途
-3. 关键词使用小写英文或中文，多词用连字符
-
-请以 JSON 格式返回：{"summary": "...", "tags": ["tag1", "tag2"]}`;
-
-        const responseText = await this._callChatAPI(prompt, {
-            timeout: 15000,
-            jsonMode: true,
-            maxTokens: 500
+        return window.SceneAI.run('bookmark.summary', {
+            title: String(title || '').slice(0, 300),
+            description: String(content.description || '').slice(0, 500),
+            content: String(content.bodyText || '').slice(0, 3000)
         });
-
-        try {
-            const parsed = JSON.parse(responseText);
-            return {
-                summary: parsed.summary || '',
-                tags: Array.isArray(parsed.tags) ? parsed.tags : []
-            };
-        } catch {
-            const summaryMatch = responseText.match(/"summary"\s*:\s*"([^"]+)"/);
-            return {
-                summary: summaryMatch?.[1] || '',
-                tags: []
-            };
-        }
     }
 
     async batchExtractSummaries(onProgress) {

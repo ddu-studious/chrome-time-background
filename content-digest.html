@@ -1,0 +1,5 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>正文与字幕提要</title><link rel="stylesheet" href="css/ai-control.css"><link rel="stylesheet" href="css/content-digest.css"></head><body><main>
+<header><div><h1>正文与字幕提要</h1><p>只分析你提供的片段，不自动抓取网页或字幕。</p></div><a href="index.html">返回首页</a></header>
+<section><form id="digest-form"><label>内容类型<select id="kind"><option value="article">文章正文</option><option value="transcript">视频字幕</option></select></label><label>标题（可选）<input id="title" maxlength="200"></label><label style="flex-basis:100%">正文或字幕片段<textarea id="text" minlength="20" maxlength="6000" rows="12" required placeholder="粘贴20至6000字的正文或字幕，不要只填写标题"></textarea></label><button id="generate">生成提要</button><button id="cancel" type="button" hidden>取消</button></form><p id="status" role="status">内容通过本地 AI 控制面处理。</p></section>
+<section id="output" hidden><h2>片段提要</h2><p id="scope"></p><div id="result"></div><button id="copy" type="button">复制提要</button></section>
+<script src="js/scene-ai.js"></script><script src="js/content-digest.js"></script></main></body></html>

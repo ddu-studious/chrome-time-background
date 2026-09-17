@@ -132,7 +132,103 @@
     const when = alarm.repeat === 'once' ? date : alarm.repeat === 'daily' ? '每天' : days.map(d => `周${'日一二三四五六'[d]}`).join('、');
     return { status: 'ready', alarm, timeZone, displayText: `${when} ${time} · ${label}${advance ? `（提前 ${advance} 分钟）` : ''}` };
   }
-  const api = { parseLocal, resolve, parts, wallTime, shiftDate, dateKey };
+  // A draft is semantic data only. It never contains an alarm ID or executable action.
+  function validateDraft(value) {
+    if (value == null) return null;
+    if (typeof value !== 'object' || Array.isArray(value)) throw new Error('提醒草稿无效');
+    const allowed = ['kind','label','delayMinutes','hour','minute','dayOffset','date','weekday','weekOffset','days','advanceMinutes','important','clockHour','period'];
+    if (Object.keys(value).some(k => !allowed.includes(k))) throw new Error('提醒草稿含未知字段');
+    const d = JSON.parse(JSON.stringify(value));
+    if (d.kind != null && !['once','relative','daily','weekly'].includes(d.kind)) throw new Error('提醒类型无效');
+    if (d.label != null && (typeof d.label !== 'string' || d.label.length > 80)) throw new Error('提醒事项应为 80 字以内');
+    for (const [key, max] of [['hour',23],['clockHour',23],['minute',59],['dayOffset',366],['weekday',6],['weekOffset',52],['advanceMinutes',10080]]) {
+      if (d[key] != null && (!Number.isInteger(d[key]) || d[key] < 0 || d[key] > max)) throw new Error('提醒时间字段无效');
+    }
+    if (d.delayMinutes != null && (!Number.isFinite(d.delayMinutes) || d.delayMinutes < 1 || d.delayMinutes > 525600)) throw new Error('倒计时无效');
+    if (['dayOffset','date','weekday'].filter(k => d[k] != null).length > 1) throw new Error('日期有冲突');
+    if (d.date != null && (typeof d.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(d.date))) throw new Error('提醒日期无效');
+    if (d.days != null && (!Array.isArray(d.days) || d.days.length > 7 || d.days.some(n => !Number.isInteger(n) || n < 0 || n > 6))) throw new Error('重复星期无效');
+    if (d.period != null && !['早上','上午','中午','下午','晚上','凌晨'].includes(d.period)) throw new Error('时段无效');
+    if (d.important != null && typeof d.important !== 'boolean') throw new Error('提醒强度无效');
+    return d;
+  }
+  function mergeDraft(previous, patch, context) {
+    const next = { ...(validateDraft(previous) || {}) }, p = validateDraft(patch) || {};
+    if (p.kind && p.kind !== next.kind) {
+      for (const key of ['dayOffset','date','weekday','weekOffset','days','delayMinutes']) delete next[key];
+      if (p.kind === 'relative') for (const key of ['hour','minute','clockHour','period','advanceMinutes']) delete next[key];
+    }
+    if (['dayOffset','date','weekday'].some(k => p[k] != null)) for (const k of ['dayOffset','date','weekday','weekOffset']) delete next[k];
+    if (p.hour != null) { delete next.clockHour; delete next.period; }
+    if (p.period != null && p.clockHour == null && next.clockHour == null && next.hour != null) next.clockHour = next.hour % 12 || 12;
+    if (p.clockHour != null || p.period != null) delete next.hour;
+    Object.assign(next, p);
+    if (next.dayOffset != null) {
+      next.date = shiftDate(dateKey(parts(context.currentNow ?? context.now, context.timeZone)), next.dayOffset);
+      delete next.dayOffset;
+    }
+    return next;
+  }
+  function parseDraft(text, previous, context) {
+    const value = String(text).trim().replace(/[。！!]+$/, '');
+    const existing = validateDraft(previous);
+    // Full supported expressions still use the established parser.
+    const exact = parseLocal(value);
+    if (exact?.intent === 'rename') return null;
+    if (exact && !exact.status) return mergeDraft(existing, exact, context);
+    // Restrict the partial rule path to a single time expression plus a label.
+    const full = /^(?:设置|设|定)?(?:一个|个)?\s*(.*?)\s*(?:的闹钟|的闹表|闹钟|闹表)?\s*[，,]?\s*(?:提醒我|叫我|叫醒我)([^，,；;]+)$/.exec(value);
+    let phrase = full ? full[1] : value;
+    if (!full && !existing) return null;
+    if (full && /然后|再提醒|提前|取消|删除/.test(full[2])) return null;
+    phrase = phrase.replace(/^(?:改成|改为|换成|就|是)\s*/, '').replace(/[吧呀]$/, '').replace(/\s+/g, '');
+    const relative = existing && new RegExp(`^(半小时|(${numeral})(分钟|小时))(?:后)?$`).exec(phrase);
+    if (relative) {
+      const delayMinutes = relative[1] === '半小时' ? 30 : number(relative[2]) * (relative[3] === '小时' ? 60 : 1);
+      return mergeDraft(existing, { kind: 'relative', delayMinutes, ...(full ? { label: full[2].trim() } : {}) }, context);
+    }
+    const m = new RegExp(`^(今天|明天|后天|每天|工作日|每个工作日|\\d{4}-\\d{2}-\\d{2})?(早上|上午|中午|下午|晚上|凌晨)?(?:(${numeral})(?:[:：]([0-9]{2})|点(?:(半)|(${numeral})分?)?))?$`).exec(phrase);
+    if (!m || !m.slice(1).some(Boolean)) return null;
+    const patch = full ? { kind: 'once', label: full[2].trim() } : {};
+    if (m[1]) {
+      if (m[1] === '每天') patch.kind = 'daily';
+      else if (m[1].includes('工作日')) { patch.kind = 'weekly'; patch.days = [1,2,3,4,5]; }
+      else { patch.kind = 'once'; if (/^\d/.test(m[1])) patch.date = m[1]; else patch.dayOffset = ({今天:0,明天:1,后天:2})[m[1]]; }
+    }
+    if (m[2]) patch.period = m[2];
+    if (m[3]) {
+      const h = number(m[3]);
+      patch.minute = m[4] ? Number(m[4]) : m[5] ? 30 : m[6] ? number(m[6]) : 0;
+      if (!m[2] && (m[4] || h > 12 || h === 0)) patch.hour = h;
+      else patch.clockHour = h;
+    }
+    return mergeDraft(existing, patch, context);
+  }
+  function resolveDraft(value, context) {
+    const draft = validateDraft(value) || {};
+    const raw = { ...draft };
+    const pending = (question, missing, options = []) => ({ ...ask(question), draft, missing, options, summary: draftSummary(draft) });
+    if (raw.clockHour != null) {
+      if (raw.clockHour > 12 && raw.period) return pending('请用 24 小时制重新说明时间，例如 23:00。', ['hour']);
+      if (!raw.period) return pending(`是上午 ${raw.clockHour} 点，还是${raw.clockHour >= 6 ? '晚上' : '下午'} ${raw.clockHour} 点？`, ['period'], ['上午', raw.clockHour >= 6 ? '晚上' : '下午']);
+      if (raw.clockHour === 12 && ['早上','上午','晚上'].includes(raw.period)) return pending('你指的是中午 12:00 还是午夜 00:00？', ['period'], ['中午12点', '凌晨0点']);
+      raw.hour = raw.clockHour; raw.minute ??= 0;
+      if (['下午','晚上'].includes(raw.period) && raw.hour < 12) raw.hour += 12;
+      if (raw.period === '中午' && raw.hour < 11) raw.hour += 12;
+      if (raw.period === '凌晨' && raw.hour === 12) raw.hour = 0;
+    }
+    if (raw.kind !== 'relative' && raw.hour == null) return pending('具体几点提醒你？', ['hour']);
+    if (raw.kind === 'once' && raw.date == null && raw.dayOffset == null && raw.weekday == null) return pending('是今天还是明天？也可以输入具体日期。', ['date'], ['今天','明天']);
+    const resolved = resolve(raw, context);
+    if (resolved.status !== 'ready') return pending(resolved.question, ['details']);
+    if (resolved.alarm?.fireAt && resolved.alarm.fireAt <= (context.currentNow ?? context.now)) return pending('这个提醒时间已经过了，请补充新的日期或时间；不会自动顺延。', ['date','hour']);
+    return { ...resolved, draft, summary: draftSummary(draft) };
+  }
+  function draftSummary(d) {
+    return [d.label || '事项待补充', d.date || (d.kind === 'daily' ? '每天' : d.kind === 'weekly' ? '每周重复' : d.kind === 'relative' ? `${d.delayMinutes} 分钟后` : '日期待补充'), d.clockHour != null ? `${d.period || '时段待补充'} ${d.clockHour}:${pad(d.minute || 0)}` : d.hour != null ? `${pad(d.hour)}:${pad(d.minute || 0)}` : d.kind === 'relative' ? '' : '时间待补充'].filter(Boolean).join(' · ');
+  }
+
+  const api = { parseLocal, resolve, parts, wallTime, shiftDate, dateKey, validateDraft, mergeDraft, parseDraft, resolveDraft, draftSummary };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.AlarmIntent = api;
 })(typeof self !== 'undefined' ? self : globalThis);
