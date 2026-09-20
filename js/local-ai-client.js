@@ -5,6 +5,7 @@
   const actions = new Set(['local_ai_status', 'local_ai_configure', 'local_ai_preferences', 'smart_alarm_interpret', 'smart_alarm_result', 'ai_control_get', 'ai_control_save', 'ai_control_rollback', 'ai_job_cancel', 'music_ai_interpret', 'music_ai_result', 'speech_ai_transcribe', 'speech_ai_result', 'ai_scene_submit', 'ai_scene_result']);
   actions.add('ai_history_get'); actions.add('ai_history_write');
   actions.add('ai_memory_get'); actions.add('ai_memory_write');
+  actions.add('ai_approval_evaluate');
   function selection(value) {
     if (value == null) return null;
     if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !['model', 'reasoning'].includes(key))) throw new Error('AI 选择无效');
@@ -16,6 +17,13 @@
   async function request(message) {
       if (!actions.has(message.action)) throw new Error('未登记的本地 AI 请求');
       const config = (await chrome.storage.local.get(KEY))[KEY] || {};
+      if (message.action === 'ai_approval_evaluate') {
+        if (!config.token) throw new Error('本机服务未连接，保留手动确认');
+        const response = await fetch(BASE + '/v1/assistant/approval', { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(1500), headers: { Authorization: `Bearer ${config.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(message.body) });
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || '确认策略服务不可用，请更新本机服务');
+        return data;
+      }
       if (message.action === 'ai_memory_get' || message.action === 'ai_memory_write') {
         if (!config.token) throw new Error('请先配置本机连接后使用长期记忆');
         const read = message.action === 'ai_memory_get';
@@ -59,7 +67,7 @@
       if (message.action === 'ai_scene_submit' || message.action === 'ai_scene_result') {
         if (!config.token) throw new Error('请先在 AI 控制台配置本地连接');
         const poll = message.action === 'ai_scene_result';
-        if (poll ? !/^[a-f0-9]{32}$/.test(message.jobId) : !['assistant.plan', 'bookmark.summary', 'bookmark.rerank', 'activity.summary', 'bookmark.embed', 'task.draft', 'schedule.draft', 'knowledge.answer', 'music.recommend', 'workspace.match', 'content.digest', 'trending.cluster'].includes(message.scene)) throw new Error('AI 场景或任务无效');
+        if (poll ? !/^[a-f0-9]{32}$/.test(message.jobId) : !['assistant.compact', 'assistant.plan', 'bookmark.summary', 'bookmark.rerank', 'activity.summary', 'bookmark.embed', 'task.draft', 'schedule.draft', 'knowledge.answer', 'music.recommend', 'workspace.match', 'content.digest', 'trending.cluster'].includes(message.scene)) throw new Error('AI 场景或任务无效');
         const selected = poll ? null : selection(message.selection);
         const response = await fetch(BASE + (poll ? `/v1/ai/jobs/${message.jobId}` : '/v1/ai/interpret'), {
           method: poll ? 'GET' : 'POST', redirect: 'error', signal: AbortSignal.timeout(7000),
@@ -67,7 +75,7 @@
           ...(poll ? {} : { body: JSON.stringify({ scene: message.scene, input: message.input, trace: message.trace, ...(selected ? { selection:selected } : {}) }) })
         });
         const result = await response.json();
-        if (!response.ok || !result.ok) throw Object.assign(new Error(result.error || 'AI 请求失败'), { execution: result.execution });
+        if (!response.ok || !result.ok) throw Object.assign(new Error(result.error || 'AI 请求失败'), { execution: result.execution, code: result.code || null });
         return result;
       }
       if (message.action === 'speech_ai_transcribe' || message.action === 'speech_ai_result') {
@@ -98,7 +106,7 @@
           ...(poll ? {} : { body: JSON.stringify({ scene: 'music.intent', trace: message.trace, input: { text: message.text, ...(message.turns ? { turns: message.turns } : {}), ...(message.draft ? { draft: message.draft } : {}) }, ...(selected ? { selection:selected } : {}) }) })
         });
         const data = await response.json();
-        if (!response.ok || data.ok === false) throw Object.assign(new Error(data.error || '音乐解析失败'), { execution: data.execution });
+        if (!response.ok || data.ok === false) throw Object.assign(new Error(data.error || '音乐解析失败'), { execution: data.execution, code: data.code || null });
         return data;
       }
       const now = Number(message.now);
@@ -128,7 +136,7 @@
         throw new Error('本地 AI 服务未连接，请先运行 local-ai 的启动命令；简单时间仍可直接创建');
       }
       const data = await response.json();
-      if (!response.ok || data.ok === false) throw Object.assign(new Error(data.error || '本地 AI 请求失败'), { execution: data.execution });
+      if (!response.ok || data.ok === false) throw Object.assign(new Error(data.error || '本地 AI 请求失败'), { execution: data.execution, code: data.code || null });
       return isStatus ? { ...data, selectedReasoning: data.defaultReasoning || 'off' } : data;
   }
   // Worker-owned tools reuse the authenticated gateway; no token is sent to the input window.
@@ -152,7 +160,7 @@
     if (sender.id !== chrome.runtime.id || !sender.url?.startsWith(chrome.runtime.getURL(''))) {
       respond({ ok: false, error: '仅扩展页面可调用本地 AI' }); return;
     }
-    auditedRequest(message).then(respond).catch(error => respond({ ok: false, error: error.message }));
+    auditedRequest(message).then(respond).catch(error => respond({ ok: false, error: error.message, code: error.code || null, execution: error.execution }));
     return true;
   });
 })();

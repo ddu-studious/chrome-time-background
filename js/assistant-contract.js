@@ -24,7 +24,7 @@
     { id: 'resume', name: '继续播放', apps: ['music'], description: '恢复当前音乐' },
     { id: 'next', name: '下一首', apps: ['music'], description: '播放队列中的下一首' },
     { id: 'sleep', name: '定时停止', apps: ['music'], description: '设置或取消音乐定时' },
-    { id: 'remind', name: '创建提醒', apps: ['alarm'], description: '理解时间，确认后创建闹钟' },
+    { id: 'remind', name: '创建提醒', apps: ['alarm'], description: '明确的一次性提醒直接创建，有歧义时补充确认' },
     { id: 'alarms', name: '查看提醒', apps: ['alarm'], description: '查看已设置的闹钟' },
     { id: 'search', name: '找视频', apps: ['bilibili', 'youtube'], description: '检索视频并展示候选' },
     { id: 'history', name: '继续看', apps: ['bilibili', 'youtube'], description: '找回记录，在原站打开并携带进度' }
@@ -39,7 +39,9 @@
     'music.queue': { app: 'music', title: '查看队列、读取歌单/专辑曲目、追加或替换队列', tools: ['music.queue.list', 'music.collection.get', 'music.queue.apply'] }
   };
   const tools = {
-    'memory.manage': { app: 'music', title: '查看或保存明确的音乐偏好', fields: ['text'] },
+    'context.read': { apps: apps.map(a => a.id), title: '按引用回读本次任务的原始工具结果', fields: ['ref', 'offset'], optional: ['offset'], readOnly: true },
+    'memory.manage': { apps: apps.map(a => a.id), title: '查看或保存用户本次明确要求记住的偏好', fields: ['text'] },
+    'memory.recall': { apps: apps.map(a => a.id), title: '查询过去搜索、播放、提醒等经历；只读背景，不提供可执行引用', fields: ['text'], readOnly: true },
     'app.status': { apps: apps.map(a => a.id), title: '只读查询连接状态，不发起授权', fields: ['platform'], enums: { platform: apps.map(a => a.id) }, readOnly: true },
     'tools.load': { title: '准备后续操作', fields: ['group'], enums: { group: Object.keys(toolGroups) }, readOnly: true },
     'music.state': { app: 'music', title: '读取真实播放状态与队列数量', fields: [], readOnly: true },
@@ -54,7 +56,7 @@
     'music.queue.remove': { app: 'music', title: '移除队列中的指定歌曲，当前曲目先显示确认卡', fields: ['ref', 'expectedRevision'] },
     'music.queue.clear': { app: 'music', title: '准备清空本地队列并停止播放，确认后执行', fields: ['expectedRevision'] },
     'alarm.get': { app: 'alarm', title: '读取已有提醒详情', fields: ['ref'], readOnly: true },
-    'alarm.update.prepare': { app: 'alarm', title: '修改已有提醒的名称、日期或时间，确认后保存', fields: ['ref', 'label', 'date', 'time', 'dayOffset'], optional: ['label', 'date', 'time', 'dayOffset'] },
+    'alarm.update.prepare': { app: 'alarm', title: '准备修改提醒，由执行器判断直接保存或确认', fields: ['ref', 'label', 'date', 'time', 'dayOffset'], optional: ['label', 'date', 'time', 'dayOffset'] },
     'alarm.toggle': { app: 'alarm', title: '开启或关闭已有提醒', fields: ['ref', 'enabled'] },
     'alarm.delete.prepare': { app: 'alarm', title: '准备删除已有提醒，确认后执行', fields: ['ref'] },
     'video.details': { apps: ['bilibili', 'youtube'], title: '读取真实视频标题、作者、时长及发布时间', fields: ['platform', 'ref'], readOnly: true },
@@ -151,14 +153,18 @@
       for (const field of tool.fields) {
         if (!Object.hasOwn(args, field)) continue;
         if (tool.enums?.[field]) { if (!tool.enums[field].includes(args[field])) throw new Error('工具参数枚举无效'); result[field] = args[field]; continue; }
-        if (field === 'offset' || field === 'limit') { if (!Number.isInteger(args[field]) || args[field] < (field === 'limit' ? 1 : 0) || args[field] > (field === 'limit' ? 20 : 300)) throw new Error('分页参数无效'); result[field] = args[field]; continue; }
+        if (field === 'offset' || field === 'limit') {
+          const min = field === 'limit' ? 1 : 0, max = field === 'limit' ? 20 : step.tool === 'context.read' ? 524288 : 300;
+          if (!Number.isInteger(args[field]) || args[field] < min || args[field] > max) throw new Error(`分页参数无效：${step.tool}.${field} 必须是 ${min} 至 ${max} 的整数`);
+          result[field] = args[field]; continue;
+        }
         if (field === 'value') { if (!Number.isFinite(args.value) || args.value < 0 || args.value > 1) throw new Error('音量必须为0至1'); result.value = args.value; continue; }
         if (['seconds', 'minSeconds', 'maxSeconds'].includes(field)) { if (!Number.isFinite(args[field]) || args[field] < 0 || args[field] > 86400) throw new Error('秒数必须在0至86400之间'); result[field] = args[field]; continue; }
         if (field === 'date') { if (typeof args.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(args.date) || new Date(args.date + 'T12:00:00Z').toISOString().slice(0, 10) !== args.date) throw new Error('日期无效'); result.date = args.date; continue; }
         if (field === 'time') { if (typeof args.time !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(args.time)) throw new Error('时间必须为24小时HH:mm'); result.time = args.time; continue; }
         if (field === 'label') { result.label = clean(args.label, 80); if (!result.label) throw new Error('提醒名称不能为空'); continue; }
         if (field === 'enabled' || field === 'startPlayback') { if (typeof args[field] !== 'boolean') throw new Error('播放标记无效'); result[field] = args[field]; continue; }
-        if (field === 'ref') { if (typeof args[field] !== 'string' || !/^r[0-9]{1,4}$/.test(args[field])) throw new Error('资源引用无效'); result[field] = args[field]; continue; }
+        if (field === 'ref') { if (typeof args[field] !== 'string' || !(step.tool === 'context.read' ? /^context:[0-9]{1,9}$/ : /^r[0-9]{1,4}$/).test(args[field])) throw new Error('资源引用无效'); result[field] = args[field]; continue; }
         if (field === 'kind') { if (!['auto', 'song', 'artist', 'album', 'playlist'].includes(args.kind)) throw new Error('音乐对象类型无效'); result.kind = args.kind; continue; }
         if (field === 'dayOffset') { if (!Number.isInteger(args[field]) || args[field] < 0 || args[field] > 30) throw new Error('仅支持最近30天的日期条件'); result[field] = args[field]; continue; }
         if (field === 'unfinishedOnly') { if (typeof args[field] !== 'boolean') throw new Error('观看状态条件无效'); result[field] = args[field]; continue; }
@@ -169,7 +175,7 @@
       if (step.tool === 'music.playback.control' && ((result.action === 'volume') !== (result.value != null))) throw new Error('仅音量操作必须提供value');
       if (step.tool === 'alarm.update.prepare' && (Object.keys(result).length < 2 || (result.date && result.dayOffset != null))) throw new Error('请提供一个明确的修改，日期与相对日期不能同时指定');
       if (result.minSeconds != null && result.maxSeconds != null && result.minSeconds > result.maxSeconds) throw new Error('时长范围无效');
-      if (selectedApp && !(step.tool === 'tools.load' ? allows(toolGroups[result.group], selectedApp) : (tool.app || result.platform) === selectedApp)) throw new Error('计划超出了已选择应用的范围');
+      if (selectedApp && !['context.read', 'memory.manage', 'memory.recall'].includes(step.tool) && !(step.tool === 'tools.load' ? allows(toolGroups[result.group], selectedApp) : (tool.app || result.platform) === selectedApp)) throw new Error('计划超出了已选择应用的范围');
       return { tool: step.tool, args: result };
     });
     if (steps.some(s => s.tool === 'tools.load') && (steps.length !== 1 || raw.continue !== true)) throw new Error('加载工具后必须重新规划');
@@ -178,7 +184,10 @@
   }
   function localPlan(raw) {
     const value = input(raw), { app, skill, text } = value;
-    if ((!app || app === 'music') && Memory?.command(text)) return validatePlan({ steps: [{ tool: 'memory.manage', args: { text } }] }, app);
+    const memoryCommand = Memory?.command(text);
+    if (memoryCommand && (memoryCommand.operation !== 'preference' || !app || app === 'music')) return validatePlan({ steps: [{ tool: 'memory.manage', args: { text } }] }, app);
+    if (Memory?.recallQuestion(text)) return validatePlan({ steps: [{ tool: 'memory.recall', args: { text } }] }, app);
+    if (Memory?.historical(text)) return null;
     if ((!app || app === 'music') && Music?.artistRequest(text)) return validatePlan({ steps: [{ tool: 'music.intent', args: { text } }] }, app);
     if (/登录|连接|权限|授权|下一页|翻页|继续搜索/.test(text)) return null;
     const step = (tool, args) => validatePlan({ steps: [{ tool, args }] }, app);

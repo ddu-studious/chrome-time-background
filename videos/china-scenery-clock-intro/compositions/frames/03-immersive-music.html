@@ -1,0 +1,46 @@
+<template>
+  <div id="root" data-composition-id="03-immersive-music" data-width="1920" data-height="1080" data-duration="3">
+    <div id="f03-immersive-music-bg" class="clip f03-immersive-music-bg" data-start="0" data-duration="3" data-track-index="0"></div>
+    <div id="f03-immersive-music-content" class="clip f03-immersive-music-content" data-start="0" data-duration="3" data-track-index="1">
+      <div class="f03-immersive-music-head">
+        <span class="f03-immersive-music-number">02</span>
+        <span class="f03-immersive-music-title">沉浸音乐</span>
+        <span class="f03-immersive-music-kicker">SEARCH / PLAY / QUEUE</span>
+      </div>
+      <div class="f03-immersive-music-line"></div>
+      <div class="f03-immersive-music-window"><img src="assets/music.png" alt="音乐工作台" data-layout-allow-overflow /></div>
+      <div class="f03-immersive-music-eq"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="f03-immersive-music-value"><span>搜索</span><b>·</b><span>播放</span><b>·</b><span>队列</span><strong>一处掌控</strong></div>
+    </div>
+    <style>
+      #root { width:100%; height:100%; position:relative; overflow:hidden; font-family:sans-serif; container-type:size; }
+      .f03-immersive-music-bg { position:absolute; inset:0; background:#07111F; }
+      .f03-immersive-music-content { position:absolute; inset:0; color:#EAF7FF; overflow:hidden; }
+      .f03-immersive-music-head { position:absolute; left:102px; right:102px; top:76px; height:124px; display:flex; align-items:flex-end; gap:28px; }
+      .f03-immersive-music-number { color:#35D6FF; font-size:78px; line-height:1; font-weight:900; letter-spacing:-.06em; }
+      .f03-immersive-music-title { font-size:108px; line-height:.98; font-weight:900; letter-spacing:-.055em; }
+      .f03-immersive-music-kicker { margin-left:auto; padding-bottom:10px; color:#24D39B; font-size:20px; font-weight:700; letter-spacing:.16em; }
+      .f03-immersive-music-line { position:absolute; left:102px; right:102px; top:230px; height:3px; background:#35D6FF; transform-origin:left center; }
+      .f03-immersive-music-window { position:absolute; left:102px; top:274px; width:1300px; height:620px; overflow:hidden; border:2px solid rgba(53,214,255,.55); background:#0C1827; box-shadow:0 28px 90px rgba(0,0,0,.48); }
+      .f03-immersive-music-window img { width:100%; height:100%; object-fit:cover; display:block; }
+      .f03-immersive-music-eq { position:absolute; right:124px; top:320px; height:260px; display:flex; align-items:flex-end; gap:16px; }
+      .f03-immersive-music-eq i { display:block; width:22px; background:#35D6FF; opacity:.72; transform-origin:center bottom; }
+      .f03-immersive-music-eq i:nth-child(1) { height:34%; } .f03-immersive-music-eq i:nth-child(2) { height:72%; } .f03-immersive-music-eq i:nth-child(3) { height:48%; } .f03-immersive-music-eq i:nth-child(4) { height:88%; } .f03-immersive-music-eq i:nth-child(5) { height:58%; } .f03-immersive-music-eq i:nth-child(6) { height:40%; }
+      .f03-immersive-music-value { position:absolute; right:102px; top:642px; width:360px; display:flex; flex-wrap:wrap; justify-content:flex-end; gap:10px 14px; font-size:34px; line-height:1.25; font-weight:700; text-align:right; }
+      .f03-immersive-music-value b { color:#24D39B; }
+      .f03-immersive-music-value strong { width:100%; color:#35D6FF; font-size:56px; line-height:1.05; }
+    </style>
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      tl.fromTo(".f03-immersive-music-number", { opacity: 0, x: -70 }, { opacity: 1, x: 0, duration: 0.36, ease: "power3.out" }, 0.02)
+        .fromTo(".f03-immersive-music-title", { opacity: 0, x: -90 }, { opacity: 1, x: 0, duration: 0.48, ease: "power4.out" }, 0.18)
+        .fromTo(".f03-immersive-music-kicker", { opacity: 0, y: -24 }, { opacity: 1, y: 0, duration: 0.35, ease: "power3.out" }, 0.34)
+        .fromTo(".f03-immersive-music-line", { scaleX: 0 }, { scaleX: 1, duration: 0.72, ease: "power3.out" }, 0.36)
+        .fromTo(".f03-immersive-music-window", { opacity: 0, clipPath: "inset(0 100% 0 0)" }, { opacity: 1, clipPath: "inset(0 0% 0 0)", duration: 1.1, ease: "power4.out" }, 0.68)
+        .fromTo(".f03-immersive-music-window img", { scale: 1.06 }, { scale: 1, duration: 1.4, ease: "power3.out" }, 0.72)
+        .fromTo(".f03-immersive-music-eq i", { opacity: 0, scaleY: 0 }, { opacity: 0.72, scaleY: 1, duration: 0.52, stagger: 0.07, ease: "power3.out" }, 1.48)
+        .fromTo(".f03-immersive-music-value span, .f03-immersive-music-value b, .f03-immersive-music-value strong", { opacity: 0, x: 38 }, { opacity: 1, x: 0, duration: 0.35, stagger: 0.09, ease: "power3.out" }, 2.18);
+      window.__timelines["03-immersive-music"] = tl;
+    </script>
+  </div>
+</template>

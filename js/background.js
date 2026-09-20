@@ -1,4 +1,4 @@
-importScripts('music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'music-search.js', 'alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'local-ai-client.js', 'background-provider.js', 'hermes-writing-sync.js', 'site-workspace-core.js', '../vendor/pinyin-match/pinyin-match.js', 'assistant-match.js', 'assistant-memory.js', 'assistant-contract.js', 'assistant-engine.js', 'assistant-music.js', 'assistant-management.js', 'assistant-tools.js', 'assistant-background.js');
+importScripts('music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'music-search.js', 'alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'alarm-countdown.js', 'local-ai-client.js', 'background-provider.js', 'hermes-writing-sync.js', 'site-workspace-core.js', '../vendor/pinyin-match/pinyin-match.js', 'assistant-match.js', 'assistant-memory.js', 'assistant-contract.js', 'assistant-context-state.js', 'assistant-engine.js', 'assistant-confirmation.js', 'assistant-music.js', 'assistant-management.js', 'assistant-tools.js', 'assistant-background.js');
 
 (function() {
     let assistantMusicRevision = 0;
@@ -25,6 +25,7 @@ importScripts('music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'mus
         }
         return stopUserAlarmSession(message.action, message.action === 'snooze' ? message.minutes : null, message.sessionId);
     });
+    const alarmCountdown = new self.AlarmCountdown(chrome.storage, desktopAlarm, AlarmCore);
     const siteWorkspacePanelPorts = new Map();
     const siteWorkspaceService = self.SiteWorkspaceCore
         ? new self.SiteWorkspaceCore.WorkspaceService(chrome)
@@ -551,7 +552,8 @@ importScripts('music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'mus
         guard?.();
         return new Promise((resolve) => {
             chrome.runtime.sendMessage({ ...msg, target: 'offscreen' }, (resp) => {
-                resolve(resp || { ok: false });
+                const error = chrome.runtime.lastError;
+                resolve(error ? { ok: false, error: error.message } : (resp || { ok: false, error: '音频页面未响应' }));
             });
         });
     }
@@ -1039,7 +1041,8 @@ importScripts('music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'mus
             alarms,
             runtime,
             nextFireAt: next?.fireAt || null,
-            notificationPermission
+            notificationPermission,
+            countdown: await alarmCountdown.sync()
         };
     }
 
@@ -3241,13 +3244,17 @@ importScripts('music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'mus
         const userAlarmActions = new Set([
             'user_alarm_list', 'user_alarm_save', 'user_alarm_rename', 'user_alarm_delete', 'user_alarm_toggle',
             'user_alarm_dismiss', 'user_alarm_snooze', 'user_alarm_test', 'user_alarm_test_stop',
-            'user_alarm_reconcile', 'user_alarm_desktop_status', 'user_alarm_desktop_test'
+            'user_alarm_reconcile', 'user_alarm_desktop_status', 'user_alarm_desktop_test', 'user_alarm_countdown_set'
         ]);
         if (userAlarmActions.has(message.action)) {
             (async () => {
                 try {
                     let result;
                     switch (message.action) {
+                        case 'user_alarm_countdown_set':
+                            if (sender.id !== chrome.runtime.id || !sender.url?.startsWith(chrome.runtime.getURL(''))) throw new Error('仅扩展页面可设置桌面倒计时');
+                            result = await alarmCountdown.setEnabled(message.enabled === true);
+                            break;
                         case 'user_alarm_desktop_status':
                         case 'user_alarm_desktop_test': {
                             if (sender.id !== chrome.runtime.id || !sender.url?.startsWith(chrome.runtime.getURL(''))) throw new Error('仅扩展页面可测试桌面提醒');
@@ -4011,6 +4018,7 @@ importScripts('music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'mus
     }
 
     const quickAssistant = QuickAssistant.install({
+        desktop: desktopAlarm,
         storage: chrome.storage.local,
         async connectionStatus(platform, ctx) {
             ctx.guard();
@@ -4132,7 +4140,7 @@ importScripts('music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'mus
     });
 
     // Service Worker 可能在任意时刻被 Chrome 回收；每次重新加载都从持久化状态恢复调度。
-    void reconcileUserAlarmSchedule({ recoverDue: true }).catch(error => {
+    void reconcileUserAlarmSchedule({ recoverDue: true }).then(() => alarmCountdown.sync()).catch(error => {
         console.warn('[Alarm] 后台启动对账失败:', error?.message || error);
     });
 })();

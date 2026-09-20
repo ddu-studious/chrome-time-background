@@ -8,7 +8,7 @@ elif [[ -x /opt/homebrew/bin/node ]]; then
 elif [[ -x /usr/local/bin/node ]]; then
   service_node=/usr/local/bin/node
 else
-  echo '未找到 Node.js，请先安装 Node.js 22.13 或更高版本。' >&2
+  echo '未找到 Node.js，请先安装 Node.js 22.19 或更高版本。' >&2
   exit 1
 fi
-exec "$service_node" "$service_directory/scripts/service.mjs" "${1:-start}"
+exec "$service_node" "$service_directory/scripts/service.mjs" "$@"

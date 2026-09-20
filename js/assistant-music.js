@@ -52,7 +52,7 @@
       const query = intent.query, type = intent.action === 'recommend' || intent.kind === 'playlist' ? 1000 : intent.kind === 'artist' ? 100 : intent.kind === 'album' ? 10 : intent.kind === 'song' ? 1 : null;
       const cached = storage?.get ? (await storage.get(INDEX))[INDEX] || [] : [];
       let choices = [];
-      if (!intent.page && /^[a-z][a-z\s.'-]{0,60}$/i.test(query)) {
+      if (!intent.fresh && !intent.page && /^[a-z][a-z\s.'-]{0,60}$/i.test(query)) {
         choices = Match.rank(cached, query, item => [item.title]).filter(c => !type || c.kind === ({ 1: 'song', 100: 'artist', 10: 'album', 1000: 'playlist' })[type]).slice(0, 24);
         if (choices.length) return { status: 'waiting', message: '匹配到本地音乐索引。选择对象后读取最新内容。', musicView: { kind: 'search', title: query, local: true }, browseStack: [], choices: collectionChoices(choices.flatMap(c => c.kind === 'song' ? songChoices([c.data]) : [c])) };
       }

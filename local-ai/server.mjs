@@ -10,6 +10,7 @@ import { WhisperProvider } from './speech-provider.mjs';
 import { createControlStore } from './control-store.mjs';
 import { createHistoryStore } from './history-store.mjs';
 import { createMemoryStore } from './memory-store.mjs';
+import { evaluateApproval } from './assistant-approval.mjs';
 
 export function createServer({ token, provider = new LMStudioProvider(), allowedOrigins = [], modelEnabled = true, disabledScenes = [], controlFile, speechProvider = new WhisperProvider(), usageFile, historyFile, memoryFile }) {
   if (typeof token !== 'string' || token.length < 32) throw new Error('本地入口令牌至少需要 32 字符');
@@ -24,6 +25,7 @@ export function createServer({ token, provider = new LMStudioProvider(), allowed
     if (!memory) throw Object.assign(new Error('记忆库无法打开，其他 AI 功能可继续使用；请检查或恢复 memory.db'), { statusCode: 503 });
     return memory;
   };
+  memory?.restrictRetention(history.info().settings.retentionDays);
   const gateway = createGateway({ provider, control, speechProvider, admission, history });
   const describe = () => ({ ...gateway.describe(), localOnly: true, jobs: [...jobs.values()].filter(job => !job.result).map(job => ({ jobId: job.id, startedAt: job.started })) });
   const server = http.createServer(async (req, res) => {
@@ -71,20 +73,37 @@ export function createServer({ token, provider = new LMStudioProvider(), allowed
         const selected = models.find(m => m.id === selectedModel);
         return send(200, { ok: true, model: selectedModel, defaultReasoning: policy.reasoning || 'off', reasoningOptions: selected?.reasoningOptions || [], state: provider.busy ? 'busy' : !selected ? 'model_missing' : selected.loaded ? 'ready' : 'not_loaded', models });
       }
-      if (req.method !== 'POST' || !['/v1/alarms/interpret', '/v1/ai/interpret', '/v1/control', '/v1/control/rollback', '/v1/speech/transcribe', '/v1/history', '/v1/memory'].includes(req.url)) return send(404, { error: '接口不存在' });
+      if (req.method !== 'POST' || !['/v1/assistant/approval', '/v1/alarms/interpret', '/v1/ai/interpret', '/v1/control', '/v1/control/rollback', '/v1/speech/transcribe', '/v1/history', '/v1/memory'].includes(req.url)) return send(404, { error: '接口不存在' });
       if (!/^application\/json(?:;|$)/i.test(req.headers['content-type'] || '')) return send(415, { error: '需要 JSON 请求' });
       let size = 0, chunks = [];
       for await (const chunk of req) {
         size += chunk.length;
-        if (size > (req.url === '/v1/speech/transcribe' ? 1300000 : ['/v1/ai/interpret', '/v1/history'].includes(req.url) ? 65536 : 16384)) { send(413, { error: '请求过长' }); req.resume(); return; }
+        if (size > (req.url === '/v1/speech/transcribe' ? 1300000 : ['/v1/ai/interpret', '/v1/history', '/v1/assistant/approval'].includes(req.url) ? 65536 : 16384)) { send(413, { error: '请求过长' }); req.resume(); return; }
         chunks.push(chunk);
       }
       let body;
       try { body = JSON.parse(Buffer.concat(chunks).toString()); } catch { return send(400, { error: 'JSON 格式无效' }); }
-      if (req.url === '/v1/memory') return send(200, { ok: true, ...requireMemory().mutate(body) });
+      if (req.url === '/v1/assistant/approval') return send(200, { ok: true, ...await evaluateApproval(body) });
+      if (req.url === '/v1/memory') {
+        if (body.operation === 'learn-history') {
+          const saved = history.snapshot();
+          if (!saved.settings.captureContent) throw Object.assign(new Error('请先开启历史正文留存；未留存的正文无法补回'), { statusCode: 409 });
+          if (!Number.isSafeInteger(body.expectedRevision)) throw Object.assign(new Error('记忆版本无效'), { statusCode: 400 });
+          return send(200, { ok: true, ...requireMemory().captureHistory(saved.tools, { ...saved.settings, expectedRevision: body.expectedRevision }) });
+        }
+        return send(200, { ok: true, ...requireMemory().mutate(body) });
+      }
       if (req.url === '/v1/history') {
-        if (body.operation === 'event') { history.event(body.event); return send(200, { ok: true }); }
-        if (body.operation === 'configure') history.configure(body.settings, body.revision);
+        if (body.operation === 'event') {
+          const receipt = history.event(body.event);
+          let memoryWarning;
+          if (receipt?.contentSaved && ['tool', 'action'].includes(receipt.kind)) {
+            try { requireMemory().captureHistory([receipt], history.info().settings); }
+            catch { memoryWarning = '本次执行已留存，但经历记忆保存失败；可在我的记忆中补充已有历史。'; }
+          }
+          return send(200, { ok: true, ...(memoryWarning ? { memoryWarning } : {}) });
+        }
+        if (body.operation === 'configure') { history.configure(body.settings, body.revision); memory?.restrictRetention(body.settings.retentionDays); }
         else if (body.operation === 'delete') { if (body.conversationId) requireMemory().forgetSource(body.conversationId); history.remove({ requestId: body.requestId, conversationId: body.conversationId }); }
         else if (body.operation === 'clear' && body.confirm === true) { requireMemory().forgetSource(null, true); history.remove({ all: true }); }
         else return send(400, { ok: false, error: '历史操作无效' });
@@ -108,7 +127,7 @@ export function createServer({ token, provider = new LMStudioProvider(), allowed
       gateway.run(scene, input, { signal: job.controller.signal, trace: body?.trace, selection: body?.selection }).then(result => {
         if (job.controller.signal.aborted) return;
         job.result = { ok: true, ...result, elapsedMs: Date.now() - job.started };
-      }).catch(error => { if (job.controller.signal.aborted) return; job.result = { ok: false, error: error.message, execution: error.execution }; });
+      }).catch(error => { if (job.controller.signal.aborted) return; job.result = { ok: false, error: error.message, code: error.code || null, execution: error.execution }; });
       send(202, { ok: true, status: 'pending', jobId: job.id });
     } catch (error) {
       send(error.statusCode || 502, { ok: false, error: error.message });

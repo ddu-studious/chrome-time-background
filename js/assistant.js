@@ -196,6 +196,7 @@
       $('submit-mode').textContent = mode === 'new' ? '新需求' : mode === 'replace' ? '替换搜索' : mode ? '接着上次' : '';
     } catch { $('submit-mode').textContent = ''; }
     renderPlayback();
+    if ($('compact-context')) { $('compact-context').hidden = !task; $('compact-context').disabled = busy(); }
     $('edit-task').hidden = !task; $('edit-task').disabled = busy();
     $('submit').disabled = busy(); input.disabled = busy(); $('new-task').disabled = busy(); $('apps').disabled = $('skills').disabled = busy();
     $('cancel').hidden = !['planning', 'running'].includes(task?.status); $('cancel').disabled = sending;
@@ -205,9 +206,9 @@
     const editingReview = task.status === 'review' && Boolean(input.value.trim());
     const signature = JSON.stringify([task, app, busy(), editingReview, resultType, resultQuery]); if (rendering === signature) return; rendering = signature;
     $('task-title').textContent = '本次对话';
-    $('task-state').textContent = states[task.status] || task.status; $('message').textContent = task.message + (task.memoryNotice ? '\n' + task.memoryNotice : '') + (task.historyWarning ? '\n' + task.historyWarning : '') + (editingReview ? '\n有尚未提交的修改，请先执行以更新确认卡。' : '');
+    $('task-state').textContent = states[task.status] || task.status; $('message').textContent = task.message + (task.memoryNotice ? '\n' + task.memoryNotice : '') + (task.historyWarning ? '\n' + task.historyWarning : '') + (task.desktopNotice ? '\n' + task.desktopNotice : '') + (task.contextNotice ? '\n' + task.contextNotice : '') + (editingReview ? '\n有尚未提交的修改，请先执行以更新确认卡。' : '');
     renderChoices(editingReview);
-    if (!busy() && !editingReview && task.messages?.at(-1)?.content === task.message && !task.historyWarning && !task.memoryNotice) $('message').hidden = true;
+    if (!busy() && !editingReview && task.messages?.at(-1)?.content === task.message && !task.desktopNotice && !task.historyWarning && !task.memoryNotice && !task.contextNotice) $('message').hidden = true;
     rendering = JSON.stringify([task, app, busy(), editingReview, resultType, resultQuery]);
     $('records').replaceChildren();
     for (const item of Array.isArray(task.result) ? task.result : []) { const row = document.createElement('div'); row.className = 'record'; const title = document.createElement('strong'), sub = document.createElement('small'); title.textContent = item.title; sub.textContent = item.subtitle; row.append(title, sub); $('records').append(row); }
@@ -241,6 +242,7 @@
     catch (e) { error(e.message); }
     finally { sending = false; rendering = ''; renderTask(); renderMenu(); if (!busy()) input.focus(); }
   });
+  $('compact-context')?.addEventListener('click', async () => { if (busy() || !task) return; try { const result = await send('assistant_compact', { taskId: task.id }); task = result.task; renderTask(); } catch (e) { error(e.message); } });
   $('cancel').addEventListener('click', async () => { if (sending || !task) return; try { task = (await send('assistant_cancel', { taskId: task.id })).task; renderTask(); input.focus(); } catch (e) { error(e.message); } });
   $('new-task').addEventListener('click', async () => { if (busy()) return; try { await send('assistant_clear'); task = null; app = null; skill = null; scopeExplicit = false; input.value = ''; menu = null; error(''); renderTokens(); renderTask(); renderMenu(); persistDraft(); input.focus(); } catch (e) { error(e.message); } });
   $('edit-task').addEventListener('click', () => {
@@ -259,17 +261,22 @@
   chrome.storage.onChanged.addListener((changes, area) => { if (area === 'local' && changes.quickAssistantTaskV1) { clearTimeout(snapshotTimer); snapshotTimer = setTimeout(refresh, 25); } });
   (async () => {
     try { const saved = (await chrome.storage.local.get(DRAFT))[DRAFT]; if (saved) { input.value = typeof saved.text === 'string' ? saved.text.slice(0, 500) : ''; app = C.apps.some(a => a.id === saved.app) ? saved.app : null; skill = C.skills.some(s => s.id === saved.skill && (!app || s.apps.includes(app))) ? saved.skill : null; scopeExplicit = saved.scopeExplicit === true; aiModel = typeof saved.aiModel === 'string' ? saved.aiModel : ''; aiReasoning = typeof saved.aiReasoning === 'string' ? saved.aiReasoning : ''; if (input.value || app) menu = null; } } catch {}
-    await Promise.all([refresh(),loadAICapabilities()]); renderTokens(); renderMenu(); focusInput();
-  if (embedded.get('embedded') === '1') parent.postMessage({ type: 'assistant_ready', nonce: embedded.get('nonce') }, embedded.get('hostOrigin'));
+    await Promise.all([refresh(),loadAICapabilities()]); renderTokens(); renderMenu();
+    // The host focuses the iframe before requesting input focus across origins.
+    if (embedded.get('embedded') === '1') parent.postMessage({ type: 'assistant_ready', nonce: embedded.get('nonce') }, embedded.get('hostOrigin'));
+    else focusInput();
   })();
   const embedded = new URLSearchParams(location.search);
   if (embedded.get('embedded') === '1') {
     document.body.classList.add('embedded');
-    const resizeResults = height => { if (Number.isFinite(height)) document.documentElement.style.setProperty('--assistant-results-height', Math.max(80, Math.min(420, height)) + 'px'); };
-    resizeResults(Number(embedded.get('maxResultsHeight')) || 420);
+    const resizeResults = (height, panelHeight) => {
+      if (Number.isFinite(height)) document.documentElement.style.setProperty('--assistant-results-height', Math.max(80, Math.min(420, height)) + 'px');
+      if (Number.isFinite(panelHeight)) document.documentElement.style.setProperty('--assistant-panel-height', Math.max(90, panelHeight) + 'px');
+    };
+    resizeResults(Number(embedded.get('maxResultsHeight')) || 420, Number(embedded.get('maxPanelHeight')) || 650);
     window.addEventListener('message', event => {
       if (event.source !== parent || event.origin !== embedded.get('hostOrigin') || event.data?.nonce !== embedded.get('nonce')) return;
-      if (event.data.type === 'assistant_host_size') resizeResults(event.data.height);
+      if (event.data.type === 'assistant_host_size') resizeResults(event.data.height, event.data.panelHeight);
       if (event.data.type === 'assistant_focus') focusInput();
     });
   }

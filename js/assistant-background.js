@@ -2,8 +2,13 @@
   'use strict';
   const COMMAND = 'toggle-quick-assistant';
   function install(deps) {
+    let confirmation;
     const handlers = root.AssistantTools.create({ ...deps, memory: (action, body) => root.LocalAIBridge.request({ action: action === 'get' ? 'ai_memory_get' : 'ai_memory_write', body }) });
-    const engine = root.AssistantEngine.create({ storage: chrome.storage.local, ...handlers, history: event => root.LocalAIBridge.request({ action: 'ai_history_write', body: { operation: 'event', event } }), cancelJob: jobId => root.LocalAIBridge.request({ action: 'ai_job_cancel', jobId }) });
+    const engine = root.AssistantEngine.create({ storage: chrome.storage.local, ...handlers, onChange: task => confirmation?.sync(task), history: event => root.LocalAIBridge.request({ action: 'ai_history_write', body: { operation: 'event', event } }), cancelJob: jobId => root.LocalAIBridge.request({ action: 'ai_job_cancel', jobId }) });
+    if (deps.desktop && root.AssistantConfirmation) {
+      confirmation = root.AssistantConfirmation.create({ desktop: deps.desktop, engine });
+      void engine.snapshot().then(task => confirmation.sync(task)).catch(() => {});
+    }
     const BINDINGS = 'quickAssistantOverlaysV1';
     let opening = null;
     async function bindings() { return (await chrome.storage.session.get(BINDINGS))[BINDINGS] || {}; }
@@ -92,7 +97,7 @@
       })();
       try { return await opening; } finally { opening = null; }
     }
-    const actions = new Set(['assistant_open', 'assistant_snapshot', 'assistant_submit', 'assistant_choose', 'assistant_cancel', 'assistant_clear', 'assistant_shortcuts', 'assistant_hide', 'assistant_resize']);
+    const actions = new Set(['assistant_open', 'assistant_snapshot', 'assistant_submit', 'assistant_choose', 'assistant_cancel', 'assistant_compact', 'assistant_clear', 'assistant_shortcuts', 'assistant_hide', 'assistant_resize']);
     chrome.runtime.onMessage.addListener((message, sender, respond) => {
       if (message?.action === 'assistant_overlay_closed' && sender.id === chrome.runtime.id && (sender.frameId === 0 || isHomeDocument(sender.url))) {
         bindings().then(async all => {
@@ -129,12 +134,14 @@
         }
         if (message.action === 'assistant_snapshot') {
           const commands = await chrome.commands.getAll();
-          return { task: await engine.snapshot(), shortcut: commands.find(c => c.name === COMMAND)?.shortcut || '' };
+          const task = await engine.snapshot();
+          return { task: task ? { ...task, desktopNotice: confirmation?.notice() || '' } : null, shortcut: commands.find(c => c.name === COMMAND)?.shortcut || '' };
         }
         if (message.action === 'assistant_submit') {
           return { task: await engine.submit(message.input) };
         }
         if (message.action === 'assistant_choose') return { task: await engine.choose(message.taskId, message.choiceId, message.version) };
+        if (message.action === 'assistant_compact') return { task: await engine.compact(message.taskId) };
         if (message.action === 'assistant_cancel') return { task: await engine.cancel(message.taskId) };
         return { task: await engine.clear() };
       })().then(result => respond({ ok: true, ...result })).catch(error => respond({ ok: false, error: error.message }));

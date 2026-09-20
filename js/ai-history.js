@@ -60,10 +60,10 @@
     filtered = groups(); page = Math.min(page, Math.max(0, Math.ceil(filtered.length / 30) - 1));
     const calls = filtered.flatMap(g => g.calls), events = filtered.flatMap(g => g.events), tools = filtered.flatMap(g => g.tools);
     const rules = events.filter(r => r.role === 'assistant' && r.source === 'rules').length;
-    $('stats').textContent = `${filtered.filter(g => g.conversationId).length} 个会话 · ${events.filter(r => r.role === 'user').length} 条用户消息（含候选选择） · ${calls.filter(r => r.source === 'model').length} 次模型受理 · ${calls.filter(r => r.source === 'speech').length} 次语音受理 · ${tools.filter(r => ['tool', 'action'].includes(r.kind)).length} 次工具动作 · ${tools.filter(r => ['operation', 'request'].includes(r.kind)).length} 次内部操作/请求 · ${tools.filter(r => r.kind === 'plan').length} 次规划 · ${rules} 次未再次调用模型的回复。按会话最近活动筛选，详情和导出包含匹配会话的全部留存记录。`;
+    $('stats').textContent = `${filtered.filter(g => g.conversationId).length} 个会话 · ${events.filter(r => r.role === 'user').length} 条用户消息（含候选选择） · ${calls.filter(r => r.source === 'model').reduce((n, r) => n + (r.attempts?.length ?? 1), 0)} 次模型尝试 · ${calls.filter(r => r.source === 'speech').length} 次语音受理 · ${tools.filter(r => ['tool', 'action'].includes(r.kind)).length} 次工具动作 · ${tools.filter(r => ['operation', 'request'].includes(r.kind)).length} 次内部操作/请求 · ${tools.filter(r => r.kind === 'plan').length} 次规划 · ${rules} 次未再次调用模型的回复。按会话最近活动筛选，详情和导出包含匹配会话的全部留存记录。`;
     $('metrics').replaceChildren();
     const counts = new Map();
-    for (const row of calls.filter(r => r.source === 'model')) { const key = `${row.model || '未记录模型'} · 思考 ${row.reasoning ?? '不适用'}`; counts.set(key, (counts.get(key) || 0) + 1); }
+    for (const row of calls.filter(r => r.source === 'model')) for (const attempt of row.attempts || [row]) { const key = `${row.model || '未记录模型'} · 思考 ${attempt.reasoning ?? '不适用'}`; counts.set(key, (counts.get(key) || 0) + 1); }
     for (const [key, count] of counts) element('p', `${key}：${count} 次`, $('metrics'));
     $('groups').replaceChildren();
     if (!filtered.length) element('p', '暂无符合条件的历史。新请求会在这里出现。', $('groups'));
@@ -107,7 +107,7 @@
       }
       element('summary', `${row.scene} · ${label(row.status)} · ${row.model || (row.source === 'rules' ? '本地规则' : '未进入模型')} · 思考 ${row.reasoning ?? '不适用'} · ${row.elapsedMs ?? '—'} ms`, box);
       if (toolNumbers.has(row.toolCallId)) element('p', `本次模型调用由步骤 ${toolNumbers.get(row.toolCallId)} 发起`, box);
-      element('pre', JSON.stringify({ requestId: row.requestId, toolCallId: row.toolCallId, time: date(row.startedAt), source: row.source, model: row.model ?? null, reasoning: row.reasoning ?? null, policyRevision: row.policyRevision, maxOutputTokens: row.maxOutputTokens, usage: row.usage || '服务未返回 token 用量', errorCode: row.errorCode, input: row.contentSaved ? row.input : '未留存正文', output: row.output ?? '未留存输出（正文关闭、处理中或失败）' }, null, 2), box);
+      element('pre', JSON.stringify({ requestId: row.requestId, toolCallId: row.toolCallId, time: date(row.startedAt), source: row.source, model: row.model ?? null, reasoning: row.reasoning ?? null, policyRevision: row.policyRevision, maxOutputTokens: row.maxOutputTokens, attempts: row.attempts, effectiveReasoning: row.effectiveReasoning, recoveryFromRequestId: row.recoveryFromRequestId, modelErrorCode: row.modelErrorCode, requestedModel: row.requestedModel, requestedReasoning: row.requestedReasoning, contextBudget: row.contextBudget, usageComplete: row.attempts?.every(a => Boolean(a.usage)), usage: row.usage || '服务未返回 token 用量', errorCode: row.errorCode, input: row.contentSaved ? row.input : '未留存正文', output: row.output ?? '未留存输出（正文关闭、处理中或失败）' }, null, 2), box);
     }
     panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }

@@ -1,0 +1,46 @@
+<template>
+  <div id="root" data-composition-id="02-ai-assistant" data-width="1920" data-height="1080" data-duration="3">
+    <div id="f02-ai-assistant-bg" class="clip f02-ai-assistant-bg" data-start="0" data-duration="3" data-track-index="0"></div>
+    <div id="f02-ai-assistant-content" class="clip f02-ai-assistant-content" data-start="0" data-duration="3" data-track-index="1">
+      <div class="f02-ai-assistant-number">01</div>
+      <div class="f02-ai-assistant-kicker" data-layout-allow-overlap>LOCAL AI / CONTROLLED</div>
+      <h1 class="f02-ai-assistant-title">AI 助手</h1>
+      <div class="f02-ai-assistant-line"></div>
+      <div class="f02-ai-assistant-window" data-layout-allow-overflow>
+        <img src="assets/assistant.png" alt="AI 助手工作台" data-layout-allow-overflow />
+      </div>
+      <div class="f02-ai-assistant-value">
+        <span>一句话</span><span>完成</span><span>复杂任务</span>
+      </div>
+      <div class="f02-ai-assistant-meta">理解 · 规划 · 执行</div>
+    </div>
+    <style>
+      #root { width:100%; height:100%; position:relative; overflow:hidden; font-family:sans-serif; container-type:size; }
+      .f02-ai-assistant-bg { position:absolute; inset:0; background:#07111F; }
+      .f02-ai-assistant-content { position:absolute; inset:0; color:#EAF7FF; overflow:hidden; }
+      .f02-ai-assistant-content::before { content:""; position:absolute; left:0; top:0; width:640px; height:900px; background:radial-gradient(circle at 10% 35%, rgba(53,214,255,.22), transparent 58%); }
+      .f02-ai-assistant-number { position:absolute; left:106px; top:86px; font-size:76px; line-height:1; font-weight:900; color:#35D6FF; letter-spacing:-.06em; }
+      .f02-ai-assistant-kicker { position:absolute; left:110px; top:190px; font-size:20px; font-weight:700; letter-spacing:.15em; color:#24D39B; }
+      .f02-ai-assistant-title { position:absolute; left:102px; top:238px; margin:0; font-size:126px; line-height:1; font-weight:900; letter-spacing:-.055em; }
+      .f02-ai-assistant-line { position:absolute; left:108px; top:404px; width:360px; height:3px; background:#35D6FF; transform-origin:left center; }
+      .f02-ai-assistant-window { position:absolute; right:84px; top:118px; width:1110px; height:688px; overflow:hidden; border:2px solid rgba(53,214,255,.6); box-shadow:0 30px 80px rgba(0,0,0,.46); background:#0E1B2B; }
+      .f02-ai-assistant-window::after { content:""; position:absolute; inset:0; border:14px solid rgba(7,17,31,.35); pointer-events:none; }
+      .f02-ai-assistant-window img { width:100%; height:100%; object-fit:cover; display:block; }
+      .f02-ai-assistant-value { position:absolute; left:106px; top:524px; width:510px; display:flex; flex-wrap:wrap; gap:14px 20px; font-size:42px; line-height:1.2; font-weight:800; }
+      .f02-ai-assistant-value span:last-child { color:#35D6FF; font-size:62px; width:100%; }
+      .f02-ai-assistant-meta { position:absolute; left:108px; top:772px; color:#24D39B; font-size:22px; font-weight:700; letter-spacing:.14em; }
+    </style>
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      tl.fromTo(".f02-ai-assistant-number", { opacity: 0, y: -40 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" }, 0.02)
+        .fromTo(".f02-ai-assistant-kicker", { opacity: 0, x: -40 }, { opacity: 1, x: 0, duration: 0.42, ease: "power3.out" }, 0.14)
+        .fromTo(".f02-ai-assistant-title", { opacity: 0, x: -80 }, { opacity: 1, x: 0, duration: 0.52, ease: "power4.out" }, 0.24)
+        .fromTo(".f02-ai-assistant-line", { scaleX: 0 }, { scaleX: 1, duration: 0.52, ease: "power3.out" }, 0.5)
+        .fromTo(".f02-ai-assistant-window", { opacity: 0, x: 260, scale: 1.08 }, { opacity: 1, x: 0, scale: 1, duration: 1.05, ease: "power4.out" }, 0.72)
+        .fromTo(".f02-ai-assistant-window img", { scale: 1.07 }, { scale: 1, duration: 1.45, ease: "power3.out" }, 0.76)
+        .fromTo(".f02-ai-assistant-value span", { opacity: 0, y: 32 }, { opacity: 1, y: 0, duration: 0.42, stagger: 0.12, ease: "power3.out" }, 2.15)
+        .fromTo(".f02-ai-assistant-meta", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: 0.34, ease: "power3.out" }, 2.44);
+      window.__timelines["02-ai-assistant"] = tl;
+    </script>
+  </div>
+</template>

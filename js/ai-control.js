@@ -26,6 +26,7 @@
     $('embedding-model').value = data.policy.embeddingModel || 'text-embedding-nomic-embed-text-v1.5';
     $('reasoning').value = data.policy.reasoning || 'off';
     $('timeout').value = (data.policy.timeoutMs || 90000) / 1000;
+    if ($('context-compaction')) $('context-compaction').value = data.policy.contextCompaction || 'hybrid';
     $('budget').value = data.policy.maxOutputTokens || 4096;
     $('model').replaceChildren();
     const defaultModel = document.createElement('option'); defaultModel.value = ''; defaultModel.textContent = '服务默认模型'; $('model').append(defaultModel);
@@ -84,7 +85,7 @@
   $('refresh').addEventListener('click', () => perform(refresh));
   $('policy').addEventListener('submit', event => { event.preventDefault(); if (!state) return; void perform(async () => {
     const disabledScenes = [...$('scenes').querySelectorAll('input')].filter(input => !input.checked).map(input => input.value);
-    render(await send('ai_control_save', { expectedRevision: state.revision, policy: { dailyRequestLimit:Number($('daily-limit').value),failureThreshold:Number($('failure-limit').value),cooldownMs:Number($('cooldown').value)*1000, modelEnabled: $('model-enabled').checked, disabledScenes, model: $('model').value || null, embeddingModel: $('embedding-model').value.trim(), reasoning: $('reasoning').value, timeoutMs: Number($('timeout').value) * 1000, maxOutputTokens: Number($('budget').value) } })); notice('策略已保存，重启后继续生效');
+    render(await send('ai_control_save', { expectedRevision: state.revision, policy: { contextCompaction: $('context-compaction')?.value || state.policy.contextCompaction || 'hybrid', dailyRequestLimit:Number($('daily-limit').value),failureThreshold:Number($('failure-limit').value),cooldownMs:Number($('cooldown').value)*1000, modelEnabled: $('model-enabled').checked, disabledScenes, model: $('model').value || null, embeddingModel: $('embedding-model').value.trim(), reasoning: $('reasoning').value, timeoutMs: Number($('timeout').value) * 1000, maxOutputTokens: Number($('budget').value) } })); notice('策略已保存，重启后继续生效');
   }); });
   void perform(refresh);
 })();

@@ -24,7 +24,7 @@
 
 ## 启动和连接
 
-需要 Node.js 22.13+，无需安装 npm 依赖（个人记忆使用内置 SQLite）。
+需要 Node.js 22.19+。首次安装或更新依赖后，在 `local-ai` 目录执行 `npm ci`；上下文整理直接复用锁定的 pi 官方 SDK，个人记忆继续使用内置 SQLite。
 
 1. 在 LM Studio 的 Developer 页面启动本地服务。默认连接 `http://127.0.0.1:1234`，默认模型为 `qwen/qwen3.8-27b`。首次生成可能触发模型加载；如果关闭了 LM Studio 的即时加载，请先手动加载该模型。
 2. macOS 推荐双击本目录的 `启动本地AI.command`，或运行 `./service.sh start`。首次安装当前用户的 LaunchAgent 并启动入口，之后登录自动启动、进程退出后自动恢复；重复执行复用现有进程，终端可关闭。入口仅监听 `127.0.0.1:19841`。其他系统或临时前台调试仍可执行 `npm start` 并保持终端运行。
@@ -33,6 +33,25 @@
 5. 点击“检查状态”。输入“明天下午三点开会，提前十分钟提醒我”，应显示具体日期、14:50 和“已设置”。缺少时间会追问，直接在原输入框补充即可。
 
 可以先用“20分钟后提醒我休息”验证离线路径。第一次连接令牌是本服务自己的令牌，与 LM Studio 的可选 API Token 不同。
+
+### 统一服务脚本（macOS）
+
+在项目根目录执行以下命令；在本目录中可省略 `local-ai/`，也可从任意目录使用脚本绝对路径。
+
+```bash
+./local-ai/service.sh start      # 启动；已运行则检查并复用
+./local-ai/service.sh restart    # 更新代码后重启，保留连接令牌、模型及语音配置
+./local-ai/service.sh stop       # 关闭本次运行；shutdown 是同义命令
+./local-ai/service.sh status     # 检查主接口、个人记忆接口及模型状态
+./local-ai/service.sh help       # 查看完整帮助；也支持 -h / --help
+./local-ai/service.sh uninstall  # 停止并取消登录自动启动，保留数据
+```
+
+不传参数默认执行 `start`。`stop` 后下次登录仍会自动启动；永久关闭使用 `uninstall`。`install` 可重新安装或更新登录启动配置。脚本只管理扩展的本地 AI 网关，LM Studio 模型服务仍需单独开启。
+
+`start`、`restart` 和 `status` 都会检查个人记忆接口；如果提示“记忆接口不存在”，说明运行中的服务尚未加载新代码，执行 `restart`。记忆库异常会单独报告，其他 AI 功能可以继续使用。日志保存在 `.local/service.log` 和 `.local/service-error.log`。
+
+快捷助手遇到以 `tools.load` 开头的计划时，会在严格验证工具、参数与应用范围后补齐继续标记，只执行加载步骤，再根据真实加载回执重新规划；同批提出的后续动作不会提前执行。
 
 ## 配置
 
@@ -125,3 +144,16 @@
 脚本复用 `.local/token`、`control.json`、`usage.json`，不重置已有连接。显式提供的模型、推理、语音等环境变量会记录到权限为600的启动配置中；再次安装时保留未重新指定的值。自动启动固定使用扩展的19841端口。若已有手动启动的进程占用该端口，脚本会提示先停止，不会杀掉未知进程。
 
 此守护负责扩展的本地入口服务，不自动打开 LM Studio 或加载模型。LM Studio 的1234端口仍需开启；`status` 将两者分开显示。登录前及电脑睡眠期间不保证可用，手动执行 `stop` / `uninstall` 会停止守护。
+
+
+### 工作台自动确认判断（pi SDK）
+
+明确的一次性提醒（例如“20分钟后提醒我喝水”）以及准确指定单条一次性提醒的名称/时间修改，可以直接执行并继续后续步骤。删除、清空、重复提醒、歧义目标及预览要求仍保留确认。使用现有 pi 0.85.1 的公开执行前事件，无额外模型调用。
+
+鉴权接口为 `POST /v1/assistant/approval`，返回当次操作的判断，不提交业务动作、不保存通用授权。服务未连接或版本过旧时明确提示并保留手动确认。升级后重启本机服务、重新加载扩展。实现范围和验证见 [自动确认判断说明](../docs/technical/assistant-approval-pi-20260919.md)。
+
+### 工作台上下文整理（pi SDK）
+
+自动整理直接复用 `@earendil-works/pi-coding-agent@0.85.1` 的公开 API，通过现有网关调用本机模型；历史用户要求和真实执行回执独立保留。AI 设置可切换“自动精简与 pi 摘要 / 仅精简”，工作台也可手动整理。首次升级请在本目录执行 `npm ci`，重启本机服务并重新加载扩展。
+
+实现、来源存储边界与真实模型验证见 [pi SDK 接入说明](../docs/technical/assistant-context-compaction-pi-20260919.md)。专项测试：`node --test test/local-ai-compaction.test.mjs`（项目根目录）；真实模型合成材料验证：`node local-ai/evaluate-assistant-compaction.mjs --live`，不会操作账号、队列或提醒。

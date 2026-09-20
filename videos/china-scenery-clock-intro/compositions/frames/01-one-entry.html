@@ -1,0 +1,43 @@
+<template>
+  <div id="root" data-composition-id="01-one-entry" data-width="1920" data-height="1080" data-duration="2">
+    <div id="f01-one-entry-bg" class="clip f01-one-entry-bg" data-start="0" data-duration="2" data-track-index="0"></div>
+    <div id="f01-one-entry-content" class="clip f01-one-entry-content" data-start="0" data-duration="2" data-track-index="1">
+      <div class="f01-one-entry-grid"></div>
+      <div class="f01-one-entry-eyebrow"><span>01</span><span>NEW TAB</span><span>不是一个时钟页</span></div>
+      <div class="f01-one-entry-rule"></div>
+      <div class="f01-one-entry-title" aria-label="是你的数字生活工作台">
+        <div class="f01-one-entry-line f01-one-entry-line-a">是你的数字生活</div>
+        <div class="f01-one-entry-line f01-one-entry-line-b">工作台</div>
+      </div>
+      <img class="f01-one-entry-logo" src="assets/logo.png" alt="中国风景时钟 Logo" />
+      <div class="f01-one-entry-index">00:15 / PRODUCT FILM</div>
+    </div>
+    <style>
+      #root { width:100%; height:100%; position:relative; overflow:hidden; font-family:sans-serif; container-type:size; }
+      .f01-one-entry-bg { position:absolute; inset:0; background:#07111F; }
+      .f01-one-entry-content { position:absolute; inset:0; color:#EAF7FF; overflow:hidden; }
+      .f01-one-entry-grid { position:absolute; inset:0; background-image:linear-gradient(rgba(53,214,255,.09) 1px, transparent 1px),linear-gradient(90deg, rgba(53,214,255,.09) 1px, transparent 1px); background-size:96px 96px; opacity:.28; }
+      .f01-one-entry-eyebrow { position:absolute; left:106px; top:88px; display:flex; gap:28px; align-items:center; color:#35D6FF; font-size:22px; font-weight:700; letter-spacing:.14em; }
+      .f01-one-entry-eyebrow span:first-child { font-size:42px; letter-spacing:-.04em; }
+      .f01-one-entry-eyebrow span:last-child { color:#EAF7FF; opacity:.8; letter-spacing:.06em; }
+      .f01-one-entry-rule { position:absolute; left:106px; top:172px; width:1708px; height:2px; background:#35D6FF; transform-origin:left center; }
+      .f01-one-entry-title { position:absolute; left:102px; top:250px; width:1460px; font-weight:900; letter-spacing:-.065em; line-height:.94; }
+      .f01-one-entry-line { display:block; width:max-content; }
+      .f01-one-entry-line-a { font-size:154px; color:#EAF7FF; }
+      .f01-one-entry-line-b { margin-top:32px; font-size:230px; color:#35D6FF; }
+      .f01-one-entry-logo { position:absolute; right:112px; top:88px; width:100px; height:100px; object-fit:contain; }
+      .f01-one-entry-index { position:absolute; right:110px; top:790px; color:#24D39B; font-size:20px; font-weight:700; letter-spacing:.14em; }
+    </style>
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      tl.fromTo(".f01-one-entry-grid", { opacity: 0 }, { opacity: 0.28, duration: 0.55 }, 0)
+        .fromTo(".f01-one-entry-eyebrow span", { opacity: 0, y: -24 }, { opacity: 1, y: 0, duration: 0.42, stagger: 0.08, ease: "power3.out" }, 0.04)
+        .fromTo(".f01-one-entry-rule", { scaleX: 0 }, { scaleX: 1, duration: 0.68, ease: "power3.out" }, 0.22)
+        .fromTo(".f01-one-entry-line-a", { opacity: 0, x: -100 }, { opacity: 1, x: 0, duration: 0.62, ease: "power3.out" }, 0.28)
+        .fromTo(".f01-one-entry-line-b", { opacity: 0, x: -130, scale: 0.9 }, { opacity: 1, x: 0, scale: 1, duration: 0.6, ease: "power4.out" }, 0.78)
+        .fromTo(".f01-one-entry-logo", { opacity: 0, scale: 0.35, rotation: -12 }, { opacity: 1, scale: 1, rotation: 0, duration: 0.48, ease: "back.out(1.5)" }, 1.38)
+        .fromTo(".f01-one-entry-index", { opacity: 0, x: 36 }, { opacity: 1, x: 0, duration: 0.34, ease: "power3.out" }, 1.48);
+      window.__timelines["01-one-entry"] = tl;
+    </script>
+  </div>
+</template>

@@ -4,6 +4,7 @@
   root.AssistantTools = api;
 })(globalThis, function (root) {
   'use strict';
+  const Context = typeof module === 'object' && module.exports ? require('./assistant-context-state.js') : root.AssistantContextState;
   const Contract = typeof module === 'object' && module.exports ? require('./assistant-contract.js') : root.AssistantContract;
   const Music = typeof module === 'object' && module.exports ? require('./music-intent.js') : root.MusicIntent;
   const Management = typeof module === 'object' && module.exports ? require('./assistant-management.js') : root.AssistantManagement;
@@ -22,10 +23,13 @@
   }
   function create(deps) {
     const labels = { netease: '请求网易云音乐', bilibili: '请求哔哩哔哩', youtube: '请求 YouTube', controlMusic: '控制播放器', playMusic: '准备并播放单曲', playQueue: '替换队列并播放', enqueueMusic: '追加音乐队列', sleepMusic: '设置音乐停止时间', listAlarms: '读取提醒列表', saveAlarm: '保存提醒', mutateAlarm: '修改提醒', openURL: '打开页面', readMusicState: '读取播放器状态', setMusicMode: '设置播放模式', playCurrentQueue: '播放当前队列', applyMusicQueue: '应用音乐队列', editMusicQueue: '编辑音乐队列', seekMusic: '调整播放进度', connectionStatus: '检查应用连接' };
-    function runtime(ctx) {
-      if (!ctx.trace) return createRuntime(deps);
+    const writes = new Set(['controlMusic', 'playMusic', 'playQueue', 'enqueueMusic', 'sleepMusic', 'saveAlarm', 'mutateAlarm', 'openURL', 'setMusicMode', 'playCurrentQueue', 'applyMusicQueue', 'editMusicQueue', 'seekMusic']);
+    function runtime(ctx, safety) {
       const scoped = { ...deps };
-      for (const [name, title] of Object.entries(labels)) if (typeof deps[name] === 'function') scoped[name] = (...args) => {
+      const beforeWrite = async () => { ctx.guard(); safety.started = true; await ctx.effectStarted?.(); ctx.guard(); };
+      for (const [name, title] of Object.entries(labels)) if (typeof deps[name] === 'function') scoped[name] = async (...args) => {
+        if (writes.has(name)) await beforeWrite();
+        if (!ctx.trace) return deps[name](...args);
         const path = name === 'netease' ? String(args[0]) : '';
         const requestTitle = /artist\/top\/song|\/api\/v1\/artist$/.test(path) ? '读取歌手热门歌曲' : /search/.test(path) ? `搜索${({ 1: '歌曲', 100: '歌手', 10: '专辑', 1000: '歌单' })[args[1]?.type] || '音乐'}` : /playlist\/detail/.test(path) ? '读取歌单曲目' : /song\/detail/.test(path) ? '补全歌曲详情' : /\/album\//.test(path) ? '读取专辑曲目' : title;
         return ctx.trace(`service.${name}`, requestTitle, args.filter(arg => arg !== ctx), async child => {
@@ -35,11 +39,52 @@
       };
       if (deps.storage) {
         scoped.storage = {};
-        for (const method of ['get', 'set', 'remove']) if (deps.storage[method]) scoped.storage[method] = (...args) => ctx.trace(`storage.${method}`, ({ get: '读取本地资料', set: '保存本地资料', remove: '移除本地资料' })[method], args, () => deps.storage[method](...args), 'operation');
+        for (const method of ['get', 'set', 'remove']) if (deps.storage[method]) scoped.storage[method] = async (...args) => {
+          if (method !== 'get') await beforeWrite();
+          return ctx.trace ? ctx.trace(`storage.${method}`, ({ get: '读取本地资料', set: '保存本地资料', remove: '移除本地资料' })[method], args, () => deps.storage[method](...args), 'operation') : deps.storage[method](...args);
+        };
       }
+      if (deps.memory) scoped.memory = async (action, ...args) => { if (action !== 'get') await beforeWrite(); return deps.memory(action, ...args); };
       return createRuntime(scoped);
     }
-    return Object.fromEntries(['plan', 'execute', 'choose'].map(method => [method, (input, ctx) => runtime(ctx)[method](input, ctx)]));
+    return { ...Object.fromEntries(['plan', 'execute', 'choose'].map(method => [method, async (input, ctx) => {
+      const safety = { started: false };
+      try {
+        const handler = runtime(ctx, safety);
+        const outcome = await handler[method](input, ctx);
+        if (method !== 'execute' || outcome?.status !== 'review' || outcome.choices?.length !== 1) return outcome;
+        const choice = outcome.choices[0];
+        if (!['alarm.create', 'alarm.commit'].includes(choice.action) || choice.data?.action === 'delete') return outcome;
+        ctx.guard();
+        const requestId = `${ctx.task.id}:${ctx.task.version}:${ctx.spanId || 'approval'}`;
+        const body = { requestId, version: ctx.task.version, text: ctx.task.input?.text || '',
+          constraints: Context.envelope(ctx.task).constraints.map(row => row.text),
+          action: choice.action, data: choice.data, ...(outcome.approvalContext || {}), now: (deps.now || Date.now)() };
+        let decision;
+        try {
+          const evaluate = () => deps.ai({ action: 'ai_approval_evaluate', body });
+          decision = await (ctx.trace ? ctx.trace('assistant.approval', '判断是否需要确认（pi SDK）', { action: choice.action }, evaluate, 'operation') : evaluate());
+          ctx.guard();
+          if (!decision?.ok || decision.requestId !== requestId || decision.version !== body.version ||
+              decision.policy !== 'assistant-approval-v1' || !['allow', 'confirm'].includes(decision.decision)) throw new Error('确认策略返回无效');
+        } catch (error) {
+          ctx.guard();
+          return { ...outcome, message: `${outcome.message}\n自动判断暂不可用，保留手动确认。`, observation: { approval: { decision: 'confirm', reason: '策略服务不可用' } } };
+        }
+        if (decision.decision !== 'allow') return { ...outcome, observation: { approval: decision } };
+        if (Context.state(ctx.task).uncertain) throw Object.assign(new Error('上次操作结果未确认，请先核对实际状态'), { code: 'ASSISTANT_USER_INPUT_REQUIRED' });
+        await ctx.reserveAction?.(); ctx.guard();
+        const commit = child => handler.choose(choice, child);
+        const result = await (ctx.trace ? ctx.trace(choice.action, '执行已授权的提醒操作', { reason: decision.reason, data: choice.data }, commit, 'action') : commit(ctx));
+        ctx.guard();
+        return { ...result, memory: { ...outcome.memory, ...result.memory }, observation: { ...result.observation, approval: decision } };
+      }
+      catch (error) {
+        // This describes dispatch, not success. An unacknowledged write stays unknown.
+        if (method !== 'plan' && error instanceof Error) error.sideEffectState = safety.started ? 'unknown' : 'none';
+        throw error;
+      }
+    }])), compact: (ctx, force) => runtime(ctx, { started: false }).compact(ctx, force) };
   }
   function createRuntime(deps) {
     const { ai, netease, bilibili, youtube, storage, controlMusic, playMusic, sleepMusic, listAlarms, saveAlarm, openURL, now = Date.now } = deps;
@@ -82,7 +127,7 @@
         playback: { mode, title: result.currentSong?.title, artist: choice.title, count: result.count, source: choice.title }, observation: publicState(result) };
     }
     async function awaitAI(action, body, ctx) {
-      if (ctx.trace && !ctx.inModelCall) return ctx.trace('assistant.model', '理解需求与生成执行计划', { scene: body.scene || action }, async child => {
+      if (ctx.trace && !ctx.inModelCall) return ctx.trace(body.scene === 'assistant.compact' ? 'assistant.compact' : 'assistant.model', body.scene === 'assistant.compact' ? '整理上下文（pi SDK）' : '理解需求与生成执行计划', { scene: body.scene || action }, async child => {
         try { return await awaitAI(action, body, { ...child, inModelCall: true }); }
         catch (error) { if (error.execution && child.modelCall) await child.modelCall(error.execution); throw error; }
       }, 'operation');
@@ -93,7 +138,7 @@
         ctx.task.usedModel = true;
         try { await ctx.trackJob(jobId); } catch (error) { await ai({ action: 'ai_job_cancel', jobId }).catch(() => {}); throw error; }
       }
-      const deadline = now() + 105000;
+      const deadline = Math.min(now() + 105000, (ctx.task.runStartedAt || ctx.task.startedAt || now()) + 300000);
       const poll = action === 'music_ai_interpret' ? 'music_ai_result' : action === 'smart_alarm_interpret' ? 'smart_alarm_result' : 'ai_scene_result';
       while (response?.ok && response.status === 'pending') {
         ctx.guard(); if (now() > deadline) throw new Error('本地 AI 处理超时，请重试');
@@ -103,19 +148,53 @@
       ctx.guard();
       if (response?.execution && ctx.modelCall) await ctx.modelCall(response.execution);
       else if (ctx.modelCall && response?.source === 'rules') await ctx.modelCall({ source: 'rules', scene: body.scene || action });
-      if (!response?.ok) throw new Error(response?.error?.message || response?.error || '本地 AI 请求失败'); return response;
+      if (!response?.ok) throw Object.assign(new Error(response?.error?.message || response?.error || '本地 AI 请求失败'), { code: response?.code || null, execution: response?.execution, contextBudget: response?.contextBudget }); return response;
+    }
+    async function compact(ctx, force = false) {
+      ctx.guard();
+      const request = Context.batch(ctx.task, force);
+      if (!request) return false;
+      if (now() - (ctx.task.runStartedAt || ctx.task.startedAt || now()) > 240000) throw new Error('剩余时间不足以整理上下文，已有执行进度已保存');
+      await ctx.progress?.('正在整理上下文，已完成操作已保留…');
+      const response = await awaitAI('ai_scene_submit', { scene: 'assistant.compact', input: request }, ctx);
+      ctx.guard();
+      // Stop/replacement makes guard fail before any persistent pointer changes.
+      const previous = structuredClone(ctx.task.contextState), previousNotice = ctx.task.contextNotice;
+      const changed = Context.commit(ctx.task, request, response.data);
+      try { await ctx.saveContext?.(); }
+      catch (error) { ctx.task.contextState = previous; ctx.task.contextNotice = previousNotice; throw error; }
+      return changed;
     }
     async function plan(input, ctx) {
       let local = ctx.task.remainingSteps?.length || ctx.task.observations?.length ? null : Contract.localPlan(input);
-      if (!local && !ctx.task.observations?.length && !/如果|否则|队列|随机|循环|登录|连接|权限|授权|下一页|翻页|继续搜索/.test(input.text) && !input.app && !input.skill) {
+      if (!local && !Memory.historical(input.text) && !ctx.task.observations?.length && !/如果|否则|队列|随机|循环|登录|连接|权限|授权|下一页|翻页|继续搜索/.test(input.text) && !input.app && !input.skill) {
         const intent = Music.parseLocal(input.text);
         if (intent && (intent.action !== 'search' || /歌曲|音乐|歌手|歌单|听|首|^播放.+的/.test(input.text))) local = { steps: [{ tool: 'music.intent', args: { text: input.text } }] };
       }
       if (local) return local;
       const { ai: _selection, ...modelInput } = input;
-      const snapshot = (!input.app || input.app === 'music') ? await readMemory(ctx) : null;
-      const response = await awaitAI('ai_scene_submit', { scene: 'assistant.plan', input: { ...modelInput, ...(snapshot?.enabled ? { personalMemory: Memory.effective(snapshot) } : {}), turns: ctx.task.turns.slice(-12), observations: ctx.task.observations || [], toolGroups: ctx.task.memory?.toolGroups || [], ...(ctx.task.remainingSteps?.length ? { remainingSteps: ctx.task.remainingSteps } : {}) } }, ctx);
-      return response.data;
+      const snapshot = await readMemory(ctx);
+      const recalledMemory = Memory.recall(snapshot, input.text, { app: input.app, now: now() });
+      if (recalledMemory.length) ctx.task.memoryNotice = `已参考 ${recalledMemory.length} 条相关记忆；历史经历不会作为本次执行回执。`;
+      // Bounded incremental SDK summaries before the legacy 40-turn transport
+      // limit. Sources and explicit user constraints are never sliced away.
+      for (let n = 0; Context.pending(ctx.task).length > 32 && n < 4; n++) {
+        if (!await compact(ctx)) break;
+      }
+      if (Context.pending(ctx.task).length > 40) throw new Error('待整理记录过长，进度已保存，请先整理上下文');
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const completedSteps = (ctx.task.log || []).filter(row => row.status === 'done' && Object.hasOwn(Contract.tools, row.tool)).slice(-24).map(row => ({ tool: row.tool, message: String(row.message || '').slice(0, 500) }));
+        const context = { ...Context.envelope(ctx.task), canCompact: Context.pending(ctx.task).length > 2, compactionAttempted: attempt > 0 };
+        const payload = { ...modelInput, ...(recalledMemory.length ? { recalledMemory } : {}), ...(snapshot?.enabled ? { personalMemory: Memory.effective(snapshot) } : {}),
+          turns: Context.pending(ctx.task).map(({ role, content }) => ({ role, content: content.slice(0, 500) })),
+          observations: ctx.task.observations || [], completedSteps, context, toolGroups: ctx.task.memory?.toolGroups || [],
+          ...(ctx.task.remainingSteps?.length ? { remainingSteps: ctx.task.remainingSteps } : {}) };
+        if (new TextEncoder().encode(JSON.stringify(payload)).length > 58000) throw new Error('必须保留的任务状态超过传输预算，进度已保存，请缩小需求范围');
+        const response = await awaitAI('ai_scene_submit', { scene: 'assistant.plan', input: payload }, ctx);
+        if (response.status !== 'needs_compaction') return response.data;
+        if (attempt) throw new Error('整理后仍无法容纳上下文，进度已保存');
+        await compact(ctx, response.reason !== 'threshold');
+      }
     }
     async function musicIntent(text, ctx) {
       const memory = ctx.task.memory || {};
@@ -135,13 +214,13 @@
     }
     async function alarmPrepare(text, ctx) {
       const memory = ctx.task.memory || {}, zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      if (memory.alarmZone && zone !== memory.alarmZone) throw new Error('时区已变化，请新建需求');
+      if (memory.alarmZone && zone !== memory.alarmZone) throw Object.assign(new Error('时区已变化，请新建需求'), { code: 'ASSISTANT_USER_INPUT_REQUIRED' });
       const anchor = memory.alarmAnchor || now();
       const response = await awaitAI('smart_alarm_interpret', { text, now: anchor, currentNow: now(), timeZone: zone, conversation: true, turns: ctx.task.turns.slice(0, -1), ...(memory.alarmDraft ? { draft: memory.alarmDraft } : {}) }, ctx);
       const saved = { alarmDraft: response.draft || memory.alarmDraft || null, alarmAnchor: anchor, alarmZone: zone };
       if (response.status === 'needs_clarification') return { status: 'clarify', message: response.question, memory: saved };
       if (response.status !== 'ready' || !response.alarm || response.timeZone !== zone) throw new Error('快捷入口仅支持新建提醒和查看列表，其他操作请进入闹钟中心');
-      return { status: 'review', message: `待确认：${response.displayText}（${zone}）。确认后创建，也可以继续补充修改。`, memory: saved,
+      return { status: 'review', approvalContext: { anchor }, message: `待确认：${response.displayText}（${zone}）。确认后创建，也可以继续补充修改。`, memory: saved,
         choices: [{ id: 'confirm-alarm', title: response.displayText, subtitle: zone, label: '确认创建', action: 'alarm.create', data: { alarm: response.alarm, zone } }] };
     }
     async function videos(tool, args, ctx) {
@@ -196,12 +275,13 @@
       return entry;
     }
     async function searchMusic(args, ctx) {
-      const result = await musicObjects.search({ action: 'search', ...args }, ctx);
+      const snapshot = ['artist', 'auto'].includes(args.kind) ? await readMemory(ctx) : null;
+      const remembered = snapshot?.enabled && snapshot.artists?.some(row => row.key === Memory.normalize(args.query));
+      const result = await musicObjects.search({ action: 'search', ...args, fresh: Boolean(remembered) }, ctx);
       const request = Music.artistRequest(ctx.task.input?.text) || (args.collection === 'top' ? args : null);
       ctx.task.memory ||= {};
       delete ctx.task.memory.artistRequest;
       if (args.kind === 'artist' && request?.collection === 'top') {
-        const snapshot = await readMemory(ctx);
         const goal = /先别.*播|先不.*播|不要.*播|不播放|只看看/.test(ctx.task.input?.text || '') ? 'browse' : request.goal === 'auto' ? Memory.effective(snapshot).artistDefaultAction : request.goal;
         ctx.task.memory.artistRequest = { query: args.query, goal, ...(request.queueMode ? { queueMode: request.queueMode } : {}) };
         if (goal === 'play' && result.choices?.length) {
@@ -215,6 +295,20 @@
           result.message = '需要确认是哪位歌手。选择后将继续播放热门歌曲。' + (snapshot?.enabled && snapshot.rememberArtists ? '本次选择会保存在“我的记忆”。' : '');
           result.choices = result.choices.map(choice => choice.kind === 'artist' && !choice.secondary ? { ...choice, label: '播放热门歌曲' } : choice);
         }
+      }
+      // A remembered identity resolves selection for both simple browsing and
+      // multi-step plans. The original plan still decides whether to play.
+      const recalled = ['artist', 'auto'].includes(args.kind) && !result.musicView?.local && result.choices?.length
+        ? Memory.candidate(result.choices, args.query, snapshot, { rememberedOnly: true }) : null;
+      if (recalled) {
+        const choice = recalled.choice;
+        ctx.task.memoryNotice = `${recalled.reason}：${choice.title}。`;
+        if (ctx.task.adaptive) {
+          const ref = remember(choice.data, ctx, true);
+          return { message: `已根据记忆选择${choice.title}，继续处理原需求。`,
+            musicView: choice.data, observation: { selectedRef: ref, title: choice.title, requiresSelection: false } };
+        }
+        return musicObjects.choose(choice, ctx);
       }
       const nextRef = result.nextPage == null ? null : remember({ type: 'music-page', args: { ...args, page: result.nextPage } }, ctx);
       if (nextRef) result.choices.push({ id: 'music-search-next', kind: 'navigation', title: '下一页音乐', label: '下一页', action: 'music.search.next', data: { ref: nextRef } });
@@ -264,16 +358,27 @@
 
     const management = Management.create(deps, { remember, resolve, publicState, videoURL, safeText, now });
     async function execute(step, ctx) {
+      if (step.tool === 'context.read') return Context.read(ctx.task, step.args.ref, step.args.offset || 0);
+      if (step.tool === 'memory.recall') {
+        Contract.validatePlan({ steps: [step] }, ctx.task.input.app);
+        const snapshot = await memoryCall('get', null, ctx);
+        if (!snapshot.enabled) return { message: '个人记忆已暂停，可在“我的记忆”中重新启用。' };
+        const rows = Memory.recall(snapshot, step.args.text, { app: ctx.task.input.app, now: now() }).filter(row => row.kind === 'experience');
+        const labels = { searched: '搜索', played: '播放', applied: '加入队列', selected: '选择', opened: '打开页面', created: '创建提醒', updated: '修改提醒', deleted: '删除提醒' };
+        return { message: rows.length ? '找到以下历史经历（不代表当前状态）：\n' + rows.map(row => `${new Date(row.at).toLocaleString('zh-CN')} · ${labels[row.action]} · ${row.title || row.query}：${row.message}`).join('\n') : '没有找到相关经历记忆。未开启正文留存、已过期或已删除的记录无法回忆；已留存历史可在“我的记忆”中补充。',
+          result: rows.map(row => ({ title: row.title || row.query, subtitle: `${new Date(row.at).toLocaleString('zh-CN')} · ${labels[row.action]}` })),
+          observation: { historical: true, items: rows.map(({ title, query, action, at, message }) => ({ title, query, action, at, message })) } };
+      }
       if (step.tool === 'memory.manage') {
         const request = Memory.command(ctx.task.input?.text);
-        if (!request || step.args.text !== ctx.task.input.text) throw new Error('只能保存你本次明确表达的偏好');
+        if (!request || step.args.text !== ctx.task.input.text || (request.operation === 'preference' && ctx.task.input.app && ctx.task.input.app !== 'music')) throw new Error('只能保存你本次明确表达的偏好');
         const snapshot = await memoryCall('get', null, ctx);
         if (request.operation === 'list') {
           const effective = Memory.effective(snapshot);
-          return { message: `音乐默认：歌手热门歌曲${effective.artistDefaultAction === 'play' ? '直接播放' : '先展示'}；${effective.artistQueueMode === 'append' ? '保留原队列' : '替换队列'}。已记住 ${snapshot.artists.length} 个歌手选择。可在“我的记忆”中修改、删除或暂停使用。` };
+          return { message: `音乐默认：歌手热门歌曲${effective.artistDefaultAction === 'play' ? '直接播放' : '先展示'}；${effective.artistQueueMode === 'append' ? '保留原队列' : '替换队列'}。已记住 ${snapshot.artists.length} 个歌手选择、${snapshot.notes?.length || 0} 条明确偏好、${snapshot.experiences?.length || 0} 条经历。可在“我的记忆”中修改、删除或暂停使用。` };
         }
-        await memoryCall('write', { ...request, source: ctx.task.input.text, sourceId: ctx.task.conversationId || ctx.task.id, sourceStartedAt: ctx.task.conversationStartedAt || ctx.task.startedAt, expectedRevision: snapshot.revision }, ctx);
-        return { message: `已保存音乐偏好：${ctx.task.input.text}${snapshot.enabled ? '。' : '。当前已暂停使用记忆，可在“我的记忆”中重新启用。'}` };
+        await memoryCall('write', { ...request, ...(request.operation === 'note' ? { app: Memory.scopeFor(request.value, ctx.task.input.app) || 'all' } : {}), source: ctx.task.input.text, sourceId: ctx.task.conversationId || ctx.task.id, sourceStartedAt: ctx.task.conversationStartedAt || ctx.task.startedAt, expectedRevision: snapshot.revision }, ctx);
+        return { message: `已保存${request.operation === 'note' ? '明确偏好（作为相关请求的参考）' : '音乐偏好'}：${ctx.task.input.text}${snapshot.enabled ? '。' : '。当前已暂停使用记忆，可在“我的记忆”中重新启用。'}` };
       }
       Contract.validatePlan({ steps: [step], ...(step.tool === 'tools.load' ? { continue: true } : {}) }, ctx.task.input.app); ctx.guard();
       if (step.tool === 'app.status') {
@@ -314,6 +419,9 @@
           await rememberArtist({ ...choice, title: data.title }, query, snapshot, ctx);
           return outcome;
         }
+        const entry = resolve(data.assistantRef, ctx); entry.selected = true;
+        await rememberArtist({ ...choice, title: data.title }, query, snapshot, ctx);
+        return { message: `已选择${entry.value.title}，继续处理原需求。`, observation: { selectedRef: data.assistantRef, title: entry.value.title } };
       }
       if (choice.action === 'music.search.next') { const entry = resolve(data.ref, ctx); if (entry.value.type !== 'music-page') throw new Error('翻页引用无效'); return searchMusic(entry.value.args, ctx); }
       const managed = await management.choose(choice, ctx); if (managed) return managed;
@@ -323,16 +431,16 @@
       }
       if (choice.action.startsWith('music.')) return musicObjects.choose(choice, ctx);
       if (choice.action === 'alarm.create') {
-        if (data.zone !== Intl.DateTimeFormat().resolvedOptions().timeZone || (data.alarm.fireAt && data.alarm.fireAt <= now())) throw new Error('提醒时间已过或时区已变化，请重新输入');
+        if (data.zone !== Intl.DateTimeFormat().resolvedOptions().timeZone || (data.alarm.fireAt && data.alarm.fireAt <= now())) throw Object.assign(new Error('提醒时间已过或时区已变化，请重新输入'), { code: 'ASSISTANT_USER_INPUT_REQUIRED' });
         ctx.guard(); const result = await saveAlarm({ ...data.alarm, id: `assistant_${ctx.task.id}`, smartInput: true });
         if (!result?.alarm) throw new Error('未收到提醒保存结果');
-        return { message: `${result.duplicate ? '已有相同提醒' : '已设置提醒'}：${result.alarm.date || '重复提醒'} ${result.alarm.time} · ${result.alarm.label}` };
+        return { observation: { created: !result.duplicate, label: result.alarm.label }, message: `${result.duplicate ? '已有相同提醒' : '已设置提醒'}：${result.alarm.date || '重复提醒'} ${result.alarm.time} · ${result.alarm.label}` };
       }
-      if (choice.action === 'video.open') { const url = videoURL(data.platform, data.id, data.seconds, data.page); ctx.guard(); await openURL(url); return { message: `已在原站打开《${data.title}》${data.page > 1 ? `第 ${data.page} P` : ''}${data.seconds > 0 ? `，链接定位到 ${time(data.seconds)}` : ''}。请以播放器的实际状态为准。` }; }
+      if (choice.action === 'video.open') { const url = videoURL(data.platform, data.id, data.seconds, data.page); ctx.guard(); await openURL(url); return { observation: { opened: true, playbackConfirmed: false }, message: `已在原站打开《${data.title}》${data.page > 1 ? `第 ${data.page} P` : ''}${data.seconds > 0 ? `，链接定位到 ${time(data.seconds)}` : ''}。请以播放器的实际状态为准。` }; }
       if (choice.action === 'video.search-site' && data.platform === 'youtube') { const url = new URL('https://www.youtube.com/results'); url.searchParams.set('search_query', data.query); ctx.guard(); await openURL(url.href); return { message: '已打开 YouTube 原站搜索结果。' }; }
       throw new Error('候选动作无效');
     }
-    return { plan, execute, choose };
+    return { plan, compact, execute, choose };
   }
   return { create, videoURL, safeText };
 });

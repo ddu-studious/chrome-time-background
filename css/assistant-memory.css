@@ -3,3 +3,5 @@
 @media(prefers-color-scheme:light){:root{color-scheme:light;--bg:#f5f5fa;--panel:#fff;--text:#242337;--muted:#64657a;--line:#dfdfeb;--accent:#6851c6}.danger{color:#a03139}#notice[data-error=true]{color:#963039}}
 
 header>a{flex-shrink:0;white-space:nowrap}
+
+.entry strong,.entry p{overflow-wrap:anywhere;min-width:0}.row strong{flex:1 1 200px}#experience-count{font-size:13px;color:var(--muted)}

@@ -3,18 +3,19 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="color-scheme" content="light dark">
-  <title>快捷助手 · 中国风景时钟</title>
-  <link rel="stylesheet" href="css/assistant.css">
+  <meta name="color-scheme" content="dark">
+  <title>AI 工作台 · 快捷助手</title>
+  <link rel="stylesheet" href="css/assistant.css?v=20260918-mist2">
 </head>
 <body>
   <main class="assistant" aria-label="快捷助手">
-    <header><h1><span class="status-dot" aria-hidden="true"></span>快捷助手 <small id="session-label"></small></h1><div><button id="edit-task" class="quiet" type="button" hidden>编辑输入</button><button id="new-task" class="quiet" type="button">新需求</button><button id="hide" class="quiet" type="button" aria-label="收起输入条">Esc 收起</button></div></header>
+    <header><h1><span>AI 工作台</span><span class="workspace-subtitle">快捷助手</span><small id="session-label"></small></h1><div><button id="edit-task" class="quiet" type="button" hidden>编辑输入</button><button id="new-task" class="quiet" type="button">＋ 新需求</button><button id="hide" class="quiet" type="button" aria-label="收起输入条">Esc 收起</button></div></header>
+    <section class="workspace-intro" aria-label="工作台介绍"><h2>从一句话开始</h2><p>找音乐、继续看视频，或安排下一件事。</p></section>
     <form id="compose">
-      <div class="search-line"><span class="search-icon" aria-hidden="true">⌕</span><div id="tokens" aria-label="已选择的应用与动作"></div>
+      <div class="search-line"><span class="search-icon" aria-hidden="true">✦</span><div id="tokens" aria-label="已选择的应用与动作"></div>
       <label class="sr-only" for="request">输入你的需求</label>
-      <textarea id="request" role="combobox" aria-autocomplete="list" aria-controls="suggestions" aria-expanded="false" maxlength="500" rows="1" placeholder="输入 @ 选择应用，或说说你想做什么…" autocomplete="off" spellcheck="false" autofocus></textarea><button id="submit" class="primary" type="submit" aria-label="执行需求">↵</button></div>
-      <div class="toolbar"><div><button id="apps" type="button">@ 应用</button><button id="skills" type="button">/ 动作</button><label class="ai-choice"><span>模型</span><select id="assistant-model" aria-label="选择本次请求的模型" disabled><option value="">读取中…</option></select></label><label class="ai-choice"><span>思考</span><select id="assistant-reasoning" aria-label="选择本次请求的思考强度" disabled><option value="">默认</option></select></label><span id="session-memory"></span></div><div><span id="submit-mode"></span><span id="new-request-shortcut"></span><button id="cancel" type="button" hidden>停止执行</button></div></div>
+      <textarea id="request" role="combobox" aria-autocomplete="list" aria-controls="suggestions" aria-expanded="false" maxlength="500" rows="1" placeholder="输入 @ 选择应用，或说说你想做什么…" autocomplete="off" spellcheck="false"></textarea><button id="submit" class="primary" type="submit" aria-label="执行需求">↵</button></div>
+      <div class="toolbar"><div><button id="apps" type="button">@ 应用</button><button id="skills" type="button">/ 动作</button><label class="ai-choice"><span>模型</span><select id="assistant-model" aria-label="选择本次请求的模型" disabled><option value="">读取中…</option></select></label><label class="ai-choice"><span>思考</span><select id="assistant-reasoning" aria-label="选择本次请求的思考强度" disabled><option value="">默认</option></select></label><span id="session-memory"></span></div><div><span id="submit-mode"></span><span id="new-request-shortcut"></span><button id="compact-context" type="button" hidden>整理上下文</button><button id="cancel" type="button" hidden>停止执行</button></div></div>
     </form>
     <section id="discovery" aria-label="应用与动作建议"><h2 id="menu-title">试试这样说</h2><div id="suggestions" role="listbox" aria-label="应用、动作与示例"></div></section>
     <section id="session-receipt" hidden><button id="receipt-toggle" type="button" aria-expanded="false" aria-controls="session-workspace"><span class="receipt-check" aria-hidden="true">✓</span><span id="receipt-title"></span><span id="receipt-label">查看本次对话 ⌄</span></button></section>

@@ -22,7 +22,7 @@ test('首页提前加载宿主，输入栏默认文案不再写死搜歌', () =>
   assert.ok(html.indexOf('js/assistant-overlay.js') < html.indexOf('js/assistant-launcher.js'));
   const assistant = fs.readFileSync(require.resolve('../assistant.html'), 'utf8');
   assert.match(assistant, /placeholder="输入 @ 选择应用/);
-  assert.match(assistant, /id="request"[^>]*autofocus/);
+  assert.doesNotMatch(assistant, /<textarea\b[^>]*\bautofocus\b/);
   assert.match(assistant, /id="assistant-model"/);assert.match(assistant, /id="assistant-reasoning"/);
 });
 test('嵌入输入条收到宿主聚焦请求后把光标放到草稿末尾', () => {

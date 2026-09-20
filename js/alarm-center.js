@@ -43,6 +43,12 @@
       this._bindEvents();
       await this.refresh();
 
+      chrome.storage?.onChanged?.addListener((changes, area) => {
+        if (area !== 'local' || !changes.userAlarmCountdownV1) return;
+        this.state.countdown = { ...this.state.countdown, enabled: changes.userAlarmCountdownV1.newValue?.enabled !== false };
+        this._renderHealth();
+      });
+
       if (chrome.runtime?.onMessage?.addListener) {
         chrome.runtime.onMessage.addListener(message => {
           if (message.action === 'user_alarm_open_center') {
@@ -93,6 +99,8 @@
           </div>
 
           <div class="alarm-health" id="alarm-health">
+            <label class="alarm-health-item" title="可拖动、记住位置；关闭浮窗不取消闹钟"><input type="checkbox" id="alarm-countdown-enabled" checked> 桌面倒计时</label>
+            <span class="alarm-health-item" id="alarm-countdown-status" role="status">设置闹钟后自动悬浮，可拖动</span>
             <button type="button" class="alarm-text-button" id="alarm-desktop-test">测试桌面提醒</button>
             <span class="alarm-health-item" data-health="sound"><i class="fas fa-volume-high"></i> 离线声音就绪</span>
             <span class="alarm-health-item" data-health="notification"><i class="fas fa-bell"></i> 通知检测中</span>
@@ -169,6 +177,16 @@
     }
 
     _bindEvents() {
+      this.root.querySelector('#alarm-countdown-enabled').addEventListener('change', async event => {
+        const toggle = event.target;
+        toggle.disabled = true;
+        try {
+          const result = await send('user_alarm_countdown_set', { enabled: toggle.checked });
+          if (!result.ok) this._toast(result.error || '设置失败，请重试');
+          else if (result.error) this._toast('闹钟仍正常运行；桌面倒计时需要安装或更新 macOS 桌面组件');
+          await this.refresh();
+        } finally { toggle.disabled = false; }
+      });
       this.root.querySelector('#alarm-desktop-test').addEventListener('click', async event => {
         event.target.disabled = true;
         const result = await send('user_alarm_desktop_test');
@@ -260,6 +278,15 @@
     }
 
     _renderHealth() {
+      const countdown = this.state.countdown || {};
+      this.root.querySelector('#alarm-countdown-enabled').checked = countdown.enabled !== false;
+      const status = this.root.querySelector('#alarm-countdown-status');
+      status.textContent = countdown.enabled === false ? '已隐藏浮窗，闹钟照常提醒'
+        : countdown.error ? '倒计时未连接 · 需安装或更新 macOS 桌面组件'
+        : this.state.runtime?.activeSession ? '正在响铃 · 处理后恢复倒计时'
+        : this.state.nextFireAt ? '显示最近提醒 · 拖动可调整位置' : '设置闹钟后自动悬浮，可拖动';
+      status.title = countdown.error || '浮窗右侧 × 仅隐藏倒计时；重新勾选即可恢复';
+      status.classList.toggle('warning', Boolean(countdown.error));
       const item = this.root.querySelector('[data-health="notification"]');
       const granted = this.state.notificationPermission === 'granted';
       item.classList.toggle('warning', !granted);

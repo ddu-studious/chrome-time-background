@@ -86,13 +86,19 @@
         detail.append(element('code', row.tool));
         if (row.parentId) detail.append(element('p', `属于：${byId.get(row.parentId)?.title || '已超出显示范围的步骤'}`));
         const model = (value.modelCalls || []).find(call => call.toolCallId === row.id);
-        if (model) detail.append(element('p', model.model ? `${model.model} · 思考：${model.reasoning ?? '未返回'} · ${duration(model.elapsedMs)}` : model.source === 'rules' ? '本地规则处理，未调用模型' : '未返回模型信息'));
+        if (model) detail.append(element('p', model.model ? `${model.model} · 思考：${model.reasoning ?? '未返回'} · ${duration(model.elapsedMs)}` : model.source === 'rules' ? '本地规则处理，未调用模型' : model.requestedModel ? `规划准备 · ${model.requestedModel} · 尚未调用模型` : '未返回模型信息'));
+        if (model?.recoveryFromRequestId) detail.append(element('p', '本轮前序规划已关闭思考恢复成功，后续步骤沿用关闭思考；未更改默认设置。'));
+        if (model?.contextBudget) detail.append(element('h3', model.scene === 'assistant.compact' ? '摘要上下文预算' : '规划上下文预算'), element('pre', JSON.stringify(model.contextBudget, null, 2)));
         for (const [key, title] of [['input','输入参数'], ['output','返回结果'], ['error','错误信息']]) {
           if (row[key] === undefined) continue;
           detail.append(element('h3', title), element('pre', JSON.stringify(row[key], null, 2)));
         }
         if (!('input' in row) && !('output' in row)) detail.append(element('p', '本次恢复仅包含步骤元数据；正文是否留存请查看完整记录。'));
-        if (model?.model) detail.append(element('p', model.usage ? '用量：' + JSON.stringify(model.usage) : '服务未返回 token 用量'));
+        if (model?.attempts?.length) {
+          for (const attempt of model.attempts) detail.append(element('p', `尝试 ${attempt.index} · 思考：${attempt.reasoning} · ${labels[attempt.status] || attempt.status} · ${duration(attempt.elapsedMs)}${attempt.retryReason ? ' · 已关闭思考重试：' + attempt.retryReason : ''}`));
+          detail.append(element('h3', '模型尝试记录'), element('pre', JSON.stringify(model.attempts, null, 2)));
+        }
+        if (model?.model) detail.append(element('p', model.usage ? `${model.usageComplete === false ? '已知用量（部分尝试未返回用量）：' : '用量：'}` + JSON.stringify(model.usage) : '服务未返回 token 用量'));
         box.append(detail); box.addEventListener('toggle', () => { if (!box.isConnected) return; if (box.open) opened.add(row.id); else opened.delete(row.id); }); fragment.append(box);
       });
       if (!rows.length) fragment.append(element('p', '等待执行事件。旧版本未记录的步骤无法补回。', 'session-note'));
@@ -136,7 +142,9 @@
       $('trace-title').textContent = `${labels[value.status] || '执行过程'} · ${rows.length} 个动作${elapsed ? ' · ' + elapsed : ''}`;
       $('execution-panel').dataset.state = value.status;
       const calls = (value.modelCalls || []).filter(call => call.turnId === value.turnId), model = calls.findLast(call => call.model);
-      $('trace-meta').textContent = model ? `本机 · ${model.model} · 思考：${model.reasoning ?? '未返回'} · ${calls.filter(c => c.model).length} 次模型调用` : calls.length && calls.every(c => c.source === 'rules') ? '本轮由本地规则处理' : '实时动作 · 展开步骤查看详情';
+      const callCount = calls.filter(c => c.model).reduce((count, call) => count + (call.attempts?.length ?? 1), 0);
+      $('trace-meta').textContent = model ? `本机 · ${model.model} · 思考：${model.reasoning ?? '未返回'}${model.recoveryFromRequestId ? ' → 关闭（沿用本轮恢复）' : model.attempts?.length > 1 ? ' → 关闭（重试）' : ''} · ${callCount} 次模型调用` : calls.length && calls.every(c => c.source === 'rules') ? '本轮由本地规则处理' : '实时动作 · 展开步骤查看详情';
+      if (value.recoveryCount) $('trace-meta').textContent += ` · 错误恢复 ${value.recoveryCount}/3`;
       $('trace-note').textContent = (value.traceTruncated ? '仅显示最近 400 个动作。' : '') + (value.historyWarning || '正文留存遵循 AI 设置；工具详情已脱敏。');
       renderMessages(value); renderTrace(value);
     } };

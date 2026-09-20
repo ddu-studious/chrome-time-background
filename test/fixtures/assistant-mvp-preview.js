@@ -52,6 +52,7 @@
       const draft = AlarmIntent.parseDraft(message.text, message.draft, { now: message.now, timeZone: message.timeZone, currentNow: Date.now() });
       return { ok: true, ...(draft ? AlarmIntent.resolveDraft(draft, { now: message.now, timeZone: message.timeZone, currentNow: Date.now() }) : { status: 'needs_clarification', question: '请补充具体日期和时间' }) };
     }
+    if (message.scene === 'assistant.compact') return { ok: true, source: 'rules', data: { changed: false, reason: 'isolated-preview-no-model' } };
     const input = message.input;
     return { ok: true, source:'rules', data: AssistantContract.localPlan(input) || (input.app === 'music' ? {steps:[{tool:'music.intent',args:{text:input.text}}]} : { steps: [{ tool: 'video.history', args: { platform: input.app || 'bilibili', query: /mysql/i.test(input.text) ? 'MySQL' : '', ...(/昨天/.test(input.text) ? { dayOffset: 1 } : {}), ...(/没看完/.test(input.text) ? { unfinishedOnly: true } : {}) } }] }) };
   };

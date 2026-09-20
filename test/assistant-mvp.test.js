@@ -166,7 +166,7 @@ function playbackFixture({ url = async () => 'https://music.example.test/track.m
   let cache = { playlist: queue }, mode = 'sequence';
   let captured;
   const context = { MusicQueuePolicy: require('../js/music-queue-policy.js'), TextEncoder, crypto: { subtle: require('node:crypto').webcrypto.subtle, randomUUID: () => 'fixture-revision' }, Date: { now: () => clock }, setTimeout: fn => { clock += 250; queueMicrotask(fn); },
-    QuickAssistant: { install(deps) { captured = deps; return {}; } }, LocalAIBridge: {},
+    QuickAssistant: { install(deps) { captured = deps; return {}; } }, LocalAIBridge: {}, desktopAlarm: {},
     chrome: { storage: { local: { async get() { return { musicPlaylistCache: cache, musicPlayMode: mode }; }, async set(value) { if (value.musicPlaylistCache) cache = value.musicPlaylistCache; if (value.musicPlayMode) mode = value.musicPlayMode; writes++; }, async remove() {} } }, tabs: {} },
     musicSleep: {}, getUserAlarmViewState() {}, saveUserAlarm() {}, neteaseApiCall() {}, bilibiliApiCall() {}, youtubeApiCall() {},
     getSilentMusicSongUrl: url,

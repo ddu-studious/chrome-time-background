@@ -46,6 +46,62 @@ test('模型文本工具调用可转换为受控计划，未知工具仍被拒�
   }), /计划格式/);
 });
 
+test('工具加载缺少继续标记时自动补正，严格合同仍拒绝原始错误计划', async () => {
+  const { plan } = await import('../local-ai/assistant-service.mjs');
+  for (const flag of [undefined, false]) {
+    const raw = { steps: [{ tool: 'tools.load', args: { group: 'music.queue' } }], ...(flag === undefined ? {} : { continue: flag }) };
+    assert.throws(() => Contract.validatePlan(raw, 'music'), /重新规划/);
+    let calls = 0;
+    const result = await plan({ app: 'music', text: '查看队列' }, { async generateObject() { calls++; return raw; } });
+    assert.deepEqual(result.data, step('tools.load', { group: 'music.queue' }));
+    assert.equal(calls, 1);
+  }
+});
+
+test('混合加载计划只执行加载，真实回执触发重新规划，不执行旧计划的播放', async () => {
+  const { createGateway } = await import('../local-ai/gateway.mjs');
+  let round = 0, reads = 0;
+  const gateway = createGateway({ provider: { async generateObject({ input }) {
+    if (round++ === 0) return { steps: [
+      { tool: 'tools.load', args: { group: 'music.queue' } },
+      { tool: 'music.queue.play', args: { expectedRevision: 'stale' } }
+    ] };
+    if (round === 2) {
+      assert.ok(input.toolGroups.includes('music.queue'));
+      assert.equal(input.observations.at(-1).tool, 'tools.load');
+      return step('music.state');
+    }
+    assert.equal(input.observations.at(-1).data.count, 0);
+    return { done: true };
+  } } });
+  const store = storage();
+  const handlers = Tools.create({ storage: store,
+    ai: async r => ({ ok: true, ...await gateway.run(r.scene, r.input) }),
+    readMusicState: async () => { reads++; return { status: 'empty', revision: 'fresh', count: 0, songs: [] }; },
+    playCurrentQueue: async () => assert.fail('不能执行被丢弃的旧计划')
+  });
+  const engine = Engine.create({ storage: store, ...handlers, id: () => 'repair-load' });
+  await engine.submit({ app: 'music', text: '查看队列' });
+  const result = await engine.settled();
+  assert.equal(result.status, 'completed', result.message);
+  assert.equal(round, 3); assert.equal(reads, 1);
+});
+
+test('加载纠正不能绕过工具、参数、应用范围或计划结构校验', async () => {
+  const { plan } = await import('../local-ai/assistant-service.mjs');
+  const load = { tool: 'tools.load', args: { group: 'music.queue' } };
+  for (const raw of [
+    { steps: [{ tool: 'tools.load', args: { group: 'unknown' } }] },
+    { steps: [{ tool: 'tools.load', args: { group: 'alarm.manage' } }] },
+    { steps: [load, { tool: 'shell', args: {} }] },
+    { steps: [load, { tool: 'music.queue.play', args: {} }] },
+    { steps: [load], continue: 'true' },
+    { steps: [load], injected: true },
+    { steps: [load], question: '请确认' },
+    { steps: [load, load, load, load] }
+  ]) await assert.rejects(plan({ app: 'music', text: '查看队列' }, { async generateObject() { return raw; } }));
+});
+
 test('有队列：真实观察驱动加载→随机模式→播放→定时，结果不暴露URL或内部曲目ID', async () => {
   const { createGateway } = await import('../local-ai/gateway.mjs');
   let state = { status: 'ready', revision: 'v1', count: 2, mode: 'sequence', isPlaying: false, songs: [{ songId: '9', url: 'secret' }] };

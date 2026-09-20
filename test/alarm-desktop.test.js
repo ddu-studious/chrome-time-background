@@ -3,15 +3,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const AlarmDesktop = require('../js/alarm-desktop.js');
+const nativeDesktop = require('./fixtures/native-desktop.js');
 function fixture(onAction = async () => ({ ok: true })) {
-  let onMessage, onDisconnect;
-  const sent = [];
-  const port = { onMessage: { addListener(fn) { onMessage = fn; } }, onDisconnect: { addListener(fn) { onDisconnect = fn; } }, postMessage(message) {
-    sent.push(message);
-    if (message.requestId) queueMicrotask(() => onMessage({ type: 'response', requestId: message.requestId, ok: true }));
-  }, disconnect() { onDisconnect?.(); } };
-  const runtime = { connectNative(name) { assert.equal(name, 'com.timekeeper.desktop'); return port; } };
-  return { bridge: new AlarmDesktop(runtime, onAction), sent, port, emit: message => onMessage(message) };
+  const native = nativeDesktop(2);
+  return { bridge: new AlarmDesktop(native.runtime, onAction), sent: native.sent, get port() { return native.port; }, emit: native.emit };
 }
 const session = { id: 'ring-test', scheduledAt: Date.now(), occurrences: [{ label: '开会', snoozeMinutes: 10, snoozeLimit: 3, snoozeCount: 0 }] };
 test('原生展示传递当前会话与可用操作，旧会话隐藏不影响新卡片', async () => {
@@ -57,4 +52,96 @@ test('桌面按钮复用真实停止/稍后调度，旧会话操作不能停止�
   assert.equal((await context.stopUserAlarmSession('snooze', 10, 'ring')).ok, true);
   assert.equal(runtime.activeSession, null); assert.equal(runtime.pendingSnoozes.length, 1);
   assert.equal(runtime.handled['a:1'].state, 'snoozed'); assert.deepEqual(hidden, ['ring']);
+});
+
+test('隐藏响铃保留仍在使用的倒计时连接，隐藏倒计时不影响响铃', async () => {
+  const f = fixture();
+  await f.bridge.setCountdown({ id: 'a:1', title: '休息', fireAt: Date.now() + 60000 });
+  await f.bridge.show(session);
+  f.bridge.hide(session.id);
+  assert.equal(f.bridge.idleTimer, null);
+  await f.bridge.show(session);
+  await f.bridge.setCountdown(null);
+  assert.equal(f.bridge.sessionId, session.id);
+  assert.equal(f.bridge.idleTimer, null);
+  f.port.disconnect();
+});
+test('浮窗关闭事件绑定连接和当前 occurrence，不接受过期关闭', async () => {
+  const f = fixture(); let calls = 0;
+  f.bridge.onCountdownHidden = () => { calls++; };
+  await f.bridge.setCountdown({ id: 'new', fireAt: Date.now() + 60000 });
+  f.emit({ type: 'countdownHidden', id: 'old' });
+  assert.equal(calls, 0);
+  f.emit({ type: 'countdownHidden', id: 'new' });
+  assert.equal(calls, 1);
+  assert.equal(f.bridge.countdownId, null);
+  clearTimeout(f.bridge.idleTimer); f.port.disconnect();
+});
+
+test('主动空闲断连无需本端事件，下次确认、倒计时和响铃使用新连接', async () => {
+  const host = nativeDesktop();
+  const bridge = new AlarmDesktop(host.runtime, async () => ({ ok: true }));
+  let notices = 0; bridge.onConfirmationDisconnect = () => { notices++; };
+  try {
+    await bridge.status();
+    const old = host.port;
+    await new Promise(resolve => setTimeout(resolve, 2100));
+    assert.equal(old.closed, true); assert.equal(bridge.port, null);
+    assert.equal(notices, 0);
+    await bridge.setConfirmation({ id: 'review:1' });
+    assert.equal(host.ports.length, 2); assert.notEqual(bridge.port, old);
+    await bridge.setCountdown({ id: 'timer', fireAt: Date.now() + 60000 });
+    await bridge.show(session);
+    await bridge.setConfirmation(null);
+    bridge.hide(session.id);
+    assert.equal(bridge.countdownId, 'timer'); assert.equal(bridge.idleTimer, null);
+    // A delayed event from the previous port cannot clear current display state.
+    old.remoteDisconnect(); old.emit({ type: 'countdownHidden', id: 'timer' });
+    assert.equal(bridge.port, host.port); assert.equal(bridge.countdownId, 'timer');
+    assert.equal(notices, 0);
+  } finally { clearTimeout(bridge.idleTimer); host.port?.disconnect(); }
+});
+
+test('失效端口发送失败会清理所有等待请求，后续重连但不重放请求', async () => {
+  const host = nativeDesktop();
+  const bridge = new AlarmDesktop(host.runtime, async () => ({ ok: true }));
+  try {
+    await bridge.setConfirmation({ id: 'review:1' });
+    const old = host.port;
+    // Keep one request in flight, then fail a second send before onDisconnect arrives.
+    const post = old.postMessage; old.postMessage = () => {};
+    const pending = assert.rejects(bridge.request('ping'), /disconnected port/);
+    old.postMessage = post; old.disconnect();
+    await assert.rejects(bridge.setCountdown({ id: 'timer' }), /disconnected port/);
+    await pending;
+    assert.equal(bridge.pending.size, 0); assert.equal(bridge.port, null);
+    assert.equal(bridge.confirmationId, null); assert.equal(bridge.countdownId, null);
+    await bridge.setConfirmation({ id: 'review:2' });
+    assert.equal(host.ports.length, 2);
+    assert.deepEqual(host.sent.filter(m => m.card).map(m => m.card.id), ['review:1', 'review:2']);
+    const ping = bridge.request('ping');
+    const requestId = host.sent.at(-1).requestId;
+    old.emit({ type: 'response', requestId, ok: false, error: 'stale response' });
+    assert.equal((await ping).ok, true);
+  } finally { clearTimeout(bridge.idleTimer); host.port?.disconnect(); }
+});
+
+test('原生端断线会提示并允许重新连接，响铃业务拒绝不切断其他面板', async () => {
+  const host = nativeDesktop();
+  const bridge = new AlarmDesktop(host.runtime, async () => ({ ok: true }));
+  let notices = 0; bridge.onConfirmationDisconnect = () => { notices++; };
+  try {
+    await bridge.setConfirmation({ id: 'review:1' });
+    host.port.remoteDisconnect();
+    assert.equal(bridge.port, null); assert.equal(notices, 1);
+    await bridge.setConfirmation({ id: 'review:1' });
+    const port = host.port, post = port.postMessage;
+    port.postMessage = message => {
+      if (message.command === 'show') queueMicrotask(() => port.emit({ type: 'response', requestId: message.requestId, ok: false, error: 'invalid session' }));
+      else post(message);
+    };
+    await assert.rejects(bridge.show(session), /invalid session/);
+    assert.equal(bridge.port, port); assert.equal(port.closed, false);
+    assert.equal(bridge.confirmationId, 'review:1'); assert.equal(bridge.idleTimer, null);
+  } finally { clearTimeout(bridge.idleTimer); host.port?.disconnect(); }
 });

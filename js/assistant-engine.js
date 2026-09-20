@@ -4,6 +4,7 @@
   root.AssistantEngine = api;
 })(globalThis, function (Contract) {
   'use strict';
+  const Context = typeof module === 'object' && module.exports ? require('./assistant-context-state.js') : globalThis.AssistantContextState;
   const KEY = 'quickAssistantTaskV1';
   const clone = value => JSON.parse(JSON.stringify(value));
   const abort = () => Object.assign(new Error('任务已停止'), { name: 'AbortError' });
@@ -37,7 +38,7 @@
     const result = visit(value), json = JSON.stringify(result ?? null);
     return json.length > 8000 ? { truncated: true, preview: json.slice(0, 8000) } : result;
   }
-  function create({ storage, plan, execute, choose, history = async () => {}, cancelJob = async () => {}, now = Date.now, id = () => crypto.randomUUID() }) {
+  function create({ storage, plan, compact, execute, choose, onChange = () => {}, history = async () => {}, cancelJob = async () => {}, now = Date.now, id = () => crypto.randomUUID() }) {
     let current = null, serial = Promise.resolve(), work = null;
     const lock = fn => { const result = serial.then(fn); serial = result.catch(() => {}); return result; };
     const save = async () => {
@@ -45,7 +46,10 @@
       const saved = clone(current);
       // Live tool bodies are ephemeral; opt-in archival remains owned by history-store.
       saved.trace = (saved.trace || []).map(({ input, output, error, ...row }) => row);
-      await storage.set({ [KEY]: saved });
+      try { await storage.set({ [KEY]: saved }); }
+      catch (error) { throw Object.assign(new Error(error.message || '任务进度保存失败'), { code: 'ASSISTANT_STORAGE_FAILED' }); }
+      // Optional displays cannot delay execution or turn a saved write into failure.
+      try { Promise.resolve(onChange(view())).catch(() => {}); } catch (_) {}
     };
     async function emit(t, event) {
       t.trace ||= [];
@@ -56,7 +60,7 @@
       }
       if (t.trace.length > 400) { t.trace = t.trace.slice(-400); t.traceTruncated = true; }
       t.traceRevision = (t.traceRevision || 0) + 1;
-      try { const result = await history(event); if (result?.ok === false) throw new Error('历史写入失败'); }
+      try { const result = await history(event); if (result?.ok === false) throw new Error('历史写入失败'); if (result?.memoryWarning) t.memoryNotice = result.memoryWarning; }
       catch { t.historyWarning = '本机历史服务不可用，部分执行记录未留存'; }
     }
     async function finishTool(t, span, status, output, error) {
@@ -79,6 +83,7 @@
       const saved = (await storage.get(KEY))[KEY];
       if (saved?.id && Array.isArray(saved.log) && Array.isArray(saved.turns)) current = saved;
       if (current && ['planning', 'running'].includes(current.status)) {
+        Context.uncertain(current);
         current.status = 'interrupted'; current.version++;
         current.message = '上次处理被浏览器中断。已提交的动作可能已经生效，请核对结果后继续；不会自动重复执行。';
         current.endedAt = now();
@@ -96,21 +101,28 @@
           if (action === 'music.enqueue-collection') { title = title.replace('加入队列', '替换并播放').replace(/^加入/, '替换队列并播放'); if (!secondary) label = '替换并播放'; }
           return { id, title, subtitle, label, kind, cover, detail, secondary, parentId, action };
         });
-      return clone({ id, version, status, input, message, log, updatedAt, result, scope, musicView, playback, operation, choices, historyWarning: current.historyWarning, memoryNotice: current.memoryNotice,
+      return clone({ id, version, status, input, message, log, updatedAt, result, scope, musicView, playback, operation, choices, historyWarning: current.historyWarning, memoryNotice: current.memoryNotice, contextNotice: current.contextNotice, contextSummary: current.contextState ? { count: current.contextState.count, checkpoint: current.contextState.checkpoint ? { sdk: current.contextState.checkpoint.sdk, beforeEstimatedTokens: current.contextState.checkpoint.beforeEstimatedTokens, afterEstimatedTokens: current.contextState.checkpoint.afterEstimatedTokens } : null } : null,
         conversationId: current.conversationId || id, turnId: current.turnId || id, startedAt: current.runStartedAt || current.startedAt, endedAt: current.endedAt,
         conversationTitle: current.conversationTitle || input.text, startMode: current.startMode, routeReason: current.routeReason,
         messages: current.messages || [], trace: current.trace || [], traceRevision: current.traceRevision || 0,
-        traceTruncated: current.traceTruncated, messagesTruncated: current.messagesTruncated, modelCalls: current.modelCalls || [],
+        traceTruncated: current.traceTruncated, messagesTruncated: current.messagesTruncated, modelCalls: current.modelCalls || [], recoveryCount: current.recovery?.count || 0,
         memorySummary: { candidateCount: (current.candidateSet?.choices || []).filter(c => !c.secondary && !['navigation', 'collection-action'].includes(c.kind)).length, expiresAt: current.candidateSet?.expiresAt } });
     }
     function guard(t, version) { if (current !== t || t.version !== version || !['planning', 'running'].includes(t.status)) throw abort(); }
     function context(t, version, parentId = null) {
       return {
         spanId: parentId,
+        async saveContext() { await lock(async () => { guard(t, version); await save(); }); },
+        async reserveAction() { await lock(async () => {
+          guard(t, version);
+          if ((t.toolCalls || 0) >= 12 || now() - (t.runStartedAt || t.startedAt) > 300000) throw Object.assign(new Error('已达到本次任务执行上限，未自动提交操作'), { code: 'ASSISTANT_USER_INPUT_REQUIRED' });
+          t.toolCalls = (t.toolCalls || 0) + 1; await save();
+        }); },
+        async effectStarted() { await lock(async () => { guard(t, version); if (t.log.at(-1)) t.log.at(-1).sideEffectStarted = true; await save(); }); },
         guard: () => guard(t, version), task: t,
         async trace(tool, title, input, fn, kind = 'operation') {
           guard(t, version);
-          const span = { id: `${t.turnId || t.id}:tool:${t.traceSequence = (t.traceSequence || 0) + 1}`, role: 'tool', tool, title, kind, conversationId: t.conversationId || t.id, turnId: t.turnId || t.id, parentId, startedAt: now() };
+          const span = { id: `${t.turnId || t.id}:tool:${t.traceSequence = (t.traceSequence || 0) + 1}`, role: 'tool', tool, title, kind, conversationId: t.conversationId || t.id, turnId: t.turnId || t.id, parentId, sourceStartedAt: t.conversationStartedAt || t.startedAt, startedAt: now() };
           t.activeTools ||= {}; t.activeTools[span.id] = span;
           await emit(t, { ...span, phase: 'start', input: traceValue(input) });
           await lock(async () => { if (current === t) await save(); });
@@ -152,27 +164,81 @@
         if (outcome.musicView) t.musicView = outcome.musicView;
         if (outcome.browseStack) t.browseStack = outcome.browseStack;
         t.result = outcome.result || null;
+        Context.state(t);
         t.turns.push({ role: 'assistant', content: t.message.slice(0, 500) }); t.turns = t.turns.slice(-16);
         const waiting = ['waiting', 'review', 'clarify'].includes(outcome.status);
         t.log.at(-1).status = waiting ? 'waiting' : 'done';
         t.log.at(-1).message = t.message;
-        t.observations = [...(t.observations || []), { tool: t.log.at(-1).tool, status: waiting ? 'waiting' : 'done', message: t.message.slice(0, 500), data: outcome.observation || null }].slice(-6);
+        let observation;
+        try { observation = Context.observe(t, { tool: t.log.at(-1).tool, status: waiting ? 'waiting' : 'done', message: t.message.slice(0, 500), data: outcome.observation || null }, t.log.at(-1)); }
+        catch (error) { await save(); throw error; }
+        t.observations = [...(t.observations || []), observation].slice(-6);
         while (JSON.stringify(t.observations).length > 12000 && t.observations.length > 1) t.observations.shift();
         if (waiting) t.status = outcome.status;
         else t.index++;
         await save();
       });
     }
+    async function recover(t, version, error, step, phase) {
+      guard(t, version);
+      const stopped = error.name === 'AbortError' || [401, 403, 429].includes(error.statusCode) ||
+        ['ASSISTANT_STORAGE_FAILED', 'ASSISTANT_USER_INPUT_REQUIRED', 'CONTROL_POLICY_CHANGED', 'auth-required', 'auth-expired', 'not-connected', 'oauth-not-configured'].includes(error.code);
+      const modelRepair = phase === 'plan' && ['MODEL_OUTPUT_FORMAT_INVALID', 'ASSISTANT_PLAN_INVALID'].includes(error.code);
+      const safeTool = phase !== 'plan' && (error.sideEffectState === 'none' || Contract.tools[step.tool]?.readOnly);
+      const unknown = phase !== 'plan' && error.sideEffectState === 'unknown';
+      if (stopped || (!modelRepair && !safeTool && !unknown)) return false;
+      const message = String(error.message || '操作失败').replace(/(?:Bearer\s+\S+|(?:token|password|secret|cookie|authorization|api[_-]?key)\s*[:=]\s*[^\s,;]+)/gi, '[凭证已隐藏]').replace(/https?:\/\/[^\s"<>]+/g, '[链接已省略]').slice(0, 400);
+      const code = /^[a-zA-Z0-9_.-]{1,80}$/.test(error.code || '') ? error.code : 'TOOL_EXECUTION_FAILED';
+      const args = traceValue(step.args || {});
+      const fingerprint = JSON.stringify([step.tool, args, code]);
+      const recovery = t.recovery ||= { count: 0, failures: [] };
+      const repeats = recovery.failures.filter(value => value === fingerprint).length;
+      if (recovery.count >= 3 || repeats >= 1 || (t.planRounds || 0) >= 12 || (t.toolCalls || 0) >= 12 || now() - (t.runStartedAt || t.startedAt) >= 300000) {
+        if (safeTool && !unknown && t.log.at(-1)?.status === 'running') { t.log.at(-1).status = 'failed'; t.log.at(-1).message = message; }
+        throw Object.assign(new Error(`${repeats >= 1 ? '同一操作重复失败' : '已达到本次任务的恢复或执行上限'}，已停止自动恢复。最近错误：${message}`), { code: 'ASSISTANT_RECOVERY_LIMIT' });
+      }
+      await lock(async () => {
+        guard(t, version);
+        if (unknown) { Context.uncertain(t); recovery.unknown = true; }
+        if (phase !== 'plan' && t.log.at(-1)?.status === 'running') {
+          t.log.at(-1).status = 'failed'; t.log.at(-1).message = message;
+        }
+        recovery.count++; recovery.failures.push(fingerprint);
+        const observation = Context.observe(t, { tool: phase === 'action' ? 'assistant.action' : step.tool, status: unknown ? 'unknown' : 'failed', message,
+          data: { operation: step.tool, error: { code, message }, args, recovery: { attempt: recovery.count, remaining: 3 - recovery.count, sideEffectState: unknown ? 'unknown' : 'none' } } });
+        t.observations = [...(t.observations || []), observation].slice(-6);
+        while (JSON.stringify(t.observations).length > 12000 && t.observations.length > 1) t.observations.shift();
+        if (phase !== 'plan') t.remainingSteps = clone(t.plan.slice(t.index));
+        t.plan = []; t.index = 0; t.adaptive = true; t.status = 'planning'; t.jobId = null;
+        t.choices = []; t.keepChoices = false; t.candidateSet = null;
+        if (t.operation?.status === 'pending') t.operation = { ...t.operation, status: 'failed', message };
+        t.message = `步骤失败，正在根据错误重新规划（${recovery.count}/3）${unknown ? '；仅允许查询核对，未确认的操作不会重做' : ''}…`;
+        await record(t, 'status', t.message, `recovery:${recovery.count}`);
+        await save();
+      });
+      return true;
+    }
     async function nextPlan(t, version, ctx) {
       guard(t, version);
       if ((t.planRounds || 0) >= 12) throw new Error('已达到本次任务的12轮规划上限，请核对已完成操作');
       if (now() - (t.runStartedAt || t.startedAt) > 300000) throw new Error('处理已超过五分钟，请核对已完成步骤');
       t.planRounds = (t.planRounds || 0) + 1;
-      const planned = await ctx.trace('assistant.plan', '规划执行步骤', t.input, async child => Contract.validatePlan(await plan(t.input, child), t.input.app), 'plan');
+      let planned;
+      try {
+        planned = await ctx.trace('assistant.plan', '规划执行步骤', t.input, async child => {
+          const value = await plan(t.input, child);
+          try { return Contract.validatePlan(value, t.input.app); }
+          catch (error) { error.code = 'ASSISTANT_PLAN_INVALID'; throw error; }
+        }, 'plan');
+      } catch (error) {
+        if (await recover(t, version, error, { tool: 'assistant.plan', args: {} }, 'plan')) return;
+        throw error;
+      }
       await lock(async () => {
         guard(t, version); t.jobId = null;
-        if (planned.done && !t.observations?.length) throw new Error('尚无执行结果，不能完成');
-        if (planned.question) { t.status = 'clarify'; t.message = planned.question; t.turns.push({ role: 'assistant', content: planned.question }); }
+        if (planned.done && Context.state(t).uncertain) planned = { question: '已有操作的结果尚未确认。请核对实际状态后再继续，助手不会自动重做可能已生效的操作。', steps: [] };
+        if (planned.done && (!t.observations?.some(row => row.status === 'done') || ['failed', 'unknown'].includes(t.observations.at(-1)?.status))) throw new Error('尚无成功恢复回执，不能声称完成');
+        if (planned.question) { t.status = 'clarify'; t.message = planned.question; t.turns.push({ role: 'assistant', content: planned.question }); Context.append(t, 'assistant', planned.question); }
         else {
           t.plan = planned.steps; t.index = 0; t.adaptive = Boolean(planned.continue); t.status = 'running';
           t.remainingSteps = [];
@@ -184,16 +250,33 @@
     async function pump(t, version, selectedChoice) {
       try {
         const ctx = context(t, version);
-        if (selectedChoice) await accept(t, version, await ctx.trace(selectedChoice.action, selectedChoice.title || '执行所选操作', { title: selectedChoice.title, data: selectedChoice.data }, child => choose(selectedChoice, child), 'action'));
-        else if (t.status === 'planning') await nextPlan(t, version, ctx);
-        while (current === t && t.version === version && t.status === 'running') {
+        const run = async (step, title, fn, kind = 'tool') => {
+          try { return await ctx.trace(step.tool, title, step.args, fn, kind); }
+          catch (error) { if (await recover(t, version, error, step, kind)) return null; throw error; }
+        };
+        if (selectedChoice) {
+          const outcome = await run({ tool: selectedChoice.action, args: { title: selectedChoice.title, data: selectedChoice.data } }, selectedChoice.title || '执行所选操作', child => choose(selectedChoice, child), 'action');
+          if (outcome) await accept(t, version, outcome);
+        }
+        while (current === t && t.version === version && ['planning', 'running'].includes(t.status)) {
+          if (t.status === 'planning') {
+            await nextPlan(t, version, ctx);
+            if (t.status === 'planning') continue;
+            if (t.status !== 'running') break;
+          }
           if (t.index >= t.plan.length && t.adaptive) {
             await nextPlan(t, version, ctx);
+            if (t.status === 'planning') continue;
             if (t.status !== 'running') break;
             if (t.index < t.plan.length) continue;
           }
           if (t.index >= t.plan.length) {
             await lock(async () => {
+              if (Context.state(t).uncertain && (!selectedChoice || t.recovery?.unknown)) {
+                guard(t, version); t.status = 'clarify'; t.choices = [];
+                t.message = '已有操作的结果尚未确认，请核对实际状态后再继续；不会自动重做可能已生效的操作。';
+                await save(); return;
+              }
               guard(t, version); t.status = 'completed'; if (!t.keepChoices) t.choices = [];
               if (t.log.length > 1) t.message = t.log.filter(step => step.status === 'done' && step.tool !== 'tools.load').map(step => step.message).join('\n').slice(0, 1500);
               await save();
@@ -203,11 +286,18 @@
           if ((t.toolCalls || 0) >= 12) throw new Error('已达到本次任务的12次工具调用上限，请核对已完成操作');
           t.toolCalls = (t.toolCalls || 0) + 1;
           const step = t.plan[t.index];
+          if (Context.state(t).uncertain && !Contract.tools[step.tool].readOnly) throw new Error('上次操作结果未确认，请先查询并核对实际状态，再新建需求；不会自动重做可能已生效的操作');
+          const actionKey = Context.actionKey(t, step);
           await lock(async () => {
             guard(t, version); t.message = `正在${Contract.tools[step.tool].title}…`;
-            t.log.push({ tool: step.tool, title: Contract.tools[step.tool].title, status: 'running' }); await save();
+            t.log.push({ tool: step.tool, title: Contract.tools[step.tool].title, status: 'running', ...(actionKey ? { key: actionKey } : {}) }); await save();
           });
-          await accept(t, version, await ctx.trace(step.tool, Contract.tools[step.tool].title, step.args, child => execute(step, child), 'tool'));
+          const outcome = await run(step, Contract.tools[step.tool].title, child => {
+            if (actionKey && Context.state(t).receipts.some(row => row.key === actionKey)) throw Object.assign(new Error('该操作已有成功回执，已阻止重复执行，请继续尚未完成的步骤'), { code: 'ASSISTANT_DUPLICATE_ACTION', sideEffectState: 'none' });
+            return execute(step, child);
+          });
+          if (!outcome) continue;
+          await accept(t, version, outcome);
           // Only an explicit direct-play request and a single real candidate can skip disambiguation.
           if (t.status === 'waiting' && t.musicView?.kind === 'search' && !t.memory?.artistRequest && /直接播放/.test(t.input.text) && !/不要|不想|别|先不|不要直接|不用|如果/.test(t.input.text)) {
             const primary = t.choices.filter(c => !c.secondary && ['song', 'artist', 'album', 'playlist'].includes(c.kind));
@@ -219,7 +309,8 @@
                 t.status = 'running'; t.message = `已找到唯一候选：${primary[0].title}，正在准备播放…`;
                 t.operation = { choiceId:chosen.id, action:chosen.action, title:chosen.title, status:'pending', message:t.message }; await save();
               });
-              await accept(t, version, await ctx.trace(chosen.action, chosen.title, { reason:'用户要求直接播放，搜索仅返回一个候选', data:chosen.data }, child => choose(chosen, child), 'action'));
+              const outcome = await run({ tool: chosen.action, args: { reason:'用户要求直接播放，搜索仅返回一个候选', data:chosen.data } }, chosen.title, child => choose(chosen, child), 'action');
+              if (outcome) await accept(t, version, outcome);
             }
           }
         }
@@ -227,6 +318,7 @@
         await lock(async () => {
           if (current !== t || t.version !== version) return;
           if (t.jobId) void cancelJob(t.jobId).catch(() => {});
+          Context.uncertain(t);
           t.jobId = null; t.status = 'failed'; t.message = error.message || '执行失败，请重试';
           if (t.operation) t.operation = { ...t.operation, status: 'failed', message: t.message };
           if (t.log.at(-1)?.status === 'running') t.log.at(-1).status = 'failed';
@@ -265,6 +357,11 @@
             scope: input.app || previous?.scope || null, plan: [], index: 0, choices: [], log: [], memory: continuing ? clone(previous?.memory || {}) : {}, observations: continuing ? clone(previous?.observations || []) : [],
             remainingSteps: continuing && sameScope && ['waiting', 'review', 'clarify'].includes(previous.status) ? previous.plan?.slice(previous.index + 1) || previous.remainingSteps || [] : [],
             turns: [...(previous?.turns || []), { role: 'user', content: utterance }].slice(-16), message: '正在理解需求…', startedAt: now(), jobId: null };
+          if (continuing && previous) task.contextState = clone(Context.state(previous));
+          // Migrate the surviving legacy window once; no claim of recovering
+          // already discarded history. New contexts store inputs before slicing.
+          if (!task.contextState) { Context.state(task); }
+          else Context.append(task, 'user', utterance);
           task.turnId = task.id;
           task.conversationTitle = previous?.conversationTitle || previous?.input?.text || utterance;
           task.startMode = route.mode; task.routeReason = route.reason;
@@ -299,14 +396,17 @@
         }
         return this.choose(current.id, selected.id, raw.version, raw.text);
       },
-      async choose(taskId, choiceId, expectedVersion, userText) {
+      async choose(taskId, choiceId, expectedVersion, userText, reviewOnly = false) {
         await ready;
         return lock(async () => {
           if (current?.id !== taskId || !['waiting', 'review', 'completed', 'failed'].includes(current.status)) throw new Error('候选已过期，请重新查询');
+          if (reviewOnly && current.status !== 'review') throw new Error('该确认卡已失效');
           if (expectedVersion != null && expectedVersion !== current.version) throw new Error('候选页面已变化，请重新选择');
           const choice = current.choices.find(item => item.id === choiceId);
           if (!choice) throw new Error('候选无效');
+          if (current.contextState?.receipts.some(row => row.status === 'unknown' && (!row.choiceId || row.choiceId === choice.id))) throw new Error('该操作的上次结果未确认，请先核对实际状态后新建需求');
           if (now() > (current.candidateSet?.expiresAt ?? current.updatedAt + 600000)) throw new Error('候选已超过十分钟，请重新查询');
+          Context.append(current, 'user', userText || `选择：${choice.title}`);
           if (current.status === 'completed') {
             if (!current.choiceStep) throw new Error('请重新搜索');
             current.plan = [clone(current.choiceStep)]; current.index = 0; current.adaptive = false;
@@ -316,6 +416,7 @@
           current.status = 'running'; current.version++; current.runStartedAt = now(); current.usedModel = false;
           current.turnId = id(); current.endedAt = null;
           current.toolCalls = 0; current.planRounds = 0;
+          current.recovery = { count: 0, failures: [] };
           current.turns.push({ role: 'user', content: userText || `选择：${choice.title}` }); current.turns = current.turns.slice(-16);
           current.operation = { choiceId, action: choice.action, title: choice.title, status: 'pending', message: '正在准备所选操作…' };
           if (!current.log.length) current.log.push({ tool: choice.action, title: choice.title });
@@ -324,11 +425,13 @@
           await save(); launch(current, choice); return view();
         });
       },
-      async cancel(taskId) {
+      async cancel(taskId, expectedVersion) {
         await ready;
         return lock(async () => {
           if (current?.id !== taskId) throw new Error('会话已变化');
+          if (expectedVersion != null && (current.version !== expectedVersion || current.status !== 'review')) throw new Error('该确认卡已失效');
           if (current.jobId) void cancelJob(current.jobId).catch(() => {});
+          Context.uncertain(current);
           current.version++; current.status = 'cancelled'; current.choices = []; current.jobId = null;
           current.endedAt = now(); current.candidateSet = null;
           await interruptTools(current, 'cancelled');
@@ -337,7 +440,18 @@
           await record(current, 'assistant', current.message, `cancelled:${current.version}`); await save(); return view();
         });
       },
-      async clear() { await ready; return lock(async () => { if (current && ['running', 'planning'].includes(current.status)) throw new Error('请先停止当前任务'); current = null; await storage.remove(KEY); return null; }); },
+      async compact(taskId) {
+        await ready;
+        let t, version, previousStatus, previousMessage;
+        await lock(async () => {
+          if (!compact || !current || current.id !== taskId || ['planning', 'running'].includes(current.status)) throw new Error('请等待当前步骤结束后整理上下文');
+          t = current; previousStatus = t.status; previousMessage = t.message; t.runStartedAt = now(); t.status = 'planning'; version = ++t.version; t.message = '正在整理上下文…'; await save();
+        });
+        try { await compact(context(t, version), true); }
+        finally { await lock(async () => { if (current === t && t.version === version) { t.status = previousStatus; t.message = previousStatus === 'review' ? previousMessage : t.contextNotice || '本次没有需要整理的旧记录'; t.jobId = null; await save(); } }); }
+        return view();
+      },
+      async clear() { await ready; return lock(async () => { if (current && ['running', 'planning'].includes(current.status)) throw new Error('请先停止当前任务'); current = null; await storage.remove(KEY); try { Promise.resolve(onChange(null)).catch(() => {}); } catch (_) {} return null; }); },
       async settled() { await ready; await work; await serial; return view(); }
     };
   }

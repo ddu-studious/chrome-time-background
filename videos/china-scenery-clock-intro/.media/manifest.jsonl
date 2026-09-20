@@ -1,0 +1,4 @@
+{"id":"image_001","type":"image","path":"assets/images/alarm.png","source":"existing","description":"alarm","width":1280,"height":720,"provenance":{"provider":"local","adopted":true}}
+{"id":"image_002","type":"image","path":"assets/images/assistant.png","source":"existing","description":"assistant","width":1060,"height":657,"provenance":{"provider":"local","adopted":true}}
+{"id":"image_003","type":"image","path":"assets/images/logo.png","source":"existing","description":"logo","width":128,"height":128,"provenance":{"provider":"local","adopted":true}}
+{"id":"image_004","type":"image","path":"assets/images/music.png","source":"existing","description":"music","width":1672,"height":941,"provenance":{"provider":"local","adopted":true}}

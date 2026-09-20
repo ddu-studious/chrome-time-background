@@ -1,0 +1,48 @@
+<template>
+  <div id="root" data-composition-id="05-brand-lockup" data-width="1920" data-height="1080" data-duration="4">
+    <div id="f05-brand-lockup-bg" class="clip f05-brand-lockup-bg" data-start="0" data-duration="4" data-track-index="0"></div>
+    <div id="f05-brand-lockup-content" class="clip f05-brand-lockup-content" data-start="0" data-duration="4" data-track-index="1">
+      <div class="f05-brand-lockup-cross f05-brand-lockup-cross-left" data-layout-allow-overflow></div>
+      <div class="f05-brand-lockup-cross f05-brand-lockup-cross-top" data-layout-allow-overflow></div>
+      <div class="f05-brand-lockup-cross f05-brand-lockup-cross-right" data-layout-allow-overflow></div>
+      <div class="f05-brand-lockup-orbit"></div>
+      <div class="f05-brand-lockup-lockup">
+        <img class="f05-brand-lockup-logo" src="assets/logo.png" alt="中国风景时钟 Logo" />
+        <div class="f05-brand-lockup-wordmark">中国风景时钟</div>
+        <div class="f05-brand-lockup-tagline">让每次打开，都更接近你想要的生活</div>
+        <div class="f05-brand-lockup-underline"></div>
+      </div>
+      <div class="f05-brand-lockup-meta">CHROME NEW TAB · 2026</div>
+    </div>
+    <style>
+      #root { width:100%; height:100%; position:relative; overflow:hidden; font-family:sans-serif; container-type:size; }
+      .f05-brand-lockup-bg { position:absolute; inset:0; background:#07111F; }
+      .f05-brand-lockup-content { position:absolute; inset:0; color:#EAF7FF; overflow:hidden; }
+      .f05-brand-lockup-content::before { content:""; position:absolute; left:50%; top:44%; width:760px; height:760px; margin-left:-380px; margin-top:-380px; border:1px solid rgba(53,214,255,.14); border-radius:50%; }
+      .f05-brand-lockup-cross { position:absolute; background:#35D6FF; opacity:.86; transform-origin:center center; }
+      .f05-brand-lockup-cross-left { left:0; top:486px; width:760px; height:3px; }
+      .f05-brand-lockup-cross-top { left:958px; top:0; width:3px; height:390px; }
+      .f05-brand-lockup-cross-right { right:0; top:486px; width:760px; height:3px; }
+      .f05-brand-lockup-orbit { position:absolute; left:735px; top:262px; width:450px; height:450px; border:3px solid rgba(53,214,255,.52); border-radius:50%; }
+      .f05-brand-lockup-lockup { position:absolute; left:360px; top:304px; width:1200px; height:430px; display:grid; grid-template-columns:250px 1fr; grid-template-rows:190px 92px 28px; column-gap:54px; align-items:center; }
+      .f05-brand-lockup-logo { grid-row:1 / 4; width:230px; height:230px; object-fit:contain; justify-self:center; }
+      .f05-brand-lockup-wordmark { align-self:end; font-size:118px; line-height:1; font-weight:900; letter-spacing:-.055em; white-space:nowrap; }
+      .f05-brand-lockup-tagline { align-self:center; color:#24D39B; font-size:34px; line-height:1.25; font-weight:700; letter-spacing:.01em; white-space:nowrap; }
+      .f05-brand-lockup-underline { align-self:start; width:100%; height:4px; background:#35D6FF; transform-origin:left center; }
+      .f05-brand-lockup-meta { position:absolute; left:50%; top:800px; width:700px; margin-left:-350px; text-align:center; color:#35D6FF; font-size:20px; font-weight:700; letter-spacing:.18em; }
+    </style>
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      tl.fromTo(".f05-brand-lockup-cross-left", { opacity: 0, x: -760 }, { opacity: 0.86, x: 0, duration: 0.72, ease: "power4.out" }, 0)
+        .fromTo(".f05-brand-lockup-cross-right", { opacity: 0, x: 760 }, { opacity: 0.86, x: 0, duration: 0.72, ease: "power4.out" }, 0.08)
+        .fromTo(".f05-brand-lockup-cross-top", { opacity: 0, y: -390 }, { opacity: 0.86, y: 0, duration: 0.68, ease: "power4.out" }, 0.16)
+        .fromTo(".f05-brand-lockup-orbit", { opacity: 0, scale: 1.45 }, { opacity: 1, scale: 1, duration: 0.66, ease: "power3.out" }, 0.4)
+        .fromTo(".f05-brand-lockup-logo", { opacity: 0, scale: 0.15, rotation: -14 }, { opacity: 1, scale: 1, rotation: 0, duration: 0.72, ease: "back.out(1.65)" }, 0.84)
+        .fromTo(".f05-brand-lockup-wordmark", { opacity: 0, x: -72, clipPath: "inset(0 100% 0 0)" }, { opacity: 1, x: 0, clipPath: "inset(0 0% 0 0)", duration: 0.72, ease: "power4.out" }, 1.18)
+        .fromTo(".f05-brand-lockup-tagline", { opacity: 0, clipPath: "inset(0 100% 0 0)" }, { opacity: 1, clipPath: "inset(0 0% 0 0)", duration: 0.62, ease: "power3.out" }, 1.88)
+        .fromTo(".f05-brand-lockup-underline", { scaleX: 0 }, { scaleX: 1, duration: 0.56, ease: "power3.out" }, 2.02)
+        .fromTo(".f05-brand-lockup-meta", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.38, ease: "power3.out" }, 2.28);
+      window.__timelines["05-brand-lockup"] = tl;
+    </script>
+  </div>
+</template>

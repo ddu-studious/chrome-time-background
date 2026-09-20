@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync, renameSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { experienceFromReceipt } from './assistant-experience.mjs';
 
 const fail = message => Object.assign(new Error(message), { statusCode: 400 });
 const idPattern = /^[a-zA-Z0-9:._-]{1,160}$/;
@@ -81,7 +82,7 @@ export function createHistoryStore({ file, now = Date.now } = {}) {
         const index = state.tools.findIndex(row => row.id === value.id);
         if (value.phase === 'start') {
           if (index >= 0) return;
-          const row = { id: value.id, conversationId: value.conversationId, turnId: value.turnId, parentId: value.parentId || null, scene: 'assistant', tool: value.tool, title: String(value.title || value.tool).slice(0, 120), kind: value.kind, startedAt: value.startedAt, status: 'running', contentSaved: state.settings.captureContent };
+          const row = { id: value.id, conversationId: value.conversationId, turnId: value.turnId, parentId: value.parentId || null, scene: 'assistant', tool: value.tool, title: String(value.title || value.tool).slice(0, 120), kind: value.kind, startedAt: value.startedAt, sourceStartedAt: Number.isSafeInteger(value.sourceStartedAt) && value.sourceStartedAt > 0 && value.sourceStartedAt <= value.startedAt ? value.sourceStartedAt : value.startedAt, status: 'running', contentSaved: state.settings.captureContent };
           if (row.contentSaved) row.input = payload(value.input, true);
           commit({ ...state, tools: [...state.tools, row] });
         } else {
@@ -92,8 +93,8 @@ export function createHistoryStore({ file, now = Date.now } = {}) {
           if (previous.status !== 'running') return;
           if (!['succeeded', 'waiting', 'failed', 'cancelled', 'interrupted'].includes(value.status) || !Number.isSafeInteger(value.endedAt) || value.endedAt < value.startedAt) throw fail('工具结束状态无效');
           const row = { ...previous, status: value.status, endedAt: value.endedAt, elapsedMs: value.endedAt - value.startedAt };
-          if (previous.contentSaved && state.settings.captureContent) { row.output = payload(value.output, true); if (value.error) row.error = payload(value.error, true); }
-          const tools = [...state.tools]; tools[index] = row; commit({ ...state, tools });
+          if (previous.contentSaved && state.settings.captureContent) { row.experience = experienceFromReceipt({ ...row, output: value.output }); row.output = payload(value.output, true); if (value.error) row.error = payload(value.error, true); }
+          const tools = [...state.tools]; tools[index] = row; commit({ ...state, tools }); return row;
         }
         return;
       }

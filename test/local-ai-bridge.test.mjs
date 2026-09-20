@@ -14,6 +14,21 @@ function bridge(fetchImpl = async () => { throw new TypeError('offline'); }) {
   vm.runInNewContext(readFileSync(new URL('../js/local-ai-client.js', import.meta.url), 'utf8'), { chrome, AlarmIntent: intent, MusicIntent: musicIntent, fetch: fetchImpl, AbortSignal, Set, Number, String });
   return { values, call: (message, url = chrome.runtime.getURL() + 'index.html') => new Promise(resolve => listener(message, { id: chrome.runtime.id, url }, resolve)) };
 }
+test('确认策略走固定鉴权端点，拒绝网页调用，不进入模型场景', async () => {
+  let calls = 0;
+  const body = { requestId: 'approval', version: 1 };
+  const b = bridge(async (url, options) => {
+    calls++; assert.equal(url, 'http://127.0.0.1:19841/v1/assistant/approval');
+    assert.equal(options.headers.Authorization, `Bearer ${'a'.repeat(64)}`);
+    assert.equal(options.redirect, 'error'); assert.deepEqual(JSON.parse(options.body), body);
+    return { ok: true, json: async () => ({ ok: true, decision: 'allow', ...body }) };
+  });
+  const message = { action: 'ai_approval_evaluate', body };
+  assert.equal((await b.call(message)).ok, false);
+  await b.call({ action: 'local_ai_configure', token: 'a'.repeat(64) });
+  assert.equal((await b.call(message, 'https://example.com')).ok, false); assert.equal(calls, 0);
+  assert.equal((await b.call(message)).decision, 'allow'); assert.equal(calls, 1);
+});
 test('扩展入口拒绝网页 content script，离线规则不需要凭证和网络', async () => {
   const b = bridge();
   const message = { action: 'smart_alarm_interpret', text: '20分钟后提醒我休息', now: Date.now(), timeZone: 'Asia/Shanghai' };
@@ -132,4 +147,14 @@ test('音乐扩展桥接传递续答历史和已知需求，不把短句当成�
  const turns=[{role:'user',content:'播放晴天'},{role:'assistant',content:'哪位歌手？'}],draft={action:'search',kind:'song',query:'晴天',title:'晴天'};
  await b.call({action:'music_ai_interpret',text:'周杰伦',turns,draft});
  assert.deepEqual(sent.input,{text:'周杰伦',turns,draft});
+});
+
+test('规划失败经过扩展消息边界仍保留错误码与每次模型尝试', async () => {
+  const execution = { model: 'qwen/test', attempts: [{ index: 1, reasoning: 'medium', status: 'failed' }, { index: 2, reasoning: 'off', status: 'failed' }] };
+  const b = bridge(async () => ({ ok: true, json: async () => ({ ok: false, error: '未生成执行计划', code: 'MODEL_NO_FINAL_OUTPUT', execution }) }));
+  await b.call({ action: 'local_ai_configure', token: 'a'.repeat(64) });
+  const result = await b.call({ action: 'ai_scene_result', jobId: 'a'.repeat(32) });
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'MODEL_NO_FINAL_OUTPUT');
+  assert.deepEqual(result.execution, execution);
 });

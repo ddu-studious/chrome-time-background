@@ -138,6 +138,74 @@ test('删除歌手后恢复消歧；保存 ID 不在真实结果时不自动取�
   write(f.store, { operation: 'artist', query: '张杰', name: '张杰', artistId: '404' });
   assert.equal((await f.run('张杰的热门歌曲')).status, 'waiting'); assert.equal(f.plays.length, 0);
 });
+test('普通歌手搜索记住手选，下次自动浏览同一身份且不播放、不重复学习', async t => {
+  const f = fixture(t, { artists: [{ id: 7, name: '张杰' }, { id: 9, name: '张杰' }] });
+  let result = await f.run('搜索歌手张杰');
+  assert.equal(result.musicView.kind, 'search');
+  await f.engine.choose(result.id, 'artist-9', result.version);
+  result = await f.engine.settled();
+  assert.equal(result.musicView.id, '9');
+  const revision = f.store.snapshot().revision;
+  for (const text of ['搜索歌手张杰', '搜索张杰', '播放张杰的热门歌曲，先别播放']) {
+    result = await f.run(text);
+    assert.equal(result.musicView.id, '9');
+    assert.match(result.memoryNotice, /已记住/);
+  }
+  assert.equal(f.plays.length, 0);
+  assert.equal(f.store.snapshot().revision, revision);
+});
+test('多步规划中的序号选择写入记忆，新会话自动选择并继续原队列要求', async t => {
+  const f = fixture(t, { artists: [{ id: 7, name: '张杰' }, { id: 9, name: '张杰' }] });
+  const engine = Engine.create({ storage: f.deps.storage, ...f.handlers,
+    plan: async (_input, ctx) => {
+      const last = ctx.task.observations.at(-1);
+      const step = (tool, args) => ({ steps: [{ tool, args }], continue: true });
+      if (!last) return step('music.search', { kind: 'artist', query: '张杰' });
+      if (last.data?.selectedRef) return step('music.collection.get', { ref: last.data.selectedRef });
+      if (last.tool === 'music.collection.get') return step('music.queue.apply', { ref: last.data.ref, mode: 'append', startPlayback: false, expectedRevision: 'queue-1' });
+      return { done: true };
+    }
+  });
+  await engine.submit({ app: 'music', text: '把张杰的歌加入队列，先别播放', newConversation: true });
+  let result = await engine.settled();
+  assert.equal(result.status, 'waiting', result.message);
+  await engine.selectOrdinal({ taskId: result.id, version: result.version, app: 'music', text: '第二个' });
+  result = await engine.settled();
+  assert.equal(result.status, 'completed', result.message);
+  assert.equal(f.store.snapshot().artists[0].artistId, '9');
+  const revision = f.store.snapshot().revision;
+  await engine.submit({ app: 'music', text: '把张杰的歌加入队列，先别播放', newConversation: true });
+  result = await engine.settled();
+  assert.equal(result.status, 'completed', result.message);
+  assert.equal(f.calls.filter(([p]) => p.includes('artist/top/song')).at(-1)[1].id, '9');
+  assert.equal(f.plays.length, 2);
+  assert.ok(f.plays.every(p => p.options.mode === 'append' && p.options.startPlayback === false));
+  assert.equal(f.store.snapshot().revision, revision);
+});
+test('普通搜索在暂停记忆或保存身份缺失时仍需选择，歌曲搜索不套用歌手记忆', async t => {
+  const f = fixture(t, { artists: [{ id: 7, name: '张杰' }] });
+  write(f.store, { operation: 'artist', query: '张杰', name: '张杰', artistId: '404' });
+  assert.equal((await f.run('搜索歌手张杰')).musicView.kind, 'search');
+  write(f.store, { operation: 'artist', query: '张杰', name: '张杰', artistId: '7' });
+  write(f.store, { operation: 'configure', enabled: false, rememberArtists: true });
+  assert.equal((await f.run('搜索歌手张杰')).musicView.kind, 'search');
+  write(f.store, { operation: 'configure', enabled: true, rememberArtists: true });
+  const ctx = { guard() {}, progress: async () => {}, task: { id: 'song-search', input: { text: '搜索歌曲张杰' }, memory: {}, adaptive: true } };
+  const result = await f.handlers.execute({ tool: 'music.search', args: { kind: 'song', query: '张杰' } }, ctx);
+  assert.equal(result.observation?.selectedRef, undefined);
+  assert.equal(f.plays.length, 0);
+});
+test('记住的英文歌手绕过本地缓存，使用实时搜索结果自动选择', async t => {
+  const f = fixture(t, { artists: [{ id: 7, name: 'Adele' }] });
+  await f.run('搜索歌手Adele');
+  write(f.store, { operation: 'artist', query: 'Adele', name: 'Adele', artistId: '7' });
+  const searches = f.calls.filter(([path]) => path.includes('search')).length;
+  const result = await f.run('搜索歌手Adele');
+  assert.equal(f.calls.filter(([path]) => path.includes('search')).length, searches + 1);
+  assert.equal(result.musicView.id, '7');
+  assert.equal(result.musicView.kind, 'artist');
+  assert.equal(f.plays.length, 0);
+});
 test('仅有近似名称也不能自动播放，不用搜索第一名代替身份', async t => {
   const f = fixture(t, { artists: [{ id: 8, name: 'AJ张杰' }] });
   assert.equal((await f.run('直接播放张杰的热门歌曲')).status, 'waiting'); assert.equal(f.plays.length, 0);

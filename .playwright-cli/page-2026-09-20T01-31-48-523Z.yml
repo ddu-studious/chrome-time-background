@@ -1,0 +1,79 @@
+- main [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - paragraph [ref=e5]: 快捷助手 / 个人设置
+      - heading "我的记忆" [level=1] [ref=e6]
+      - paragraph [ref=e7]: 记住你明确的习惯，也能找回过去搜索和操作的经历。
+    - link "返回助手 ↗" [ref=e8] [cursor=pointer]:
+      - /url: assistant.html
+  - status [ref=e9]: 已删除该记忆。
+  - region [ref=e10]:
+    - heading "音乐偏好" [level=2] [ref=e11]
+    - paragraph [ref=e12]: 本次说“先别播放”或“只搜索”始终优先。未保存偏好时，热门歌曲默认播放，并保留原队列。
+    - generic [ref=e13]:
+      - generic [ref=e114]:
+        - generic [ref=e115]:
+          - generic [ref=e116]: 省略动词的歌手热门歌曲
+          - combobox "省略动词的歌手热门歌曲" [ref=e117]:
+            - option "找到明确歌手后播放" [selected]
+            - option "先展示，由我选择播放"
+        - generic [ref=e118]: 当前为默认规则，尚未保存个人偏好。
+      - generic [ref=e119]:
+        - generic [ref=e120]:
+          - generic [ref=e121]: 自然语言播放歌手热门歌曲
+          - combobox "自然语言播放歌手热门歌曲" [ref=e122]:
+            - option "保留原队列，加入热门歌曲并播放" [selected]
+            - option "替换为热门歌曲并播放"
+        - generic [ref=e123]: 当前为默认规则，尚未保存个人偏好。
+  - region [ref=e24]:
+    - heading "我选过的歌手 （0）" [level=2] [ref=e25]
+    - paragraph [ref=e26]: 同名结果需要你选择时，记住你选的是哪一位。下次仍会核对最新搜索结果。
+    - paragraph [ref=e124]: 还没有歌手记忆。你主动选择歌手后，会出现在这里。
+  - region [ref=e29]:
+    - heading "明确保存的偏好" [level=2] [ref=e30]
+    - paragraph [ref=e31]: 例如“记住：我喜欢爵士乐”。偏好用于相关请求的参考，本次要求始终优先，不代表操作授权。
+    - generic [ref=e125]:
+      - generic [ref=e126]:
+        - strong [ref=e127]: 我喜欢爵士乐
+        - button "删除" [ref=e128] [cursor=pointer]
+      - generic [ref=e129]: 音乐 · 2026/9/20 09:26:34 · 记住：我喜欢爵士乐
+  - region [ref=e130]:
+    - heading "我的经历 （2）" [level=2] [ref=e131]
+    - paragraph [ref=e40]: 根据已留存的真实执行回执记录搜索、选择、播放和提醒操作。搜索不代表喜欢，打开视频不代表看过。最多保留 300 条，期限不超过来源历史设置及 30 天。
+    - generic [ref=e41]:
+      - button "补充已留存历史" [ref=e42] [cursor=pointer]
+      - link "管理历史正文留存 ↗" [ref=e43] [cursor=pointer]:
+        - /url: settings.html#ai-history
+    - generic [ref=e44]:
+      - generic [ref=e132]:
+        - generic [ref=e133]:
+          - strong [ref=e134]: 搜索过 · 法老
+          - button "删除" [ref=e135] [cursor=pointer]
+        - generic [ref=e136]: 音乐 · 2026/9/20 09:26:24 · 执行器回执：music.search
+        - paragraph [ref=e137]: 搜索完成，等待选择歌手
+      - generic [ref=e138]:
+        - generic [ref=e139]:
+          - strong [ref=e140]: 搜索过 · 林俊杰
+          - button "删除" [ref=e141] [cursor=pointer]
+        - generic [ref=e142]: 音乐 · 2026/9/20 09:26:24 · 执行器回执：music.search
+        - paragraph [ref=e143]: 搜索完成，等待选择歌手
+  - region [ref=e46]:
+    - heading "由你掌握" [level=2] [ref=e47]
+    - generic [ref=e48]:
+      - checkbox "使用已保存的个人记忆" [checked] [ref=e49]
+      - text: 使用已保存的个人记忆
+    - generic [ref=e50]:
+      - checkbox "记住我主动选择的歌手" [checked] [ref=e51]
+      - text: 记住我主动选择的歌手
+    - generic [ref=e52]:
+      - checkbox "从已开启正文留存的执行记录中记住经历" [checked] [ref=e53]
+      - text: 从已开启正文留存的执行记录中记住经历
+    - paragraph [ref=e54]: 经历写入还需要开启历史正文留存；仅搜索也会保存经历，但不会自动生成喜好。记忆保存在本机，与对话正文留存分开。删除对话时，会一并删除由该对话保存的记忆；在此页面保存的偏好不受影响。暂停使用后按默认规则处理。
+    - generic [ref=e55]:
+      - button "刷新" [ref=e56] [cursor=pointer]
+      - button "导出记忆" [ref=e57] [cursor=pointer]
+      - button "清空已保存记忆" [ref=e58] [cursor=pointer]
+  - generic [ref=e59]:
+    - text: 也可以对助手说：“记住：以后歌手热门歌曲先展示，不自动播放”。
+    - link "本机 AI 连接设置 ↗" [ref=e60] [cursor=pointer]:
+      - /url: settings.html#ai-control

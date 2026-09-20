@@ -50,7 +50,7 @@
         if (patch.repeat === 'once' && (!patch.fireAt || patch.fireAt <= now())) throw new Error('修改后的提醒时间必须在未来');
       }
       const action = patch ? 'update' : 'delete';
-      return { status: 'review', message: patch ? `修改前：${alarmText(alarm)}\n修改后：${alarmText(patch)}（${zone}）。确认后保存。` : `确认删除提醒：${alarmText(alarm)}？`,
+      return { status: 'review', approvalContext: { before: alarm, anchor: ctx.task.startedAt || now() }, message: patch ? `修改前：${alarmText(alarm)}\n修改后：${alarmText(patch)}（${zone}）。确认后保存。` : `确认删除提醒：${alarmText(alarm)}？`,
         choices: [{ id: `alarm-confirm-${args.ref}`, title: patch ? alarmText(patch) : alarmText(alarm), subtitle: zone, label: patch ? '确认修改' : '确认删除', action: 'alarm.commit', data: { ref: args.ref, action, patch, zone } }] };
     }
     async function music(tool, args, ctx) {
@@ -82,9 +82,9 @@
       if (choice.action === 'alarm.page') return alarms('alarm.list', d, ctx);
       if (choice.action === 'alarm.select') { const { record, alarm } = await currentAlarm(d.ref, ctx); record.selected = true; return { message: `已选择${alarmText(alarm)}。`, observation: { selectedRef: d.ref, ...alarmView(alarm) } }; }
       if (choice.action === 'alarm.commit') {
-        if (Intl.DateTimeFormat().resolvedOptions().timeZone !== d.zone) throw new Error('时区已变化，请重新准备修改');
+        if (Intl.DateTimeFormat().resolvedOptions().timeZone !== d.zone) throw Object.assign(new Error('时区已变化，请重新准备修改'), { code: 'ASSISTANT_USER_INPUT_REQUIRED' });
         const { record, alarm } = await currentAlarm(d.ref, ctx, true);
-        if (d.patch?.repeat === 'once' && d.patch.fireAt <= now()) throw new Error('提醒时间已过，请重新修改');
+        if (d.patch?.repeat === 'once' && d.patch.fireAt <= now()) throw Object.assign(new Error('提醒时间已过，请重新修改'), { code: 'ASSISTANT_USER_INPUT_REQUIRED' });
         const result = await deps.mutateAlarm({ action: d.action, id: alarm.id, expectedRevision: alarm.revision, expectedSnapshot: JSON.stringify(alarm), patch: d.patch }, ctx);
         if (d.action === 'update' ? !result?.alarm : !result?.ok) throw new Error(result?.error || '没有收到提醒操作回执');
         record.consumed = true;

@@ -37,11 +37,12 @@
     }
     nonce = message.nonce; previous = document.activeElement;
     host = document.createElement('div'); host.id = 'quick-assistant-overlay'; host.dataset.extension = chrome.runtime.id;
-    host.style.cssText = 'position:fixed;top:min(10vh,72px);left:50%;transform:translateX(-50%);width:min(760px,calc(100vw - 24px));z-index:2147483647;';
+    host.style.cssText = 'position:fixed;top:min(10vh,72px);left:50%;transform:translateX(-50%);width:min(760px,calc(100vw - 24px));z-index:2147483647;border-radius:20px;-webkit-backdrop-filter:blur(28px) saturate(135%);backdrop-filter:blur(28px) saturate(135%);';
     const shadow = host.attachShadow({ mode: 'closed' });
     target.searchParams.set('maxResultsHeight', String(Math.max(80, Math.min(420, innerHeight - 260))));
+    target.searchParams.set('maxPanelHeight', String(Math.max(90, innerHeight - 130)));
     frame = document.createElement('iframe'); frame.src = target.href; frame.title = '快捷助手'; frame.referrerPolicy = 'no-referrer';
-    frame.style.cssText = 'display:block;width:100%;height:160px;max-height:calc(100vh - 130px);border:0;border-radius:16px;background:transparent;box-shadow:0 12px 36px #0005;';
+    frame.style.cssText = 'display:block;width:100%;height:160px;max-height:calc(100vh - 130px);border:0;border-radius:20px;background:transparent;box-shadow:0 18px 56px #141d3d40,0 2px 8px #141d3d26;';
     shadow.append(frame); document.documentElement.append(host);
     ready = respond;
     timeout = setTimeout(() => hide(false, false), 4000);
@@ -67,7 +68,7 @@
       host.style.width = `min(${event.data.expanded === true ? 1060 : 760}px,calc(100vw - 24px))`;
     }
   });
-  window.addEventListener('resize', () => { if (frame) frame.contentWindow.postMessage({ type: 'assistant_host_size', nonce, height: Math.max(80, Math.min(420, innerHeight - 260)) }, assistantOrigin); });
+  window.addEventListener('resize', () => { if (frame) frame.contentWindow.postMessage({ type: 'assistant_host_size', nonce, height: Math.max(80, Math.min(420, innerHeight - 260)), panelHeight: Math.max(90, innerHeight - 130) }, assistantOrigin); });
   document.addEventListener('pointerdown', event => { if (host && !event.composedPath().includes(host)) hide(false); }, true);
   document.addEventListener('keydown', event => { if (host && event.key === 'Escape' && !event.isComposing) { event.preventDefault(); hide(); } }, true);
 })();
