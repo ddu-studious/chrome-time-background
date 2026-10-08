@@ -8,7 +8,9 @@
 
   const CONFIG_KEY = 'siteWorkspaceV1';
   const BINDINGS_KEY = 'siteWorkspaceTabBindingsV1';
-  const VERSION = 2;
+  const VERSION = 3;
+  const RECENT_LIMIT = 30;
+  const RECENT_TTL = 7 * 24 * 60 * 60 * 1000;
   const GROUP_TITLE_PREFIX = '网站 · ';
   const UNCATEGORIZED_ID = 'uncategorized';
   const MASHIBING_URL = 'https://www.mashibing.com/study?courseNo=2699&sectionNo=107317&systemId=167&courseVersionId=3600';
@@ -29,7 +31,7 @@
 
   function normalizeHttpUrl(rawUrl) {
     const raw = typeof rawUrl === 'string' ? rawUrl.trim() : '';
-    if (!raw) return null;
+    if (!raw || (/^[a-z][a-z0-9+.-]*:/i.test(raw) && !/^https?:/i.test(raw) && !/^[^/:]+:\d+(?:[/?#]|$)/.test(raw))) return null;
     const candidate = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
     try {
       const url = new URL(candidate);
@@ -63,6 +65,7 @@
         },
       ],
       pages: [],
+      recentClosed: [],
       updatedAt: now(),
     };
   }
@@ -142,6 +145,8 @@
       const pageKey = `${groupId}\n${url}`;
       const duplicate = pageByKey.get(pageKey);
       if (duplicate) {
+        duplicate.pinned ||= item.pinned !== false;
+        if (!duplicate.customTitle && item.customTitle) duplicate.customTitle = String(item.customTitle).trim().slice(0, 200);
         const candidateLastOpenedAt = Number.isFinite(item.lastOpenedAt) ? item.lastOpenedAt : 0;
         if (candidateLastOpenedAt >= duplicate.lastOpenedAt) {
           duplicate.title = title;
@@ -157,6 +162,9 @@
         id,
         groupId,
         siteId,
+        pinned: item.pinned !== false, // Existing records are retained as fixed entries.
+        sourcePageId: typeof item.sourcePageId === 'string' ? item.sourcePageId.slice(0, 100) : null,
+        sourceTitle: typeof item.sourceTitle === 'string' ? item.sourceTitle.slice(0, 200) : '',
         url,
         title,
         customTitle: typeof item?.customTitle === 'string' && item.customTitle.trim()
@@ -181,8 +189,39 @@
       groups,
       sites,
       pages,
+      recentClosed: sanitizeRecent(input.recentClosed, groupIds),
       updatedAt: Number.isFinite(input.updatedAt) ? input.updatedAt : now(),
     };
+  }
+
+  function sanitizeRecent(entries, groupIds) {
+    const seen = new Set();
+    return (Array.isArray(entries) ? entries : [])
+      .filter(item => item && normalizeHttpUrl(item.url) && Number.isFinite(item.closedAt) && item.closedAt > now() - RECENT_TTL)
+      .sort((a, b) => b.closedAt - a.closedAt)
+      .filter(item => { if (seen.has(item.id)) return false; seen.add(item.id); return true; })
+      .slice(0, RECENT_LIMIT).map(item => ({
+        id: safeId(item.id, makeId('recent')), groupId: groupIds.has(item.groupId) ? item.groupId : UNCATEGORIZED_ID,
+        url: normalizeHttpUrl(item.url), title: String(item.customTitle || item.title || new URL(normalizeHttpUrl(item.url)).hostname).slice(0, 200),
+        sourcePageId: typeof item.sourcePageId === 'string' ? item.sourcePageId.slice(0, 100) : null,
+        sourceTitle: String(item.sourceTitle || '').slice(0, 200), closedAt: item.closedAt,
+      }));
+  }
+
+  function pageLabel(page) { return page?.customTitle || page?.title || ''; }
+
+  // Follow recorded links only; never infer a parent from a hostname or title.
+  function fixedAncestor(config, page) {
+    const seen = new Set([page.id]);
+    let parentId = page.sourcePageId;
+    while (parentId && !seen.has(parentId)) {
+      seen.add(parentId);
+      const parent = config.pages.find(item => item.id === parentId);
+      if (!parent || parent.groupId !== page.groupId) return null;
+      if (parent.pinned) return parent;
+      parentId = parent.sourcePageId;
+    }
+    return null;
   }
 
   function groupTitle(name) {
@@ -250,6 +289,9 @@
         url,
         title: String(input?.title || new URL(url).hostname).trim().slice(0, 200),
         customTitle: '',
+        pinned: input.pinned !== false,
+        sourcePageId: input.sourcePageId || null,
+        sourceTitle: String(input.sourceTitle || '').slice(0, 200),
         order: config.pages.filter(item => item.groupId === groupId).length,
         createdAt: now(),
         lastOpenedAt: Number.isFinite(input?.lastOpenedAt) ? input.lastOpenedAt : now(),
@@ -282,7 +324,8 @@
     async saveBindings(value) {
       const area = this.chrome.storage.session || this.chrome.storage.local;
       const saved = { version: VERSION, bindings: { ...(value?.bindings || {}) } };
-      await area.set({ [BINDINGS_KEY]: saved });
+      const previous = await area.get(BINDINGS_KEY);
+      if (JSON.stringify(previous?.[BINDINGS_KEY]) !== JSON.stringify(saved)) await area.set({ [BINDINGS_KEY]: saved });
       return saved;
     }
 
@@ -392,6 +435,7 @@
     async deletePage(pageId) {
       const config = await this.loadConfig();
       config.pages = config.pages.filter(page => page.id !== pageId);
+      config.recentClosed = config.recentClosed.filter(page => page.id !== pageId);
       const saved = await this.saveConfig(config);
       const bindings = await this.loadBindings();
       Object.keys(bindings.bindings).forEach(tabId => {
@@ -408,7 +452,44 @@
       const name = String(customTitle || '').trim().slice(0, 200);
       if (!name) throw new Error('请输入页面名称');
       page.customTitle = name;
+      page.pinned = true;
       return this.saveConfig(config);
+    }
+
+    async pinPage(pageId, pinned = true) {
+      const config = await this.loadConfig();
+      const page = config.pages.find(item => item.id === pageId);
+      if (!page) throw new Error('工作区页面不存在');
+      page.pinned = Boolean(pinned);
+      await this.saveConfig(config);
+      return this.getSnapshot();
+    }
+
+    async restoreRecent(pageId) {
+      const snapshot = await this.getSnapshot();
+      const entry = snapshot.config.recentClosed.find(item => item.id === pageId);
+      if (!entry) throw new Error('最近关闭记录已过期');
+      const existing = snapshot.tabs.find(tab => tab.workspaceGroupId === entry.groupId && normalizeHttpUrl(tab.url) === entry.url);
+      const result = existing ? { tab: await this.activateTab(existing.id), reused: true } : await this.openUrl(entry.url, { groupId: entry.groupId, pinned: false, forceNew: true,
+        sourcePageId: entry.sourcePageId, sourceTitle: entry.sourceTitle, title: entry.title });
+      const config = await this.loadConfig();
+      config.recentClosed = config.recentClosed.filter(item => item.id !== pageId);
+      await this.saveConfig(config);
+      return result;
+    }
+
+    // Capture at onCreated, before Chrome may discard openerTabId when the parent closes.
+    async rememberOpener(tab) {
+      if (!Number.isInteger(tab?.openerTabId)) return;
+      const bindings = await this.loadBindings();
+      const parent = bindings.bindings[String(tab.openerTabId)];
+      if (!parent?.pageId) return;
+      const config = await this.loadConfig();
+      const page = config.pages.find(item => item.id === parent.pageId);
+      if (!page) return;
+      bindings.bindings[String(tab.id)] = { ...bindings.bindings[String(tab.id)],
+        sourcePageId: page.id, sourceTitle: pageLabel(page), pendingSource: true };
+      await this.saveBindings(bindings);
     }
 
     async movePageToGroup(pageId, groupId) {
@@ -488,61 +569,79 @@
         if (workspaceGroup) groupByChromeId.set(chromeGroup.id, workspaceGroup);
       }
 
+      const beforeConfig = JSON.stringify(config);
+      const previousBindings = { ...bindingState.bindings };
       const liveTabIds = new Set(tabs.map(tab => String(tab.id)));
       Object.keys(bindingState.bindings).forEach(tabId => {
         if (!liveTabIds.has(tabId)) delete bindingState.bindings[tabId];
       });
-
       const managedTabs = [];
-      for (const tab of tabs) {
-        const workspaceGroup = groupByChromeId.get(tab.groupId);
-        if (!workspaceGroup) {
-          delete bindingState.bindings[String(tab.id)];
-          continue;
-        }
+      const byTabId = new Map(tabs.map(tab => [tab.id, tab]));
+      const visited = new Set();
+      const visit = tab => {
+        if (visited.has(tab.id)) return;
+        visited.add(tab.id);
+        const opener = byTabId.get(tab.openerTabId);
+        if (opener) visit(opener);
         const key = String(tab.id);
         const current = bindingState.bindings[key] || {};
-        const matchedSite = current.siteId
-          ? config.sites.find(site => site.id === current.siteId)
-          : findSiteForUrl(config, tab.url);
-        let page = current.pageId ? config.pages.find(item => item.id === current.pageId) : null;
+        const workspaceGroup = groupByChromeId.get(tab.groupId);
+        if (!workspaceGroup) {
+          // Newly created tabs may not have a group yet. Keep only a captured source hint.
+          if (!current.pendingSource) delete bindingState.bindings[key];
+          return;
+        }
+        const parentBinding = bindingState.bindings[String(tab.openerTabId)] || previousBindings[String(tab.openerTabId)];
+        const parent = config.pages.find(item => item.id === (current.sourcePageId || parentBinding?.pageId));
+        const source = { sourcePageId: parent?.id || current.sourcePageId || null,
+          sourceTitle: pageLabel(parent) || current.sourceTitle || '' };
+        const normalizedUrl = normalizeHttpUrl(tab.url);
+        if (!normalizedUrl) {
+          bindingState.bindings[key] = { ...current, ...source, pendingSource: true };
+          return;
+        }
+        const matchedSite = findSiteForUrl(config, tab.url);
+        let page = config.pages.find(item => item.id === current.pageId);
+        // A fixed URL is an entry point; navigation creates a temporary child instead of overwriting it.
+        const sharedPage = page && tabs.some(other => other.id !== tab.id && previousBindings[String(other.id)]?.pageId === page.id && normalizeHttpUrl(other.url) !== normalizedUrl);
+        if (page && page.url !== normalizedUrl && (page.pinned || sharedPage)) {
+          source.sourcePageId = page.id;
+          source.sourceTitle = pageLabel(page);
+          page = null;
+        }
+        const fixedAtUrl = config.pages.find(item => item.pinned && item.groupId === workspaceGroup.id && item.url === normalizedUrl);
+        if (fixedAtUrl) page = fixedAtUrl;
         if (!page) page = this.findReusablePage(config, { groupId: workspaceGroup.id, url: tab.url });
         if (!page) {
-          page = this.createPage(config, {
-            groupId: workspaceGroup.id,
-            siteId: matchedSite?.id || null,
-            url: tab.url,
-            title: tab.title,
-            lastOpenedAt: Number.isFinite(current.lastActivatedAt) ? current.lastActivatedAt : now(),
-          });
-          configChanged = true;
+          page = this.createPage(config, { groupId: workspaceGroup.id, siteId: matchedSite?.id,
+            url: normalizedUrl, title: tab.title, pinned: false, ...source });
         } else {
-          const normalizedUrl = normalizeHttpUrl(tab.url);
-          const title = String(tab.title || page.title).trim().slice(0, 200);
-          const siteId = matchedSite?.id || page.siteId || null;
-          if (page.groupId !== workspaceGroup.id || page.url !== normalizedUrl || page.title !== title || page.siteId !== siteId) {
-            Object.assign(page, { groupId: workspaceGroup.id, url: normalizedUrl, title, siteId });
-            configChanged = true;
+          Object.assign(page, { groupId: workspaceGroup.id, url: normalizedUrl,
+            title: String(tab.title || page.title).trim().slice(0, 200), siteId: matchedSite?.id || null });
+        }
+        const binding = { pageId: page.id, siteId: matchedSite?.id || null,
+          groupId: workspaceGroup.id, windowId: tab.windowId,
+          lastActivatedAt: Number.isFinite(current.lastActivatedAt) ? current.lastActivatedAt : 0 };
+        bindingState.bindings[key] = binding;
+        managedTabs.push({ ...tab, workspaceGroupId: workspaceGroup.id,
+          pageId: page.id, siteId: binding.siteId, lastActivatedAt: binding.lastActivatedAt });
+      };
+      tabs.forEach(visit);
+      const livePages = new Set(Object.values(bindingState.bindings).map(binding => binding.pageId));
+      const closed = config.pages.filter(page => !page.pinned && !livePages.has(page.id));
+      if (closed.length) {
+        // Keep a surviving child's nearest fixed ancestor before its temporary parent disappears.
+        for (const page of config.pages) {
+          if (closed.some(item => item.id === page.sourcePageId)) {
+            const ancestor = fixedAncestor(config, page);
+            if (ancestor) { page.sourcePageId = ancestor.id; page.sourceTitle = pageLabel(ancestor); }
           }
         }
-        const binding = {
-          pageId: page.id,
-          siteId: matchedSite?.id || null,
-          groupId: workspaceGroup.id,
-          windowId,
-          lastActivatedAt: Number.isFinite(current.lastActivatedAt) ? current.lastActivatedAt : 0,
-        };
-        bindingState.bindings[key] = binding;
-        managedTabs.push({
-          ...tab,
-          workspaceGroupId: workspaceGroup.id,
-          pageId: page.id,
-          siteId: binding.siteId,
-          lastActivatedAt: binding.lastActivatedAt,
-        });
+        config.recentClosed = [...closed.map(page => ({ ...page, closedAt: now() })), ...config.recentClosed];
+        config.pages = config.pages.filter(page => page.pinned || livePages.has(page.id));
       }
       await this.saveBindings(bindingState);
-      if (configChanged) config = await this.saveConfig(config);
+      if (configChanged || beforeConfig !== JSON.stringify(config)) config = await this.saveConfig(config);
       return { config, windowId, tabs: managedTabs, chromeGroups };
     }
 
@@ -577,7 +676,7 @@
       const tab = await this.chrome.tabs.create({ url, active: true, windowId: snapshot.windowId });
       await this.ensureChromeGroup(tab.id, workspaceGroup, snapshot.windowId);
       const config = await this.loadConfig();
-      let page = options.pageId ? config.pages.find(item => item.id === options.pageId) : null;
+      let page = this.findReusablePage(config, { pageId: options.pageId, groupId: workspaceGroup.id, url });
       if (page) {
         Object.assign(page, { groupId: workspaceGroup.id, siteId, url, lastOpenedAt: now() });
       } else {
@@ -585,7 +684,8 @@
           groupId: workspaceGroup.id,
           siteId,
           url,
-          title: matchedSite?.name || tab.title,
+          title: options.title || matchedSite?.name || tab.title,
+          pinned: options.pinned !== false, sourcePageId: options.sourcePageId, sourceTitle: options.sourceTitle,
           lastOpenedAt: now(),
         });
       }
@@ -605,7 +705,7 @@
     async openGroup(groupId) {
       const snapshot = await this.getSnapshot();
       if (!snapshot.config.groups.some(group => group.id === groupId)) throw new Error('工作区分组不存在');
-      const pages = snapshot.config.pages.filter(page => page.groupId === groupId);
+      const pages = snapshot.config.pages.filter(page => page.groupId === groupId && page.pinned !== false);
       const sites = snapshot.config.sites.filter(site => site.groupId === groupId && !pages.some(page => page.siteId === site.id));
       const seen = new Set(), targets = [];
       for (const page of pages) { const url = normalizeHttpUrl(page.url); if (!seen.has(url)) { seen.add(url); targets.push({ id: page.id, page: true }); } }
@@ -671,6 +771,7 @@
       const bindings = await this.loadBindings();
       const current = bindings.bindings[String(tab.id)] || {};
       let page = current.pageId ? config.pages.find(item => item.id === current.pageId) : null;
+      if (page?.pinned && page.url !== normalizeHttpUrl(tab.url)) page = null;
       if (!page) page = this.findReusablePage(config, { groupId: group.id, url: tab.url });
       if (!page) {
         page = this.createPage(config, {
@@ -685,6 +786,7 @@
           groupId: group.id,
           siteId: matchedSite?.id || page.siteId || null,
           url: normalizeHttpUrl(tab.url),
+          pinned: true,
           title: String(tab.title || page.title).trim().slice(0, 200),
           lastOpenedAt: now(),
         });
@@ -747,6 +849,25 @@
     }
   }
 
+  const transaction = Symbol('workspace-transaction');
+  const queues = new WeakMap();
+  for (const name of Object.getOwnPropertyNames(WorkspaceService.prototype)) {
+    const operation = WorkspaceService.prototype[name];
+    if (operation?.constructor?.name !== 'AsyncFunction' || name === 'openPanel') continue;
+    WorkspaceService.prototype[name] = function (...args) {
+      if (this[transaction]) return operation.apply(this, args);
+      const receiver = Object.create(this);
+      receiver[transaction] = true;
+      const run = () => operation.apply(receiver, args);
+      if (typeof navigator !== 'undefined' && navigator.locks) {
+        return navigator.locks.request('site-workspace-storage', run);
+      }
+      const pending = (queues.get(this.chrome) || Promise.resolve()).then(run);
+      queues.set(this.chrome, pending.catch(() => {}));
+      return pending;
+    };
+  }
+
   return {
     WorkspaceService,
     CONFIG_KEY,
@@ -762,5 +883,7 @@
     groupTitle,
     groupNameFromTitle,
     findSiteForUrl,
+    fixedAncestor,
+    RECENT_LIMIT,
   };
 });

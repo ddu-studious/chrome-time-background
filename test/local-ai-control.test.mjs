@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createControlStore } from '../local-ai/control-store.mjs';
@@ -69,4 +69,17 @@ test('HTTP 取消不会被迟到结果覆盖，策略更新撤销已生成的未
   assert.equal((await request(`/v1/ai/jobs/${localJob.jobId}`)).status, 'ready');
   assert.equal((await request('/v1/control', { expectedRevision: 1, policy: { modelEnabled: false, disabledScenes: [] } })).revision, 2);
   assert.equal((await request(`/v1/ai/jobs/${localJob.jobId}`)).status, 'cancelled');
+});
+
+test('规划思考起步策略默认严格按设置，可持久化和回滚，非法值被拒绝', t => {
+  const dir = mkdtempSync(join(tmpdir(), 'ai-policy-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = join(dir, 'control.json');
+  const control = createControlStore({ file });
+  assert.equal(control.snapshot().policy.planningStrategy, 'follow');
+  control.update({ ...control.snapshot().policy, planningStrategy: 'adaptive' }, 1);
+  assert.equal(createControlStore({ file }).snapshot().policy.planningStrategy, 'adaptive');
+  assert.throws(() => control.update({ ...control.snapshot().policy, planningStrategy: 'always-off' }, 2), /规划思考起步/);
+  assert.equal(control.rollback(1, 2).policy.planningStrategy, 'follow');
+  writeFileSync(join(dir, 'legacy.json'), JSON.stringify({ revision: 1, policy: { modelEnabled: true, disabledScenes: [] }, history: [] }));
+  assert.equal(createControlStore({ file: join(dir, 'legacy.json') }).snapshot().policy.planningStrategy, 'follow');
 });

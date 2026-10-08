@@ -105,3 +105,26 @@ test('首页显式宿主标识兼容可见 chrome://newtab 地址，仍只响应
   assert.equal(status.home,true);assert.equal(status.visible,false);
   let wrong=false;listener({action:'assistant_home_overlay_status',targetTabId:10},{id},()=>{wrong=true;});await Promise.resolve();assert.equal(wrong,false);
 });
+
+test('磨砂与点击范围仅覆盖真实主卡片和 Tips，布局数据仍绑定来源且受视口限制',()=>{
+  const id='a'.repeat(32),events={},nodes=[];let listener;
+  const contentWindow={postMessage(){}};
+  const document={activeElement:null,getElementById:()=>null,
+    createElement:tag=>{const el={style:{},dataset:{},clientWidth:1322,clientHeight:600,contentWindow,focus(){},attachShadow:()=>({append(){}})};nodes.push({tag,el});return el;},
+    documentElement:{append(el){el.isConnected=true;}},addEventListener(){}};
+  const context={document,window:{addEventListener:(name,fn)=>events[name]=fn},URL,innerHeight:800,setTimeout:()=>1,clearTimeout(){},
+    chrome:{runtime:{id,getURL:p=>`chrome-extension://${id}/${p}`,sendMessage:async()=>{},onMessage:{addListener:fn=>listener=fn}}}};
+  vm.runInNewContext(fs.readFileSync(require.resolve('../js/assistant-overlay.js'),'utf8'),context);
+  listener({action:'assistant_overlay_show',nonce:'n',url:`chrome-extension://${id}/assistant.html?embedded=1&nonce=n`},{id},()=>{});
+  const [host,main,todo,frame]=nodes.map(row=>row.el);
+  const data={type:'assistant_resize',nonce:'n',height:600,expanded:true,todoDock:'open',surfaces:{main:{x:0,y:0,width:1060,height:600},todo:{x:1070,y:58,width:252,height:130}}};
+  events.message({source:contentWindow,origin:`chrome-extension://${id}`,data});
+  assert.doesNotMatch(host.style.cssText,/backdrop-filter/);assert.match(host.style.cssText,/pointer-events:none/);
+  assert.equal(main.style.width,'1060px');assert.equal(todo.style.height,'130px');
+  assert.match(frame.style.clipPath,/M 1070 58 H 1322 V 188/);
+  const previous=frame.style.clipPath;
+  events.message({source:{},origin:`chrome-extension://${id}`,data:{...data,surfaces:{}}});assert.equal(frame.style.clipPath,previous);
+  events.message({source:contentWindow,origin:'https://hostile.test',data});assert.equal(frame.style.clipPath,previous);
+  events.message({source:contentWindow,origin:`chrome-extension://${id}`,data:{...data,surfaces:{main:data.surfaces.main,todo:{x:-1,y:0,width:Infinity,height:50000}}}});
+  assert.equal(todo.style.display,'none');assert.doesNotMatch(frame.style.clipPath,/Infinity|-1/);
+});

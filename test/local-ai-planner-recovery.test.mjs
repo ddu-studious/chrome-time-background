@@ -6,6 +6,7 @@ import { createControlStore } from '../local-ai/control-store.mjs';
 import { createHistoryStore } from '../local-ai/history-store.mjs';
 import Engine from '../js/assistant-engine.js';
 import Tools from '../js/assistant-tools.js';
+import Todo from '../js/assistant-todo.js';
 
 const input = { app: 'music', text: '首先清空播放列表，搜索杨和苏的热歌，添加到队列，随机播放。' };
 const selection = { reasoning: 'medium' };
@@ -151,7 +152,7 @@ test('降级不跨执行轮、会话、模型、用户选择或控制策略，�
 test('真实Engine与Tools逐轮传递恢复范围，读取后只清空一次并保留确认', async () => {
   const revision = 'fixture-revision';
   const clear = { steps: [{ tool: 'music.queue.clear', args: { expectedRevision: revision } }], continue: true };
-  const f = fixture([reasoningOnly, answer(plan), answer(clear), answer({ done: true })]);
+  const f = fixture([reasoningOnly, answer({ todoTips: [{ text: '清空队列', source: 0, tool: 'music.queue.clear' }] }), answer(plan), answer(clear), answer({ done: true })]);
   const values = {}, effects = [];
   const storage = { async get() { return structuredClone(values); }, async set(v) { Object.assign(values, structuredClone(v)); }, async remove(k) { delete values[k]; } };
   const handlers = Tools.create({ storage,
@@ -170,7 +171,7 @@ test('真实Engine与Tools逐轮传递恢复范围，读取后只清空一次并
   await engine.choose(task.id, task.choices.find(c => c.id === 'queue-edit-confirm').id, task.version);
   task = await engine.settled();
   assert.equal(task.status, 'completed', task.message); assert.deepEqual(effects, ['clear']);
-  assert.deepEqual(f.sent.map(row => row.reasoning), ['medium', 'off', 'off', 'medium']);
+  assert.deepEqual(f.sent.map(row => row.reasoning), ['medium', 'off', 'off', 'off', 'medium']);
   assert.equal(task.input.ai.reasoning, 'medium'); // 用户确认开始新执行轮，重新尊重所选等级。
 });
 
@@ -196,6 +197,32 @@ test('第二次失败必须停止，错误码和两次元数据均保留', async
     return true;
   });
   assert.equal(f.sent.length, 2);
+  assert.equal(f.gateway.describe().usage.scenes['assistant.plan'].failures, 2);
+  assert.equal(f.gateway.describe().usage.scenes['assistant.plan'].consecutiveFailures, 1);
+});
+
+test('接近冷却阈值时首尝试超时仍可恢复，每次调用继续计预算和失败', async () => {
+  const f = fixture([new Error('first failure'), new Error('second failure'), reasoningOnly, answer(plan)], { failureThreshold: 3 });
+  await assert.rejects(f.gateway.run('assistant.plan', input, { selection }));
+  await assert.rejects(f.gateway.run('assistant.plan', input, { selection }));
+  const result = await f.gateway.run('assistant.plan', input, { selection });
+  assert.equal(result.execution.attempts.length, 2);
+  const usage = f.gateway.describe().usage;
+  assert.equal(usage.admitted, 4); assert.equal(usage.scenes['assistant.plan'].failures, 3);
+  assert.equal(usage.scenes['assistant.plan'].consecutiveFailures, 0);
+});
+
+test('真正连续三轮失败触发冷却，到期后首尝试失败不会再次堵住off恢复', async t => {
+  const start = Date.now(); let now = start; t.mock.method(Date, 'now', () => now);
+  const f = fixture([new Error('one'), new Error('two'), reasoningOnly, reasoningOnly, reasoningOnly, answer(plan)], { failureThreshold: 3, cooldownMs: 60000 });
+  for (let i = 0; i < 3; i++) await assert.rejects(f.gateway.run('assistant.plan', input, { selection }));
+  assert.equal(f.gateway.describe().usage.scenes['assistant.plan'].consecutiveFailures, 3);
+  await assert.rejects(f.gateway.run('assistant.plan', input, { selection }), /冷却/);
+  assert.equal(f.sent.length, 4);
+  now += 60001;
+  assert.equal((await f.gateway.run('assistant.plan', input, { selection })).status, 'ready');
+  assert.deepEqual(f.sent.slice(-2).map(r => r.reasoning), ['medium', 'off']);
+  assert.equal(f.gateway.describe().usage.scenes['assistant.plan'].consecutiveFailures, 0);
 });
 
 test('取消、策略变更和当日预算限制均阻止恢复尝试', async () => {
@@ -253,4 +280,96 @@ test('Provider区分网络超时与用户取消，确保取消不会变成自动
   await assert.rejects(provider.request('/api/v1/chat', {}), { code: 'MODEL_RESPONSE_TIMEOUT' });
   const controller = new AbortController(); controller.abort();
   await assert.rejects(provider.request('/api/v1/chat', {}, 1000, controller.signal), e => e === controller.signal.reason);
+});
+
+const adaptive = { planningStrategy: 'adaptive' };
+const receipt = [{ tool: 'music.state', status: 'done', message: '当前队列共3首。', data: { status: 'ready', revision: 'v1', count: 3 } }];
+const withReceipts = { ...input, observations: receipt };
+
+test('自适应起步：已有执行回执时直接关闭思考并拿到完整超时，所选等级和默认设置不变', async () => {
+  const f = fixture([answer(plan)], adaptive);
+  const result = await f.gateway.run('assistant.plan', withReceipts, { selection });
+  assert.deepEqual(f.sent.map(row => row.reasoning), ['off']);
+  assert.ok(f.sent[0].timeoutMs > 60000 && f.sent[0].timeoutMs <= 90000);
+  assert.equal(f.sent[0].max_output_tokens, 1200);
+  assert.equal(result.execution.requestedReasoning, 'medium');
+  assert.equal(result.execution.effectiveReasoning, 'off');
+  assert.equal(result.execution.startReason, 'adaptive-receipts');
+  assert.equal(result.execution.recoveryFromRequestId, undefined);
+  assert.equal(result.execution.attempts.length, 1);
+  assert.equal(result.execution.attempts[0].startReason, 'adaptive-receipts');
+  assert.equal(f.gateway.describe().usage.admitted, 1);
+  assert.equal(f.history.snapshot().calls[0].startReason, 'adaptive-receipts');
+  assert.equal(f.control.snapshot().policy.reasoning, 'off', '默认设置保持原值');
+});
+
+test('自适应起步只在有真实工具回执、非清单分析阶段且思考未关闭时生效', async () => {
+  const outline = { ...input, todoTips: Todo.create(input), planningPhase: 'outline', observations: receipt };
+  const cases = [
+    ['默认 follow 仍按所选设置起步', {}, withReceipts, selection, 'medium'],
+    ['没有执行回执', adaptive, input, selection, 'medium'],
+    ['只有规划失败观察不算执行回执', adaptive, { ...input, observations: [{ tool: 'assistant.plan', status: 'failed', message: '计划格式无效', data: null }] }, selection, 'medium'],
+    ['清单分析阶段', adaptive, outline, selection, 'medium'],
+    ['所选思考已经是 off', adaptive, withReceipts, { reasoning: 'off' }, 'off']
+  ];
+  for (const [name, policy, body, chosen, expected] of cases) {
+    const f = fixture([answer(plan)], policy);
+    await f.gateway.run('assistant.plan', body, { selection: chosen }).catch(() => {});
+    assert.equal(f.sent[0].reasoning, expected, name);
+    assert.equal(f.history.snapshot().calls[0].startReason, undefined, name);
+  }
+});
+
+test('自适应起步不是超时恢复：不会让后续无回执规划继续沿用 off，也不记为恢复来源', async () => {
+  const trace = { conversationId: 'conversation', turnId: 'turn', userManaged: true };
+  const f = fixture([answer(plan), answer(plan), answer(plan)], adaptive);
+  const first = await f.gateway.run('assistant.plan', withReceipts, { selection, trace });
+  const second = await f.gateway.run('assistant.plan', withReceipts, { selection, trace });
+  const third = await f.gateway.run('assistant.plan', input, { selection, trace });
+  assert.deepEqual(f.sent.map(row => row.reasoning), ['off', 'off', 'medium']);
+  assert.equal(first.execution.startReason, 'adaptive-receipts'); assert.equal(second.execution.startReason, 'adaptive-receipts');
+  assert.equal(second.execution.recoveryFromRequestId, undefined);
+  assert.equal(third.execution.recoveryFromRequestId, undefined);
+  assert.equal(third.execution.startReason, undefined);
+});
+
+test('自适应起步失败不再重试，预算只计一次；真实超时恢复的来源仍照常记录', async () => {
+  const f = fixture([Object.assign(new Error('timeout'), { code: 'MODEL_RESPONSE_TIMEOUT' })], adaptive);
+  await assert.rejects(f.gateway.run('assistant.plan', withReceipts, { selection }), { code: 'MODEL_RESPONSE_TIMEOUT' });
+  assert.equal(f.sent.length, 1);
+  assert.equal(f.gateway.describe().usage.admitted, 1);
+  const trace = { conversationId: 'conversation', turnId: 'turn', userManaged: true };
+  const g = fixture([reasoningOnly, answer(plan), answer(plan)], adaptive);
+  const first = await g.gateway.run('assistant.plan', input, { selection, trace });
+  const next = await g.gateway.run('assistant.plan', withReceipts, { selection, trace });
+  assert.deepEqual(g.sent.map(row => row.reasoning), ['medium', 'off', 'off']);
+  assert.equal(next.execution.recoveryFromRequestId, first.requestId);
+  assert.equal(next.execution.startReason, undefined, '真实恢复优先，不重复标记为自适应起步');
+});
+
+test('真实 Engine 与 Tools：首轮按所选等级，读取回执后的规划轮从 off 起步，用户确认后仍带回执起步', async () => {
+  const revision = 'fixture-revision';
+  const clear = { steps: [{ tool: 'music.queue.clear', args: { expectedRevision: revision } }], continue: true };
+  const f = fixture([answer({ todoTips: [{ text: '清空队列', source: 0, tool: 'music.queue.clear' }] }), answer(plan), answer(clear), answer({ done: true })], adaptive);
+  const values = {}, effects = [];
+  const storage = { async get() { return structuredClone(values); }, async set(v) { Object.assign(values, structuredClone(v)); }, async remove(k) { delete values[k]; } };
+  const handlers = Tools.create({ storage,
+    memory: async () => ({ ok: true, revision: 1, enabled: false, preferences: [] }),
+    ai: async request => ({ ok: true, ...await f.gateway.run(request.scene, request.input, { selection: request.selection, trace: request.trace }) }),
+    readMusicState: async () => ({ status: 'ready', revision, count: 50, isPlaying: false }),
+    editMusicQueue: async (action, songId, expectedRevision) => {
+      assert.equal(action, 'clear'); assert.equal(expectedRevision, revision); effects.push(action);
+      return { status: 'empty', revision: 'fixture-empty', count: 0, isPlaying: false };
+    }
+  });
+  const engine = Engine.create({ storage, ...handlers });
+  await engine.submit({ app: 'music', text: '清空队列', ai: selection });
+  let task = await engine.settled();
+  assert.equal(task.status, 'review'); assert.deepEqual(effects, []);
+  await engine.choose(task.id, task.choices.find(c => c.id === 'queue-edit-confirm').id, task.version);
+  task = await engine.settled();
+  assert.equal(task.status, 'completed', task.message); assert.deepEqual(effects, ['clear']);
+  assert.deepEqual(f.sent.map(row => row.reasoning), ['medium', 'medium', 'off', 'off']);
+  assert.deepEqual(task.modelCalls.filter(call => call.scene === 'assistant.plan').map(call => call.startReason), [undefined, undefined, 'adaptive-receipts', 'adaptive-receipts']);
+  assert.equal(task.input.ai.reasoning, 'medium');
 });

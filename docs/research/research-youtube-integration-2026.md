@@ -14,6 +14,8 @@ related:
 
 # YouTube Chrome 扩展集成调研（2026）
 
+> 2026-09-22 更新：用户已明确选择并授权新增网页首页推荐来源。实现复用 YouTube.js 18.0.0，见[首页接入说明](../technical/youtube-home-feed-20260922.md)。本文原方案“不读取 Cookie”的边界仍适用于 OAuth 数据链路；新首页来源只在 YouTube 网页内使用会话 Cookie，不导出至扩展 UI、AI 或存储。
+
 ## 1. 结论
 
 **可以集成，但不能把现有 B 站方案原样复制。** 推荐建设一个独立的「YouTube 工作台」，复用 B 站 v5 的工作台布局和列表体验，底层改用 YouTube 官方 OAuth、Data API v3 与官方嵌入播放器。

@@ -46,11 +46,35 @@
     }
     return result;
   }
+  // Closed grammar for "play the existing queue". Artists, conditions and extra
+  // steps are deliberately absent: they belong to full planning.
+  const queueGrammar = (() => {
+    const prefix = '(?:请帮我|帮我|请)?(?:把)?', suffix = '(?:吧|一下)?';
+    const scope = '(?:当前|已有|现有|本地)?', place = '(?:里面?|中|内)?', songs = '(?:的)?(?:歌曲|曲目|音乐|歌)';
+    const strong = `${scope}(?:队列|队里|播放列表)${place}(?:${songs})?`;
+    const weak = `${scope}列表${place}${songs}`, weakBare = `${scope}列表${place}`;
+    return Object.freeze({
+      shuffleForward: new RegExp(`^${prefix}随机播放(?:一下)?(?:${strong}|${weak}|${weakBare})${suffix}$`),
+      shuffleReverse: new RegExp(`^${prefix}(?:${strong}|${weak}|${weakBare})随机播放${suffix}$`),
+      playForward: new RegExp(`^${prefix}(?:播放|听)(?:一下)?(?:${strong}|${weak})${suffix}$`),
+      playReverse: new RegExp(`^${prefix}(?:${strong}|${weak})播放${suffix}$`),
+      bareShuffle: new RegExp(`^${prefix}随机播放${suffix}$`)
+    });
+  })();
+  // A bare "随机播放" names no object. Callers allow it only when nothing else
+  // (such as a pending candidate list) could be the thing to shuffle.
+  function queuePlayRequest(text, { bare = false } = {}) {
+    const value = String(text || '').trim().replace(/[。！!]+$/, '').replace(/\s+/g, '');
+    if (queueGrammar.shuffleForward.test(value) || queueGrammar.shuffleReverse.test(value) || (bare && queueGrammar.bareShuffle.test(value))) return { mode: 'shuffle' };
+    if (queueGrammar.playForward.test(value) || queueGrammar.playReverse.test(value)) return {};
+    return null;
+  }
   function artistRequest(text) {
     const value = String(text || '').trim().replace(/[。！!？?]+$/, '');
+    if (queuePlayRequest(value)) return null;
     if (/^(?:播放|搜索|打开|找|搜)?(?:歌单|专辑|歌曲|单曲)|[《》“”"]/.test(value)) return null;
     const match = value.match(/^(?:(?:请帮我|帮我|请)\s*)?(直接播放|播放|听|我想听|只搜索|搜索|查找|找|搜|查看|看看|打开)?\s*(.+?)的(热门歌曲|热门歌|代表作|歌曲|歌)(?:[，,；;]\s*(先别播放|先不播放|不要播放|只看看|先看看|不播放|替换(?:当前|原)?队列|保留(?:当前|原)?队列))?$/);
-    if (!match || /[，,；;]|不要|别|以后|今后|如果|然后|并且|再/.test(match[2])) return null;
+    if (!match || /[，,；;]|不要|别|以后|今后|如果|然后|并且|再|队列|队里|队中|播放列表|随机播放|循环播放|当前播放/.test(match[2])) return null;
     if (/^(他|她|它|这个歌手|那个歌手|该歌手)$/.test(match[2].trim())) return null;
     return validate({ action: 'search', kind: 'artist', query: match[2].trim(), collection: 'top',
       ...(/队列$/.test(match[4] || '') ? { queueMode: match[4].startsWith('替换') ? 'replace' : 'append' } : {}),
@@ -61,6 +85,7 @@
     const original = text.trim().replace(/[。！!？?]+$/, '');
     const aliases = { '暫停': '暂停', '暫停播放': '暂停播放', '繼續': '继续', '繼續播放': '继续播放', '恢復播放': '恢复播放', '靜音': '静音' };
     const value = Object.hasOwn(aliases, original) ? aliases[original] : original;
+    if (queuePlayRequest(value)) return null;
     const artist = artistRequest(value);
     if (artist) return artist;
     for (const [pattern, action] of [[/^(暂停|暂停播放|停止播放|暂停音乐)$/, 'pause'], [/^(继续|继续播放|播放音乐|恢复播放)$/, 'resume'], [/^(下一首|切歌|换一首)$/, 'next'], [/^(上一首|前一首)$/, 'previous']]) if (pattern.test(value)) return { action };
@@ -97,5 +122,5 @@
     if (match) return validate({ action: 'search', kind: 'auto', query: match[1], title: match[1] });
     return null;
   }
-  return Object.freeze({ parseLocal, validate, artistRequest });
+  return Object.freeze({ parseLocal, validate, artistRequest, queuePlayRequest });
 });

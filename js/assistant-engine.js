@@ -5,6 +5,7 @@
 })(globalThis, function (Contract) {
   'use strict';
   const Context = typeof module === 'object' && module.exports ? require('./assistant-context-state.js') : globalThis.AssistantContextState;
+  const Todo = typeof module === 'object' && module.exports ? require('./assistant-todo.js') : globalThis.AssistantTodo;
   const KEY = 'quickAssistantTaskV1';
   const clone = value => JSON.parse(JSON.stringify(value));
   const abort = () => Object.assign(new Error('任务已停止'), { name: 'AbortError' });
@@ -24,6 +25,15 @@
     const choices = (task.choices || []).filter(choice => ['music.enqueue-collection', 'music.play-artist'].includes(choice.action) && /热门歌曲/.test(choice.title || ''));
     return choices.length === 1 ? choices[0] : null;
   }
+  // Canonical identity of a read-only proposal. Oversized arguments are never
+  // treated as duplicates, so this cannot hide a genuinely different request.
+  function readFingerprint(step) {
+    if (!step || !Contract.tools[step.tool]?.readOnly) return null;
+    const canonical = value => Array.isArray(value) ? value.map(canonical)
+      : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
+    const args = JSON.stringify(canonical(step.args || {}));
+    return args.length > 2000 ? null : `${step.tool}\n${args}`;
+  }
   function traceValue(value) {
     const seen = new WeakSet();
     function visit(v, depth = 0) {
@@ -41,7 +51,22 @@
   function create({ storage, plan, compact, execute, choose, onChange = () => {}, history = async () => {}, cancelJob = async () => {}, now = Date.now, id = () => crypto.randomUUID() }) {
     let current = null, serial = Promise.resolve(), work = null;
     const lock = fn => { const result = serial.then(fn); serial = result.catch(() => {}); return result; };
+    const interactionKinds = { review: 'confirm', waiting: 'select', clarify: 'input', failed: 'inspect', interrupted: 'inspect' };
+    function interaction(t) {
+      const kind = interactionKinds[t?.status];
+      if (!kind) return null;
+      const previous = t.interaction;
+      const expiresAt = previous?.version === t.version && previous.status === t.status ? previous.expiresAt
+        : (['waiting', 'review'].includes(t.status) && t.candidateSet?.expiresAt) || (t.updatedAt || now()) + 600000;
+      return { id: `${t.id}:${t.version}`, version: t.version, status: t.status, kind, expiresAt, allowText: kind !== 'inspect' };
+    }
+    function checkInteraction(expected) {
+      const active = interaction(current);
+      if (!expected || !active || expected.id !== active.id || expected.status !== active.status || now() >= active.expiresAt) throw new Error('交互卡已失效，请查看工作台最新状态');
+      return active;
+    }
     const save = async () => {
+      current.interaction = interaction(current);
       current.updatedAt = now();
       const saved = clone(current);
       // Live tool bodies are ephemeral; opt-in archival remains owned by history-store.
@@ -101,7 +126,7 @@
           if (action === 'music.enqueue-collection') { title = title.replace('加入队列', '替换并播放').replace(/^加入/, '替换队列并播放'); if (!secondary) label = '替换并播放'; }
           return { id, title, subtitle, label, kind, cover, detail, secondary, parentId, action };
         });
-      return clone({ id, version, status, input, message, log, updatedAt, result, scope, musicView, playback, operation, choices, historyWarning: current.historyWarning, memoryNotice: current.memoryNotice, contextNotice: current.contextNotice, contextSummary: current.contextState ? { count: current.contextState.count, checkpoint: current.contextState.checkpoint ? { sdk: current.contextState.checkpoint.sdk, beforeEstimatedTokens: current.contextState.checkpoint.beforeEstimatedTokens, afterEstimatedTokens: current.contextState.checkpoint.afterEstimatedTokens } : null } : null,
+      return clone({ id, version, status, input, message, log, updatedAt, result, scope, musicView, playback, operation, choices, todoTips: Todo.view(current), interaction: interaction(current), historyWarning: current.historyWarning, memoryNotice: current.memoryNotice, contextNotice: current.contextNotice, contextSummary: current.contextState ? { count: current.contextState.count, checkpoint: current.contextState.checkpoint ? { sdk: current.contextState.checkpoint.sdk, beforeEstimatedTokens: current.contextState.checkpoint.beforeEstimatedTokens, afterEstimatedTokens: current.contextState.checkpoint.afterEstimatedTokens } : null } : null,
         conversationId: current.conversationId || id, turnId: current.turnId || id, startedAt: current.runStartedAt || current.startedAt, endedAt: current.endedAt,
         conversationTitle: current.conversationTitle || input.text, startMode: current.startMode, routeReason: current.routeReason,
         messages: current.messages || [], trace: current.trace || [], traceRevision: current.traceRevision || 0,
@@ -144,7 +169,7 @@
         async progress(message) { await lock(async () => { guard(t, version); t.message = String(message).slice(0, 400); if (t.operation?.status === 'pending') t.operation.message = t.message; await save(); }); }
       };
     }
-    async function accept(t, version, outcome) {
+    async function accept(t, version, outcome, step) {
       await lock(async () => {
         guard(t, version);
         if (!outcome || typeof outcome.message !== 'string') throw new Error('工具没有返回可核对的结果');
@@ -169,9 +194,16 @@
         const waiting = ['waiting', 'review', 'clarify'].includes(outcome.status);
         t.log.at(-1).status = waiting ? 'waiting' : 'done';
         t.log.at(-1).message = t.message;
+        // Successful read-only calls since the last write, choice or recovery. Anything
+        // else changes the world (or the plan), so an identical read may return new data.
+        if (step && Contract.tools[step.tool]?.readOnly) {
+          const fingerprint = readFingerprint(step);
+          if (fingerprint && !waiting) t.readSeen = [...(t.readSeen || []).filter(item => item !== fingerprint), fingerprint].slice(-24);
+        } else t.readSeen = [];
         let observation;
         try { observation = Context.observe(t, { tool: t.log.at(-1).tool, status: waiting ? 'waiting' : 'done', message: t.message.slice(0, 500), data: outcome.observation || null }, t.log.at(-1)); }
         catch (error) { await save(); throw error; }
+        Todo.observe(t, t.log.at(-1), observation, Context.state(t).receipts.at(-1));
         t.observations = [...(t.observations || []), observation].slice(-6);
         while (JSON.stringify(t.observations).length > 12000 && t.observations.length > 1) t.observations.shift();
         if (waiting) t.status = outcome.status;
@@ -204,8 +236,11 @@
           t.log.at(-1).status = 'failed'; t.log.at(-1).message = message;
         }
         recovery.count++; recovery.failures.push(fingerprint);
+        // A failed or unknown tool run may have changed state: verification reads are legitimate again.
+        if (phase !== 'plan') t.readSeen = [];
         const observation = Context.observe(t, { tool: phase === 'action' ? 'assistant.action' : step.tool, status: unknown ? 'unknown' : 'failed', message,
           data: { operation: step.tool, error: { code, message }, args, recovery: { attempt: recovery.count, remaining: 3 - recovery.count, sideEffectState: unknown ? 'unknown' : 'none' } } });
+        Todo.observe(t, t.log.at(-1), observation, Context.state(t).receipts.at(-1));
         t.observations = [...(t.observations || []), observation].slice(-6);
         while (JSON.stringify(t.observations).length > 12000 && t.observations.length > 1) t.observations.shift();
         if (phase !== 'plan') t.remainingSteps = clone(t.plan.slice(t.index));
@@ -225,9 +260,17 @@
       t.planRounds = (t.planRounds || 0) + 1;
       let planned;
       try {
-        planned = await ctx.trace('assistant.plan', '规划执行步骤', t.input, async child => {
+        planned = await ctx.trace('assistant.plan', t.todoTips?.items.length ? '规划当前待办的下一步' : '分析完整待办清单', t.input, async child => {
           const value = await plan(t.input, child);
-          try { return Contract.validatePlan(value, t.input.app); }
+          try {
+            guard(t, version);
+            const validated = Contract.validatePlan(value, t.input.app);
+            Todo.prepare(t, validated);
+            if (validated.steps.length === 1) Todo.before(t, validated.steps[0]);
+            const repeated = readFingerprint(validated.steps[0]);
+            if (repeated && (t.readSeen || []).includes(repeated)) throw new Error(`已读取过完全相同的「${Contract.tools[validated.steps[0].tool].title}」，且之后没有写入、选择或失败恢复，重复读取不会有新信息。请依据已有回执给出下一步、用 question 说明需要用户提供什么，或在原始要求已满足时输出 done。`);
+            return validated;
+          }
           catch (error) { error.code = 'ASSISTANT_PLAN_INVALID'; throw error; }
         }, 'plan');
       } catch (error) {
@@ -239,8 +282,13 @@
         if (planned.done && Context.state(t).uncertain) planned = { question: '已有操作的结果尚未确认。请核对实际状态后再继续，助手不会自动重做可能已生效的操作。', steps: [] };
         if (planned.done && (!t.observations?.some(row => row.status === 'done') || ['failed', 'unknown'].includes(t.observations.at(-1)?.status))) throw new Error('尚无成功恢复回执，不能声称完成');
         if (planned.question) { t.status = 'clarify'; t.message = planned.question; t.turns.push({ role: 'assistant', content: planned.question }); Context.append(t, 'assistant', planned.question); }
+        else if (planned.todoTips && !planned.steps.length) {
+          t.plan = []; t.index = 0; t.adaptive = true; t.status = 'planning';
+          t.message = `已分析完整计划，共${t.todoTips.items.length}项，准备逐项执行。`;
+        }
         else {
-          t.plan = planned.steps; t.index = 0; t.adaptive = Boolean(planned.continue); t.status = 'running';
+          t.plan = planned.steps; t.index = 0; t.adaptive = Boolean(planned.continue) || Boolean(!Context.state(t).uncertain && Todo.current(t.todoTips) && (
+            Todo.current(t.todoTips).tool !== planned.steps[0]?.tool || t.todoTips.items.filter(row => row.status !== 'completed').length > planned.steps.length)); t.status = 'running';
           t.remainingSteps = [];
           if (t.plan.length) t.scope = t.input.app || Contract.tools[t.plan[0].tool].app || t.plan[0].args.platform || t.scope;
         }
@@ -264,7 +312,7 @@
             if (t.status === 'planning') continue;
             if (t.status !== 'running') break;
           }
-          if (t.index >= t.plan.length && t.adaptive) {
+          if (t.index >= t.plan.length && (t.adaptive || (Todo.current(t.todoTips) && !Context.state(t).uncertain))) {
             await nextPlan(t, version, ctx);
             if (t.status === 'planning') continue;
             if (t.status !== 'running') break;
@@ -290,14 +338,16 @@
           const actionKey = Context.actionKey(t, step);
           await lock(async () => {
             guard(t, version); t.message = `正在${Contract.tools[step.tool].title}…`;
-            t.log.push({ tool: step.tool, title: Contract.tools[step.tool].title, status: 'running', ...(actionKey ? { key: actionKey } : {}) }); await save();
+            const todo = Todo.current(t.todoTips);
+            if (todo) todo.status = 'running';
+            t.log.push({ tool: step.tool, ...(todo ? { todoId: todo.id, args: clone(step.args) } : {}), title: Contract.tools[step.tool].title, status: 'running', ...(actionKey ? { key: actionKey } : {}) }); await save();
           });
           const outcome = await run(step, Contract.tools[step.tool].title, child => {
             if (actionKey && Context.state(t).receipts.some(row => row.key === actionKey)) throw Object.assign(new Error('该操作已有成功回执，已阻止重复执行，请继续尚未完成的步骤'), { code: 'ASSISTANT_DUPLICATE_ACTION', sideEffectState: 'none' });
             return execute(step, child);
           });
           if (!outcome) continue;
-          await accept(t, version, outcome);
+          await accept(t, version, outcome, step);
           // Only an explicit direct-play request and a single real candidate can skip disambiguation.
           if (t.status === 'waiting' && t.musicView?.kind === 'search' && !t.memory?.artistRequest && /直接播放/.test(t.input.text) && !/不要|不想|别|先不|不要直接|不用|如果/.test(t.input.text)) {
             const primary = t.choices.filter(c => !c.secondary && ['song', 'artist', 'album', 'playlist'].includes(c.kind));
@@ -331,18 +381,35 @@
     function launch(t, choice) { const promise = pump(t, t.version, choice); work = promise; promise.finally(() => { if (work === promise) work = null; }).catch(() => {}); }
     return {
       async snapshot() { await ready; return view(); },
-      async submit(raw) {
+      async respond(taskId, version, response) {
         await ready;
-        const route = Contract.routeRequest(raw, current), input = route.input;
+        if (current?.id !== taskId || current.version !== version) throw new Error('交互卡已失效');
+        const expected = checkInteraction(response?.interaction);
+        if (response.action === 'cancel') return this.cancel(taskId, version, expected);
+        if (response.action === 'select' && ['select', 'confirm'].includes(expected.kind)) return this.choose(taskId, response.choiceId, version, undefined, false, expected);
+        if (response.action === 'reply' && expected.allowText) {
+          if (typeof response.text !== 'string' || !response.text.trim() || response.text.length > 500) throw new Error('请输入1至500字的补充内容');
+          return this.submit({ text: response.text, app: current.scope, taskId, version }, expected);
+        }
+        throw new Error('当前交互不支持该操作');
+      },
+      async submit(raw, expectedInteraction) {
+        await ready;
+        if (expectedInteraction) checkInteraction(expectedInteraction);
+        const route = expectedInteraction
+          ? { input: Contract.input(raw), mode: 'continue', reason: '回答当前问题' }
+          : Contract.routeRequest(raw, current);
+        const input = route.input;
         const utterance = input.text || Contract.skills.find(skill => skill.id === input.skill)?.name || '新需求';
         const ordinal = Contract.ordinal(input.text);
-        if (ordinal) {
+        if (ordinal && (!expectedInteraction || current.status === 'waiting')) {
           if (route.mode === 'new') throw new Error('新需求没有上轮候选，请输入完整需求，或按 Enter 接着上次选择');
-          return this.selectOrdinal({ ...raw, app:input.app, text:input.text }, ordinal);
+          return this.selectOrdinal({ ...raw, app:input.app, text:input.text }, ordinal, expectedInteraction);
         }
         const directChoice = route.mode === 'continue' && (alarmConfirmationChoice(current, input) || directContinuationChoice(current, input));
-        if (directChoice) return this.choose(raw.taskId || current.id, directChoice.id, raw.version, input.text);
+        if (directChoice) return this.choose(raw.taskId || current.id, directChoice.id, raw.version, input.text, false, expectedInteraction);
         return lock(async () => {
+          if (expectedInteraction) checkInteraction(expectedInteraction);
           if (current && ['planning', 'running'].includes(current.status)) throw new Error('当前任务正在执行，请先停止或等待完成');
           const continuing = Boolean(current) && route.mode === 'continue';
           const replacing = Boolean(current) && route.mode === 'replace';
@@ -358,6 +425,7 @@
             remainingSteps: continuing && sameScope && ['waiting', 'review', 'clarify'].includes(previous.status) ? previous.plan?.slice(previous.index + 1) || previous.remainingSteps || [] : [],
             turns: [...(previous?.turns || []), { role: 'user', content: utterance }].slice(-16), message: '正在理解需求…', startedAt: now(), jobId: null };
           if (continuing && previous) task.contextState = clone(Context.state(previous));
+          if (continuing && sameScope && Todo.current(previous?.todoTips)) task.todoTips = clone(previous.todoTips);
           // Migrate the surviving legacy window once; no claim of recovering
           // already discarded history. New contexts store inputs before slicing.
           if (!task.contextState) { Context.state(task); }
@@ -378,7 +446,7 @@
           current = task; await record(task, 'user', utterance); await save(); launch(task); return view();
         });
       },
-      async selectOrdinal(raw, ordinal = Contract.ordinal(raw.text)) {
+      async selectOrdinal(raw, ordinal = Contract.ordinal(raw.text), expectedInteraction) {
         await ready;
         if (!current || !ordinal || raw.taskId !== current.id || (raw.app && raw.app !== current.scope)) throw new Error('当前没有可引用的候选，请先搜索');
         const source = current.candidateSet?.choices || current.choices || [];
@@ -394,11 +462,12 @@
           selected = source.find(c => c.parentId === selected.id && ['music.enqueue-collection', 'music.play-collection'].includes(c.action));
           if (!selected) throw new Error('这个候选暂不能直接播放');
         }
-        return this.choose(current.id, selected.id, raw.version, raw.text);
+        return this.choose(current.id, selected.id, raw.version, raw.text, false, expectedInteraction);
       },
-      async choose(taskId, choiceId, expectedVersion, userText, reviewOnly = false) {
+      async choose(taskId, choiceId, expectedVersion, userText, reviewOnly = false, expectedInteraction) {
         await ready;
         return lock(async () => {
+          if (expectedInteraction) checkInteraction(expectedInteraction);
           if (current?.id !== taskId || !['waiting', 'review', 'completed', 'failed'].includes(current.status)) throw new Error('候选已过期，请重新查询');
           if (reviewOnly && current.status !== 'review') throw new Error('该确认卡已失效');
           if (expectedVersion != null && expectedVersion !== current.version) throw new Error('候选页面已变化，请重新选择');
@@ -415,7 +484,7 @@
           current.selectionView = clone({ choices: current.choices, musicView: current.musicView || null, message: current.message, result: current.result || null });
           current.status = 'running'; current.version++; current.runStartedAt = now(); current.usedModel = false;
           current.turnId = id(); current.endedAt = null;
-          current.toolCalls = 0; current.planRounds = 0;
+          current.toolCalls = 0; current.planRounds = 0; current.readSeen = [];
           current.recovery = { count: 0, failures: [] };
           current.turns.push({ role: 'user', content: userText || `选择：${choice.title}` }); current.turns = current.turns.slice(-16);
           current.operation = { choiceId, action: choice.action, title: choice.title, status: 'pending', message: '正在准备所选操作…' };
@@ -425,11 +494,12 @@
           await save(); launch(current, choice); return view();
         });
       },
-      async cancel(taskId, expectedVersion) {
+      async cancel(taskId, expectedVersion, expectedInteraction) {
         await ready;
         return lock(async () => {
+          if (expectedInteraction) checkInteraction(expectedInteraction);
           if (current?.id !== taskId) throw new Error('会话已变化');
-          if (expectedVersion != null && (current.version !== expectedVersion || current.status !== 'review')) throw new Error('该确认卡已失效');
+          if (expectedVersion != null && (current.version !== expectedVersion || (!expectedInteraction && current.status !== 'review'))) throw new Error('该确认卡已失效');
           if (current.jobId) void cancelJob(current.jobId).catch(() => {});
           Context.uncertain(current);
           current.version++; current.status = 'cancelled'; current.choices = []; current.jobId = null;
@@ -448,7 +518,7 @@
           t = current; previousStatus = t.status; previousMessage = t.message; t.runStartedAt = now(); t.status = 'planning'; version = ++t.version; t.message = '正在整理上下文…'; await save();
         });
         try { await compact(context(t, version), true); }
-        finally { await lock(async () => { if (current === t && t.version === version) { t.status = previousStatus; t.message = previousStatus === 'review' ? previousMessage : t.contextNotice || '本次没有需要整理的旧记录'; t.jobId = null; await save(); } }); }
+        finally { await lock(async () => { if (current === t && t.version === version) { t.status = previousStatus; t.message = ['review', 'waiting', 'clarify'].includes(previousStatus) ? previousMessage : t.contextNotice || '本次没有需要整理的旧记录'; t.jobId = null; await save(); } }); }
         return view();
       },
       async clear() { await ready; return lock(async () => { if (current && ['running', 'planning'].includes(current.status)) throw new Error('请先停止当前任务'); current = null; await storage.remove(KEY); try { Promise.resolve(onChange(null)).catch(() => {}); } catch (_) {} return null; }); },

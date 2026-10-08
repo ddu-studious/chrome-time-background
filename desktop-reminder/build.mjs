@@ -17,7 +17,7 @@ const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <key>CFBundleExecutable</key><string>TimeKeeperDesktop</string>
 <key>CFBundleName</key><string>桌面闹钟</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleVersion</key><string>4</string>
+<key>CFBundleVersion</key><string>5</string>
 <key>LSUIElement</key><true/>
 <key>NSHighResolutionCapable</key><true/>
 <key>AllowedExtensionOrigins</key><array><string>chrome-extension://${id}/</string></array>

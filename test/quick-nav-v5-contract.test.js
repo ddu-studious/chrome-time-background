@@ -39,7 +39,7 @@ test('快捷导航关闭态不会残留在无障碍树或键盘焦点中', () =>
   const html = read('index.html');
   assert.match(css, /\.quick-nav-panel\s*\{[\s\S]*?visibility:\s*hidden/);
   assert.match(css, /\.quick-nav-panel\.open\s*\{[\s\S]*?visibility:\s*visible/);
-  assert.match(html, /css\/style\.css\?v=14/);
+  assert.match(html, /css\/style\.css\?v=15/);
   assert.match(source, /aria-labelledby="quick-nav-dialog-title"/);
   assert.match(source, /setAttribute\('aria-hidden', 'false'\)/);
   assert.match(source, /_setBackgroundInert\(true\)/);

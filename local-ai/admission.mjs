@@ -35,12 +35,12 @@ export function createAdmission({file,now=Date.now}={}){
    const next=structuredClone(state);next.admitted++;next.scenes[scene]={...previous,calls:previous.calls+1};save(next);
    return {scene,day:state.day,started:now(),finished:false};
   },
-  finish(ticket,ok,policy){
+  finish(ticket,ok,policy,{intermediate=false}={}){
    if(ticket.finished)return;ticket.finished=true;roll();if(ticket.day!==state.day)return;
    const next=structuredClone(state),row=next.scenes[ticket.scene];if(!row)return;
    const elapsed=Math.max(0,now()-ticket.started);
    row.totalElapsedMs+=elapsed;row.latencies=[...(row.latencies||[]),elapsed].slice(-100);
-   if(ok===true){row.consecutiveFailures=0;row.blockedUntil=0;}else if(ok===false){row.failures++;row.consecutiveFailures++;if(row.consecutiveFailures>=policy.failureThreshold)row.blockedUntil=now()+policy.cooldownMs;}
+   if(ok===true){row.consecutiveFailures=0;row.blockedUntil=0;}else if(ok===false){row.failures++;if(!intermediate){row.consecutiveFailures++;if(row.consecutiveFailures>=policy.failureThreshold)row.blockedUntil=now()+policy.cooldownMs;}}
    save(next);
   }
  };

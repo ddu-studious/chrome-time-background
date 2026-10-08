@@ -26,13 +26,21 @@ node desktop-reminder/build.mjs --extension-id=ipcgchgohpjheedlgfkcjlhhfbdljefo 
 
 - 原生 `NSPanel` 使用不激活应用的浮动面板，位于鼠标所在屏幕的右上角。长标题适度增加高度，卡片可拖动。
 - 使用 `canJoinAllSpaces`、`fullScreenAuxiliary` 及受系统版本保护的 `canJoinAllApplications`，为跨桌面和全屏空间显示配置公开 API。锁屏及安全系统界面不承诺覆盖。
-- 模型和 HTTP AI 服务不参与响铃。Native Messaging 采用长度前缀 JSON，接受 ping/show/hide/actionResult/countdown/confirmation/confirmationResult，读取上限 64 KiB；stdout 只写协议帧。
+- 模型和 HTTP AI 服务不参与响铃。Native Messaging 采用长度前缀 JSON，接受 ping/show/hide/actionResult/countdown/confirmation/confirmationResult，读取上限 256 KiB（v4）；stdout 只写协议帧。
 - 点击停止/稍后后等待 Chrome 确认；8 秒未确认可重试。无回执不声称操作成功。
 - 回传绑定 sessionId/actionId，重复动作幂等，旧会话不得停止新会话；后台复核当前会话后复用原 `stopUserAlarmSession`，稍后提醒仍按原限制创建待调度记录。
 - 没有可用的稍后提醒次数时隐藏该按钮。浏览器内停止或会话过期会同步关闭原生卡片。
 - 正常显示原生卡片时不额外聚焦 Chrome；组件启动失败时，已结束的会话不会在延迟后再次弹出 Chrome 小窗。
 
-## AI 工作台外部确认（2026-09-20）
+## AI 工作台统一原生交互（协议 v4）
+
+原生面板现支持歌手/歌曲/视频/提醒目标选择、文字补充和操作确认。搜索无结果或模型追问时可以直接输入回答；失败或中断时展示原因并提供工作台核对入口。任务已完成后不会因保留可选按钮而弹窗。
+
+已更新原安装路径下的组件，重新加载 Chrome 扩展后生效；无需重新注册宿主或重启本机 AI。旧 v3 组件需要更新后才能使用候选列表和输入框。文字回答、选择、取消都由同一 Chrome 执行器处理；关闭仅隐藏，原生组件不直接执行业务。
+
+302 项相关回归通过，隔离原生 UI 已实际验证选择、中文输入、确认、取消、工作台入口和隐藏事件；未进行真实 Chrome 业务全链路验收。详细协议、边界和复验命令见 [统一原生交互说明](../docs/technical/assistant-interaction-native-20260920.md)。
+
+## 历史：AI 工作台外部确认 v3（2026-09-20）
 
 协议 v3 支持独立的“需要你确认”浮层：跨应用展示确认内容，点击确认或取消会交回 Chrome 中同一任务执行器；关闭按钮仅隐藏，不取消任务。确认卡与闹钟/倒计时共享连接，单独关闭不会断开其他活动面板。窗口复用 AppKit 材质遮罩、不主动切换应用，并记忆位置和尺寸。长详情可滚动。
 

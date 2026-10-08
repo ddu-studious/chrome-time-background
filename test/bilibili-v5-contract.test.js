@@ -70,7 +70,7 @@ test('B站工作台隔离背景并管理初始与返回焦点', () => {
   assert.ok(source.includes("searchInput?.focus({ preventScroll: true })"));
   assert.ok(source.includes('this._returnFocus?.focus?.({ preventScroll: true })'));
   assert.ok(source.includes("if (e.key === 'Tab') this._trapFocus(e)"));
-  assert.ok(index.includes('js/bilibili-controller.js?v=29'));
+  assert.ok(index.includes('js/bilibili-controller.js?v=30'));
 });
 
 test('B站工作台同步真实视口高度并提供可操作播放器空态', () => {
@@ -221,7 +221,7 @@ test('B站直播在新版流为空或官方播放器超时时使用本地 FLV �
 
   assert.ok(fs.existsSync(path.join(root, 'vendor/flv.min.js')));
   assert.ok(fs.existsSync(path.join(root, 'vendor/flv.js.LICENSE')));
-  assert.ok(index.indexOf('vendor/flv.min.js') < index.indexOf('js/bilibili-controller.js?v=29'));
+  assert.ok(index.indexOf('vendor/flv.min.js') < index.indexOf('js/bilibili-controller.js?v=30'));
   assert.match(manifest, /\*:\/\/\*\.bilivideo\.com\/\*/);
   assert.match(source, /_resolveLivePlaybackMode\(item\.roomId\)/);
   assert.match(source, /return resp\?\.code === 0 && Array\.isArray\(streams\) && streams\.length \? 'activity' : 'flv'/);

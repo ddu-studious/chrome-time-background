@@ -34,6 +34,7 @@ class MusicController {
         this._showLyric = true;
         this._volumeRestored = false;
         this._playlist = [];
+        this._queueCacheExpired = false;
         this._panelOpen = false;
         this._apiLoadingQueue = false;
         this._currentPlaylistId = null;
@@ -109,17 +110,17 @@ class MusicController {
                 if (lastMusicState.songId != null) this._currentSongId = lastMusicState.songId;
             }
             if (musicPlaylistCache && Array.isArray(musicPlaylistCache.playlist) && musicPlaylistCache.playlist.length > 0) {
-                const cacheAge = Date.now() - (musicPlaylistCache.savedAt || 0);
-                if (cacheAge < 24 * 60 * 60 * 1000) {
-                    this._playlist = musicPlaylistCache.playlist;
-                    this._currentPlaylistId = musicPlaylistCache.playlistId || null;
-                    this._currentPlaylistName = musicPlaylistCache.playlistName || '';
-                    if (this._currentSongId != null) {
-                        const activeSongId = String(this._currentSongId);
-                        this._playlist.forEach(s => { s.isActive = (String(s.songId) === activeSongId); });
-                    } else {
-                        this._playlist.forEach(s => { s.isActive = false; });
-                    }
+                // The queue is user data, even when its playback snapshot is too old to resume.
+                // Keep it visible for review; background playback recovery still checks its 24h limit.
+                this._queueCacheExpired = Date.now() - Number(musicPlaylistCache.savedAt || 0) >= 24 * 60 * 60 * 1000;
+                this._playlist = musicPlaylistCache.playlist;
+                this._currentPlaylistId = musicPlaylistCache.playlistId || null;
+                this._currentPlaylistName = musicPlaylistCache.playlistName || '';
+                if (this._currentSongId != null) {
+                    const activeSongId = String(this._currentSongId);
+                    this._playlist.forEach(s => { s.isActive = (String(s.songId) === activeSongId); });
+                } else {
+                    this._playlist.forEach(s => { s.isActive = false; });
                 }
             }
         } catch { /* storage may not be available */ }
@@ -140,6 +141,7 @@ class MusicController {
     }
 
     _savePlaylistCache() {
+        this._queueCacheExpired = false;
         if (this._savePlaylistTimer) return;
         this._savePlaylistTimer = setTimeout(() => {
             this._savePlaylistTimer = null;
@@ -734,6 +736,7 @@ class MusicController {
         const latest = await chrome.storage.local.get('musicPlaylistCache');
         if (version !== this._playRequestSeq || latest.musicPlaylistCache?.source !== 'quick-assistant' || latest.musicPlaylistCache.assistantRevision !== cache.assistantRevision || latest.musicPlaylistCache.savedAt !== cache.savedAt) return;
         this._playlist = cache.playlist.map((song, index) => ({ ...song, index, isActive: String(song.songId) === String(current?.data?.songId) }));
+        this._queueCacheExpired = false;
         this._currentPlaylistId = cache.playlistId || null;
         this._currentPlaylistName = cache.playlistName || '播放队列';
         await this._refreshPlaylist();
@@ -1829,7 +1832,12 @@ class MusicController {
             </div>
         `;
 
-        pane.innerHTML = headerHtml + songs.map((song, idx) => `
+        const reviewHtml = isQueue && this._queueCacheExpired ? `
+            <div class="mc-queue-review" role="group" aria-label="核对已保存队列">
+                <div><strong>这 ${songs.length} 首是本地保存的队列，已超过 24 小时。</strong><span>核对后可保留并恢复队列，或清空本地记录；保留不会自动播放，也不会修改网易云云端歌单。</span></div>
+                <div class="mc-queue-review-actions"><button type="button" class="mc-queue-review-keep">保留并恢复</button><button type="button" class="mc-queue-review-clear">清空保存队列</button></div>
+            </div>` : '';
+        pane.innerHTML = headerHtml + reviewHtml + songs.map((song, idx) => `
             <div class="mc-row${song.isActive ? ' mc-row-active' : ''}" data-song-id="${song.songId || ''}" data-index="${idx}">
                 <span class="mc-row-num">${song.isActive ? '<i class="fas fa-volume-up" style="font-size:9px"></i>' : (idx + 1)}</span>
                 <div class="mc-row-info">
@@ -1915,6 +1923,14 @@ class MusicController {
             e.stopPropagation();
             this._confirmClearPlaylist();
         });
+        pane.querySelector('.mc-queue-review-keep')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            void this._reconcileSavedQueue('keep');
+        });
+        pane.querySelector('.mc-queue-review-clear')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._confirmClearPlaylist();
+        });
 
         pane.querySelectorAll('.mc-row-remove').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -1942,7 +1958,7 @@ class MusicController {
             pane.innerHTML = '<div class="mc-empty">暂无歌曲，请先播放音乐</div>';
             return;
         }
-        this._renderPlaylistDetail(pane, songs, '播放队列', '', songs.length, true);
+        this._renderPlaylistDetail(pane, songs, this._queueCacheExpired ? '已保存队列（待核对）' : '播放队列', '', songs.length, true);
     }
 
     async _playSongById(songId, options = {}) {
@@ -4318,12 +4334,37 @@ class MusicController {
 
     // ===================== 队列管理 =====================
 
+    async _reconcileSavedQueue(mode) {
+        if (this._queueReviewBusy || !this._queueCacheExpired) return;
+        this._queueReviewBusy = true;
+        try {
+            const send = message => new Promise(resolve => {
+                chrome.runtime.sendMessage(message, response => {
+                    const error = chrome.runtime.lastError;
+                    resolve(error ? { ok: false, error: error.message } : response || { ok: false, error: '后台未响应' });
+                });
+            });
+            const before = await send({ action: 'music_queue_review_state' });
+            if (!before.ok) throw new Error(before.error || '暂时无法读取队列状态');
+            if (!(mode === 'clear' ? ['stale', 'unavailable'].includes(before.status) : before.status === 'stale') || before.count !== this._playlist.length) throw new Error('队列状态已变化，请重新打开队列核对');
+            const result = await send({ action: 'music_queue_reconcile', mode, expectedRevision: before.revision });
+            if (!result.ok) throw new Error(result.error || '队列核对失败');
+            const { musicPlaylistCache } = await chrome.storage.local.get('musicPlaylistCache');
+            if (musicPlaylistCache?.source === 'quick-assistant') await this._applyAssistantQueue(musicPlaylistCache);
+            this._showToast(mode === 'keep' ? `已保留并恢复${result.count}首本地队列，未开始播放` : '已清空过期保存队列');
+        } catch (error) {
+            this._showToast(error.message || '队列核对失败，请重试');
+        } finally {
+            this._queueReviewBusy = false;
+        }
+    }
+
     _confirmClearPlaylist() {
         const overlay = document.createElement('div');
         overlay.className = 'mc-confirm-overlay';
         overlay.innerHTML = `
             <div class="mc-confirm-box">
-                <div class="mc-confirm-msg">确定清空播放队列？<br><span style="font-size:11px;opacity:0.5">共 ${this._playlist.length} 首歌曲</span></div>
+                <div class="mc-confirm-msg">确定清空${this._queueCacheExpired ? '过期保存队列' : '播放队列'}？<br><span style="font-size:11px;opacity:0.5">共 ${this._playlist.length} 首歌曲；不会修改云端歌单</span></div>
                 <div class="mc-confirm-actions">
                     <button class="mc-confirm-cancel">取消</button>
                     <button class="mc-confirm-ok">清空</button>
@@ -4340,7 +4381,8 @@ class MusicController {
         overlay.querySelector('.mc-confirm-ok')?.addEventListener('click', () => {
             overlay.classList.remove('mc-confirm-show');
             setTimeout(() => overlay.remove(), 200);
-            this._clearPlaylist();
+            if (this._queueCacheExpired) void this._reconcileSavedQueue('clear');
+            else this._clearPlaylist();
         });
         overlay.addEventListener('click', (e) => {
             if (e.target === overlay) {

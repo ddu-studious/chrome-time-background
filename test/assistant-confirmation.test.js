@@ -5,12 +5,12 @@ const Desktop = require('../js/alarm-desktop.js');
 const Engine = require('../js/assistant-engine.js');
 const nativeDesktop = require('./fixtures/native-desktop.js');
 
-function native(version = 3) {
+function native(version = 4) {
   const host = nativeDesktop(version);
   const desktop = new Desktop(host.runtime, async () => ({ ok: true }));
   return { desktop, get port() { return host.port; }, ports: host.ports, sent: host.sent, emit: host.emit };
 }
-async function fixture({ hostVersion = 3, choose, stored } = {}) {
+async function fixture({ hostVersion = 4, choose, stored } = {}) {
   const f = native(hostVersion), values = stored || {};
   let coordinator, writes = 0, seq = 0;
   const storage = { get: async () => structuredClone(values), set: async v => Object.assign(values, structuredClone(v)), remove: async key => { delete values[key]; } };
@@ -72,7 +72,7 @@ test('外部取消使同一工作台任务取消；隐藏浮层只隐藏，不�
     await f.coordinator.settled(); assert.equal((await f.engine.snapshot()).status, 'review'); assert.equal(f.writes(), 0);
     await f.coordinator.sync(f.task); assert.equal(f.sent.filter(m => m.command === 'confirmation').at(-1).card, null);
     // A new version may display again; the old hidden version is not revived.
-    const newer = { ...f.task, version: f.task.version + 1 };
+    const newer = { ...f.task, version: f.task.version + 1, interaction: { ...f.task.interaction, id: `${f.task.id}:${f.task.version + 1}`, version: f.task.version + 1 } };
     await f.coordinator.sync(newer); assert.equal(f.desktop.confirmationId, `${newer.id}:${newer.version}`);
   } finally { f.close(); }
   const g = await fixture();

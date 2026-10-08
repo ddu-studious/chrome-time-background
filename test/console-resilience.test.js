@@ -90,8 +90,8 @@ test('可恢复外部依赖降级不再记入 warning', () => {
     'js/weather.js?v=1',
     'js/ticker.js?v=4',
     'js/adaptive-overlay.js?v=1',
-    'js/bilibili-controller.js?v=29',
-    'js/youtube-controller.js?v=12',
+    'js/bilibili-controller.js?v=30',
+    'js/youtube-controller.js?v=16',
     'js/hermes-writing-sync.js?v=1',
   ]) assert.ok(index.includes(resource), `缺少缓存版本: ${resource}`);
 });

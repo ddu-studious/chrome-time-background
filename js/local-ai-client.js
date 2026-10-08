@@ -6,6 +6,8 @@
   actions.add('ai_history_get'); actions.add('ai_history_write');
   actions.add('ai_memory_get'); actions.add('ai_memory_write');
   actions.add('ai_approval_evaluate');
+  // Only the worker-owned assistant voice bridge may submit text for synthesis.
+  const internalActions = new Set(['speech_ai_synthesize']);
   function selection(value) {
     if (value == null) return null;
     if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !['model', 'reasoning'].includes(key))) throw new Error('AI 选择无效');
@@ -15,7 +17,7 @@
     return Object.keys(result).length ? result : null;
   }
   async function request(message) {
-      if (!actions.has(message.action)) throw new Error('未登记的本地 AI 请求');
+      if (!actions.has(message.action) && !internalActions.has(message.action)) throw new Error('未登记的本地 AI 请求');
       const config = (await chrome.storage.local.get(KEY))[KEY] || {};
       if (message.action === 'ai_approval_evaluate') {
         if (!config.token) throw new Error('本机服务未连接，保留手动确认');
@@ -78,14 +80,15 @@
         if (!response.ok || !result.ok) throw Object.assign(new Error(result.error || 'AI 请求失败'), { execution: result.execution, code: result.code || null });
         return result;
       }
-      if (message.action === 'speech_ai_transcribe' || message.action === 'speech_ai_result') {
+      if (message.action === 'speech_ai_transcribe' || message.action === 'speech_ai_result' || message.action === 'speech_ai_synthesize') {
         if (!config.token) throw new Error('请先配置本地 AI 连接');
         const poll = message.action === 'speech_ai_result';
-        if (poll ? !/^[a-f0-9]{32}$/.test(message.jobId) : typeof message.audio !== 'string' || message.audio.length > 1280064) throw new Error('语音请求无效');
-        const response = await fetch(BASE + (poll ? `/v1/ai/jobs/${message.jobId}` : '/v1/speech/transcribe'), {
+        const synthesize = message.action === 'speech_ai_synthesize';
+        if (poll ? !/^[a-f0-9]{32}$/.test(message.jobId) : synthesize ? typeof message.text !== 'string' || !message.text.trim() || message.text.length > 300 : typeof message.audio !== 'string' || message.audio.length > 1280064) throw new Error('语音请求无效');
+        const response = await fetch(BASE + (poll ? `/v1/ai/jobs/${message.jobId}` : synthesize ? '/v1/speech/synthesize' : '/v1/speech/transcribe'), {
           method: poll ? 'GET' : 'POST', redirect: 'error', signal: AbortSignal.timeout(7000),
           headers: { Authorization: `Bearer ${config.token}`, 'Content-Type': 'application/json' },
-          ...(poll ? {} : { body: JSON.stringify({ audio: message.audio }) })
+          ...(poll ? {} : { body: JSON.stringify(synthesize ? { text: message.text, trace: message.trace } : { audio: message.audio }) })
         });
         const data = await response.json();
         if (!response.ok || !data.ok) throw new Error(data.error || '语音请求失败');

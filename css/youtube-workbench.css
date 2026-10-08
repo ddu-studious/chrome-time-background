@@ -308,3 +308,15 @@
     .yt-loading span { animation-duration: 1.5s; }
     .yt-trend-mix-item.is-loading::after { animation: none; }
 }
+
+/* Homepage feed uses the same cards/player as other YouTube lists. */
+.yt-home-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 18px; }
+.yt-home-tools a { color: var(--yt-muted, #a5adbb); font-size: 13px; }
+.yt-home-tools small { flex-basis: 100%; color: var(--yt-muted, #a5adbb); }
+.yt-home-footer { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px 0; color: var(--yt-muted, #a5adbb); }
+.yt-home-footer p { margin: 0; }
+.yt-home-tools button:disabled, .yt-home-footer button:disabled { opacity: .6; cursor: wait; }
+
+.yt-card-meta { display: flex; align-items: baseline; gap: 6px; margin-top: 5px; min-width: 0; }
+.yt-card-meta > span { flex: 1; min-width: 0; margin-top: 0; }
+.yt-card-published { flex: none; color: var(--yt-muted); font-size: 10px; white-space: nowrap; font-variant-numeric: tabular-nums; }

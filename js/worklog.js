@@ -63,6 +63,12 @@ class WorkLogManager {
         if (this._initialized) return;
         await this._loadData();
         this._initialized = true;
+        chrome.storage.onChanged?.addListener((changes, area) => {
+            if (area !== 'local') return;
+            if (Array.isArray(changes.worklogEntries?.newValue)) this._entries = changes.worklogEntries.newValue;
+            if (Array.isArray(changes.worklogProjects?.newValue)) this._projects = changes.worklogProjects.newValue;
+            if (changes.worklogEntries || changes.worklogProjects) this._refreshPanel();
+        });
         if (this._timer) this._updateDockBadge(true);
         console.log('[WorkLog] 初始化完成，项目数:', this._projects.length, '条目数:', this._entries.length);
     }
@@ -216,22 +222,7 @@ class WorkLogManager {
 
     // ─── 工时条目 CRUD ───
     async addEntry(data) {
-        const entry = {
-            id: this._genId('te'),
-            projectId: data.projectId || 'proj_default',
-            description: (data.description || '').trim(),
-            date: data.date || this._todayStr(),
-            duration: Math.max(0, Math.round(data.duration || 0)),
-            startTime: data.startTime || '',
-            endTime: data.endTime || '',
-            tags: Array.isArray(data.tags) ? data.tags : [],
-            memoId: data.memoId || null,
-            urgency: !!data.urgency,
-            importance: !!data.importance,
-            subItems: Array.isArray(data.subItems) ? data.subItems : [],
-            createdAt: Date.now(),
-            updatedAt: Date.now()
-        };
+        const entry = QuickCapture.entry({ ...data, date: data.date || this._todayStr() });
         this._entries.push(entry);
         await this._saveEntries();
         return entry;

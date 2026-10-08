@@ -350,7 +350,7 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
     }
     func respond(_ message: [String: Any], ok: Bool) {
         if let requestID = message["requestId"] as? String {
-            send(["type": "response", "requestId": requestID, "ok": ok, "version": 3, "confirmationVisible": confirmation.panel.isVisible, "confirmationId": confirmation.card?["id"] ?? NSNull(), "confirmationWindowNumber": confirmation.panel.windowNumber, "confirmationFocusStayed": confirmation.focusStayed, "confirmationFrame": NSStringFromRect(confirmation.panel.frame), "countdownVisible": countdownPanel.isVisible, "countdownText": countdownTime.stringValue, "countdownTitle": countdownTitle.stringValue, "countdownWindowNumber": countdownPanel.windowNumber, "countdownFrame": NSStringFromRect(countdownPanel.frame), "visible": panel.isVisible, "onActiveSpace": panel.isOnActiveSpace, "screenCount": NSScreen.screens.count, "spaceTransitions": spaceTransitions, "focusStayed": focusStayed])
+            send(["type": "response", "requestId": requestID, "ok": ok, "version": 4, "confirmationKind": confirmation.card?["kind"] ?? "confirm", "confirmationChoiceCount": confirmation.choices.count, "confirmationVisible": confirmation.panel.isVisible, "confirmationId": confirmation.card?["id"] ?? NSNull(), "confirmationWindowNumber": confirmation.panel.windowNumber, "confirmationFocusStayed": confirmation.focusStayed, "confirmationFrame": NSStringFromRect(confirmation.panel.frame), "countdownVisible": countdownPanel.isVisible, "countdownText": countdownTime.stringValue, "countdownTitle": countdownTitle.stringValue, "countdownWindowNumber": countdownPanel.windowNumber, "countdownFrame": NSStringFromRect(countdownPanel.frame), "visible": panel.isVisible, "onActiveSpace": panel.isOnActiveSpace, "screenCount": NSScreen.screens.count, "spaceTransitions": spaceTransitions, "focusStayed": focusStayed])
         }
     }
     func send(_ object: [String: Any]) {
@@ -370,7 +370,7 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
     func readMessages() {
         while let header = readExact(4) {
             let size = header.enumerated().reduce(UInt32(0)) { $0 | (UInt32($1.element) << ($1.offset * 8)) }
-            guard size > 0, size <= 65536, let data = readExact(Int(size)),
+            guard size > 0, size <= 262144, let data = readExact(Int(size)),
                   let message = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { break }
             DispatchQueue.main.async { self.handle(message) }
         }

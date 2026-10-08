@@ -49,6 +49,10 @@ class TaskManager {
     async init() {
         await this.loadData();
         this.bindEvents();
+        chrome.storage.onChanged?.addListener((changes, area) => {
+            if (area !== 'local' || !changes.memos || !Array.isArray(changes.memos.newValue)) return;
+            void this.loadData().then(() => { this.applyFilters(); this.render(); });
+        });
         this.populateCategoryFilter();
         this.applyFilters();
         this._setProductPage('list');
@@ -1138,34 +1142,11 @@ class TaskManager {
             this.openDetail(editedId);
             return;
         }
-        const task = {
-            id: `memo_${now}_${Math.random().toString(36).slice(2, 8)}`,
-            title,
-            text: document.getElementById('task-create-description')?.value.trim() || '',
-            completed: false,
-            createdAt: now,
-            updatedAt: now,
-            completedAt: null,
-            categoryId: null,
-            tagIds: [],
+        const task = QuickCapture.task({ title,
+            description: document.getElementById('task-create-description')?.value.trim() || '',
             priority: document.getElementById('task-create-priority')?.value || 'medium',
-            startDate,
-            dueDate,
-            images: newImages,
-            links: [],
-            progress,
-            recurrence,
-            habit: recurrence ? { type: recurrence, streak: 0 } : null,
-            habitCard: null,
-            subtasks: firstSubtask ? [{ id: `st_${now}`, title: firstSubtask, completed: false }] : [],
-            status: null,
-            failedAt: null,
-            archived: false,
-            archivedAt: null,
-            recurrencePaused: false,
-            lastSkippedAt: null,
-            assignee,
-        };
+            startDate, dueDate, images: newImages, progress, recurrence, firstSubtask, assignee
+        }, now);
         this.memos.unshift(task);
         await this.saveData();
         this.filters.search = '';

@@ -1,0 +1,25 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e6]:
+        - button "主菜单" [ref=e7] [cursor=pointer]
+        - heading "扩展程序" [level=1] [ref=e8]
+      - button "搜索扩展程序" [ref=e12] [cursor=pointer]
+      - generic [ref=e15]:
+        - generic [ref=e16]: 开发者模式
+        - button "开发者模式" [ref=e17] [cursor=pointer]
+  - main [ref=e21]:
+    - generic [ref=e25]:
+      - heading "所有扩展程序" [level=2] [ref=e26]
+      - generic [ref=e29]:
+        - generic [ref=e30]:
+          - img "未打包的扩展程序" [ref=e34]
+          - generic [ref=e36]:
+            - heading "中国风景时钟" [level=3] [ref=e39]
+            - generic [ref=e40]: 中国风景新标签页时钟，支持天气、备忘录、独立音乐播放器、哔哩哔哩集成(关注分组/UP主主页/已购课程/倍速画质控制/Cookie共享)、温情提示、扩展活动监控、热搜资讯、书签智能检索，含性能省电模式
+        - generic [ref=e41]:
+          - generic [ref=e42]:
+            - button "详情" [ref=e43] [cursor=pointer]
+            - button "移除" [ref=e45] [cursor=pointer]
+          - button "重新加载" [ref=e47] [cursor=pointer]
+          - button "开启，扩展程序已启用" [pressed] [ref=e48] [cursor=pointer]

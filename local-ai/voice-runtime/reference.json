@@ -1,0 +1,18 @@
+{
+  "voice": "stepaudio-official-zh-example",
+  "repository": "https://github.com/stepfun-ai/Step-Audio-EditX",
+  "revision": "a652e87052c109e26f616d60971376ff47a829d4",
+  "file": "examples/whisper_prompt.wav",
+  "bytes": 1065312,
+  "sha256": "c9becd44c539e0b60ab3991e14af254d2ecb4e93078a4484539882fba2c1da4a",
+  "git_blob_sha1": "d010128af6e3fa70039eebd658e1d72839a06481",
+  "text": "比如在工作间隙，做一些简单的伸展运动，放松一下身体，这样，会让你更有精力.",
+  "license": "Apache-2.0",
+  "license_scope": "Official repository license; reference distributed as an upstream example",
+  "transcript_source": "README.md clone/style example at the same pinned revision",
+  "license_sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+  "readme_sha256": "be66119df5af49607393879ebfb800640fb7e0826f30478d2cf391fbc0bc314e",
+  "sample_rate": 48000,
+  "channels": 1,
+  "duration_seconds": 7.334208333333334
+}

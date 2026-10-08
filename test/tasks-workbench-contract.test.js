@@ -34,7 +34,7 @@ test('新建任务在当前工作台完成并写回真实任务存储', () => {
 test('任务八个设计页面均绑定 v5 页面状态与真实渲染入口', () => {
   const html = read('tasks.html');
   const tasks = read('js/tasks.js');
-  assert.ok(html.includes('js/product-pages-v5.js?v=6'));
+  assert.ok(html.includes('js/product-pages-v5.js?v=7'));
   assert.ok(html.includes('js/product-ui-v5.js?v=6'));
   assert.ok(tasks.includes("setBusinessPage?.('tasks', page)"));
   for (const method of ['renderKanban()', 'renderCalendar()', 'renderAnalytics()', 'renderRecurring()', 'openDetail(taskId)', 'openCreateTask(recurring = false)']) {
@@ -68,7 +68,7 @@ test('任务表格状态和筛选器可以由键盘与辅助技术操作', () =>
   assert.match(html, /id="page-size"[^>]*aria-label="每页任务数量"/);
   assert.match(tasks, /<button type="button" class="status-icon/);
   assert.match(tasks, /aria-label="查看任务详情：/);
-  assert.match(html, /js\/tasks\.js\?v=11/);
+  assert.match(html, /js\/tasks\.js\?v=12/);
 });
 
 test('分类管理是可见模态工作流并提供完整键盘与辅助技术语义', () => {

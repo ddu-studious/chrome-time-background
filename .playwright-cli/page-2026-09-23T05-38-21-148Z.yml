@@ -1,0 +1,73 @@
+- main "快捷助手" [ref=f4e2]:
+  - generic [ref=f4e3]:
+    - heading "AI 工作台 快捷助手 本次对话" [level=1] [ref=f4e48]:
+      - generic [ref=f4e5]: AI 工作台
+      - generic [ref=f4e6]: 快捷助手
+      - generic [ref=f4e7]: 本次对话
+    - generic [ref=f4e8]:
+      - button "编辑输入" [ref=f4e9] [cursor=pointer]
+      - button "＋ 新需求" [ref=f4e10] [cursor=pointer]
+      - button "收起输入条" [ref=f4e11] [cursor=pointer]: Esc 收起
+  - generic [ref=f4e12]:
+    - generic [ref=f4e13]:
+      - generic [aria-hidden] [ref=f4e14]: ✦
+      - generic [ref=f4e15]: 输入你的需求
+      - combobox "输入你的需求" [ref=f4e16]
+      - button "执行需求" [ref=f4e17] [cursor=pointer]: ↵
+    - generic [ref=f4e18]:
+      - generic [ref=f4e19]:
+        - button "@ 应用" [ref=f4e20] [cursor=pointer]
+        - button "/ 动作" [ref=f4e21] [cursor=pointer]
+        - generic [ref=f4e22]:
+          - generic [ref=f4e23]: 模型
+          - combobox "选择本次请求的模型" [ref=f4e24]:
+            - option "默认 · qwen/qwen3.8-27b" [selected]
+            - option "Qwen3.8 4B · 未加载"
+            - option "Gemma 4 26B A4B · 未加载"
+            - option "Qwen3.8 27B · 未加载"
+        - generic [ref=f4e25]:
+          - generic [ref=f4e26]: 思考
+          - combobox "选择本次请求的思考强度" [ref=f4e27]:
+            - option "默认 · 低" [selected]
+            - option "关闭"
+            - option "低"
+            - option "中"
+            - option "极高"
+            - option "开启"
+        - generic [ref=f4e28]: 独立需求自动新开，追问保留上下文
+      - generic [ref=f4e29]:
+        - generic "直接开始新会话并发送当前输入；不停止正在播放的音乐" [ref=f4e30]: ⌘ Enter 新需求
+        - button "整理上下文" [ref=f4e31] [cursor=pointer]
+    - generic [ref=f4e32]:
+      - generic "语音输入" [ref=f4e33]:
+        - button "说一句话" [ref=f4e34] [cursor=pointer]
+      - status [ref=f4e35]: 正在本机合成 1/1…
+      - button "停止朗读" [ref=f4e68] [cursor=pointer]
+  - button "请读出这句测试文字 · 已完成 收起本次对话 ⌃" [expanded] [ref=f4e49] [cursor=pointer]:
+    - generic [aria-hidden] [ref=f4e38]: ✓
+    - generic "你好，这是 AI 工作台的语音能力验收。" [ref=f4e39]: 请读出这句测试文字 · 已完成
+    - generic [ref=f4e40]: 收起本次对话 ⌃
+  - generic [ref=f4e50]:
+    - region "当前任务" [ref=f4e51]:
+      - generic [ref=f4e52]:
+        - heading "本次对话" [level=2] [ref=f4e53]
+        - generic [ref=f4e54]: 已完成
+      - generic "本次对话" [ref=f4e55]:
+        - article [ref=f4e56]:
+          - generic [ref=f4e57]: 助手
+          - generic [ref=f4e58]:
+            - paragraph [ref=f4e59]: 你好，这是 AI 工作台的语音能力验收。
+            - button "停止朗读这条答复" [active] [pressed] [ref=f4e71] [cursor=pointer]: 停止合成
+    - complementary "执行过程" [ref=f4e62]:
+      - button "已完成 · 0 个动作 · 0 ms 展开过程 ⌄" [ref=f4e63] [cursor=pointer]:
+        - strong [ref=f4e66]: 已完成 · 0 个动作 · 0 ms
+        - generic [ref=f4e67]: 展开过程 ⌄
+  - generic [ref=f4e41]:
+    - button "示例" [ref=f4e42] [cursor=pointer]
+    - generic [ref=f4e43]: 首次使用：请绑定“快捷助手”的快捷键
+    - button "设置快捷键" [ref=f4e44] [cursor=pointer]
+    - link "AI 设置" [ref=f4e45] [cursor=pointer]:
+      - /url: settings.html#ai-control
+    - link "我的记忆" [ref=f4e46] [cursor=pointer]:
+      - /url: assistant-memory.html
+    - generic [ref=f4e47]: ↑↓ 选择 · Tab 补全

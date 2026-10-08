@@ -10,7 +10,7 @@
 
 ## 快捷助手 MVP（2026-09-15）
 
-新增 `assistant.plan` 场景和 `skills/` 下的四个应用技能，接入扩展的统一输入条。支持 `@` 应用、`/` 动作、最多三步受控计划、真实候选选择和执行结果回执；简单操作复用离线解析。使用方式、工具范围和验收边界见 [快捷助手 MVP](../docs/requirements/assistant-command-mvp.md)。
+新增 `assistant.plan` 场景和 `skills/` 下的六个应用技能，接入扩展的统一输入条。支持 `@` 应用、`/` 动作、最多三步受控计划、真实候选选择和执行结果回执；简单操作复用离线解析。使用方式、工具范围和验收边界见 [快捷助手 MVP](../docs/requirements/assistant-command-mvp.md)。
 
 ## 统一控制面基础（2026-09-12）
 
@@ -117,13 +117,19 @@
 
 闹钟“取消解析”仅撤销尚未保存的解析；进入保存后按钮隐藏。取消后本地立即停止消费结果，后台取消请求失败也不会继续保存。真实扩展入口验证仍待完成。
 
-## 本地语音输入（开发中）
+## 本机模型管理
 
-设置 `LOCAL_AI_SPEECH_MODEL` 为 whisper.cpp 兼容模型的绝对路径后启动服务。当前程序默认 `/usr/local/bin/whisper-cli`；音频不会自动转发云端。`POST /v1/speech/transcribe` 接收 `{audio: base64Wav}`，返回 jobId，复用 `/v1/ai/jobs/:jobId` 轮询和取消。录音上限 29 秒，服务最多接受 30 秒规范 WAV。
+本机模型目录与独立运行时的管理入口是 `./local-ai/models.sh list`，Laya 多语言模型通过 `./local-ai/models.sh laya status|verify|test|start|stop|logs` 管理。权重与 LM Studio 其他模型同放在 `~/.lmstudio/models/` 的独立子目录，Laya 由锁定的官方 Python 包加载，LM Studio 不运行其决策头。目录归属、固定版本与哈希、下载恢复、启停和新增模型规范见 [本机模型管理手册](../docs/technical/local-model-management-20260924.md)。Laya 已作为默认关闭的首轮工具组预加载建议器接入 Gateway；关闭、只观察、参与及故障降级边界见 [Laya 预加载技术说明](../docs/technical/assistant-laya-prefetch-20260924.md)。
 
-音乐搜索页点击“说一句话”录音，再点击“结束录音”提交本机识别；转写后检查文字再点击执行。控制台未配置语音模型时不会申请麦克风。临时音频识别后删除，转写结果与其他解析任务一样只在服务内存中短暂保留。真实麦克风及语音模型验收尚未完成，新增功能需要重启服务并重载扩展后生效。
+## AI 工作台本地语音
 
-2026-09-12 已在当前运行服务配置本机现有 small 模型，用生成的“暂停播放”音频完成真实 Provider 和统一 HTTP 入口测试，转写为“暫停播放”，约 4.1 秒。未申请真实麦克风权限；浏览器录音端仍待验收。语音模型路径通过启动环境变量传入，手工重新启动时需保留该变量。
+语音输入复用 whisper.cpp。Apple Silicon 优先选择 `/opt/homebrew/bin/whisper-cli`，其他现有环境保留 `/usr/local/bin/whisper-cli`；默认识别模型是 `.local/whisper/ggml-small-q5_1.bin`，也可用 `LOCAL_AI_SPEECH_MODEL` 指向已核验的兼容模型。Whisper 返回文字经锁定的 `opencc-js@1.4.2` 转为简体，预览和最终转写共用该出口，用户手写内容不转换。音频只发送到本机受控入口。`POST /v1/speech/transcribe` 接收 `{audio: base64Wav}`，返回 jobId，复用 `/v1/ai/jobs/:jobId` 轮询和取消。录音上限 29 秒，服务最多接受 30 秒规范 WAV；数字静音立即提示麦克风问题。
+
+音乐搜索页继续点击“说一句话”开始、点击“结束录音”提交识别。AI 工作台使用本机逐步转写：录音中会修正输入框文字，说完停顿后自动完成；“完成语音输入”仍可手动提前结束。两处都只回填可编辑文字，检查后由用户点击执行。控制台未配置语音模型时不会申请麦克风。临时音频识别后删除，转写结果与其他解析任务一样只在服务内存中短暂保留。
+
+AI 工作台的助手答复另有“朗读”按钮：按真实消息分段，通过独立 `speech.synthesize` 场景调用本机 StepAudio，不改变音乐队列。必须开启 AI 总开关及“助手回答朗读（StepAudio）”场景；旧策略默认关闭。运行库锁定于 `voice-runtime/pyproject.toml` / `uv.lock`，独立 ARM Python 环境和参考音色放在 `.local/stepaudio-runtime/`，模型权重在 LM Studio 模型目录。点击停止、任务变化或关页会撤销待生成音频。完整的安装来源、调用边界和验证结果见 [技术说明](../docs/technical/assistant-voice-stepaudio-20260923.md)。代码更新后需重启服务并重载扩展。
+
+2026-09-12 曾以当时的 small 模型转写生成音频。2026-09-23 已下载并校验默认 small-q5_1，原生 ARM 与现有 x86 CLI 均通过公开规范 WAV 的本机网关测试；真实扩展中 StepAudio 朗读与停止已验收。隔离 Chromium 的虚拟麦克风返回全零录音，当前会直接提示静音；真实物理麦克风和网页浮层权限仍需单独验收。
 
 ## 固定场景评估
 
@@ -157,3 +163,9 @@
 自动整理直接复用 `@earendil-works/pi-coding-agent@0.85.1` 的公开 API，通过现有网关调用本机模型；历史用户要求和真实执行回执独立保留。AI 设置可切换“自动精简与 pi 摘要 / 仅精简”，工作台也可手动整理。首次升级请在本目录执行 `npm ci`，重启本机服务并重新加载扩展。
 
 实现、来源存储边界与真实模型验证见 [pi SDK 接入说明](../docs/technical/assistant-context-compaction-pi-20260919.md)。专项测试：`node --test test/local-ai-compaction.test.mjs`（项目根目录）；真实模型合成材料验证：`node local-ai/evaluate-assistant-compaction.mjs --live`，不会操作账号、队列或提醒。
+
+### 工作台规划提速（规划思考起步 · 无进展保护 · 队列播放快速路径）
+
+AI 设置新增“规划思考起步”（`planningStrategy`），默认“严格按上方思考设置”，行为与此前完全一致。选择“已有执行回执时自动关闭思考”后，仅 `assistant.plan` 中已拿到真实工具回执、且不是清单分析阶段的规划轮会直接以关闭思考单次起步并独占完整超时；所选思考等级仍是上限，默认设置、预算与熔断规则不变。历史和时间线用 `startReason=adaptive-receipts` 标记，与“超时恢复”分开显示。Engine 会拦截“自上次写入、选择或失败恢复后，重复提出完全相同的只读查询”：先把原因写入回执让模型重规划一次，再次重复则由现有恢复上限停止。“随机播放列表歌曲”“列表歌曲随机播放”“随机播放队里中的歌曲”等封闭语法的队列播放短句直接走确定性快速路径，不调用模型。更新后须重启本机服务并重载扩展（旧服务会拒绝 `planningStrategy` 字段）。设计、边界与验证见 [提速技术说明](../docs/technical/assistant-speed-20260929.md)。
+
+进程内评估：`node local-ai/evaluate-assistant-todo.mjs --in-process --strategy=follow|adaptive [--remove-artist]` 创建独立的内存网关直接调用 LM Studio（`LM_STUDIO_URL`、`LOCAL_AI_MODEL` 可覆盖），不读取生产令牌、不写生产策略与历史，报告与 `metrics` 写入 `.local/evaluations/`。LM Studio 为单并发，运行时不要同时使用助手；音乐依赖与用户点击均为替身。

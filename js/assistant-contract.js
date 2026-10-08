@@ -11,7 +11,9 @@
     { id: 'music', name: '音乐', aliases: ['音乐', '网易云', '网易云音乐', 'music'], description: '点歌、播放控制与定时停止' },
     { id: 'alarm', name: '闹钟', aliases: ['闹钟', '提醒', 'alarm'], description: '创建提醒、查看已有闹钟' },
     { id: 'bilibili', name: '哔哩哔哩', aliases: ['哔哩哔哩', 'B站', 'b站', 'bili', 'bilibili'], description: '搜索视频、找回观看记录' },
-    { id: 'youtube', name: 'YouTube', aliases: ['YouTube', 'youtube', '油管', 'yt'], description: '搜索视频、查询本地观看记录' }
+    { id: 'youtube', name: 'YouTube', aliases: ['YouTube', 'youtube', '油管', 'yt'], description: '搜索视频、查询本地观看记录' },
+    { id: 'task', name: '任务', aliases: ['任务', '任务App', '待办', 'task'], description: '快速添加任务' },
+    { id: 'worklog', name: '工作日志', aliases: ['工作日志', '工作日志App', '工时', '日志', 'worklog'], description: '快速记录工作内容与耗时' }
   ];
   const skills = [
     { id: 'music-search', name: '搜索音乐', apps: ['music'], description: '综合搜索歌曲、歌手与歌单' },
@@ -27,25 +29,28 @@
     { id: 'remind', name: '创建提醒', apps: ['alarm'], description: '明确的一次性提醒直接创建，有歧义时补充确认' },
     { id: 'alarms', name: '查看提醒', apps: ['alarm'], description: '查看已设置的闹钟' },
     { id: 'search', name: '找视频', apps: ['bilibili', 'youtube'], description: '检索视频并展示候选' },
-    { id: 'history', name: '继续看', apps: ['bilibili', 'youtube'], description: '找回记录，在原站打开并携带进度' }
+    { id: 'history', name: '继续看', apps: ['bilibili', 'youtube'], description: '找回记录，在 App 内打开并携带进度' },
+    { id: 'task-add', name: '添加任务', apps: ['task'], description: '新增一条任务' },
+    { id: 'worklog-add', name: '添加工作日志', apps: ['worklog'], description: '新增一条工作日志和耗时' }
   ];
   const toolGroups = {
-    'app.connection': { apps: apps.map(a => a.id), title: '查询账号连接或通知权限状态', tools: ['app.status'] },
+    'app.connection': { apps: ['music', 'alarm', 'bilibili', 'youtube'], title: '查询账号连接或通知权限状态', tools: ['app.status'] },
     'music.playback': { app: 'music', title: '读取播放状态、设置随机/循环模式、播放已有队列', tools: ['music.state', 'music.playback.setMode', 'music.queue.play', 'music.playback.control'] },
     'music.library': { app: 'music', title: '音乐搜索继续下一页，保留关键词及对象类型', tools: ['music.search.next'] },
-    'music.edit': { app: 'music', title: '音乐定位进度、移除歌曲与清空本地队列', tools: ['music.playback.seek', 'music.queue.remove', 'music.queue.clear'] },
+    'music.edit': { app: 'music', title: '音乐定位进度、移除歌曲与清空本地队列', tools: ['music.playback.seek', 'music.queue.remove', 'music.queue.removeArtist', 'music.queue.clear'] },
     'alarm.manage': { app: 'alarm', title: '查看、修改、开关或删除已有提醒', tools: ['alarm.get', 'alarm.update.prepare', 'alarm.toggle', 'alarm.delete.prepare'] },
     'video.inspect': { apps: ['bilibili', 'youtube'], title: '视频详情、观看进度、打开已选视频及翻页', tools: ['video.details', 'video.progress.get', 'video.open', 'video.search.next'] },
-    'music.queue': { app: 'music', title: '查看队列、读取歌单/专辑曲目、追加或替换队列', tools: ['music.queue.list', 'music.collection.get', 'music.queue.apply'] }
+    'music.queue': { app: 'music', title: '查看、核对、保留或清空过期队列，读取集合并应用队列', tools: ['music.queue.list', 'music.queue.reconcile', 'music.collection.get', 'music.queue.apply'] }
   };
   const tools = {
     'context.read': { apps: apps.map(a => a.id), title: '按引用回读本次任务的原始工具结果', fields: ['ref', 'offset'], optional: ['offset'], readOnly: true },
     'memory.manage': { apps: apps.map(a => a.id), title: '查看或保存用户本次明确要求记住的偏好', fields: ['text'] },
     'memory.recall': { apps: apps.map(a => a.id), title: '查询过去搜索、播放、提醒等经历；只读背景，不提供可执行引用', fields: ['text'], readOnly: true },
-    'app.status': { apps: apps.map(a => a.id), title: '只读查询连接状态，不发起授权', fields: ['platform'], enums: { platform: apps.map(a => a.id) }, readOnly: true },
+    'app.status': { apps: ['music', 'alarm', 'bilibili', 'youtube'], title: '只读查询连接状态，不发起授权', fields: ['platform'], enums: { platform: ['music', 'alarm', 'bilibili', 'youtube'] }, readOnly: true },
     'tools.load': { title: '准备后续操作', fields: ['group'], enums: { group: Object.keys(toolGroups) }, readOnly: true },
     'music.state': { app: 'music', title: '读取真实播放状态与队列数量', fields: [], readOnly: true },
     'music.queue.list': { app: 'music', title: '分页读取当前队列', fields: ['offset', 'limit'], optional: ['offset', 'limit'], readOnly: true },
+    'music.queue.reconcile': { app: 'music', title: '核对过期保存队列：保留恢复但不播放，或准备确认后清空', fields: ['action', 'expectedRevision'], enums: { action: ['keep', 'clear'] } },
     'music.playback.setMode': { app: 'music', title: '仅设置播放模式，不开始播放', fields: ['mode', 'expectedRevision'], enums: { mode: ['sequence', 'loop', 'single', 'shuffle'] } },
     'music.queue.play': { app: 'music', title: '真正开始播放队列；可同时指定播放模式', fields: ['expectedRevision', 'ref', 'mode'], optional: ['ref', 'mode'], enums: { mode: ['sequence', 'loop', 'single', 'shuffle'] } },
     'music.collection.get': { app: 'music', title: '读取真实集合引用的曲目，最多300首', fields: ['ref'], readOnly: true },
@@ -54,6 +59,7 @@
     'music.playback.control': { app: 'music', title: '暂停、继续、上下首或设置音量', fields: ['action', 'value', 'expectedRevision'], optional: ['value'], enums: { action: ['pause', 'resume', 'next', 'previous', 'volume'] } },
     'music.playback.seek': { app: 'music', title: '定位音乐进度，秒数必须在曲目时长内', fields: ['seconds', 'expectedRevision'] },
     'music.queue.remove': { app: 'music', title: '移除队列中的指定歌曲，当前曲目先显示确认卡', fields: ['ref', 'expectedRevision'] },
+    'music.queue.removeArtist': { app: 'music', title: '按完整歌手名批量移除本地队列歌曲（含合唱），先显示确认卡', fields: ['artist', 'expectedRevision'] },
     'music.queue.clear': { app: 'music', title: '准备清空本地队列并停止播放，确认后执行', fields: ['expectedRevision'] },
     'alarm.get': { app: 'alarm', title: '读取已有提醒详情', fields: ['ref'], readOnly: true },
     'alarm.update.prepare': { app: 'alarm', title: '准备修改提醒，由执行器判断直接保存或确认', fields: ['ref', 'label', 'date', 'time', 'dayOffset'], optional: ['label', 'date', 'time', 'dayOffset'] },
@@ -61,7 +67,7 @@
     'alarm.delete.prepare': { app: 'alarm', title: '准备删除已有提醒，确认后执行', fields: ['ref'] },
     'video.details': { apps: ['bilibili', 'youtube'], title: '读取真实视频标题、作者、时长及发布时间', fields: ['platform', 'ref'], readOnly: true },
     'video.progress.get': { apps: ['bilibili', 'youtube'], title: '读取已选视频的已知观看进度及来源', fields: ['platform', 'ref'], readOnly: true },
-    'video.open': { apps: ['bilibili', 'youtube'], title: '打开用户已选视频并携带已知进度', fields: ['platform', 'ref'] },
+    'video.open': { apps: ['bilibili', 'youtube'], title: '在 App 内打开用户已选视频并携带已知进度', fields: ['platform', 'ref'] },
     'video.search.next': { apps: ['bilibili', 'youtube'], title: '使用上一页的nextRef继续检索，保留原查询与筛选', fields: ['platform', 'ref'], readOnly: true },
     'music.search': { app: 'music', title: '搜索音乐对象', fields: ['kind', 'query'] },
     'music.intent': { app: 'music', title: '检索与控制音乐', fields: ['text'] },
@@ -69,7 +75,10 @@
     'alarm.prepare': { app: 'alarm', title: '准备提醒', fields: ['text'] },
     'alarm.list': { app: 'alarm', title: '按名称查找已有提醒并返回真实引用', fields: ['query', 'offset', 'limit'], optional: ['query', 'offset', 'limit'], readOnly: true },
     'video.search': { apps: ['bilibili', 'youtube'], title: '搜索视频，可按真实时长筛选，秒为单位', fields: ['platform', 'query', 'minSeconds', 'maxSeconds'], optional: ['minSeconds', 'maxSeconds'], readOnly: true },
-    'video.history': { title: '查询观看记录', fields: ['platform', 'query', 'dayOffset', 'unfinishedOnly'], optional: ['dayOffset', 'unfinishedOnly'] }
+    'video.history': { title: '查询观看记录', fields: ['platform', 'query', 'dayOffset', 'unfinishedOnly'], optional: ['dayOffset', 'unfinishedOnly'] },
+    'task.create': { app: 'task', title: '快速添加任务', fields: ['title', 'description', 'priority', 'dueDate'], optional: ['description', 'priority', 'dueDate'], enums: { priority: ['none', 'low', 'medium', 'high'] } },
+    'worklog.projects': { app: 'worklog', title: '读取现有工作日志项目', fields: ['query'], optional: ['query'], readOnly: true },
+    'worklog.create': { app: 'worklog', title: '添加工作日志', fields: ['description', 'durationMinutes', 'date', 'projectRef'], optional: ['date', 'projectRef'] }
   };
   function inputHint(app, skill) {
     const actionHints = {
@@ -83,11 +92,14 @@
       remind: '例如：明天下午三点提醒我开会',
       history: '例如：继续昨天没看完的 MySQL 视频',
       search: '输入视频标题或主题关键词',
+      'task-add': '例如：明天前完成接口文档，优先级高',
+      'worklog-add': '例如：今天写接口文档用了45分钟',
       pause: '按 Enter 暂停音乐', resume: '按 Enter 继续播放音乐', next: '按 Enter 播放下一首'
     };
     if (skills.some(item => item.id === skill && (!app || item.apps.includes(app))) && actionHints[skill]) return actionHints[skill];
     return ({ music: '搜索歌手、专辑、歌单或歌曲，例如：张杰', alarm: '例如：30分钟后提醒我休息',
-      bilibili: '搜索 B 站视频，或继续上次没看完的视频', youtube: '搜索 YouTube 视频，或继续上次观看' })[app]
+      bilibili: '搜索 B 站视频，或继续上次没看完的视频', youtube: '搜索 YouTube 视频，或继续上次观看',
+      task: '例如：添加任务，周五前完成接口文档', worklog: '例如：记录今天排查接口问题用了45分钟' })[app]
       || '输入 @ 选择应用，或说说你想做什么…';
   }
   const allows = (entry, app) => !app || entry.app === app || entry.apps?.includes(app);
@@ -127,7 +139,16 @@
     return { text, app, skill };
   }
   function validatePlan(raw, selectedApp = null) {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw) || Object.keys(raw).some(k => !['steps', 'question', 'continue', 'done'].includes(k))) throw new Error('助手计划格式无效');
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw) || Object.keys(raw).some(k => !['steps', 'question', 'continue', 'done', 'todoTips', 'todoId'].includes(k))) throw new Error('助手计划格式无效');
+    const todo = {};
+    if (raw.todoTips != null) {
+      const Todo = typeof module === 'object' && module.exports ? require('./assistant-todo.js') : globalThis.AssistantTodo;
+      todo.todoTips = Todo.definitions(raw.todoTips);
+    }
+    if (raw.todoId != null) {
+      if (typeof raw.todoId !== 'string' || !/^todo-(?:[1-9]|1[0-2])$/.test(raw.todoId)) throw new Error('Todo 引用无效');
+      todo.todoId = raw.todoId;
+    }
     if (raw.continue != null && typeof raw.continue !== 'boolean') throw new Error('继续执行标记无效');
     if (raw.done != null) {
       if (typeof raw.done !== 'boolean' || raw.question != null) throw new Error('完成标记无效');
@@ -138,20 +159,34 @@
         return validatePlan({ ...planned, continue: raw.continue ?? !done }, selectedApp);
       }
       if (!raw.done || (raw.steps != null && !Array.isArray(raw.steps)) || raw.continue === true) throw new Error('完成时不能同时执行动作');
-      return { done: true, steps: [] };
+      return { done: true, steps: [], ...todo };
     }
     if (raw.question != null) {
       if (raw.steps?.length || raw.continue) throw new Error('追问时不能同时执行动作');
-      const question = clean(raw.question, 250); if (!question) throw new Error('追问内容为空'); return { question, steps: [] };
+      const question = clean(raw.question, 250); if (!question) throw new Error('追问内容为空'); return { question, steps: [], ...todo };
+    }
+    // A full outline is persisted before any execution plan is requested.
+    // Its 1–12 goals are not subject to the 1–3 executable-step limit.
+    if (todo.todoTips && (raw.steps == null || (Array.isArray(raw.steps) && !raw.steps.length))) {
+      if (raw.continue || raw.todoId) throw new Error('清单分析阶段不能指定执行步骤');
+      return { ...todo, steps: [] };
     }
     if (!Array.isArray(raw.steps) || !raw.steps.length || raw.steps.length > 3) throw new Error('一次最多执行三个步骤');
     const steps = raw.steps.map(step => {
-      if (!step || Object.keys(step).some(k => !['tool', 'args'].includes(k)) || !Object.hasOwn(tools, step.tool)) throw new Error('助手选择了未接入的工具');
+      if (!step) throw new Error('助手选择了未接入的工具');
+      // Name only todoId: other keys are model-authored text and must not be echoed back into the recovery prompt.
+      const extraKeys = Object.keys(step).filter(k => !['tool', 'args'].includes(k));
+      if (extraKeys.length) throw new Error(extraKeys.includes('todoId') ? '步骤只能包含 tool 与 args；todoId 请写在 JSON 顶层，与 steps 同级' : '步骤只能包含 tool 与 args，不能带其他字段');
+      if (!Object.hasOwn(tools, step.tool)) throw new Error('助手选择了未接入的工具');
       const tool = tools[step.tool], args = step.args;
       if (!args || typeof args !== 'object' || Array.isArray(args) || Object.keys(args).some(k => !tool.fields.includes(k)) || tool.fields.some(k => !tool.optional?.includes(k) && !Object.hasOwn(args, k))) throw new Error('工具参数无效');
       const result = {};
       for (const field of tool.fields) {
         if (!Object.hasOwn(args, field)) continue;
+        if (field === 'expectedRevision') {
+          if (typeof args[field] !== 'string' || !args[field].trim() || args[field].length > 500) throw new Error('音乐队列版本无效：请先调用 music.state，使用真实回执中的 revision 字符串，不能使用 context.revision');
+          result[field] = args[field]; continue;
+        }
         if (tool.enums?.[field]) { if (!tool.enums[field].includes(args[field])) throw new Error('工具参数枚举无效'); result[field] = args[field]; continue; }
         if (field === 'offset' || field === 'limit') {
           const min = field === 'limit' ? 1 : 0, max = field === 'limit' ? 20 : step.tool === 'context.read' ? 524288 : 300;
@@ -160,11 +195,15 @@
         }
         if (field === 'value') { if (!Number.isFinite(args.value) || args.value < 0 || args.value > 1) throw new Error('音量必须为0至1'); result.value = args.value; continue; }
         if (['seconds', 'minSeconds', 'maxSeconds'].includes(field)) { if (!Number.isFinite(args[field]) || args[field] < 0 || args[field] > 86400) throw new Error('秒数必须在0至86400之间'); result[field] = args[field]; continue; }
-        if (field === 'date') { if (typeof args.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(args.date) || new Date(args.date + 'T12:00:00Z').toISOString().slice(0, 10) !== args.date) throw new Error('日期无效'); result.date = args.date; continue; }
+        if (field === 'date' || field === 'dueDate') { if (typeof args[field] !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(args[field]) || new Date(args[field] + 'T12:00:00Z').toISOString().slice(0, 10) !== args[field]) throw new Error('日期无效'); result[field] = args[field]; continue; }
         if (field === 'time') { if (typeof args.time !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(args.time)) throw new Error('时间必须为24小时HH:mm'); result.time = args.time; continue; }
+        if (field === 'artist') { if (typeof args.artist !== 'string' || !args.artist.trim() || args.artist.length > 80) throw new Error('请提供1至80字的完整歌手名'); result.artist = args.artist.trim(); continue; }
         if (field === 'label') { result.label = clean(args.label, 80); if (!result.label) throw new Error('提醒名称不能为空'); continue; }
         if (field === 'enabled' || field === 'startPlayback') { if (typeof args[field] !== 'boolean') throw new Error('播放标记无效'); result[field] = args[field]; continue; }
         if (field === 'ref') { if (typeof args[field] !== 'string' || !(step.tool === 'context.read' ? /^context:[0-9]{1,9}$/ : /^r[0-9]{1,4}$/).test(args[field])) throw new Error('资源引用无效'); result[field] = args[field]; continue; }
+        if (field === 'projectRef') { if (typeof args[field] !== 'string' || !/^r[0-9]{1,4}$/.test(args[field])) throw new Error('项目引用无效'); result[field] = args[field]; continue; }
+        if (field === 'durationMinutes') { if (!Number.isInteger(args[field]) || args[field] < 1 || args[field] > 1439) throw new Error('工作日志耗时应为1至1439分钟'); result[field] = args[field]; continue; }
+        if (field === 'title' || field === 'description') { const max = field === 'title' ? 120 : 500; result[field] = clean(args[field], max); if (!result[field] && (field === 'title' || step.tool === 'worklog.create')) throw new Error('内容不能为空'); continue; }
         if (field === 'kind') { if (!['auto', 'song', 'artist', 'album', 'playlist'].includes(args.kind)) throw new Error('音乐对象类型无效'); result.kind = args.kind; continue; }
         if (field === 'dayOffset') { if (!Number.isInteger(args[field]) || args[field] < 0 || args[field] > 30) throw new Error('仅支持最近30天的日期条件'); result[field] = args[field]; continue; }
         if (field === 'unfinishedOnly') { if (typeof args[field] !== 'boolean') throw new Error('观看状态条件无效'); result[field] = args[field]; continue; }
@@ -179,8 +218,9 @@
       return { tool: step.tool, args: result };
     });
     if (steps.some(s => s.tool === 'tools.load') && (steps.length !== 1 || raw.continue !== true)) throw new Error('加载工具后必须重新规划');
+    if (steps.some(s => s.tool === 'worklog.projects') && steps.some(s => s.tool === 'worklog.create' && s.args.projectRef)) throw new Error('必须先读取真实项目回执，再提交工作日志');
     if (raw.continue && steps.length !== 1) throw new Error('逐步决策每轮只执行一个工具');
-    return { steps, ...(raw.continue ? { continue: true } : {}) };
+    return { steps, ...(raw.continue ? { continue: true } : {}), ...todo };
   }
   function localPlan(raw) {
     const value = input(raw), { app, skill, text } = value;
@@ -188,10 +228,12 @@
     if (memoryCommand && (memoryCommand.operation !== 'preference' || !app || app === 'music')) return validatePlan({ steps: [{ tool: 'memory.manage', args: { text } }] }, app);
     if (Memory?.recallQuestion(text)) return validatePlan({ steps: [{ tool: 'memory.recall', args: { text } }] }, app);
     if (Memory?.historical(text)) return null;
+    if ((!app || app === 'music') && Music?.queuePlayRequest(text)) return null;
+    if ((!app || app === 'music') && /清除|清空|移除|删掉|去掉|删除.*(?:歌|曲)/.test(text)) return null;
     if ((!app || app === 'music') && Music?.artistRequest(text)) return validatePlan({ steps: [{ tool: 'music.intent', args: { text } }] }, app);
     if (/登录|连接|权限|授权|下一页|翻页|继续搜索/.test(text)) return null;
     const step = (tool, args) => validatePlan({ steps: [{ tool, args }] }, app);
-    if ((app === 'alarm' || /提醒|闹钟/.test(text)) && /修改|改成|改到|改为|删除|取消|关闭|开启|启用|停用|重命名/.test(text)) return null;
+    if ((app === 'alarm' || /提醒|闹钟/.test(text)) && /修改|改成|改到|改为|延后|推迟|往后|关掉|删除|取消|关闭|开启|启用|停用|重命名/.test(text)) return null;
     if ((!app || app === 'music') && /跳到|快进|进度|清空|移除|删除.*(?:歌|曲)/.test(text)) return null;
     // State-dependent requests must not be swallowed by the single-action music parser.
     if ((!app || app === 'music') && /如果|否则|没有.*(?:就|则)|有.*(?:就|则)|队列|播放列表|随机|循环|当前.*播放|正在.*播放/.test(text)) return null;
@@ -235,6 +277,9 @@
     const n = /^\d+$/.test(match[3]) ? Number(match[3]) : match[3] === '一百' ? 100 : match[3].includes('十') ? (digits[match[3].split('十')[0]] || 1) * 10 + (digits[match[3].split('十')[1]] || 0) : digits[match[3]];
     return { index: n || 0, play: /直接|播放|放|听/.test(match[0]) };
   }
+  // A live candidate list means a bare "随机播放" may refer to those results, so
+  // only full planning can resolve it. Engine tasks and snapshots share these fields.
+  const hasCandidates = task => Boolean(task?.choices?.length || task?.candidateSet?.choices?.length);
   function routeRequest(raw, current) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('需求输入无效');
     if (raw.newConversation != null && typeof raw.newConversation !== 'boolean') throw new Error('新需求标记无效');
@@ -249,10 +294,12 @@
     const bareSearchTerm = /^[^，,。！？!?；;]{1,40}$/.test(text)
       && !/^(?:继续|换一个|换一首|再来|再看看|看看|更多|重试|重新试|下一页|翻页|下一首|上一首|暂停|恢复播放|停止播放|取消定时|返回)/.test(text)
       && !/(?:怎么样|好听吗|好听么|可以吗|行吗|是谁|是什么|为什么|为何|吗|么|呢|吧|呀)$/.test(text);
+    const queueEdit = /清除|清空|移除|删除|删掉|去掉/.test(text) && /队列|播放列表|队里|队中/.test(text);
+    const queuePlay = Boolean(Music?.queuePlayRequest(text, { bare: !hasCandidates(current) }));
     let inferred = /(?:YouTube|油管)/i.test(text) ? 'youtube' : /B站|哔哩哔哩/i.test(text) ? 'bilibili'
       : /提醒我|提醒一下|闹钟|(?:创建|设置|新增|查看|看看|列出).{0,20}提醒/.test(text) ? 'alarm'
-      : /音乐|歌手|歌曲|专辑|歌单|下一首|上一首|(?:分钟|小时).*?(?:停止|暂停)播放/.test(text) || /^(?:暂停|继续播放|恢复播放|停止播放)(?:音乐|一下|吧)?$/.test(text) ? 'music' : null;
-    const independentSearch = (/^(?:搜索|查找|搜|找|播放|听|查看|看看|列出)\s*\S/.test(text) || Boolean(Music?.artistRequest(text)) || Boolean(Memory?.command(text))) && !reference;
+      : queueEdit || queuePlay || /音乐|歌手|歌曲|专辑|歌单|下一首|上一首|(?:分钟|小时).*?(?:停止|暂停)播放/.test(text) || /^(?:暂停|继续播放|恢复播放|停止播放)(?:音乐|一下|吧)?$/.test(text) ? 'music' : null;
+    const independentSearch = (queueEdit || queuePlay || /^(?:搜索|查找|搜|找|播放|听|查看|看看|列出)\s*\S/.test(text) || Boolean(Music?.artistRequest(text)) || Boolean(Memory?.command(text))) && !reference;
     // A fresh named music query may keep the domain, but never the previous candidates or plan.
     if (!inferred && independentSearch && scope === 'music' && !raw.newConversation) inferred = 'music';
     const changedScope = Boolean(current && parsed.app && parsed.app !== scope);
@@ -266,5 +313,5 @@
     const mode = replaceSearch ? 'replace' : fresh ? 'new' : 'continue';
     return { mode, input:{ ...parsed, app, ...(aiSpecified ? { ai:selectedAI } : {}) }, reason:raw.newConversation ? '快捷键新需求' : !current ? '首次需求' : changedScope ? '切换应用' : replaceSearch ? (correction ? '纠正上次搜索' : '替换搜索关键词') : fresh ? '独立需求' : reference ? '引用当前会话' : '保留上下文' };
   }
-  return Object.freeze({ apps, skills, tools, toolGroups, allows, input, appId, inputHint, aiSelection, validatePlan, localPlan, ordinal, routeRequest });
+  return Object.freeze({ apps, skills, tools, toolGroups, allows, input, appId, inputHint, aiSelection, validatePlan, localPlan, ordinal, hasCandidates, routeRequest });
 });

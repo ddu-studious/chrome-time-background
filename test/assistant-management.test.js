@@ -88,13 +88,88 @@ test('YouTube精确时长来自videos接口，翻页令牌不暴露给模型且�
   assert.equal(calls[2].args.pageToken, 'private-page-token'); assert.equal(calls[2].args.q, 'mysql');
 });
 test('视频详情使用真实引用；未经选择不能打开，重复打开不会再次开页', async () => {
-  let opened = 0; const tools = Tools.create({ openURL: async () => { opened++; }, bilibili: async path => path.includes('search') ? { code: 0, data: { result: [video(0)] } } : { code: 0, data: { bvid: video(0).bvid, title: '真实标题', duration: 400, owner: { name: '真实作者' }, pubdate: 1000 } } }); const c = ctx('bilibili');
+  const opened = []; const tools = Tools.create({ openVideo: async request => { opened.push(request); return { opened: true, destination: 'app' }; }, bilibili: async path => path.includes('search') ? { code: 0, data: { result: [video(0)] } } : { code: 0, data: { bvid: video(0).bvid, title: '真实标题', duration: 400, owner: { name: '真实作者' }, pubdate: 1000 } } }); const c = ctx('bilibili');
   const result = await exec(tools, c, 'video.search', { platform: 'bilibili', query: 'mysql' }); const ref = result.observation.items[0].ref;
   const detail = await exec(tools, c, 'video.details', { platform: 'bilibili', ref }); assert.equal(detail.observation.durationSeconds, 400);
   await assert.rejects(exec(tools, c, 'video.open', { platform: 'bilibili', ref }), /选择/);
   await tools.choose(result.choices[0], c);
-  await exec(tools, c, 'video.open', { platform: 'bilibili', ref }); assert.equal(opened, 1);
+  const receipt = await exec(tools, c, 'video.open', { platform: 'bilibili', ref }); assert.equal(opened.length, 1);
+  assert.deepEqual(opened[0], { platform: 'bilibili', id: video(0).bvid, title: '真实标题', author: '真实作者' });
+  assert.deepEqual(receipt.observation, { opened: true, destination: 'app', playbackConfirmed: false });
   await assert.rejects(exec(tools, c, 'video.open', { platform: 'bilibili', ref }), /已经打开/);
+});
+test('App 视频打开拒绝过期、跨任务和跨平台引用，依赖不会被调用', async () => {
+  let clock = 1000, opened = 0;
+  const tools = Tools.create({ now: () => clock, openVideo: async () => { opened++; return { opened: true, destination: 'app' }; },
+    youtube: async () => ({ items: [{ id: { videoId: 'dQw4w9WgXcQ' }, snippet: { title: '课程' } }] }) });
+  const c = ctx(null);
+  const result = await exec(tools, c, 'video.search', { platform: 'youtube', query: '课程' });
+  const ref = result.observation.items[0].ref;
+  await tools.choose(result.choices[0], c);
+  await assert.rejects(exec(tools, c, 'video.open', { platform: 'bilibili', ref }), /平台/);
+  await assert.rejects(exec(tools, { ...c, task: { ...c.task, id: 'another-task' } }, 'video.open', { platform: 'youtube', ref }), /引用|过期/);
+  clock += 600001;
+  await assert.rejects(exec(tools, c, 'video.open', { platform: 'youtube', ref }), /引用|过期/);
+  assert.equal(opened, 0);
+});
+
+function videoEngineFixture(openVideo, adaptive = false) {
+  const values = {}, plans = [];
+  const storage = { get: async () => structuredClone(values), set: async value => Object.assign(values, structuredClone(value)), remove: async key => delete values[key] };
+  const handlers = Tools.create({ storage, openVideo,
+    youtube: async () => ({ items: [{ id: { videoId: 'dQw4w9WgXcQ' }, snippet: { title: '课程' } }] }) });
+  const engine = Engine.create({ storage, ...handlers, id: () => 'video-task', plan: async (_input, c) => {
+    plans.push(c.task.observations?.at(-1));
+    if (plans.length === 1) return { steps: [{ tool: 'video.search', args: { platform: 'youtube', query: '课程' } }], ...(adaptive ? { continue: true } : {}) };
+    const ref = Object.entries(c.task.memory.musicRefs).find(([, record]) => record.selected)[0];
+    return { steps: [{ tool: 'video.open', args: { platform: 'youtube', ref } }], continue: true };
+  } });
+  return { engine, values, plans };
+}
+
+test('搜索候选由 Engine 串行打开 App，重复点击只产生一次副作用', async () => {
+  let opened = 0;
+  const f = videoEngineFixture(async () => { opened++; return { opened: true, destination: 'app' }; });
+  await f.engine.submit({ app: 'youtube', text: '查找课程' }); const waiting = await f.engine.settled();
+  const results = await Promise.allSettled(Array.from({ length: 2 }, () => f.engine.choose(waiting.id, waiting.choices[0].id, waiting.version)));
+  assert.equal(results.filter(result => result.status === 'fulfilled').length, 1);
+  const final = await f.engine.settled();
+  assert.equal(final.status, 'completed', final.message); assert.equal(opened, 1);
+  assert.match(final.message, /App 内/); assert.doesNotMatch(final.message, /已播放|正在播放/);
+});
+
+test('取消候选后不打开 App，派发后取消的晚到回执也不改写任务', async () => {
+  let opened = 0;
+  const before = videoEngineFixture(async () => { opened++; return { opened: true, destination: 'app' }; });
+  await before.engine.submit({ app: 'youtube', text: '查找课程' }); const waiting = await before.engine.settled();
+  await before.engine.cancel(waiting.id);
+  await assert.rejects(before.engine.choose(waiting.id, waiting.choices[0].id)); assert.equal(opened, 0);
+
+  let release, dispatched;
+  const started = new Promise(resolve => { dispatched = resolve; });
+  const after = videoEngineFixture(() => new Promise(resolve => { opened++; release = resolve; dispatched(); }));
+  await after.engine.submit({ app: 'youtube', text: '查找课程' }); const selected = await after.engine.settled();
+  await after.engine.choose(selected.id, selected.choices[0].id);
+  await started;
+  await after.engine.cancel(selected.id); release({ opened: true, destination: 'app' });
+  const cancelled = await after.engine.settled();
+  assert.equal(cancelled.status, 'cancelled'); assert.equal(opened, 1);
+  assert.equal(after.values[Engine.KEY].observations.some(row => row.data?.opened), false);
+});
+
+test('App 打开回执丢失进入 unknown，恢复规划不得重复打开', async () => {
+  let opened = 0;
+  const f = videoEngineFixture(async () => { opened++; throw new Error('App 已收到打开请求但回执丢失'); }, true);
+  await f.engine.submit({ app: 'youtube', text: '查找课程' }); const waiting = await f.engine.settled();
+  await f.engine.choose(waiting.id, waiting.choices[0].id);
+  const failed = await f.engine.settled();
+  assert.equal(failed.status, 'failed', failed.message); assert.match(failed.message, /结果未确认/);
+  assert.equal(opened, 1); assert.equal(f.plans.length, 3);
+  assert.equal(f.plans[2].status, 'unknown');
+  const persisted = f.values[Engine.KEY];
+  assert.equal(persisted.contextState.uncertain, true);
+  assert.ok(persisted.contextState.receipts.some(row => row.status === 'unknown'));
+  assert.ok(persisted.log.some(row => row.tool === 'video.open' && row.sideEffectStarted));
 });
 test('无观看记录不伪装成零进度，进度工具拒绝跨平台引用', async () => {
   const tools = Tools.create({ youtube: async () => ({ items: [{ id: { videoId: 'abcdefghijk' }, snippet: { title: '课程' } }] }), storage: { get: async () => ({}) } }); const c = ctx('youtube');
@@ -132,6 +207,7 @@ test('生产执行器把已有提醒修改停在确认卡，确认后继续后�
   const { createGateway } = await import('../local-ai/gateway.mjs');
   const f = alarmFixture([{ id: 'a' }]); let n = 0, ref;
   const gateway = createGateway({ provider: { async generateObject({ input }) {
+    if (input.planningPhase === 'outline') return { todoTips: [{ text: '修改开会提醒', source: 0, tool: 'alarm.update.prepare', args: { dayOffset: 1, time: '16:30' } }] };
     if (n++ === 0) return { steps: [{ tool: 'alarm.list', args: { query: '开会' } }], continue: true };
     if (n === 2) { ref = input.observations.at(-1).data.items[0].ref; return { steps: [{ tool: 'alarm.update.prepare', args: { ref, dayOffset: 1, time: '16:30' } }], continue: true }; }
     return { done: true };

@@ -39,7 +39,7 @@ for (const scenario of scenarios.filter(s => !process.argv.includes('--alarm-onl
       if (args.part.includes('snippet')) details++;
       return { items: [{ id: 'abcdefghijk', snippet: { title: 'MySQL入门', channelTitle: '测试作者' }, contentDetails: { duration: 'PT5M' } }, { id: 'bcdefghijkl', contentDetails: { duration: 'PT40M' } }] };
     },
-    openURL: async () => { opens++; }
+    openVideo: async () => { opens++; return { opened: true, destination: 'app', playbackConfirmed: false }; }
   });
   const engine = Engine.create({ storage, ...handlers, id: () => 'p1-fixture' });
   await engine.submit({ app: scenario.app, text: scenario.text });

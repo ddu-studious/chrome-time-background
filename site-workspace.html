@@ -4,8 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>网站工作区</title>
-  <link rel="stylesheet" href="css/site-workspace.css?v=1">
-  <link rel="stylesheet" href="css/music-assistant.css">
+  <link rel="stylesheet" href="css/site-workspace.css?v=2026092001">
 </head>
 <body>
   <main class="sw-shell">
@@ -35,7 +34,7 @@
     <section class="sw-groups" id="sw-groups" aria-label="网站与标签分组"></section>
 
     <footer class="sw-footer">
-      Chrome 分组关闭或删除后，页面会作为“已关闭”记录保留。快速开关：按 <kbd>⌘⇧U</kbd>；网页或工具栏图标右键也可打开。快速加入：按 <kbd>⌘⇧Y</kbd>。
+      Chrome 分组关闭或删除后，固定入口仍保留；临时页面进入“最近关闭”（7 天，最多 30 条）。快速开关：按 <kbd>⌘⇧U</kbd>；网页或工具栏图标右键也可打开。快速加入：按 <kbd>⌘⇧Y</kbd>。
     </footer>
   </main>
 
@@ -80,6 +79,7 @@
         <button type="button" data-close-dialog="sw-page-dialog" aria-label="关闭">×</button>
       </header>
       <input id="sw-page-id" type="hidden">
+      <p class="sw-dialog-hint">重命名会将此页面固定，关闭后仍保留。</p>
       <label>页面名称<input id="sw-page-name" maxlength="200" required placeholder="输入便于识别的名称"></label>
       <p class="sw-form-error" id="sw-page-error" role="alert"></p>
       <div class="sw-dialog-actions">
@@ -89,9 +89,9 @@
     </form>
   </dialog>
 
-  <script src="js/site-workspace-core.js?v=1"></script>
+  <script src="js/site-workspace-core.js?v=3"></script>
   <script src="js/scene-ai.js"></script>
-  <script src="js/workspace-matcher.js"></script>
-  <script src="js/site-workspace.js?v=1"></script>
+  <script src="js/workspace-matcher.js?v=3"></script>
+  <script src="js/site-workspace.js?v=3"></script>
 </body>
 </html>

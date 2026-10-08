@@ -1,0 +1,58 @@
+- main "快捷助手" [ref=e2]:
+  - generic [ref=e3]:
+    - heading "AI 工作台 快捷助手 待命" [level=1] [ref=e4]:
+      - generic [ref=e5]: AI 工作台
+      - generic [ref=e6]: 快捷助手
+      - generic [ref=e7]: 待命
+    - generic [ref=e8]:
+      - button "编辑输入" [ref=e9] [cursor=pointer]
+      - button "＋ 新需求" [ref=e10] [cursor=pointer]
+      - button "收起输入条" [ref=e11] [cursor=pointer]: Esc 收起
+  - generic [ref=e12]:
+    - generic [ref=e13]:
+      - generic [aria-hidden] [ref=e14]: ✦
+      - generic [ref=e15]: 输入你的需求
+      - combobox "输入你的需求" [ref=e16]
+      - button "执行需求" [ref=e17] [cursor=pointer]: ↵
+    - generic [ref=e18]:
+      - generic [ref=e19]:
+        - button "@ 应用" [ref=e20] [cursor=pointer]
+        - button "/ 动作" [ref=e21] [cursor=pointer]
+        - generic [ref=e22]:
+          - generic [ref=e23]: 模型
+          - combobox "选择本次请求的模型" [ref=e24]:
+            - option "默认 · qwen/qwen3.8-27b" [selected]
+            - option "Qwen3.8 4B · 未加载"
+            - option "Gemma 4 26B A4B · 未加载"
+            - option "Qwen3.8 27B · 未加载"
+        - generic [ref=e25]:
+          - generic [ref=e26]: 思考
+          - combobox "选择本次请求的思考强度" [ref=e27]:
+            - option "默认 · 低" [selected]
+            - option "关闭"
+            - option "低"
+            - option "中"
+            - option "极高"
+            - option "开启"
+        - generic [ref=e28]: 独立需求自动新开，追问保留上下文
+      - generic [ref=e29]:
+        - generic "直接开始新会话并发送当前输入；不停止正在播放的音乐" [ref=e30]: ⌘ Enter 新需求
+        - button "整理上下文" [ref=e31] [cursor=pointer]
+    - generic [ref=e32]:
+      - generic "语音输入" [ref=e33]:
+        - button "结束录音" [ref=e48] [cursor=pointer]
+        - button "取消录音" [ref=e49] [cursor=pointer]
+      - status [ref=e35]: 正在录音，音频仅发送到本机识别；转写后可编辑
+  - button "请读出这句测试文字 · 已完成 查看本次对话 ⌄" [ref=e37] [cursor=pointer]:
+    - generic [aria-hidden] [ref=e38]: ✓
+    - generic "你好，这是 AI 工作台的语音能力验收。" [ref=e39]: 请读出这句测试文字 · 已完成
+    - generic [ref=e40]: 查看本次对话 ⌄
+  - generic [ref=e41]:
+    - button "示例" [ref=e42] [cursor=pointer]
+    - generic [ref=e43]: 首次使用：请绑定“快捷助手”的快捷键
+    - button "设置快捷键" [ref=e44] [cursor=pointer]
+    - link "AI 设置" [ref=e45] [cursor=pointer]:
+      - /url: settings.html#ai-control
+    - link "我的记忆" [ref=e46] [cursor=pointer]:
+      - /url: assistant-memory.html
+    - generic [ref=e47]: ↑↓ 选择 · Tab 补全

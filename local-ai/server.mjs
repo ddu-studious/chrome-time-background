@@ -7,15 +7,27 @@ import { resolve, dirname } from 'node:path';
 import { LMStudioProvider } from './provider.mjs';
 import { createGateway } from './gateway.mjs';
 import { WhisperProvider } from './speech-provider.mjs';
+import { StepAudioProvider } from './speech-synthesis-provider.mjs';
+import { LayaPrefetchProvider } from './laya-prefetch-provider.mjs';
 import { createControlStore } from './control-store.mjs';
 import { createHistoryStore } from './history-store.mjs';
 import { createMemoryStore } from './memory-store.mjs';
 import { evaluateApproval } from './assistant-approval.mjs';
 
-export function createServer({ token, provider = new LMStudioProvider(), allowedOrigins = [], modelEnabled = true, disabledScenes = [], controlFile, speechProvider = new WhisperProvider(), usageFile, historyFile, memoryFile }) {
+export function createServer({ token, provider = new LMStudioProvider(), allowedOrigins = [], modelEnabled = true, disabledScenes = [], controlFile, speechProvider = new WhisperProvider(), synthesisProvider = new StepAudioProvider(), layaProvider = new LayaPrefetchProvider(), usageFile, historyFile, memoryFile, jobRetentionMs = 300000, speechRetentionMs = 60000 }) {
   if (typeof token !== 'string' || token.length < 32) throw new Error('本地入口令牌至少需要 32 字符');
   const jobs = new Map();
   const admission = createAdmission({file:usageFile});
+  let layaAdmission;
+  try { layaAdmission = createAdmission({file:usageFile ? `${usageFile}.laya` : undefined}); }
+  catch {
+    // Auxiliary accounting damage may disable Laya, never the Qwen gateway.
+    layaAdmission = {
+      describe: () => ({ admitted: 0, scenes: {}, error: 'Laya 使用记录不可用' }),
+      start: () => { throw Object.assign(new Error('Laya 使用记录不可用'), { code: 'LAYA_USAGE_UNAVAILABLE' }); },
+      finish: () => {}
+    };
+  }
   const control = createControlStore({ file: controlFile, modelEnabled, disabledScenes });
   const history = createHistoryStore({ file: historyFile });
   let memory;
@@ -26,7 +38,11 @@ export function createServer({ token, provider = new LMStudioProvider(), allowed
     return memory;
   };
   memory?.restrictRetention(history.info().settings.retentionDays);
-  const gateway = createGateway({ provider, control, speechProvider, admission, history });
+  const gateway = createGateway({ provider, control, speechProvider, synthesisProvider, layaProvider, admission, layaAdmission, history });
+  // Audio results live only in bounded jobs; expiry also runs when no client polls.
+  const expireJobs = () => { for (const [id, job] of jobs) if (Date.now() >= job.expiresAt) { job.controller.abort(); job.result = null; jobs.delete(id); } };
+  const expiryTimer = setInterval(expireJobs, Math.max(10, Math.min(5000, jobRetentionMs, speechRetentionMs)));
+  expiryTimer.unref();
   const describe = () => ({ ...gateway.describe(), localOnly: true, jobs: [...jobs.values()].filter(job => !job.result).map(job => ({ jobId: job.id, startedAt: job.started })) });
   const server = http.createServer(async (req, res) => {
     const send = (code, result) => {
@@ -51,7 +67,7 @@ export function createServer({ token, provider = new LMStudioProvider(), allowed
     const expected = Buffer.from(`Bearer ${token}`);
     if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) return send(401, { error: '连接令牌不正确，请在本地 AI 设置中重新填写' });
     try {
-      for (const [id, job] of jobs) if (Date.now() - job.started > 300000) { job.controller.abort(); jobs.delete(id); }
+      expireJobs();
       if (req.method === 'POST' && /^\/v1\/ai\/jobs\/[a-f0-9]{32}\/cancel$/.test(req.url)) {
         const job = jobs.get(req.url.split('/')[4]);
         if (!job) return send(404, { error: '任务不存在或已过期' });
@@ -73,7 +89,7 @@ export function createServer({ token, provider = new LMStudioProvider(), allowed
         const selected = models.find(m => m.id === selectedModel);
         return send(200, { ok: true, model: selectedModel, defaultReasoning: policy.reasoning || 'off', reasoningOptions: selected?.reasoningOptions || [], state: provider.busy ? 'busy' : !selected ? 'model_missing' : selected.loaded ? 'ready' : 'not_loaded', models });
       }
-      if (req.method !== 'POST' || !['/v1/assistant/approval', '/v1/alarms/interpret', '/v1/ai/interpret', '/v1/control', '/v1/control/rollback', '/v1/speech/transcribe', '/v1/history', '/v1/memory'].includes(req.url)) return send(404, { error: '接口不存在' });
+      if (req.method !== 'POST' || !['/v1/assistant/approval', '/v1/alarms/interpret', '/v1/ai/interpret', '/v1/control', '/v1/control/rollback', '/v1/speech/transcribe', '/v1/speech/synthesize', '/v1/history', '/v1/memory'].includes(req.url)) return send(404, { error: '接口不存在' });
       if (!/^application\/json(?:;|$)/i.test(req.headers['content-type'] || '')) return send(415, { error: '需要 JSON 请求' });
       let size = 0, chunks = [];
       for await (const chunk of req) {
@@ -119,21 +135,22 @@ export function createServer({ token, provider = new LMStudioProvider(), allowed
         return send(200, { ok: true, ...describe() });
       }
       if (jobs.size >= 32) return send(429, { error: '请求过多，请稍后再试' });
-      const job = { id: randomBytes(16).toString('hex'), started: Date.now(), controller: new AbortController() };
+      const job = { id: randomBytes(16).toString('hex'), started: Date.now(), expiresAt: Date.now() + jobRetentionMs, controller: new AbortController() };
       jobs.set(job.id, job);
       // Keep each browser fetch short: MV3 workers cannot await a long cold-start HTTP response.
-      const scene = req.url === '/v1/alarms/interpret' ? 'alarm.interpret' : req.url === '/v1/speech/transcribe' ? 'speech.transcribe' : body?.scene;
-      const input = ['/v1/alarms/interpret', '/v1/speech/transcribe'].includes(req.url) ? body : body?.input;
+      const scene = req.url === '/v1/alarms/interpret' ? 'alarm.interpret' : req.url === '/v1/speech/transcribe' ? 'speech.transcribe' : req.url === '/v1/speech/synthesize' ? 'speech.synthesize' : body?.scene;
+      const input = req.url === '/v1/speech/synthesize' ? { text: body?.text } : ['/v1/alarms/interpret', '/v1/speech/transcribe'].includes(req.url) ? body : body?.input;
       gateway.run(scene, input, { signal: job.controller.signal, trace: body?.trace, selection: body?.selection }).then(result => {
         if (job.controller.signal.aborted) return;
         job.result = { ok: true, ...result, elapsedMs: Date.now() - job.started };
+        if (scene === 'speech.synthesize') job.expiresAt = Date.now() + speechRetentionMs;
       }).catch(error => { if (job.controller.signal.aborted) return; job.result = { ok: false, error: error.message, code: error.code || null, execution: error.execution }; });
       send(202, { ok: true, status: 'pending', jobId: job.id });
     } catch (error) {
       send(error.statusCode || 502, { ok: false, error: error.message });
     }
   });
-  server.on('close', () => memory?.close());
+  server.on('close', () => { clearInterval(expiryTimer); for (const job of jobs.values()) job.controller.abort(); jobs.clear(); memory?.close(); });
   return server;
 }
 

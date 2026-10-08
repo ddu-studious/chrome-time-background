@@ -62,6 +62,7 @@ test('混合加载计划只执行加载，真实回执触发重新规划，不�
   const { createGateway } = await import('../local-ai/gateway.mjs');
   let round = 0, reads = 0;
   const gateway = createGateway({ provider: { async generateObject({ input }) {
+    if (input.planningPhase === 'outline') return { todoTips: [{ text: '查看队列', source: 0, tool: 'music.state' }] };
     if (round++ === 0) return { steps: [
       { tool: 'tools.load', args: { group: 'music.queue' } },
       { tool: 'music.queue.play', args: { expectedRevision: 'stale' } }
@@ -108,7 +109,8 @@ test('有队列：真实观察驱动加载→随机模式→播放→定时，�
   const operations = []; let round = 0;
   const gateway = createGateway({ provider: { generateObject: async ({ input }) => {
     const last = input.observations.at(-1);
-    const plans = [step('music.state'), step('tools.load', { group: 'music.playback' }), step('music.playback.setMode', { mode: 'shuffle', expectedRevision: 'v1' }), step('music.queue.play', { expectedRevision: 'v2' }), step('music.sleep', { minutes: 30 }, false)];
+    if (input.planningPhase === 'outline') return { todoTips: [{ text: '随机播放队列', source: 0, tool: 'music.queue.play', args: { mode: 'shuffle' } }, { text: '设置30分钟后暂停', source: 0, tool: 'music.sleep', args: { minutes: 30 } }] };
+    const plans = [step('music.state'), step('tools.load', { group: 'music.playback' }), step('music.playback.setMode', { mode: 'shuffle', expectedRevision: 'v1' }), step('music.queue.play', { expectedRevision: 'v2', mode: 'shuffle' }), step('music.sleep', { minutes: 30 }, false)];
     if (round === 1) { assert.equal(last.data.count, 2); assert.equal(last.data.songs, undefined); assert.doesNotMatch(JSON.stringify(input), /secret/); }
     if (round === 3) assert.equal(last.data.revision, 'v2');
     if (round === 4) assert.equal(last.data.isPlaying, true);
@@ -132,6 +134,7 @@ test('空队列：暂停选择真实歌单，读取后仅追加；不会自动�
   let round = 0, selected, loaded, writes = 0;
   const gateway = createGateway({ provider: { generateObject: async ({ input }) => {
     const last = input.observations.at(-1);
+    if (input.planningPhase === 'outline') return { todoTips: [{ text: '追加张杰歌单', source: 0, tool: 'music.queue.apply', args: { mode: 'append', startPlayback: false } }] };
     switch (round++) {
       case 0: return step('music.state');
       case 1: assert.equal(last.data.status, 'empty'); return step('music.search', { kind: 'playlist', query: '张杰' });
@@ -158,7 +161,7 @@ test('空队列：暂停选择真实歌单，读取后仅追加；不会自动�
 
 test('规划有上限；未知/未选择/跨任务引用不能触发写入', async () => {
   const store = storage(); let calls = 0;
-  const engine = Engine.create({ storage: store, id: () => 't', plan: async () => { calls++; return step('music.state'); }, execute: async () => ({ message: '读取完成', observation: { count: 1 } }) });
+  const engine = Engine.create({ storage: store, id: () => 't', plan: async () => { calls++; return step('music.queue.list', { offset: calls }); }, execute: async () => ({ message: '读取完成', observation: { count: 1 } }) });
   await engine.submit({ text: '测试' }); const result = await engine.settled();
   assert.equal(result.status, 'failed'); assert.match(result.message, /上限/); assert.equal(calls, 12);
   const tools = Tools.create({ applyMusicQueue() { assert.fail(); } });

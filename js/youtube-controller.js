@@ -9,7 +9,7 @@
         settings: 'youtubeSettings',
     });
     const VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
-    const VIEWS = new Set(['recommended', 'trending', 'subscriptions', 'playlists', 'likes', 'history', 'local-queue', 'learning']);
+    const VIEWS = new Set(['recommended', 'trending', 'subscriptions', 'playlists', 'likes', 'history', 'local-queue', 'learning', 'home']);
     const LAYOUTS = new Set(['grid', 'list']);
     const TREND_CATEGORIES = Object.freeze([
         { id: 'culture', label: '文化', icon: 'fas fa-landmark', queries: {
@@ -83,6 +83,28 @@
         return String(value).replace(/[&<>'"]/g, character => ({
             '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
         })[character]);
+    }
+
+    function compactPublishedDate(item, now = new Date()) {
+        if (item.publishedAt) {
+            const date = new Date(item.publishedAt);
+            if (Number.isFinite(date.getTime())) {
+                const monthDay = `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                return {
+                    label: date.getFullYear() === now.getFullYear() ? monthDay : `${String(date.getFullYear()).slice(-2)}-${monthDay}`,
+                    title: `${date.toLocaleDateString('zh-CN')} 发布`, datetime: date.toISOString(),
+                };
+            }
+        }
+        const original = String(item.publishedLabel || '').trim();
+        if (!original) return null;
+        const chinese = original.match(/\d+\s*(?:秒|分钟|分鐘|小时|小時|天|日|周|週|个月|個月|月|年)\s*前/);
+        const english = original.match(/(\d+)\s+(seconds?|minutes?|hours?|days?|weeks?|months?|years?)\s+ago/i);
+        const unit = { second: '秒', minute: '分钟', hour: '小时', day: '天', week: '周', month: '个月', year: '年' };
+        return {
+            label: chinese ? chinese[0].replace(/\s+/g, '') : english ? `${english[1]}${unit[english[2].toLowerCase().replace(/s$/, '')]}前` : original,
+            title: `YouTube 发布时间：${original}`, datetime: '',
+        };
     }
 
     function parseYouTubeVideoId(input = '') {
@@ -316,6 +338,8 @@
             this.items = [];
             this.subscriptions = [];
             this.trendCache = new Map();
+            this.homeCursor = '';
+            this.homeError = '';
             this.listContext = null;
             this.currentVideo = null;
             this.playerOrigin = null;
@@ -338,7 +362,7 @@
             this.clearLocalArmedUntil = 0;
         }
 
-        async init() {
+        async init({ skipInitialView = false } = {}) {
             if (this.initialized) return;
             this._injectPanel();
             this._bindEvents();
@@ -363,7 +387,8 @@
                 await storageSet({ [STORAGE_KEYS.settings]: this.settings });
             }
             await this._refreshAuthStatus();
-            this._renderActiveView();
+            if (skipInitialView) this._syncNav();
+            else this._renderActiveView();
             this.initialized = true;
         }
 
@@ -372,9 +397,10 @@
             else this.open();
         }
 
-        open() {
+        open({ refreshHome = true } = {}) {
             if (!this.panel) return;
             this.returnFocus = document.activeElement;
+            if (refreshHome && this.activeView === 'home') void this._showView('home', true);
             this.isOpen = true;
             this.panel.hidden = false;
             this.panel.removeAttribute('inert');
@@ -393,6 +419,12 @@
         close() {
             if (!this.panel) return;
             this._captureWatchProgress(true);
+            if (this.activeView === 'home') {
+                this.remoteRequestId += 1;
+                this.busy = false;
+                this.homeCursor = '';
+                void sendMessage({ action: 'youtube_home_release' });
+            }
             this.isOpen = false;
             this.panel.hidden = true;
             this.panel.setAttribute('inert', '');
@@ -441,6 +473,7 @@
                 <div class="yt-body">
                     <nav class="yt-nav" aria-label="YouTube 工作台导航">
                         <button type="button" data-youtube-view="recommended"><i class="fas fa-compass"></i><span>为你推荐</span></button>
+                        <button type="button" data-youtube-view="home"><i class="fas fa-home"></i><span>首页推荐</span></button>
                         <button type="button" data-youtube-view="trending"><i class="fas fa-fire"></i><span>兴趣趋势</span></button>
                         <button type="button" data-youtube-view="subscriptions"><i class="fas fa-layer-group"></i><span>订阅</span></button>
                         <button type="button" data-youtube-view="playlists"><i class="fas fa-list"></i><span>播放列表</span></button>
@@ -483,6 +516,7 @@
             }
             const playButton = event.target.closest('[data-yt-play]');
             if (playButton) {
+                if (this.activeView === 'home' && this.busy) return;
                 const item = this._findItem(playButton.dataset.ytPlay);
                 if (item) await this._play(item, this._capturePlayerOrigin());
                 return;
@@ -515,6 +549,8 @@
             const item = this._findItem(actionButton.dataset.videoId) || this.currentVideo;
             const action = actionButton.dataset.ytAction;
             if (action === 'connect') await this._connect();
+            if (action === 'home-refresh') await this._showView('home', true);
+            if (action === 'home-more' && this.activeView === 'home' && !this.busy && !this.currentVideo && this.homeCursor) await this._loadHome(++this.remoteRequestId, true);
             if (action === 'retry') await this._showView(this.activeView, true);
             if (action === 'subscription-updates') await this._openSubscriptionUpdates();
             if (action === 'return-list') this._returnToPlayerOrigin();
@@ -612,6 +648,10 @@
             if (!VIEWS.has(view) || (this.busy && !force)) return;
             if (force) this.busy = false;
             const requestId = ++this.remoteRequestId;
+            if (this.activeView === 'home' && view !== 'home') {
+                this.homeCursor = '';
+                void sendMessage({ action: 'youtube_home_release' });
+            }
             this._detachPlayerBridge();
             this.activeView = view;
             this.currentVideo = null;
@@ -620,6 +660,10 @@
             this.listContext = null;
             this._syncNav();
             window.ProductUIV5?.setBusinessPage?.('youtube', this._pageForView(view));
+            if (view === 'home') {
+                await this._loadHome(requestId);
+                return;
+            }
             if (view === 'history' || view === 'local-queue' || view === 'learning') {
                 if (view === 'history') {
                     this.items = [...this.history];
@@ -642,6 +686,79 @@
                 return;
             }
             await this._loadRemote(view, requestId);
+        }
+
+        async _loadHome(requestId, append = false) {
+            this.busy = true;
+            this.homeError = '';
+            if (append) this._renderHome();
+            else {
+                this.items = [];
+                this.homeCursor = '';
+                this.panel.querySelector('.yt-view-title').textContent = '首页推荐';
+                this._renderLoading('正在读取 YouTube 网页账号的首页推荐…');
+            }
+            const response = await sendMessage({ action: 'youtube_home_feed', cursor: append ? this.homeCursor : '' }, 50000);
+            if (requestId !== this.remoteRequestId || this.activeView !== 'home') return;
+            this.busy = false;
+            if (!response.ok) {
+                const code = response.error?.code;
+                const messages = {
+                    'home-login-required': '请先在 YouTube 网页登录，然后回来刷新。这里使用网页登录态。',
+                    'home-account-changed': 'YouTube 网页账号已变化，请刷新首页推荐。',
+                    'home-source-closed': '来源 YouTube 标签页已关闭，请刷新首页推荐。',
+                    'home-expired': '这批推荐已过期，请刷新后继续浏览。',
+                    'home-busy': '上一次首页请求正在结束，请稍后刷新。',
+                    'home-timeout': 'YouTube 首页响应超时，请稍后刷新。',
+                };
+                this.homeError = messages[code] || '暂时无法读取 YouTube 首页，请检查网页是否能正常打开，然后重试。';
+                if (['home-account-changed', 'home-login-required', 'home-expired', 'home-source-closed'].includes(code)) {
+                    this.homeCursor = '';
+                    if (['home-account-changed', 'home-login-required'].includes(code)) this.items = [];
+                }
+                this._renderHome();
+                this._setStatus(this.homeError);
+                return;
+            }
+            const seen = new Set(append ? this.items.map(item => item.id) : []);
+            const incoming = (response.data.items || []).filter(item => {
+                if (seen.has(item.id)) return false;
+                seen.add(item.id);
+                return true;
+            });
+            this.items = append ? [...this.items, ...incoming] : incoming;
+            this.homeCursor = response.data.cursor || '';
+            this._renderHome();
+            this._setStatus(`已加载 ${this.items.length} 个首页推荐视频`);
+            await this._enrichHomeDates(incoming, requestId);
+        }
+
+        async _enrichHomeDates(items, requestId) {
+            if (!this.auth.connected || !items.length) return;
+            const missing = items.filter(item => !item.publishedAt).map(item => item.id);
+            const batches = [];
+            for (let i = 0; i < missing.length; i += 50) batches.push(missing.slice(i, i + 50));
+            // Reuse the existing read-only API in batches; cards render before this optional lookup.
+            const responses = await Promise.all(batches.map(ids => sendMessage({
+                action: 'youtube_api', resource: 'videos',
+                params: { part: 'snippet', id: ids.join(','), fields: 'items(id,snippet(publishedAt))' },
+            }, 5000)));
+            if (requestId !== this.remoteRequestId || this.activeView !== 'home' || this.currentVideo || !this.auth.connected) return;
+            const dates = new Map(responses.filter(response => response.ok).flatMap(response => response.data?.items || [])
+                .filter(item => missing.includes(item.id) && Number.isFinite(Date.parse(item.snippet?.publishedAt)))
+                .map(item => [item.id, item.snippet.publishedAt]));
+            if (!dates.size) return;
+            this.items = this.items.map(item => dates.has(item.id) ? { ...item, publishedAt: dates.get(item.id) } : item);
+            this._renderHome();
+        }
+
+        _renderHome() {
+            this._renderList(this.items, '首页推荐', false, {
+                homeFeed: true, businessPage: 'home', playerReturnLabel: '首页推荐',
+                note: '来自 YouTube 网页账号 · 按需读取，不自动刷新',
+                emptyTitle: this.homeError ? '首页推荐暂不可用' : '当前没有推荐视频',
+                emptyDescription: this.homeError || '可以打开 YouTube 首页检查登录状态与推荐内容，然后回来刷新。',
+            });
         }
 
         async _loadRemote(view, requestId = this.remoteRequestId) {
@@ -893,12 +1010,35 @@
                 emptyTitle: '订阅频道近期没有公开投稿',
                 emptyDescription: '可以前往兴趣趋势切换分类，或稍后刷新。',
                 playerReturnLabel: '为你推荐',
+                compactVideoMeta: true,
             });
+            await this._enrichRecommendationDurations(requestId);
+        }
+
+        async _enrichRecommendationDurations(requestId) {
+            if (!this.items.length) return;
+            const ids = this.items.map(item => item.id);
+            const response = await sendMessage({
+                action: 'youtube_api', resource: 'videos',
+                params: { part: 'contentDetails', id: ids.join(','), fields: 'items(id,contentDetails(duration))' },
+            }, 5000);
+            if (!response.ok || requestId !== this.remoteRequestId || this.activeView !== 'recommended'
+                || this.currentVideo || !this.listContext?.options.compactVideoMeta) return;
+            const durations = new Map((response.data?.items || []).map(item => [item.id, parseIso8601DurationSeconds(item.contentDetails?.duration)]));
+            this.items = this.items.map(item => durations.get(item.id) > 0
+                ? { ...item, durationLabel: formatPlaybackTime(durations.get(item.id)) } : item);
+            const { title, local, options } = this.listContext;
+            this._renderList(this.items, title, local, options);
         }
 
         async _handleSearch(raw) {
             const query = String(raw || '').trim();
             if (!query) return;
+            if (this.activeView === 'home') {
+                this.homeCursor = '';
+                this.busy = false;
+                void sendMessage({ action: 'youtube_home_release' });
+            }
             this.remoteRequestId += 1;
             const videoId = parseYouTubeVideoId(query);
             if (videoId) {
@@ -1517,9 +1657,48 @@
             this._setStatus(`已返回${origin.label}`);
         }
 
-        async _play(item, origin = null) {
+        async openVideo(request = {}) {
+            if (!VIDEO_ID_PATTERN.test(request.id || '')) throw new Error('无效的 YouTube 视频标识');
+            if (!this.initialized || !this.panel) throw new Error('YouTube 工作台尚未初始化');
+            this.open({ refreshHome: false });
+            await this._play({
+                id: request.id,
+                title: request.title || 'YouTube 视频',
+                channel: request.author || '通过链接打开',
+                description: '',
+                thumbnail: `https://i.ytimg.com/vi/${request.id}/hqdefault.jpg`,
+                kind: 'video',
+            }, null, request.seconds);
+        }
+
+        async openSearch(raw) {
+            const query = String(raw || '').trim();
+            if (!query) throw new Error('请输入 YouTube 搜索内容');
+            if (!this.initialized || !this.panel) throw new Error('YouTube 工作台尚未初始化');
+            this.open({ refreshHome: false });
+            this._detachPlayerBridge();
+            this.currentVideo = null;
+            this.playerOrigin = null;
+            this.creatorEntry = null;
+            this.busy = false;
+            const input = this.panel.querySelector('#yt-search-input');
+            if (input) input.value = query;
+            if (!this.auth.connected) {
+                this.remoteRequestId += 1;
+                this.listContext = null;
+                this._renderConnect('search');
+                window.ProductUIV5?.setBusinessPage?.('youtube', 'connect');
+                this._setStatus('搜索内容已保留；连接账号后点击搜索。', true);
+                return;
+            }
+            await this._handleSearch(query);
+        }
+
+        async _play(item, origin = null, resumeSeconds) {
             if (!VIDEO_ID_PATTERN.test(item.id)) return;
-            const resumeTime = this._getWatchResumeTime(item.id);
+            const resumeTime = Number.isFinite(resumeSeconds) && resumeSeconds >= 0
+                ? Math.floor(resumeSeconds)
+                : this._getWatchResumeTime(item.id);
             const requestId = ++this.remoteRequestId;
             this.busy = false;
             this._detachPlayerBridge();
@@ -1529,10 +1708,11 @@
             window.ProductUIV5?.setBusinessPage?.('youtube', 'player');
             this.panel.querySelector('.yt-view-title').textContent = '播放器';
             this._renderLoading('正在识别视频与创作者…');
-            this.currentVideo = await this._hydrateVideoDetails(this.currentVideo);
+            const hydratedVideo = await this._hydrateVideoDetails(this.currentVideo);
             if (requestId !== this.remoteRequestId || this.currentVideo?.id !== item.id) return;
+            this.currentVideo = hydratedVideo;
             const identity = await sendMessage({ action: 'youtube_prepare_player' }, 5_000);
-            if (this.currentVideo?.id !== item.id) return;
+            if (requestId !== this.remoteRequestId || this.currentVideo?.id !== item.id) return;
             if (!identity.ok) {
                 const watchUrl = `https://www.youtube.com/watch?v=${encodeURIComponent(item.id)}`;
                 this.stage.innerHTML = `${this._playerContextControls()}<div class="yt-empty"><i class="fab fa-youtube"></i><h3>当前扩展无法标识播放器来源</h3><p>为避免显示无效的错误 153 播放器，请先在 YouTube 原站观看。重新加载扩展后可再次尝试。</p><a class="yt-primary" href="${watchUrl}" target="_blank" rel="noopener noreferrer">在 YouTube 打开</a></div>`;
@@ -1573,17 +1753,18 @@
                     this.items = this.activeView === 'local-queue' ? [...this.queue] : [...this.learning];
                     this._renderList(this.items, this.activeView === 'local-queue' ? '本地稍后看' : '本地学习清单', true);
                 }
-            } else if (!this.auth.connected) this._renderConnect(this.activeView);
+            } else if (this.activeView === 'home') this._showView('home', true);
+            else if (!this.auth.connected) this._renderConnect(this.activeView);
             else this._showView(this.activeView, true);
         }
 
         _renderConnect(view) {
             const configured = this.auth.configured;
             const extensionId = this.auth.extensionId || chrome.runtime?.id || '请在 chrome://extensions 中查看';
-            const label = { recommended: '为你推荐', trending: '兴趣趋势', subscriptions: '订阅', playlists: '播放列表', likes: '喜欢的视频' }[view] || 'YouTube';
+            const label = { recommended: '为你推荐', trending: '兴趣趋势', subscriptions: '订阅', playlists: '播放列表', likes: '喜欢的视频', search: '连接账号后在工作台搜索' }[view] || 'YouTube';
             this.panel.querySelector('.yt-view-title').textContent = label;
             const setup = configured ? '' : `<ol class="yt-setup-steps"><li>在 Google Cloud 启用 YouTube Data API v3</li><li>配置 OAuth 权限请求页面</li><li>创建 Chrome 扩展客户端并绑定 <code>${escapeHtml(extensionId)}</code></li><li>把 client_id 写入 manifest 后重新加载扩展</li></ol>`;
-            this.stage.innerHTML = `<div class="yt-connect-state"><div class="yt-connect-copy"><span class="yt-eyebrow">${configured ? 'READ ONLY ACCESS' : 'OAUTH SETUP REQUIRED'}</span><h3>${configured ? '连接 Google 账号以加载你的 YouTube 数据' : '当前扩展尚未配置 Google OAuth'}</h3><p>${configured ? '只申请 YouTube 只读权限。订阅、播放列表与喜欢的视频不会被修改。' : '你登录 YouTube 网页，只代表浏览器持有 youtube.com Cookie；扩展不会读取该 Cookie，必须单独配置并完成 Google OAuth 授权。'}</p>${setup}<div class="yt-connect-actions"><button class="yt-primary" type="button" data-yt-action="connect">${configured ? '连接 YouTube' : '查看当前配置'}</button><button class="yt-secondary" type="button" data-youtube-view="local-queue">打开本地稍后看</button></div></div><div class="yt-direct-card"><strong>直接播放</strong><p>粘贴 youtube.com/watch、youtu.be、Shorts 链接或视频 ID。</p><form class="yt-direct-form"><label for="yt-direct-input">视频链接或 ID</label><div><input id="yt-direct-input" autocomplete="off" placeholder="https://youtu.be/…"><button type="submit">播放</button></div></form><small>不读取浏览器 YouTube Cookie；观看记录仅保存在本扩展，不同步 YouTube 官方历史。</small><button class="yt-data-clear" type="button" data-yt-action="clear-local"><i class="far fa-trash-alt"></i> 清空 YouTube 本地数据</button></div></div>`;
+            this.stage.innerHTML = `<div class="yt-connect-state"><div class="yt-connect-copy"><span class="yt-eyebrow">${configured ? 'READ ONLY ACCESS' : 'OAUTH SETUP REQUIRED'}</span><h3>${configured ? '连接 Google 账号以加载你的 YouTube 数据' : '当前扩展尚未配置 Google OAuth'}</h3><p>${configured ? '只申请 YouTube 只读权限。订阅、播放列表与喜欢的视频不会被修改。' : '订阅、播放列表和喜欢的视频使用 Google OAuth；首页推荐单独使用 YouTube 网页登录状态。'}</p>${setup}<div class="yt-connect-actions"><button class="yt-primary" type="button" data-yt-action="connect">${configured ? '连接 YouTube' : '查看当前配置'}</button><button class="yt-secondary" type="button" data-youtube-view="local-queue">打开本地稍后看</button></div></div><div class="yt-direct-card"><strong>直接播放</strong><p>粘贴 youtube.com/watch、youtu.be、Shorts 链接或视频 ID。</p><form class="yt-direct-form"><label for="yt-direct-input">视频链接或 ID</label><div><input id="yt-direct-input" autocomplete="off" placeholder="https://youtu.be/…"><button type="submit">播放</button></div></form><small>直接播放无需 OAuth；首页推荐使用网页登录态，观看记录仍仅保存在本扩展，不同步 YouTube 官方历史。</small><button class="yt-data-clear" type="button" data-yt-action="clear-local"><i class="far fa-trash-alt"></i> 清空 YouTube 本地数据</button></div></div>`;
             const form = this.stage.querySelector('.yt-direct-form');
             form?.addEventListener('submit', event => {
                 event.preventDefault();
@@ -1594,12 +1775,14 @@
         _renderList(items, title, local = false, options = {}) {
             this.panel.querySelector('.yt-view-title').textContent = title;
             this.listContext = { items, title, local, options };
-            const prelude = `${options.creatorHome ? this._creatorHeroMarkup(options.creatorHome) : ''}${options.trendCategories ? this._trendCategoriesMarkup() : ''}${options.trendMix ? this._trendMixMarkup(options.trendMix) : ''}`;
+            const homeTools = options.homeFeed ? `<div class="yt-home-tools"><button type="button" class="yt-secondary" data-yt-action="home-refresh" ${this.busy ? 'disabled' : ''}><i class="fas fa-sync-alt"></i> 刷新推荐</button><a href="https://www.youtube.com/" target="_blank" rel="noopener noreferrer">网页登录 / 切换账号 <i class="fas fa-external-link-alt"></i></a><small>使用最近访问的 YouTube 标签页账号；首次读取可能短暂打开后台首页。</small></div>` : '';
+            const homeFooter = options.homeFeed ? `<div class="yt-home-footer" role="status">${this.homeError && items.length ? `<p>${escapeHtml(this.homeError)}</p>` : ''}${this.homeCursor ? `<button type="button" class="yt-secondary" data-yt-action="home-more" ${this.busy ? 'disabled' : ''}>${this.busy ? '正在加载…' : '加载更多'}</button>` : (items.length && !this.homeError ? '<span>本批推荐已加载完</span>' : '')}</div>` : '';
+            const prelude = `${homeTools}${options.creatorHome ? this._creatorHeroMarkup(options.creatorHome) : ''}${options.trendCategories ? this._trendCategoriesMarkup() : ''}${options.trendMix ? this._trendMixMarkup(options.trendMix) : ''}`;
             const toolbar = `<div class="yt-list-toolbar"><div class="yt-list-context">${options.backView ? `<button type="button" data-youtube-view="${escapeHtml(options.backView)}"><i class="fas fa-arrow-left"></i> 返回</button>` : ''}${options.showSubscriptionUpdates ? '<button type="button" data-yt-action="subscription-updates"><i class="far fa-clock"></i> 最近更新</button>' : ''}${options.note ? `<span>${escapeHtml(options.note)}</span>` : ''}</div><div class="yt-layout-switch" role="group" aria-label="内容布局"><button type="button" data-yt-action="layout-grid" aria-label="方框布局" aria-pressed="${this.layout === 'grid'}" title="方框布局"><i class="fas fa-th-large"></i></button><button type="button" data-yt-action="layout-list" aria-label="列表布局" aria-pressed="${this.layout === 'list'}" title="列表布局"><i class="fas fa-list"></i></button></div></div>`;
             if (!items.length) {
                 const emptyTitle = options.emptyTitle || (local ? '清单还是空的' : '暂无可显示内容');
                 const emptyDescription = options.emptyDescription || (local ? '播放任意视频后，可加入稍后看或学习清单。' : '请稍后重试，或粘贴链接直接播放。');
-                this.stage.innerHTML = `${prelude}${toolbar}<div class="yt-empty"><i class="${local ? 'far fa-bookmark' : 'fas fa-inbox'}"></i><h3>${escapeHtml(emptyTitle)}</h3><p>${escapeHtml(emptyDescription)}</p></div>`;
+                this.stage.innerHTML = `${prelude}${toolbar}<div class="yt-empty"><i class="${local ? 'far fa-bookmark' : 'fas fa-inbox'}"></i><h3>${escapeHtml(emptyTitle)}</h3><p>${escapeHtml(emptyDescription)}</p></div>${homeFooter}`;
                 return;
             }
             this.stage.innerHTML = `${prelude}${toolbar}<div class="yt-grid ${this.layout === 'list' ? 'is-list' : 'is-grid'}" role="list">${items.map(item => {
@@ -1614,7 +1797,7 @@
                 const progressBar = watchState ? `<span class="yt-watch-progress" aria-label="已观看 ${watchState.percent}%"><span style="width:${watchState.percent}%"></span></span>` : '';
                 const thumbnail = `${item.thumbnail ? `<img src="${escapeHtml(item.thumbnail)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="yt-card-placeholder"><i class="fab fa-youtube"></i></span>'}${circleBadge}${progressBar}${isVideo ? '<span class="yt-play-badge"><i class="fas fa-play"></i></span>' : ((isChannel || isPlaylist) ? '<span class="yt-play-badge"><i class="fas fa-arrow-right"></i></span>' : '')}`;
                 const media = isVideo
-                    ? `<button class="yt-card-media" type="button" data-yt-play="${item.id}" aria-label="${verb} ${escapeHtml(item.title)}">${thumbnail}</button>`
+                    ? `<button class="yt-card-media" type="button" ${options.homeFeed && this.busy ? 'disabled' : ''} data-yt-play="${item.id}" aria-label="${verb} ${escapeHtml(item.title)}">${thumbnail}</button>`
                     : `<div class="yt-card-media">${thumbnail}</div>`;
                 const cardTarget = isChannel
                     ? `data-yt-channel="${item.id}"`
@@ -1622,8 +1805,14 @@
                 const cardOpen = isVideo ? '' : `<button class="yt-card-open" type="button" ${cardTarget} aria-label="${verb} ${escapeHtml(item.title)}"></button>`;
                 const localType = options.localType || (this.activeView === 'learning' ? 'learning' : 'queue');
                 const watchLabel = watchState ? ` · 看到 ${formatPlaybackTime(watchState.time)}` : '';
-                return `<article class="yt-card" role="listitem">${media}<div class="yt-card-copy"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.channel)}${date ? ` · ${date}` : ''}${watchLabel}</span></div>${isVideo ? `<div class="yt-card-actions"><button type="button" data-yt-action="${local ? `remove-${localType}` : 'add-queue'}" data-video-id="${item.id}" title="${local ? '从列表移除' : '加入稍后看'}" aria-label="${local ? `从列表移除 ${escapeHtml(item.title)}` : `将 ${escapeHtml(item.title)} 加入稍后看`}"><i class="${local ? 'fas fa-times' : 'far fa-clock'}"></i></button><button type="button" data-yt-action="open" data-video-id="${item.id}" title="在 YouTube 打开" aria-label="在 YouTube 打开 ${escapeHtml(item.title)}"><i class="fas fa-external-link-alt"></i></button></div>` : cardOpen}</article>`;
-            }).join('')}</div>`;
+                const compactMetadata = item.source === 'youtube-home' || options.compactVideoMeta;
+                const published = isVideo && compactMetadata && !options.dateField ? compactPublishedDate(item) : null;
+                const publishedMarkup = published ? `<time class="yt-card-published" ${published.datetime ? `datetime="${escapeHtml(published.datetime)}"` : ''} title="${escapeHtml(published.title)}" aria-label="${escapeHtml(published.title)}">${escapeHtml(published.label)}</time>` : '';
+                const detailLabels = options.compactVideoMeta ? [item.durationLabel] : [item.durationLabel, item.viewCountLabel];
+                const metadata = `${escapeHtml(item.channel)}${!published && date ? ` · ${date}` : ''}${compactMetadata ? escapeHtml(detailLabels.filter(Boolean).map(value => ` · ${value}`).join('')) : ''}${watchLabel}`;
+                const metadataMarkup = published ? `<div class="yt-card-meta"><span title="${escapeHtml(item.channel)}">${metadata}</span>${publishedMarkup}</div>` : `<span>${metadata}</span>`;
+                return `<article class="yt-card" role="listitem">${media}<div class="yt-card-copy"><strong>${escapeHtml(item.title)}</strong>${metadataMarkup}</div>${isVideo ? `<div class="yt-card-actions"><button type="button" data-yt-action="${local ? `remove-${localType}` : 'add-queue'}" data-video-id="${item.id}" title="${local ? '从列表移除' : '加入稍后看'}" aria-label="${local ? `从列表移除 ${escapeHtml(item.title)}` : `将 ${escapeHtml(item.title)} 加入稍后看`}"><i class="${local ? 'fas fa-times' : 'far fa-clock'}"></i></button><button type="button" data-yt-action="open" data-video-id="${item.id}" title="在 YouTube 打开" aria-label="在 YouTube 打开 ${escapeHtml(item.title)}"><i class="fas fa-external-link-alt"></i></button></div>` : cardOpen}</article>`;
+            }).join('')}</div>${homeFooter}`;
         }
 
         _trendCategoriesMarkup() {
@@ -1703,6 +1892,7 @@
         }
 
         _pageForView(view) {
+            if (view === 'home') return 'home';
             if (view === 'recommended') return this.auth.connected ? 'recommended' : 'connect';
             if (view === 'subscriptions') return 'subscriptions';
             if (view === 'history' || view === 'local-queue' || view === 'learning') return 'local-queue';
@@ -1809,6 +1999,9 @@
             this.settings = {};
             this.trendCategoryId = DEFAULT_TREND_CATEGORY_ID;
             this.trendCache.clear();
+            this.homeCursor = '';
+            this.homeError = '';
+            void sendMessage({ action: 'youtube_home_release' });
             this.clearLocalArmedUntil = 0;
             await storageSet({
                 [STORAGE_KEYS.queue]: [],
@@ -1829,6 +2022,6 @@
         }
     }
 
-    window.YouTubeWorkbench = Object.freeze({ parseYouTubeVideoId, extractYouTubeVideoId, normalizeYouTubeChannelUrl, getYouTubeChannelLookup, parseIso8601DurationSeconds, isLongFormTrendVideo, mergeSearchVideoIds, selectHighQualityTrendVideos, mergeWatchHistory, mergeWatchProgress, getWatchResumeTime, isWatchProgressComplete, STORAGE_KEYS });
+    window.YouTubeWorkbench = Object.freeze({ compactPublishedDate, parseYouTubeVideoId, extractYouTubeVideoId, normalizeYouTubeChannelUrl, getYouTubeChannelLookup, parseIso8601DurationSeconds, isLongFormTrendVideo, mergeSearchVideoIds, selectHighQualityTrendVideos, mergeWatchHistory, mergeWatchProgress, getWatchResumeTime, isWatchProgressComplete, STORAGE_KEYS });
     window.youtubeController = new YouTubeController();
 })();

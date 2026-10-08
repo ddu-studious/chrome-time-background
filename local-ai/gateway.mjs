@@ -16,6 +16,7 @@ import { interpret, validateInput } from './alarm-service.mjs';
 import { createControlStore } from './control-store.mjs';
 import { createHistoryStore } from './history-store.mjs';
 import { interpret as interpretSpeech, validateInput as validateSpeech } from './speech-service.mjs';
+import { interpret as synthesizeSpeech, validateInput as validateSynthesis } from './speech-synthesis-service.mjs';
 import { interpret as interpretMusic, validateInput as validateMusic } from './music-service.mjs';
 import { plan as planAssistant, validateInput as validateAssistant } from './assistant-service.mjs';
 
@@ -36,6 +37,7 @@ const SCENES = Object.freeze({
   'bookmark.summary': Object.freeze({ name: '书签摘要', version: 1, validate: validateSummary, run: summarize }),
   'bookmark.rerank': Object.freeze({ name: '书签精排', version: 1, validate: validateRanking, run: rerank }),
   'speech.transcribe': Object.freeze({ name: '本地语音识别', version: 1, validate: validateSpeech, run: interpretSpeech }),
+  'speech.synthesize': Object.freeze({ name: '助手回答朗读（StepAudio）', version: 1, validate: validateSynthesis, run: synthesizeSpeech }),
   'music.intent': Object.freeze({ name: '音乐意图', version: 1, validate: validateMusic, run: interpretMusic }),
   'alarm.interpret': Object.freeze({ name: '智能闹钟', version: 1, validate: validateInput, run: interpret })
 });
@@ -51,13 +53,16 @@ function resolveSelection(value, sceneId, policy, fallbackModel) {
 }
 
 // Business callers choose a registered scene, never a URL, prompt or provider.
-export function createGateway({ provider, speechProvider, history = createHistoryStore(), admission = createAdmission(), modelEnabled = true, disabledScenes = [], control = createControlStore({ modelEnabled, disabledScenes }) }) {
+export function createGateway({ provider, speechProvider, synthesisProvider, layaProvider = null, history = createHistoryStore(), admission = createAdmission(), layaAdmission = createAdmission(), modelEnabled = true, disabledScenes = [], control = createControlStore({ modelEnabled, disabledScenes }) }) {
   const records = [];
   return {
     describe() {
       const state = control.snapshot();
-      return { version: 1, usage: admission.describe(), speech: speechProvider?.describe?.() || { configured: false, localOnly: true, maxSeconds: 30 }, ...state, modelEnabled: state.policy.modelEnabled, localOnly: true,
-        scenes: [...Object.entries(SCENES).map(([id, scene]) => ({ id, name: scene.name, version: scene.version, modelEnabled: state.policy.modelEnabled && !state.policy.disabledScenes.includes(id) }))],
+      let layaUsage;
+      try { layaUsage = layaAdmission.describe(); }
+      catch { layaUsage = { admitted: 0, scenes: {}, error: 'Laya 使用记录不可用' }; }
+      return { version: 1, usage: admission.describe(), laya: { mode: state.policy.layaMode, configured: Boolean(layaProvider), usage: layaUsage }, speech: speechProvider?.describe?.() || { configured: false, localOnly: true, maxSeconds: 30 }, synthesis: synthesisProvider?.describe?.() || { configured: false, localOnly: true }, ...state, modelEnabled: state.policy.modelEnabled, localOnly: true,
+        scenes: [...Object.entries(SCENES).map(([id, scene]) => ({ id, name: scene.name, version: scene.version, modelEnabled: state.policy.modelEnabled && !state.policy.disabledScenes.includes(id) && (id !== 'speech.synthesize' || state.policy.speechSynthesisEnabled) }))],
         historyInfo: history.info(), records: structuredClone(records) };
     },
     async run(sceneId, body, { signal, trace, selection } = {}) {
@@ -75,7 +80,7 @@ export function createGateway({ provider, speechProvider, history = createHistor
       const scene = Object.hasOwn(SCENES, sceneId) ? SCENES[sceneId] : null;
       const record = { requestId, scene: scene ? sceneId : 'unknown', startedAt: started, status: 'pending', source: null,
         ...(trace?.userManaged && trace.conversationId && trace.turnId ? { conversationId: trace.conversationId, turnId: trace.turnId } : {}) };
-      const execution = () => ({ requestId, scene: record.scene, source: record.source, status: record.status, model: record.model || null, reasoning: record.reasoning ?? null, requestedModel: record.requestedModel || null, requestedReasoning: record.requestedReasoning ?? null, contextBudget: record.contextBudget || null, policyRevision: record.policyRevision ?? null, elapsedMs: Date.now() - started, usage: record.usage || null, ...(record.recoveryFromRequestId ? { recoveryFromRequestId: record.recoveryFromRequestId } : {}), ...(record.attempts ? { attempts: structuredClone(record.attempts), effectiveReasoning: record.effectiveReasoning, usageComplete: record.attempts.every(attempt => Boolean(attempt.usage)) } : {}) });
+      const execution = () => ({ requestId, scene: record.scene, source: record.source, status: record.status, model: record.model || null, reasoning: record.reasoning ?? null, requestedModel: record.requestedModel || null, requestedReasoning: record.requestedReasoning ?? null, contextBudget: record.contextBudget || null, policyRevision: record.policyRevision ?? null, elapsedMs: Date.now() - started, usage: record.usage || null, ...(record.layaPrefetch ? { layaPrefetch: { ...record.layaPrefetch } } : {}), ...(record.speech ? { speech: { ...record.speech } } : {}), ...(record.recoveryFromRequestId ? { recoveryFromRequestId: record.recoveryFromRequestId } : {}), ...(record.startReason ? { startReason: record.startReason } : {}), ...(record.attempts ? { attempts: structuredClone(record.attempts), effectiveReasoning: record.effectiveReasoning, usageComplete: record.attempts.every(attempt => Boolean(attempt.usage)) } : {}) });
       records.push(record);
       if (records.length > 100) records.shift();
       try {
@@ -89,15 +94,67 @@ export function createGateway({ provider, speechProvider, history = createHistor
           ? records.findLast(row => row !== record && row.scene === sceneId && row.conversationId === record.conversationId && row.turnId === record.turnId) : null;
         const recovered = previous?.status === 'ready' && previous.policyRevision === state.revision &&
           previous.requestedModel === selected.model && previous.requestedReasoning === selected.reasoning &&
-          previous.effectiveReasoning === 'off' && previous.attempts?.at(-1)?.status === 'succeeded';
+          previous.effectiveReasoning === 'off' && previous.attempts?.at(-1)?.status === 'succeeded' &&
+          previous.startReason !== 'adaptive-receipts';
         if (recovered) record.recoveryFromRequestId = previous.requestId;
-        const planningReasoning = recovered ? 'off' : selected.reasoning;
         // Strip caller-supplied prompts, provider URLs, credentials and unrelated context.
-        const input = { ...scene.validate(body), reasoning: planningReasoning };
+        const validated = scene.validate(body);
+        // Opt-in policy: a planning round that already holds executor receipts starts with
+        // thinking off. The selected level stays the ceiling and no setting is changed.
+        const adaptiveStart = sceneId === 'assistant.plan' && !recovered && selected.reasoning !== 'off' && state.policy.planningStrategy === 'adaptive' &&
+          validated.planningPhase !== 'outline' && Array.isArray(validated.observations) && validated.observations.some(row => row.tool !== 'assistant.plan');
+        if (adaptiveStart) record.startReason = 'adaptive-receipts';
+        const planningReasoning = recovered || adaptiveStart ? 'off' : selected.reasoning;
+        const input = sceneId.startsWith('speech.') ? validated : { ...validated, reasoning: planningReasoning };
         historyTicket = history.begin(record, input, standalone ? { ...trace, conversationId } : trace);
         event('user', input.text);
         const controlledProvider = {
-          model: selected.model, reasoning: planningReasoning, compactionEnabled: state.policy.contextCompaction === 'hybrid' && (sceneId === 'assistant.compact' || !state.policy.disabledScenes.includes('assistant.compact')),
+          model: selected.model, reasoning: planningReasoning, prefetchMode: state.policy.layaMode, compactionEnabled: state.policy.contextCompaction === 'hybrid' && (sceneId === 'assistant.compact' || !state.policy.disabledScenes.includes('assistant.compact')),
+          async prefetchToolGroups({ text, app, groups }) {
+            const mode = state.policy.layaMode;
+            if (mode === 'off' || !state.policy.modelEnabled || !layaProvider) {
+              record.layaPrefetch = { mode, status: 'disabled', groupCount: 0 };
+              return { mode, status: 'disabled', groups: [] };
+            }
+            record.layaPrefetch = { mode, status: mode === 'shadow' ? 'observing' : 'pending', groupCount: 0 };
+            const startedAt = Date.now();
+            let prefetchTicket, timer;
+            const controller = new AbortController();
+            const onAbort = () => controller.abort(signal?.reason);
+            if (signal?.aborted) onAbort();
+            else signal?.addEventListener('abort', onAbort, { once: true });
+            try {
+              signal?.throwIfAborted();
+              if (control.snapshot().revision !== state.revision) throw fail('控制策略已更新，请重新提交请求', 409);
+              prefetchTicket = layaAdmission.start('assistant.prefetch', state.policy);
+              timer = setTimeout(() => controller.abort(Object.assign(new Error('Laya 判断超时'), { code: 'LAYA_TIMEOUT' })), 2000);
+              const aborted = new Promise((_, reject) => controller.signal.addEventListener('abort', () => reject(controller.signal.reason), { once: true }));
+              const suggested = await Promise.race([layaProvider.predict({ text, app, groups, signal: controller.signal }), aborted]);
+              signal?.throwIfAborted();
+              if (control.snapshot().revision !== state.revision) throw fail('控制策略已更新，请重新提交请求', 409);
+              if (!Array.isArray(suggested) || suggested.length > groups.length || suggested.some(id => !groups.some(group => group.id === id))) throw Object.assign(new Error('Laya 返回了目录外工具组'), { code: 'LAYA_RESPONSE_INVALID' });
+              try { layaAdmission.finish(prefetchTicket, true, state.policy); }
+              catch { throw Object.assign(new Error('Laya 使用记录不可用'), { code: 'LAYA_USAGE_UNAVAILABLE' }); }
+              // Broad answers increase Qwen's tool surface and are not useful
+              // prefetch advice. Keep the baseline directory in that case.
+              const status = mode === 'shadow' ? 'observed' : suggested.length > 2 ? 'abstained' : 'applied';
+              const info = { mode, status, groupCount: suggested.length, elapsedMs: Date.now() - startedAt };
+              record.layaPrefetch = info;
+              return { ...info, groups: status === 'applied' ? suggested : [] };
+            } catch (error) {
+              if (prefetchTicket) {
+                try { layaAdmission.finish(prefetchTicket, signal?.aborted || error.statusCode === 409 ? null : false, state.policy); }
+                catch { error = Object.assign(new Error('Laya 使用记录不可用'), { code: 'LAYA_USAGE_UNAVAILABLE' }); }
+              }
+              if (signal?.aborted) throw error;
+              if (control.snapshot().revision !== state.revision) throw fail('控制策略已更新，请重新提交请求', 409);
+              record.layaPrefetch = { mode, status: 'fallback', groupCount: 0, elapsedMs: Date.now() - startedAt, code: error.code || (error.statusCode === 429 ? 'LAYA_LIMITED' : 'LAYA_UNAVAILABLE') };
+              return { mode, status: 'fallback', groups: [] };
+            } finally {
+              if (timer) clearTimeout(timer);
+              signal?.removeEventListener('abort', onAbort);
+            }
+          },
           async planningContext({ maxOutputTokens }) {
             signal?.throwIfAborted();
             if (!state.policy.modelEnabled || state.policy.disabledScenes.includes(sceneId)) throw fail('此场景的模型调用已关闭，仍可使用简单指令或手动设置', 403);
@@ -120,8 +177,25 @@ export function createGateway({ provider, speechProvider, history = createHistor
             if (!speechProvider) throw fail('本地语音识别尚未配置', 503);
             ticket = admission.start(sceneId, state.policy);
             record.source = 'speech'; record.policyRevision = state.revision;
+            record.model = speechProvider.describe?.().model || 'whisper.cpp'; record.requestedModel = record.model; record.requestedReasoning = null; record.reasoning = null; record.timeoutMs = state.policy.timeoutMs;
             history.finish(historyTicket, record);
-            return speechProvider.transcribe(audio, signal);
+            return speechProvider.transcribe(audio, signal, { timeoutMs: state.policy.timeoutMs });
+          },
+          async synthesize(text) {
+            signal?.throwIfAborted();
+            if (!state.policy.modelEnabled || !state.policy.speechSynthesisEnabled || state.policy.disabledScenes.includes(sceneId)) throw fail('回答朗读已关闭，请在 AI 控制台启用', 403);
+            if (!synthesisProvider) throw fail('本地语音合成尚未配置', 503);
+            ticket = admission.start(sceneId, state.policy);
+            const info = synthesisProvider.describe?.() || {};
+            record.source = 'speech'; record.policyRevision = state.revision; record.timeoutMs = state.policy.timeoutMs;
+            record.model = info.model || 'step-audio-editx'; record.requestedModel = record.model; record.requestedReasoning = null; record.reasoning = null;
+            record.speech = { provider: info.provider, modelRevision: info.revision, runtime: info.runtime, voice: info.voice };
+            history.finish(historyTicket, record);
+            const audio = await synthesisProvider.synthesize(text, { signal, timeoutMs: state.policy.timeoutMs });
+            signal?.throwIfAborted();
+            record.speech.durationSeconds = audio.durationSeconds;
+            record.speech.sampleRate = audio.sampleRate;
+            return audio;
           },
           async generateText(options) { return this.generateObject(options); },
           async generateObject(options) {
@@ -150,7 +224,7 @@ export function createGateway({ provider, speechProvider, history = createHistor
               const timeoutMs = index === 0 && canRetry ? Math.max(1, Math.min(remaining, Math.floor(state.policy.timeoutMs / 3))) : remaining;
               const maxOutputTokens = index ? Math.min(record.maxOutputTokens, 1200) : record.maxOutputTokens;
               ticket = admission.start(sceneId, state.policy);
-              const attempt = { index: index + 1, reasoning, maxOutputTokens, timeoutMs, startedAt: Date.now(), status: 'pending', ...(retryReason ? { retryReason } : {}) };
+              const attempt = { index: index + 1, reasoning, maxOutputTokens, timeoutMs, startedAt: Date.now(), status: 'pending', ...(retryReason ? { retryReason } : {}), ...(index === 0 && record.startReason ? { startReason: record.startReason } : {}) };
               record.attempts.push(attempt);
               record.effectiveReasoning = reasoning;
               history.finish(historyTicket, record);
@@ -175,7 +249,9 @@ export function createGateway({ provider, speechProvider, history = createHistor
                 if (index || !canRetry || signal?.aborted || !retryCodes.has(error.code) || deadline - Date.now() < 1000) throw error;
                 // Only retry generation. No executor, queue mutation or prior
                 // business step is replayed, and the domain validates the result.
-                admission.finish(ticket, false, state.policy);
+                // Count every failed attempt, but trip cooldown on the final
+                // planning outcome. Otherwise this timeout blocks its own retry.
+                admission.finish(ticket, false, state.policy, { intermediate: true });
                 ticket = null;
                 retryReason = error.code;
               } finally {

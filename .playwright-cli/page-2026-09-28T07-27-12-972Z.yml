@@ -1,0 +1,10 @@
+- main [ref=f1e2]:
+  - paragraph [ref=f1e3]: 隔离验收：使用真实首页消息通道、浮层宿主和助手 UI；Chrome API、模型与业务副作用使用替身。
+  - heading "21:08" [level=1] [ref=f1e4]
+  - paragraph [ref=f1e5]: 夜色山水 · 个人桌面
+  - button "唤出快捷助手" [ref=f1e6] [cursor=pointer]
+  - status
+  - generic [ref=f1e7]:
+    - text: 页面原有输入框
+    - textbox "页面原有输入框" [ref=f1e8]:
+      - /placeholder: 用于检查收起后的焦点

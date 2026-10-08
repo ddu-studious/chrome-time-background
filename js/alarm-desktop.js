@@ -72,7 +72,7 @@
       this.confirmationProcessing.add(key);
       try {
         if (!this.confirmationHandled.has(key)) {
-          if (!this.confirmationId || message.confirmationId !== this.confirmationId || !['confirm', 'cancel'].includes(message.action) || !this.onConfirmationAction) throw new Error('确认卡已失效，请查看工作台');
+          if (!this.confirmationId || message.confirmationId !== this.confirmationId || !['confirm', 'select', 'reply', 'cancel', 'open'].includes(message.action) || !this.onConfirmationAction) throw new Error('确认卡已失效，请查看工作台');
           const result = await this.onConfirmationAction(message);
           if (result?.ok !== true) throw new Error(result?.error || 'Chrome 未接受该操作');
           this.confirmationHandled.add(key);
@@ -88,8 +88,14 @@
       if (!card && !this.port) { this.confirmationId = null; return; }
       this.confirmationId = card?.id || null;
       try {
+        const minimumVersion = card?.protocolVersion >= 4 ? 4 : 3;
+        if (card && minimumVersion === 4) {
+          const status = await this.request('ping');
+          if (!(Number(status.version) >= minimumVersion)) throw new Error('请更新桌面组件以启用选择与输入');
+          if (new TextEncoder().encode(JSON.stringify(card)).length > 240 * 1024) throw new Error('交互内容过大，请在工作台处理');
+        }
         const result = await this.request('confirmation', { card });
-        if (!(Number(result.version) >= 3)) throw new Error('请更新桌面组件以启用外部确认');
+        if (!(Number(result.version) >= minimumVersion)) throw new Error('请更新桌面组件以启用外部确认');
         return result;
       } catch (error) { this.confirmationId = null; throw error; }
       finally { this.releaseWhenIdle(); }

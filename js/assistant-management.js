@@ -1,7 +1,8 @@
 (function (root) {
   'use strict';
   const Alarm = typeof module === 'object' && module.exports ? require('./alarm-core.js') : root.AlarmCore;
-  function create(deps, { remember, resolve, publicState, videoURL, safeText, now }) {
+  const Queue = typeof module === 'object' && module.exports ? require('./music-queue-policy.js') : root.MusicQueuePolicy;
+  function create(deps, { remember, resolve, publicState, openVideo, safeText, now }) {
     const dateKey = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     const alarmView = a => ({ label: a.label, date: a.date, time: a.time, repeat: a.repeat, days: a.days, enabled: a.enabled, revision: a.revision });
     const alarmText = a => `${a.label} · ${a.date || a.repeat} ${a.time} · ${a.enabled ? '已开启' : '已关闭'}`;
@@ -54,6 +55,30 @@
         choices: [{ id: `alarm-confirm-${args.ref}`, title: patch ? alarmText(patch) : alarmText(alarm), subtitle: zone, label: patch ? '确认修改' : '确认删除', action: 'alarm.commit', data: { ref: args.ref, action, patch, zone } }] };
     }
     async function music(tool, args, ctx) {
+      if (tool === 'music.queue.removeArtist') {
+        const state = await deps.readMusicState(ctx); ctx.guard();
+        if (state.queueType === 'personal-fm') throw new Error('私人FM使用独立队列，请先切回普通本地队列');
+        if (state.revision !== args.expectedRevision || !['ready', 'empty'].includes(state.status) || state.songs.length !== state.count) throw new Error('队列已变化、过期或不完整，请重新查询并核对');
+        const matches = Queue.songsByArtist(state.songs, args.artist);
+        if (!matches.length) return { message: `当前本地队列没有歌手“${args.artist}”的歌曲，未修改队列。`,
+          observation: { ...publicState(state), artist: args.artist, matchedCount: 0, removedCount: 0 } };
+        const songIds = matches.map(song => String(song.songId));
+        Queue.removeSongs(state.songs, songIds); // Validate the complete, bounded selection before review.
+        const stopsPlayback = songIds.includes(state.currentSongId);
+        const ref = remember({ type: 'queue-artist-removal', artist: args.artist, songIds, revision: state.revision }, ctx, true);
+        return { status: 'review', message: `本地队列中找到${matches.length}首“${args.artist}”参与的歌曲（含合唱），确认后一次性移除。${stopsPlayback ? '其中包含当前曲目，将停止播放，不自动切歌。' : '保留其他歌曲，不改变播放状态。'}`,
+          result: matches.slice(0, 10).map(song => ({ title: safeText(song.title), subtitle: safeText(song.artist) })).concat(matches.length > 10 ? [{ title: `另有${matches.length - 10}首匹配歌曲`, subtitle: '确认将移除全部匹配项，仅影响本地队列' }] : []),
+          observation: { ...publicState(state), artist: args.artist, matchedCount: matches.length, requiresConfirmation: true },
+          choices: [{ id: 'queue-artist-confirm', title: `移除“${args.artist}”的${matches.length}首歌曲`, label: '确认移除', action: 'music.queue.removeArtist.commit', data: { ref } }] };
+      }
+      if (tool === 'music.queue.reconcile') {
+        const before = await deps.readMusicState(ctx);
+        if (before.revision !== args.expectedRevision || !(args.action === 'clear' ? ['stale', 'unavailable'].includes(before.status) : before.status === 'stale')) throw new Error('待核对队列已变化，请重新查询');
+        if (args.action === 'clear') return { status: 'review', message: `确认清空过期保存队列中的${before.count}首歌曲？此操作不影响云端歌单。`,
+          choices: [{ id: 'queue-reconcile-clear', title: `清空${before.count}首本地保存曲目`, label: '确认清空', action: 'music.queue.reconcile.commit', data: { expectedRevision: before.revision } }] };
+        const next = await deps.reconcileMusicQueue('keep', before.revision, ctx);
+        return { message: `已保留并恢复本地队列，共${next.count}首；未开始播放。`, observation: publicState(next) };
+      }
       if (tool === 'music.playback.control') {
         const before = await deps.readMusicState(ctx); if (before.revision !== args.expectedRevision) throw new Error('播放器状态已变化');
         const result = await deps.controlMusic({ action: args.action, ...(args.value != null ? { value: args.value } : {}) }, ctx);
@@ -79,6 +104,19 @@
     }
     async function choose(choice, ctx) {
       const d = choice.data; ctx.guard();
+      if (choice.action === 'music.queue.removeArtist.commit') {
+        const record = entry(d.ref, 'queue-artist-removal', ctx, true), selection = record.value;
+        const before = await deps.readMusicState(ctx); ctx.guard();
+        if (before.queueType === 'personal-fm') throw new Error('已切换到私人FM，原确认已失效，请重新核对');
+        if (before.revision !== selection.revision || !['ready', 'empty'].includes(before.status) || before.songs.length !== before.count) throw new Error('队列已变化，原确认已失效，请重新准备移除');
+        const ids = Queue.songsByArtist(before.songs, selection.artist).map(song => String(song.songId));
+        if (JSON.stringify(ids) !== JSON.stringify(selection.songIds)) throw new Error('匹配曲目已变化，原确认已失效，请重新核对');
+        const next = await deps.editMusicQueue('remove-many', ids, selection.revision, ctx); ctx.guard();
+        if (!next || next.count !== before.count - ids.length || !['ready', 'empty'].includes(next.status) || !Array.isArray(next.songs) || next.songs.some(song => ids.includes(String(song.songId)))) throw new Error('未收到完整批量移除回执，请核对实际队列，不要重复执行');
+        record.consumed = true;
+        return { message: `已从本地队列移除“${selection.artist}”的${ids.length}首歌曲，剩余${next.count}首。${ids.includes(before.currentSongId) ? '当前曲目已停止，未自动切歌。' : '其他歌曲及播放状态保持不变。'}`,
+          observation: { ...publicState(next), artist: selection.artist, matchedCount: ids.length, removedCount: ids.length } };
+      }
       if (choice.action === 'alarm.page') return alarms('alarm.list', d, ctx);
       if (choice.action === 'alarm.select') { const { record, alarm } = await currentAlarm(d.ref, ctx); record.selected = true; return { message: `已选择${alarmText(alarm)}。`, observation: { selectedRef: d.ref, ...alarmView(alarm) } }; }
       if (choice.action === 'alarm.commit') {
@@ -93,6 +131,10 @@
       if (choice.action === 'music.queue.commit') {
         const state = await deps.editMusicQueue(d.action, d.songId, d.expectedRevision, ctx);
         return { message: `已停止播放并${d.action === 'clear' ? '清空本地队列' : '移除当前歌曲'}，剩余${state.count}首。`, observation: publicState(state) };
+      }
+      if (choice.action === 'music.queue.reconcile.commit') {
+        const state = await deps.reconcileMusicQueue('clear', d.expectedRevision, ctx);
+        return { message: '已清空过期保存的本地队列。', observation: publicState(state) };
       }
       if (choice.action === 'video.next') return videos('video.search.next', d, ctx);
       if (choice.action === 'video.select') {
@@ -137,9 +179,9 @@
         }
         if (tool === 'video.open') {
           if (record.opened) throw new Error('这个选择已经打开，不能重复执行');
-          const url = videoURL(args.platform, video.id, video.seconds || 0, video.page || 1); ctx.guard(); await deps.openURL(url);
+          const result = await openVideo({ ...video, platform: args.platform }, ctx);
           record.opened = true;
-          return { message: `已在原站打开《${video.title}》${video.seconds > 0 ? `，定位到${Math.floor(video.seconds)}秒` : ''}；是否播放以原站播放器为准。`, observation: { opened: true, playbackConfirmed: false } };
+          return result;
         }
         let progress = null, source;
         if (args.platform === 'youtube') {
@@ -171,7 +213,7 @@
           try { response = await deps.youtube('search', { part: 'snippet', q: queryArgs.query, type: 'video', maxResults: 8, ...(cursor?.token ? { pageToken: cursor.token } : {}) }); }
           catch (error) {
             if (!['auth-required', 'auth-expired', 'not-connected', 'oauth-not-configured'].includes(error.code)) throw error;
-            return { status: 'waiting', message: 'YouTube账号尚未连接。可打开原站搜索；原站搜索不会自动应用这里的时长筛选。', choices: [{ id: 'youtube-search', title: `在YouTube搜索：${queryArgs.query}`, label: '原站搜索', action: 'video.search-site', data: { platform, query: queryArgs.query } }] };
+            return { status: 'waiting', message: 'YouTube 账号尚未连接。可在 App 内连接账号后搜索；工作台搜索不会自动应用这里的时长筛选。', choices: [{ id: 'youtube-search', title: `在YouTube搜索：${queryArgs.query}`, label: 'App 内搜索', action: 'video.search-app', data: { platform, query: queryArgs.query } }] };
           }
           rows = (response.items || []).map(v => ({ id: v.id?.videoId, title: safeText(v.snippet?.title), author: safeText(v.snippet?.channelTitle), seconds: 0, live: ['live', 'upcoming'].includes(v.snippet?.liveBroadcastContent), publishedAt: v.snippet?.publishedAt || null }));
           next = response.nextPageToken ? { token: response.nextPageToken } : null;

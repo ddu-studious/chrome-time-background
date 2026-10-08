@@ -1,0 +1,44 @@
+- main "快捷助手" [ref=f1e2]:
+  - generic [ref=f1e3]:
+    - heading "AI 工作台 快捷助手" [level=1] [ref=f1e4]:
+      - generic [ref=f1e5]: AI 工作台
+      - generic [ref=f1e6]: 快捷助手
+    - generic [ref=f1e7]:
+      - button "＋ 新需求" [ref=f1e8] [cursor=pointer]
+      - button "收起输入条" [ref=f1e9] [cursor=pointer]: Esc 收起
+  - region "工作台介绍" [ref=f1e10]:
+    - heading "从一句话开始" [level=2] [ref=f1e11]
+    - paragraph [ref=f1e12]: 找音乐、继续看视频，或安排下一件事。
+  - generic [ref=f1e13]:
+    - generic [ref=f1e14]:
+      - generic [aria-hidden] [ref=f1e15]: ✦
+      - generic "已选择的应用与动作"
+      - generic [ref=f1e16]: 输入你的需求
+      - combobox "输入你的需求" [ref=f1e17]
+      - button "执行需求" [ref=f1e18] [cursor=pointer]: ↵
+    - generic [ref=f1e19]:
+      - generic [ref=f1e20]:
+        - button "@ 应用" [ref=f1e21] [cursor=pointer]
+        - button "/ 动作" [ref=f1e22] [cursor=pointer]
+        - generic [ref=f1e23]:
+          - generic [ref=f1e24]: 模型
+          - combobox "选择本次请求的模型" [disabled] [ref=f1e25]:
+            - option "连接 AI 后可选" [selected]
+        - generic [ref=f1e26]:
+          - generic [ref=f1e27]: 思考
+          - combobox "选择本次请求的思考强度" [disabled] [ref=f1e28]:
+            - option "默认" [selected]
+      - generic "直接开始新会话并发送当前输入；不停止正在播放的音乐" [ref=f1e30]: ⌘ Enter 新需求
+    - generic [ref=f1e31]:
+      - generic "语音输入" [ref=f1e32]:
+        - button "说一句话" [ref=f1e33] [cursor=pointer]
+      - status [ref=f1e34]: 请先保存本地 AI 连接令牌
+  - generic [ref=f1e35]:
+    - button "示例" [ref=f1e36] [cursor=pointer]
+    - generic [ref=f1e37]: 首次使用：请绑定“快捷助手”的快捷键
+    - button "设置快捷键" [ref=f1e38] [cursor=pointer]
+    - link "AI 设置" [ref=f1e39] [cursor=pointer]:
+      - /url: settings.html#ai-control
+    - link "我的记忆" [ref=f1e40] [cursor=pointer]:
+      - /url: assistant-memory.html
+    - generic [ref=f1e41]: ↑↓ 选择 · Tab 补全

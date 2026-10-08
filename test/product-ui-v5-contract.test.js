@@ -132,24 +132,24 @@ test('产品外壳完整实现首页、概览、个性化、专注与离线五�
   assert.ok(shell.includes("homeMode: 'island'"));
 });
 
-test('v5 页面注册表与设计矩阵保持 19 个业务、121 个唯一页面', () => {
+test('v5 页面注册表与设计矩阵保持 19 个业务、122 个唯一页面', () => {
   const source = read('js/product-pages-v5.js');
   const context = { window: {}, console };
   vm.runInNewContext(source, context);
   const registry = context.window.ProductPagesV5;
   assert.equal(registry.totalBusinesses, 19);
-  assert.equal(registry.totalPages, 121);
-  assert.equal(new Set(registry.pages.map(page => page.key)).size, 121);
+  assert.equal(registry.totalPages, 122);
+  assert.equal(new Set(registry.pages.map(page => page.key)).size, 122);
   assert.equal(registry.list('shell').length, 5);
   assert.equal(registry.list('music').length, 10);
   assert.equal(registry.list('tasks').length, 8);
-  assert.equal(registry.list('youtube').length, 9);
+  assert.equal(registry.list('youtube').length, 10);
   assert.equal(registry.get('settings/about-diagnostics').name, '关于与诊断');
   assert.equal(registry.get('shell/offline').name, '离线状态');
-  assert.ok(read('index.html').includes('js/product-pages-v5.js?v=6'));
+  assert.ok(read('index.html').includes('js/product-pages-v5.js?v=7'));
 });
 
-test('真实 Chrome R4 清单逐页覆盖 121 个页面且不把部分验收计为完成', () => {
+test('真实 Chrome R4 清单逐页覆盖 122 个页面且不把部分验收计为完成', () => {
   const source = read('js/product-pages-v5.js');
   const context = { window: {}, console };
   vm.runInNewContext(source, context);
@@ -157,7 +157,7 @@ test('真实 Chrome R4 清单逐页覆盖 121 个页面且不把部分验收计�
   const checklist = read('docs/design/product-ui-v5-r4-checklist.md');
   const rows = checklist.split('\n').filter(line => /^\| (?:✅|⬜) \|/.test(line));
 
-  assert.equal(rows.length, 121);
+  assert.equal(rows.length, 122);
   for (const page of registry.pages) {
     assert.equal(rows.filter(line => line.includes(`| \`${page.key}\` |`)).length, 1, `R4 清单缺少或重复页面: ${page.key}`);
   }
@@ -179,7 +179,8 @@ test('网易云工作台把现有真实功能映射为 10 个设计页面且复�
   }
   assert.ok(controller.includes("normalizeMusicPage?.(pageName)"));
   assert.ok(controller.includes("_renderPlaylistDetail(pane, allSongs, playlistName, coverUrl, totalCount, false)"));
-  assert.ok(controller.includes("_renderPlaylistDetail(pane, songs, '播放队列', '', songs.length, true)"));
+  assert.ok(controller.includes('_renderPlaylistDetail(pane, songs,'));
+  assert.ok(controller.includes('已保存队列（待核对）'));
   assert.equal((controller.match(/new MusicController\(\)/g) || []).length, 1);
   assert.ok(controller.includes('window.ProductUIV5?.updatePlayer?.'));
   assert.ok(controller.includes("this._switchTab('now-playing', true)"));

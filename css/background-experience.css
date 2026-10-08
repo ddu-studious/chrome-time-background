@@ -26,6 +26,17 @@
 
 .bgx-root.enabled { opacity: 1; }
 
+/* 工作台遮住首页或标签页隐藏时，停掉背景合成与 CSS 动画。 */
+body.home-background-suspended #background-experience-root,
+body.home-background-suspended #background-video {
+    display: none !important;
+}
+body.home-background-suspended .bgx-root *,
+body.home-background-suspended .ticker-mini-track,
+body.home-background-suspended .task-ticker-track {
+    animation-play-state: paused !important;
+}
+
 .bgx-tone,
 .bgx-detail,
 .bgx-time,

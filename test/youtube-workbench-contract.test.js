@@ -27,10 +27,10 @@ test('工作台接入 Dock、启动流程、设置和 v5 页面注册表', () =>
   const settingsPage = read('js/settings-page.js');
   const settingsHtml = read('settings.html');
   assert.ok(index.includes('id="youtube-dock-btn"'));
-  assert.ok(index.includes('css/youtube-workbench.css?v=4'));
-  assert.ok(index.includes('js/youtube-controller.js?v=12'));
+  assert.ok(index.includes('css/youtube-workbench.css?v=6'));
+  assert.ok(index.includes('js/youtube-controller.js?v=16'));
   assert.ok(main.includes("getSetting('enableYouTube')"));
-  assert.ok(main.includes('await window.youtubeController.init()'));
+  assert.ok(main.includes('await window.youtubeController.init({ skipInitialView:'));
   assert.ok(settings.includes('enableYouTube: true'));
   assert.ok(settingsPage.includes('enableYouTube: true'));
   assert.ok(settingsHtml.includes('id="set-enableYouTube"'));
@@ -39,7 +39,7 @@ test('工作台接入 Dock、启动流程、设置和 v5 页面注册表', () =>
   vm.runInNewContext(read('js/product-pages-v5.js'), context);
   assert.deepEqual(
     Array.from(context.window.ProductPagesV5.list('youtube'), page => page.id),
-    ['connect', 'recommended', 'trending', 'player', 'subscriptions', 'library', 'local-queue', 'search', 'error']
+    ['connect', 'recommended', 'home', 'trending', 'player', 'subscriptions', 'library', 'local-queue', 'search', 'error']
   );
 });
 
@@ -466,7 +466,7 @@ test('账号状态区分 OAuth 未配置、待授权和已连接，不把网页�
     'OAuth 未配置',
     '待授权',
     '已连接 · 只读',
-    '你登录 YouTube 网页，只代表浏览器持有 youtube.com Cookie',
+    '首页推荐单独使用 YouTube 网页登录状态',
     '查看当前配置',
     '清空 YouTube 本地数据',
     '再次点击确认清空',

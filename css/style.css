@@ -12957,6 +12957,15 @@ body.bright-bg .ticker-sources-panel {
 .mc-pl-detail-name { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.85); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mc-pl-detail-count { font-size: 10px; color: rgba(255,255,255,0.3); margin-top: 2px; }
 .mc-pl-detail-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.mc-queue-review { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 10px 0; padding: 12px 14px; border: 1px solid rgba(200,160,255,.28); border-radius: 12px; background: rgba(200,160,255,.08); color: rgba(255,255,255,.8); }
+.mc-queue-review > div:first-child { display: grid; gap: 4px; min-width: 0; font-size: 12px; line-height: 1.5; }
+.mc-queue-review span { color: rgba(255,255,255,.55); font-size: 11px; }
+.mc-queue-review-actions { display: flex; gap: 8px; flex-wrap: wrap; flex-shrink: 0; }
+.mc-queue-review-actions button { min-height: 32px; padding: 5px 12px; border-radius: 8px; border: 1px solid rgba(200,160,255,.45); background: rgba(200,160,255,.18); color: #e6d9ff; cursor: pointer; font-size: 11px; }
+.mc-queue-review-actions button:hover { background: rgba(200,160,255,.3); }
+.mc-queue-review-actions .mc-queue-review-clear { border-color: rgba(255,110,110,.3); background: rgba(255,90,90,.1); color: #ffb1b1; }
+.mc-queue-review-actions .mc-queue-review-clear:hover { background: rgba(255,90,90,.2); }
+@media (max-width: 700px) { .mc-queue-review { align-items: stretch; flex-direction: column; } .mc-queue-review-actions { flex-shrink: 1; } }
 .mc-pl-action-btn { width: 32px; height: 32px; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; transition: all .15s; }
 .mc-pl-play-all { background: rgba(200,160,255,0.25); color: rgba(200,160,255,0.95); }
 .mc-pl-play-all:hover { background: rgba(200,160,255,0.4); transform: scale(1.05); }

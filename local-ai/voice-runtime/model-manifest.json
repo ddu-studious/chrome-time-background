@@ -1,0 +1,101 @@
+{
+  "model": "appautomaton/step-audio-editx-8bit-mlx",
+  "revision": "3890eb13396c8bb791ff982987e9d3bbdecfab25",
+  "files": [
+    {
+      "file": "campplus-config.json",
+      "bytes": 242,
+      "sha256": "20e7aeab2b700a44fa96ea43df92493fb2a8b6be90739ce8ae5144471b8667ae"
+    },
+    {
+      "file": "campplus.safetensors",
+      "bytes": 13881588,
+      "sha256": "40d2618b188444a982932ff9bfa7f79a1089d38ee58a3a84f592156ad35a0421"
+    },
+    {
+      "file": "config.json",
+      "bytes": 650,
+      "sha256": "8905e5da1d45e836f624f6df7c6353f68e478ec01eb86d6f13a5f2ad8accf10c"
+    },
+    {
+      "file": "flow-conditioner-config.json",
+      "bytes": 204,
+      "sha256": "05559a9034995bba8caa953962f65c53af27c1e058a5bdd9648834c188e6b59e"
+    },
+    {
+      "file": "flow-conditioner.safetensors",
+      "bytes": 2653151,
+      "sha256": "108792964617513bf2b0d8a47255bc8efa7e63acef1b96b866b3d97c0ea8f6a7"
+    },
+    {
+      "file": "flow-model-config.json",
+      "bytes": 619,
+      "sha256": "a196954304e000e9dec25673b3daff325cd388cb65772eb8974d3c0ade91fc10"
+    },
+    {
+      "file": "flow-model.safetensors",
+      "bytes": 190272187,
+      "sha256": "40fb429efee588d5c9d124eab6e69517aa80549b04f2710d4495c8f49c046d1a"
+    },
+    {
+      "file": "frontend-config.json",
+      "bytes": 136,
+      "sha256": "7815143f8100f5fb0ed0813b4b6258f9eaa701ab888252d2948483f16b055c6a"
+    },
+    {
+      "file": "hift-config.json",
+      "bytes": 881,
+      "sha256": "9b7b6a7f7a1bb5e27fdff9f31b05c7792a0eb701a27f5e99c75ed7490f234bc7"
+    },
+    {
+      "file": "hift.safetensors",
+      "bytes": 41637433,
+      "sha256": "28a40adb4e2a8bc401b9a12cca2e9219e486e0601ad57b32584a9f3e7e1e41fd"
+    },
+    {
+      "file": "model.safetensors",
+      "bytes": 3750584760,
+      "sha256": "7b7fb89f4e58b8a91aa63c237cb5331777c9b7342c34c2e2b1e88952b908e8e1"
+    },
+    {
+      "file": "step-audio-tokenizer-assets.safetensors",
+      "bytes": 2101864,
+      "sha256": "9eb651ec816b90046dc8c9eaadc1ef0f19f36e29f5e904e616c67b3a9bdcd052"
+    },
+    {
+      "file": "step-audio-tokenizer-config.json",
+      "bytes": 559,
+      "sha256": "dd55a19786f0ca172889804df7a059a1f4b5d5d0834813d93fc6ddbdc47fa4b3"
+    },
+    {
+      "file": "tokenizer.json",
+      "bytes": 6397824,
+      "sha256": "41f89b484d2fccbd9668706a7cfe812da3032ded024e59406b249f2382dd0da0"
+    },
+    {
+      "file": "tokenizer_config.json",
+      "bytes": 757,
+      "sha256": "f4867ace4775a7ccce881e4d3a47ad99d3e6e9c406e83f4632819dc44fa34303"
+    },
+    {
+      "file": "vq02-config.json",
+      "bytes": 858,
+      "sha256": "539b0b1a7ead53997e7349cf06218ea80bbbe6057827fd44faaf1595c17bda12"
+    },
+    {
+      "file": "vq02.safetensors",
+      "bytes": 169352242,
+      "sha256": "4caa0d4ef375727e07da750af2ee4c1d9becaf7b9f0018d358db700681593798"
+    },
+    {
+      "file": "vq06-config.json",
+      "bytes": 338,
+      "sha256": "6f6a727066344ca6e99dd6e190a9018b3e75b5bdf4784010319b6c76a1009d8f"
+    },
+    {
+      "file": "vq06.safetensors",
+      "bytes": 261268214,
+      "sha256": "3b10c2501908c26ccf14c93995d3110801c5a86221eb919e3481d812a4cb9c86"
+    }
+  ]
+}

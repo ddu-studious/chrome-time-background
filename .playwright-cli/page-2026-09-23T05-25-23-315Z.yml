@@ -1,0 +1,162 @@
+- generic [active] [ref=e2]:
+  - banner [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e6]:
+        - button "主菜单" [ref=e7] [cursor=pointer]
+        - heading "扩展程序" [level=1] [ref=e8]
+      - button "搜索扩展程序" [ref=e12] [cursor=pointer]
+      - generic [ref=e15]:
+        - generic [ref=e16]: 开发者模式
+        - button "开发者模式" [ref=e17] [cursor=pointer]
+  - main [ref=e21]:
+    - generic [ref=e53]:
+      - generic [ref=e54]:
+        - button "“中国风景时钟”详情页面上的返回按钮" [ref=e55] [cursor=pointer]
+        - heading "中国风景时钟" [level=1] [ref=e56]
+        - button "重新加载" [ref=e57] [cursor=pointer]
+      - generic [ref=e58]:
+        - generic [ref=e59]: 已启用
+        - button "开启，扩展程序已启用" [pressed] [ref=e61] [cursor=pointer]
+      - generic [ref=e64]:
+        - heading "说明" [level=2] [ref=e65]
+        - generic [ref=e66]: 中国风景新标签页时钟，支持天气、备忘录、独立音乐播放器、哔哩哔哩集成(关注分组/UP主主页/已购课程/倍速画质控制/Cookie共享)、温情提示、扩展活动监控、热搜资讯、书签智能检索，含性能省电模式
+      - generic [ref=e67]:
+        - heading "版本" [level=2] [ref=e68]
+        - generic [ref=e69]: 3.16.0
+      - generic [ref=e70]:
+        - heading "大小" [level=2] [ref=e71]
+        - generic [ref=e72]: 2,129 MB
+      - generic [ref=e74]:
+        - heading "权限" [level=2] [ref=e75]
+        - list [ref=e77]:
+          - listitem [ref=e78]: 替换您在打开新标签页时看到的页面
+          - listitem [ref=e79]: 检测您所在的地理位置
+          - listitem [ref=e80]: 读取您的浏览记录
+          - listitem [ref=e81]: 屏蔽所有页面上的内容
+          - listitem [ref=e82]: 显示通知
+          - listitem [ref=e83]: 管理您的下载内容
+          - listitem [ref=e84]: 识别并弹出存储设备
+          - listitem [ref=e85]: 与协作的本机应用通信
+          - listitem [ref=e86]: 查看和管理您的标签页组
+      - generic [ref=e87]:
+        - heading "有权访问的网站" [level=2] [ref=e88]
+        - generic [ref=e89]:
+          - generic [ref=e90]:
+            - generic [ref=e91]: 此扩展程序可读取和更改您的网站数据。您可以控制此扩展程序能访问哪些网站。
+            - link "详细了解扩展程序的权限" [ref=e92] [cursor=pointer]:
+              - /url: https://support.google.com/chrome?p=enable_extensions
+          - generic [ref=e95]:
+            - generic [aria-hidden] [ref=e96] [cursor=pointer]: 自动允许访问以下网站
+            - button "自动允许访问以下网站 详细了解扩展程序的权限" [pressed] [ref=e97] [cursor=pointer]
+          - generic [ref=e101]:
+            - generic [ref=e103] [cursor=pointer]: "*://*.bilibili.com/*"
+            - button "*://*.bilibili.com/*" [disabled] [pressed]
+          - generic [ref=e106]:
+            - generic [ref=e108] [cursor=pointer]: "*://*.bilivideo.com/*"
+            - button "*://*.bilivideo.com/*" [disabled] [pressed]
+          - generic [ref=e111]:
+            - generic [ref=e113] [cursor=pointer]: "*://*.mashibing.com/*"
+            - button "*://*.mashibing.com/*" [disabled] [pressed]
+          - generic [ref=e116]:
+            - generic [ref=e118] [cursor=pointer]: "*://*.music.163.com/*"
+            - button "*://*.music.163.com/*" [disabled] [pressed]
+          - generic [ref=e121]:
+            - generic [ref=e123] [cursor=pointer]: http://127.0.0.1:19840/*
+            - button "http://127.0.0.1:19840/*" [disabled] [pressed]
+          - generic [ref=e126]:
+            - generic [ref=e128] [cursor=pointer]: http://127.0.0.1:19841/*
+            - button "http://127.0.0.1:19841/*" [disabled] [pressed]
+          - generic [ref=e131]:
+            - generic [ref=e133] [cursor=pointer]: http://localhost:19840/*
+            - button "http://localhost:19840/*" [disabled] [pressed]
+          - generic [ref=e136]:
+            - generic [ref=e138] [cursor=pointer]: https://*.unsplash.com/*
+            - button "https://*.unsplash.com/*" [disabled] [pressed]
+          - generic [ref=e141]:
+            - generic [ref=e143] [cursor=pointer]: https://api.coverr.co/*
+            - button "https://api.coverr.co/*" [disabled] [pressed]
+          - generic [ref=e146]:
+            - generic [ref=e148] [cursor=pointer]: https://api.deepseek.com/*
+            - button "https://api.deepseek.com/*" [disabled] [pressed]
+          - generic [ref=e151]:
+            - generic [ref=e153] [cursor=pointer]: https://api.github.com/*
+            - button "https://api.github.com/*" [disabled] [pressed]
+          - generic [ref=e156]:
+            - generic [ref=e158] [cursor=pointer]: https://api.nasa.gov/*
+            - button "https://api.nasa.gov/*" [disabled] [pressed]
+          - generic [ref=e161]:
+            - generic [ref=e163] [cursor=pointer]: https://api.openai.com/*
+            - button "https://api.openai.com/*" [disabled] [pressed]
+          - generic [ref=e166]:
+            - generic [ref=e168] [cursor=pointer]: https://api.pexels.com/*
+            - button "https://api.pexels.com/*" [disabled] [pressed]
+          - generic [ref=e171]:
+            - generic [ref=e173] [cursor=pointer]: https://commons.wikimedia.org/*
+            - button "https://commons.wikimedia.org/*" [disabled] [pressed]
+          - generic [ref=e176]:
+            - generic [ref=e178] [cursor=pointer]: https://dashscope.aliyuncs.com/*
+            - button "https://dashscope.aliyuncs.com/*" [disabled] [pressed]
+          - generic [ref=e181]:
+            - generic [ref=e183] [cursor=pointer]: https://dev.to/*
+            - button "https://dev.to/*" [disabled] [pressed]
+          - generic [ref=e186]:
+            - generic [ref=e188] [cursor=pointer]: https://devapi.qweather.com/*
+            - button "https://devapi.qweather.com/*" [disabled] [pressed]
+          - generic [ref=e191]:
+            - generic [ref=e193] [cursor=pointer]: https://generativelanguage.googleapis.com/*
+            - button "https://generativelanguage.googleapis.com/*" [disabled] [pressed]
+          - generic [ref=e196]:
+            - generic [ref=e198] [cursor=pointer]: https://hacker-news.firebaseio.com/*
+            - button "https://hacker-news.firebaseio.com/*" [disabled] [pressed]
+          - generic [ref=e201]:
+            - generic [ref=e203] [cursor=pointer]: https://pixabay.com/*
+            - button "https://pixabay.com/*" [disabled] [pressed]
+          - generic [ref=e206]:
+            - generic [ref=e208] [cursor=pointer]: https://upload.wikimedia.org/*
+            - button "https://upload.wikimedia.org/*" [disabled] [pressed]
+          - generic [ref=e211]:
+            - generic [ref=e213] [cursor=pointer]: https://wallhaven.cc/*
+            - button "https://wallhaven.cc/*" [disabled] [pressed]
+          - generic [ref=e216]:
+            - generic [ref=e218] [cursor=pointer]: https://www.bing.com/*
+            - button "https://www.bing.com/*" [disabled] [pressed]
+          - generic [ref=e221]:
+            - generic [ref=e223] [cursor=pointer]: https://www.googleapis.com/*
+            - button "https://www.googleapis.com/*" [disabled] [pressed]
+          - generic [ref=e226]:
+            - generic [ref=e228] [cursor=pointer]: https://www.meczyc6.info/*
+            - button "https://www.meczyc6.info/*" [disabled] [pressed]
+          - generic [ref=e231]:
+            - generic [ref=e233] [cursor=pointer]: https://www.reddit.com/*
+            - button "https://www.reddit.com/*" [disabled] [pressed]
+          - generic [ref=e236]:
+            - generic [ref=e238] [cursor=pointer]: https://www.youtube-nocookie.com/*
+            - button "https://www.youtube-nocookie.com/*" [disabled] [pressed]
+          - generic [ref=e241]:
+            - generic [ref=e243] [cursor=pointer]: https://www.youtube.com/*
+            - button "https://www.youtube.com/*" [disabled] [pressed]
+      - generic [ref=e245] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e247]: 网站设置
+        - generic [aria-hidden] [ref=e248]: 在新标签页中打开
+        - link "网站设置" [ref=e249]
+      - generic [ref=e250]:
+        - generic [ref=e251]:
+          - generic [aria-hidden] [ref=e252] [cursor=pointer]: 固定到工具栏
+          - button "固定到工具栏" [ref=e253] [cursor=pointer]
+        - generic [ref=e256]:
+          - generic [ref=e258] [cursor=pointer]:
+            - generic [ref=e259]: 在无痕模式下启用
+            - generic [ref=e260]: 警告：Chromium 无法阻止扩展程序记录您的浏览活动。若要在无痕模式下停用该扩展程序，请取消选中此选项。
+          - button "在无痕模式下启用 警告：Chromium 无法阻止扩展程序记录您的浏览活动。若要在无痕模式下停用该扩展程序，请取消选中此选项。 对此设置的更改将在 Chromium 重启后生效。" [ref=e261] [cursor=pointer]
+        - generic [ref=e264]:
+          - generic [ref=e266] [cursor=pointer]: 允许访问文件网址
+          - button "允许访问文件网址 对此设置的更改将在 Chromium 重启后生效。" [pressed] [ref=e268] [cursor=pointer]
+      - generic [ref=e271]:
+        - heading "来源" [level=2] [ref=e272]
+        - generic [ref=e273]: 未打包的扩展程序
+        - generic [ref=e274]:
+          - text: 加载来源：
+          - link "~/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background" [ref=e275] [cursor=pointer]
+      - generic [ref=e276] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e278]: 卸载扩展程序
+        - link "卸载扩展程序" [ref=e279]

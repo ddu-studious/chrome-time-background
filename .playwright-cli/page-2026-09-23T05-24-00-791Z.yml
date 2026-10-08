@@ -1,0 +1,16 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e6]:
+        - button "主菜单" [ref=e7] [cursor=pointer]
+        - heading "扩展程序" [level=1] [ref=e8]
+      - button "搜索扩展程序" [ref=e12] [cursor=pointer]
+      - generic [ref=e15]:
+        - generic [ref=e16]: 开发者模式
+        - button "开发者模式" [ref=e17] [cursor=pointer]
+  - main [ref=e21]:
+    - generic [ref=e26]:
+      - text: 在
+      - link "Chrome 应用商店" [ref=e27] [cursor=pointer]:
+        - /url: https://chrome.google.com/webstore/category/extensions
+      - text: 中查找扩展程序和主题背景

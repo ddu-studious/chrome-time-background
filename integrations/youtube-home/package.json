@@ -1,0 +1,9 @@
+{
+  "name": "time-background-youtube-home",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": { "build": "node build.mjs" },
+  "dependencies": { "youtubei.js": "18.0.0" },
+  "devDependencies": { "esbuild": "0.27.7" }
+}

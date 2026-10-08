@@ -3392,6 +3392,20 @@ class BilibiliController {
         this._renderPlayerRecent('ready', message);
     }
 
+    async openVideo(request = {}) {
+        if (!/^BV[A-Za-z0-9]{10}$/.test(request.id || '')) throw new Error('无效的 B 站视频标识');
+        if (!this._el) throw new Error('哔哩哔哩工作台尚未初始化');
+        this.show();
+        await this._playItem({
+            bvid: request.id,
+            title: request.title || '哔哩哔哩视频',
+            author: request.author || '',
+            watchPage: Math.max(1, Math.floor(Number(request.page) || 1)),
+            progressSec: Math.max(0, Math.floor(Number(request.seconds) || 0)),
+            type: 'video',
+        });
+    }
+
     async _playItem(item) {
         this._flushCurrentWatchMemory();
         this._el.classList.remove('bili-live-mode');

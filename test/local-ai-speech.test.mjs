@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { validateAudio, WhisperProvider } from '../local-ai/speech-provider.mjs';
 import { createGateway } from '../local-ai/gateway.mjs';
 function wav() {
-  const b = Buffer.alloc(364); b.write('RIFF'); b.writeUInt32LE(356,4); b.write('WAVEfmt ',8); b.writeUInt32LE(16,16); b.writeUInt16LE(1,20); b.writeUInt16LE(1,22); b.writeUInt32LE(16000,24); b.writeUInt32LE(32000,28); b.writeUInt16LE(2,32); b.writeUInt16LE(16,34); b.write('data',36); b.writeUInt32LE(320,40); return b;
+  const b = Buffer.alloc(364); b.write('RIFF'); b.writeUInt32LE(356,4); b.write('WAVEfmt ',8); b.writeUInt32LE(16,16); b.writeUInt16LE(1,20); b.writeUInt16LE(1,22); b.writeUInt32LE(16000,24); b.writeUInt32LE(32000,28); b.writeUInt16LE(2,32); b.writeUInt16LE(16,34); b.write('data',36); b.writeUInt32LE(320,40); b.writeInt16LE(1200,44); return b;
 }
 test('只接受有界规范 WAV，拒绝伪造时长、编码和任意文件', () => {
   assert.equal(validateAudio(wav().toString('base64')).length,364);
@@ -13,6 +13,8 @@ test('只接受有界规范 WAV，拒绝伪造时长、编码和任意文件', (
   assert.throws(() => validateAudio(broken.toString('base64')));
   assert.throws(() => validateAudio(Buffer.from('not audio').toString('base64')));
   assert.throws(() => validateAudio('a'.repeat(1300000)));
+  const silent = wav(); silent.writeInt16LE(0, 44);
+  assert.throws(() => validateAudio(silent.toString('base64')), /没有录到声音/);
 });
 test('语音场景服从控制面开关，不向模型传递无关字段', async () => {
   let calls = 0;
@@ -33,6 +35,15 @@ test('本地进程采用固定参数且成功后清理临时音频', async () =>
   }});
   assert.equal((await provider.transcribe(wav().toString('base64'))).text,'暂停');
   await assert.rejects(access(inputPath)); assert.equal(provider.busy,false);
+});
+test('Whisper 返回繁体时统一转为简体，简体识别结果保持不变', async () => {
+  let recognized = '隨機播放周杰倫的歌曲';
+  const provider = new WhisperProvider({binary:process.execPath,modelPath:fileURLToPath(import.meta.url),run:async (_binary,args) => {
+    await writeFile(args[args.indexOf('-of')+1]+'.txt',recognized);
+  }});
+  assert.equal((await provider.transcribe(wav().toString('base64'))).text,'随机播放周杰伦的歌曲');
+  recognized = '随机播放周杰伦的歌曲';
+  assert.equal((await provider.transcribe(wav().toString('base64'))).text,recognized);
 });
 test('识别失败同样清理临时文件且不会暴露进程命令', async () => {
   let inputPath;

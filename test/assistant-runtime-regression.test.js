@@ -12,7 +12,7 @@ test('初始化时跨域输入条等待宿主聚焦，独立窗口仍自动聚�
     const events = [];
     const context = {
       DRAFT: 'draft', chrome: { storage: { local: { get: async () => ({}) } } },
-      refresh: async () => {}, loadAICapabilities: async () => {},
+      refresh: async () => {}, loadAICapabilities: async () => {}, loadLayaControl: async () => {},
       renderTokens() {}, renderMenu() {}, focusInput: () => events.push('focus'),
       embedded: new URLSearchParams(embeddedMode ? 'embedded=1&nonce=test&hostOrigin=https%3A%2F%2Fx.com' : ''),
       parent: { postMessage(message, origin) { events.push({ ...message, origin }); } }

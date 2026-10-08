@@ -3,108 +3,7 @@ const assert = require('node:assert/strict');
 
 const Core = require('../js/site-workspace-core.js');
 
-function clone(value) {
-  return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
-}
-
-function storageArea(initial = {}) {
-  const data = clone(initial) || {};
-  return {
-    data,
-    async get(key) {
-      if (typeof key === 'string') return { [key]: clone(data[key]) };
-      return clone(data);
-    },
-    async set(values) {
-      Object.assign(data, clone(values));
-    },
-  };
-}
-
-function createChromeMock(options = {}) {
-  const local = storageArea(options.local);
-  const session = storageArea(options.session);
-  const tabs = clone(options.tabs || []);
-  const groups = clone(options.groups || []);
-  let nextTabId = Math.max(0, ...tabs.map(tab => tab.id)) + 1;
-  let nextGroupId = Math.max(0, ...groups.map(group => group.id)) + 1;
-  const calls = [];
-
-  const api = {
-    calls,
-    storage: { local, session },
-    windows: { async getCurrent() { return { id: 7 }; } },
-    tabs: {
-      async get(tabId) {
-        const tab = tabs.find(item => item.id === tabId);
-        if (!tab) throw new Error('tab missing');
-        return clone(tab);
-      },
-      async query(query) {
-        return clone(tabs.filter(tab => {
-          if (query.windowId !== undefined && tab.windowId !== query.windowId) return false;
-          if (query.active !== undefined && tab.active !== query.active) return false;
-          return true;
-        }));
-      },
-      async create(props) {
-        tabs.forEach(tab => { if (props.active && tab.windowId === props.windowId) tab.active = false; });
-        const tab = { id: nextTabId++, windowId: props.windowId, url: props.url, title: props.url, active: Boolean(props.active), groupId: -1 };
-        tabs.push(tab);
-        calls.push(['create', clone(props)]);
-        return clone(tab);
-      },
-      async update(tabId, props) {
-        const tab = tabs.find(item => item.id === tabId);
-        if (!tab) throw new Error('tab missing');
-        if (props.active) tabs.forEach(item => { if (item.windowId === tab.windowId) item.active = false; });
-        Object.assign(tab, props);
-        calls.push(['update', tabId, clone(props)]);
-        return clone(tab);
-      },
-      async remove(tabId) {
-        const index = tabs.findIndex(item => item.id === tabId);
-        if (index >= 0) tabs.splice(index, 1);
-        calls.push(['remove', tabId]);
-      },
-      async group(props) {
-        let groupId = props.groupId;
-        if (groupId === undefined) {
-          groupId = nextGroupId++;
-          groups.push({ id: groupId, windowId: props.createProperties.windowId, title: '', color: 'grey' });
-        }
-        for (const tabId of props.tabIds) {
-          const tab = tabs.find(item => item.id === tabId);
-          if (tab) tab.groupId = groupId;
-        }
-        calls.push(['group', clone(props)]);
-        return groupId;
-      },
-      async ungroup(tabIds) {
-        for (const tabId of tabIds) {
-          const tab = tabs.find(item => item.id === tabId);
-          if (tab) tab.groupId = -1;
-        }
-        calls.push(['ungroup', clone(tabIds)]);
-      },
-    },
-    tabGroups: {
-      async query(query) {
-        return clone(groups.filter(group => query.windowId === undefined || group.windowId === query.windowId));
-      },
-      async update(groupId, props) {
-        const group = groups.find(item => item.id === groupId);
-        Object.assign(group, props);
-        calls.push(['update-group', groupId, clone(props)]);
-        return clone(group);
-      },
-    },
-    sidePanel: { async open(props) { calls.push(['open-panel', clone(props)]); } },
-    _tabs: tabs,
-    _groups: groups,
-  };
-  return api;
-}
+const { createChromeMock } = require('./fixtures/site-workspace-chrome.js');
 
 test('首次初始化预置学习、未分类和马士兵，已有空库不会被重新填充', async () => {
   const chrome = createChromeMock();
@@ -135,7 +34,7 @@ test('旧结构升级、URL 归一化和精确 URL 去重保持确定', async ()
   } });
   const service = new Core.WorkspaceService(chrome);
   const config = await service.loadConfig();
-  assert.equal(config.version, 2);
+  assert.equal(config.version, Core.VERSION);
   assert.deepEqual(config.pages, []);
   assert.equal(config.sites[0].startUrl, 'https://example.com/docs');
   await assert.rejects(() => service.addSite({ name: '重复', startUrl: 'https://example.com/docs', groupId: 'work' }), /已存在/);
@@ -360,4 +259,220 @@ test('分组打开过程中已移走的入口不能被打开', async () => {
   const service=new Core.WorkspaceService({});const config={groups:[{id:'g'}],pages:[{id:'p',groupId:'g',url:'https://example.com/'}],sites:[]};
   service.getSnapshot=async()=>({config});service.loadConfig=async()=>({...config,pages:[{...config.pages[0],groupId:'other'}]});service.openSavedPage=async()=>assert.fail('不能打开已移动入口');
   assert.equal((await service.openGroup('g')).failed,1);
+});
+
+function workspaceFixture() {
+  const chrome = createChromeMock({ tabs: [{ id: 100, windowId: 7, url: 'https://docs.example/start', title: '文档首页', groupId: -1, active: true }] });
+  return { chrome, service: new Core.WorkspaceService(chrome) };
+}
+function childTab(chrome, id, url, extra = {}) {
+  const parent = chrome._tabs.find(tab => tab.id === 100);
+  const tab = { id, windowId: 7, url, title: `页面 ${id}`, groupId: parent.groupId, openerTabId: 100, ...extra };
+  chrome._tabs.push(tab);
+  return tab;
+}
+
+test('升级保留全部旧页面、别名和 URL，旧记录全部固定', async () => {
+  const config = { ...Core.defaultConfig(), version: 2, pages: [
+    { id: 'renamed', groupId: 'learning', url: 'https://docs.example/a', title: '原标题', customTitle: '会员项目文档' },
+    { id: 'untitled', groupId: 'learning', url: 'https://docs.example/b', title: '旧页面' },
+  ] };
+  const chrome = createChromeMock({ local: { [Core.CONFIG_KEY]: config } });
+  const snapshot = await new Core.WorkspaceService(chrome).getSnapshot();
+  assert.equal(snapshot.config.pages.length, 2);
+  assert.ok(snapshot.config.pages.every(page => page.pinned));
+  assert.equal(snapshot.config.pages[0].customTitle, '会员项目文档');
+  assert.equal(snapshot.config.pages[0].url, 'https://docs.example/a');
+  assert.deepEqual(snapshot.config.recentClosed, []);
+});
+
+test('新标签使用真实 opener 关联；同域无 opener 仍来源未知', async () => {
+  const { chrome, service } = workspaceFixture();
+  await service.adoptTab(100, 'learning');
+  const parent = (await service.getSnapshot()).config.pages[0];
+  await service.renamePage(parent.id, '会员项目文档');
+  childTab(chrome, 101, 'https://docs.example/api');
+  childTab(chrome, 102, 'https://docs.example/unknown', { openerTabId: undefined });
+  const snapshot = await service.getSnapshot();
+  const child = snapshot.config.pages.find(page => page.url.endsWith('/api'));
+  assert.equal(child.pinned, false);
+  assert.equal(child.sourcePageId, parent.id);
+  assert.equal(child.sourceTitle, '会员项目文档');
+  assert.equal(Core.fixedAncestor(snapshot.config, child).id, parent.id);
+  assert.equal(snapshot.config.pages.find(page => page.url.endsWith('/unknown')).sourcePageId, null);
+});
+
+test('先出现的子标签、跨域后代也能归到固定祖先；父页面关闭后关系保留', async () => {
+  const { chrome, service } = workspaceFixture();
+  await service.adoptTab(100, 'learning');
+  const root = (await service.getSnapshot()).config.pages[0];
+  childTab(chrome, 101, 'https://docs.example/api');
+  childTab(chrome, 102, 'https://other.example/details', { openerTabId: 101 });
+  chrome._tabs.reverse();
+  let snapshot = await service.getSnapshot();
+  const descendant = snapshot.config.pages.find(page => page.url.includes('other.example'));
+  assert.equal(Core.fixedAncestor(snapshot.config, descendant).id, root.id);
+  await service.closeTab(101);
+  snapshot = await service.getSnapshot();
+  assert.equal(snapshot.config.pages.find(page => page.id === descendant.id).sourcePageId, root.id);
+  assert.equal(snapshot.config.recentClosed.length, 1);
+});
+
+test('固定入口同标签跳转不覆盖名称/地址；重新打开会恢复原地址', async () => {
+  const { chrome, service } = workspaceFixture();
+  await service.adoptTab(100, 'learning');
+  const original = (await service.getSnapshot()).config.pages[0];
+  await service.renamePage(original.id, '固定入口');
+  Object.assign(chrome._tabs[0], { url: 'https://docs.example/next', title: '下一页' });
+  let snapshot = await service.getSnapshot();
+  const fixed = snapshot.config.pages.find(page => page.id === original.id);
+  assert.equal(fixed.url, original.url);
+  assert.equal(fixed.customTitle, '固定入口');
+  assert.equal(fixed.title, '文档首页');
+  assert.equal(snapshot.tabs[0].pageId === fixed.id, false);
+  assert.equal(snapshot.config.pages.find(page => !page.pinned).sourcePageId, fixed.id);
+  await service.openSavedPage(fixed.id);
+  assert.equal(chrome.calls.filter(call => call[0] === 'create').at(-1)[1].url, original.url);
+  snapshot = await service.getSnapshot();
+  assert.equal(snapshot.tabs.length, 2);
+});
+
+test('临时页面固定或重命名后保留；未固定页面关闭进入有界最近关闭', async () => {
+  const { chrome, service } = workspaceFixture();
+  await service.adoptTab(100, 'learning');
+  childTab(chrome, 101, 'https://docs.example/pin');
+  childTab(chrome, 102, 'https://docs.example/rename');
+  childTab(chrome, 103, 'https://docs.example/temp');
+  let snapshot = await service.getSnapshot();
+  await service.pinPage(snapshot.tabs.find(tab => tab.id === 101).pageId);
+  await service.renamePage(snapshot.tabs.find(tab => tab.id === 102).pageId, '重要页面');
+  for (const id of [101, 102, 103]) await service.closeTab(id);
+  snapshot = await service.getSnapshot();
+  assert.equal(snapshot.config.pages.length, 3);
+  assert.ok(snapshot.config.pages.every(page => page.pinned));
+  assert.equal(snapshot.config.recentClosed.length, 1);
+  const recent = snapshot.config.recentClosed[0];
+  await service.restoreRecent(recent.id);
+  snapshot = await service.getSnapshot();
+  assert.equal(snapshot.config.recentClosed.length, 0);
+  assert.equal(snapshot.config.pages.find(page => page.url === recent.url).pinned, false);
+  assert.equal(snapshot.config.pages.find(page => page.url === recent.url).sourcePageId, recent.sourcePageId);
+});
+
+test('最近关闭最多 30 条、7 天；删除记录后不会复活', async () => {
+  const config = Core.defaultConfig();
+  config.recentClosed = Array.from({ length: 40 }, (_, i) => ({ id: `r${i}`, url: `https://docs.example/${i}`, title: `记录${i}`, closedAt: Date.now() - i * 1000, groupId: 'learning' }));
+  config.recentClosed.push({ id: 'expired', url: 'https://docs.example/expired', closedAt: Date.now() - 8 * 86400000 });
+  const chrome = createChromeMock({ local: { [Core.CONFIG_KEY]: config } });
+  const service = new Core.WorkspaceService(chrome);
+  const snapshot = await service.getSnapshot();
+  assert.equal(snapshot.config.recentClosed.length, 30);
+  assert.equal(snapshot.config.recentClosed.some(page => page.id === 'expired'), false);
+  await service.deletePage('r0');
+  assert.equal((await service.getSnapshot()).config.recentClosed.some(page => page.id === 'r0'), false);
+});
+
+test('about:blank 中间页不入库，onCreated 的来源提示在父标签关闭后仍可用', async () => {
+  const { chrome, service } = workspaceFixture();
+  await service.adoptTab(100, 'learning');
+  const parent = (await service.getSnapshot()).config.pages[0];
+  const child = childTab(chrome, 101, 'about:blank', { groupId: -1 });
+  await service.rememberOpener(child);
+  await service.closeTab(100);
+  await service.getSnapshot();
+  delete child.openerTabId;
+  Object.assign(child, { groupId: chrome._groups[0].id, url: 'https://docs.example/delayed' });
+  const snapshot = await service.getSnapshot();
+  assert.equal(snapshot.config.pages.length, 2);
+  assert.equal(snapshot.config.pages.find(page => !page.pinned).sourcePageId, parent.id);
+  for (const url of ['about:blank', 'chrome://settings/', 'file:///tmp/a', 'javascript:alert(1)']) assert.equal(Core.normalizeHttpUrl(url), null);
+});
+
+test('临时页面跨窗口恢复、移除不关闭标签且不写入最近关闭', async () => {
+  const { chrome, service } = workspaceFixture();
+  await service.adoptTab(100, 'learning');
+  childTab(chrome, 101, 'https://docs.example/temporary', { windowId: 8 });
+  await service.getSnapshot();
+  const second = new Core.WorkspaceService(chrome);
+  let snapshot = await second.getSnapshot();
+  assert.equal(snapshot.config.pages.filter(page => !page.pinned).length, 1);
+  assert.equal((await second.loadBindings()).bindings['101'].windowId, 8);
+  await second.removeTab(101);
+  snapshot = await second.getSnapshot();
+  assert.equal(snapshot.config.recentClosed.length, 0);
+  assert.equal(chrome._tabs.some(tab => tab.id === 101), true);
+});
+
+test('并发快照、重命名和固定不丢失修改；稳定快照不重复写 session', async () => {
+  const { chrome, service } = workspaceFixture();
+  await service.adoptTab(100, 'learning');
+  const pageId = (await service.getSnapshot()).config.pages[0].id;
+  const second = new Core.WorkspaceService(chrome);
+  await Promise.all([service.getSnapshot(), second.renamePage(pageId, '并发保存'), service.pinPage(pageId), second.getSnapshot()]);
+  assert.equal((await service.getSnapshot()).config.pages[0].customTitle, '并发保存');
+  let writes = 0;
+  const set = chrome.storage.session.set;
+  chrome.storage.session.set = async values => { writes++; await set(values); };
+  await service.getSnapshot(); await second.getSnapshot();
+  assert.equal(writes, 0);
+});
+
+test('批量打开分组仅恢复固定入口，不重开临时或最近关闭', async () => {
+  const { chrome, service } = workspaceFixture();
+  await service.adoptTab(100, 'learning');
+  childTab(chrome, 101, 'https://docs.example/temporary');
+  childTab(chrome, 102, 'https://docs.example/closed');
+  await service.getSnapshot(); await service.closeTab(102); await service.getSnapshot();
+  const result = await service.openGroup('learning');
+  assert.equal(result.opened, 2); // One fixed document and the preset site.
+  assert.equal(chrome.calls.some(call => call[0] === 'create' && /temporary|closed/.test(call[1].url)), false);
+});
+
+test('同页多标签中一个临时标签跳转，不会改写另一个标签的记录', async () => {
+  const { chrome, service } = workspaceFixture();
+  await service.adoptTab(100, 'learning');
+  childTab(chrome, 101, 'https://docs.example/shared');
+  childTab(chrome, 102, 'https://docs.example/shared');
+  await service.getSnapshot();
+  chrome._tabs.find(tab => tab.id === 101).url = 'https://docs.example/next';
+  const snapshot = await service.getSnapshot();
+  const a = snapshot.tabs.find(tab => tab.id === 101), b = snapshot.tabs.find(tab => tab.id === 102);
+  assert.notEqual(a.pageId, b.pageId);
+  assert.equal(snapshot.config.pages.find(page => page.id === b.pageId).url, 'https://docs.example/shared');
+  assert.equal((await service.getSnapshot()).config.pages.length, 3);
+});
+
+test('最近关闭恢复精确 URL，不会误复用同网站其他路径', async () => {
+  const chrome = createChromeMock();
+  const service = new Core.WorkspaceService(chrome);
+  await service.openSite('mashibing');
+  chrome._tabs[0].url = 'https://www.mashibing.com/other';
+  let snapshot = await service.getSnapshot();
+  const config = snapshot.config;
+  config.recentClosed.push({ id: 'restore-home', groupId: 'learning', url: Core.MASHIBING_URL, title: '课程首页', closedAt: Date.now() });
+  await service.saveConfig(config);
+  await service.restoreRecent('restore-home');
+  assert.equal(chrome._tabs.length, 2);
+  assert.equal(chrome._tabs.at(-1).url, Core.MASHIBING_URL);
+  snapshot = await service.getSnapshot();
+  const config2 = snapshot.config;
+  config2.recentClosed.push({ id: 'same-url', groupId: 'learning', url: Core.MASHIBING_URL, title: '同地址', closedAt: Date.now() });
+  await service.saveConfig(config2);
+  const result = await service.restoreRecent('same-url');
+  assert.equal(result.reused, true);
+  assert.equal(chrome._tabs.length, 2);
+});
+
+test('临时页面跳回已有固定地址，保留原来的别名和身份', async () => {
+  const { chrome, service } = workspaceFixture();
+  await service.adoptTab(100, 'learning');
+  const original = (await service.getSnapshot()).config.pages[0];
+  await service.renamePage(original.id, '固定入口');
+  chrome._tabs[0].url = 'https://docs.example/next';
+  await service.getSnapshot();
+  chrome._tabs[0].url = original.url;
+  const snapshot = await service.getSnapshot();
+  assert.equal(snapshot.tabs[0].pageId, original.id);
+  assert.equal(snapshot.config.pages[0].customTitle, '固定入口');
+  assert.equal(snapshot.config.pages.length, 1);
 });

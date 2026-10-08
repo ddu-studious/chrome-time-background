@@ -49,3 +49,5 @@
 真实模型为 `qwen/qwen3.8-27b`，加载上下文 208384，控制策略仍为原 revision=5、默认 low。服务已重载，默认策略未修改。这是两轮规划的单次实测，提示缓存与负载可能影响耗时，不作为稳定性能承诺。
 
 HTTP 规划验证不等于真实 Chrome 扩展或真实账号音乐链路验收。页面刷新可加载新的恢复说明；没有自动重试用户的失败业务任务，没有清空真实队列或播放音乐，未提交 Git。
+
+2026-09-29 补充：AI 设置新增可选“规划思考起步”（`planningStrategy`，默认 `follow`，行为不变）。选择 `adaptive` 后，已有真实工具回执的规划轮不再先等 30 秒 `low` 尝试，而是从 `off` 单次起步；这不是本文的超时恢复，记录为 `startReason=adaptive-receipts`，不写入 `recoveryFromRequestId`，也不使后续无回执规划沿用 off。详见 [assistant-speed-20260929.md](assistant-speed-20260929.md)。

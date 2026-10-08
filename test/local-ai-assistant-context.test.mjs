@@ -107,7 +107,7 @@ test('模型在准备后换成更小上下文时重新检查，不能把超限�
 
 test('工具入口带上完整已完成摘要，较早写操作不会随六条观察窗口消失', async () => {
   let sent;
-  const handlers = Tools.create({ ai: async request => { sent = request; return { ok: true, data: clear }; } });
+  const handlers = Tools.create({ ai: async request => { sent = request; return { ok: true, data: { ...clear, todoTips: [{ text: '清空队列', source: 0, tool: 'music.queue.clear' }] } }; } });
   const log = [{ tool: 'music.queue.clear', status: 'done', message: '已清空' }, ...Array.from({ length: 7 }, (_, i) => ({ tool: 'music.state', status: 'done', message: `状态${i}` })), { tool: 'music.queue.play', status: 'running' }];
   await handlers.plan({ app: 'music', text }, { task: { id: 'task', input: {}, observations: Array(6).fill(state), log, turns: [], memory: {} }, guard() {} });
   assert.equal(sent.input.completedSteps[0].tool, 'music.queue.clear');
@@ -124,6 +124,11 @@ test('完整生产引擎链路：101首队列→确认清空→选歌手→读�
     assert.equal(sent.text, text);
     const observations = sent.observations;
     const revision = [...observations].reverse().find(row => row.data?.revision)?.data.revision;
+    if (sent.planningPhase === 'outline') return { todoTips: [
+        { text: '清空队列', source: 0, tool: 'music.queue.clear' },
+        { text: '追加杨和苏热歌', source: 0, tool: 'music.queue.apply', args: { mode: 'append', startPlayback: false } },
+        { text: '随机播放', source: 0, tool: 'music.queue.play', args: { mode: 'shuffle' } }
+      ] };
     switch (calls++) {
       case 0: return step('music.state');
       case 1: assert.equal(observations.at(-1).data.count, 101); return step('music.queue.clear', { expectedRevision: revision });
@@ -146,7 +151,7 @@ test('复合队列任务不暴露单动作意图入口，防止把整个剩余�
   await plan(input, { generateObject: async options => { instructions = options.instructions; return clear; } });
   assert.doesNotMatch(instructions, /"music.intent":/);
   assert.match(instructions, /本次是队列组合任务/);
-  await assert.rejects(plan(input, { generateObject: async () => ({ steps: [{ tool: 'music.intent', args: { text: '搜索热歌，添加到队列，随机播放' } }], continue: true }) }), /尚未加载/);
+  await assert.rejects(plan(input, { generateObject: async () => ({ steps: [{ tool: 'music.intent', args: { text: '搜索热歌，添加到队列，随机播放' } }], continue: true }) }), /music.intent 本轮不可用，不能通过加载工具组启用/);
   await plan({ app: 'music', text: '给我找点适合写代码的音乐' }, { generateObject: async options => {
     assert.match(options.instructions, /"music.intent":/);
     return { steps: [{ tool: 'music.intent', args: { text: '搜索钢琴音乐' } }] };

@@ -14,6 +14,11 @@
   const names = { pending: '处理中', ready: '解析完成', needs_clarification: '等待补充', failed: '失败', complete: '完成', cancelled: '已取消' };
   function render(data) {
     state = data;
+    if ($('speech-health')) $('speech-health').textContent = `语音输入：${data.speech?.configured ? '已就绪' : '尚未配置 Whisper'} · 回答朗读：${data.synthesis?.configured ? (data.scenes?.find(scene => scene.id === 'speech.synthesize')?.modelEnabled ? '已就绪' : '已安装，待开启场景') : '尚未安装本机语音组件'}${data.synthesis?.configured ? ' · StepAudio 中文示例音色' : ''}`;
+    if ($('laya-health')) {
+      const usage = data.laya?.usage?.scenes?.['assistant.prefetch'];
+      $('laya-health').textContent = `Laya 预加载：${({ off: '关闭', shadow: '只观察', assist: '参与预加载' })[data.policy.layaMode] || '关闭'} · ${data.laya?.usage?.error || `今日 ${usage?.calls || 0} 次，失败 ${usage?.failures || 0} 次${usage?.blockedUntil > Date.now() ? ' · 当前冷却中，自动走原规划链路' : ''}`}。`;
+    }
     $('policy-fields').disabled = false;
     $('revision').textContent = `版本 ${data.revision}`;
     $('daily-limit').value=data.policy.dailyRequestLimit||200;
@@ -23,10 +28,12 @@
     $('ai-scenes-usage').replaceChildren();
     for(const [scene,row] of Object.entries(data.usage?.scenes||{})){const line=document.createElement('p');line.textContent=`${scene}：${row.calls} 次，失败 ${row.failures} 次；最近 ${row.latency?.sampleCount||0} 个已结束尝试 P50 ${row.latency?.p50==null?'—':row.latency.p50+'ms'} / P95 ${row.latency?.p95==null?'—':row.latency.p95+'ms'}${row.blockedUntil>Date.now()?' · 冷却至 '+new Date(row.blockedUntil).toLocaleTimeString('zh-CN'):''}`;$('ai-scenes-usage').append(line);}
     $('model-enabled').checked = data.policy.modelEnabled;
+    if ($('laya-mode')) $('laya-mode').value = data.policy.layaMode || 'off';
     $('embedding-model').value = data.policy.embeddingModel || 'text-embedding-nomic-embed-text-v1.5';
     $('reasoning').value = data.policy.reasoning || 'off';
     $('timeout').value = (data.policy.timeoutMs || 90000) / 1000;
     if ($('context-compaction')) $('context-compaction').value = data.policy.contextCompaction || 'hybrid';
+    if ($('planning-strategy')) $('planning-strategy').value = data.policy.planningStrategy || 'follow';
     $('budget').value = data.policy.maxOutputTokens || 4096;
     $('model').replaceChildren();
     const defaultModel = document.createElement('option'); defaultModel.value = ''; defaultModel.textContent = '服务默认模型'; $('model').append(defaultModel);
@@ -35,7 +42,7 @@
     $('scenes').replaceChildren();
     for (const scene of data.scenes) {
       const label = document.createElement('label'); label.className = 'toggle';
-      const input = document.createElement('input'); input.type = 'checkbox'; input.value = scene.id; input.checked = !data.policy.disabledScenes.includes(scene.id);
+      const input = document.createElement('input'); input.type = 'checkbox'; input.value = scene.id; input.checked = !data.policy.disabledScenes.includes(scene.id) && (scene.id !== 'speech.synthesize' || data.policy.speechSynthesisEnabled === true);
       label.append(input, document.createTextNode(scene.name)); $('scenes').append(label);
     }
     $('history').replaceChildren();
@@ -85,7 +92,8 @@
   $('refresh').addEventListener('click', () => perform(refresh));
   $('policy').addEventListener('submit', event => { event.preventDefault(); if (!state) return; void perform(async () => {
     const disabledScenes = [...$('scenes').querySelectorAll('input')].filter(input => !input.checked).map(input => input.value);
-    render(await send('ai_control_save', { expectedRevision: state.revision, policy: { contextCompaction: $('context-compaction')?.value || state.policy.contextCompaction || 'hybrid', dailyRequestLimit:Number($('daily-limit').value),failureThreshold:Number($('failure-limit').value),cooldownMs:Number($('cooldown').value)*1000, modelEnabled: $('model-enabled').checked, disabledScenes, model: $('model').value || null, embeddingModel: $('embedding-model').value.trim(), reasoning: $('reasoning').value, timeoutMs: Number($('timeout').value) * 1000, maxOutputTokens: Number($('budget').value) } })); notice('策略已保存，重启后继续生效');
+    const speechSynthesisEnabled = Boolean($('scenes').querySelector('input[value="speech.synthesize"]')?.checked);
+    render(await send('ai_control_save', { expectedRevision: state.revision, policy: { speechSynthesisEnabled, contextCompaction: $('context-compaction')?.value || state.policy.contextCompaction || 'hybrid', layaMode: $('laya-mode')?.value || 'off', planningStrategy: $('planning-strategy')?.value || state.policy.planningStrategy || 'follow', dailyRequestLimit:Number($('daily-limit').value),failureThreshold:Number($('failure-limit').value),cooldownMs:Number($('cooldown').value)*1000, modelEnabled: $('model-enabled').checked, disabledScenes, model: $('model').value || null, embeddingModel: $('embedding-model').value.trim(), reasoning: $('reasoning').value, timeoutMs: Number($('timeout').value) * 1000, maxOutputTokens: Number($('budget').value) } })); notice('策略已保存，重启后继续生效');
   }); });
   void perform(refresh);
 })();

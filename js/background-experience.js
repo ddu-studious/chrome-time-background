@@ -54,7 +54,9 @@
             this.height = innerHeight;
             this.dpr = 1;
             this.active = false;
-            this.hidden = document.hidden;
+            this.hidden = document.hidden || document.body.classList.contains('home-background-suspended');
+            this.frameRequest = null;
+            this.initialized = false;
             this.lastFrame = 0;
             this.frameIndex = 0;
             this.lastInteraction = performance.now();
@@ -82,8 +84,8 @@
             this.seedWorld();
             this.bind();
             this.observeWeather();
+            this.initialized = true;
             this.applySettings();
-            requestAnimationFrame(time => this.frame(time));
         }
 
         async loadSettings() {
@@ -112,6 +114,30 @@
             this.applyTimeVisual();
             this.seedWeather();
             this.seedLiquid();
+            this.syncAnimation();
+        }
+
+        setSuspended(value) {
+            this.hidden = !!value;
+            this.lastFrame = 0;
+            if (this.hidden) this.cancelPointer();
+            this.syncAnimation();
+        }
+
+        needsAnimation() {
+            return this.settings.enabled && (this.active || this.settings.visualEffect === 'liquid'
+                || (this.settings.visualEffect === 'weather' && !['clear', 'night'].includes(this.weather)));
+        }
+
+        syncAnimation() {
+            if (!this.initialized) return;
+            if (this.hidden || !this.needsAnimation()) {
+                if (this.frameRequest !== null) cancelAnimationFrame(this.frameRequest);
+                this.frameRequest = null;
+                this.ctx.clearRect(0, 0, this.width, this.height);
+            } else if (this.frameRequest === null) {
+                this.frameRequest = requestAnimationFrame(time => this.frame(time));
+            }
         }
 
         setBackground(background) {
@@ -182,6 +208,7 @@
                     this.weather = next;
                     this.syncWeatherVisual();
                     this.seedWeather();
+                    this.syncAnimation();
                 }
             };
             new MutationObserver(update).observe(target, { childList: true, subtree: true, characterData: true });
@@ -213,7 +240,9 @@
                 this.seedWeather();
                 this.seedLiquid();
             });
-            document.addEventListener('visibilitychange', () => { this.hidden = document.hidden; });
+            document.addEventListener('visibilitychange', () => {
+                this.setSuspended(document.hidden || document.body.classList.contains('home-background-suspended'));
+            });
             document.addEventListener('pointermove', event => this.onPointerMove(event), { passive: true });
             document.addEventListener('pointerdown', event => this.onPointerDown(event), true);
             document.addEventListener('pointerup', event => this.onPointerUp(event), true);
@@ -267,6 +296,7 @@
                 this.cancelPointer();
                 this.combo = 0;
             }
+            this.syncAnimation();
         }
 
         status(text) {
@@ -335,6 +365,7 @@
         }
 
         onPointerMove(event) {
+            if (this.hidden) return;
             this.setPointer(event);
             if (!this.active) return;
             const p = this.pointer;
@@ -596,6 +627,8 @@
         }
 
         frame(now) {
+            this.frameRequest = null;
+            if (this.hidden || !this.needsAnimation()) return;
             const dt = Math.min(34, now - this.lastFrame || 16);
             this.lastFrame = now;
             this.frameIndex++;
@@ -617,7 +650,7 @@
                 }
                 this.ctx.restore();
             }
-            requestAnimationFrame(time => this.frame(time));
+            this.syncAnimation();
         }
     }
 

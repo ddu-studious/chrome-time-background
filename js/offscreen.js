@@ -151,6 +151,8 @@ player.addEventListener('error', () => {
     const code = player.error?.code || 0;
     // 切换 src 时浏览器可能主动中止上一首；这是预期切歌，不应触发自动跳过下一首。
     if (code === 1) return;
+    // 清空音源后迟到的错误也不属于一首正在播放的歌。
+    if (!player.getAttribute('src')) return;
     const mediaErrMap = {
         1: 'MEDIA_ERR_ABORTED: 加载被中止',
         2: 'MEDIA_ERR_NETWORK: 网络错误',
@@ -313,7 +315,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         case 'stop':
             playGeneration++;
             player.pause();
-            player.src = '';
+            // 赋空字符串会被解析为 offscreen.html，并触发 MEDIA_ERR_SRC_NOT_SUPPORTED。
+            player.removeAttribute('src');
+            player.load();
             currentState = {
                 isPlaying: false, title: '', artist: '', album: '', cover: '',
                 currentTime: 0, duration: 0, volume: currentState.volume, songId: null,

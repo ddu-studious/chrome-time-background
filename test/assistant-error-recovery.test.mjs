@@ -15,11 +15,17 @@ function fixture(responses, deps = {}, options = {}) {
   if (options.policy) control.update({ ...control.snapshot().policy, ...options.policy }, 1);
   const storage = { async get() { return structuredClone(values); }, async set(v) { Object.assign(values, structuredClone(v)); }, async remove(k) { delete values[k]; } };
   const gateway = createGateway({ control, provider: { model: 'fixture', async generateObject(request) {
+    if (request.input.planningPhase === 'outline') {
+      const text = request.input.text;
+      const tool = /不要/.test(text) ? 'music.state' : /清空/.test(text) ? 'music.queue.clear' : /随机播放/.test(text) ? 'music.queue.play' : /队列曲目/.test(text) ? 'music.queue.list' : 'music.state';
+      return { todoTips: [{ text, source: 0, tool, ...(tool === 'music.queue.play' ? { args: { mode: 'shuffle' } } : {}) }] };
+    }
     inputs.push(structuredClone(request.input));
     assert.ok(responses.length, '不应产生额外规划');
     const value = responses.shift();
     if (value instanceof Error) throw value;
-    return typeof value === 'function' ? value(request) : value;
+    const output = await (typeof value === 'function' ? value(request) : value);
+    return output;
   } } });
   const handlers = Tools.create({ storage, readMusicState: async () => state('v1'), ...deps,
     ai: async request => ({ ok: true, ...await gateway.run(request.scene, request.input, { selection: request.selection, trace: request.trace }) }) });
@@ -86,12 +92,12 @@ test('混合工具搜索在写入前失败可恢复，而自动播放开始后�
 
 test('写入后丢失回执仅查询核对，不重复副作用，也不把只读查询当完成', async () => {
   let plays = 0;
-  const f = fixture([step('music.queue.play', { expectedRevision: 'v1', mode: 'shuffle' }, true), statePlan], {
+  const f = fixture([step('music.state', {}, true), step('music.queue.play', { expectedRevision: 'v1', mode: 'shuffle' }, true), statePlan], {
     playCurrentQueue: async () => { plays++; throw new Error('已提交，但回执通道断开'); }
   });
-  const task = await submit(f, '随机播放队列');
+  const task = await submit(f, '随机播放队列，然后核对播放状态');
   assert.equal(task.status, 'clarify'); assert.equal(plays, 1);
-  const request = f.inputs[1]; assert.equal(request.observations.at(-1).status, 'unknown');
+  const request = f.inputs[2]; assert.equal(request.observations.at(-1).status, 'unknown');
   assert.ok(request.context.receipts.some(row => row.status === 'unknown'));
   assert.ok(Context.state(f.values[Engine.KEY]).uncertain);
 });
@@ -99,8 +105,8 @@ test('写入后丢失回执仅查询核对，不重复副作用，也不把只�
 test('unknown后模型仍试图写入会被执行器拒绝', async () => {
   let plays = 0;
   const play = step('music.queue.play', { expectedRevision: 'v1', mode: 'shuffle' }, true);
-  const f = fixture([play, play], { playCurrentQueue: async () => { plays++; throw new Error('回执丢失'); } });
-  const task = await submit(f, '随机播放队列');
+  const f = fixture([step('music.state', {}, true), play, play], { playCurrentQueue: async () => { plays++; throw new Error('回执丢失'); } });
+  const task = await submit(f, '随机播放队列，然后核对播放状态');
   assert.equal(task.status, 'failed'); assert.match(task.message, /结果未确认/); assert.equal(plays, 1);
 });
 
@@ -120,7 +126,7 @@ test('不同错误最多恢复三次，不重置规划和工具计数', async ()
   const task = await submit(f);
   assert.equal(task.status, 'failed'); assert.match(task.message, /恢复或执行上限/);
   assert.equal(f.inputs.length, 4); assert.equal(reads, 4); assert.equal(task.recoveryCount, 3);
-  assert.equal(f.values[Engine.KEY].planRounds, 4); assert.equal(f.values[Engine.KEY].toolCalls, 4);
+  assert.equal(f.values[Engine.KEY].planRounds, 5); assert.equal(f.values[Engine.KEY].toolCalls, 4);
 });
 
 test('格式错误交给模型修正；非法工具不能执行，超时耗尽不绕过底层重试', async () => {
@@ -138,7 +144,7 @@ test('取消、权限拒绝、额度及全局时限仍能终止恢复', async ()
     const f = fixture([statePlan], { readMusicState: async () => { throw error; } });
     await submit(f); assert.equal(f.inputs.length, 1);
   }
-  const limited = fixture([statePlan], { readMusicState: async () => { throw new Error('查询失败'); } }, { policy: { dailyRequestLimit: 1 } });
+  const limited = fixture([statePlan], { readMusicState: async () => { throw new Error('查询失败'); } }, { policy: { dailyRequestLimit: 2 } });
   assert.match((await submit(limited)).message, /今日 AI 请求预算/); assert.equal(limited.inputs.length, 1);
   let clock = Date.now();
   const timed = fixture([statePlan], { readMusicState: async () => { clock += 300001; throw new Error('查询超时'); } }, { now: () => clock });

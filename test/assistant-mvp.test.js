@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const C = require('../js/assistant-contract.js');
 const { create, KEY } = require('../js/assistant-engine.js');
 const Tools = require('../js/assistant-tools.js');
+const AppVideo = require('../js/app-video.js');
 const vm = require('node:vm');
 const fs = require('node:fs');
 function storage() { const values = {}; return { values, async get() { return structuredClone(values); }, async set(patch) { Object.assign(values, structuredClone(patch)); }, async remove(key) { delete values[key]; } }; }
@@ -81,26 +82,108 @@ test('旧任务候选、伪造候选及过期候选不能执行', async () => {
   clock += 600001; await assert.rejects(f.engine.choose(task.id, 'x'), /十分钟/);
 });
 test('查询与候选链接拒绝脚本协议和无效视频ID', () => {
-  assert.equal(Tools.videoURL('youtube', 'dQw4w9WgXcQ', 63), 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=63s');
-  assert.equal(Tools.videoURL('bilibili', 'BV1xx411c7mD', 12), 'https://www.bilibili.com/video/BV1xx411c7mD/?t=12');
-  assert.equal(Tools.videoURL('bilibili', 'BV1xx411c7mD', 12, 3), 'https://www.bilibili.com/video/BV1xx411c7mD/?p=3&t=12');
-  assert.throws(() => Tools.videoURL('youtube', 'javascript:alert(1)'));
-  assert.throws(() => Tools.videoURL('other', 'dQw4w9WgXcQ'));
+  const base = 'chrome-extension://fixture/index.html';
+  const youtube = AppVideo.readURL(AppVideo.buildURL({ platform: 'youtube', id: 'dQw4w9WgXcQ', seconds: 63 }, base));
+  assert.equal(youtube.id, 'dQw4w9WgXcQ'); assert.equal(youtube.seconds, 63);
+  const bilibili = AppVideo.readURL(AppVideo.buildURL({ platform: 'bilibili', id: 'BV1xx411c7mD', seconds: 12, page: 3 }, base));
+  assert.equal(bilibili.id, 'BV1xx411c7mD'); assert.equal(bilibili.seconds, 12); assert.equal(bilibili.page, 3);
+  assert.throws(() => AppVideo.buildURL({ platform: 'youtube', id: 'javascript:alert(1)' }, base));
+  assert.throws(() => AppVideo.buildURL({ platform: 'other', id: 'dQw4w9WgXcQ' }, base));
 });
 const context = () => ({ guard() {}, trackJob: async () => {}, progress: async () => {}, task: { id: 'fixture', input: { app: null }, memory: {}, turns: [{ role: 'user', content: 'test' }] } });
+test('过期音乐缓存只称为本地保存队列，不宣称播放器已有当前队列', async () => {
+  const songs = [{ songId: '1', title: '第一首', artist: '甲' }];
+  const tools = Tools.create({ readMusicState: async () => ({ status: 'stale', revision: 'saved', count: 1, songs, isPlaying: false, source: 'cache' }) });
+  const state = await tools.execute({ tool: 'music.state', args: {} }, context());
+  const list = await tools.execute({ tool: 'music.queue.list', args: {} }, context());
+  assert.match(state.message, /本地保存的队列有1首.*保留并恢复.*清空保存队列/);
+  assert.doesNotMatch(state.message, /当前队列1首/);
+  assert.match(list.message, /本地过期缓存共1首/);
+  assert.equal(list.observation.status, 'stale');
+  const unavailable = Tools.create({ readMusicState: async () => ({ status: 'unavailable', revision: 'saved', count: 1, songs, isPlaying: false, source: 'cache' }) });
+  const mismatch = await unavailable.execute({ tool: 'music.state', args: {} }, context());
+  assert.match(mismatch.message, /队列记录有1首.*与播放器状态不一致/);
+  assert.doesNotMatch(mismatch.message, /当前队列1首/);
+});
 test('YouTube 续看只用扩展本地历史并携带持久化时间', async () => {
   const store = storage(); await store.set({ youtubeWatchHistory: [{ id: 'dQw4w9WgXcQ', title: 'MySQL 入门', channel: '课程' }], youtubeWatchProgress: { dQw4w9WgXcQ: { time: 123 } } });
-  let url;
-  const tools = Tools.create({ storage: store, openURL: async value => { url = value; }, youtube: () => assert.fail('不能获取官方账号历史') });
+  let opened;
+  const tools = Tools.create({ storage: store, openVideo: async value => { opened = value; return { opened: true, destination: 'app' }; }, youtube: () => assert.fail('不能获取官方账号历史') });
   const result = await tools.execute({ tool: 'video.history', args: { platform: 'youtube', query: 'mysql' } }, context());
   assert.match(result.message, /本地/); assert.match(result.choices[0].subtitle, /2:03/);
-  await tools.choose(result.choices[0], context()); assert.match(url, /t=123s/);
+  const receipt = await tools.choose(result.choices[0], context());
+  assert.equal(opened.platform, 'youtube'); assert.equal(opened.id, 'dQw4w9WgXcQ'); assert.equal(opened.seconds, 123);
+  assert.deepEqual(receipt.observation, { opened: true, destination: 'app', playbackConfirmed: false });
+  assert.match(receipt.message, /App 内/); assert.doesNotMatch(receipt.message, /已播放|正在播放/);
 });
-test('未授权 YouTube 搜索只提供原站搜索选项，不编造候选', async () => {
-  let opened = 0;
-  const tools = Tools.create({ youtube: async () => { throw Object.assign(new Error('no'), { code: 'auth-required' }); }, openURL: async () => { opened++; } });
+test('未授权 YouTube 搜索提供 App 搜索选项，并兼容持久化的旧候选动作', async () => {
+  const opened = [];
+  const tools = Tools.create({ youtube: async () => { throw Object.assign(new Error('no'), { code: 'auth-required' }); }, openVideo: async request => { opened.push(request); return { opened: true, destination: 'app' }; } });
   const result = await tools.execute({ tool: 'video.search', args: { platform: 'youtube', query: 'test' } }, context());
-  assert.equal(opened, 0); assert.equal(result.choices[0].action, 'video.search-site');
+  assert.equal(opened.length, 0); assert.equal(result.choices[0].action, 'video.search-app');
+  for (const action of ['video.search-app', 'video.search-site']) {
+    const receipt = await tools.choose({ ...result.choices[0], action }, context());
+    assert.deepEqual(receipt.observation, { opened: true, destination: 'app', playbackConfirmed: false });
+    assert.match(receipt.message, /App 内/);
+  }
+  assert.deepEqual(opened, Array(2).fill({ platform: 'youtube', query: 'test' }));
+});
+test('两平台搜索候选走 App 打开依赖，未知进度保留播放器默认续播', async () => {
+  for (const [platform, id] of [['bilibili', 'BV1xx411c7mD'], ['youtube', 'dQw4w9WgXcQ']]) {
+    const opened = [];
+    const tools = Tools.create({
+      bilibili: async () => ({ code: 0, data: { result: [{ bvid: id, title: '<b>课程</b>', author: '讲师' }, { bvid: 'javascript:alert(1)' }] } }),
+      youtube: async () => ({ items: [{ id: { videoId: id }, snippet: { title: '课程', channelTitle: '讲师' } }, { id: { videoId: 'javascript:alert(1)' } }] }),
+      openVideo: async (request, c) => { c.guard(); opened.push(request); return { opened: true, destination: 'app' }; }
+    });
+    const c = context(); c.task.input.app = platform;
+    const result = await tools.execute({ tool: 'video.search', args: { platform, query: '课程' } }, c);
+    assert.equal(result.choices.length, 1); assert.equal(opened.length, 0);
+    const receipt = await tools.choose(result.choices[0], c);
+    assert.equal(opened.length, 1); assert.equal(opened[0].id, id); assert.equal(opened[0].platform, platform);
+    assert.equal(opened[0].title, '课程'); assert.equal(Object.hasOwn(opened[0], 'seconds'), false);
+    assert.equal(Object.hasOwn(opened[0], 'page'), false);
+    assert.deepEqual(receipt.observation, { opened: true, destination: 'app', playbackConfirmed: false });
+    assert.doesNotMatch(receipt.message, /已播放|正在播放/);
+  }
+});
+test('B 站历史候选在 App 内携带真实进度和分 P', async () => {
+  let opened;
+  const tools = Tools.create({ bilibili: async () => ({ code: 0, data: { list: [{ title: '课程', progress: 85, duration: 900, history: { bvid: 'BV1xx411c7mD', page: 3 } }] } }),
+    openVideo: async request => { opened = request; return { opened: true, destination: 'app' }; } });
+  const c = context(); c.task.input.app = 'bilibili';
+  const result = await tools.execute({ tool: 'video.history', args: { platform: 'bilibili', query: '课程' } }, c);
+  const receipt = await tools.choose(result.choices[0], c);
+  assert.equal(opened.id, 'BV1xx411c7mD'); assert.equal(opened.seconds, 85); assert.equal(opened.page, 3);
+  assert.match(receipt.message, /第 3 P/); assert.equal(receipt.observation.playbackConfirmed, false);
+});
+test('App 打开回执缺失或目标错误不报成功，已派发操作标记 unknown', async () => {
+  for (const result of [undefined, { opened: false, destination: 'app' }, { opened: 'true', destination: 'app' }, { opened: 1, destination: 'app' }, { opened: true, destination: 'website' }]) {
+    let writes = 0, started = 0;
+    const tools = Tools.create({ openVideo: async () => { writes++; return result; } });
+    const c = context(); c.effectStarted = async () => { started++; };
+    await assert.rejects(tools.choose({ action: 'video.open', data: { platform: 'youtube', id: 'dQw4w9WgXcQ' } }, c), error => {
+      assert.match(error.message, /回执/); assert.equal(error.sideEffectState, 'unknown'); return true;
+    });
+    assert.equal(writes, 1); assert.equal(started, 1);
+  }
+  let writes = 0;
+  const tools = Tools.create({ openVideo: async () => { writes++; } });
+  await assert.rejects(tools.choose({ action: 'video.open', data: { platform: 'youtube', id: 'javascript:alert(1)' } }, context()), error => error.sideEffectState === 'none');
+  assert.equal(writes, 0);
+  await assert.rejects(Tools.create({}).choose({ action: 'video.open', data: { platform: 'youtube', id: 'dQw4w9WgXcQ' } }, context()), error => {
+    assert.match(error.message, /App 视频入口不可用/); assert.equal(error.sideEffectState, 'none'); return true;
+  });
+});
+test('App 搜索新旧候选也拒绝非布尔的打开回执', async () => {
+  for (const action of ['video.search-app', 'video.search-site']) {
+    let writes = 0;
+    const tools = Tools.create({ openVideo: async () => { writes++; return { opened: 'true', destination: 'app' }; } });
+    await assert.rejects(tools.choose({ action, data: { platform: 'youtube', query: '课程' } }, context()), error => {
+      assert.match(error.message, /回执/); assert.equal(error.sideEffectState, 'unknown'); return true;
+    });
+    assert.equal(writes, 1);
+  }
 });
 test('闹钟先显示确认卡，确认前不保存，过期时间不能创建', async () => {
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -158,19 +241,20 @@ test('确认前修改倒计时保留事项，中文数字可离线解析', () =>
     assert.equal(A.resolveDraft(next, context).alarm.fireAt, context.now + 40 * 60000);
   }
 });
-function playbackFixture({ url = async () => 'https://music.example.test/track.mp3', confirms = true, initialQueue } = {}) {
+function playbackFixture({ url = async () => 'https://music.example.test/track.mp3', confirms = true, initialQueue, savedAt, initialAudio, random } = {}) {
   const source = fs.readFileSync(require.resolve('../js/background.js'), 'utf8');
   const start = source.indexOf('    async function waitAssistantPlayback('), end = source.indexOf('    chrome.contextMenus.onClicked.addListener(', start);
-  let clock = 1000, plays = 0, writes = 0, state = { songId: '1', isPlaying: true, volume: .5, currentTime: 30, duration: 300 };
+  let clock = 1000, plays = 0, writes = 0, state = initialAudio || { songId: '1', isPlaying: true, volume: .5, currentTime: 30, duration: 300 };
   const queue = initialQueue || [{ songId: '1', title: '第一首' }, { songId: '2', title: '第二首' }];
-  let cache = { playlist: queue }, mode = 'sequence';
+  let cache = { playlist: queue, ...(savedAt == null ? {} : { savedAt }) }, mode = 'sequence';
   let captured;
-  const context = { MusicQueuePolicy: require('../js/music-queue-policy.js'), TextEncoder, crypto: { subtle: require('node:crypto').webcrypto.subtle, randomUUID: () => 'fixture-revision' }, Date: { now: () => clock }, setTimeout: fn => { clock += 250; queueMicrotask(fn); },
+  const math = Object.create(Math); math.random = random || Math.random;
+  const context = { MusicQueuePolicy: require('../js/music-queue-policy.js'), Math: math, TextEncoder, crypto: { subtle: require('node:crypto').webcrypto.subtle, randomUUID: () => 'fixture-revision' }, Date: { now: () => clock }, setTimeout: fn => { clock += 250; queueMicrotask(fn); },
     QuickAssistant: { install(deps) { captured = deps; return {}; } }, LocalAIBridge: {}, desktopAlarm: {},
     chrome: { storage: { local: { async get() { return { musicPlaylistCache: cache, musicPlayMode: mode }; }, async set(value) { if (value.musicPlaylistCache) cache = value.musicPlaylistCache; if (value.musicPlayMode) mode = value.musicPlayMode; writes++; }, async remove() {} } }, tabs: {} },
     musicSleep: {}, getUserAlarmViewState() {}, saveUserAlarm() {}, neteaseApiCall() {}, bilibiliApiCall() {}, youtubeApiCall() {},
     getSilentMusicSongUrl: url,
-    persistSilentMusicPlayback: async () => { writes++; cache = { playlist: context.playbackSnapshot().songs }; },
+    persistSilentMusicPlayback: async (_song, _source, requestedMode) => { writes++; cache = { playlist: context.playbackSnapshot().songs, savedAt: clock }; if (requestedMode) mode = requestedMode; },
     sendToOffscreen: async (message, guard) => { guard?.(); if (message.command === 'seekTo') state.currentTime = message.value; if (message.command === 'stop') state = { ...state, songId: null, isPlaying: false, currentTime: 0 }; if (message.command === 'play') { plays++; state = { ...state, songId: message.songId, title: message.title, isPlaying: confirms }; } return { ok: true, data: state }; }
   };
   vm.runInNewContext('let silentMusicPlayback = null, assistantMusicRevision = 0;\n' + source.slice(start, end) + '\nglobalThis.interrupt = () => assistantMusicRevision++; globalThis.playbackSnapshot = () => silentMusicPlayback;', context);
@@ -299,6 +383,76 @@ test('队列播放可在同一工具中明确设置随机模式并确认声音�
   const f = playbackFixture(); const c = context(); const state = await f.deps.readMusicState(c);
   const result = await f.deps.playCurrentQueue(state.revision, null, c, 'shuffle');
   assert.equal(result.mode, 'shuffle'); assert.equal(result.isPlaying, true); assert.equal(f.plays(), 1);
+});
+test('明确随机播放可恢复过期保存队列，必须收到真实播放回执', async () => {
+  const f = playbackFixture({ savedAt: -86400000, initialAudio: { songId: null, isPlaying: false, volume: .5, currentTime: 0, duration: 0 } });
+  const c = context(); const before = await f.deps.readMusicState(c);
+  assert.equal(before.status, 'stale'); assert.equal(before.count, 2);
+  const result = await f.deps.playCurrentQueue(before.revision, null, c, 'shuffle');
+  assert.equal(result.status, 'ready'); assert.equal(result.mode, 'shuffle'); assert.equal(result.isPlaying, true);
+  assert.equal(f.plays(), 1); assert.deepEqual(Array.from(f.queue(), song => song.songId), ['1', '2']);
+
+  const failed = playbackFixture({ savedAt: -86400000, initialAudio: { songId: null, isPlaying: false }, confirms: false });
+  const old = await failed.deps.readMusicState(c);
+  await assert.rejects(failed.deps.playCurrentQueue(old.revision, null, c, 'shuffle'), /未确认/);
+  assert.equal(failed.writes(), 0);
+  const afterFailure = await failed.deps.readMusicState(c);
+  assert.equal(afterFailure.isPlaying, false);
+  assert.notEqual(afterFailure.source, 'background');
+});
+test('过期队列随机起点不可播放时有界尝试另一首，均失败则不改队列', async () => {
+  const requested = [];
+  const options = { savedAt: -86400000, initialAudio: { songId: null, isPlaying: false }, random: () => 0 };
+  const f = playbackFixture({ ...options, url: async id => { requested.push(id); return id === '1' ? '' : 'https://music.example.test/track.mp3'; } });
+  const c = context(); const state = await f.deps.readMusicState(c);
+  const played = await f.deps.playCurrentQueue(state.revision, null, c, 'shuffle');
+  assert.deepEqual(requested, ['1', '2']); assert.equal(played.currentSong.title, '第二首'); assert.equal(f.plays(), 1);
+
+  const none = playbackFixture({ ...options, url: async () => '' });
+  const before = await none.deps.readMusicState(c);
+  await assert.rejects(none.deps.playCurrentQueue(before.revision, null, c, 'shuffle'), /均暂不可播放/);
+  assert.equal(none.plays(), 0); assert.equal(none.writes(), 0);
+  assert.deepEqual(Array.from(none.queue(), song => song.songId), ['1', '2']);
+});
+test('保留过期队列不播放，清空过期队列需真实版本且不影响云端', async () => {
+  const options = { savedAt: -86400000, initialAudio: { songId: null, isPlaying: false } };
+  const keep = playbackFixture(options); const c = context();
+  const before = await keep.deps.readMusicState(c);
+  const restored = await keep.deps.reconcileMusicQueue('keep', before.revision, c);
+  assert.equal(restored.status, 'ready'); assert.equal(restored.count, 2); assert.equal(keep.plays(), 0);
+  await assert.rejects(keep.deps.reconcileMusicQueue('clear', before.revision, c), /已变化/);
+
+  const clear = playbackFixture(options);
+  const old = await clear.deps.readMusicState(c);
+  const empty = await clear.deps.reconcileMusicQueue('clear', old.revision, c);
+  assert.equal(empty.status, 'empty'); assert.equal(empty.count, 0); assert.equal(clear.plays(), 0);
+  assert.deepEqual(Array.from(clear.queue()), []);
+
+  const changed = playbackFixture(options);
+  const snapshot = await changed.deps.readMusicState(c);
+  changed.interrupt();
+  await assert.rejects(changed.deps.reconcileMusicQueue('keep', snapshot.revision, c), /已变化/);
+  assert.equal(changed.writes(), 0);
+
+  const invalid = playbackFixture({ ...options, initialQueue: [{ songId: 'bad', title: '无效记录' }] });
+  const invalidState = await invalid.deps.readMusicState(c);
+  assert.equal(invalidState.status, 'unavailable');
+  await assert.rejects(invalid.deps.reconcileMusicQueue('keep', invalidState.revision, c), /不是可恢复/);
+  const discarded = await invalid.deps.reconcileMusicQueue('clear', invalidState.revision, c);
+  assert.equal(discarded.status, 'empty'); assert.equal(invalid.plays(), 0);
+});
+test('工作台保留过期队列直接提交，清空先给确认卡', async () => {
+  const before = { status: 'stale', revision: 'r1', count: 2, songs: [{ songId: '1' }, { songId: '2' }] };
+  const calls = [];
+  const tools = Tools.create({ readMusicState: async () => before, reconcileMusicQueue: async (action, revision) => {
+    calls.push([action, revision]); return { status: action === 'keep' ? 'ready' : 'empty', revision: 'r2', count: action === 'keep' ? 2 : 0 };
+  } });
+  const kept = await tools.execute({ tool: 'music.queue.reconcile', args: { action: 'keep', expectedRevision: 'r1' } }, context());
+  assert.match(kept.message, /未开始播放/); assert.deepEqual(calls, [['keep', 'r1']]);
+  const review = await tools.execute({ tool: 'music.queue.reconcile', args: { action: 'clear', expectedRevision: 'r1' } }, context());
+  assert.equal(review.status, 'review'); assert.equal(calls.length, 1);
+  const cleared = await tools.choose(review.choices[0], context());
+  assert.match(cleared.message, /已清空/); assert.deepEqual(calls[1], ['clear', 'r1']);
 });
 
 test('音乐定位等待真实进度，超出时长或旧版本不得提交', async () => {

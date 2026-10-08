@@ -1,9 +1,11 @@
 # 技术文档索引
 
-> 最后更新：2026-08-16
+> 最后更新：2026-09-29
 
 | 更新日期 | 文档 | 标题 |
 |----------|------|------|
+| 2026-09-29 | [plan-assistant-speed-20260929.md](plan-assistant-speed-20260929.md) | AI 工作台提速实现计划 |
+| 2026-09-29 | [assistant-speed-20260929.md](assistant-speed-20260929.md) | AI 工作台提速：思考档位起步策略、无进展保护与队列播放快速路径 |
 | 2026-08-16 | [guide-youtube-oauth-setup.md](guide-youtube-oauth-setup.md) | YouTube OAuth 配置与验收指南 |
 | 2026-05-26 | [plan-writing-rag-and-agent-capability-v2.md](plan-writing-rag-and-agent-capability-v2.md) | 写作空间 RAG 联想与 Agent 能力建设 v2 |
 | 2026-05-26 | [plan-dock-agent-capability-v1.md](plan-dock-agent-capability-v1.md) | Dock 优化与 Agent 能力建设功能落地文档 |

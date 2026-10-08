@@ -1,0 +1,37 @@
+{
+  "storageRoot": "~/.lmstudio/models",
+  "entries": [
+    {
+      "id": "qwen3.8-27b",
+      "directory": "lmstudio-community/Qwen3.8-27B-MLX-4bit",
+      "runtime": "LM Studio",
+      "note": "LM Studio 管理下载与加载；本清单不代替其模型实例状态"
+    },
+    {
+      "id": "gemma-4-26b-a4b",
+      "directory": "lmstudio-community/gemma-4-26B-A4B-it-MLX-4bit",
+      "runtime": "LM Studio",
+      "note": "LM Studio 管理下载与加载"
+    },
+    {
+      "id": "qwen3.8-4b-distill",
+      "directory": "empero-ai/Qwen3.8-4B-Distill-GGUF",
+      "runtime": "LM Studio",
+      "note": "LM Studio 管理下载与加载；社区蒸馏版"
+    },
+    {
+      "id": "step-audio-editx",
+      "directory": "appautomaton/step-audio-editx-8bit-mlx",
+      "runtime": "mlx-speech",
+      "manifest": "voice-runtime/model-manifest.json",
+      "note": "复用同一存储目录；由语音运行时加载，LM Studio 不提供语音推理"
+    },
+    {
+      "id": "laya-multilingual",
+      "directory": "convaiinnovations/laya",
+      "runtime": "laya[serve]",
+      "manifest": "laya-runtime/model-manifest.json",
+      "note": "复用同一存储目录；由 Laya 运行时加载，LM Studio 不提供决策头推理"
+    }
+  ]
+}

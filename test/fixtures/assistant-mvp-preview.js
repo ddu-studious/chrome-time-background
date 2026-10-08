@@ -27,6 +27,23 @@
     tabs: { async create({ url }) { effect('打开 ' + url); return { id: 2 }; }, async remove() { effect('输入条已收起，刷新后恢复任务'); document.querySelector('main').hidden = true; } },
     windows: { async update() {}, async get() { return { id: 1, type: 'popup' }; }, async remove() { effect('输入条已收起，刷新后恢复任务'); document.querySelector('main').hidden = true; } }
   };
+  // Isolated control-plane substitute for checking the workbench's Laya UI.
+  chrome.runtime.onMessage.addListener((message, _sender, respond) => {
+    if (message.action === 'local_ai_status') {
+      respond({ ok: true, model: 'qwen/qwen3.8-27b', defaultReasoning: 'low', models: [{ id: 'qwen/qwen3.8-27b', name: 'Qwen3.8 27B', loaded: true, reasoningOptions: ['off', 'low'] }] });
+      return true;
+    }
+    if (!['ai_control_get', 'ai_control_save'].includes(message.action)) return;
+    const current = values.fixtureLayaControl || { revision: 1, policy: { modelEnabled: true, disabledScenes: [], layaMode: 'off' } };
+    if (message.action === 'ai_control_get') {
+      respond({ ok: true, ...current, laya: { mode: current.policy.layaMode, usage: { admitted: 0, scenes: {} } }, jobs: [] });
+      return true;
+    }
+    if (message.expectedRevision !== current.revision) { respond({ ok: false, error: '策略版本已变化，请刷新' }); return true; }
+    const next = { revision: current.revision + 1, policy: { ...message.policy } };
+    void storage.set({ fixtureLayaControl: next }).then(() => respond({ ok: true, ...next, laya: { mode: next.policy.layaMode, usage: { admitted: 0, scenes: {} } }, jobs: [] }));
+    return true;
+  });
   if (homeTest) {
     Object.assign(chrome.tabs, { getCurrent: async () => tab, get: async () => tab, query: async options => options.url ? [] : [tab] });
     Object.assign(chrome.windows, { getLastFocused: async () => ({ left: 0, top: 0, width: innerWidth, height: innerHeight }), create: async () => { effect('错误：走到了独立窗口兜底'); } });
@@ -86,6 +103,6 @@
     sleepMusic: async minutes => { effect('模拟设置 ' + minutes + ' 分钟定时'); return { ok: true }; },
     listAlarms: async () => ({ alarms: values.fixtureAlarms || [] }),
     saveAlarm: async alarm => { await storage.set({ fixtureAlarms: [...(values.fixtureAlarms || []), alarm] }); effect('只写入隔离测试提醒'); return { alarm }; },
-    openURL: async url => effect('模拟打开 ' + url)
+    openVideo: async request => { effect('模拟在 App 内打开 ' + (request.title || request.query || request.id)); return { opened: true, destination: 'app', playbackConfirmed: false }; }
   });
 })();

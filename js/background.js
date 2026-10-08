@@ -1,7 +1,9 @@
-importScripts('music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'music-search.js', 'alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'alarm-countdown.js', 'local-ai-client.js', 'background-provider.js', 'hermes-writing-sync.js', 'site-workspace-core.js', '../vendor/pinyin-match/pinyin-match.js', 'assistant-match.js', 'assistant-memory.js', 'assistant-contract.js', 'assistant-context-state.js', 'assistant-engine.js', 'assistant-confirmation.js', 'assistant-music.js', 'assistant-management.js', 'assistant-tools.js', 'assistant-background.js');
+importScripts('quick-capture.js', 'app-video.js', 'youtube-home.js', 'music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'music-search.js', 'alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'alarm-countdown.js', 'local-ai-client.js', 'background-provider.js', 'hermes-writing-sync.js', 'site-workspace-core.js', '../vendor/pinyin-match/pinyin-match.js', 'assistant-match.js', 'assistant-memory.js', 'assistant-contract.js', 'assistant-context-state.js', 'assistant-todo.js', 'assistant-engine.js', 'assistant-confirmation.js', 'assistant-music.js', 'assistant-management.js', 'assistant-tools.js', 'assistant-voice-background.js', 'assistant-background.js');
 
 (function() {
     let assistantMusicRevision = 0;
+    let youtubeHomeService = null;
+    const getYouTubeHomeService = () => (youtubeHomeService ||= new self.YouTubeHomeService(chrome));
     const SITE_WORKSPACE_MENU_ID = 'site-workspace-add-current-tab';
     const SITE_WORKSPACE_OPEN_MENU_ID = 'site-workspace-open-panel';
     const SITE_WORKSPACE_COMMAND = 'add-current-tab-to-site-workspace';
@@ -30,6 +32,21 @@ importScripts('music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'mus
     const siteWorkspaceService = self.SiteWorkspaceCore
         ? new self.SiteWorkspaceCore.WorkspaceService(chrome)
         : null;
+    // Keep workspace relationships and temporary-page lifecycle up to date with the panel closed.
+    // The core serializes storage transactions across the worker and extension pages.
+    const syncWorkspace = () => siteWorkspaceService?.getSnapshot()
+        .catch(error => console.warn('[SiteWorkspace] 标签同步失败:', error));
+    chrome.tabs.onCreated.addListener(tab => {
+        siteWorkspaceService?.rememberOpener(tab)
+            .then(syncWorkspace).catch(error => console.warn('[SiteWorkspace] 来源记录失败:', error));
+    });
+    chrome.tabs.onUpdated.addListener((_id, changes) => {
+        if (['url', 'title', 'groupId', 'status'].some(key => key in changes)) void syncWorkspace();
+    });
+    chrome.tabs.onRemoved.addListener(syncWorkspace);
+    chrome.tabs.onAttached.addListener(syncWorkspace);
+    chrome.tabGroups.onRemoved.addListener(syncWorkspace);
+
 
     function ensureContextMenu(id, options) {
         chrome.contextMenus.create({ id, ...options }, () => {
@@ -1084,7 +1101,7 @@ importScripts('music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'mus
         return '';
     }
 
-    async function persistSilentMusicPlayback(song, source) {
+    async function persistSilentMusicPlayback(song, source, playMode) {
         const playback = silentMusicPlayback;
         if (!playback || !song) return;
         const playlist = playback.songs.map((item, index) => ({
@@ -1093,6 +1110,7 @@ importScripts('music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'mus
             isActive: index === playback.index,
         }));
         await chrome.storage.local.set({
+            ...(playMode ? { musicPlayMode: playMode } : {}),
             musicPlaylistCache: {
                 playlist,
                 playlistId: null,
@@ -3241,6 +3259,19 @@ importScripts('music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'mus
     // 监听消息事件
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.action === 'offscreen_play' || (message.action === 'offscreen_command' && ['play', 'pause', 'resume', 'togglePlay', 'stop', 'seekTo', 'setVolume'].includes(message.command))) assistantMusicRevision++;
+        if (['music_queue_review_state', 'music_queue_reconcile'].includes(message.action)) {
+            (async () => {
+                try {
+                    if (sender.id !== chrome.runtime.id || !sender.url?.startsWith(chrome.runtime.getURL(''))) throw new Error('仅扩展页面可核对本地队列');
+                    const ctx = { guard() {} };
+                    const state = message.action === 'music_queue_review_state'
+                        ? await readAssistantMusicState(ctx)
+                        : await reconcileAssistantMusicQueue(message.mode, message.expectedRevision, ctx);
+                    sendResponse({ ok: true, status: state.status, count: state.count, revision: state.revision });
+                } catch (error) { sendResponse({ ok: false, error: error.message }); }
+            })();
+            return true;
+        }
         const userAlarmActions = new Set([
             'user_alarm_list', 'user_alarm_save', 'user_alarm_rename', 'user_alarm_delete', 'user_alarm_toggle',
             'user_alarm_dismiss', 'user_alarm_snooze', 'user_alarm_test', 'user_alarm_test_stop',
@@ -3449,6 +3480,18 @@ importScripts('music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'mus
         }
 
         // ========== v3.20.0: YouTube OAuth 与只读 Data API ==========
+
+        if (message.action === 'youtube_home_feed') {
+            getYouTubeHomeService().read(message, sender)
+                .then(data => sendResponse({ ok: true, data }))
+                .catch(error => sendResponse({ ok: false, error: { code: error.code || 'home-fetch-failed' } }));
+            return true;
+        }
+        if (message.action === 'youtube_home_release') {
+            try { sendResponse(getYouTubeHomeService().release(sender)); }
+            catch { sendResponse({ ok: false, error: { code: 'home-forbidden' } }); }
+            return false;
+        }
 
         if (message.action === 'youtube_auth_status') {
             getYouTubeAuthStatus()
@@ -3922,7 +3965,8 @@ importScripts('music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'mus
         const current = audio.data;
         const liveMatch = current.songId != null && songs.some(s => s.songId === String(current.songId));
         const stale = !silentMusicPlayback && songs.length > 0 && !liveMatch && Date.now() - Number(cache?.savedAt || 0) >= 86400000;
-        const status = unsupportedQueue ? 'unavailable' : stale ? 'stale' : current.songId != null && !liveMatch ? 'unavailable' : songs.length ? 'ready' : 'empty';
+        const status = unsupportedQueue || (current.songId != null && !liveMatch) || (current.isPlaying && current.songId == null)
+            ? 'unavailable' : stale ? 'stale' : songs.length ? 'ready' : 'empty';
         const mode = MusicQueuePolicy.modes.includes(stored.musicPlayMode) ? stored.musicPlayMode : 'sequence';
         const material = JSON.stringify([epoch, cache?.savedAt || 0, cache?.assistantRevision || '', silentMusicPlayback?.id || '', songs.map(s => s.songId), current.songId, mode]);
         const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(material));
@@ -3931,15 +3975,30 @@ importScripts('music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'mus
         const revision = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
         return { status, revision, mode, isPlaying: Boolean(current.isPlaying), currentSong: current.songId == null ? null : { title: String(current.title || '').slice(0, 180), artist: String(current.artist || '').slice(0, 180) },
             currentTime: Number(current.currentTime) || 0, duration: Number(current.duration) || 0, volume: current.volume,
-            count: sourceSongs.length, source: silentMusicPlayback ? 'background' : liveMatch ? 'live-cache' : 'cache', readAt: Date.now(),
+            count: sourceSongs.length, queueType: silentMusicPlayback?.mode === 'personal-fm' ? 'personal-fm' : 'queue', source: silentMusicPlayback ? 'background' : liveMatch ? 'live-cache' : 'cache', readAt: Date.now(),
             timer: stored.musicSleepTimerV1?.status === 'pending' ? { fireAt: stored.musicSleepTimerV1.fireAt } : null,
             cacheStamp: JSON.stringify([cache?.savedAt, cache?.assistantRevision, cache?.playlist]), songs, currentSongId: current.songId == null ? null : String(current.songId) };
     }
-    async function assertAssistantMusicRevision(expected, ctx) {
+    async function assertAssistantMusicRevision(expected, ctx, { allowStale = false } = {}) {
         const state = await readAssistantMusicState(ctx);
         if (state.revision !== expected) throw new Error('队列或播放状态已变化，已停止旧操作，请重新发起');
-        if (!['ready', 'empty'].includes(state.status)) throw new Error('当前队列不可用或已过期，请先在播放器核对');
+        if (!['ready', 'empty', ...(allowStale ? ['stale'] : [])].includes(state.status)) throw new Error('当前队列不可用或已过期，请先在播放器核对');
         return state;
+    }
+    async function reconcileAssistantMusicQueue(action, expectedRevision, ctx) {
+        if (!['keep', 'clear'].includes(action)) throw new Error('队列核对动作无效');
+        const epoch = assistantMusicRevision;
+        const state = await readAssistantMusicState(ctx);
+        if (state.revision !== expectedRevision) throw new Error('队列或播放状态已变化，请重新核对');
+        const inactiveCache = state.source === 'cache' && state.count > 0 && state.currentSongId == null && !state.isPlaying;
+        if (!inactiveCache) throw new Error('播放器已有播放状态或队列来源不明，请先核对当前歌曲');
+        if (action === 'keep' && (state.status !== 'stale' || !state.songs.length || state.songs.length !== state.count)) throw new Error('当前不是可恢复的过期队列，请重新查询');
+        if (action === 'clear' && !['stale', 'unavailable'].includes(state.status)) throw new Error('当前不是待核对的保存队列，请重新查询');
+        const latest = await chrome.storage.local.get('musicPlaylistCache'); ctx.guard();
+        if (epoch !== assistantMusicRevision || state.cacheStamp !== JSON.stringify([latest.musicPlaylistCache?.savedAt, latest.musicPlaylistCache?.assistantRevision, latest.musicPlaylistCache?.playlist])) throw new Error('队列已变化，请重新核对');
+        const saved = { ...latest.musicPlaylistCache, playlist: action === 'keep' ? state.songs : [], savedAt: Date.now(), source: 'quick-assistant', assistantRevision: crypto.randomUUID() };
+        await chrome.storage.local.set({ musicPlaylistCache: saved, ...(action === 'clear' ? { lastMusicState: null } : {}) });
+        return readAssistantMusicState(ctx);
     }
     async function setAssistantMusicMode(mode, expected, ctx) {
         await assertAssistantMusicRevision(expected, ctx); ctx.guard();
@@ -3950,15 +4009,29 @@ importScripts('music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'mus
         return readAssistantMusicState(ctx);
     }
     async function playAssistantQueue(expected, songId, ctx, mode) {
-        let state = await assertAssistantMusicRevision(expected, ctx);
+        const state = await assertAssistantMusicRevision(expected, ctx, { allowStale: true });
         if (!state.songs.length) throw new Error('当前队列为空，请先搜索并选择歌曲或歌单');
         if (silentMusicPlayback?.mode === 'personal-fm') throw new Error('私人FM请使用继续播放或下一首');
-        if (mode != null && mode !== state.mode) { state = await setAssistantMusicMode(mode, expected, ctx); expected = state.revision; }
+        if (mode != null && !MusicQueuePolicy.modes.includes(mode)) throw new Error('播放模式无效');
+        const playMode = mode || state.mode;
         const current = state.songs.findIndex(s => s.songId === state.currentSongId);
-        const index = songId ? state.songs.findIndex(s => s.songId === songId) : state.mode === 'shuffle' ? Math.floor(Math.random() * state.songs.length) : Math.max(0, current);
+        const index = songId ? state.songs.findIndex(s => s.songId === songId) : playMode === 'shuffle' ? Math.floor(Math.random() * state.songs.length) : Math.max(0, current);
         if (index < 0) throw new Error('该歌曲已不在当前队列');
-        const guarded = { ...ctx, checkMusicRevision: () => assertAssistantMusicRevision(expected, ctx) };
-        await playAssistantMusic(state.songs[index], guarded, state.songs);
+        // Only an explicit queue.play may reactivate an expired but valid saved queue.
+        // The original revision is checked again after URL lookup, before any playback dispatch.
+        const guarded = { ...ctx, checkMusicRevision: () => assertAssistantMusicRevision(expected, ctx, { allowStale: state.status === 'stale' }) };
+        const attempts = songId ? 1 : Math.min(state.songs.length, 5);
+        let played = false;
+        for (let offset = 0; offset < attempts; offset++) {
+            try {
+                await playAssistantMusic(state.songs[(index + offset) % state.songs.length], guarded, state.songs, undefined, mode);
+                played = true;
+                break;
+            } catch (error) {
+                if (songId || error.code !== 'unavailable') throw error;
+            }
+        }
+        if (!played) throw new Error('已尝试队列中最多5首歌曲，均暂不可播放；队列未更改');
         return readAssistantMusicState(ctx);
     }
     async function applyAssistantQueue(songs, { mode, startPlayback, expectedRevision, title }, ctx) {
@@ -3994,11 +4067,13 @@ importScripts('music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'mus
     }
     async function editAssistantMusicQueue(action, songId, expectedRevision, ctx) {
         const state = await assertAssistantMusicRevision(expectedRevision, ctx);
-        if (!['remove', 'clear'].includes(action)) throw new Error('队列操作无效');
+        if (!['remove', 'remove-many', 'clear'].includes(action)) throw new Error('队列操作无效');
+        if (action === 'remove-many' && silentMusicPlayback?.mode === 'personal-fm') throw new Error('私人FM使用独立队列，不能按普通本地队列批量移除');
         if (action === 'remove' && !state.songs.some(s => s.songId === songId)) throw new Error('歌曲已不在当前队列');
-        const songs = action === 'clear' ? [] : state.songs.filter(s => s.songId !== songId);
+        const songs = action === 'clear' ? [] : action === 'remove-many' ? MusicQueuePolicy.removeSongs(state.songs, songId) : state.songs.filter(s => s.songId !== songId);
+        const removesCurrent = action === 'clear' || (action === 'remove-many' ? songId.includes(state.currentSongId) : songId === state.currentSongId);
         const epoch = assistantMusicRevision;
-        if (action === 'clear' || songId === state.currentSongId) {
+        if (removesCurrent) {
             const result = await sendToOffscreen({ command: 'stop' }, () => { ctx.guard(); if (epoch !== assistantMusicRevision) throw new Error('播放器已被手动操作'); });
             if (!result?.ok) throw new Error('播放器没有确认停止，队列未修改');
             await waitAssistantPlayback(data => !data.isPlaying && data.songId == null, ctx, epoch);
@@ -4011,7 +4086,7 @@ importScripts('music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'mus
         // No automatic next song when removing the playing item: stop is part of the reviewed action.
         await chrome.storage.local.set({ musicPlaylistCache: { ...latest.musicPlaylistCache, playlist: songs, savedAt: Date.now(), source: 'quick-assistant', assistantRevision: crypto.randomUUID() } });
         if (silentMusicPlayback) {
-            if (!songs.length || songId === state.currentSongId) silentMusicPlayback = null;
+            if (!songs.length || removesCurrent) silentMusicPlayback = null;
             else { silentMusicPlayback.songs = songs; silentMusicPlayback.index = songs.findIndex(s => s.songId === state.currentSongId); }
         }
         return readAssistantMusicState(ctx);
@@ -4035,7 +4110,7 @@ importScripts('music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'mus
             if (data.code !== 0 && data.code !== -101) throw new Error('账号状态接口暂不可用');
             return { platform, connected: Boolean(data.data?.isLogin), status: data.data?.isLogin ? 'connected' : 'login-required' };
         },
-        readMusicState: readAssistantMusicState, setMusicMode: setAssistantMusicMode,
+        readMusicState: readAssistantMusicState, reconcileMusicQueue: reconcileAssistantMusicQueue, setMusicMode: setAssistantMusicMode,
         playCurrentQueue: playAssistantQueue, applyMusicQueue: applyAssistantQueue,
         ai: message => LocalAIBridge.request(message),
         netease: neteaseApiCall, bilibili: bilibiliApiCall, youtube: youtubeApiCall,
@@ -4049,7 +4124,12 @@ importScripts('music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'mus
             throw new Error('提醒操作无效');
         },
         editMusicQueue: editAssistantMusicQueue, seekMusic: seekAssistantMusic,
-        openURL: url => chrome.tabs.create({ url, active: true }),
+        async openVideo(request, ctx) {
+            const url = AppVideo.buildURL(request, chrome.runtime.getURL('index.html'));
+            ctx.guard();
+            const tab = await chrome.tabs.create({ url, active: true });
+            return { opened: Number.isInteger(tab?.id), destination: 'app', playbackConfirmed: false };
+        },
         async controlMusic(intent, ctx) {
             ctx.guard(); const before = await sendToOffscreen({ command: 'getState' }); ctx.guard();
             const revision = ++assistantMusicRevision;
@@ -4102,7 +4182,7 @@ importScripts('music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'mus
         },
         playMusic: playAssistantMusic
     });
-    async function playAssistantMusic(song, ctx, selectedQueue, queueName) {
+    async function playAssistantMusic(song, ctx, selectedQueue, queueName, requestedMode) {
         if (!/^\d+$/.test(song.songId)) throw new Error('歌曲编号无效');
         const trace = (name, title, input, fn) => ctx.trace ? ctx.trace(name, title, input, fn) : fn();
         const revision = assistantMusicRevision;
@@ -4120,7 +4200,7 @@ importScripts('music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'mus
         if (ctx.checkMusicRevision) await ctx.checkMusicRevision();
         ctx.guard();
         const previousPlayback = silentMusicPlayback;
-        const playback = silentMusicPlayback = { ...(selectedQueue ? {} : previousPlayback || {}), id: Date.now(), mode: 'assistant', name: queueName || musicPlaylistCache?.playlistName || '播放队列', songs, index };
+        const playback = silentMusicPlayback = { ...(selectedQueue ? {} : previousPlayback || {}), id: Date.now(), mode: 'assistant', name: queueName || musicPlaylistCache?.playlistName || '播放队列', songs, index, ...(requestedMode ? { playMode: requestedMode } : {}) };
         let result;
         try {
             result = await trace('music.playback.dispatch', '提交播放请求', { songId: song.songId, title: song.title }, () => sendToOffscreen({ command: 'play', ...song, url }, () => { ctx.guard(); if (revision !== assistantMusicRevision) throw new Error('播放器已被手动操作，请重新选择歌曲'); }));
@@ -4129,9 +4209,14 @@ importScripts('music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'mus
             throw error;
         }
         if (!result?.ok) { if (silentMusicPlayback === playback) silentMusicPlayback = previousPlayback; throw new Error('播放请求失败'); }
-        await trace('music.playback.confirm', '等待播放器确认开始播放', { songId: song.songId }, async () => { await waitAssistantPlayback(data => data.isPlaying && String(data.songId) === song.songId, ctx, revision); return { confirmed: true, songId: song.songId }; });
-        ctx.guard(); if (silentMusicPlayback !== playback) throw new Error('播放队列已变化');
-        await trace('music.queue.persist', '保存播放队列和当前曲目', { mode: selectedQueue ? 'replace' : 'append', songId: song.songId, count: songs.length }, async () => { await persistSilentMusicPlayback(song, 'quick-assistant'); return { saved: true, count: songs.length, currentSong: song.title }; });
+        try {
+            await trace('music.playback.confirm', '等待播放器确认开始播放', { songId: song.songId }, async () => { await waitAssistantPlayback(data => data.isPlaying && String(data.songId) === song.songId, ctx, revision); return { confirmed: true, songId: song.songId }; });
+            ctx.guard(); if (silentMusicPlayback !== playback) throw new Error('播放队列已变化');
+            await trace('music.queue.persist', '保存播放队列和当前曲目', { mode: selectedQueue ? 'replace' : 'append', songId: song.songId, count: songs.length }, async () => { await persistSilentMusicPlayback(song, 'quick-assistant', requestedMode); return { saved: true, count: songs.length, currentSong: song.title }; });
+        } catch (error) {
+            if (silentMusicPlayback === playback) silentMusicPlayback = previousPlayback;
+            throw error;
+        }
         return { ok: true, song: { songId: song.songId, title: song.title, artist: song.artist }, queueLength: songs.length };
     }
     chrome.contextMenus.onClicked.addListener((info, tab) => {

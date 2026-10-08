@@ -8,8 +8,8 @@
         html { overflow: hidden; height: 100%; }
         body { position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; overflow: hidden; margin: 0; padding: 0; background-size: cover; background-position: center; background-repeat: no-repeat; }
     </style>
-    <link rel="stylesheet" href="css/style.css?v=14">
-    <link rel="stylesheet" href="css/background-experience.css?v=3">
+    <link rel="stylesheet" href="css/style.css?v=15">
+    <link rel="stylesheet" href="css/background-experience.css?v=4">
     <link rel="stylesheet" href="css/schedule.css">
     <link rel="stylesheet" href="css/alarm-center.css?v=1">
     <link rel="stylesheet" href="css/smart-alarm.css?v=5">
@@ -20,13 +20,13 @@
     <link rel="stylesheet" href="css/tetris-3d-game.css">
     <link rel="stylesheet" href="css/dock-manager.css?v=10">
     <link rel="stylesheet" href="css/prompt-manager.css?v=3">
-    <link rel="stylesheet" href="css/youtube-workbench.css?v=4">
+    <link rel="stylesheet" href="css/youtube-workbench.css?v=6">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="css/music-assistant.css?v=4">
 </head>
 <body>
     <!-- 视频背景层（v3.16.0 多源背景支持） -->
-    <video id="background-video" autoplay muted loop playsinline preload="metadata" disablepictureinpicture></video>
+    <video id="background-video" muted loop playsinline preload="metadata" disablepictureinpicture></video>
     <!-- 背景体验层：v2 视觉皮肤 + v3 手势物理世界 -->
     <div id="background-experience-root" class="bgx-root" aria-hidden="true">
         <div id="background-experience-tone" class="bgx-tone"></div>
@@ -441,7 +441,7 @@
     <script src="js/ticker.js?v=4"></script>
     <script src="js/adaptive-overlay.js?v=1"></script>
     <script src="js/product-ui-v5.js?v=6"></script>
-    <script src="js/product-pages-v5.js?v=6"></script>
+    <script src="js/product-pages-v5.js?v=7"></script>
     <script src="js/music-view.js?v=7"></script>
     <script src="js/assistant-session.js"></script>
     <script src="js/music-search.js"></script>
@@ -449,11 +449,13 @@
     <script src="js/voice-input.js?v=2"></script>
     <script src="js/music-assistant.js?v=4"></script>
     <script src="js/music-queue-policy.js"></script>
-    <script src="js/music-controller.js?v=18"></script>
+    <script src="js/music-controller.js?v=19"></script>
     <script src="vendor/flv.min.js"></script>
-    <script src="js/bilibili-controller.js?v=29"></script>
-    <script src="js/youtube-controller.js?v=12"></script>
-    <script src="js/worklog.js?v=7"></script>
+    <script src="js/app-video.js?v=1"></script>
+    <script src="js/bilibili-controller.js?v=30"></script>
+    <script src="js/youtube-controller.js?v=16"></script>
+    <script src="js/quick-capture.js"></script>
+    <script src="js/worklog.js?v=8"></script>
     <script src="js/today-overview.js?v=6"></script>
     <script src="js/product-shell-v5.js?v=9"></script>
     <script src="js/hermes-writing-sync.js?v=1"></script>
@@ -482,11 +484,11 @@
     <script src="js/app-registry.js"></script>
     <script src="js/dock-manager.js?v=13"></script>
     <script src="js/site-workspace-launcher.js?v=1"></script>
-    <script src="js/assistant-overlay.js?v=5" data-assistant-home="true"></script>
+    <script src="js/assistant-overlay.js?v=7" data-assistant-home="true"></script>
     <script src="js/assistant-launcher.js?v=3"></script>
     <script src="js/games-v5.js?v=2"></script>
     <script src="js/quick-nav.js?v=13"></script>
-    <script src="js/background-experience.js?v=3"></script>
-    <script src="js/main.js?v=11"></script>
+    <script src="js/background-experience.js?v=4"></script>
+    <script src="js/main.js?v=13"></script>
   </body>
 </html>

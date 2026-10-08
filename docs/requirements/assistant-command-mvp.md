@@ -1,5 +1,9 @@
 # 快捷助手 MVP
 
+> 2026-09-23 新增任务与工作日志快速添加，见 [实现与验收边界](../technical/assistant-quick-capture-20260923.md)。以下保留第一版范围。
+
+> 视频入口于 2026-09-22 改为 App 内播放器，见 [实现与验收边界](../technical/assistant-video-in-app-20260922.md)。
+
 > 工具编排已升级，见 [按需工具与逐步决策 v1](../design/assistant-adaptive-tools-v1.md)。以下保留第一版记录。
 
 > 已升级轻量入口、拼音匹配与歌曲/歌手/歌单三类对象，最新说明见 [轻量助手实现](../design/assistant-v2-implementation.md)。下文保留第一版的范围与验收记录。
@@ -27,10 +31,10 @@ Esc 先关闭建议列表，再收起窗口。停止执行和收起窗口分别�
 | music.sleep | 0–240 分钟；0 取消定时 |
 | alarm.prepare | 复用智能闹钟解析和追问，确认后保存 |
 | alarm.list | 展示最多20条现有提醒 |
-| video.search | B站/YouTube标题搜索；YouTube未授权时提供原站搜索选项 |
+| video.search | B站/YouTube标题搜索；YouTube未授权时提供 App 内连接与搜索入口 |
 | video.history | B站最近一页记录，或YouTube扩展本地记录；可按最近30天中的具体日期及未看完状态筛选 |
 
-视频选择后在原站打开，链接携带已知秒数；页面打开不等于自动播放成功。字幕、视频内容理解、精确时长筛选不在此版。
+视频选择后在 App 内打开，携带已知秒数及 B 站分 P；页面打开不等于自动播放成功。字幕、视频内容理解、精确时长筛选不在此版。
 
 ## 实现
 

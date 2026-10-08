@@ -36,7 +36,7 @@ child.stdout.on('data', chunk => {
 });
 try {
   const first = await request('confirmation', { card: card(1) });
-  assert.equal(first.ok, true); assert.equal(first.version, 3); assert.equal(first.confirmationVisible, true); assert.equal(first.confirmationFocusStayed, true);
+  assert.equal(first.ok, true); assert.equal(first.version, 4); assert.equal(first.confirmationVisible, true); assert.equal(first.confirmationFocusStayed, true);
   console.log('SHOW', JSON.stringify(first));
   const invalid = await request('confirmation', { card: { ...card(2), expiresAt: 'bad' } });
   assert.equal(invalid.ok, false); assert.equal(invalid.confirmationId, card(1).id);

@@ -114,7 +114,7 @@ test('任务时间预算到期时不提交自动动作', async () => {
 
 test('第十二个工具准备提醒后不能额外自动提交', async () => {
   let rounds = 0;
-  const f = fixture({ plan: async () => ({ steps: [++rounds === 12 ? prepare : { tool: 'alarm.list', args: {} }], continue: true }) });
+  const f = fixture({ plan: async () => ({ steps: [++rounds === 12 ? prepare : { tool: 'alarm.list', args: { query: `提醒${rounds}` } }], continue: true }) });
   await f.engine.submit({ text, app: 'alarm' }); const task = await f.engine.settled();
   assert.equal(f.values[Engine.KEY].toolCalls, 12); assert.equal(f.calls.writes, 0);
   assert.notEqual(task.status, 'completed');

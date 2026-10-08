@@ -2,11 +2,13 @@
   'use strict';
   const COMMAND = 'toggle-quick-assistant';
   function install(deps) {
-    let confirmation;
+    let confirmation, voice;
     const handlers = root.AssistantTools.create({ ...deps, memory: (action, body) => root.LocalAIBridge.request({ action: action === 'get' ? 'ai_memory_get' : 'ai_memory_write', body }) });
-    const engine = root.AssistantEngine.create({ storage: chrome.storage.local, ...handlers, onChange: task => confirmation?.sync(task), history: event => root.LocalAIBridge.request({ action: 'ai_history_write', body: { operation: 'event', event } }), cancelJob: jobId => root.LocalAIBridge.request({ action: 'ai_job_cancel', jobId }) });
+    const engine = root.AssistantEngine.create({ storage: chrome.storage.local, ...handlers, onChange: task => { confirmation?.sync(task); void voice?.onChange(task).catch(() => {}); }, history: event => root.LocalAIBridge.request({ action: 'ai_history_write', body: { operation: 'event', event } }), cancelJob: jobId => root.LocalAIBridge.request({ action: 'ai_job_cancel', jobId }) });
+    voice = root.AssistantVoiceBackground?.create({ snapshot: () => engine.snapshot(), request: message => root.LocalAIBridge.request(message), storage: chrome.storage.session });
+    void voice?.onChange().catch(() => {});
     if (deps.desktop && root.AssistantConfirmation) {
-      confirmation = root.AssistantConfirmation.create({ desktop: deps.desktop, engine });
+      confirmation = root.AssistantConfirmation.create({ desktop: deps.desktop, engine, openWorkspace: () => open(false) });
       void engine.snapshot().then(task => confirmation.sync(task)).catch(() => {});
     }
     const BINDINGS = 'quickAssistantOverlaysV1';
@@ -97,12 +99,12 @@
       })();
       try { return await opening; } finally { opening = null; }
     }
-    const actions = new Set(['assistant_open', 'assistant_snapshot', 'assistant_submit', 'assistant_choose', 'assistant_cancel', 'assistant_compact', 'assistant_clear', 'assistant_shortcuts', 'assistant_hide', 'assistant_resize']);
+    const actions = new Set(['assistant_open', 'assistant_snapshot', 'assistant_submit', 'assistant_choose', 'assistant_cancel', 'assistant_compact', 'assistant_clear', 'assistant_shortcuts', 'assistant_hide', 'assistant_resize', 'assistant_voice_synthesize', 'assistant_voice_result', 'assistant_voice_cancel']);
     chrome.runtime.onMessage.addListener((message, sender, respond) => {
       if (message?.action === 'assistant_overlay_closed' && sender.id === chrome.runtime.id && (sender.frameId === 0 || isHomeDocument(sender.url))) {
         bindings().then(async all => {
           const tabId = sender.tab?.id ?? (isHomeDocument(sender.url) ? message.hostTabId : null);
-          if (all[tabId]?.nonce === message.nonce) { delete all[tabId]; await chrome.storage.session.set({ [BINDINGS]: all }); }
+          if (all[tabId]?.nonce === message.nonce) { await voice?.cancelOwner(`overlay:${tabId}:${message.nonce}`); delete all[tabId]; await chrome.storage.session.set({ [BINDINGS]: all }); }
           respond({ ok: true });
         }).catch(() => respond({ ok: false })); return true;
       }
@@ -111,6 +113,12 @@
         if (sender.id !== chrome.runtime.id || !sender.url?.startsWith(chrome.runtime.getURL(''))) throw new Error('仅扩展页面可使用快捷助手');
         sender = await resolveSender(sender);
         const embedded = await authorize(sender);
+        if (message.action.startsWith('assistant_voice_') && !embedded && !sender.documentId && sender.tab?.id == null) throw new Error('语音页面来源无法核验，请重新打开工作台');
+        const voiceOwner = embedded ? `overlay:${sender.tab.id}:${embedded.nonce}` : sender.documentId ? `document:${sender.documentId}` : `page:${sender.tab?.id ?? 'none'}:${sender.frameId ?? 0}:${sender.url}`;
+        if (message.action.startsWith('assistant_voice_')) {
+          if (new URL(sender.url).pathname !== '/assistant.html' || !voice) throw new Error('请在 AI 工作台使用回答朗读');
+          return voice.handle(message, voiceOwner);
+        }
         if (message.action === 'assistant_open') { await open(false, sender.tab); return {}; }
         if (message.action === 'assistant_shortcuts') { await chrome.tabs.create({ url: 'chrome://extensions/shortcuts' }); return {}; }
         if (message.action === 'assistant_resize') {
@@ -121,6 +129,7 @@
           return {};
         }
         if (message.action === 'assistant_hide') {
+          await voice?.cancelOwner(voiceOwner);
           if (embedded) {
             const message = { action: 'assistant_overlay_hide', nonce: embedded.nonce };
             if (embedded.home) await sendHome(sender.tab.id, message);

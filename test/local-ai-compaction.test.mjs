@@ -164,6 +164,11 @@ test('真实 SDK 压缩后的溢出恢复仅重试规划，清空/追加/播放�
   let calls = 0, summaries = 0, overflow = false;
   const step = (tool, args = {}) => ({ steps: [{ tool, args }], continue: true });
   const result = await runContextScenario({ provider: provider({ generateText: async () => { summaries++; return { text: '用户要求清空队列后找杨和苏热门歌曲，追加并随机播放；清空已完成，不要重复清空。' }; }, generateObject: async ({ input: sent }) => {
+    if (sent.planningPhase === 'outline') return { todoTips: [
+      { text: '清空队列', source: 0, tool: 'music.queue.clear', args: {} },
+      { text: '追加杨和苏热门歌曲', source: 0, tool: 'music.queue.apply', args: { mode: 'append', startPlayback: false } },
+      { text: '随机起播', source: 0, tool: 'music.queue.play', args: { mode: 'shuffle' } }
+    ] };
     const obs = sent.observations, revision = [...obs].reverse().find(row => row.data?.revision)?.data.revision;
     if (calls === 3 && !overflow) { overflow = true; throw Object.assign(new Error('capacity'), { code: 'MODEL_CONTEXT_WINDOW_EXCEEDED' }); }
     switch (calls++) {

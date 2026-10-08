@@ -82,7 +82,7 @@ test('私人 FM 不再复制正在播放的歌曲卡', () => {
 test('非激活音乐页面不会残留在无障碍树或键盘焦点中', () => {
   assert.match(styleSource, /\.mc-pane\s*\{[^}]*visibility:\s*hidden[^}]*pointer-events:\s*none/s);
   assert.match(styleSource, /\.mc-pane\.active\s*\{[^}]*visibility:\s*visible[^}]*pointer-events:\s*auto/s);
-  assert.ok(indexSource.includes('css/style.css?v=14'));
+  assert.ok(indexSource.includes('css/style.css?v=15'));
 });
 
 test('歌手专辑工作区具备模态背景、初始焦点、Esc 关闭与焦点恢复', () => {
@@ -92,7 +92,7 @@ test('歌手专辑工作区具备模态背景、初始焦点、Esc 关闭与焦�
   assert.match(controllerSource, /#mc-as-close, \.mc-as-tab/);
   assert.match(controllerSource, /e\.key === 'Escape'[\s\S]*?_closeActionSheet\(\)/);
   assert.match(controllerSource, /_actionSheetReturnFocus\?\.focus\?\.\(\)/);
-  assert.ok(indexSource.includes('js/music-controller.js?v=18'));
+  assert.ok(indexSource.includes('js/music-controller.js?v=19'));
 });
 
 test('睡眠定时和更多操作使用可键盘操作的标准菜单语义', () => {

@@ -27,6 +27,47 @@
 let backgroundImages = [];
 let _bgAutoSwitchTimer = null;
 let _activeBackground = null;
+let _bgSuspended = null;
+let _bgPlayAttempt = 0;
+
+function _isBackgroundSuspended() {
+    return document.hidden || document.body.classList.contains('bili-panel-open')
+        || document.body.classList.contains('youtube-workbench-open');
+}
+
+function _playBackgroundVideo(video, onError = video.onerror) {
+    const attempt = ++_bgPlayAttempt;
+    if (_isBackgroundSuspended()) {
+        video.pause();
+        return;
+    }
+    video.play().catch(error => {
+        // pause()/切换来源会中断旧 play；迟到的失败不能覆盖当前背景。
+        if (attempt !== _bgPlayAttempt || error?.name === 'AbortError' || _isBackgroundSuspended()) return;
+        onError?.();
+    });
+}
+
+function _syncBackgroundActivity() {
+    const suspended = _isBackgroundSuspended();
+    if (_bgSuspended === suspended) return;
+    _bgSuspended = suspended;
+    document.body.classList.toggle('home-background-suspended', suspended);
+    window.backgroundExperience?.setSuspended(suspended);
+    const video = document.getElementById('background-video');
+    if (!video) return;
+    if (suspended) {
+        ++_bgPlayAttempt;
+        video.pause();
+    } else if (video.getAttribute('src')) {
+        _playBackgroundVideo(video);
+    }
+}
+
+// 两个工作台已有 body 状态；只观察 class，不扫描播放器 DOM 或增加轮询。
+new MutationObserver(_syncBackgroundActivity).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+document.addEventListener('visibilitychange', _syncBackgroundActivity);
+_syncBackgroundActivity();
 
 chrome.runtime.sendMessage({ action: 'getBackgrounds' }, function(response) {
     if (response && response.backgrounds) {
@@ -41,7 +82,7 @@ function _getVideoElement() {
     if (!el) {
         el = document.createElement('video');
         el.id = 'background-video';
-        el.autoplay = true;
+        el.autoplay = false;
         el.muted = true;
         el.loop = true;
         el.playsInline = true;
@@ -54,6 +95,7 @@ function _getVideoElement() {
 
 function _applyBackground(background) {
     if (!background) return;
+    ++_bgPlayAttempt;
     _activeBackground = background;
     const video = _getVideoElement();
     const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
@@ -82,7 +124,7 @@ function _applyBackground(background) {
         video.poster = background.url || '';
         video.style.display = 'block';
         document.body.dataset.backgroundMedia = 'video';
-        video.play().catch(() => {
+        _playBackgroundVideo(video, () => {
             if (_activeBackground === background) applyStaticFallback();
         });
     } else {
@@ -132,16 +174,10 @@ function setupBackgroundAutoSwitch() {
     chrome.storage.sync.get('settings', ({ settings }) => {
         const minutes = Number(settings?.backgroundInterval) || 30;
         _bgAutoSwitchTimer = setInterval(() => {
-            if (backgroundImages.length > 1) changeBackground();
+            if (!_isBackgroundSuspended() && backgroundImages.length > 1) changeBackground();
         }, minutes * 60 * 1000);
     });
 }
-
-document.addEventListener('visibilitychange', () => {
-    const video = document.getElementById('background-video');
-    if (!video) return;
-    if (document.hidden) { video.pause(); } else if (video.src) { video.play().catch(() => {}); }
-});
 
 window.matchMedia?.('(prefers-reduced-motion: reduce)')?.addEventListener?.('change', () => {
     if (_activeBackground) _applyBackground(_activeBackground);
@@ -150,11 +186,41 @@ window.matchMedia?.('(prefers-reduced-motion: reduce)')?.addEventListener?.('cha
 // 注意：时间显示已由 clock.js 模块处理，此处不再重复更新
 // 避免多处同时更新导致的闪烁问题
 
+function showAppVideoError(message) {
+    document.getElementById('app-video-status')?.remove();
+    const notice = document.createElement('div');
+    notice.id = 'app-video-status';
+    notice.className = 'memo-toast memo-toast-visible';
+    notice.setAttribute('role', 'status');
+    Object.assign(notice.style, { pointerEvents: 'auto', maxWidth: 'calc(100vw - 32px)', background: '#302e38', flexWrap: 'wrap' });
+    const text = document.createElement('span');
+    text.textContent = message;
+    const settings = document.createElement('a');
+    settings.href = 'settings.html';
+    settings.textContent = '打开设置';
+    settings.style.color = 'inherit';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.textContent = '关闭';
+    close.setAttribute('aria-label', '关闭视频提示');
+    close.addEventListener('click', () => notice.remove());
+    notice.append(text, settings, close);
+    document.body.appendChild(notice);
+}
+
 // 初始化应用
 async function initApp() {
     if (window.__chromeTimeAppInitialized) return;
     window.__chromeTimeAppInitialized = true;
     console.log('正在初始化应用...');
+    let appVideoRequest = null;
+    try {
+        appVideoRequest = window.AppVideo?.readURL(window.location.href) || null;
+        if (appVideoRequest) history.replaceState({}, '', window.AppVideo.clearURL(window.location.href));
+    } catch (error) {
+        console.error('App 视频入口参数无效:', error);
+        showAppVideoError('视频打开参数无效，请返回 AI 工作台重新选择视频。');
+    }
 
     // 关键：无论其他模块是否初始化失败，按钮/快捷键都必须可用
     try {
@@ -285,7 +351,17 @@ async function initApp() {
     if (sm.getSetting('enableBilibili') !== false) {
         try {
             if (window.bilibiliController && typeof window.bilibiliController.init === 'function') {
-                window.bilibiliController.init();
+                const initialized = window.bilibiliController.init();
+                void Promise.resolve(initialized).then(async () => {
+                    if (appVideoRequest?.platform === 'bilibili') {
+                        await window.bilibiliController.openVideo(appVideoRequest);
+                    }
+                }).catch(error => {
+                    console.error('哔哩哔哩工作台打开失败:', error);
+                    if (appVideoRequest?.platform === 'bilibili') showAppVideoError(`B 站视频未能在 App 中打开：${error.message || '初始化失败'}`);
+                });
+            } else if (appVideoRequest?.platform === 'bilibili') {
+                throw new Error('哔哩哔哩模块尚未加载');
             }
             const biliDockBtn = document.getElementById('bili-dock-btn');
             if (biliDockBtn) {
@@ -296,9 +372,11 @@ async function initApp() {
             console.log('哔哩哔哩控制器初始化完成');
         } catch (error) {
             console.error('哔哩哔哩控制器初始化失败:', error);
+            if (appVideoRequest?.platform === 'bilibili') showAppVideoError(`B 站视频未能在 App 中打开：${error.message || '初始化失败'}`);
         }
     } else {
         console.log('哔哩哔哩模块已禁用（性能设置）');
+        if (appVideoRequest?.platform === 'bilibili') showAppVideoError('哔哩哔哩模块已关闭，请先在设置中启用后重新打开视频。');
         document.getElementById('bili-dock-btn')?.classList.add('hidden');
     }
 
@@ -306,7 +384,13 @@ async function initApp() {
     if (sm.getSetting('enableYouTube') !== false) {
         try {
             if (window.youtubeController && typeof window.youtubeController.init === 'function') {
-                await window.youtubeController.init();
+                await window.youtubeController.init({ skipInitialView: appVideoRequest?.platform === 'youtube' });
+                if (appVideoRequest?.platform === 'youtube') {
+                    if (appVideoRequest.id) await window.youtubeController.openVideo(appVideoRequest);
+                    else await window.youtubeController.openSearch(appVideoRequest.query);
+                }
+            } else if (appVideoRequest?.platform === 'youtube') {
+                throw new Error('YouTube 模块尚未加载');
             }
             const youtubeDockBtn = document.getElementById('youtube-dock-btn');
             if (youtubeDockBtn) {
@@ -315,9 +399,11 @@ async function initApp() {
             console.log('YouTube 工作台初始化完成');
         } catch (error) {
             console.error('YouTube 工作台初始化失败:', error);
+            if (appVideoRequest?.platform === 'youtube') showAppVideoError(`YouTube 视频未能在 App 中打开：${error.message || '初始化失败'}`);
         }
     } else {
         console.log('YouTube 模块已禁用（用户设置）');
+        if (appVideoRequest?.platform === 'youtube') showAppVideoError('YouTube 模块已关闭，请先在设置中启用后重新打开视频。');
         document.getElementById('youtube-dock-btn')?.classList.add('hidden');
     }
 

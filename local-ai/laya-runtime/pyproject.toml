@@ -1,0 +1,8 @@
+[project]
+name = "time-keeper-laya-runtime"
+version = "0.1.0"
+requires-python = "==3.12.*"
+dependencies = ["laya[serve]==0.3.11"]
+
+[tool.uv]
+package = false

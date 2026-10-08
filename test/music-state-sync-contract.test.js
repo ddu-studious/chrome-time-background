@@ -130,6 +130,43 @@ test('播放错误和结束事件携带 songId，切歌中止不会误跳下一�
     assert.match(source, /_handlePlaybackError\(msg\.error, msg\.code, msg\.songId\)/);
 });
 
+test('停止音乐清空音源时不误报格式错误，真实坏音源仍上报', () => {
+    const listeners = {}, sent = [], warnings = [];
+    let sourceAttribute = null, messageListener;
+    const player = {
+        paused: true, currentTime: 0, duration: 0, volume: 1,
+        get src() { return sourceAttribute == null ? '' : sourceAttribute || 'chrome-extension://test/offscreen.html'; },
+        set src(value) {
+            sourceAttribute = value;
+            if (value === '') { this.error = { code: 4 }; listeners.error(); }
+        },
+        getAttribute(name) { return name === 'src' ? sourceAttribute : null; },
+        removeAttribute(name) { if (name === 'src') sourceAttribute = null; },
+        load() {}, pause() { this.paused = true; },
+        addEventListener(name, listener) { listeners[name] = listener; },
+    };
+    const chrome = { runtime: {
+        onMessage: { addListener(listener) { messageListener = listener; } },
+        sendMessage(message) { sent.push(message); return Promise.resolve(); },
+    } };
+    vm.runInNewContext(offscreenSource, {
+        document: { getElementById: () => player }, chrome,
+        console: { log() {}, warn(...args) { warnings.push(args); } },
+        location: { href: 'chrome-extension://test/offscreen.html' },
+        setInterval() {}, clearInterval() {}, clearTimeout() {},
+    });
+    messageListener({ target: 'offscreen', command: 'stop' }, {}, () => {});
+    assert.equal(sourceAttribute, null);
+    assert.equal(sent.filter(message => message.action === 'offscreen_error').length, 0);
+    assert.equal(warnings.length, 0);
+
+    sourceAttribute = 'https://audio.test/broken.mp3';
+    player.error = { code: 4 };
+    listeners.error();
+    assert.equal(sent.filter(message => message.action === 'offscreen_error').length, 1);
+    assert.equal(warnings.length, 1);
+});
+
 test('连续切歌时只有最后一次异步请求可以提交播放', async () => {
     const controller = loadController();
     const url1 = deferred();
@@ -203,6 +240,62 @@ test('过期播放状态不会继续把缓存队列标成正在播放', async ()
     assert.equal(controller._currentSongId, null);
     assert.equal(controller.state.title, '');
     assert.equal(controller._playlist[0].isActive, false);
+});
+
+test('超过24小时的保存队列仍在播放器显示，但不恢复旧播放状态', async () => {
+    const old = Date.now() - 25 * 60 * 60 * 1000;
+    const controller = loadController({
+        lastMusicState: { songId: 1, title: '旧播放', savedAt: old },
+        musicPlaylistCache: {
+            playlist: [{ songId: 1, title: '第一首', isActive: true }, { songId: 2, title: '第二首' }],
+            playlistName: '已保存队列', savedAt: old,
+        },
+    });
+    let rendered;
+    controller._renderQueueWithApi = songs => { rendered = songs.map(song => song.title); };
+    controller._el = { querySelector: () => null };
+
+    await controller._restoreMusicState();
+    await controller._refreshPlaylist();
+
+    assert.deepEqual(rendered, ['第一首', '第二首']);
+    assert.equal(controller._currentPlaylistName, '已保存队列');
+    assert.equal(controller._currentSongId, null);
+    assert.equal(controller.state.isPlaying, false);
+    assert.equal(controller._playlist.some(song => song.isActive), false);
+    assert.equal(controller._queueCacheExpired, true);
+    let label;
+    controller._el = { querySelector: selector => selector === '#mc-pane-queue' ? {} : null };
+    controller._renderPlaylistDetail = (_pane, _songs, name) => { label = name; };
+    Object.getPrototypeOf(controller)._renderQueueWithApi.call(controller, controller._playlist);
+    assert.equal(label, '已保存队列（待核对）');
+});
+
+test('播放器保留按钮读取真实版本后提交，收到回执才退出待核对', async () => {
+    const cache = { source: 'quick-assistant', assistantRevision: 'old', savedAt: 1, playlist: [{ songId: '1' }, { songId: '2' }] };
+    const stored = { musicPlaylistCache: cache };
+    const sent = [];
+    const controller = loadController(stored, { runtime: { lastError: null, sendMessage(message, callback) {
+        sent.push(message);
+        if (message.action === 'music_queue_review_state') callback({ ok: true, status: 'stale', count: 2, revision: 'r1' });
+        else {
+            stored.musicPlaylistCache = { ...cache, assistantRevision: 'new', savedAt: Date.now() };
+            callback({ ok: true, status: 'ready', count: 2, revision: 'r2' });
+        }
+    } } });
+    controller._queueCacheExpired = true;
+    controller._playlist = cache.playlist;
+    let applied, toast;
+    controller._applyAssistantQueue = async latest => { applied = latest; controller._queueCacheExpired = false; };
+    controller._showToast = message => { toast = message; };
+
+    await controller._reconcileSavedQueue('keep');
+
+    assert.deepEqual(sent.map(message => message.action), ['music_queue_review_state', 'music_queue_reconcile']);
+    assert.equal(sent[1].expectedRevision, 'r1');
+    assert.equal(applied.assistantRevision, 'new');
+    assert.equal(controller._queueCacheExpired, false);
+    assert.match(toast, /未开始播放/);
 });
 
 test('默认空态只覆盖正在播放页，不遮挡队列和发现页', () => {

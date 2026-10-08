@@ -145,6 +145,7 @@
 
     renderGroups() {
       const root = document.getElementById('sw-groups');
+      const disclosureState = new Map([...root.querySelectorAll('details[data-disclosure]')].map(item => [item.dataset.disclosure, item.open]));
       const config = this.snapshot.config;
       const groups = config.groups.slice().sort((a, b) => a.order - b.order);
       root.innerHTML = groups.map((group, groupIndex) => {
@@ -152,7 +153,16 @@
         const tabs = this.snapshot.tabs.filter(tab => tab.workspaceGroupId === group.id);
         const pages = config.pages.filter(page => page.groupId === group.id).sort((a, b) => a.order - b.order);
         const liveByPageId = new Map(tabs.map(tab => [tab.pageId, tab]));
-        const openCount = pages.filter(page => liveByPageId.has(page.id)).length;
+        const fixed = pages.filter(page => page.pinned);
+        const temporary = pages.filter(page => !page.pinned);
+        const parentById = new Map(temporary.map(page => [page.id, Core.fixedAncestor(config, page)?.id]));
+        const unlinked = temporary.filter(page => !parentById.get(page.id));
+        const renderTemporary = items => items.map(page => this.renderPage(page, liveByPageId.get(page.id), groups)).join('');
+        const fixedHtml = fixed.map(page => {
+          const children = temporary.filter(child => parentById.get(child.id) === page.id);
+          return `<div class="sw-entry">${this.renderPage(page, liveByPageId.get(page.id), groups)}${children.length ?
+            `<details class="sw-related" data-disclosure="${this.escape(page.id)}" ${(disclosureState.get(page.id) ?? children.some(child => liveByPageId.get(child.id)?.active)) ? 'open' : ''}><summary>关联页面 · ${children.length}</summary><div class="sw-list">${renderTemporary(children)}</div></details>` : ''}</div>`;
+        }).join('');
         return `
           <article class="sw-group" data-group-id="${this.escape(group.id)}">
             <header class="sw-group-header">
@@ -167,12 +177,16 @@
                 <button class="sw-action is-danger" data-action="delete-group" title="删除分组" ${group.id === Core.UNCATEGORIZED_ID ? 'disabled' : ''}>×</button>
               </div>
             </header>
-            <div class="sw-section-label"><span>常用网站</span><span>${sites.length}</span></div>
-            <div class="sw-list">${sites.length ? sites.map((site, index) => this.renderSite(site, index, sites.length)).join('') : '<div class="sw-empty">此分组还没有常用网站</div>'}</div>
-            <div class="sw-section-label"><span>工作区页面</span><span>${openCount} 打开 · ${pages.length - openCount} 已关闭</span></div>
-            <div class="sw-list">${pages.length ? pages.map(page => this.renderPage(page, liveByPageId.get(page.id), groups)).join('') : '<div class="sw-empty">暂无工作区页面</div>'}</div>
+            ${sites.length ? `<div class="sw-section-label"><span>常用网站</span><span>${sites.length}</span></div>
+            <div class="sw-list">${sites.map((site, index) => this.renderSite(site, index, sites.length)).join('')}</div>` : ''}
+            <div class="sw-section-label"><span>固定入口</span><span>${fixed.length}</span></div>
+            <div class="sw-list">${fixedHtml || '<div class="sw-empty">将页面固定，方便下次回来</div>'}</div>
+            ${unlinked.length ? `<details class="sw-temporary" data-disclosure="temp-${this.escape(group.id)}" ${disclosureState.get('temp-' + group.id) ? 'open' : ''}><summary>其他临时页面 · ${unlinked.length}</summary><div class="sw-list">${renderTemporary(unlinked)}</div></details>` : ''}
           </article>`;
       }).join('');
+      if (config.recentClosed.length) {
+        root.insertAdjacentHTML('beforeend', `<details class="sw-recent" data-disclosure="recent" ${disclosureState.get('recent') ? 'open' : ''}><summary>最近关闭 · ${config.recentClosed.length}<small>临时页面保留 7 天，最多 30 条</small></summary><div class="sw-list">${config.recentClosed.map(page => `<div class="sw-recent-row" data-page-id="${this.escape(page.id)}"><span class="sw-copy"><strong>${this.escape(page.title)}</strong><small>${this.escape(this.hostname(page.url))}</small></span><button class="sw-text-action" data-action="restore-recent">重新打开</button><button class="sw-action" data-action="delete-page" title="删除此记录" aria-label="删除此记录">×</button></div>`).join('')}</div></details>`);
+      }
     }
 
     renderSite(site, index, count) {
@@ -194,19 +208,23 @@
     }
 
     renderPage(page, tab, groups) {
-      const title = page.customTitle || tab?.title || page.title || this.hostname(page.url) || '未命名页面';
+      const title = page.customTitle || (page.pinned ? page.title : tab?.title || page.title) || this.hostname(page.url) || '未命名页面';
+      const source = this.snapshot.config.pages.find(item => item.id === page.sourcePageId);
+      const sourceName = source?.customTitle || source?.title || page.sourceTitle;
+      const sourceText = sourceName ? `来自：${sourceName}` : '来源未知';
       const url = tab?.url || page.url;
       const groupOptions = groups.map(group => `<option value="${this.escape(group.id)}" ${group.id === page.groupId ? 'selected' : ''}>${this.escape(group.name)}</option>`).join('');
       return `
         <div class="sw-tab${tab?.active ? ' is-active' : ''}${tab ? '' : ' is-closed'}" data-page-id="${this.escape(page.id)}"${tab ? ` data-tab-id="${tab.id}"` : ''}>
           <button class="sw-tab-open" data-action="open-page" title="${tab ? '切换到' : '重新打开'} ${this.escape(title)}">
             ${this.favicon(url, title)}
-            <span class="sw-copy"><strong>${this.escape(title)}</strong><small>${tab ? (this.escape(this.hostname(url)) + (tab.audible ? ' · 正在播放' : ' · 已打开')) : ('已关闭 · ' + this.escape(this.hostname(url)))}</small></span>
+            <span class="sw-copy"><strong>${this.escape(title)}</strong><small>${tab ? (this.escape(this.hostname(url)) + (tab.audible ? ' · 正在播放' : ' · 已打开')) : ('已关闭 · ' + this.escape(this.hostname(url)))}</small>${!page.pinned ? `<small class="sw-source" title="${this.escape(sourceText)}">${this.escape(sourceText)}</small>` : ''}</span>
           </button>
           <div class="sw-row-actions">
+            <button class="sw-text-action${page.pinned ? ' is-pinned' : ''}" data-action="toggle-pin" title="${page.pinned ? '取消固定，关闭后移至最近关闭' : '固定此页面，关闭后仍保留'}">${page.pinned ? '★ 已固定' : '☆ 固定'}</button>
             <select class="sw-tab-group-select" data-action="move-page" aria-label="移动页面分组">${groupOptions}</select>
             <button class="sw-action" data-action="edit-page" title="重命名工作区页面">✎</button>
-            ${tab ? '<button class="sw-action" data-action="remove-page" title="从工作区移除并保留标签">↗</button><button class="sw-action is-danger" data-action="close-tab" title="关闭 Chrome 标签，页面仍保留">×</button>' : '<button class="sw-action" data-action="open-page" title="重新打开">↗</button><button class="sw-action is-danger" data-action="delete-page" title="从工作区删除">×</button>'}
+            ${tab ? '<button class="sw-action" data-action="remove-page" title="从工作区移除并保留标签">↗</button><button class="sw-action is-danger" data-action="close-tab" title="关闭 Chrome 标签">×</button>' : '<button class="sw-action" data-action="open-page" title="重新打开">↗</button><button class="sw-action is-danger" data-action="delete-page" title="从工作区删除">×</button>'}
           </div>
         </div>`;
     }
@@ -228,6 +246,8 @@
         if (action === 'open-site') await this.service.openSite(siteId);
         else if (action === 'new-site-tab') await this.service.openSite(siteId, { forceNew: true });
         else if (action === 'open-page') await this.service.openSavedPage(pageId);
+        else if (action === 'toggle-pin') await this.service.pinPage(pageId, !this.snapshot.config.pages.find(page => page.id === pageId)?.pinned);
+        else if (action === 'restore-recent') await this.service.restoreRecent(pageId);
         else if (action === 'remove-page') await this.service.removeTab(tabId);
         else if (action === 'close-tab') await this.service.closeTab(tabId);
         else if (action === 'delete-page') await this.service.deletePage(pageId);
@@ -334,7 +354,7 @@
       try {
         await this.service.renamePage(pageId, name);
         document.getElementById('sw-page-dialog').close();
-        await this.render('页面名称已保存');
+        await this.render('页面已命名并固定');
       } catch (error) {
         document.getElementById('sw-page-error').textContent = error?.message || '保存失败';
       }

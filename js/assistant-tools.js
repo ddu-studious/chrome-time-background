@@ -6,24 +6,19 @@
   'use strict';
   const Context = typeof module === 'object' && module.exports ? require('./assistant-context-state.js') : root.AssistantContextState;
   const Contract = typeof module === 'object' && module.exports ? require('./assistant-contract.js') : root.AssistantContract;
+  const Todo = typeof module === 'object' && module.exports ? require('./assistant-todo.js') : root.AssistantTodo;
   const Music = typeof module === 'object' && module.exports ? require('./music-intent.js') : root.MusicIntent;
   const Management = typeof module === 'object' && module.exports ? require('./assistant-management.js') : root.AssistantManagement;
   const MusicObjects = typeof module === 'object' && module.exports ? require('./assistant-music.js') : root.AssistantMusic;
   const Memory = typeof module === 'object' && module.exports ? require('./assistant-memory.js') : root.AssistantMemory;
+  const AppVideo = typeof module === 'object' && module.exports ? require('./app-video.js') : root.AppVideo;
+  const QuickCapture = typeof module === 'object' && module.exports ? require('./quick-capture.js') : root.QuickCapture;
   const safeText = text => String(text || '').replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").slice(0, 200);
   const time = value => { const s = Math.max(0, Math.floor(Number(value) || 0)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   const videoId = (platform, id) => (platform === 'youtube' ? /^[A-Za-z0-9_-]{11}$/ : /^BV[A-Za-z0-9]{10}$/).test(id || '');
-  function videoURL(platform, id, seconds = 0, page = 1) {
-    if (!['bilibili', 'youtube'].includes(platform) || !videoId(platform, id)) throw new Error('视频编号无效');
-    const url = new URL(platform === 'youtube' ? 'https://www.youtube.com/watch' : `https://www.bilibili.com/video/${id}/`);
-    if (platform === 'youtube') url.searchParams.set('v', id);
-    if (platform === 'bilibili' && Number.isInteger(page) && page > 1 && page <= 10000) url.searchParams.set('p', String(page));
-    if (Number.isFinite(seconds) && seconds > 0) url.searchParams.set('t', String(Math.floor(seconds)) + (platform === 'youtube' ? 's' : ''));
-    return url.href;
-  }
   function create(deps) {
-    const labels = { netease: '请求网易云音乐', bilibili: '请求哔哩哔哩', youtube: '请求 YouTube', controlMusic: '控制播放器', playMusic: '准备并播放单曲', playQueue: '替换队列并播放', enqueueMusic: '追加音乐队列', sleepMusic: '设置音乐停止时间', listAlarms: '读取提醒列表', saveAlarm: '保存提醒', mutateAlarm: '修改提醒', openURL: '打开页面', readMusicState: '读取播放器状态', setMusicMode: '设置播放模式', playCurrentQueue: '播放当前队列', applyMusicQueue: '应用音乐队列', editMusicQueue: '编辑音乐队列', seekMusic: '调整播放进度', connectionStatus: '检查应用连接' };
-    const writes = new Set(['controlMusic', 'playMusic', 'playQueue', 'enqueueMusic', 'sleepMusic', 'saveAlarm', 'mutateAlarm', 'openURL', 'setMusicMode', 'playCurrentQueue', 'applyMusicQueue', 'editMusicQueue', 'seekMusic']);
+    const labels = { netease: '请求网易云音乐', bilibili: '请求哔哩哔哩', youtube: '请求 YouTube', controlMusic: '控制播放器', playMusic: '准备并播放单曲', playQueue: '替换队列并播放', enqueueMusic: '追加音乐队列', sleepMusic: '设置音乐停止时间', listAlarms: '读取提醒列表', saveAlarm: '保存提醒', mutateAlarm: '修改提醒', openVideo: '打开 App 内视频', readMusicState: '读取播放器状态', reconcileMusicQueue: '核对过期队列', setMusicMode: '设置播放模式', playCurrentQueue: '播放当前队列', applyMusicQueue: '应用音乐队列', editMusicQueue: '编辑音乐队列', seekMusic: '调整播放进度', connectionStatus: '检查应用连接' };
+    const writes = new Set(['controlMusic', 'playMusic', 'playQueue', 'enqueueMusic', 'sleepMusic', 'saveAlarm', 'mutateAlarm', 'openVideo', 'reconcileMusicQueue', 'setMusicMode', 'playCurrentQueue', 'applyMusicQueue', 'editMusicQueue', 'seekMusic']);
     function runtime(ctx, safety) {
       const scoped = { ...deps };
       const beforeWrite = async () => { ctx.guard(); safety.started = true; await ctx.effectStarted?.(); ctx.guard(); };
@@ -87,8 +82,21 @@
     }])), compact: (ctx, force) => runtime(ctx, { started: false }).compact(ctx, force) };
   }
   function createRuntime(deps) {
-    const { ai, netease, bilibili, youtube, storage, controlMusic, playMusic, sleepMusic, listAlarms, saveAlarm, openURL, now = Date.now } = deps;
+    const { ai, netease, bilibili, youtube, storage, controlMusic, playMusic, sleepMusic, listAlarms, saveAlarm, now = Date.now } = deps;
     const musicObjects = MusicObjects.create(deps);
+    async function openVideo(video, ctx) {
+      const request = AppVideo.normalize(video);
+      // Search results use zero as an unknown progress placeholder; keep native resume.
+      if (request.seconds === 0) delete request.seconds;
+      if (request.page === 1) delete request.page;
+      ctx.guard();
+      if (typeof deps.openVideo !== 'function') throw new Error('App 视频入口不可用，请重新加载扩展');
+      const result = await deps.openVideo(request, ctx);
+      ctx.guard();
+      if (result?.opened !== true || result.destination !== 'app') throw new Error('未收到 App 视频页打开回执，请核对实际页面');
+      return { observation: { opened: true, destination: 'app', playbackConfirmed: false },
+        message: `已打开 App 内${request.platform === 'youtube' ? ' YouTube ' : ' B 站'}视频页《${video.title || video.id}》${request.page > 1 ? `第 ${request.page} P` : ''}${request.seconds > 0 ? `，已请求续看至 ${time(request.seconds)}` : ''}。是否开始播放及实际进度以 App 播放器为准。` };
+    }
     async function memoryCall(action, body, ctx) {
       ctx.guard();
       if (!deps.memory) throw new Error('长期记忆未连接');
@@ -127,7 +135,7 @@
         playback: { mode, title: result.currentSong?.title, artist: choice.title, count: result.count, source: choice.title }, observation: publicState(result) };
     }
     async function awaitAI(action, body, ctx) {
-      if (ctx.trace && !ctx.inModelCall) return ctx.trace(body.scene === 'assistant.compact' ? 'assistant.compact' : 'assistant.model', body.scene === 'assistant.compact' ? '整理上下文（pi SDK）' : '理解需求与生成执行计划', { scene: body.scene || action }, async child => {
+      if (ctx.trace && !ctx.inModelCall) return ctx.trace(body.scene === 'assistant.compact' ? 'assistant.compact' : 'assistant.model', body.scene === 'assistant.compact' ? '整理上下文（pi SDK）' : body.input?.planningPhase === 'outline' ? '分析完整待办清单' : '规划当前待办的下一步', { scene: body.scene || action }, async child => {
         try { return await awaitAI(action, body, { ...child, inModelCall: true }); }
         catch (error) { if (error.execution && child.modelCall) await child.modelCall(error.execution); throw error; }
       }, 'operation');
@@ -165,13 +173,60 @@
       catch (error) { ctx.task.contextState = previous; ctx.task.contextNotice = previousNotice; throw error; }
       return changed;
     }
+    function quickQueuePlayPlan(input, ctx) {
+      const request = input.app === 'music' && !input.skill && Music.queuePlayRequest(input.text, { bare: !Contract.hasCandidates(ctx.task) });
+      const todo = ctx.task.todoTips;
+      if (!request || !todo || todo.goal !== input.text || todo.sources.length !== 1 || ctx.task.remainingSteps?.length) return null;
+      const context = Context.state(ctx.task);
+      if (context.uncertain || context.receipts.some(row => row.status === 'unknown')) return null;
+      if (!todo.items.length) {
+        if (ctx.task.observations?.length) return null;
+        return { todoTips: [{ text: request.mode ? '随机播放当前队列中的歌曲' : '播放当前队列中的歌曲',
+          source: 0, tool: 'music.queue.play', args: { ...request } }], steps: [] };
+      }
+      if (todo.items.length !== 1 || todo.items[0].tool !== 'music.queue.play' || todo.items[0].source !== 0 ||
+        JSON.stringify(todo.items[0].args) !== JSON.stringify(request)) return null;
+      if (!Todo.current(todo)) return ctx.task.log?.at(-1)?.tool === 'music.queue.play' &&
+        ctx.task.log.at(-1).status === 'done' ? { done: true, steps: [] } : null;
+      const last = ctx.task.log?.at(-1);
+      if (!last) return { steps: [{ tool: 'music.state', args: {} }], continue: true };
+      if (last.tool !== 'music.state' || last.status !== 'done') return null;
+      const observation = ctx.task.observations?.at(-1);
+      if (observation?.tool !== 'music.state' || observation.status !== 'done') return null;
+      const state = observation.data;
+      if (state?.status === 'empty' && state.count === 0) return { question: '当前队列为空，请先添加歌曲后再播放。' };
+      if (state?.status === 'unavailable') return { question: '队列与播放器状态不一致，请先在播放器核对。' };
+      if (!['ready', 'stale'].includes(state?.status) || !Number.isInteger(state.count) || state.count <= 0 ||
+        typeof state.revision !== 'string' || !state.revision.trim()) return null;
+      return { steps: [{ tool: 'music.queue.play', args: { expectedRevision: state.revision, ...request } }], continue: true };
+    }
     async function plan(input, ctx) {
+      ctx.task.todoTips ||= Todo.create(input);
+      const queuePlan = quickQueuePlayPlan(input, ctx);
+      if (queuePlan) return queuePlan;
       let local = ctx.task.remainingSteps?.length || ctx.task.observations?.length ? null : Contract.localPlan(input);
-      if (!local && !Memory.historical(input.text) && !ctx.task.observations?.length && !/如果|否则|队列|随机|循环|登录|连接|权限|授权|下一页|翻页|继续搜索/.test(input.text) && !input.app && !input.skill) {
+      if (!local && !Memory.historical(input.text) && !ctx.task.observations?.length && !/如果|否则|队列|队里|队中|清除|移除|删除|删掉|去掉|随机|循环|登录|连接|权限|授权|下一页|翻页|继续搜索/.test(input.text) && !input.app && !input.skill) {
         const intent = Music.parseLocal(input.text);
         if (intent && (intent.action !== 'search' || /歌曲|音乐|歌手|歌单|听|首|^播放.+的/.test(input.text))) local = { steps: [{ tool: 'music.intent', args: { text: input.text } }] };
       }
-      if (local) return local;
+      if (local && !ctx.task.todoTips.items.length) {
+        local = Todo.local(input, local);
+        if (local) {
+          try {
+            const checked = Contract.validatePlan(local, input.app);
+            const preview = { input, todoTips: structuredClone(ctx.task.todoTips), usedModel: ctx.task.usedModel };
+            Todo.prepare(preview, checked);
+            if (checked.steps.length === 1) Todo.before(preview, checked.steps[0]);
+            return checked;
+          } catch (error) {
+            if (error.code !== 'ASSISTANT_PLAN_INVALID') throw error;
+            await ctx.trace?.('assistant.localPlan', '本地快捷规划未命中', { tool: local.steps?.[0]?.tool },
+              async () => ({ code: error.code, next: 'outline' }), 'decision');
+          }
+        }
+      }
+      const planningPhase = ctx.task.todoTips.items.length ? 'execute' : 'outline';
+      if (planningPhase === 'outline') await ctx.progress?.('正在分析完整待办清单…');
       const { ai: _selection, ...modelInput } = input;
       const snapshot = await readMemory(ctx);
       const recalledMemory = Memory.recall(snapshot, input.text, { app: input.app, now: now() });
@@ -187,11 +242,23 @@
         const context = { ...Context.envelope(ctx.task), canCompact: Context.pending(ctx.task).length > 2, compactionAttempted: attempt > 0 };
         const payload = { ...modelInput, ...(recalledMemory.length ? { recalledMemory } : {}), ...(snapshot?.enabled ? { personalMemory: Memory.effective(snapshot) } : {}),
           turns: Context.pending(ctx.task).map(({ role, content }) => ({ role, content: content.slice(0, 500) })),
-          observations: ctx.task.observations || [], completedSteps, context, toolGroups: ctx.task.memory?.toolGroups || [],
+          observations: ctx.task.observations || [], completedSteps, context, todoTips: ctx.task.todoTips, planningPhase, toolGroups: ctx.task.memory?.toolGroups || [],
           ...(ctx.task.remainingSteps?.length ? { remainingSteps: ctx.task.remainingSteps } : {}) };
         if (new TextEncoder().encode(JSON.stringify(payload)).length > 58000) throw new Error('必须保留的任务状态超过传输预算，进度已保存，请缩小需求范围');
-        const response = await awaitAI('ai_scene_submit', { scene: 'assistant.plan', input: payload }, ctx);
-        if (response.status !== 'needs_compaction') return response.data;
+        let response;
+        try { response = await awaitAI('ai_scene_submit', { scene: 'assistant.plan', input: payload }, ctx); }
+        catch (error) {
+          // The extension can be reloaded while the separately managed local
+          // service still runs an older application catalog.
+          if (error.message === '请选择已接入的应用' && Contract.apps.some(app => app.id === input.app)) {
+            throw Object.assign(new Error(`本机 AI 服务尚未加载「${Contract.apps.find(app => app.id === input.app).name}」应用。请运行 ./local-ai/service.sh restart 后重试；本次未执行写入。`), { code: 'ASSISTANT_LOCAL_SERVICE_OUTDATED' });
+          }
+          throw error;
+        }
+        if (response.status !== 'needs_compaction') {
+          if (!ctx.task.todoTips.items.length && !response.data?.question && !response.data?.todoTips) throw Object.assign(new Error('规划未返回完整 Todo，请检查本机 AI 服务版本并重新规划'), { code: 'ASSISTANT_PLAN_INVALID' });
+          return response.data;
+        }
         if (attempt) throw new Error('整理后仍无法容纳上下文，进度已保存');
         await compact(ctx, response.reason !== 'threshold');
       }
@@ -235,7 +302,7 @@
         try { const response = await youtube('search', { part: 'snippet', q: query, type: 'video', maxResults: 8 }); rows = (response.items || []).map(v => ({ id: v.id?.videoId, title: v.snippet?.title, author: v.snippet?.channelTitle, seconds: 0 })); }
         catch (error) {
           if (!['auth-required', 'auth-expired', 'not-connected', 'oauth-not-configured'].includes(error.code)) throw error;
-          return { status: 'waiting', message: 'YouTube 账号尚未连接。可以先在原站搜索，或在 YouTube 工作台连接账号。', choices: [{ id: 'youtube-search', title: `在 YouTube 搜索：${query}`, subtitle: '打开原站搜索结果', label: '打开', action: 'video.search-site', data: { platform, query } }] };
+          return { status: 'waiting', message: 'YouTube 账号尚未连接。可在 App 内 YouTube 工作台连接账号后继续搜索。', choices: [{ id: 'youtube-search', title: `在 YouTube 搜索：${query}`, subtitle: '在 App 内连接账号并搜索', label: '打开', action: 'video.search-app', data: { platform, query } }] };
         }
       } else {
         const response = await bilibili(history ? '/x/web-interface/history/cursor' : '/x/web-interface/search/type', history ? { ps: 30, business: 'archive' } : { search_type: 'video', keyword: query, page: 1 });
@@ -253,7 +320,7 @@
       rows = rows.filter(v => videoId(platform, v.id)).slice(0, 8);
       const source = history ? (platform === 'youtube' ? '扩展本地观看记录' : 'B 站最近一页观看记录') : '搜索结果';
       if (!rows.length) return { status: 'clarify', message: `${source}中没有找到匹配视频。可以换一个标题关键词，或使用 /找视频。` };
-      return { status: 'waiting', message: `${source}：选择后将在原站打开${history ? '，并携带已知观看进度' : ''}。`, observation: { items: rows.map(v => ({ ref: remember({ type: 'video', platform, video: v }, ctx), title: safeText(v.title), seconds: v.seconds })), platform }, choices: rows.map((v, i) => ({ id: `video-${i}`, title: safeText(v.title), subtitle: `${safeText(v.author)}${v.seconds > 0 ? ` · 观看至 ${time(v.seconds)}` : ''}`, label: history ? '继续看' : '打开视频', action: 'video.open', data: { platform, id: v.id, seconds: v.seconds, page: v.page || 1, title: safeText(v.title) } })) };
+      return { status: 'waiting', message: `${source}：选择后将在 App 内打开${history ? '，并携带已知观看进度' : ''}。`, observation: { items: rows.map(v => ({ ref: remember({ type: 'video', platform, video: v }, ctx), title: safeText(v.title), seconds: v.seconds })), platform }, choices: rows.map((v, i) => ({ id: `video-${i}`, title: safeText(v.title), subtitle: `${safeText(v.author)}${v.seconds > 0 ? ` · 观看至 ${time(v.seconds)}` : ''}`, label: history ? '继续看' : '打开视频', action: 'video.open', data: { platform, id: v.id, seconds: v.seconds, page: v.page || 1, title: safeText(v.title), author: safeText(v.author) } })) };
     }
     const publicState = state => ({ status: state.status, revision: state.revision, mode: state.mode, isPlaying: state.isPlaying, count: state.count,
       currentTime: state.currentTime, duration: state.duration, volume: state.volume, currentSong: state.currentSong, source: state.source, readAt: state.readAt, timer: state.timer });
@@ -349,14 +416,18 @@
         return { message: `已确认播放《${state.currentSong?.title || '当前歌曲'}》，队列共${state.count}首。`, observation: publicState(state) };
       }
       const state = await deps.readMusicState(ctx);
-      if (step.tool === 'music.state') return { message: `当前队列${state.count}首，${state.isPlaying ? '正在播放' : '未在播放'}${state.currentSong?.title ? `《${state.currentSong.title}》` : ''}。${['stale', 'unavailable'].includes(state.status) ? '队列已过期或与播放器不一致，需先核对。' : ''}`, observation: publicState(state) };
+      if (step.tool === 'music.state') return { message: state.status === 'stale'
+        ? `本地保存的队列有${state.count}首，尚待核对。可在播放器队列页选择“保留并恢复”（不播放）或“清空保存队列”；也可直接告诉我保留或清空。`
+        : state.status === 'unavailable'
+          ? `队列记录有${state.count}首，但与播放器状态不一致；请打开播放器核对后再操作。`
+          : `当前队列${state.count}首，${state.isPlaying ? '正在播放' : '未在播放'}${state.currentSong?.title ? `《${state.currentSong.title}》` : ''}。`, observation: publicState(state) };
       const offset = args.offset || 0, rows = state.songs.slice(offset, offset + (args.limit || 20));
       const items = rows.map(song => ({ ref: remember(song, ctx, true), title: safeText(song.title).slice(0, 80), artist: safeText(song.artist).slice(0, 80) }));
-      return { message: `当前队列共${state.count}首，本页${items.length}首。`, result: items.map(item => ({ title: item.title, subtitle: item.artist })),
+      return { message: `${state.status === 'stale' ? '本地过期缓存' : state.status === 'unavailable' ? '待核对队列记录' : '当前队列'}共${state.count}首，本页${items.length}首${['stale', 'unavailable'].includes(state.status) ? '；播放器尚未确认这些歌曲' : ''}。`, result: items.map(item => ({ title: item.title, subtitle: item.artist })),
         observation: { ...publicState(state), items, truncated: state.count > state.songs.length, nextOffset: offset + rows.length < state.songs.length ? offset + rows.length : null } };
     }
 
-    const management = Management.create(deps, { remember, resolve, publicState, videoURL, safeText, now });
+    const management = Management.create(deps, { remember, resolve, publicState, openVideo, safeText, now });
     async function execute(step, ctx) {
       if (step.tool === 'context.read') return Context.read(ctx.task, step.args.ref, step.args.offset || 0);
       if (step.tool === 'memory.recall') {
@@ -390,8 +461,45 @@
         if (groups.includes(step.args.group)) throw new Error('工具组已加载，无需重复加载');
         return { message: '已准备好后续操作。', memory: { toolGroups: [...groups, step.args.group] }, observation: { group: step.args.group } };
       }
+      if (step.tool === 'task.create') {
+        const captureId = Todo.current(ctx.task.todoTips)?.id || ctx.task.index;
+        const value = QuickCapture.task({ ...step.args, id: `memo_ai_${ctx.task.id}_${ctx.task.version}_${captureId}` }, now());
+        const saved = await QuickCapture.append(storage, 'memos', value, ctx.guard);
+        return { message: `${saved.duplicate ? '已有这条任务' : '已添加任务'}：${saved.value.title}${saved.value.dueDate ? `，截止 ${saved.value.dueDate}` : ''}。`,
+          observation: { created: !saved.duplicate, id: saved.value.id, title: saved.value.title, dueDate: saved.value.dueDate } };
+      }
+      if (step.tool === 'worklog.projects') {
+        const data = await storage.get('worklogProjects'); ctx.guard();
+        const all = (Array.isArray(data.worklogProjects) ? data.worklogProjects : []).filter(row => row && !row.archived);
+        if (!all.some(row => row.id === 'proj_default')) all.unshift({ id: 'proj_default', name: '未分类' });
+        const projects = step.args.query ? all.filter(row => String(row.name || '').includes(step.args.query)) : all;
+        const refs = ctx.task.memory?.captureRefs || {};
+        const items = projects.slice(0, 20).map((row, index) => {
+          const ref = `r${(ctx.task.memory?.captureRefSeq || 0) + index + 1}`;
+          refs[ref] = { id: row.id, taskId: ctx.task.id, expires: now() + 600000 };
+          return { ref, name: safeText(row.name) };
+        });
+        ctx.task.memory ||= {}; ctx.task.memory.captureRefs = refs; ctx.task.memory.captureRefSeq = (ctx.task.memory.captureRefSeq || 0) + items.length;
+        return { message: `找到 ${items.length} 个工作日志项目。`, observation: { projects: items, truncated: projects.length > items.length } };
+      }
+      if (step.tool === 'worklog.create') {
+        let projectId = 'proj_default';
+        if (step.args.projectRef) {
+          const ref = ctx.task.memory?.captureRefs?.[step.args.projectRef];
+          if (!ref || ref.taskId !== ctx.task.id || ref.expires < now()) throw new Error('项目引用已失效，请重新读取项目');
+          const current = (await storage.get('worklogProjects')).worklogProjects; ctx.guard();
+          if (ref.id !== 'proj_default' && (!Array.isArray(current) || !current.some(row => row.id === ref.id && !row.archived))) throw new Error('项目已变更，请重新读取项目');
+          projectId = ref.id;
+        }
+        const captureId = Todo.current(ctx.task.todoTips)?.id || ctx.task.index;
+        const value = QuickCapture.entry({ id: `te_ai_${ctx.task.id}_${ctx.task.version}_${captureId}`,
+          description: step.args.description, duration: step.args.durationMinutes, date: step.args.date, projectId }, now());
+        const saved = await QuickCapture.append(storage, 'worklogEntries', value, ctx.guard);
+        return { message: `${saved.duplicate ? '已有这条工作日志' : '已记录工作日志'}：${saved.value.date} · ${saved.value.description} · ${saved.value.duration} 分钟。`,
+          observation: { created: !saved.duplicate, id: saved.value.id, date: saved.value.date, durationMinutes: saved.value.duration, projectId } };
+      }
       if (step.tool === 'music.search.next') { const entry = resolve(step.args.ref, ctx); if (entry.value.type !== 'music-page') throw new Error('翻页引用无效'); return searchMusic(entry.value.args, ctx); }
-      if (['music.playback.control', 'music.playback.seek', 'music.queue.remove', 'music.queue.clear'].includes(step.tool)) return management.music(step.tool, step.args, ctx);
+      if (['music.playback.control', 'music.playback.seek', 'music.queue.remove', 'music.queue.removeArtist', 'music.queue.clear', 'music.queue.reconcile'].includes(step.tool)) return management.music(step.tool, step.args, ctx);
       if (['music.state', 'music.queue.list', 'music.playback.setMode', 'music.queue.play', 'music.collection.get', 'music.queue.apply'].includes(step.tool)) return queueTool(step, ctx);
       if (step.tool === 'music.search') return searchMusic(step.args, ctx);
       if (step.tool === 'music.intent') return musicIntent(step.args.text, ctx);
@@ -436,11 +544,18 @@
         if (!result?.alarm) throw new Error('未收到提醒保存结果');
         return { observation: { created: !result.duplicate, label: result.alarm.label }, message: `${result.duplicate ? '已有相同提醒' : '已设置提醒'}：${result.alarm.date || '重复提醒'} ${result.alarm.time} · ${result.alarm.label}` };
       }
-      if (choice.action === 'video.open') { const url = videoURL(data.platform, data.id, data.seconds, data.page); ctx.guard(); await openURL(url); return { observation: { opened: true, playbackConfirmed: false }, message: `已在原站打开《${data.title}》${data.page > 1 ? `第 ${data.page} P` : ''}${data.seconds > 0 ? `，链接定位到 ${time(data.seconds)}` : ''}。请以播放器的实际状态为准。` }; }
-      if (choice.action === 'video.search-site' && data.platform === 'youtube') { const url = new URL('https://www.youtube.com/results'); url.searchParams.set('search_query', data.query); ctx.guard(); await openURL(url.href); return { message: '已打开 YouTube 原站搜索结果。' }; }
+      if (choice.action === 'video.open') return openVideo(data, ctx);
+      // Retain the old action ID for pending choices saved before the App route existed.
+      if (['video.search-app', 'video.search-site'].includes(choice.action) && data.platform === 'youtube') {
+        const request = AppVideo.normalize({ platform: data.platform, query: data.query }); ctx.guard();
+        if (typeof deps.openVideo !== 'function') throw new Error('App 视频入口不可用，请重新加载扩展');
+        const result = await deps.openVideo(request, ctx); ctx.guard();
+        if (result?.opened !== true || result.destination !== 'app') throw new Error('未收到 App 搜索页打开回执，请核对实际页面');
+        return { message: '已打开 App 内 YouTube 搜索入口；连接账号后可继续搜索。', observation: { opened: true, destination: 'app', playbackConfirmed: false } };
+      }
       throw new Error('候选动作无效');
     }
     return { plan, compact, execute, choose };
   }
-  return { create, videoURL, safeText };
+  return { create, safeText };
 });
