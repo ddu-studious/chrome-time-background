@@ -222,7 +222,9 @@
       const message = String(error.message || '操作失败').replace(/(?:Bearer\s+\S+|(?:token|password|secret|cookie|authorization|api[_-]?key)\s*[:=]\s*[^\s,;]+)/gi, '[凭证已隐藏]').replace(/https?:\/\/[^\s"<>]+/g, '[链接已省略]').slice(0, 400);
       const code = /^[a-zA-Z0-9_.-]{1,80}$/.test(error.code || '') ? error.code : 'TOOL_EXECUTION_FAILED';
       const args = traceValue(step.args || {});
-      const fingerprint = JSON.stringify([step.tool, args, code]);
+      const issue = modelRepair ? Contract.planIssue(error.planIssue || error.execution?.planIssue) : null;
+      const phaseKey = modelRepair ? (t.todoTips?.items.length ? 'execute' : 'outline') : null;
+      const fingerprint = JSON.stringify([step.tool, args, code, ...(modelRepair ? [phaseKey, issue] : [])]);
       const recovery = t.recovery ||= { count: 0, failures: [] };
       const repeats = recovery.failures.filter(value => value === fingerprint).length;
       if (recovery.count >= 3 || repeats >= 1 || (t.planRounds || 0) >= 12 || (t.toolCalls || 0) >= 12 || now() - (t.runStartedAt || t.startedAt) >= 300000) {
@@ -239,7 +241,7 @@
         // A failed or unknown tool run may have changed state: verification reads are legitimate again.
         if (phase !== 'plan') t.readSeen = [];
         const observation = Context.observe(t, { tool: phase === 'action' ? 'assistant.action' : step.tool, status: unknown ? 'unknown' : 'failed', message,
-          data: { operation: step.tool, error: { code, message }, args, recovery: { attempt: recovery.count, remaining: 3 - recovery.count, sideEffectState: unknown ? 'unknown' : 'none' } } });
+          data: { operation: step.tool, error: { code, message, ...(issue ? { planIssue: issue } : {}) }, args, recovery: { attempt: recovery.count, remaining: 3 - recovery.count, sideEffectState: unknown ? 'unknown' : 'none' } } });
         Todo.observe(t, t.log.at(-1), observation, Context.state(t).receipts.at(-1));
         t.observations = [...(t.observations || []), observation].slice(-6);
         while (JSON.stringify(t.observations).length > 12000 && t.observations.length > 1) t.observations.shift();
@@ -264,11 +266,11 @@
           const value = await plan(t.input, child);
           try {
             guard(t, version);
-            const validated = Contract.validatePlan(value, t.input.app);
+            const validated = Contract.validatePlan(Todo.executionPlan(value, t.todoTips), t.input.app);
             Todo.prepare(t, validated);
             if (validated.steps.length === 1) Todo.before(t, validated.steps[0]);
             const repeated = readFingerprint(validated.steps[0]);
-            if (repeated && (t.readSeen || []).includes(repeated)) throw new Error(`已读取过完全相同的「${Contract.tools[validated.steps[0].tool].title}」，且之后没有写入、选择或失败恢复，重复读取不会有新信息。请依据已有回执给出下一步、用 question 说明需要用户提供什么，或在原始要求已满足时输出 done。`);
+            if (repeated && (t.readSeen || []).includes(repeated)) throw Contract.planFailure(`已读取过完全相同的「${Contract.tools[validated.steps[0].tool].title}」，且之后没有写入、选择或失败恢复，重复读取不会有新信息。请依据已有回执给出下一步、用 question 说明需要用户提供什么，或在原始要求已满足时输出 done。`, 'plan-no-progress');
             return validated;
           }
           catch (error) { error.code = 'ASSISTANT_PLAN_INVALID'; throw error; }

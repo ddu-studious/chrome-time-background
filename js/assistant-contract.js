@@ -7,6 +7,9 @@
   const Match = typeof module === 'object' && module.exports ? require('./assistant-match.js') : globalThis.AssistantMatch;
   const Memory = typeof module === 'object' && module.exports ? require('./assistant-memory.js') : globalThis.AssistantMemory;
   const Music = typeof module === 'object' && module.exports ? require('./music-intent.js') : globalThis.MusicIntent;
+  const planIssues = new Set(['todo-missing', 'todo-format', 'todo-arguments', 'todo-immutable', 'todo-incomplete', 'todo-order', 'todo-scope', 'plan-phase', 'plan-no-progress']);
+  const planIssue = value => planIssues.has(value) ? value : null;
+  const planFailure = (message, issue) => Object.assign(new Error(message), { code: 'ASSISTANT_PLAN_INVALID', ...(planIssue(issue) ? { planIssue: issue } : {}) });
   const apps = [
     { id: 'music', name: '音乐', aliases: ['音乐', '网易云', '网易云音乐', 'music'], description: '点歌、播放控制与定时停止' },
     { id: 'alarm', name: '闹钟', aliases: ['闹钟', '提醒', 'alarm'], description: '创建提醒、查看已有闹钟' },
@@ -313,5 +316,5 @@
     const mode = replaceSearch ? 'replace' : fresh ? 'new' : 'continue';
     return { mode, input:{ ...parsed, app, ...(aiSpecified ? { ai:selectedAI } : {}) }, reason:raw.newConversation ? '快捷键新需求' : !current ? '首次需求' : changedScope ? '切换应用' : replaceSearch ? (correction ? '纠正上次搜索' : '替换搜索关键词') : fresh ? '独立需求' : reference ? '引用当前会话' : '保留上下文' };
   }
-  return Object.freeze({ apps, skills, tools, toolGroups, allows, input, appId, inputHint, aiSelection, validatePlan, localPlan, ordinal, hasCandidates, routeRequest });
+  return Object.freeze({ apps, skills, tools, toolGroups, allows, input, appId, inputHint, aiSelection, planIssue, planFailure, validatePlan, localPlan, ordinal, hasCandidates, routeRequest });
 });

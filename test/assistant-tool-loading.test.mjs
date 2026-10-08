@@ -69,10 +69,10 @@ test('未加载错误提供具体工具和有效加载计划；禁用入口及�
   await assert.rejects(plan({ app: 'alarm', text: '查看复杂需求', observations: [receipt()] }, { generateObject: async () => reconcile('saved') }), /范围/);
 });
 
-test('真实Engine恢复收到具体加载建议，加载回执后重规划，仍计入原预算', async () => {
-  let calls = 0;
+test('真实Engine预加载最终目标，缺失的前置工具仍收到加载建议并计入原预算', async () => {
+  let calls = 0, plays = 0;
   const gateway = createGateway({ provider: { async generateObject({ input }) {
-    if (input.planningPhase === 'outline') return { todoTips: [{ text: '查看队列', source: 0, tool: 'music.queue.list' }] };
+    if (input.planningPhase === 'outline') return { todoTips: [{ text: '核对并播放队列', source: 0, tool: 'music.queue.play' }] };
     switch (calls++) {
       case 0: return step('music.queue.list');
       case 1:
@@ -83,20 +83,22 @@ test('真实Engine恢复收到具体加载建议，加载回执后重规划，�
         assert.equal(input.observations.at(-1).tool, 'tools.load');
         assert.ok(input.toolGroups.includes('music.queue'));
         return step('music.queue.list');
-      case 3: return { done: true };
+      case 3: return step('music.queue.play', { expectedRevision: 'saved' });
+      case 4: return { done: true };
       default: assert.fail('不得继续重试');
     }
   } } });
   const store = storage();
   const handlers = Tools.create({ storage: store, readMusicState: async () => ({ ...receipt('ready').data, songs: [] }),
+    playCurrentQueue: async revision => { assert.equal(revision, 'saved'); plays++; return { status: 'ready', revision: 'playing', count: 50, mode: 'sequence', isPlaying: true }; },
     ai: async r => ({ ok: true, ...await gateway.run(r.scene, r.input, { trace: r.trace, selection: r.selection }) }) });
   const engine = Engine.create({ storage: store, ...handlers });
-  await engine.submit({ app: 'music', text: '查看队列' });
+  await engine.submit({ app: 'music', text: '核对并播放队列' });
   const task = await engine.settled();
   assert.equal(task.status, 'completed', task.message);
   assert.equal(task.recoveryCount, 1);
-  assert.equal(calls, 4);
-  assert.equal(gateway.describe().usage.admitted, 5); // Includes the outline phase.
+  assert.equal(calls, 5); assert.equal(plays, 1);
+  assert.equal(gateway.describe().usage.admitted, 6); // Includes the outline phase.
 });
 
 function workflow({ earlyDone = false, omitContinue = false } = {}) {

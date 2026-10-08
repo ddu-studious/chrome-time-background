@@ -5,7 +5,7 @@
 })(globalThis, function (Contract) {
   'use strict';
   const copy = value => JSON.parse(JSON.stringify(value));
-  const fail = message => Object.assign(new Error(message), { code: 'ASSISTANT_PLAN_INVALID' });
+  const fail = (message, issue = 'todo-format') => Contract.planFailure(message, issue);
   const runtimeFields = ['ref', 'expectedRevision', 'projectRef'];
   const completionFields = tool => Contract.tools[tool].fields.filter(key => !runtimeFields.includes(key));
   function create(input) {
@@ -25,23 +25,26 @@
     return { version: 1, goal, sources, items: [] };
   }
   function definitions(rows) {
-    if (!Array.isArray(rows) || !rows.length || rows.length > 12) throw fail('请先规划覆盖完整需求的 Todo（1至12项）');
+    if (!Array.isArray(rows) || !rows.length || rows.length > 12) throw fail('请先规划覆盖完整需求的 Todo（1至12项）；不能返回空清单，信息不足时只返回 question', 'todo-missing');
     return rows.map((row, index) => {
-      if (!row || Object.keys(row).some(key => !['text', 'source', 'tool', 'args'].includes(key)) ||
-        typeof row.text !== 'string' || !row.text.trim() || row.text.length > 200 ||
-        !Number.isInteger(row.source) || row.source < 0 || row.source > 11 || !Object.hasOwn(Contract.tools, row.tool)) throw fail('Todo 项目格式无效');
+      const item = `Todo 第${index + 1}项`;
+      if (!row || typeof row !== 'object' || Array.isArray(row)) throw fail(`${item} 必须是对象`);
+      if (Object.keys(row).some(key => !['text', 'source', 'tool', 'args'].includes(key))) throw fail(`${item} 只能包含 text/source/tool/args；id、status 和 receiptId 由执行器管理，不能由模型填写`);
+      if (typeof row.text !== 'string' || !row.text.trim() || row.text.length > 200) throw fail(`${item}.text 必须是1至200字符的目标说明`);
+      if (!Number.isInteger(row.source) || row.source < 0 || row.source > 11) throw fail(`${item}.source 必须是0至11的原文来源下标`);
+      if (!Object.hasOwn(Contract.tools, row.tool)) throw fail(`${item}.tool 必须来自完成条件目录`);
       const args = row.args ?? {};
       const where = `Todo 第${index + 1}项 ${row.tool}`;
-      if (!args || typeof args !== 'object' || Array.isArray(args)) throw fail(`${where} 的 args 必须是对象`);
+      if (!args || typeof args !== 'object' || Array.isArray(args)) throw fail(`${where} 的 args 必须是对象`, 'todo-arguments');
       const unknown = Object.keys(args).filter(key => !Contract.tools[row.tool].fields.includes(key));
       // Model-authored keys and values must not become arbitrary recovery text.
-      if (unknown.length) throw fail(`${where} 不支持参数 ${unknown.slice(0, 12).map(key => /^[a-zA-Z][a-zA-Z0-9_]{0,49}$/.test(key) ? key : '[非标准字段名]').join('、')}；允许的验收参数：${completionFields(row.tool).join('、') || '无（args 必须为空对象）'}`);
+      if (unknown.length) throw fail(`${where} 不支持参数 ${unknown.slice(0, 12).map(key => /^[a-zA-Z][a-zA-Z0-9_]{0,49}$/.test(key) ? key : '[非标准字段名]').join('、')}；允许的验收参数：${completionFields(row.tool).join('、') || '无（args 必须为空对象）'}`, 'todo-arguments');
       for (const [key, value] of Object.entries(args)) {
-        if (runtimeFields.includes(key)) throw fail(`${where} 不能预先指定引用或版本：${key}；请在执行阶段读取真实工具回执`);
-        if (!['string', 'boolean', 'number'].includes(typeof value) || (typeof value === 'number' && !Number.isFinite(value))) throw fail(`${where}.${key} 必须是字符串、布尔值或有限数字`);
-        if (typeof value === 'string' && value.length > 500) throw fail(`${where}.${key} 最多500字符`);
+        if (runtimeFields.includes(key)) throw fail(`${where} 不能预先指定引用或版本：${key}；请在执行阶段读取真实工具回执`, 'todo-arguments');
+        if (!['string', 'boolean', 'number'].includes(typeof value) || (typeof value === 'number' && !Number.isFinite(value))) throw fail(`${where}.${key} 必须是字符串、布尔值或有限数字`, 'todo-arguments');
+        if (typeof value === 'string' && value.length > 500) throw fail(`${where}.${key} 最多500字符`, 'todo-arguments');
         const values = Contract.tools[row.tool].enums?.[key];
-        if (values && !values.includes(value)) throw fail(`${where}.${key} 只允许：${values.join('、')}`);
+        if (values && !values.includes(value)) throw fail(`${where}.${key} 只允许：${values.join('、')}`, 'todo-arguments');
       }
       return { text: row.text.trim(), source: row.source, tool: row.tool, args: copy(args) };
     });
@@ -56,6 +59,22 @@
     return copy(value);
   }
   function current(state) { return state?.items.find(row => row.status !== 'completed'); }
+  function executionPlan(raw, state) {
+    if (!state?.items.length || !raw || typeof raw !== 'object' || raw.todoTips == null) return raw;
+    // An identical echo is redundant data, never a new definition or progress.
+    // Compare every supplied field, then discard it without updating state.
+    const same = (left, right) => left === right || (left && right && typeof left === 'object' && typeof right === 'object' &&
+      Array.isArray(left) === Array.isArray(right) && Object.keys(left).length === Object.keys(right).length &&
+      Object.keys(left).every(key => Object.hasOwn(right, key) && same(left[key], right[key])));
+    const fields = ['text', 'source', 'tool', 'args', 'id', 'status', 'receiptId'];
+    const rows = raw.todoTips;
+    if (!Array.isArray(rows) || rows.length !== state.items.length || rows.some((row, index) =>
+      !row || typeof row !== 'object' || Array.isArray(row) || ['text', 'source', 'tool'].some(key => !Object.hasOwn(row, key)) ||
+      Object.keys(row).some(key => !fields.includes(key) || !same(row[key], state.items[index][key])) ||
+      !same(row.args ?? {}, state.items[index].args))) throw fail('已有 Todo 不能被模型覆盖、删除或重新勾选；执行阶段只返回 steps/question/done，可用顶层 todoId 指向当前事项，不要返回 todoTips', 'todo-immutable');
+    const { todoTips, ...planned } = raw;
+    return planned;
+  }
   function requestsAppend(text) {
     // “播放添加到队列里的歌曲” refers to the previous result; it is not
     // another append request. Do not treat this relative clause as a command.
@@ -65,10 +84,10 @@
   function install(state, rows, app) {
     const items = definitions(rows);
     if (items.some(row => row.source >= state.sources.length) || state.sources.some((_, index) => !items.some(row => row.source === index)) ||
-      items.some((row, index) => index && row.source < items[index - 1].source)) throw fail('Todo 必须按顺序覆盖每项原始要求，不能遗漏或重排');
+      items.some((row, index) => index && row.source < items[index - 1].source)) throw fail('Todo 必须按顺序覆盖每项原始要求，不能遗漏或重排', 'todo-order');
     for (const row of items) {
       const tool = Contract.tools[row.tool];
-      if (app && tool.app && tool.app !== app) throw fail('Todo 超出了已选择应用的范围');
+      if (app && ((tool.app && tool.app !== app) || (tool.apps && !tool.apps.includes(app)))) throw fail('Todo 超出了已选择应用的范围', 'todo-scope');
       if (['tools.load', 'context.read'].includes(row.tool)) throw fail('加载工具和读取上下文不能作为业务目标的完成条件');
     }
     // These are completion checks, never authorization or generated actions.
@@ -97,15 +116,15 @@
     const state = task.todoTips;
     if (!state) return; // Legacy snapshots acquire Todo through Tools.plan on their next planning pass.
     if (plan.todoTips) {
-      if (state.items.length) throw fail('已有 Todo 不能被模型覆盖、删除或重新勾选，请继续当前未完成项');
+      if (state.items.length) throw fail('已有 Todo 不能被模型覆盖、删除或重新勾选，请继续当前未完成项', 'todo-immutable');
       install(state, plan.todoTips, task.input.app);
     }
     if (plan.question) return;
-    if (!state.items.length) throw fail('必须先建立完整 Todo，再执行工具');
+    if (!state.items.length) throw fail('必须先建立完整 Todo，再执行工具', 'todo-missing');
     const active = current(state);
-    if (plan.done && active) throw fail(`Todo 尚未完成：${active.text}。请继续当前事项，不能结束整个任务`);
+    if (plan.done && active) throw fail(`Todo 尚未完成：${active.text}。请继续当前事项，不能结束整个任务`, 'todo-incomplete');
     if (plan.steps.length && !active) throw fail('Todo 已全部完成，不能追加原计划之外的动作');
-    if (plan.todoId && plan.todoId !== active?.id) throw fail(`必须按 Todo 顺序执行当前事项 ${active?.id}`);
+    if (plan.todoId && plan.todoId !== active?.id) throw fail(`必须按 Todo 顺序执行当前事项 ${active?.id}`, 'todo-order');
     if (plan.steps.length > 1 && task.usedModel) throw fail('Todo 模式每轮只执行一个工具，再依据真实回执继续');
   }
   function observe(task, step, observation, receipt) {
@@ -118,7 +137,10 @@
       (active.tool !== 'music.queue.reconcile' || active.args.action === 'clear') &&
       ['music.state', 'music.queue.list'].includes(step.tool) && data.status === 'empty' && data.count === 0;
     const clearEquivalent = active.tool === 'music.queue.clear' && step.tool === 'music.queue.reconcile' && args.action === 'clear';
-    if (!emptyClear && !clearEquivalent && (active.tool !== step.tool || Object.entries(active.args).some(([key, value]) => args[key] !== value))) return;
+    const readyKeep = active.tool === 'music.queue.reconcile' && active.args.action === 'keep' &&
+      ['music.state', 'music.queue.list'].includes(step.tool) && data.status === 'ready' && Number.isInteger(data.count) && data.count > 0 &&
+      typeof data.revision === 'string' && Boolean(data.revision.trim());
+    if (!emptyClear && !clearEquivalent && !readyKeep && (active.tool !== step.tool || Object.entries(active.args).some(([key, value]) => args[key] !== value))) return;
     if (active.tool === 'music.queue.removeArtist' && (!Number.isInteger(data.removedCount) || data.removedCount < 0)) return;
     if (active.tool === 'music.queue.play' && (data.isPlaying !== true || (active.args.mode && data.mode !== active.args.mode))) return;
     if (active.tool === 'music.queue.apply' && (!Number.isInteger(data.count) || data.count < 1 || (args.startPlayback && data.isPlaying !== true))) return;
@@ -144,5 +166,5 @@
     if (active && ['waiting', 'review', 'clarify', 'failed', 'interrupted', 'cancelled'].includes(task.status)) active.status = task.status;
     return value;
   }
-  return Object.freeze({ create, completionFields, definitions, validate, current, install, local, prepare, observe, before, view });
+  return Object.freeze({ create, completionFields, definitions, validate, current, executionPlan, install, local, prepare, observe, before, view });
 });

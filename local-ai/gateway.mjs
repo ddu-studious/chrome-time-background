@@ -19,6 +19,7 @@ import { interpret as interpretSpeech, validateInput as validateSpeech } from '.
 import { interpret as synthesizeSpeech, validateInput as validateSynthesis } from './speech-synthesis-service.mjs';
 import { interpret as interpretMusic, validateInput as validateMusic } from './music-service.mjs';
 import { plan as planAssistant, validateInput as validateAssistant } from './assistant-service.mjs';
+import contract from '../js/assistant-contract.js';
 
 const SCENES = Object.freeze({
   'assistant.compact': Object.freeze({ name: '上下文整理（pi SDK）', version: 1, validate: validateCompaction, run: compactHistory }),
@@ -80,7 +81,7 @@ export function createGateway({ provider, speechProvider, synthesisProvider, lay
       const scene = Object.hasOwn(SCENES, sceneId) ? SCENES[sceneId] : null;
       const record = { requestId, scene: scene ? sceneId : 'unknown', startedAt: started, status: 'pending', source: null,
         ...(trace?.userManaged && trace.conversationId && trace.turnId ? { conversationId: trace.conversationId, turnId: trace.turnId } : {}) };
-      const execution = () => ({ requestId, scene: record.scene, source: record.source, status: record.status, model: record.model || null, reasoning: record.reasoning ?? null, requestedModel: record.requestedModel || null, requestedReasoning: record.requestedReasoning ?? null, contextBudget: record.contextBudget || null, policyRevision: record.policyRevision ?? null, elapsedMs: Date.now() - started, usage: record.usage || null, ...(record.layaPrefetch ? { layaPrefetch: { ...record.layaPrefetch } } : {}), ...(record.speech ? { speech: { ...record.speech } } : {}), ...(record.recoveryFromRequestId ? { recoveryFromRequestId: record.recoveryFromRequestId } : {}), ...(record.startReason ? { startReason: record.startReason } : {}), ...(record.attempts ? { attempts: structuredClone(record.attempts), effectiveReasoning: record.effectiveReasoning, usageComplete: record.attempts.every(attempt => Boolean(attempt.usage)) } : {}) });
+      const execution = () => ({ requestId, scene: record.scene, source: record.source, status: record.status, model: record.model || null, reasoning: record.reasoning ?? null, requestedModel: record.requestedModel || null, requestedReasoning: record.requestedReasoning ?? null, contextBudget: record.contextBudget || null, policyRevision: record.policyRevision ?? null, elapsedMs: Date.now() - started, usage: record.usage || null, ...(record.layaPrefetch ? { layaPrefetch: { ...record.layaPrefetch } } : {}), ...(record.speech ? { speech: { ...record.speech } } : {}), ...(record.recoveryFromRequestId ? { recoveryFromRequestId: record.recoveryFromRequestId } : {}), ...(record.startReason ? { startReason: record.startReason } : {}), ...(record.planIssue ? { planIssue: record.planIssue } : {}), ...(record.attempts ? { attempts: structuredClone(record.attempts), effectiveReasoning: record.effectiveReasoning, usageComplete: record.attempts.every(attempt => Boolean(attempt.usage)) } : {}) });
       records.push(record);
       if (records.length > 100) records.shift();
       try {
@@ -274,6 +275,7 @@ export function createGateway({ provider, speechProvider, synthesisProvider, lay
         record.status = signal?.aborted ? 'cancelled' : 'failed';
         record.errorCode = error.statusCode || 502;
         record.modelErrorCode = error.code || null;
+        if (sceneId === 'assistant.plan' && error.code === 'ASSISTANT_PLAN_INVALID' && contract.planIssue(error.planIssue)) record.planIssue = error.planIssue;
         if (error.contextBudget) record.contextBudget = error.contextBudget;
         error.execution = execution();
         throw error;
