@@ -32,7 +32,8 @@ let _bgPlayAttempt = 0;
 
 function _isBackgroundSuspended() {
     return document.hidden || document.body.classList.contains('bili-panel-open')
-        || document.body.classList.contains('youtube-workbench-open');
+        || document.body.classList.contains('youtube-workbench-open')
+        || document.body.classList.contains('huya-workbench-open');
 }
 
 function _playBackgroundVideo(video, onError = video.onerror) {
@@ -154,17 +155,51 @@ function _applyBackground(background) {
     }
 }
 
+// 选图：优先选已预热（图片字节已在浏览器缓存里）的壁纸，没有就和原来一样从整个列表随机。见 js/background-warm.js。
+function _pickBackground() {
+    if (backgroundImages.length === 0) return null;
+    const warm = window.BackgroundWarm;
+    if (warm) {
+        try {
+            const choice = warm.choose(backgroundImages, warm.read(localStorage));
+            if (choice) {
+                if (choice.warm) warm.consume(localStorage, choice.item.url);
+                return choice.item;
+            }
+        } catch { /* 预热只是加速手段，出错就按原来的随机选 */ }
+    }
+    return backgroundImages[Math.floor(Math.random() * backgroundImages.length)];
+}
+
+let _bgWarmRun = 0;
+// 当前这张下载完后再预热下一批，下次打开几乎瞬间出图。不抢当前壁纸的带宽；打开时就不可见的页面（如恢复会话的
+// 后台标签）和省流量模式不启动预热；已开始的预热不因切走标签而中断，只会被更新的一轮取代。
+function _scheduleBackgroundWarm() {
+    const warm = window.BackgroundWarm;
+    const current = _activeBackground;
+    if (!warm || !current || document.hidden || navigator.connection?.saveData === true) return;
+    const run = ++_bgWarmRun;
+    const superseded = () => run !== _bgWarmRun;
+    (async () => {
+        if (warm.isWarmable(current)) await warm.warmImage(current.url, { timeoutMs: 20000 });
+        if (superseded()) return;
+        await warm.topUp({ list: backgroundImages, current: current.url, storage: localStorage, shouldStop: superseded });
+    })().catch(() => { /* 预热失败只是少一次加速，不影响显示 */ });
+}
+
 function initBackgrounds() {
-    if (backgroundImages.length > 0) {
-        const randomIndex = Math.floor(Math.random() * backgroundImages.length);
-        _applyBackground(backgroundImages[randomIndex]);
+    const background = _pickBackground();
+    if (background) {
+        _applyBackground(background);
+        _scheduleBackgroundWarm();
     }
 }
 
 function changeBackground() {
-    if (backgroundImages.length > 0) {
-        const randomIndex = Math.floor(Math.random() * backgroundImages.length);
-        _applyBackground(backgroundImages[randomIndex]);
+    const background = _pickBackground();
+    if (background) {
+        _applyBackground(background);
+        _scheduleBackgroundWarm();
     }
 }
 
@@ -405,6 +440,25 @@ async function initApp() {
         console.log('YouTube 模块已禁用（用户设置）');
         if (appVideoRequest?.platform === 'youtube') showAppVideoError('YouTube 模块已关闭，请先在设置中启用后重新打开视频。');
         document.getElementById('youtube-dock-btn')?.classList.add('hidden');
+    }
+
+    // 虎牙直播：关注列表经后台标签页读取，推荐与官方嵌入播放器只在本页面内完成
+    if (sm.getSetting('enableHuya') !== false) {
+        try {
+            if (window.huyaController && typeof window.huyaController.init === 'function') {
+                await window.huyaController.init();
+            }
+            const huyaDockBtn = document.getElementById('huya-dock-btn');
+            if (huyaDockBtn) {
+                huyaDockBtn.addEventListener('click', () => window.huyaController?.toggle());
+            }
+            console.log('虎牙工作台初始化完成');
+        } catch (error) {
+            console.error('虎牙工作台初始化失败:', error);
+        }
+    } else {
+        console.log('虎牙模块已禁用（用户设置）');
+        document.getElementById('huya-dock-btn')?.classList.add('hidden');
     }
 
     // 初始化每日计划

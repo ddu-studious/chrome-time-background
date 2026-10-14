@@ -18,7 +18,7 @@
 | 检查点 | [Hugging Face Laya](https://huggingface.co/convaiinnovations/laya) revision `aa8c91ca088ec597df95a0d1c76b3063cb2ae5e8`，只取 `multilingual/` |
 | 权重 | `~/.lmstudio/models/convaiinnovations/laya/multilingual/`，5 个文件，共 678,201,636 字节 |
 | 权重校验 | `local-ai/laya-runtime/model-manifest.json`；主文件 SHA-256 为 `9d628fd971b700382ac6f65920a86f149777b2e748e0c955fb3b19695aa8f204`，与[官方文件页](https://huggingface.co/convaiinnovations/laya/blob/main/multilingual/model.safetensors)一致 |
-| Python 环境 | `local-ai/.local/laya-runtime/.venv/`，只供 Laya 使用 |
+| Python 环境 | `~/.local/share/chrome-time-background/laya-venv/`，只供 Laya 使用；环境变量 `LAYA_VENV_DIR` 可改（支持 `~/` 开头），**必须在扩展目录之外**（2026-10-14 起，原先在 `local-ai/.local/laya-runtime/.venv/`，见下文“恢复安装”） |
 | 下载缓存 | `local-ai/.local/model-cache/huggingface/`；这是传输缓存，权重成品以模型目录和 manifest 为准 |
 | 服务 | 当前用户的按需 `launchd` 项 `local.chrome-time-background.laya`，仅绑定 `127.0.0.1:19085`，不加入登录自启 |
 | 令牌、日志、启动配置 | `local-ai/.local/laya-runtime/`；该目录被 Git 忽略，令牌及日志权限为当前用户可读写 |
@@ -45,16 +45,20 @@ HTTP 接口为 `POST http://127.0.0.1:19085/v1/systemone`。管理命令使用�
 
 ## 恢复安装与复核下载
 
-锁文件和运行脚本在仓库，实际环境和权重不入 Git。换机器、环境损坏或删除 `.venv` 后，用本机 Python 3.12 恢复：
+锁文件和运行脚本在仓库，实际环境和权重不入 Git。换机器、环境损坏或删除环境目录后，用本机 Python 3.12 恢复：
 
 ```bash
 cd local-ai/laya-runtime
-UV_PROJECT_ENVIRONMENT=../.local/laya-runtime/.venv \
-UV_CACHE_DIR=../.local/uv-cache \
+UV_PROJECT_ENVIRONMENT="$HOME/.local/share/chrome-time-background/laya-venv" \
+UV_CACHE_DIR="$HOME/Library/Caches/chrome-time-background/uv-cache" \
 uv sync --locked --python /Users/liuqingwen/.local/bin/python3.12 --no-dev
 cd ../..
 ./local-ai/models.sh laya verify
 ```
+
+`UV_PROJECT_ENVIRONMENT` 和 `UV_CACHE_DIR` 都必须放在扩展目录之外。Chrome 加载或重新加载未打包扩展时会递归枚举整个扩展目录，Python 环境约 2.3 万个文件、`uv` 缓存约 2.1 万个文件，各会让每次重新加载多出约 3 秒以上（2026-10-14 起，缓存移到 `~/Library/Caches/chrome-time-background/uv-cache`，环境移到 `~/.local/share/chrome-time-background/laya-venv`）。缓存可再生，缺失时 `uv` 会重新下载；环境可按上面的命令用锁文件重建（缓存还在时加 `--offline` 约 1 秒）。**不要再放回 `local-ai/.local/` 下**：`models.sh` 在环境位于扩展目录内时会打印警告。令牌、日志和启动配置只有几个小文件，仍在 `local-ai/.local/laya-runtime/`。详见 [扩展重新加载与首页打开提速](extension-reload-and-page-open-20261014.md)。
+
+迁移与启动时间的实测（2026-10-14，CPU 设备）：新环境与原树内环境的包名和版本完全一致（43 个）；新环境没有字节码缓存，**重建后的第一次启动**要现编译约 2,300 个 `.pyc`，约 70 秒才就绪；之后的热启动约 35 秒，新旧两个环境相同。`start` 等待就绪的上限是 35 秒，所以热启动偶尔会在服务其实马上就绪前提示“Laya 未就绪”，此时先用 `status` 复查几次，**不要立刻 `restart`**（那会卸载正在启动的服务）。迁移后用 `test` 的固定测试句“把开会提醒延后十分钟”得到 `update`、confidence 0.946。
 
 若权重尚未下载，先看 `model-manifest.json` 的仓库与 revision，再执行 `./local-ai/models.sh laya download`。官方源连接不可用时，手动选择 `./local-ai/models.sh laya download --mirror`。命令只下载该固定 revision 的多语言文件，结束时自动按 manifest 验证。已校验的权重无需重复下载。恢复后运行 `start`、`status`、`test`。
 

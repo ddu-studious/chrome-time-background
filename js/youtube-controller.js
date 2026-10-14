@@ -72,6 +72,10 @@
     const YOUTUBE_PLAYER_ORIGIN = 'https://www.youtube.com';
     const DEFAULT_PLAYBACK_RATES = [0.75, 1, 1.25, 1.5, 2];
     const AUTO_PLAYBACK_RATE = 2;
+    const PLAYER_CONNECT_TIMEOUT_MS = 30_000;
+    const AUTO_RATE_TIMEOUT_MS = 60_000;
+    const AUTO_RATE_RETRY_MS = 2_000;
+    const AUTO_RATE_MAX_ATTEMPTS = 6;
     const WATCH_HISTORY_LIMIT = 100;
     const WATCH_PROGRESS_LIMIT = 200;
     const WATCH_PROGRESS_MIN_SECONDS = 5;
@@ -346,6 +350,7 @@
             this.creatorEntry = null;
             this.playerBridge = null;
             this.playerBridgeTimer = 0;
+            this.playerAutoRateTimer = 0;
             this.playerControlUpdateFrame = 0;
             this.playerProgressDragging = false;
             this.playerRecentItems = [];
@@ -1167,7 +1172,7 @@
         }
 
         _playerControlsMarkup() {
-            const rates = DEFAULT_PLAYBACK_RATES.map(rate => `<button type="button" data-yt-player-action="rate" data-rate="${rate}" aria-pressed="${rate === AUTO_PLAYBACK_RATE}" disabled>${rate}×</button>`).join('');
+            const rates = DEFAULT_PLAYBACK_RATES.map(rate => `<button type="button" data-yt-player-action="rate" data-rate="${rate}" aria-pressed="false" disabled>${rate}×</button>`).join('');
             return `<section class="yt-player-controls" aria-label="YouTube 快捷播放控制">
                 <div class="yt-player-seek">
                     <button type="button" data-yt-player-action="back-10" disabled aria-label="后退 10 秒"><i class="fas fa-undo-alt"></i><span>10s</span></button>
@@ -1178,7 +1183,7 @@
                 <div class="yt-player-quick-row">
                     <div class="yt-player-rates" role="group" aria-label="播放速度"><span>倍速</span>${rates}</div>
                     <span class="yt-player-quality" title="YouTube 已停止支持通过 IFrame API 设置清晰度"><i class="fas fa-cog"></i> 清晰度在播放器内调整</span>
-                    <span class="yt-player-shortcuts" data-yt-player-status>连接播放器后可用：J/L ±10s · K 播放暂停 · ←/→ ±5s</span>
+                    <span class="yt-player-shortcuts" data-yt-player-status>正在连接快捷控制，连接后自动设置 2 倍速…</span>
                 </div>
             </section>`;
         }
@@ -1188,41 +1193,109 @@
             this.playerBridge = {
                 frame,
                 loaded: false,
+                navigated: false,
                 ready: false,
                 currentTime: resumeTime,
                 duration: 0,
-                playbackRate: AUTO_PLAYBACK_RATE,
+                playbackRate: null,
                 playerState: -1,
                 availableRates: [...DEFAULT_PLAYBACK_RATES],
+                ratesKnown: false,
                 autoRatePending: true,
+                autoRateAttempts: 0,
+                autoRateLastAttemptAt: null,
+                autoRateDeadline: 0,
+                targetVideoId: this.currentVideo?.id || parseYouTubeVideoId(frame.src),
+                rateVideoPending: false,
             };
-            const startListening = () => {
-                if (!this.playerBridge || this.playerBridge.frame !== frame || !this.playerBridge.loaded) return;
-                this._postPlayerMessage({ event: 'listening', id: frame.id, channel: 'youtube-workbench' });
-            };
+            const bridge = this.playerBridge;
             frame.addEventListener('load', () => {
-                if (!this.playerBridge || this.playerBridge.frame !== frame) return;
-                this.playerBridge.loaded = true;
-                startListening();
-                window.setTimeout(startListening, 350);
-                window.setTimeout(startListening, 1000);
+                if (this.playerBridge !== bridge) return;
+                bridge.loaded = true;
+                bridge.navigated = true;
+                bridge.stopNavigationWatch?.();
+                this._startPlayerBridgePolling(bridge);
             }, { once: true });
-            this.playerBridgeTimer = window.setInterval(() => {
-                if (!this.playerBridge?.frame?.isConnected) return;
-                if (this.playerBridge.ready) {
-                    window.clearInterval(this.playerBridgeTimer);
-                    this.playerBridgeTimer = 0;
+            this._startPlayerBridgePolling(bridge);
+            this._watchPlayerNavigation(bridge);
+        }
+
+        _startPlayerBridgePolling(bridge) {
+            if (this.playerBridge !== bridge || bridge.ready) return;
+            const listen = () => {
+                if (this.playerBridge !== bridge || !bridge.frame.isConnected || !bridge.navigated) return;
+                this._postPlayerMessage({ event: 'listening', id: bridge.frame.id, channel: 'youtube-workbench' });
+            };
+            listen();
+            if (this.playerBridgeTimer) return;
+            bridge.connectTimedOut = false;
+            bridge.connectDeadline = Date.now() + PLAYER_CONNECT_TIMEOUT_MS;
+            const timer = window.setInterval(() => {
+                if (this.playerBridge !== bridge || !bridge.frame.isConnected || bridge.ready || Date.now() >= bridge.connectDeadline) {
+                    window.clearInterval(timer);
+                    if (this.playerBridgeTimer === timer) this.playerBridgeTimer = 0;
+                    if (this.playerBridge === bridge && !bridge.ready) {
+                        bridge.connectTimedOut = true;
+                        bridge.stopNavigationWatch?.();
+                        this._schedulePlayerControlUpdate();
+                    }
                     return;
                 }
-                startListening();
+                listen();
             }, 700);
+            this.playerBridgeTimer = timer;
+        }
+
+        _watchPlayerNavigation(bridge) {
+            // Chrome 的导航提交已证明文档来源，无需等图片等资源全部 load。
+            // 不在 about:blank 阶段猜测来源；无此 API 的 HTTP 预览沿用 iframe load。
+            if (typeof chrome === 'undefined' || !chrome.tabs?.getCurrent || !chrome.webNavigation?.onCommitted || !chrome.webNavigation?.getAllFrames) return;
+            const navigation = chrome.webNavigation;
+            const matches = details => details.tabId === bridge.tabId && details.frameId > 0
+                && details.parentFrameId === 0 && details.url === bridge.frame.src
+                && details.documentLifecycle === 'active';
+            const accept = () => {
+                if (this.playerBridge !== bridge || !bridge.frame.isConnected || !bridge.navigationWatching) return;
+                bridge.navigated = true;
+                bridge.stopNavigationWatch();
+                this._startPlayerBridgePolling(bridge);
+            };
+            const onCommitted = details => {
+                if (Number.isInteger(bridge.tabId) && matches(details)) accept();
+            };
+            bridge.navigationWatching = true;
+            bridge.stopNavigationWatch = () => {
+                if (!bridge.navigationWatching) return;
+                bridge.navigationWatching = false;
+                navigation.onCommitted.removeListener(onCommitted);
+            };
+            try {
+                navigation.onCommitted.addListener(onCommitted, { url: [{ schemes: ['https'], hostEquals: 'www.youtube.com', pathPrefix: '/embed/' }] });
+                Promise.resolve(chrome.tabs.getCurrent()).then(async tab => {
+                    if (this.playerBridge !== bridge || !bridge.navigationWatching || !Number.isInteger(tab?.id)) return;
+                    bridge.tabId = tab.id;
+                    const frames = await navigation.getAllFrames({ tabId: tab.id });
+                    // 补上 getCurrent 返回前已经提交的导航，只接受当前标签的唯一匹配。
+                    const matching = (frames || []).filter(details => !details.errorOccurred && matches({ ...details, tabId: tab.id }));
+                    if (matching.length === 1) accept();
+                }).catch(() => {
+                    bridge.navigationCheckFailed = true;
+                    bridge.stopNavigationWatch();
+                });
+            } catch {
+                bridge.navigationCheckFailed = true;
+                bridge.stopNavigationWatch();
+            }
         }
 
         _detachPlayerBridge() {
             this._captureWatchProgress(true);
+            this.playerBridge?.stopNavigationWatch?.();
             if (this.playerBridgeTimer) window.clearInterval(this.playerBridgeTimer);
+            if (this.playerAutoRateTimer) window.clearInterval(this.playerAutoRateTimer);
             if (this.playerControlUpdateFrame) window.cancelAnimationFrame(this.playerControlUpdateFrame);
             this.playerBridgeTimer = 0;
+            this.playerAutoRateTimer = 0;
             this.playerControlUpdateFrame = 0;
             this.playerBridge = null;
             this.playerProgressDragging = false;
@@ -1241,6 +1314,14 @@
                 try { message = JSON.parse(message); } catch { return; }
             }
             if (!message || typeof message !== 'object') return;
+            const info = message.info && typeof message.info === 'object' ? message.info : null;
+            const reportedVideoId = info ? parseYouTubeVideoId(info.videoUrl || '')
+                || (VIDEO_ID_PATTERN.test(String(info.videoData?.video_id || '')) ? info.videoData.video_id : '') : '';
+            if (reportedVideoId && this.playerBridge.targetVideoId && reportedVideoId !== this.playerBridge.targetVideoId) return;
+            if (this.playerBridge.rateVideoPending) {
+                if (!reportedVideoId || reportedVideoId !== this.playerBridge.targetVideoId) return;
+                this.playerBridge.rateVideoPending = false;
+            }
             const wasReady = this.playerBridge.ready;
             const previousPlayerState = this.playerBridge.playerState;
             if (message.event === 'onReady') this.playerBridge.ready = true;
@@ -1248,31 +1329,35 @@
                 this.playerBridge.ready = true;
                 this.playerBridge.playerState = Number(message.info ?? message.data);
             }
-            if (message.event === 'infoDelivery' && message.info && typeof message.info === 'object') {
+            if (['initialDelivery', 'infoDelivery'].includes(message.event) && message.info && typeof message.info === 'object') {
                 const info = message.info;
                 this.playerBridge.ready = true;
                 if (Number.isFinite(Number(info.currentTime))) this.playerBridge.currentTime = Number(info.currentTime);
                 if (Number.isFinite(Number(info.duration))) this.playerBridge.duration = Number(info.duration);
-                if (Number.isFinite(Number(info.playbackRate))) this.playerBridge.playbackRate = Number(info.playbackRate);
+                this._observePlayerRate(info.playbackRate);
                 if (Number.isFinite(Number(info.playerState))) this.playerBridge.playerState = Number(info.playerState);
                 if (Array.isArray(info.availablePlaybackRates) && info.availablePlaybackRates.length) {
-                    this.playerBridge.availableRates = info.availablePlaybackRates.map(Number).filter(Number.isFinite);
+                    this.playerBridge.availableRates = info.availablePlaybackRates.map(Number).filter(rate => Number.isFinite(rate) && rate > 0);
+                    this.playerBridge.ratesKnown = true;
                 }
+            }
+            if (message.event === 'onPlaybackRateChange') {
+                this._observePlayerRate(message.info ?? message.data);
             }
             if (previousPlayerState !== 1 && this.playerBridge.playerState === 1 && this.currentVideo) {
                 void this._recordWatchHistory(this.currentVideo);
             }
             this._captureWatchProgress(message.event === 'onStateChange' && this.playerBridge.playerState !== 1);
             if (!wasReady && this.playerBridge.ready) {
+                this.playerBridge.stopNavigationWatch?.();
                 if (this.playerBridgeTimer) window.clearInterval(this.playerBridgeTimer);
                 this.playerBridgeTimer = 0;
                 ['getCurrentTime', 'getDuration', 'getPlaybackRate', 'getAvailablePlaybackRates'].forEach(func => {
                     this._postPlayerMessage({ event: 'command', func, args: [] });
                 });
-                this._applyAutoPlaybackRate();
-            } else if (message.event === 'onStateChange' && this.playerBridge.autoRatePending) {
-                this._applyAutoPlaybackRate();
             }
+            // infoDelivery 也会携带真实播放状态；不能仅等 onStateChange 才补设。
+            if (this.playerBridge.autoRatePending) this._applyAutoPlaybackRate();
             this._schedulePlayerControlUpdate();
         }
 
@@ -1294,7 +1379,7 @@
             const currentTime = previewTime === null ? bridge.currentTime : previewTime;
             if (progress) {
                 const max = String(Math.max(1, duration));
-                const disabled = !bridge.ready || duration <= 0;
+                const disabled = !bridge.ready || bridge.rateVideoPending || duration <= 0;
                 const value = Math.min(Math.max(0, currentTime), Math.max(1, duration));
                 if (progress.max !== max) progress.max = max;
                 if (progress.disabled !== disabled) progress.disabled = disabled;
@@ -1303,7 +1388,8 @@
             const timeLabel = `${formatPlaybackTime(currentTime)} / ${formatPlaybackTime(duration)}`;
             if (time && time.textContent !== timeLabel) time.textContent = timeLabel;
             this.stage.querySelectorAll('[data-yt-player-action]').forEach(button => {
-                if (button.disabled === bridge.ready) button.disabled = !bridge.ready;
+                const disabled = !bridge.ready || Boolean(bridge.rateVideoPending);
+                if (button.disabled !== disabled) button.disabled = disabled;
             });
             this.stage.querySelectorAll('[data-yt-player-action="rate"]').forEach(button => {
                 const rate = Number(button.dataset.rate);
@@ -1312,7 +1398,16 @@
                 if (button.hidden !== hidden) button.hidden = hidden;
                 if (button.getAttribute('aria-pressed') !== pressed) button.setAttribute('aria-pressed', pressed);
             });
-            const statusLabel = bridge.ready ? '快捷键：J/L ±10s · K 播放暂停 · ←/→ ±5s' : '正在连接快捷控制…';
+            const statusLabel = !bridge.ready
+                ? (bridge.connectTimedOut ? '快捷控制连接超时，可先在播放器内调整速度' : '正在连接快捷控制，连接后自动设置 2 倍速…')
+                : bridge.autoRatePending
+                    ? (bridge.autoRateAttempts ? '正在设置 2 倍速，等待播放器确认…' : '快捷控制已连接，等待视频就绪后设置 2 倍速…')
+                    : bridge.autoRateFailed
+                        ? (bridge.rateVideoPending ? '视频切换尚未确认，请在播放器内核对'
+                            : bridge.ratesKnown && !bridge.availableRates.includes(AUTO_PLAYBACK_RATE)
+                                ? '当前视频暂未提供 2 倍速，可在播放器内检查'
+                                : '自动 2 倍速未确认，请点击 2× 重试或在播放器内调整')
+                        : '快捷键：J/L ±10s · K 播放暂停 · ←/→ ±5s';
             if (status && status.textContent !== statusLabel) status.textContent = statusLabel;
         }
 
@@ -1324,7 +1419,7 @@
         }
 
         _handlePlayerProgressChange(event) {
-            if (!event.target.matches('[data-yt-player-progress]') || !this.playerBridge) return;
+            if (!event.target.matches('[data-yt-player-progress]') || !this.playerBridge?.ready || this.playerBridge.rateVideoPending) return;
             const seconds = Number(event.target.value);
             this.playerBridge.currentTime = seconds;
             this.playerProgressDragging = false;
@@ -1334,7 +1429,7 @@
         }
 
         _seekPlayerBy(delta) {
-            if (!this.playerBridge?.ready) return;
+            if (!this.playerBridge?.ready || this.playerBridge.rateVideoPending) return;
             const seconds = Math.min(Math.max(0, this.playerBridge.currentTime + delta), this.playerBridge.duration || Number.MAX_SAFE_INTEGER);
             this.playerBridge.currentTime = seconds;
             this._captureWatchProgress(true, true);
@@ -1343,19 +1438,60 @@
         }
 
         _setPlayerRate(rate) {
-            if (!this.playerBridge?.ready || !Number.isFinite(rate)) return;
+            if (!this.playerBridge?.ready || this.playerBridge.rateVideoPending || !Number.isFinite(rate) || !this.playerBridge.availableRates.includes(rate)) return;
             this.playerBridge.autoRatePending = false;
-            this.playerBridge.playbackRate = rate;
+            this.playerBridge.autoRateFailed = false;
+            if (this.playerAutoRateTimer) window.clearInterval(this.playerAutoRateTimer);
+            this.playerAutoRateTimer = 0;
             this._postPlayerMessage({ event: 'command', func: 'setPlaybackRate', args: [rate] });
             this._schedulePlayerControlUpdate();
         }
 
         _applyAutoPlaybackRate() {
-            if (!this.playerBridge?.ready) return;
-            this.playerBridge.autoRatePending = false;
-            this.playerBridge.playbackRate = AUTO_PLAYBACK_RATE;
+            const bridge = this.playerBridge;
+            if (!bridge?.ready || !bridge.autoRatePending) return;
+            const confirmed = !bridge.rateVideoPending && Math.abs(bridge.playbackRate - AUTO_PLAYBACK_RATE) < 0.01;
+            const now = Date.now();
+            if (!bridge.autoRateDeadline) bridge.autoRateDeadline = now + AUTO_RATE_TIMEOUT_MS;
+            const exhausted = now >= bridge.autoRateDeadline
+                || (bridge.autoRateAttempts >= AUTO_RATE_MAX_ATTEMPTS && now - bridge.autoRateLastAttemptAt >= AUTO_RATE_RETRY_MS);
+            if (confirmed || exhausted) {
+                bridge.autoRatePending = false;
+                bridge.autoRateFailed = !confirmed;
+                if (this.playerAutoRateTimer) window.clearInterval(this.playerAutoRateTimer);
+                this.playerAutoRateTimer = 0;
+                this._schedulePlayerControlUpdate();
+                return;
+            }
+            if (!this.playerAutoRateTimer) {
+                const timer = window.setInterval(() => {
+                    if (this.playerBridge !== bridge || !bridge.frame.isConnected) {
+                        window.clearInterval(timer);
+                        if (this.playerAutoRateTimer === timer) this.playerAutoRateTimer = 0;
+                        return;
+                    }
+                    this._applyAutoPlaybackRate();
+                }, 700);
+                this.playerAutoRateTimer = timer;
+            }
+            // 视频尚未 cued/播放时设置可能被之后的加载重置；真实不支持时不强行发送。
+            if (bridge.rateVideoPending || ![1, 2, 3, 5].includes(bridge.playerState)
+                || (bridge.ratesKnown && !bridge.availableRates.includes(AUTO_PLAYBACK_RATE))) return;
+            if (bridge.autoRateAttempts >= AUTO_RATE_MAX_ATTEMPTS
+                || (bridge.autoRateLastAttemptAt !== null && now - bridge.autoRateLastAttemptAt < AUTO_RATE_RETRY_MS)) return;
+            bridge.autoRateAttempts += 1;
+            bridge.autoRateLastAttemptAt = now;
             this._postPlayerMessage({ event: 'command', func: 'setPlaybackRate', args: [AUTO_PLAYBACK_RATE] });
+            this._postPlayerMessage({ event: 'command', func: 'getPlaybackRate', args: [] });
             this._schedulePlayerControlUpdate();
+        }
+
+        _observePlayerRate(value) {
+            const rate = Number(value);
+            const bridge = this.playerBridge;
+            if (!bridge || !Number.isFinite(rate) || rate <= 0) return;
+            bridge.playbackRate = rate;
+            if (Math.abs(rate - AUTO_PLAYBACK_RATE) < 0.01) bridge.autoRateFailed = false;
         }
 
         _handlePlayerAction(action, rate) {
@@ -1365,6 +1501,7 @@
         }
 
         _handlePlayerShortcut(event) {
+            if (!this.playerBridge?.ready || this.playerBridge.rateVideoPending) return false;
             const key = String(event.key || '').toLowerCase();
             if (key === 'j') this._seekPlayerBy(-10);
             else if (key === 'l') this._seekPlayerBy(10);
@@ -1508,10 +1645,21 @@
             const resumeTime = this._getWatchResumeTime(item.id);
             this.playerBridge.currentTime = resumeTime;
             this.playerBridge.duration = 0;
-            this.playerBridge.playbackRate = AUTO_PLAYBACK_RATE;
+            this.playerBridge.playbackRate = null;
             this.playerBridge.playerState = -1;
             this.playerBridge.autoRatePending = true;
+            this.playerBridge.targetVideoId = item.id;
+            this.playerBridge.rateVideoPending = true;
+            this.playerBridge.autoRateFailed = false;
+            this.playerBridge.autoRateAttempts = 0;
+            this.playerBridge.autoRateLastAttemptAt = null;
+            this.playerBridge.autoRateDeadline = 0;
+            this.playerBridge.ratesKnown = false;
+            this.playerBridge.availableRates = [...DEFAULT_PLAYBACK_RATES];
+            if (this.playerAutoRateTimer) window.clearInterval(this.playerAutoRateTimer);
+            this.playerAutoRateTimer = 0;
             this._postPlayerMessage({ event: 'command', func: 'loadVideoById', args: [{ videoId: item.id, startSeconds: resumeTime }] });
+            this._applyAutoPlaybackRate();
             this._updatePlayerVideoMeta();
             this._renderPlayerRecent();
             this._schedulePlayerControlUpdate();

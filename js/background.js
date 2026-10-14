@@ -1,9 +1,11 @@
-importScripts('quick-capture.js', 'app-video.js', 'youtube-home.js', 'music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'music-search.js', 'alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'alarm-countdown.js', 'local-ai-client.js', 'background-provider.js', 'hermes-writing-sync.js', 'site-workspace-core.js', '../vendor/pinyin-match/pinyin-match.js', 'assistant-match.js', 'assistant-memory.js', 'assistant-contract.js', 'assistant-context-state.js', 'assistant-todo.js', 'assistant-engine.js', 'assistant-confirmation.js', 'assistant-music.js', 'assistant-management.js', 'assistant-tools.js', 'assistant-voice-background.js', 'assistant-background.js');
+importScripts('quick-capture.js', 'app-video.js', 'youtube-home.js', 'huya-core.js', 'huya-follow.js', 'music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'music-search.js', 'alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'alarm-countdown.js', 'local-ai-client.js', 'background-provider.js', 'hermes-writing-sync.js', 'site-workspace-core.js', '../vendor/pinyin-match/pinyin-match.js', 'assistant-match.js', 'assistant-memory.js', 'assistant-contract.js', 'assistant-context-state.js', 'assistant-todo.js', 'assistant-engine.js', 'assistant-confirmation.js', 'assistant-music.js', 'assistant-management.js', 'assistant-tools.js', 'assistant-voice-background.js', 'assistant-background.js');
 
 (function() {
     let assistantMusicRevision = 0;
     let youtubeHomeService = null;
     const getYouTubeHomeService = () => (youtubeHomeService ||= new self.YouTubeHomeService(chrome));
+    let huyaFollowService = null;
+    const getHuyaFollowService = () => (huyaFollowService ||= new self.HuyaFollowService(chrome));
     const SITE_WORKSPACE_MENU_ID = 'site-workspace-add-current-tab';
     const SITE_WORKSPACE_OPEN_MENU_ID = 'site-workspace-open-panel';
     const SITE_WORKSPACE_COMMAND = 'add-current-tab-to-site-workspace';
@@ -3493,6 +3495,26 @@ importScripts('quick-capture.js', 'app-video.js', 'youtube-home.js', 'music-queu
             return false;
         }
 
+        // ========== 虎牙：关注列表经后台标签页读取虎牙自己的页面，推荐与播放不经过后台 ==========
+
+        if (message.action === 'huya_follow') {
+            getHuyaFollowService().read(message, sender)
+                .then(data => sendResponse({ ok: true, data }))
+                .catch(error => sendResponse({ ok: false, error: { code: error.code || 'huya-read-failed' } }));
+            return true;
+        }
+        if (message.action === 'huya_follow_release') {
+            try { sendResponse(getHuyaFollowService().release(sender)); }
+            catch { sendResponse({ ok: false, error: { code: 'huya-forbidden' } }); }
+            return false;
+        }
+        if (message.action === 'huya_follow_clear') {
+            getHuyaFollowService().clear(sender)
+                .then(() => sendResponse({ ok: true }))
+                .catch(error => sendResponse({ ok: false, error: { code: error.code || 'huya-read-failed' } }));
+            return true;
+        }
+
         if (message.action === 'youtube_auth_status') {
             getYouTubeAuthStatus()
                 .then(data => sendResponse({ ok: true, data }))
@@ -4094,6 +4116,7 @@ importScripts('quick-capture.js', 'app-video.js', 'youtube-home.js', 'music-queu
 
     const quickAssistant = QuickAssistant.install({
         desktop: desktopAlarm,
+        log: (category, action, detail) => { void logExtEvent(category, action, detail); },
         storage: chrome.storage.local,
         async connectionStatus(platform, ctx) {
             ctx.guard();

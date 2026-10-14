@@ -99,6 +99,17 @@
     return { message: `已读取工具结果 ${offset + 1}–${end}/${text.length} 字符；历史引用使用前须核对当前状态。`,
       observation: { contextRef: ref, excerpt: text.slice(offset, end), nextOffset: end < text.length ? end : null, totalCharacters: text.length, historical: true } };
   }
+  // Whole raw receipts for the read-only compute sandbox. The caller gets independent copies of the already
+  // sanitized artifacts (credentials were stripped when they were stored); one stale reference fails the call
+  // rather than computing from a partial set.
+  function sources(task, refs) {
+    const artifacts = state(task).artifacts, result = {};
+    for (const ref of refs) {
+      if (!Object.hasOwn(artifacts, ref)) throw error(`上下文引用 ${ref} 已失效或不存在，请重新读取数据后再计算`, 'CONTEXT_REF_EXPIRED');
+      result[ref] = copy(artifacts[ref].data);
+    }
+    return result;
+  }
   function actionKey(task, step) {
     if (!['music.queue.clear', 'music.queue.apply', 'music.queue.play', 'music.queue.remove', 'alarm.toggle', 'alarm.prepare', 'alarm.update.prepare'].includes(step.tool)) return null;
     const args = Object.fromEntries(Object.entries(step.args || {}).filter(([key]) => key !== 'expectedRevision'));
@@ -113,5 +124,5 @@
       tool: task.operation?.action || last.tool, ...(task.operation?.choiceId ? { choiceId: task.operation.choiceId } : {}), status: 'unknown', message: '操作已开始但没有收到完成回执，可能已经生效，核对前不可重做。' });
     s.uncertain = true;
   }
-  return { state, append, observe, pending, batch, commit, envelope, read, actionKey, uncertain };
+  return { state, append, observe, pending, batch, commit, envelope, read, sources, actionKey, uncertain };
 });

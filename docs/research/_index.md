@@ -1,9 +1,11 @@
 # 调研文档索引
 
-> 最后更新：2026-08-22
+> 最后更新：2026-10-12
 
 | 更新日期 | 文档 | 标题 |
 |----------|------|------|
+| 2026-10-12 | [research-native-popup-generated-ui-20261012.md](research-native-popup-generated-ui-20261012.md) | 原生弹窗提示 UI 的“自主编码”可行性调研（现状问题、U0–U4 四档方案、锁定 WKWebView 实测、生成耗时与质量；只调研，未改弹窗实现） |
+| 2026-10-12 | [research-assistant-dynamic-tools-20261012.md](research-assistant-dynamic-tools-20261012.md) | AI 工作台“临时写代码 / 自主编写工具”可行性调研（pi 0.85.1、MV3/CWS 约束、沙箱方案、分阶段建议）；v1.1：A 档已实现为默认关闭的 `compute.run`，B/C 档仍不做 |
 | 2026-08-22 | [research-player-recent-publish-switch-2026.md](research-player-recent-publish-switch-2026.md) | B 站与 YouTube 播放器最近发布切换调研（2026） |
 | 2026-08-16 | [research-youtube-integration-2026.md](research-youtube-integration-2026.md) | YouTube Chrome 扩展集成调研（2026） |
 | 2026-08-05 | [research-music-netease-enhanced-features.md](research-music-netease-enhanced-features.md) | 网易云音乐增强功能 API 调研报告 |

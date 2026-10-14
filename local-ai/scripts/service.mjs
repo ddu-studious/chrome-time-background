@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // macOS per-user supervision. Never installs a root daemon or kills an unowned process.
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync, chmodSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync, chmodSync, statSync, openSync, readSync, closeSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -51,6 +51,92 @@ const scope = () => `gui/${process.getuid()}`;
 const target = () => `${scope()}/${LABEL}`;
 function loaded() { return launch('print', target()).status === 0; }
 function checked(result, operation) { if (result.status !== 0) throw new Error(`${operation}失败：${result.stderr?.trim() || result.error?.message || result.status}`); }
+
+// `launchctl bootout` returns before the old process has exited (13-490 ms in the 2026-10-12 launchd logs), and a
+// `bootstrap` inside that window fails with "5: Input/output error". Wait for the unload, then retry that one error.
+// See docs/technical/local-ai-service-restart-20261012.md.
+export const UNLOAD_WAIT_MS = 8000; // launchd's exit timeout for this job is 5 s
+export const READY_WAIT_MS = 30000;
+const defaultSleep = ms => new Promise(resolveSleep => setTimeout(resolveSleep, ms));
+const isLaunchRace = result => result.status === 5 || /Input\/output error/.test(result.stderr || '');
+
+export async function waitUntilUnloaded({ isLoaded, sleep = defaultSleep, now = Date.now, timeoutMs = UNLOAD_WAIT_MS, intervalMs = 100 }) {
+  const started = now();
+  while (isLoaded()) {
+    if (now() - started >= timeoutMs) throw new Error(`旧服务在 ${timeoutMs / 1000} 秒内仍未卸载（launchd 对退出的等待上限是 5 秒）；请稍后重试，或先运行 service.sh stop。不会强制终止进程。`);
+    await sleep(intervalMs);
+  }
+}
+export async function bootstrapJob({ run, sleep = defaultSleep, attempts = 5, delayMs = 300 }) {
+  let result;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    result = run();
+    if (result.status === 0) return result;
+    if (!isLaunchRace(result) || attempt === attempts) break;
+    await sleep(delayMs);
+  }
+  checked(result, '加载用户服务'); // throws with launchd's own message
+  return result;
+}
+// commit() swaps in the prepared plist; discard() drops it when the swap never happens.
+export async function reloadJob({ launch: run, sleep = defaultSleep, now = Date.now, target: job, scope: domain, plist, commit, discard }) {
+  try {
+    if (run('print', job).status === 0) {
+      checked(run('bootout', job), '停止旧守护服务');
+      await waitUntilUnloaded({ isLoaded: () => run('print', job).status === 0, sleep, now });
+    }
+    commit?.();
+  } catch (error) { discard?.(); throw error; }
+  checked(run('enable', job), '启用用户服务');
+  await bootstrapJob({ run: () => run('bootstrap', domain, plist), sleep });
+}
+export function parseJobState(text = '') {
+  const field = name => text.match(new RegExp(`^\\s*${name} = (.+)$`, 'm'))?.[1].trim() ?? null;
+  const count = value => (value !== null && /^\d+$/.test(value) ? Number(value) : null);
+  return { loaded: Boolean(text.trim()), state: field('state'), pid: count(field('pid')), runs: count(field('runs')), lastExit: field('last exit code') };
+}
+export async function waitForReady({ probe, jobState, sleep = defaultSleep, now = Date.now, timeoutMs = READY_WAIT_MS, intervalMs = 500 }) {
+  const started = now();
+  for (;;) {
+    let healthy = false;
+    try { healthy = await probe(); } catch { healthy = false; }
+    if (healthy) return { ok: true, waitedMs: now() - started };
+    const job = jobState();
+    const waitedMs = now() - started;
+    if (!job.loaded) return { ok: false, reason: 'not-loaded', waitedMs, job };
+    if (waitedMs >= timeoutMs) return { ok: false, reason: 'timeout', waitedMs, job };
+    await sleep(intervalMs);
+  }
+}
+export function tailLines(text = '', maxLines = 3, maxChars = 300) {
+  return String(text).split(/\r?\n/).map(line => line.trimEnd()).filter(line => line.trim()).slice(-maxLines)
+    .map(line => (line.length > maxChars ? `${line.slice(0, maxChars)}…` : line)).join('\n');
+}
+export function readTail(path, maxBytes = 4096) {
+  try {
+    const { size } = statSync(path);
+    const length = Math.min(size, maxBytes);
+    if (!length) return '';
+    const buffer = Buffer.alloc(length);
+    const fd = openSync(path, 'r');
+    try { readSync(fd, buffer, 0, length, size - length); } finally { closeSync(fd); }
+    return buffer.toString('utf8');
+  } catch { return ''; }
+}
+export function describeNotReady({ outcome, listening, errorLog, errorTail = '', logTail = '' }) {
+  const { job } = outcome;
+  const processText = outcome.reason === 'not-loaded' ? '守护服务已被卸载（未加载）'
+    : job.pid ? `服务进程 pid ${job.pid} 仍在运行，但没有通过 /v1/control 检查`
+      : `服务进程未在运行（launchd 状态：${job.state ?? '未知'}；上次退出码：${job.lastExit ?? '未知'}）`;
+  const portText = listening ? '19841 端口有进程在监听' : '19841 端口尚无进程监听';
+  const indent = text => text.split('\n').map(line => `  ${line}`).join('\n');
+  return [
+    `入口未就绪（已等待 ${Math.floor((outcome.waitedMs ?? 0) / 1000)} 秒）：${processText}；${portText}。`,
+    errorTail ? `service-error.log 末尾：\n${indent(errorTail)}` : `service-error.log 为空（${errorLog}）`,
+    logTail ? `service.log 末尾：\n${indent(logTail)}` : '',
+    '稍后运行 service.sh status 复查；不会自动终止其他占用端口的进程。'
+  ].filter(Boolean).join('\n');
+}
 function occupied() {
   return new Promise(resolveResult => {
     const socket = net.connect({host:'127.0.0.1',port:19841});
@@ -82,12 +168,12 @@ async function reportMemory() {
   catch { result = { ok: false, message: '尚无连接令牌，请先启动服务' }; }
   console.log(`个人记忆：${result.message}`);
 }
+function jobState() { const result = launch('print', target()); return parseJobState(result.status === 0 ? result.stdout : ''); }
 async function ready() {
-  for (let attempt=0;attempt<20;attempt++) {
-    if(await health()) return;
-    await new Promise(r=>setTimeout(r,500));
-  }
-  throw new Error(`入口未就绪，请查看 ${resolve(STATE,'service-error.log')}；不会自动终止其他占用端口的进程。`);
+  const outcome = await waitForReady({ probe: health, jobState });
+  if (outcome.ok) return;
+  const errorLog = resolve(STATE,'service-error.log');
+  throw new Error(describeNotReady({ outcome, listening: await occupied(), errorLog, errorTail: tailLines(readTail(errorLog)), logTail: tailLines(readTail(resolve(STATE,'service.log'))) }));
 }
 async function status() {
   console.log(`自动守护：${loaded() ? '已加载' : '未加载'}；登录启动配置：${existsSync(PLIST) ? '已安装' : '未安装'}`);
@@ -118,10 +204,7 @@ async function install(force = false) {
   writeFileSync(temporary,renderPlist({node:process.execPath,root:ROOT,environment}),{mode:0o600});
   const validation=spawnSync('/usr/bin/plutil',['-lint',temporary],{encoding:'utf8'});
   if(validation.status !== 0) { unlinkSync(temporary); throw new Error('启动配置校验失败'); }
-  if(loaded()) checked(launch('bootout',target()),'停止旧守护服务');
-  renameSync(temporary,PLIST);
-  checked(launch('enable',target()),'启用用户服务');
-  checked(launch('bootstrap',scope(),PLIST),'加载用户服务');
+  await reloadJob({ launch, target:target(), scope:scope(), plist:PLIST, commit:()=>renameSync(temporary,PLIST), discard:()=>{ if(existsSync(temporary)) unlinkSync(temporary); } });
   await ready();
   console.log('本地 AI 已启动；已启用登录自动启动、退出后自动恢复。可以关闭终端。');
   await reportMemory();
@@ -137,7 +220,7 @@ export async function main(command = 'start', ...extra) {
   if(command === 'install' || command === 'restart') return install(true);
   if(command === 'status') return status();
   if(command === 'stop' || command === 'shutdown' || command === 'uninstall') {
-    if(loaded()) checked(launch('bootout',target()),'停止用户服务');
+    if(loaded()) { checked(launch('bootout',target()),'停止用户服务'); await waitUntilUnloaded({ isLoaded: loaded }); }
     if(command === 'uninstall' && existsSync(PLIST)) unlinkSync(PLIST);
     console.log(command === 'uninstall' ? '已移除自动启动；令牌、业务配置和日志均保留。' : '已停止本次运行；下次登录仍会启动，永久关闭请用uninstall。');return;
   }

@@ -7,9 +7,15 @@
   const copy = value => JSON.parse(JSON.stringify(value));
   const fail = (message, issue = 'todo-format') => Contract.planFailure(message, issue);
   const runtimeFields = ['ref', 'expectedRevision', 'projectRef'];
-  const completionFields = tool => Contract.tools[tool].fields.filter(key => !runtimeFields.includes(key));
+  // Every compute.run field is written at execution time: its code and source refs cannot exist before the data does.
+  const hiddenFields = tool => tool === 'compute.run' ? Contract.tools[tool].fields : runtimeFields;
+  const completionFields = tool => Contract.tools[tool].fields.filter(key => !hiddenFields(tool).includes(key));
+  // Clear action verbs only. Nouns such as 播放次数 or 观看记录 describe data to analyse, not a change to make.
+  // "关闭状态的闹钟"、"开启的提醒" describe a state to filter on, not a request to change it.
+  const actionText = /加入|添加|追加|新增|新建|创建|删除|删掉|移除|清空|清除|去掉|设置|设为|修改|改成|改为|重命名|(?:关闭|开启|启用|停用)(?!状态|的)|保存|记住|暂停|取消|跳到|快进|随机播放|循环播放|打开|提醒我|播放(?!次数|记录|历史|量|列表|时长|时间|频率|情况)/;
+  const goalOf = input => input.text || Contract.skills.find(row => row.id === input.skill)?.name || '执行所选操作';
   function create(input) {
-    const goal = input.text || Contract.skills.find(row => row.id === input.skill)?.name || '执行所选操作';
+    const goal = goalOf(input);
     const sources = [];
     const taskInput = input.app === 'task' || input.skill === 'task-add';
     // Explicitly labelled task attributes belong to the preceding requirement.
@@ -25,7 +31,7 @@
     return { version: 1, goal, sources, items: [] };
   }
   function definitions(rows) {
-    if (!Array.isArray(rows) || !rows.length || rows.length > 12) throw fail('请先规划覆盖完整需求的 Todo（1至12项）；不能返回空清单，信息不足时只返回 question', 'todo-missing');
+    if (!Array.isArray(rows) || !rows.length || rows.length > 12) throw fail('请先规划覆盖完整需求的 Todo（1至12项）；不能返回空清单。请补全清单，或在信息不足时只返回 question', 'todo-missing');
     return rows.map((row, index) => {
       const item = `Todo 第${index + 1}项`;
       if (!row || typeof row !== 'object' || Array.isArray(row)) throw fail(`${item} 必须是对象`);
@@ -40,7 +46,9 @@
       // Model-authored keys and values must not become arbitrary recovery text.
       if (unknown.length) throw fail(`${where} 不支持参数 ${unknown.slice(0, 12).map(key => /^[a-zA-Z][a-zA-Z0-9_]{0,49}$/.test(key) ? key : '[非标准字段名]').join('、')}；允许的验收参数：${completionFields(row.tool).join('、') || '无（args 必须为空对象）'}`, 'todo-arguments');
       for (const [key, value] of Object.entries(args)) {
-        if (runtimeFields.includes(key)) throw fail(`${where} 不能预先指定引用或版本：${key}；请在执行阶段读取真实工具回执`, 'todo-arguments');
+        if (hiddenFields(row.tool).includes(key)) throw fail(row.tool === 'compute.run'
+          ? `${where} 的 args 必须为空对象：purpose、code、inputRefs 在执行阶段给出`
+          : `${where} 不能预先指定引用或版本：${key}；请在执行阶段读取真实工具回执`, 'todo-arguments');
         if (!['string', 'boolean', 'number'].includes(typeof value) || (typeof value === 'number' && !Number.isFinite(value))) throw fail(`${where}.${key} 必须是字符串、布尔值或有限数字`, 'todo-arguments');
         if (typeof value === 'string' && value.length > 500) throw fail(`${where}.${key} 最多500字符`, 'todo-arguments');
         const values = Contract.tools[row.tool].enums?.[key];
@@ -59,6 +67,14 @@
     return copy(value);
   }
   function current(state) { return state?.items.find(row => row.status !== 'completed'); }
+  // An outline question stops before any item exists. The user's next typed answer
+  // belongs to that original request: it keeps the goal and sources instead of
+  // starting a Todo from the answer text alone.
+  const awaitingAnswer = task => task?.status === 'clarify' && Boolean(task.todoTips) && !task.todoTips.items.length;
+  // True when this input is the user's answer to that question: the empty state was carried over
+  // (its goal is not this input) and the assistant's question is the turn right before the answer.
+  const answers = (task, input) => Boolean(task.todoTips) && !task.todoTips.items.length && Boolean(input.text) &&
+    task.todoTips.goal !== goalOf(input) && task.turns?.at(-2)?.role === 'assistant';
   function executionPlan(raw, state) {
     if (!state?.items.length || !raw || typeof raw !== 'object' || raw.todoTips == null) return raw;
     // An identical echo is redundant data, never a new definition or progress.
@@ -89,6 +105,22 @@
       const tool = Contract.tools[row.tool];
       if (app && ((tool.app && tool.app !== app) || (tool.apps && !tool.apps.includes(app)))) throw fail('Todo 超出了已选择应用的范围', 'todo-scope');
       if (['tools.load', 'context.read'].includes(row.tool)) throw fail('加载工具和读取上下文不能作为业务目标的完成条件');
+    }
+    // A computed answer is never evidence that an action happened. A source that asks for a change must keep a
+    // goal verified by that action's own receipt; compute.run may only be an extra analysis goal beside it.
+    for (const [source, text] of state.sources.entries()) {
+      const group = items.filter(row => row.source === source);
+      if (group.length && group.every(row => row.tool === 'compute.run') && actionText.test(text)) throw fail(`第${source + 1}项“${text.slice(0, 40)}”含有需要执行的动作，不能只用 compute.run 验收；compute.run 只能作为分析目标，请为动作另设用对应动作工具验收的目标`, 'todo-arguments');
+      // After a computation in the same source, free text the user never wrote can only be a guess or a placeholder: its real
+      // value is whatever the computation produces. A Todo cannot be edited afterwards, so such a value could never be matched
+      // by the real call and the task would only stop after repeated failures. Enums, booleans and numbers stay (acceptance
+      // conditions the model may choose); a value written in the source text is the user's own and stays too. Keys here are
+      // registered tool fields, and the value is never echoed.
+      const first = group.findIndex(row => row.tool === 'compute.run');
+      if (first >= 0) for (const row of group.slice(first + 1)) for (const [key, value] of Object.entries(row.args)) {
+        if (typeof value !== 'string' || Contract.tools[row.tool].enums?.[key] || text.includes(value)) continue;
+        throw fail(`Todo 第${items.indexOf(row) + 1}项 ${row.tool} 的 ${key} 要由前面的 compute.run 分析得出，原文里没有写明，不能在清单里预先填写（占位文字也不行）；args 写成空对象，执行阶段再按分析结果填写真实值`, 'todo-arguments');
+      }
     }
     // These are completion checks, never authorization or generated actions.
     // Keep the common queue workflow from accepting a search/state receipt as
@@ -147,6 +179,25 @@
     if (['music.queue.clear', 'music.queue.reconcile'].includes(active.tool) && (active.tool === 'music.queue.clear' || active.args.action === 'clear') && data.count !== 0) return;
     active.status = 'completed'; active.receiptId = receipt.id;
   }
+  // The user may press a visible “+” / “播放” on a candidate instead of letting the model run
+  // `music.queue.apply`. That click is an explicit user decision, executed by the same Engine
+  // with a real receipt, but it carries neither a todoId nor the tool the Todo was registered
+  // with, so `observe()` can never tick it. Accept it only for a pending local-queue goal, and
+  // only on real evidence: a non-waiting choice receipt plus the player-confirmed playback
+  // record (the choice handlers throw unless the player confirmed). Never a model claim.
+  const choicePlayback = { 'music.enqueue-collection': 'replace', 'music.play-collection': 'replace', 'music.enqueue': 'append', 'music.play': 'append' };
+  function observeChoice(task, choice, outcome, receipt) {
+    const state = task.todoTips, active = current(state);
+    if (!active || !receipt || receipt.status !== 'done' || active.tool !== 'music.queue.apply') return;
+    if (!Object.hasOwn(choicePlayback, choice?.action)) return;
+    if (['waiting', 'review', 'clarify'].includes(outcome?.status)) return;
+    const playback = outcome?.playback;
+    if (!playback || playback.mode !== choicePlayback[choice.action] || typeof playback.songId !== 'string' || !playback.songId ||
+      !Number.isInteger(playback.count) || playback.count < 1) return;
+    // The click replaces the queue and starts playback; refuse when the user's own words ruled that out.
+    if (/不要|先不|先别|不替换|保留原|不播放|别播放/.test(state.sources[active.source] || '')) return;
+    active.status = 'completed'; active.receiptId = receipt.id;
+  }
   function before(task, step) {
     const active = current(task.todoTips);
     if (!active) return;
@@ -156,7 +207,7 @@
       'music.queue.apply': ['music.state', 'music.queue.list', 'music.search', 'music.collection.get', 'music.queue.apply'],
       'music.queue.play': ['music.state', 'music.queue.list', 'music.playback.setMode', 'music.queue.play']
     }[active.tool];
-    if (prerequisites && !['tools.load', 'context.read', 'memory.recall', ...prerequisites].includes(step.tool)) throw fail(`当前 Todo 是“${active.text}”，不能提前执行其他事项`);
+    if (prerequisites && !['tools.load', 'context.read', 'memory.recall', 'compute.run', ...prerequisites].includes(step.tool)) throw fail(`当前 Todo 是“${active.text}”，不能提前执行其他事项`);
     if (step.tool === active.tool && Object.entries(active.args).some(([key, value]) => step.args[key] !== value)) throw fail('执行参数不符合当前 Todo 的验收目标，请重新规划');
     if (active.tool === 'music.queue.clear' && step.tool === 'music.queue.reconcile' && step.args.action !== 'clear') throw fail('当前 Todo 要求清空，不能改为保留队列');
   }
@@ -166,5 +217,5 @@
     if (active && ['waiting', 'review', 'clarify', 'failed', 'interrupted', 'cancelled'].includes(task.status)) active.status = task.status;
     return value;
   }
-  return Object.freeze({ create, completionFields, definitions, validate, current, executionPlan, install, local, prepare, observe, before, view });
+  return Object.freeze({ create, completionFields, definitions, validate, current, awaitingAnswer, answers, executionPlan, install, local, prepare, observe, observeChoice, before, view });
 });

@@ -42,7 +42,7 @@
     $('scenes').replaceChildren();
     for (const scene of data.scenes) {
       const label = document.createElement('label'); label.className = 'toggle';
-      const input = document.createElement('input'); input.type = 'checkbox'; input.value = scene.id; input.checked = !data.policy.disabledScenes.includes(scene.id) && (scene.id !== 'speech.synthesize' || data.policy.speechSynthesisEnabled === true);
+      const input = document.createElement('input'); input.type = 'checkbox'; input.value = scene.id; input.checked = !data.policy.disabledScenes.includes(scene.id) && (scene.id !== 'speech.synthesize' || data.policy.speechSynthesisEnabled === true) && (scene.id !== 'assistant.compute' || data.policy.computeEnabled === true);
       label.append(input, document.createTextNode(scene.name)); $('scenes').append(label);
     }
     $('history').replaceChildren();
@@ -93,7 +93,10 @@
   $('policy').addEventListener('submit', event => { event.preventDefault(); if (!state) return; void perform(async () => {
     const disabledScenes = [...$('scenes').querySelectorAll('input')].filter(input => !input.checked).map(input => input.value);
     const speechSynthesisEnabled = Boolean($('scenes').querySelector('input[value="speech.synthesize"]')?.checked);
-    render(await send('ai_control_save', { expectedRevision: state.revision, policy: { speechSynthesisEnabled, contextCompaction: $('context-compaction')?.value || state.policy.contextCompaction || 'hybrid', layaMode: $('laya-mode')?.value || 'off', planningStrategy: $('planning-strategy')?.value || state.policy.planningStrategy || 'follow', dailyRequestLimit:Number($('daily-limit').value),failureThreshold:Number($('failure-limit').value),cooldownMs:Number($('cooldown').value)*1000, modelEnabled: $('model-enabled').checked, disabledScenes, model: $('model').value || null, embeddingModel: $('embedding-model').value.trim(), reasoning: $('reasoning').value, timeoutMs: Number($('timeout').value) * 1000, maxOutputTokens: Number($('budget').value) } })); notice('策略已保存，重启后继续生效');
+    // The policy normalizer treats a missing computeEnabled as off, so a save that left it out would silently switch
+    // code computation off. Send it whenever the service lists the scene; an older service (no such scene) gets no new key.
+    const computeScene = $('scenes').querySelector('input[value="assistant.compute"]');
+    render(await send('ai_control_save', { expectedRevision: state.revision, policy: { speechSynthesisEnabled, ...(computeScene ? { computeEnabled: Boolean(computeScene.checked) } : {}), contextCompaction: $('context-compaction')?.value || state.policy.contextCompaction || 'hybrid', layaMode: $('laya-mode')?.value || 'off', planningStrategy: $('planning-strategy')?.value || state.policy.planningStrategy || 'follow', dailyRequestLimit:Number($('daily-limit').value),failureThreshold:Number($('failure-limit').value),cooldownMs:Number($('cooldown').value)*1000, modelEnabled: $('model-enabled').checked, disabledScenes, model: $('model').value || null, embeddingModel: $('embedding-model').value.trim(), reasoning: $('reasoning').value, timeoutMs: Number($('timeout').value) * 1000, maxOutputTokens: Number($('budget').value) } })); notice('策略已保存，重启后继续生效');
   }); });
   void perform(refresh);
 })();

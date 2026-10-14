@@ -24,7 +24,9 @@
         const matches = alarms.filter(a => !args.query || String(a.label).toLowerCase().includes(args.query.toLowerCase()));
         const offset = args.offset || 0, rows = matches.slice(offset, offset + (args.limit || 20));
         const items = rows.map(alarm => ({ ref: remember({ type: 'alarm', alarm }, ctx, matches.length === 1), ...alarmView(alarm) }));
-        const choosing = ctx.task.adaptive && matches.length > 1;
+        // A read-only analysis (the active Todo item is verified by compute.run) wants the rows, not a target to act on.
+        const analysing = ctx.task.todoTips?.items?.find(row => row.status !== 'completed')?.tool === 'compute.run';
+        const choosing = ctx.task.adaptive && matches.length > 1 && !analysing;
         const nextOffset = offset + rows.length < matches.length ? offset + rows.length : null;
         return { message: matches.length ? `找到${matches.length}条提醒${choosing ? '，请选择要操作的目标' : ''}。` : '当前没有匹配提醒。',
           ...(choosing ? { status: 'waiting', choices: items.map(item => ({ id: `alarm-${item.ref}`, title: item.label, subtitle: `${item.date || item.repeat} ${item.time}`, label: '选择', action: 'alarm.select', data: { ref: item.ref } })).concat(nextOffset == null ? [] : [{ id: 'alarm-next-page', kind: 'navigation', title: '下一页提醒', label: '下一页', action: 'alarm.page', data: { ...args, offset: nextOffset } }]) } : {}),

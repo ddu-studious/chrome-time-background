@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<base href="http://127.0.0.1:__PORT__/v-base/">
+<style>
+  body { margin:0; padding:20px; font:13px -apple-system, "PingFang SC", sans-serif; background:transparent; }
+  .card { padding:12px 14px; border-radius:14px; background:rgba(255,255,255,.7); }
+  .a { background:url(http://127.0.0.1:__PORT__/v-css-bg); width:2px; height:2px; }
+  .b { list-style-image:url(http://127.0.0.1:__PORT__/v-css-list); }
+  .c { cursor:url(http://127.0.0.1:__PORT__/v-css-cursor), auto; }
+  .d::before { content:url(http://127.0.0.1:__PORT__/v-css-content); }
+  .e { -webkit-mask-image:url(http://127.0.0.1:__PORT__/v-css-mask); width:2px; height:2px; background:#000; }
+  .f { border:4px solid; border-image:url(http://127.0.0.1:__PORT__/v-css-border) 4 round; width:4px; height:4px; }
+  @font-face { font-family:Bait; src:url(http://127.0.0.1:__PORT__/v-font); }
+  .g { font-family:Bait, sans-serif; }
+  @import url("http://127.0.0.1:__PORT__/v-css-import");
+  .primary { display:inline-block; padding:8px 12px; background:#2f7d6d; color:#fff; border-radius:8px; text-decoration:none; }
+</style>
+<link rel="stylesheet" href="http://127.0.0.1:__PORT__/v-link-css">
+<link rel="prefetch" href="http://127.0.0.1:__PORT__/v-link-prefetch">
+<link rel="preload" as="image" href="http://127.0.0.1:__PORT__/v-link-preload">
+<link rel="icon" href="http://127.0.0.1:__PORT__/v-link-icon">
+<link rel="manifest" href="http://127.0.0.1:__PORT__/v-link-manifest">
+<link rel="preconnect" href="http://127.0.0.1:__PORT__/">
+<script src="http://127.0.0.1:__PORT__/v-script-src"></script>
+<meta http-equiv="refresh" content="1;url=http://127.0.0.1:__PORT__/v-meta-refresh">
+</head>
+<body data-script-ran="no">
+<div class="card">
+  <p class="g">宽向量诱饵卡片（含大量外部引用）</p>
+  <p><a class="primary" href="action://choice/open-workbench" ping="http://127.0.0.1:__PORT__/v-a-ping">打开工作台</a>
+     <a id="blank" target="_blank" href="http://127.0.0.1:__PORT__/v-blank-popup">新窗口链接</a></p>
+  <div class="a"></div><div class="b" style="display:list-item;margin-left:20px">li</div><div class="c">c</div><div class="d">d</div><div class="e"></div><div class="f"></div>
+  <img src="http://127.0.0.1:__PORT__/v-img" width="1" height="1">
+  <img src="rel.png" width="1" height="1">
+  <img srcset="http://127.0.0.1:__PORT__/v-srcset 2x" width="1" height="1">
+  <picture><source srcset="http://127.0.0.1:__PORT__/v-picture"><img width="1" height="1"></picture>
+  <svg width="2" height="2"><image href="http://127.0.0.1:__PORT__/v-svg-image" width="2" height="2"/></svg>
+  <svg width="2" height="2"><use href="http://127.0.0.1:__PORT__/v-svg-use#a"/></svg>
+  <video src="http://127.0.0.1:__PORT__/v-video" poster="http://127.0.0.1:__PORT__/v-video-poster" width="2" height="2" preload="auto"><track src="http://127.0.0.1:__PORT__/v-track" default></video>
+  <audio src="http://127.0.0.1:__PORT__/v-audio" preload="auto"></audio>
+  <object data="http://127.0.0.1:__PORT__/v-object" width="2" height="2"></object>
+  <embed src="http://127.0.0.1:__PORT__/v-embed" width="2" height="2">
+  <iframe src="http://127.0.0.1:__PORT__/v-iframe" width="2" height="2"></iframe>
+  <iframe srcdoc="&lt;img src='http://127.0.0.1:__PORT__/v-srcdoc-img'&gt;" width="2" height="2"></iframe>
+  <form action="http://127.0.0.1:__PORT__/v-form" method="post"><input type="image" src="http://127.0.0.1:__PORT__/v-input-image" width="2" height="2"><button formaction="http://127.0.0.1:__PORT__/v-formaction">go</button></form>
+</div>
+</body></html>

@@ -1,0 +1,24 @@
+/*
+ * 虎牙小老虎图标：自绘 SVG（assets/huya/tiger.svg），只借鉴吉祥物的整体特征，不是虎牙官方素材文件。
+ * 用法与 Font Awesome 的 <i> 一致：font-size 决定尺寸；图标是彩色的，不跟随 color。
+ * 应用启动台、Dock、设置页的“应用选择”都渲染 <i class="${app.icon}">，所以这条规则要在首页和设置页同时加载。
+ */
+.hy-tiger-icon {
+    display: inline-block;
+    flex: none;
+    width: 1.06em;
+    height: 1em;
+    vertical-align: -0.14em;
+    background: url("../assets/huya/tiger.svg") center / contain no-repeat;
+}
+
+/* Dock 按钮、启动台瓷砖里的 FA 图标偏小偏细，彩色图标需要略大一点才有相同的视觉重量。 */
+.dock-btn .hy-tiger-icon { font-size: 19px; }
+.dock-launchpad-app-icon .hy-tiger-icon { font-size: 26px; }
+
+/* 设置页的应用选择里，<i> 自己就是 32px 的浅色底块（背景、宽高都由 .settings-v5-app-choice > i 设置），图标作为第一层背景叠上去。 */
+.settings-v5-app-choice > .hy-tiger-icon {
+    width: 32px;
+    height: 32px;
+    background: url("../assets/huya/tiger.svg") center / 22px no-repeat, rgba(255, 255, 255, .05);
+}

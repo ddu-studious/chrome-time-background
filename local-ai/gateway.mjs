@@ -19,11 +19,13 @@ import { interpret as interpretSpeech, validateInput as validateSpeech } from '.
 import { interpret as synthesizeSpeech, validateInput as validateSynthesis } from './speech-synthesis-service.mjs';
 import { interpret as interpretMusic, validateInput as validateMusic } from './music-service.mjs';
 import { plan as planAssistant, validateInput as validateAssistant } from './assistant-service.mjs';
+import { interpret as runCompute, validateInput as validateComputeBody } from './compute-service.mjs';
 import contract from '../js/assistant-contract.js';
 
 const SCENES = Object.freeze({
   'assistant.compact': Object.freeze({ name: '上下文整理（pi SDK）', version: 1, validate: validateCompaction, run: compactHistory }),
   'assistant.plan': Object.freeze({ name: '快捷助手工具规划', version: 3, validate: validateAssistant, run: planAssistant }),
+  'assistant.compute': Object.freeze({ name: '代码计算（QuickJS 沙箱，只读无 I/O）', version: 1, validate: validateComputeBody, run: runCompute }),
   'trending.cluster': Object.freeze({ name: '热榜主题聚合', version: 1, validate: validateTrending, run: cluster }),
   'content.digest': Object.freeze({ name: '正文与字幕提要', version: 1, validate: validateDigest, run: digest }),
   'workspace.match': Object.freeze({ name: '工作区语义匹配', version: 1, validate: validateWorkspace, run: matchWorkspace }),
@@ -54,7 +56,7 @@ function resolveSelection(value, sceneId, policy, fallbackModel) {
 }
 
 // Business callers choose a registered scene, never a URL, prompt or provider.
-export function createGateway({ provider, speechProvider, synthesisProvider, layaProvider = null, history = createHistoryStore(), admission = createAdmission(), layaAdmission = createAdmission(), modelEnabled = true, disabledScenes = [], control = createControlStore({ modelEnabled, disabledScenes }) }) {
+export function createGateway({ provider, speechProvider, synthesisProvider, computeProvider = null, layaProvider = null, history = createHistoryStore(), admission = createAdmission(), layaAdmission = createAdmission(), modelEnabled = true, disabledScenes = [], control = createControlStore({ modelEnabled, disabledScenes }) }) {
   const records = [];
   return {
     describe() {
@@ -62,8 +64,8 @@ export function createGateway({ provider, speechProvider, synthesisProvider, lay
       let layaUsage;
       try { layaUsage = layaAdmission.describe(); }
       catch { layaUsage = { admitted: 0, scenes: {}, error: 'Laya 使用记录不可用' }; }
-      return { version: 1, usage: admission.describe(), laya: { mode: state.policy.layaMode, configured: Boolean(layaProvider), usage: layaUsage }, speech: speechProvider?.describe?.() || { configured: false, localOnly: true, maxSeconds: 30 }, synthesis: synthesisProvider?.describe?.() || { configured: false, localOnly: true }, ...state, modelEnabled: state.policy.modelEnabled, localOnly: true,
-        scenes: [...Object.entries(SCENES).map(([id, scene]) => ({ id, name: scene.name, version: scene.version, modelEnabled: state.policy.modelEnabled && !state.policy.disabledScenes.includes(id) && (id !== 'speech.synthesize' || state.policy.speechSynthesisEnabled) }))],
+      return { version: 1, usage: admission.describe(), laya: { mode: state.policy.layaMode, configured: Boolean(layaProvider), usage: layaUsage }, speech: speechProvider?.describe?.() || { configured: false, localOnly: true, maxSeconds: 30 }, synthesis: synthesisProvider?.describe?.() || { configured: false, localOnly: true }, compute: computeProvider?.describe?.() || { configured: false, localOnly: true }, ...state, modelEnabled: state.policy.modelEnabled, localOnly: true,
+        scenes: [...Object.entries(SCENES).map(([id, scene]) => ({ id, name: scene.name, version: scene.version, modelEnabled: state.policy.modelEnabled && !state.policy.disabledScenes.includes(id) && (id !== 'speech.synthesize' || state.policy.speechSynthesisEnabled) && (id !== 'assistant.compute' || state.policy.computeEnabled) }))],
         historyInfo: history.info(), records: structuredClone(records) };
     },
     async run(sceneId, body, { signal, trace, selection } = {}) {
@@ -81,7 +83,7 @@ export function createGateway({ provider, speechProvider, synthesisProvider, lay
       const scene = Object.hasOwn(SCENES, sceneId) ? SCENES[sceneId] : null;
       const record = { requestId, scene: scene ? sceneId : 'unknown', startedAt: started, status: 'pending', source: null,
         ...(trace?.userManaged && trace.conversationId && trace.turnId ? { conversationId: trace.conversationId, turnId: trace.turnId } : {}) };
-      const execution = () => ({ requestId, scene: record.scene, source: record.source, status: record.status, model: record.model || null, reasoning: record.reasoning ?? null, requestedModel: record.requestedModel || null, requestedReasoning: record.requestedReasoning ?? null, contextBudget: record.contextBudget || null, policyRevision: record.policyRevision ?? null, elapsedMs: Date.now() - started, usage: record.usage || null, ...(record.layaPrefetch ? { layaPrefetch: { ...record.layaPrefetch } } : {}), ...(record.speech ? { speech: { ...record.speech } } : {}), ...(record.recoveryFromRequestId ? { recoveryFromRequestId: record.recoveryFromRequestId } : {}), ...(record.startReason ? { startReason: record.startReason } : {}), ...(record.planIssue ? { planIssue: record.planIssue } : {}), ...(record.attempts ? { attempts: structuredClone(record.attempts), effectiveReasoning: record.effectiveReasoning, usageComplete: record.attempts.every(attempt => Boolean(attempt.usage)) } : {}) });
+      const execution = () => ({ requestId, scene: record.scene, source: record.source, status: record.status, model: record.model || null, reasoning: record.reasoning ?? null, requestedModel: record.requestedModel || null, requestedReasoning: record.requestedReasoning ?? null, contextBudget: record.contextBudget || null, policyRevision: record.policyRevision ?? null, elapsedMs: Date.now() - started, usage: record.usage || null, ...(record.layaPrefetch ? { layaPrefetch: { ...record.layaPrefetch } } : {}), ...(record.speech ? { speech: { ...record.speech } } : {}), ...(record.compute ? { compute: { ...record.compute } } : {}), ...(record.recoveryFromRequestId ? { recoveryFromRequestId: record.recoveryFromRequestId } : {}), ...(record.startReason ? { startReason: record.startReason } : {}), ...(record.planIssue ? { planIssue: record.planIssue } : {}), ...(record.attempts ? { attempts: structuredClone(record.attempts), effectiveReasoning: record.effectiveReasoning, usageComplete: record.attempts.every(attempt => Boolean(attempt.usage)) } : {}) });
       records.push(record);
       if (records.length > 100) records.shift();
       try {
@@ -104,13 +106,23 @@ export function createGateway({ provider, speechProvider, synthesisProvider, lay
         // thinking off. The selected level stays the ceiling and no setting is changed.
         const adaptiveStart = sceneId === 'assistant.plan' && !recovered && selected.reasoning !== 'off' && state.policy.planningStrategy === 'adaptive' &&
           validated.planningPhase !== 'outline' && Array.isArray(validated.observations) && validated.observations.some(row => row.tool !== 'assistant.plan');
+        // The analysis request only splits the original text into goals and completion tools. It starts with thinking off
+        // in a single attempt that keeps the whole timeout. Like a successful timeout downgrade, that off result is reused
+        // by the later planning rounds of the same executor turn (`recovered` above, so a 30 s low attempt is not paid
+        // again right after it); the selected level stays the ceiling and a new execution round decides again.
+        const outlineStart = sceneId === 'assistant.plan' && !recovered && selected.reasoning !== 'off' && validated.planningPhase === 'outline';
         if (adaptiveStart) record.startReason = 'adaptive-receipts';
-        const planningReasoning = recovered || adaptiveStart ? 'off' : selected.reasoning;
-        const input = sceneId.startsWith('speech.') ? validated : { ...validated, reasoning: planningReasoning };
+        else if (outlineStart) record.startReason = 'outline-off';
+        const planningReasoning = recovered || adaptiveStart || outlineStart ? 'off' : selected.reasoning;
+        const input = sceneId.startsWith('speech.') || sceneId === 'assistant.compute' ? validated : { ...validated, reasoning: planningReasoning };
         historyTicket = history.begin(record, input, standalone ? { ...trace, conversationId } : trace);
         event('user', input.text);
         const controlledProvider = {
-          model: selected.model, reasoning: planningReasoning, prefetchMode: state.policy.layaMode, compactionEnabled: state.policy.contextCompaction === 'hybrid' && (sceneId === 'assistant.compact' || !state.policy.disabledScenes.includes('assistant.compact')),
+          model: selected.model, reasoning: planningReasoning, prefetchMode: state.policy.layaMode,
+          // Whether the planner may even be told about compute.run. The same three conditions guard the run itself
+          // (below); a mid-task change of the switch is caught there and by the policy revision check.
+          computeEnabled: sceneId === 'assistant.plan' && state.policy.modelEnabled && state.policy.computeEnabled === true && !state.policy.disabledScenes.includes('assistant.compute') && computeProvider?.describe?.().configured === true,
+          compactionEnabled: state.policy.contextCompaction === 'hybrid' && (sceneId === 'assistant.compact' || !state.policy.disabledScenes.includes('assistant.compact')),
           async prefetchToolGroups({ text, app, groups }) {
             const mode = state.policy.layaMode;
             if (mode === 'off' || !state.policy.modelEnabled || !layaProvider) {
@@ -198,6 +210,36 @@ export function createGateway({ provider, speechProvider, synthesisProvider, lay
             record.speech.sampleRate = audio.sampleRate;
             return audio;
           },
+          // Pure computation over data the assistant already holds. It follows the same master switch, scene
+          // switch, daily budget, cooldown, cancellation and policy-revision rules as every other local call.
+          async compute(request) {
+            signal?.throwIfAborted();
+            // Stable codes let the extension tell "the user must act" from "the model must fix its code".
+            if (!state.policy.modelEnabled || !state.policy.computeEnabled || state.policy.disabledScenes.includes(sceneId)) throw Object.assign(fail('代码计算已关闭，请在 AI 控制台启用', 403), { code: 'COMPUTE_DISABLED' });
+            if (!computeProvider) throw Object.assign(fail('代码计算沙箱尚未配置', 503), { code: 'COMPUTE_UNCONFIGURED' });
+            ticket = admission.start(sceneId, state.policy);
+            const info = computeProvider.describe?.() || {};
+            const engine = info.engine ? `${info.engine.name}@${info.engine.version}` : 'quickjs';
+            record.source = 'compute'; record.policyRevision = state.revision;
+            record.model = null; record.requestedModel = null; record.requestedReasoning = null; record.reasoning = null;
+            record.compute = { engine };
+            history.finish(historyTicket, record);
+            try {
+              const outcome = await computeProvider.run(request, { signal });
+              signal?.throwIfAborted();
+              // Only fingerprints are recorded; code, input and output bodies never enter the operational record.
+              record.compute = { engine, codeHash: outcome.codeHash, inputDigest: outcome.inputDigest, outputBytes: outcome.outputBytes, elapsedMs: outcome.elapsedMs };
+              return outcome;
+            } catch (error) {
+              // A fault in the model's own code is an ordinary result of that attempt, not a sandbox fault, so it
+              // must not open the circuit breaker. Infrastructure failures still do.
+              if (error?.guest === true && !signal?.aborted) {
+                record.compute = { engine, errorClass: error.code };
+                admission.finish(ticket, true, state.policy); ticket = null;
+              }
+              throw error;
+            }
+          },
           async generateText(options) { return this.generateObject(options); },
           async generateObject(options) {
             signal?.throwIfAborted();
@@ -265,7 +307,7 @@ export function createGateway({ provider, speechProvider, synthesisProvider, lay
         // The scene resolver validates model output before it leaves the gateway.
         result = await scene.run(input, controlledProvider);
         signal?.throwIfAborted();
-        if (['model', 'speech'].includes(record.source) && control.snapshot().revision !== state.revision) throw fail('控制策略已更新，请重新提交请求', 409);
+        if (['model', 'speech', 'compute'].includes(record.source) && control.snapshot().revision !== state.revision) throw fail('控制策略已更新，请重新提交请求', 409);
         if (ticket) admission.finish(ticket, true, state.policy);
         record.source = result.source;
         record.status = result.status;

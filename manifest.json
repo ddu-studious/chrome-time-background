@@ -64,6 +64,7 @@
     "https://www.googleapis.com/*",
     "https://www.youtube.com/*",
     "https://www.youtube-nocookie.com/*",
+    "https://www.huya.com/*",
     "*://music.163.com/*",
     "*://*.music.163.com/*",
     "*://*.bilibili.com/*",

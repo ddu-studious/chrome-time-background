@@ -1,0 +1,89 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"></head><body style="margin:0;padding:16px"><style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: transparent; font-family: -apple-system, "PingFang SC", sans-serif; }
+  .card {
+    width: 520px;
+    background: rgba(255, 255, 255, 0.85);
+    color: #1d1d1f;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    .card {
+      background: rgba(28, 28, 30, 0.85);
+      color: #f5f5f7;
+      border-color: rgba(255, 255, 255, 0.15);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+  }
+  .header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .status-icon { width: 24px; height: 24px; flex-shrink: 0; }
+  .title { font-size: 16px; font-weight: 600; }
+  .steps { list-style: none; padding: 0; margin: 0 0 16px 0; }
+  .step { display: flex; align-items: center; gap: 10px; padding: 8px 0; font-size: 14px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dot.done { background: #34c759; }
+  .dot.blocked { background: #ff3b30; }
+  .dot.todo { background: #8e8e93; }
+  .step-label { flex: 1; }
+  .step-state { font-size: 12px; opacity: 0.7; }
+  details { margin-bottom: 16px; font-size: 13px; }
+  summary { cursor: pointer; font-weight: 500; margin-bottom: 8px; }
+  .error-text {
+    background: rgba(255, 59, 48, 0.1);
+    padding: 10px;
+    border-radius: 8px;
+    line-height: 1.5;
+    word-break: break-all;
+  }
+  .actions { display: flex; gap: 12px; }
+  .actions a {
+    text-decoration: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    transition: opacity 0.2s;
+  }
+  .actions a:hover { opacity: 0.8; }
+  .actions a.primary { background: #007aff; color: #fff; }
+  .actions a.secondary { background: rgba(128, 128, 128, 0.2); color: inherit; }
+</style>
+<main class="card">
+  <div class="header">
+    <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="#ff3b30" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"></circle>
+      <line x1="12" y1="8" x2="12" y2="12"></line>
+      <line x1="12" y1="16" x2="12.01" y2="16"></line>
+    </svg>
+    <span class="title">推荐歌曲并加入本地播放队列</span>
+  </div>
+  <ul class="steps">
+    <li class="step">
+      <span class="dot done"></span>
+      <span class="step-label">读取当前队列</span>
+      <span class="step-state">已完成</span>
+    </li>
+    <li class="step">
+      <span class="dot done"></span>
+      <span class="step-label">搜索真实歌单</span>
+      <span class="step-state">已完成</span>
+    </li>
+    <li class="step">
+      <span class="dot blocked"></span>
+      <span class="step-label">加入本地播放队列</span>
+      <span class="step-state">卡住</span>
+    </li>
+  </ul>
+  <details>
+    <summary>查看错误详情</summary>
+    <div class="error-text">同一操作重复失败，已停止自动恢复。最近错误：Todo 尚未完成：推荐歌曲并加入本地播放队列，请继续当前事项，不能结束整个任务</div>
+  </details>
+  <div class="actions">
+    <a href="action://choice/cancel-task" class="secondary">取消任务</a>
+    <a href="action://choice/open-workbench" class="primary">打开工作台</a>
+  </div>
+</main></body></html>

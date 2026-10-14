@@ -652,20 +652,23 @@
         nasa:       { label: 'NASA APOD',          needsKey: true,  supportsVideo: false },
     });
 
+    function selectByMediaMode(mediaMode, allowed) {
+        return mediaMode === 'video'
+            ? allowed.filter(item => item.mediaType === 'video' && item.videoUrl)
+            : mediaMode === 'image'
+                ? allowed.filter(item => item.mediaType !== 'video')
+                : allowed;
+    }
+
     /**
-     * 核心入口：从所有启用的源获取背景列表
-     * 策略：每次选一个随机源拉取，失败则尝试下一个，最后兜底
+     * 实际拉取并合并：每次选一个随机源拉取，失败则尝试下一个，最后兜底。
+     * 缓存过期的源会在这里同步等网络（Wikimedia 要串行请求 3 个分类），所以首页不直接调用它，
+     * 而是经 getBackgrounds() 的“先用上次结果、后台刷新”。
      */
-    async function getBackgrounds() {
-        const settings = await getProviderSettings();
-        const enabled = (settings.enabledSources || []).filter(s => PROVIDER_META[s]);
+    async function buildBackgrounds(settings, enabled) {
         const keys = settings.apiKeys || {};
         const mediaMode = settings.mediaMode || (settings.enableVideoBackground ? 'mixed' : 'image');
         const includeVideo = mediaMode !== 'image';
-
-        if (enabled.length === 0) {
-            return { backgrounds: FALLBACK_BACKGROUNDS, source: 'fallback' };
-        }
 
         const mergedItems = [];
         const shuffled = [...enabled].sort(() => Math.random() - 0.5);
@@ -727,15 +730,137 @@
             // Provider 缓存可能早于过滤规则生成，因此必须在合并后统一过滤，
             // 不能只依赖请求分类或搜索关键词。
             const allowed = filterAllowedBackgrounds(deduped);
-            const selected = mediaMode === 'video'
-                ? allowed.filter(item => item.mediaType === 'video' && item.videoUrl)
-                : mediaMode === 'image'
-                    ? allowed.filter(item => item.mediaType !== 'video')
-                    : allowed;
+            const selected = selectByMediaMode(mediaMode, allowed);
             if (selected.length > 0) return { backgrounds: selected, source: 'multi', mediaMode };
         }
 
         return { backgrounds: FALLBACK_BACKGROUNDS, source: 'fallback', mediaMode, videoFallback: mediaMode === 'video' };
+    }
+
+    // ======================== 首页入口：先用上次结果，后台刷新 ========================
+    //
+    // 首页每次打开都要等 getBackgrounds() 的结果才能开始下载壁纸。源缓存（Wikimedia 12 小时、Bing 12 小时等）
+    // 一旦过期，buildBackgrounds 就要同步等网络：Wikimedia 串行请求 3 个分类、Bing 再请求一次，实测 3 秒以上，
+    // 期间首页背景是纯黑（每天至少一次，通常是早上的第一次打开）。
+    //
+    // 所以把“最终合并结果”按设置指纹存一份：命中就立刻返回；超过 MERGED_REFRESH_MS 就在后台重建并更新，页面不等；
+    // 没有可用结果（首次、来源/媒体模式/API Key 变了、超过 MERGED_STALE_MAX_MS）才和以前一样同步等待。
+    // 兜底结果（source: 'fallback'）从不写入，所以断网时不会用兜底图覆盖上次的好结果。
+    //
+    // 为什么还要有两个上限：Provider 的 fetch 没有超时，网络半死不活时一次重建可能卡很久。
+    //   - MERGED_WAIT_MS：没有可用旧结果时页面最多同步等这么久，超时先用兜底图，重建仍在后台继续，成功后下次直接命中；
+    //   - MERGED_BUILD_MAX_MS：同一指纹共用一次重建，但进行中的重建超过这个时间就视为卡住，新请求可另起一次，
+    //     不能让一次卡死的请求拖住以后每一次打开。
+    const MERGED_KEY = 'bgMergedResultV1';
+    const MERGED_REFRESH_MS = 30 * 60_000;
+    const MERGED_STALE_MAX_MS = 7 * 24 * 3600_000;
+    const MERGED_RETRY_MS = 5 * 60_000;
+    const MERGED_WAIT_MS = 10_000;
+    const MERGED_BUILD_MAX_MS = 60_000;
+    const mergedBuilds = new Map();
+    let lastBackgroundRefreshAt = 0;
+
+    async function digestHex(text) {
+        try {
+            if (globalThis.crypto?.subtle) {
+                const bytes = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+                return [...new Uint8Array(bytes)].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
+            }
+        } catch { /* 退回简单指纹 */ }
+        let hash = 0x811c9dc5; // FNV-1a：只用来判断设置有没有变化，不涉及安全
+        for (let i = 0; i < text.length; i++) {
+            hash ^= text.charCodeAt(i);
+            hash = Math.imul(hash, 0x01000193) >>> 0;
+        }
+        return `fnv-${hash.toString(16)}`;
+    }
+
+    // API Key 只参与摘要，不会写入缓存。
+    async function settingsFingerprint(settings, enabled, mediaMode) {
+        const keys = settings.apiKeys || {};
+        return digestHex(JSON.stringify({
+            v: 1,
+            enabled: [...enabled].sort(),
+            mediaMode,
+            keys: [...enabled].sort().map(name => [name, String(keys[name] || '')]),
+        }));
+    }
+
+    async function readMergedResult(signature, mediaMode) {
+        try {
+            const { [MERGED_KEY]: memo } = await chrome.storage.local.get(MERGED_KEY);
+            if (!memo || memo.v !== 1 || memo.signature !== signature || !Array.isArray(memo.backgrounds)) return null;
+            const age = Date.now() - memo.ts;
+            if (!Number.isFinite(age) || age < 0 || age > MERGED_STALE_MAX_MS) return null;
+            // 过滤规则可能比缓存新（例如后来加了地区过滤），读出时重新过滤并按当前媒体模式筛选。
+            const backgrounds = selectByMediaMode(mediaMode, filterAllowedBackgrounds(memo.backgrounds));
+            return backgrounds.length > 0 ? { age, backgrounds } : null;
+        } catch { return null; }
+    }
+
+    async function buildAndRemember(settings, enabled, signature) {
+        const result = await buildBackgrounds(settings, enabled);
+        if (result.source === 'multi' && result.backgrounds.length > 0) {
+            try {
+                await chrome.storage.local.set({ [MERGED_KEY]: { v: 1, ts: Date.now(), signature, backgrounds: result.backgrounds } });
+            } catch { /* 写失败只是少一次加速 */ }
+        }
+        return result;
+    }
+
+    function buildInFlight(signature) {
+        const entry = mergedBuilds.get(signature);
+        return entry && Date.now() - entry.startedAt < MERGED_BUILD_MAX_MS ? entry : null;
+    }
+
+    // 同一指纹同一时刻只重建一次：首次同时打开多个首页、或后台刷新进行中又有页面来请求时共用同一个结果。
+    function buildShared(settings, enabled, signature) {
+        const running = buildInFlight(signature);
+        if (running) return running.promise;
+        const entry = { startedAt: Date.now(), promise: null };
+        entry.promise = buildAndRemember(settings, enabled, signature).finally(() => {
+            if (mergedBuilds.get(signature) === entry) mergedBuilds.delete(signature);
+        });
+        mergedBuilds.set(signature, entry);
+        return entry.promise;
+    }
+
+    function refreshInBackground(settings, enabled, signature) {
+        const now = Date.now();
+        if (buildInFlight(signature) || now - lastBackgroundRefreshAt < MERGED_RETRY_MS) return;
+        lastBackgroundRefreshAt = now;
+        buildShared(settings, enabled, signature)
+            .catch(error => console.warn('[ProviderManager] 后台刷新壁纸列表失败:', error?.message));
+    }
+
+    /**
+     * 核心入口：获取背景列表（首页、设置页共用）
+     */
+    async function getBackgrounds() {
+        const settings = await getProviderSettings();
+        const enabled = (settings.enabledSources || []).filter(s => PROVIDER_META[s]);
+        if (enabled.length === 0) {
+            return { backgrounds: FALLBACK_BACKGROUNDS, source: 'fallback' };
+        }
+        const mediaMode = settings.mediaMode || (settings.enableVideoBackground ? 'mixed' : 'image');
+        const signature = await settingsFingerprint(settings, enabled, mediaMode);
+        const remembered = await readMergedResult(signature, mediaMode);
+        if (remembered) {
+            if (remembered.age > MERGED_REFRESH_MS) refreshInBackground(settings, enabled, signature);
+            return { backgrounds: remembered.backgrounds, source: 'multi', mediaMode };
+        }
+        const pending = buildShared(settings, enabled, signature);
+        let timer;
+        const timedOut = new Promise(resolve => { timer = setTimeout(() => resolve(null), MERGED_WAIT_MS); });
+        try {
+            const result = await Promise.race([pending, timedOut]);
+            if (result) return result;
+            // 等太久：这次先给兜底图；重建继续在后台进行，成功后会写入缓存，下次打开直接命中。
+            pending.catch(() => { /* 失败已由 buildBackgrounds 内部记录，这里只避免未处理的拒绝 */ });
+            return { backgrounds: FALLBACK_BACKGROUNDS, source: 'fallback', mediaMode, videoFallback: mediaMode === 'video' };
+        } finally {
+            clearTimeout(timer);
+        }
     }
 
     // 导出到 Service Worker 全局作用域

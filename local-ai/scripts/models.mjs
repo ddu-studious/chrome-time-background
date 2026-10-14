@@ -3,17 +3,24 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync, chmodSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import net from 'node:net';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const EXTENSION_ROOT = resolve(ROOT, '..');
+// 令牌、日志、启动配置只有几个小文件，留在扩展目录里（该目录被 Git 忽略）。
 const STATE = resolve(ROOT, '.local/laya-runtime');
 const REGISTRY = JSON.parse(readFileSync(resolve(ROOT, 'model-registry.json'), 'utf8'));
 const LMS_MODELS = REGISTRY.storageRoot.startsWith('~/')
   ? resolve(homedir(), REGISTRY.storageRoot.slice(2)) : resolve(REGISTRY.storageRoot);
-const PYTHON = resolve(STATE, '.venv/bin/python');
+// Python 虚拟环境约 2.3 万个文件，必须放在扩展目录之外：Chrome 每次加载或重新加载扩展都会递归枚举整个扩展目录，
+// 这个环境曾让重新加载多出约 3 秒。默认放在 ~/.local/share（路径不含空格，避免脚本 shebang 出问题），
+// LAYA_VENV_DIR 可改到别处（支持 ~/ 开头）。见 docs/technical/extension-reload-and-page-open-20261014.md。
+const expandHome = value => value.startsWith('~/') ? resolve(homedir(), value.slice(2)) : resolve(value);
+const VENV = expandHome(process.env.LAYA_VENV_DIR || join(homedir(), '.local/share/chrome-time-background/laya-venv'));
+const PYTHON = resolve(VENV, 'bin/python');
 const SCRIPT = resolve(ROOT, 'laya-runtime/serve.py');
 const VERIFY = resolve(ROOT, 'laya-runtime/model_store.py');
 const DOWNLOAD = resolve(ROOT, 'laya-runtime/download.py');
@@ -85,6 +92,15 @@ function ensureState() {
     chmodSync(path, 0o600);
   }
 }
+function requirePython() {
+  if (existsSync(PYTHON)) return;
+  throw new Error(`缺少 Laya Python 环境（${VENV}）；先按管理文档执行 uv sync --locked，并让 UV_PROJECT_ENVIRONMENT 指向该目录`);
+}
+function warnIfVenvInExtension() {
+  const path = relative(EXTENSION_ROOT, VENV);
+  if (path === '..' || path.startsWith(`..${sep}`) || isAbsolute(path)) return;
+  console.error(`警告：Laya Python 环境位于扩展目录内（${VENV}）。Chrome 每次加载或重新加载扩展都会枚举这里约 2.3 万个文件，重新加载会多出约 3 秒；建议放到扩展目录之外。`);
+}
 function renderPlist() {
   const device = process.env.LAYA_DEVICE || 'cpu';
   if (!['cpu', 'mps'].includes(device)) throw new Error('Laya 设备只支持 cpu 或 mps');
@@ -108,7 +124,7 @@ function renderPlist() {
 </dict></plist>\n`;
 }
 async function start(restart = false) {
-  if (!existsSync(PYTHON)) throw new Error('缺少 Laya Python 环境；先按管理文档执行 uv sync --locked');
+  requirePython();
   if (loaded()) {
     if (!restart && await health()) { console.log('Laya 已运行，复用现有服务。'); return; }
     if (!restart) throw new Error('Laya 守护项已加载但服务未就绪；检查日志后运行 restart');
@@ -128,17 +144,19 @@ async function start(restart = false) {
 async function main() {
   const [commandName = 'help', model, option] = process.argv.slice(2);
   if (commandName === 'list' && model == null) return inventory();
+  if (commandName === 'help' || commandName === '-h' || commandName === '--help' || commandName === 'laya') warnIfVenvInExtension();
   if (commandName === 'help' || commandName === '-h' || commandName === '--help') {
     console.log(`用法：./local-ai/models.sh list | laya <verify|download|start|restart|status|test|stop|logs>\n\n` +
       `Laya 权重：${resolve(LMS_MODELS, 'convaiinnovations/laya/multilingual')}\n` +
+      `Laya Python 环境：${VENV}（环境变量 LAYA_VENV_DIR 可改，须在扩展目录之外）\n` +
       `Laya 日志：${resolve(STATE, 'laya.log')} 和 laya-error.log\n` +
       `download 默认访问官方 Hugging Face；明确传 --mirror 才使用 hf-mirror.com。`);
     return;
   }
   if (commandName !== 'laya' || !model || (option && !(model === 'download' && option === '--mirror'))) throw new Error('未知模型或命令；运行 models.sh help');
-  if (model === 'verify') { if (!existsSync(PYTHON)) throw new Error('缺少 Laya Python 环境'); return command(PYTHON, [VERIFY]); }
+  if (model === 'verify') { requirePython(); return command(PYTHON, [VERIFY]); }
   if (model === 'download') {
-    if (!existsSync(PYTHON)) throw new Error('缺少 Laya Python 环境');
+    requirePython();
     const mirror = option === '--mirror';
     return command(PYTHON, [DOWNLOAD], {
       HF_HOME: resolve(ROOT, '.local/model-cache/huggingface'),

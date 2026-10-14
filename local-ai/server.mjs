@@ -8,13 +8,14 @@ import { LMStudioProvider } from './provider.mjs';
 import { createGateway } from './gateway.mjs';
 import { WhisperProvider } from './speech-provider.mjs';
 import { StepAudioProvider } from './speech-synthesis-provider.mjs';
+import { ComputeProvider } from './compute-provider.mjs';
 import { LayaPrefetchProvider } from './laya-prefetch-provider.mjs';
 import { createControlStore } from './control-store.mjs';
 import { createHistoryStore } from './history-store.mjs';
 import { createMemoryStore } from './memory-store.mjs';
 import { evaluateApproval } from './assistant-approval.mjs';
 
-export function createServer({ token, provider = new LMStudioProvider(), allowedOrigins = [], modelEnabled = true, disabledScenes = [], controlFile, speechProvider = new WhisperProvider(), synthesisProvider = new StepAudioProvider(), layaProvider = new LayaPrefetchProvider(), usageFile, historyFile, memoryFile, jobRetentionMs = 300000, speechRetentionMs = 60000 }) {
+export function createServer({ token, provider = new LMStudioProvider(), allowedOrigins = [], modelEnabled = true, disabledScenes = [], controlFile, speechProvider = new WhisperProvider(), synthesisProvider = new StepAudioProvider(), computeProvider = new ComputeProvider(), layaProvider = new LayaPrefetchProvider(), usageFile, historyFile, memoryFile, jobRetentionMs = 300000, speechRetentionMs = 60000 }) {
   if (typeof token !== 'string' || token.length < 32) throw new Error('本地入口令牌至少需要 32 字符');
   const jobs = new Map();
   const admission = createAdmission({file:usageFile});
@@ -38,7 +39,7 @@ export function createServer({ token, provider = new LMStudioProvider(), allowed
     return memory;
   };
   memory?.restrictRetention(history.info().settings.retentionDays);
-  const gateway = createGateway({ provider, control, speechProvider, synthesisProvider, layaProvider, admission, layaAdmission, history });
+  const gateway = createGateway({ provider, control, speechProvider, synthesisProvider, computeProvider, layaProvider, admission, layaAdmission, history });
   // Audio results live only in bounded jobs; expiry also runs when no client polls.
   const expireJobs = () => { for (const [id, job] of jobs) if (Date.now() >= job.expiresAt) { job.controller.abort(); job.result = null; jobs.delete(id); } };
   const expiryTimer = setInterval(expireJobs, Math.max(10, Math.min(5000, jobRetentionMs, speechRetentionMs)));

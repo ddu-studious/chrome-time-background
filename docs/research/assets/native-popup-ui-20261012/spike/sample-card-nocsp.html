@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<style>
+  :root { color-scheme: light dark; --accent:#d9534f; --ink:#1d1d1f; --muted:#6e6e73; }
+  @media (prefers-color-scheme: dark) { :root { --ink:#f5f5f7; --muted:#a1a1a6; } }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:22px 24px 18px; font:13px/1.5 -apple-system, "PingFang SC", sans-serif; color:var(--ink); background:transparent; }
+  .head { display:flex; gap:14px; align-items:center; }
+  .badge { width:44px; height:44px; border-radius:14px; display:grid; place-items:center; background:linear-gradient(135deg,#ff8a80,#d9534f); box-shadow:0 6px 16px rgba(217,83,79,.35); }
+  .badge svg { width:24px; height:24px; fill:none; stroke:#fff; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round; }
+  h1 { margin:0; font-size:17px; font-weight:650; }
+  .sub { color:var(--muted); font-size:12px; margin-top:2px; }
+  .progress { margin:18px 0 14px; display:flex; align-items:center; gap:14px; }
+  .ring { width:54px; height:54px; border-radius:50%; background:conic-gradient(var(--accent) 0 66%, rgba(127,127,127,.22) 0); display:grid; place-items:center; }
+  .ring b { width:42px; height:42px; border-radius:50%; background:Canvas; display:grid; place-items:center; font-size:13px; }
+  .steps { flex:1; display:grid; gap:6px; }
+  .step { display:flex; gap:8px; align-items:center; font-size:12.5px; }
+  .dot { width:8px; height:8px; border-radius:50%; background:#34c759; }
+  .step.todo .dot { background:var(--accent); } .step.todo { font-weight:600; }
+  .why { padding:10px 12px; border-radius:12px; background:rgba(217,83,79,.10); border:1px solid rgba(217,83,79,.25); font-size:12.5px; }
+  details { margin-top:10px; font-size:12px; color:var(--muted); } summary { cursor:pointer; }
+  code { display:block; margin-top:6px; padding:8px 10px; border-radius:8px; background:rgba(127,127,127,.14); font:11px/1.5 ui-monospace, Menlo, monospace; color:var(--ink); white-space:pre-wrap; }
+  .actions { display:flex; gap:10px; margin-top:16px; }
+  .actions a { flex:1; text-align:center; padding:9px 12px; border-radius:10px; text-decoration:none; font-weight:600; font-size:13px; }
+  .primary { background:#2f7d6d; color:#fff; } .ghost { background:rgba(127,127,127,.16); color:var(--ink); }
+  .hostile-bait { background:url(http://127.0.0.1:__PORT__/css-background.png); }
+</style></head>
+<body data-script-ran="no">
+  <div class="head">
+    <div class="badge"><svg viewBox="0 0 24 24"><path d="M12 8v5M12 17h.01"/><path d="M10.3 3.9 2.4 17.6A2 2 0 0 0 4.1 20.6h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></div>
+    <div><h1>任务卡在第 2 项</h1><div class="sub">AI 工作台 · 推荐歌曲并加入队列 · 已停止自动恢复</div></div>
+  </div>
+  <div class="progress">
+    <div class="ring"><b>2/3</b></div>
+    <div class="steps">
+      <div class="step"><span class="dot"></span>读取当前队列（已完成）</div>
+      <div class="step"><span class="dot"></span>搜索真实歌单（已完成）</div>
+      <div class="step todo"><span class="dot"></span>加入本地播放队列（未完成）</div>
+    </div>
+  </div>
+  <div class="why">同一操作连续失败，已停止自动恢复。<b>已完成的步骤不会重复执行。</b></div>
+  <details><summary>查看最近错误</summary><code>Todo 尚未完成：推荐歌曲并加入本地播放队列
+请继续当前事项，不能结束整个任务</code></details>
+  <div class="actions"><a class="ghost" href="action://choice/cancel-task">取消任务</a><a class="primary" href="action://choice/open-workbench">打开工作台</a></div>
+
+  <!-- hostile content a model (or an injected page title) could emit -->
+  <script>document.body.dataset.scriptRan = 'yes'; fetch('http://127.0.0.1:__PORT__/script-fetch');</script>
+  <img src="x" onerror="document.body.dataset.scriptRan='onerror'; fetch('http://127.0.0.1:__PORT__/onerror-fetch')">
+  <img src="http://127.0.0.1:__PORT__/remote-image.png" width="1" height="1">
+  <link rel="stylesheet" href="http://127.0.0.1:__PORT__/remote.css">
+  <iframe src="http://127.0.0.1:__PORT__/iframe" width="1" height="1"></iframe>
+  <form action="http://127.0.0.1:__PORT__/form-post" method="post"><input name="x" value="1"></form>
+  <div class="hostile-bait" style="width:1px;height:1px"></div>
+  <style>@import url("http://127.0.0.1:__PORT__/import.css");</style>
+  <a id="evil" href="http://127.0.0.1:__PORT__/click-through">外部链接</a>
+  <meta http-equiv="refresh" content="1;url=http://127.0.0.1:__PORT__/meta-refresh">
+</body></html>

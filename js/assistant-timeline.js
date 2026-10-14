@@ -3,6 +3,14 @@
   const labels = { planning:'理解中', running:'执行中', succeeded:'成功', completed:'已完成', waiting:'等待选择', review:'待确认', clarify:'待补充', failed:'失败', cancelled:'已停止', interrupted:'中断' };
   const duration = ms => !Number.isFinite(ms) ? '耗时未确认' : ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} 秒`;
   const layaLabel = value => ({ disabled: '未调用', observing: '只观察，不影响规划', observed: '只观察，不影响规划', applied: '已参与工具组预加载', abstained: '建议过宽，沿用原工具目录', fallback: '不可用，已沿用原规划链路' })[value?.status] || '状态未确认';
+  // A round can reuse thinking-off from an earlier round of the same executor turn. Follow the links to the call that
+  // actually started it, so the history says whether it came from the analysis start or from a real timeout recovery.
+  const offOrigin = (calls, call) => {
+    const seen = new Set();
+    let row = call;
+    while (row?.recoveryFromRequestId && !seen.has(row.requestId)) { seen.add(row.requestId); row = calls.find(item => item.requestId === row.recoveryFromRequestId); }
+    return row;
+  };
   function create() {
     const $ = id => document.getElementById(id);
     let conversationId, turnId, status, expanded = true, timer, traceSignature = '', messageSignature = '', task, followMessages = false;
@@ -98,11 +106,16 @@
         const model = (value.modelCalls || []).find(call => call.toolCallId === row.id);
         if (model) detail.append(element('p', model.model ? `${model.model} · 思考：${model.reasoning ?? '未返回'} · ${duration(model.elapsedMs)}` : model.source === 'rules' ? '本地规则处理，未调用模型' : model.requestedModel ? `规划准备 · ${model.requestedModel} · 尚未调用模型` : '未返回模型信息'));
         if (model?.layaPrefetch && model.layaPrefetch.mode !== 'off') detail.append(element('p', `Laya 决策辅助：${layaLabel(model.layaPrefetch)}${model.layaPrefetch.code ? `（${model.layaPrefetch.code}）` : ''}`));
-        if (model?.recoveryFromRequestId) detail.append(element('p', '本轮前序规划已关闭思考恢复成功，后续步骤沿用关闭思考；未更改默认设置。'));
+        if (model?.recoveryFromRequestId) detail.append(element('p', offOrigin(value.modelCalls || [], model)?.startReason === 'outline-off'
+          ? '清单分析已用关闭思考完成，本执行轮后续规划沿用关闭思考；选择或确认后的新执行轮按所选等级重新判断；未更改默认设置。'
+          : '本轮前序规划已关闭思考恢复成功，后续步骤沿用关闭思考；未更改默认设置。'));
         if (model?.startReason === 'adaptive-receipts') detail.append(element('p', '已有执行回执，本轮从关闭思考开始（规划思考起步：自适应）；未更改默认设置。'));
+        if (model?.startReason === 'outline-off') detail.append(element('p', '清单分析只拆分目标，本轮从关闭思考开始，本执行轮后续规划沿用关闭思考（所选等级仍是上限，选择或确认后的新执行轮重新判断）；未更改默认设置。'));
         if (model?.contextBudget) detail.append(element('h3', model.scene === 'assistant.compact' ? '摘要上下文预算' : '规划上下文预算'), element('pre', JSON.stringify(model.contextBudget, null, 2)));
+        const compute = computeDetails(row);
+        for (const block of compute || []) detail.append(element('h3', block.title), element(block.kind, block.text));
         for (const [key, title] of [['input','输入参数'], ['output','返回结果'], ['error','错误信息']]) {
-          if (row[key] === undefined) continue;
+          if (row[key] === undefined || compute?.some(block => block.from === key)) continue;
           detail.append(element('h3', title), element('pre', JSON.stringify(row[key], null, 2)));
         }
         if (!('input' in row) && !('output' in row)) detail.append(element('p', '本次恢复仅包含步骤元数据；正文是否留存请查看完整记录。'));
@@ -155,7 +168,7 @@
       $('execution-panel').dataset.state = value.status;
       const calls = (value.modelCalls || []).filter(call => call.turnId === value.turnId), model = calls.findLast(call => call.model);
       const callCount = calls.filter(c => c.model).reduce((count, call) => count + (call.attempts?.length ?? 1), 0);
-      $('trace-meta').textContent = model ? `本机 · ${model.model} · 思考：${model.reasoning ?? '未返回'}${model.recoveryFromRequestId ? ' → 关闭（沿用本轮恢复）' : model.startReason === 'adaptive-receipts' ? ' → 关闭（已有回执，自适应）' : model.attempts?.length > 1 ? ' → 关闭（重试）' : ''} · ${callCount} 次模型调用` : calls.length && calls.every(c => c.source === 'rules') ? '本轮由本地规则处理' : '实时动作 · 展开步骤查看详情';
+      $('trace-meta').textContent = model ? `本机 · ${model.model} · 思考：${model.reasoning ?? '未返回'}${model.recoveryFromRequestId ? (offOrigin(value.modelCalls || [], model)?.startReason === 'outline-off' ? ' → 关闭（沿用清单分析）' : ' → 关闭（沿用本轮恢复）') : model.startReason === 'adaptive-receipts' ? ' → 关闭（已有回执，自适应）' : model.startReason === 'outline-off' ? ' → 关闭（清单分析起步）' : model.attempts?.length > 1 ? ' → 关闭（重试）' : ''} · ${callCount} 次模型调用` : calls.length && calls.every(c => c.source === 'rules') ? '本轮由本地规则处理' : '实时动作 · 展开步骤查看详情';
       const laya = calls.findLast(call => call.layaPrefetch)?.layaPrefetch;
       if (laya && laya.mode !== 'off') $('trace-meta').textContent += ` · Laya：${layaLabel(laya)}`;
       if (value.recoveryCount) $('trace-meta').textContent += ` · 错误恢复 ${value.recoveryCount}/3`;
@@ -163,5 +176,21 @@
       renderMessages(value); renderTrace(value);
     } };
   }
-  root.AssistantTimeline = { create };
+  // compute.run runs a program the model wrote, so show exactly what ran as readable text rather than a JSON string
+  // with escaped newlines. Rows come from saved traces and history, so every field is checked instead of assumed.
+  // Blocks are plain text (rendered through textContent); `from` says which generic block each one replaces.
+  function computeDetails(row) {
+    if (row?.tool !== 'compute.run') return null;
+    const blocks = [], input = row.input && typeof row.input === 'object' ? row.input : {};
+    if (typeof input.purpose === 'string' && input.purpose) blocks.push({ title: '计算目的', text: input.purpose, kind: 'p', from: 'input' });
+    if (typeof input.code === 'string' && input.code) {
+      blocks.push({ title: '模型生成的代码（本机沙箱只读运行，不能联网、读写文件或执行任何操作）', text: input.code, kind: 'pre', from: 'input' });
+      if (input.code.includes('[文本已截断]')) blocks.push({ title: '代码已截断显示', text: '执行轨迹只保留前约 2000 个字符；沙箱运行的是完整代码。', kind: 'p', from: 'input' });
+    }
+    if (Array.isArray(input.inputRefs) && input.inputRefs.length && input.inputRefs.every(ref => typeof ref === 'string')) blocks.push({ title: '输入来源', text: input.inputRefs.join('、'), kind: 'p', from: 'input' });
+    const observation = row.output?.observation;
+    if (observation && typeof observation === 'object' && Object.hasOwn(observation, 'output')) blocks.push({ title: '计算输出', text: typeof observation.output === 'string' ? observation.output : JSON.stringify(observation.output, null, 2), kind: 'pre', from: 'output' });
+    return blocks;
+  }
+  root.AssistantTimeline = { create, offOrigin, computeDetails };
 })(globalThis);

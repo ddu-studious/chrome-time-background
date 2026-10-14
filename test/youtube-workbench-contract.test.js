@@ -28,7 +28,7 @@ test('工作台接入 Dock、启动流程、设置和 v5 页面注册表', () =>
   const settingsHtml = read('settings.html');
   assert.ok(index.includes('id="youtube-dock-btn"'));
   assert.ok(index.includes('css/youtube-workbench.css?v=6'));
-  assert.ok(index.includes('js/youtube-controller.js?v=16'));
+  assert.ok(index.includes('js/youtube-controller.js?v=17'));
   assert.ok(main.includes("getSetting('enableYouTube')"));
   assert.ok(main.includes('await window.youtubeController.init({ skipInitialView:'));
   assert.ok(settings.includes('enableYouTube: true'));
@@ -611,7 +611,6 @@ test('拖动进度只在松手后跳转且播放器状态合并更新，避免�
   assert.ok(changeHandler.includes("func: 'seekTo'"), '松手后必须提交一次最终进度');
   assert.ok(source.includes('this._schedulePlayerControlUpdate()'), '播放器消息应合并到浏览器单帧更新');
   assert.ok(source.includes('window.cancelAnimationFrame(this.playerControlUpdateFrame)'), '离开播放器时应取消待处理的控件刷新');
-  assert.ok(source.includes('if (this.playerBridge.ready) {'), '桥接就绪后应停止重复 listening 轮询');
 });
 
 test('YouTube iframe 完成导航后才发送定向 postMessage', () => {

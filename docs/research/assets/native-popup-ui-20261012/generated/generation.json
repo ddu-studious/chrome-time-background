@@ -1,0 +1,98 @@
+{
+ "model": "qwen/qwen3.8-27b",
+ "reasoning": "off",
+ "maxOutputTokens": 3000,
+ "facts": {
+  "state": "failed",
+  "taskTitle": "推荐歌曲并加入本地播放队列",
+  "steps": [
+   {
+    "label": "读取当前队列",
+    "state": "done"
+   },
+   {
+    "label": "搜索真实歌单",
+    "state": "done"
+   },
+   {
+    "label": "加入本地播放队列",
+    "state": "blocked"
+   }
+  ],
+  "error": "同一操作重复失败，已停止自动恢复。最近错误：Todo 尚未完成：推荐歌曲并加入本地播放队列，请继续当前事项，不能结束整个任务",
+  "actions": [
+   {
+    "id": "open-workbench",
+    "label": "打开工作台",
+    "kind": "safe"
+   },
+   {
+    "id": "cancel-task",
+    "label": "取消任务",
+    "kind": "destructive"
+   }
+  ]
+ },
+ "rows": [
+  {
+   "sample": 1,
+   "ms": 99886,
+   "usage": {
+    "inputTokens": 444,
+    "outputTokens": 1533,
+    "reasoningTokens": 0
+   },
+   "stopReason": "stop",
+   "chars": 3611,
+   "bytes": 3835,
+   "hrefs": [
+    "action://choice/cancel-task",
+    "action://choice/open-workbench"
+   ],
+   "hrefsAllowed": true,
+   "forbidden": [],
+   "missingLabels": [],
+   "hasDetailsWithError": false
+  },
+  {
+   "sample": 2,
+   "ms": 83247,
+   "usage": {
+    "inputTokens": 444,
+    "outputTokens": 1314,
+    "reasoningTokens": 0
+   },
+   "stopReason": "stop",
+   "chars": 3143,
+   "bytes": 3369,
+   "hrefs": [
+    "action://choice/cancel-task",
+    "action://choice/open-workbench"
+   ],
+   "hrefsAllowed": true,
+   "forbidden": [],
+   "missingLabels": [],
+   "hasDetailsWithError": true
+  },
+  {
+   "sample": 3,
+   "ms": 88457,
+   "usage": {
+    "inputTokens": 444,
+    "outputTokens": 1314,
+    "reasoningTokens": 0
+   },
+   "stopReason": "stop",
+   "chars": 3143,
+   "bytes": 3369,
+   "hrefs": [
+    "action://choice/cancel-task",
+    "action://choice/open-workbench"
+   ],
+   "hrefsAllowed": true,
+   "forbidden": [],
+   "missingLabels": [],
+   "hasDetailsWithError": true
+  }
+ ]
+}

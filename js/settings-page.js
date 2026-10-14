@@ -17,6 +17,7 @@
         enableMusic: true,
         enableBilibili: true,
         enableYouTube: true,
+        enableHuya: true,
         enableSystemMonitor: false,
         enableKeywordScan: false,
         enableWarmTip: true,

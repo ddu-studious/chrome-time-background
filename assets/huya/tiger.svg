@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 96" width="100" height="96">
+  <!-- ears sit behind the head; only the outer brown crescents show -->
+  <path fill="#774224" d="M19 2.4C12.5 6.2 7.2 14.5 4.6 31L17 24.8L36.5 9.4Z"/>
+  <path fill="#774224" d="M71.6 4.2C79 7.6 87.4 15.5 95.6 31L83 25.4L63.5 10.2Z"/>
+  <!-- head -->
+  <path fill="#FFD12B" d="M5.4 36.5C7.5 22.5 14.5 11.5 24 9.4C33.5 7.6 43 8 50.5 8C58 8 65 7.8 73 10C83 13 91 25 95.6 38.5C99.4 51 99 62 94 72C86.5 85 69 93 50 93C31 93 13.5 85.5 6.2 72C1 62 1.6 49 5.4 36.5Z"/>
+  <!-- white screen -->
+  <path fill="#FFFFFF" d="M18.4 43C18.4 27 33.5 16.2 52 16.2C72 16.2 86.8 28 86.8 44C86.8 52.4 83.5 57 75 58L30.5 58C22 57 18.4 52.2 18.4 43Z"/>
+  <!-- play triangle -->
+  <path fill="#774224" stroke="#774224" stroke-width="3.4" stroke-linejoin="round" d="M46.6 29.6L46.6 46.8L62.6 38.2Z"/>
+  <!-- cheek stripes -->
+  <path fill="#774224" d="M3.4 58.6L15 57.2L9.6 72.2Z"/>
+  <path fill="#774224" d="M22.4 67.4L17.4 86L8.6 76.6Z"/>
+  <path fill="#774224" d="M89 56L97.4 57.8L92.6 69Z"/>
+  <path fill="#774224" d="M83.6 68L90.8 70.4L86.4 80.2Z"/>
+  <!-- smirk and little fang -->
+  <path fill="none" stroke="#774224" stroke-width="2.6" stroke-linecap="round" d="M41.5 69.4Q56 72.6 71 67.8"/>
+  <path fill="#FFFFFF" d="M41.4 73L47.4 72.2L44.1 78.8Z"/>
+</svg>

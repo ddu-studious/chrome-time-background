@@ -401,10 +401,14 @@
   chrome.storage.onChanged.addListener((changes, area) => { if (area === 'local' && changes.quickAssistantTaskV1) { clearTimeout(snapshotTimer); snapshotTimer = setTimeout(refresh, 25); } });
   (async () => {
     try { const saved = (await chrome.storage.local.get(DRAFT))[DRAFT]; if (saved) { input.value = typeof saved.text === 'string' ? saved.text.slice(0, 500) : ''; app = C.apps.some(a => a.id === saved.app) ? saved.app : null; skill = C.skills.some(s => s.id === saved.skill && (!app || s.apps.includes(app))) ? saved.skill : null; scopeExplicit = saved.scopeExplicit === true; aiModel = typeof saved.aiModel === 'string' ? saved.aiModel : ''; aiReasoning = typeof saved.aiReasoning === 'string' ? saved.aiReasoning : ''; if (input.value || app) menu = null; } } catch {}
-    await Promise.all([refresh(),loadAICapabilities(),loadLayaControl()]); renderTokens(); renderMenu();
+    renderTokens(); renderMenu();
+    // “就绪”只表示输入条已经存活、完成首屏并能接收焦点；任务快照、模型列表与本机策略稍后补齐。
+    // 宿主只给就绪信号 4 秒，超时会撤下浮层并让后台改开独立小窗。以前这里要等下面三项都返回，
+    // Service Worker 冷启动恢复上次任务、本机服务不应答（各自最长 7 秒）时就会掉进小窗。
     // The host focuses the iframe before requesting input focus across origins.
     if (embedded.get('embedded') === '1') parent.postMessage({ type: 'assistant_ready', nonce: embedded.get('nonce') }, embedded.get('hostOrigin'));
     else focusInput();
+    await Promise.all([refresh(),loadAICapabilities(),loadLayaControl()]); renderTokens(); renderMenu();
   })();
   const embedded = new URLSearchParams(location.search);
   if (embedded.get('embedded') === '1') {

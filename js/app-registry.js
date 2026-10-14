@@ -8,6 +8,7 @@
     { id: 'knowledge', name: '常用信息', summary: '收藏、检索和复习常用知识', icon: 'fas fa-brain', category: 'tools', dockBtnId: 'kw-dock-btn', defaultOrder: 2, defaultInDock: true },
     { id: 'bilibili', name: '哔哩哔哩', summary: '视频、音频与稍后观看工作区', icon: 'fab fa-bilibili', category: 'media', dockBtnId: 'bili-dock-btn', defaultOrder: 3 },
     { id: 'youtube', name: 'YouTube', summary: '订阅推荐、跨圈层兴趣趋势与本地学习清单', icon: 'fab fa-youtube', category: 'media', dockBtnId: 'youtube-dock-btn', defaultOrder: 3.2 },
+    { id: 'huya', name: '虎牙直播', summary: '关注主播、热门推荐与官方播放器嵌入', icon: 'hy-tiger-icon', category: 'media', dockBtnId: 'huya-dock-btn', defaultOrder: 3.3 },
     { id: 'schedule', name: '计划管理', summary: '安排日程、课程和专注时间', icon: 'fas fa-calendar-check', category: 'productivity', dockBtnId: 'schedule-dock-btn', defaultOrder: 4, defaultInDock: true },
     { id: 'alarm', name: '闹钟', summary: '声音、通知与视觉动作协同提醒', icon: 'fas fa-bell', category: 'productivity', dockBtnId: 'alarm-dock-btn', defaultOrder: 4.2, defaultInDock: true },
     { id: 'worklog', name: '工作日志', summary: '记录进展并生成工作复盘', icon: 'fas fa-clipboard-list', category: 'productivity', dockBtnId: 'worklog-dock-btn', defaultOrder: 5, defaultInDock: true },

@@ -24,7 +24,7 @@
 
 ## 启动和连接
 
-需要 Node.js 22.19+。首次安装或更新依赖后，在 `local-ai` 目录执行 `npm ci`；上下文整理直接复用锁定的 pi 官方 SDK，个人记忆继续使用内置 SQLite。
+需要 Node.js 22.19+。首次安装或更新依赖后，在 `local-ai` 目录执行 `npm ci`；上下文整理直接复用锁定的 pi 官方 SDK，个人记忆继续使用内置 SQLite。`package.json` 的 `allowScripts` 按 `包名@版本` 登记了 pi 子依赖中的三个安装脚本（`esbuild`、`protobufjs`、`@google/genai`）；这些脚本原本就会执行，登记只为消除 npm 11.19 的“未审核”提示，并在版本变化时要求重新审核（`npm install-scripts ls` 查看，`approve` 登记；注意 11.19.0 的 `approve --dry-run` 仍会写 `package.json`）。`npm audit` 的 3 项告警来自 pi 0.85.1 的子依赖，未升级，见 `docs/technical/local-ai-service-restart-20261012.md`。
 
 1. 在 LM Studio 的 Developer 页面启动本地服务。默认连接 `http://127.0.0.1:1234`，默认模型为 `qwen/qwen3.8-27b`。首次生成可能触发模型加载；如果关闭了 LM Studio 的即时加载，请先手动加载该模型。
 2. macOS 推荐双击本目录的 `启动本地AI.command`，或运行 `./service.sh start`。首次安装当前用户的 LaunchAgent 并启动入口，之后登录自动启动、进程退出后自动恢复；重复执行复用现有进程，终端可关闭。入口仅监听 `127.0.0.1:19841`。其他系统或临时前台调试仍可执行 `npm start` 并保持终端运行。
@@ -50,6 +50,8 @@
 不传参数默认执行 `start`。`stop` 后下次登录仍会自动启动；永久关闭使用 `uninstall`。`install` 可重新安装或更新登录启动配置。脚本只管理扩展的本地 AI 网关，LM Studio 模型服务仍需单独开启。
 
 `start`、`restart` 和 `status` 都会检查个人记忆接口；如果提示“记忆接口不存在”，说明运行中的服务尚未加载新代码，执行 `restart`。记忆库异常会单独报告，其他 AI 功能可以继续使用。日志保存在 `.local/service.log` 和 `.local/service-error.log`。
+
+`restart`、`stop`、`uninstall` 在停止旧服务后会等它真正卸载（最多 8 秒；`launchctl bootout` 在旧进程退出前就会返回，直接重新加载会报 `Bootstrap failed: 5: Input/output error`），加载时只对这一种错误有限次重试，其他错误立即报告原文，不会强杀进程。启动后最多等 30 秒确认入口；未就绪时输出服务进程状态、19841 是否有进程监听以及两个日志的末几行。该问题的证据与验证见 `docs/technical/local-ai-service-restart-20261012.md`。
 
 快捷助手遇到以 `tools.load` 开头的计划时，会在严格验证工具、参数与应用范围后补齐继续标记，只执行加载步骤，再根据真实加载回执重新规划；同批提出的后续动作不会提前执行。
 
@@ -166,6 +168,18 @@ AI 工作台的助手答复另有“朗读”按钮：按真实消息分段，�
 
 ### 工作台规划提速（规划思考起步 · 无进展保护 · 队列播放快速路径）
 
-AI 设置新增“规划思考起步”（`planningStrategy`），默认“严格按上方思考设置”，行为与此前完全一致。选择“已有执行回执时自动关闭思考”后，仅 `assistant.plan` 中已拿到真实工具回执、且不是清单分析阶段的规划轮会直接以关闭思考单次起步并独占完整超时；所选思考等级仍是上限，默认设置、预算与熔断规则不变。历史和时间线用 `startReason=adaptive-receipts` 标记，与“超时恢复”分开显示。Engine 会拦截“自上次写入、选择或失败恢复后，重复提出完全相同的只读查询”：先把原因写入回执让模型重规划一次，再次重复则由现有恢复上限停止。“随机播放列表歌曲”“列表歌曲随机播放”“随机播放队里中的歌曲”等封闭语法的队列播放短句直接走确定性快速路径，不调用模型。更新后须重启本机服务并重载扩展（旧服务会拒绝 `planningStrategy` 字段）。设计、边界与验证见 [提速技术说明](../docs/technical/assistant-speed-20260929.md)。
+AI 设置新增“规划思考起步”（`planningStrategy`），默认“严格按上方思考设置”。清单分析（先拆分完整待办的 `planningPhase=outline`）不受该设置影响，固定从关闭思考单次起步并独占完整超时（`startReason=outline-off`）；成功后同一执行轮内的后续规划沿用关闭思考（`recoveryFromRequestId` 指向前一次，与超时降级共用来源链），选择或确认后的新执行轮、会话、模型、所选等级或策略变化后，仍按所选等级重新判断，默认设置不变。选择“已有执行回执时自动关闭思考”后，仅 `assistant.plan` 中已拿到真实工具回执、且不是清单分析阶段的规划轮会直接以关闭思考单次起步并独占完整超时；所选思考等级仍是上限，默认设置、预算与熔断规则不变。历史和时间线用 `startReason=adaptive-receipts` 标记，与“超时恢复”分开显示。Engine 会拦截“自上次写入、选择或失败恢复后，重复提出完全相同的只读查询”：先把原因写入回执让模型重规划一次，再次重复则由现有恢复上限停止。“随机播放列表歌曲”“列表歌曲随机播放”“随机播放队里中的歌曲”等封闭语法的队列播放短句直接走确定性快速路径，不调用模型。更新后须重启本机服务并重载扩展（旧服务会拒绝 `planningStrategy` 字段）。设计、边界与验证见 [提速技术说明](../docs/technical/assistant-speed-20260929.md)。
 
 进程内评估：`node local-ai/evaluate-assistant-todo.mjs --in-process --strategy=follow|adaptive [--remove-artist]` 创建独立的内存网关直接调用 LM Studio（`LM_STUDIO_URL`、`LOCAL_AI_MODEL` 可覆盖），不读取生产令牌、不写生产策略与历史，报告与 `metrics` 写入 `.local/evaluations/`。LM Studio 为单并发，运行时不要同时使用助手；音乐依赖与用户点击均为替身。
+
+清单分析起步对照：`node local-ai/evaluate-outline-start.mjs [--runs=N] [--levels=low,off] [--scenario=recommend|queue4|removeArtist] [--cases=base|variant|all]` 捕获真实的清单分析（outline）请求，在进程内 Gateway 上按各思考等级交替回放，用 `Todo.install` 校验清单是否有效、工具与固定参数是否符合场景预期，并报告用时、首次尝试超时次数与输出 token；只发送清单分析请求，不执行任何业务工具，报告写入 `.local/evaluations/`。当前 Gateway 已让清单分析固定从关闭思考起步，所以 `--levels` 里的非 off 等级在这里实际按 off 回放，报告的 `forcedOff` 与 `notes` 会标出；要重现低思考对照，须在去掉 `gateway.mjs` 中 `outlineStart` 的临时副本里运行。同样为单并发，不要与助手或其他评估同时运行。
+
+### 工作台只读代码计算（`assistant.compute`，默认关闭）
+
+模型可以写一小段 JavaScript，对本任务已取得的回执数据做统计、筛选、排序、去重、日期或数值计算。代码只在本机服务里执行：`compute-provider.mjs` 每次启动一个 `node --permission` 子进程（只读运行器和三个固定依赖目录；无写、子进程、Worker、网络；空环境），子进程内由固定版本的 `quickjs-emscripten-core@0.32.0` 与 `@jitl/quickjs-wasmfile-release-sync@0.32.0`（QuickJS 编译为 WebAssembly，无宿主对象）运行。限额：2 秒、16 MiB（WebAssembly 内存硬顶 64 MiB）、栈 256 KiB、输出 16 KiB、同时 2 个。沙箱依赖或进程隔离不可用时拒绝执行，不会在服务进程内执行代码。
+
+开启方式：在本目录执行 `npm ci`，`./local-ai/service.sh restart`，重新加载扩展，然后在 AI 设置打开“代码计算”（`computeEnabled`，默认关闭；还需要总开关打开、场景 `assistant.compute` 未被禁用）。关闭时规划提示词和工具目录里没有 `compute.run`。它计入每日额度、冷却/熔断和取消；记录只保存代码哈希、输入摘要、输出字节数和耗时。
+
+评测：`node local-ai/evaluate-compute.mjs [--runs=N] [--cases=id,id] [--compute=on|off] [--reasoning=low] [--trace] [--list]`。使用真实 Engine/Tools/Contract/Todo、进程内 Gateway、本机 LM Studio 和真实沙箱子进程；队列、提醒与全部业务写入都是替身（写入会抛错并被记录，不会执行），不读取生产令牌、控制文件或账号，报告写入 `.local/evaluations/`。LM Studio 为单并发，运行时不要同时使用助手。
+
+实现、与调研草案的差异、对共享规划路径的改动、验证层级与已知边界见 [技术说明](../docs/technical/assistant-compute-sandbox-20261012.md)。

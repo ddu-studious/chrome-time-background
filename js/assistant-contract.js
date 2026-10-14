@@ -49,6 +49,9 @@
     'context.read': { apps: apps.map(a => a.id), title: '按引用回读本次任务的原始工具结果', fields: ['ref', 'offset'], optional: ['offset'], readOnly: true },
     'memory.manage': { apps: apps.map(a => a.id), title: '查看或保存用户本次明确要求记住的偏好', fields: ['text'] },
     'memory.recall': { apps: apps.map(a => a.id), title: '查询过去搜索、播放、提醒等经历；只读背景，不提供可执行引用', fields: ['text'], readOnly: true },
+    // Pure computation in the local sandbox over receipts the task already holds. It has no network, files or
+    // business tools, so it is read-only by construction and can never report that an action happened.
+    'compute.run': { apps: apps.map(a => a.id), title: '只读计算：统计、筛选、排序与日期数值运算，无网络与文件，不能执行任何操作', fields: ['purpose', 'code', 'inputRefs'], optional: ['inputRefs'], readOnly: true },
     'app.status': { apps: ['music', 'alarm', 'bilibili', 'youtube'], title: '只读查询连接状态，不发起授权', fields: ['platform'], enums: { platform: ['music', 'alarm', 'bilibili', 'youtube'] }, readOnly: true },
     'tools.load': { title: '准备后续操作', fields: ['group'], enums: { group: Object.keys(toolGroups) }, readOnly: true },
     'music.state': { app: 'music', title: '读取真实播放状态与队列数量', fields: [], readOnly: true },
@@ -83,6 +86,8 @@
     'worklog.projects': { app: 'worklog', title: '读取现有工作日志项目', fields: ['query'], optional: ['query'], readOnly: true },
     'worklog.create': { app: 'worklog', title: '添加工作日志', fields: ['description', 'durationMinutes', 'date', 'projectRef'], optional: ['date', 'projectRef'] }
   };
+  // Kept equal to the local sandbox's COMPUTE_LIMITS (checked by test/assistant-compute-contract.test.mjs).
+  const limits = Object.freeze({ computeCodeChars: 4000, computeInputBytes: 40960, computeRefs: 6 });
   function inputHint(app, skill) {
     const actionHints = {
       'music-search': '搜索歌手、专辑、歌单或歌曲，例如：张杰',
@@ -142,7 +147,11 @@
     return { text, app, skill };
   }
   function validatePlan(raw, selectedApp = null) {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw) || Object.keys(raw).some(k => !['steps', 'question', 'continue', 'done', 'todoTips', 'todoId'].includes(k))) throw new Error('助手计划格式无效');
+    // These messages go back to the model as its repair instruction, so they say what shape is wanted.
+    // They never echo a key or value the model wrote: that text is untrusted.
+    if (Array.isArray(raw)) throw new Error('助手计划必须是 JSON 对象，不能是数组；写成 {"steps":[{"tool":"工具名","args":{}}]}，需要依据结果继续规划时加 "continue":true');
+    if (!raw || typeof raw !== 'object') throw new Error('助手计划必须是 JSON 对象，例如 {"steps":[{"tool":"工具名","args":{}}]}');
+    if (Object.keys(raw).some(k => !['steps', 'question', 'continue', 'done', 'todoTips', 'todoId'].includes(k))) throw new Error('助手计划格式无效：顶层只能使用 steps、question、continue、done、todoTips、todoId');
     const todo = {};
     if (raw.todoTips != null) {
       const Todo = typeof module === 'object' && module.exports ? require('./assistant-todo.js') : globalThis.AssistantTodo;
@@ -174,12 +183,19 @@
       if (raw.continue || raw.todoId) throw new Error('清单分析阶段不能指定执行步骤');
       return { ...todo, steps: [] };
     }
-    if (!Array.isArray(raw.steps) || !raw.steps.length || raw.steps.length > 3) throw new Error('一次最多执行三个步骤');
+    if (!Array.isArray(raw.steps) || !raw.steps.length) throw new Error('计划没有可执行步骤：返回 {"steps":[{"tool":"工具名","args":{}}],"continue":true} 执行下一步，或用 question 追问、done 结束；不要复述待办清单');
+    if (raw.steps.length > 3) throw new Error('一次最多执行三个步骤');
     const steps = raw.steps.map(step => {
       if (!step) throw new Error('助手选择了未接入的工具');
-      // Name only todoId: other keys are model-authored text and must not be echoed back into the recovery prompt.
+      // Keys are model-authored text and are not echoed back into the recovery prompt, with two exceptions that
+      // are safe to name: todoId, and keys that are registered parameters of this very tool (a misplaced
+      // parameter is the usual slip, e.g. inputRefs written beside args). Anything else gets a fixed message.
       const extraKeys = Object.keys(step).filter(k => !['tool', 'args'].includes(k));
-      if (extraKeys.length) throw new Error(extraKeys.includes('todoId') ? '步骤只能包含 tool 与 args；todoId 请写在 JSON 顶层，与 steps 同级' : '步骤只能包含 tool 与 args，不能带其他字段');
+      if (extraKeys.length) {
+        const misplaced = Object.hasOwn(tools, step.tool) ? extraKeys.filter(k => tools[step.tool].fields.includes(k)) : [];
+        if (misplaced.length) throw new Error(`步骤只能包含 tool 与 args，不能带其他字段；${misplaced.join('、')} 是 ${step.tool} 的参数，必须写在 args 里面，与其他参数并列`);
+        throw new Error(extraKeys.includes('todoId') ? '步骤只能包含 tool 与 args；todoId 请写在 JSON 顶层，与 steps 同级' : '步骤只能包含 tool 与 args，不能带其他字段（id、text、status 之类都不行）；正确写法 {"steps":[{"tool":"工具名","args":{}}],"continue":true}');
+      }
       if (!Object.hasOwn(tools, step.tool)) throw new Error('助手选择了未接入的工具');
       const tool = tools[step.tool], args = step.args;
       if (!args || typeof args !== 'object' || Array.isArray(args) || Object.keys(args).some(k => !tool.fields.includes(k)) || tool.fields.some(k => !tool.optional?.includes(k) && !Object.hasOwn(args, k))) throw new Error('工具参数无效');
@@ -189,6 +205,24 @@
         if (field === 'expectedRevision') {
           if (typeof args[field] !== 'string' || !args[field].trim() || args[field].length > 500) throw new Error('音乐队列版本无效：请先调用 music.state，使用真实回执中的 revision 字符串，不能使用 context.revision');
           result[field] = args[field]; continue;
+        }
+        if (step.tool === 'compute.run') {
+          // The code is data for the sandbox: keep it byte for byte instead of trimming or rewriting it.
+          if (field === 'purpose') {
+            if (typeof args.purpose !== 'string' || !args.purpose.trim() || args.purpose.length > 120) throw new Error('compute.run 的 purpose 必须是1至120字的计算目的说明');
+            result.purpose = args.purpose.trim(); continue;
+          }
+          if (field === 'code') {
+            if (typeof args.code !== 'string' || !args.code.trim() || args.code.length > limits.computeCodeChars || args.code.includes('\u0000')) throw new Error(`compute.run 的 code 必须是1至${limits.computeCodeChars}字符的 JavaScript 函数体，且不能包含NUL字符`);
+            result.code = args.code; continue;
+          }
+          if (field === 'inputRefs') {
+            const refs = args.inputRefs;
+            if (Array.isArray(refs) && !refs.length) continue; // "no source data": same as omitting it, so it is not carried forward
+            if (!Array.isArray(refs) || refs.length > limits.computeRefs || refs.some(ref => typeof ref !== 'string' || !/^context:[0-9]{1,9}$/.test(ref))) throw new Error(`compute.run 的 inputRefs 必须是1至${limits.computeRefs}个形如 context:3 的来源引用`);
+            if (new Set(refs).size !== refs.length) throw new Error('compute.run 的 inputRefs 不能重复');
+            result.inputRefs = [...refs]; continue;
+          }
         }
         if (tool.enums?.[field]) { if (!tool.enums[field].includes(args[field])) throw new Error('工具参数枚举无效'); result[field] = args[field]; continue; }
         if (field === 'offset' || field === 'limit') {
@@ -217,7 +251,7 @@
       if (step.tool === 'music.playback.control' && ((result.action === 'volume') !== (result.value != null))) throw new Error('仅音量操作必须提供value');
       if (step.tool === 'alarm.update.prepare' && (Object.keys(result).length < 2 || (result.date && result.dayOffset != null))) throw new Error('请提供一个明确的修改，日期与相对日期不能同时指定');
       if (result.minSeconds != null && result.maxSeconds != null && result.minSeconds > result.maxSeconds) throw new Error('时长范围无效');
-      if (selectedApp && !['context.read', 'memory.manage', 'memory.recall'].includes(step.tool) && !(step.tool === 'tools.load' ? allows(toolGroups[result.group], selectedApp) : (tool.app || result.platform) === selectedApp)) throw new Error('计划超出了已选择应用的范围');
+      if (selectedApp && !['context.read', 'memory.manage', 'memory.recall', 'compute.run'].includes(step.tool) && !(step.tool === 'tools.load' ? allows(toolGroups[result.group], selectedApp) : (tool.app || result.platform) === selectedApp)) throw new Error('计划超出了已选择应用的范围');
       return { tool: step.tool, args: result };
     });
     if (steps.some(s => s.tool === 'tools.load') && (steps.length !== 1 || raw.continue !== true)) throw new Error('加载工具后必须重新规划');
@@ -225,6 +259,12 @@
     if (raw.continue && steps.length !== 1) throw new Error('逐步决策每轮只执行一个工具');
     return { steps, ...(raw.continue ? { continue: true } : {}), ...todo };
   }
+  // A question about alarms that already exist (统计、筛选、最近一个…) is analysis, not "create an alarm". Creation wording keeps
+  // the original quick path, so only texts that path could never serve change: alarm.prepare either fails on them or
+  // misreads "周六或周日响的" as a new repeating alarm.
+  const alarmQuestion = text => /提醒|闹钟/.test(text)
+    && /有没有|是不是|是否|哪些|哪个|哪几|几个|几条|多少|几天|多久|最早|最晚|最多|统计|一共|总共/.test(text)
+    && !/提醒我|提醒一下|叫我|喊我|通知我|设置|设个|设一个|定个|定一个|创建|新增|添加|新建|帮我.{0,6}(?:设|定|建)/.test(text);
   function localPlan(raw) {
     const value = input(raw), { app, skill, text } = value;
     const memoryCommand = Memory?.command(text);
@@ -259,6 +299,7 @@
     }
     if (skill === 'alarms') return text ? null : step('alarm.list', {});
     if ((!app || app === 'alarm') && /^(?:查看|看看|列出)(?:已有|我的|全部)?(?:提醒|闹钟)(?:列表)?$/.test(text)) return step('alarm.list', {});
+    if ((!app || app === 'alarm') && !skill && alarmQuestion(text)) return null;
     if (['pause', 'resume', 'next'].includes(skill)) {
       // Extra prose can add constraints or negate an action; do not silently discard it.
       if (text) return null;
@@ -316,5 +357,5 @@
     const mode = replaceSearch ? 'replace' : fresh ? 'new' : 'continue';
     return { mode, input:{ ...parsed, app, ...(aiSpecified ? { ai:selectedAI } : {}) }, reason:raw.newConversation ? '快捷键新需求' : !current ? '首次需求' : changedScope ? '切换应用' : replaceSearch ? (correction ? '纠正上次搜索' : '替换搜索关键词') : fresh ? '独立需求' : reference ? '引用当前会话' : '保留上下文' };
   }
-  return Object.freeze({ apps, skills, tools, toolGroups, allows, input, appId, inputHint, aiSelection, planIssue, planFailure, validatePlan, localPlan, ordinal, hasCandidates, routeRequest });
+  return Object.freeze({ apps, skills, tools, toolGroups, limits, allows, input, appId, inputHint, aiSelection, planIssue, planFailure, validatePlan, localPlan, ordinal, hasCandidates, routeRequest });
 });

@@ -27,10 +27,24 @@
   }
   // Canonical identity of a read-only proposal. Oversized arguments are never
   // treated as duplicates, so this cannot hide a genuinely different request.
+  // Two independent 32-bit FNV-1a style hashes plus the length: a stable short identity, not a security boundary.
+  // A collision can only make the Engine reject one proposal and ask the model to propose a different one.
+  function digest(text) {
+    let a = 0x811c9dc5, b = 0x9e3779b1;
+    for (let index = 0; index < text.length; index++) {
+      const code = text.charCodeAt(index);
+      a = Math.imul(a ^ code, 0x01000193) >>> 0;
+      b = Math.imul(b ^ code, 0x85ebca6b) >>> 0; b = (b ^ (b >>> 13)) >>> 0;
+    }
+    return `${a.toString(16)}${b.toString(16)}-${text.length}`;
+  }
   function readFingerprint(step) {
     if (!step || !Contract.tools[step.tool]?.readOnly) return null;
     const canonical = value => Array.isArray(value) ? value.map(canonical)
       : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
+    // The sandbox is deterministic over immutable source refs, so the code and its sources identify a run; the
+    // purpose text does not. Hash it: a 4,000-character program must not bloat every saved task snapshot.
+    if (step.tool === 'compute.run') return `${step.tool}\n#${digest(JSON.stringify(canonical({ code: step.args?.code, inputRefs: [...(step.args?.inputRefs || [])].sort() })))}`;
     const args = JSON.stringify(canonical(step.args || {}));
     return args.length > 2000 ? null : `${step.tool}\n${args}`;
   }
@@ -169,7 +183,7 @@
         async progress(message) { await lock(async () => { guard(t, version); t.message = String(message).slice(0, 400); if (t.operation?.status === 'pending') t.operation.message = t.message; await save(); }); }
       };
     }
-    async function accept(t, version, outcome, step) {
+    async function accept(t, version, outcome, step, choice) {
       await lock(async () => {
         guard(t, version);
         if (!outcome || typeof outcome.message !== 'string') throw new Error('工具没有返回可核对的结果');
@@ -204,6 +218,8 @@
         try { observation = Context.observe(t, { tool: t.log.at(-1).tool, status: waiting ? 'waiting' : 'done', message: t.message.slice(0, 500), data: outcome.observation || null }, t.log.at(-1)); }
         catch (error) { await save(); throw error; }
         Todo.observe(t, t.log.at(-1), observation, Context.state(t).receipts.at(-1));
+        // A waiting outcome records no receipt, so at(-1) would be an older one: only pass completed choices.
+        if (choice && !waiting) Todo.observeChoice(t, choice, outcome, Context.state(t).receipts.at(-1));
         t.observations = [...(t.observations || []), observation].slice(-6);
         while (JSON.stringify(t.observations).length > 12000 && t.observations.length > 1) t.observations.shift();
         if (waiting) t.status = outcome.status;
@@ -306,7 +322,7 @@
         };
         if (selectedChoice) {
           const outcome = await run({ tool: selectedChoice.action, args: { title: selectedChoice.title, data: selectedChoice.data } }, selectedChoice.title || '执行所选操作', child => choose(selectedChoice, child), 'action');
-          if (outcome) await accept(t, version, outcome);
+          if (outcome) await accept(t, version, outcome, undefined, selectedChoice);
         }
         while (current === t && t.version === version && ['planning', 'running'].includes(t.status)) {
           if (t.status === 'planning') {
@@ -427,7 +443,7 @@
             remainingSteps: continuing && sameScope && ['waiting', 'review', 'clarify'].includes(previous.status) ? previous.plan?.slice(previous.index + 1) || previous.remainingSteps || [] : [],
             turns: [...(previous?.turns || []), { role: 'user', content: utterance }].slice(-16), message: '正在理解需求…', startedAt: now(), jobId: null };
           if (continuing && previous) task.contextState = clone(Context.state(previous));
-          if (continuing && sameScope && Todo.current(previous?.todoTips)) task.todoTips = clone(previous.todoTips);
+          if (continuing && sameScope && (Todo.current(previous?.todoTips) || Todo.awaitingAnswer(previous))) task.todoTips = clone(previous.todoTips);
           // Migrate the surviving legacy window once; no claim of recovering
           // already discarded history. New contexts store inputs before slicing.
           if (!task.contextState) { Context.state(task); }

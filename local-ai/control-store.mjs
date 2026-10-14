@@ -2,12 +2,15 @@ import { existsSync, readFileSync, writeFileSync, renameSync, mkdirSync } from '
 import { dirname } from 'node:path';
 
 const error = (text, code = 400) => Object.assign(new Error(text), { statusCode: code });
-export function createControlStore({ file, modelEnabled = true, disabledScenes = [], sceneIds = ['assistant.compact', 'assistant.plan', 'alarm.interpret', 'music.intent', 'speech.transcribe', 'speech.synthesize', 'bookmark.summary', 'bookmark.rerank', 'activity.summary', 'bookmark.embed', 'writing.assist', 'writing.embed', 'task.draft', 'schedule.draft', 'knowledge.answer', 'music.recommend', 'workspace.match', 'content.digest', 'trending.cluster'] } = {}) {
+export function createControlStore({ file, modelEnabled = true, disabledScenes = [], sceneIds = ['assistant.compact', 'assistant.plan', 'assistant.compute', 'alarm.interpret', 'music.intent', 'speech.transcribe', 'speech.synthesize', 'bookmark.summary', 'bookmark.rerank', 'activity.summary', 'bookmark.embed', 'writing.assist', 'writing.embed', 'task.draft', 'schedule.draft', 'knowledge.answer', 'music.recommend', 'workspace.match', 'content.digest', 'trending.cluster'] } = {}) {
   function validate(value) {
     if (!value || typeof value.modelEnabled !== 'boolean' || !Array.isArray(value.disabledScenes) || value.disabledScenes.some(id => id !== 'agent.cursor' && !sceneIds.includes(id))) throw error('控制策略无效');
-    if (Object.keys(value).some(key => !['speechSynthesisEnabled', 'contextCompaction', 'layaMode', 'planningStrategy', 'modelEnabled', 'disabledScenes', 'model', 'reasoning', 'timeoutMs', 'maxOutputTokens', 'embeddingModel', 'allowRemote', 'dailyRequestLimit', 'failureThreshold', 'cooldownMs'].includes(key))) throw error('控制策略包含未知字段');
+    if (Object.keys(value).some(key => !['computeEnabled', 'speechSynthesisEnabled', 'contextCompaction', 'layaMode', 'planningStrategy', 'modelEnabled', 'disabledScenes', 'model', 'reasoning', 'timeoutMs', 'maxOutputTokens', 'embeddingModel', 'allowRemote', 'dailyRequestLimit', 'failureThreshold', 'cooldownMs'].includes(key))) throw error('控制策略包含未知字段');
     const speechSynthesisEnabled = value.speechSynthesisEnabled ?? false;
     if (typeof speechSynthesisEnabled !== 'boolean') throw error('朗读开关无效');
+    // Model-written code only ever runs when the user switches it on; older policies stay off.
+    const computeEnabled = value.computeEnabled ?? false;
+    if (typeof computeEnabled !== 'boolean') throw error('代码计算开关无效');
     const contextCompaction = value.contextCompaction ?? 'hybrid';
     if (!['deterministic', 'hybrid'].includes(contextCompaction)) throw error('上下文整理模式无效');
     const layaMode = value.layaMode ?? 'off';
@@ -28,7 +31,7 @@ export function createControlStore({ file, modelEnabled = true, disabledScenes =
     if (!['off', 'low', 'medium', 'high', 'xhigh', 'on'].includes(reasoning)) throw error('推理等级无效');
     if (!Number.isInteger(timeoutMs) || timeoutMs < 5000 || timeoutMs > 90000) throw error('超时应为 5 至 90 秒');
     if (!Number.isInteger(maxOutputTokens) || maxOutputTokens < 64 || maxOutputTokens > 4096) throw error('输出预算应为 64 至 4096 token');
-    return { speechSynthesisEnabled, contextCompaction, layaMode, planningStrategy, modelEnabled: value.modelEnabled, disabledScenes: [...new Set(value.disabledScenes)].filter(id => sceneIds.includes(id)), model, reasoning, timeoutMs, maxOutputTokens, embeddingModel, dailyRequestLimit, failureThreshold, cooldownMs };
+    return { computeEnabled, speechSynthesisEnabled, contextCompaction, layaMode, planningStrategy, modelEnabled: value.modelEnabled, disabledScenes: [...new Set(value.disabledScenes)].filter(id => sceneIds.includes(id)), model, reasoning, timeoutMs, maxOutputTokens, embeddingModel, dailyRequestLimit, failureThreshold, cooldownMs };
   }
   let state = { revision: 1, policy: validate({ modelEnabled, disabledScenes }), history: [] };
   if (file && existsSync(file)) {

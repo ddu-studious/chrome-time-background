@@ -7,7 +7,8 @@
   actions.add('ai_memory_get'); actions.add('ai_memory_write');
   actions.add('ai_approval_evaluate');
   // Only the worker-owned assistant voice bridge may submit text for synthesis.
-  const internalActions = new Set(['speech_ai_synthesize']);
+  // Likewise only the worker-owned assistant tool may submit code for the read-only compute sandbox; pages cannot.
+  const internalActions = new Set(['speech_ai_synthesize', 'ai_compute_submit']);
   function selection(value) {
     if (value == null) return null;
     if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !['model', 'reasoning'].includes(key))) throw new Error('AI 选择无效');
@@ -78,6 +79,21 @@
         });
         const result = await response.json();
         if (!response.ok || !result.ok) throw Object.assign(new Error(result.error || 'AI 请求失败'), { execution: result.execution, code: result.code || null });
+        return result;
+      }
+      if (message.action === 'ai_compute_submit') {
+        if (!config.token) throw new Error('请先在 AI 控制台配置本地连接');
+        const body = message.input;
+        // Fixed scene, code and data only; limits mirror AssistantContract.limits and the sandbox's own checks.
+        if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some(key => !['code', 'input'].includes(key)) ||
+          typeof body.code !== 'string' || !body.code.trim() || body.code.length > 4000 || !body.input || typeof body.input !== 'object' || Array.isArray(body.input)) throw new Error('代码计算请求无效');
+        const response = await fetch(BASE + '/v1/ai/interpret', {
+          method: 'POST', redirect: 'error', signal: AbortSignal.timeout(7000),
+          headers: { Authorization: `Bearer ${config.token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scene: 'assistant.compute', input: { code: body.code, input: body.input }, trace: message.trace })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.ok) throw Object.assign(new Error(result.error || '代码计算请求失败'), { execution: result.execution, code: result.code || null });
         return result;
       }
       if (message.action === 'speech_ai_transcribe' || message.action === 'speech_ai_result' || message.action === 'speech_ai_synthesize') {

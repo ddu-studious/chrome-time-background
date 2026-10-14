@@ -152,7 +152,9 @@ test('降级不跨执行轮、会话、模型、用户选择或控制策略，�
 test('真实Engine与Tools逐轮传递恢复范围，读取后只清空一次并保留确认', async () => {
   const revision = 'fixture-revision';
   const clear = { steps: [{ tool: 'music.queue.clear', args: { expectedRevision: revision } }], continue: true };
-  const f = fixture([reasoningOnly, answer({ todoTips: [{ text: '清空队列', source: 0, tool: 'music.queue.clear' }] }), answer(plan), answer(clear), answer({ done: true })]);
+  // 清单分析从 off 起步，同一执行轮内的后续规划沿用它；用户确认后是新执行轮，重新尊重所选等级，
+  // 这一轮的思考耗尽才是真实的超时降级。
+  const f = fixture([answer({ todoTips: [{ text: '清空队列', source: 0, tool: 'music.queue.clear' }] }), answer(plan), answer(clear), reasoningOnly, answer({ done: true })]);
   const values = {}, effects = [];
   const storage = { async get() { return structuredClone(values); }, async set(v) { Object.assign(values, structuredClone(v)); }, async remove(k) { delete values[k]; } };
   const handlers = Tools.create({ storage,
@@ -171,7 +173,13 @@ test('真实Engine与Tools逐轮传递恢复范围，读取后只清空一次并
   await engine.choose(task.id, task.choices.find(c => c.id === 'queue-edit-confirm').id, task.version);
   task = await engine.settled();
   assert.equal(task.status, 'completed', task.message); assert.deepEqual(effects, ['clear']);
-  assert.deepEqual(f.sent.map(row => row.reasoning), ['medium', 'off', 'off', 'off', 'medium']);
+  assert.deepEqual(f.sent.map(row => row.reasoning), ['off', 'off', 'off', 'medium', 'off']);
+  const planCalls = task.modelCalls.filter(call => call.scene === 'assistant.plan');
+  assert.deepEqual(planCalls.map(call => call.startReason), ['outline-off', undefined, undefined, undefined]);
+  assert.equal(planCalls[1].recoveryFromRequestId, planCalls[0].requestId, '读取一步沿用清单分析的 off');
+  assert.equal(planCalls[2].recoveryFromRequestId, planCalls[1].requestId, '清空一步继续沿用');
+  assert.equal(planCalls[3].recoveryFromRequestId, undefined, '确认后的新执行轮自己降级，来源是它自己的重试');
+  assert.deepEqual(planCalls[3].attempts.map(row => row.reasoning), ['medium', 'off']);
   assert.equal(task.input.ai.reasoning, 'medium'); // 用户确认开始新执行轮，重新尊重所选等级。
 });
 
@@ -304,12 +312,10 @@ test('自适应起步：已有执行回执时直接关闭思考并拿到完整�
 });
 
 test('自适应起步只在有真实工具回执、非清单分析阶段且思考未关闭时生效', async () => {
-  const outline = { ...input, todoTips: Todo.create(input), planningPhase: 'outline', observations: receipt };
   const cases = [
     ['默认 follow 仍按所选设置起步', {}, withReceipts, selection, 'medium'],
     ['没有执行回执', adaptive, input, selection, 'medium'],
     ['只有规划失败观察不算执行回执', adaptive, { ...input, observations: [{ tool: 'assistant.plan', status: 'failed', message: '计划格式无效', data: null }] }, selection, 'medium'],
-    ['清单分析阶段', adaptive, outline, selection, 'medium'],
     ['所选思考已经是 off', adaptive, withReceipts, { reasoning: 'off' }, 'off']
   ];
   for (const [name, policy, body, chosen, expected] of cases) {
@@ -347,7 +353,7 @@ test('自适应起步失败不再重试，预算只计一次；真实超时恢�
   assert.equal(next.execution.startReason, undefined, '真实恢复优先，不重复标记为自适应起步');
 });
 
-test('真实 Engine 与 Tools：首轮按所选等级，读取回执后的规划轮从 off 起步，用户确认后仍带回执起步', async () => {
+test('真实 Engine 与 Tools：清单分析从 off 起步并被同一执行轮沿用，用户确认后的新执行轮带回执自适应起步', async () => {
   const revision = 'fixture-revision';
   const clear = { steps: [{ tool: 'music.queue.clear', args: { expectedRevision: revision } }], continue: true };
   const f = fixture([answer({ todoTips: [{ text: '清空队列', source: 0, tool: 'music.queue.clear' }] }), answer(plan), answer(clear), answer({ done: true })], adaptive);
@@ -369,7 +375,120 @@ test('真实 Engine 与 Tools：首轮按所选等级，读取回执后的规划
   await engine.choose(task.id, task.choices.find(c => c.id === 'queue-edit-confirm').id, task.version);
   task = await engine.settled();
   assert.equal(task.status, 'completed', task.message); assert.deepEqual(effects, ['clear']);
-  assert.deepEqual(f.sent.map(row => row.reasoning), ['medium', 'medium', 'off', 'off']);
-  assert.deepEqual(task.modelCalls.filter(call => call.scene === 'assistant.plan').map(call => call.startReason), [undefined, undefined, 'adaptive-receipts', 'adaptive-receipts']);
+  assert.deepEqual(f.sent.map(row => row.reasoning), ['off', 'off', 'off', 'off']);
+  const planCalls = task.modelCalls.filter(call => call.scene === 'assistant.plan');
+  // 真实沿用优先于自适应标记：读取回执后的第二个执行规划仍是“沿用”，不重复记为自适应起步；确认后才是新执行轮。
+  assert.deepEqual(planCalls.map(call => call.startReason), ['outline-off', undefined, undefined, 'adaptive-receipts']);
+  assert.deepEqual(planCalls.map(call => call.recoveryFromRequestId), [undefined, planCalls[0].requestId, planCalls[1].requestId, undefined]);
   assert.equal(task.input.ai.reasoning, 'medium');
+});
+
+// 清单分析（outline）只是把原文拆成目标和完成条件：本机历史里它的首轮低思考几乎总是超时，真实对照中关闭思考同样有效且更快。
+const outlineInput = { app: 'music', text: '清空队列' };
+const outlineRow = { text: '清空队列', source: 0, tool: 'music.queue.clear' };
+const outlineBody = { ...outlineInput, todoTips: Todo.create(outlineInput), planningPhase: 'outline' };
+const outlineAnswer = answer({ todoTips: [outlineRow] });
+const executeBody = (() => { const state = Todo.create(outlineInput); Todo.install(state, [outlineRow], 'music'); return { ...outlineInput, todoTips: state, planningPhase: 'execute' }; })();
+
+test('清单分析从关闭思考起步：单次尝试独占完整超时，所选等级和默认设置不变', async () => {
+  const f = fixture([outlineAnswer]);
+  const result = await f.gateway.run('assistant.plan', outlineBody, { selection });
+  assert.deepEqual(f.sent.map(row => row.reasoning), ['off']);
+  assert.ok(f.sent[0].timeoutMs > 60000 && f.sent[0].timeoutMs <= 90000);
+  assert.equal(f.sent[0].max_output_tokens, 1200);
+  assert.equal(result.execution.requestedReasoning, 'medium');
+  assert.equal(result.execution.effectiveReasoning, 'off');
+  assert.equal(result.execution.startReason, 'outline-off');
+  assert.equal(result.execution.recoveryFromRequestId, undefined);
+  assert.equal(result.execution.attempts.length, 1);
+  assert.equal(result.execution.attempts[0].startReason, 'outline-off');
+  assert.equal(f.gateway.describe().usage.admitted, 1);
+  assert.equal(f.history.snapshot().calls[0].startReason, 'outline-off');
+  assert.equal(f.control.snapshot().policy.reasoning, 'off', '默认设置保持原值');
+});
+
+test('清单分析起步与规划思考起步策略无关；执行阶段和已经关闭的思考不受影响', async () => {
+  const cases = [
+    ['follow 的清单分析', {}, outlineBody, selection, 'off', 'outline-off'],
+    ['adaptive 的清单分析不记为自适应', adaptive, outlineBody, selection, 'off', 'outline-off'],
+    ['带回执的 adaptive 清单分析仍是清单分析起步', adaptive, { ...outlineBody, observations: receipt }, selection, 'off', 'outline-off'],
+    ['所选思考已经是 off 时没有起步原因', {}, outlineBody, { reasoning: 'off' }, 'off', undefined],
+    ['执行阶段仍按所选等级', {}, executeBody, selection, 'medium', undefined],
+    ['没有 Todo 阶段的旧请求仍按所选等级', {}, outlineInput, selection, 'medium', undefined]
+  ];
+  for (const [name, policy, body, chosen, expected, startReason] of cases) {
+    const f = fixture([outlineAnswer], policy);
+    await f.gateway.run('assistant.plan', body, { selection: chosen }).catch(() => {});
+    assert.equal(f.sent[0].reasoning, expected, name);
+    assert.equal(f.history.snapshot().calls[0].startReason, startReason, name);
+  }
+});
+
+test('清单分析成功后，同一执行轮的后续规划沿用 off、独占完整超时并记录来源，默认设置不变', async () => {
+  const trace = { conversationId: 'conversation', turnId: 'turn', userManaged: true };
+  const f = fixture([outlineAnswer, answer(plan), answer(plan)]);
+  const first = await f.gateway.run('assistant.plan', outlineBody, { selection, trace });
+  const second = await f.gateway.run('assistant.plan', executeBody, { selection, trace });
+  const third = await f.gateway.run('assistant.plan', executeBody, { selection, trace });
+  assert.deepEqual(f.sent.map(row => row.reasoning), ['off', 'off', 'off']);
+  assert.equal(first.execution.startReason, 'outline-off');
+  assert.equal(second.execution.recoveryFromRequestId, first.requestId);
+  assert.equal(third.execution.recoveryFromRequestId, second.requestId);
+  assert.equal(second.execution.startReason, undefined, '沿用是来源链，不是新的起步原因');
+  assert.equal(second.execution.requestedReasoning, 'medium', '所选等级仍是上限');
+  assert.equal(second.execution.effectiveReasoning, 'off');
+  assert.equal(second.execution.attempts.length, 1, '沿用 off 后不再有 30 秒的 medium 首次尝试');
+  assert.ok(f.sent[1].timeoutMs > 60000 && f.sent[1].timeoutMs <= 90000);
+  assert.equal(f.sent[1].max_output_tokens, 1200);
+  assert.equal(f.history.snapshot().calls[1].recoveryFromRequestId, first.requestId);
+  assert.equal(f.gateway.describe().usage.admitted, 3, '每次调用仍计入预算');
+  assert.equal(f.control.snapshot().policy.reasoning, 'off', '默认设置保持原值');
+});
+
+test('清单分析的 off 只在同一会话、执行轮、模型、等级和策略内沿用，失败结果不复用', async () => {
+  const trace = { conversationId: 'conversation', turnId: 'turn', userManaged: true };
+  for (const change of ['turn', 'conversation', 'model', 'reasoning', 'policy', 'failed', 'unmanaged', 'missing-turn']) {
+    const f = fixture([outlineAnswer, answer(plan), answer(plan)]);
+    await f.gateway.run('assistant.plan', outlineBody, { selection, trace });
+    const nextTrace = { ...trace }, nextSelection = { ...selection };
+    if (change === 'turn') nextTrace.turnId = 'other';
+    if (change === 'conversation') nextTrace.conversationId = 'other';
+    if (change === 'unmanaged') nextTrace.userManaged = false;
+    if (change === 'missing-turn') delete nextTrace.turnId;
+    if (change === 'reasoning') nextSelection.reasoning = 'low';
+    if (change === 'model') {
+      nextSelection.model = 'other-model';
+      f.provider.models = async () => [{ id: 'other-model', loaded: true, loadedContextLength: 40960, reasoningOptions: ['medium', 'off'] }];
+    }
+    if (change === 'policy') f.control.update({ ...f.control.snapshot().policy, maxOutputTokens: 3000 }, 2);
+    if (change === 'failed') {
+      f.provider.generateObject = async () => { throw new Error('connection failed'); };
+      await assert.rejects(f.gateway.run('assistant.plan', executeBody, { selection, trace }));
+      delete f.provider.generateObject;
+    }
+    const result = await f.gateway.run('assistant.plan', executeBody, { selection: nextSelection, trace: nextTrace });
+    assert.equal(result.execution.recoveryFromRequestId, undefined, change);
+    assert.equal(f.sent.at(-1).reasoning, nextSelection.reasoning, change);
+  }
+});
+
+test('清单分析之后的新执行轮重新按所选等级判断，真实超时降级照常记录并被后续规划沿用', async () => {
+  const trace = { conversationId: 'conversation', turnId: 'turn', userManaged: true };
+  const f = fixture([outlineAnswer, reasoningOnly, answer(plan), answer(plan)]);
+  await f.gateway.run('assistant.plan', outlineBody, { selection, trace });
+  const recovered = await f.gateway.run('assistant.plan', executeBody, { selection, trace: { ...trace, turnId: 'next-turn' } });
+  const next = await f.gateway.run('assistant.plan', executeBody, { selection, trace: { ...trace, turnId: 'next-turn' } });
+  assert.deepEqual(f.sent.map(row => row.reasoning), ['off', 'medium', 'off', 'off']);
+  assert.equal(recovered.execution.recoveryFromRequestId, undefined, '新执行轮自己发生了降级，来源是它自己的重试');
+  assert.deepEqual(recovered.execution.attempts.map(row => row.reasoning), ['medium', 'off']);
+  assert.equal(next.execution.recoveryFromRequestId, recovered.requestId);
+});
+
+test('清单分析关闭起步失败不再重试，预算只计一次；重新规划的分析仍从 off 起步', async () => {
+  const f = fixture([Object.assign(new Error('timeout'), { code: 'MODEL_RESPONSE_TIMEOUT' }), outlineAnswer]);
+  await assert.rejects(f.gateway.run('assistant.plan', outlineBody, { selection }), { code: 'MODEL_RESPONSE_TIMEOUT' });
+  assert.equal(f.sent.length, 1);
+  assert.equal(f.gateway.describe().usage.admitted, 1);
+  await f.gateway.run('assistant.plan', outlineBody, { selection });
+  assert.deepEqual(f.sent.map(row => row.reasoning), ['off', 'off']);
 });

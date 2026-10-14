@@ -12,6 +12,13 @@
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "0.85.1",
-    "opencc-js": "1.4.2"
+    "@jitl/quickjs-wasmfile-release-sync": "0.32.0",
+    "opencc-js": "1.4.2",
+    "quickjs-emscripten-core": "0.32.0"
+  },
+  "allowScripts": {
+    "@google/genai@1.52.0": true,
+    "esbuild@0.28.1": true,
+    "protobufjs@7.6.5": true
   }
 }

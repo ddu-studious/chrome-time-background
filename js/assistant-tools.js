@@ -158,6 +158,57 @@
       else if (ctx.modelCall && response?.source === 'rules') await ctx.modelCall({ source: 'rules', scene: body.scene || action });
       if (!response?.ok) throw Object.assign(new Error(response?.error?.message || response?.error || '本地 AI 请求失败'), { code: response?.code || null, execution: response?.execution, contextBudget: response?.contextBudget }); return response;
     }
+    // Faults of the sandbox itself, as opposed to faults in the model's own code. The model cannot repair these,
+    // so the task stops with the original explanation instead of burning its recovery budget on rewrites.
+    const computeInfrastructure = new Set(['COMPUTE_DISABLED', 'COMPUTE_UNCONFIGURED', 'COMPUTE_BUSY', 'COMPUTE_ISOLATION_UNAVAILABLE', 'COMPUTE_SANDBOX_FAILED', 'COMPUTE_NO_RESPONSE']);
+    const computeError = (code, message) => Object.assign(new Error(message), { code });
+    function computeFailure(error) {
+      if (!computeInfrastructure.has(error?.code)) return error;
+      return Object.assign(new Error(error.message), { code: 'ASSISTANT_USER_INPUT_REQUIRED', computeCode: error.code, execution: error.execution });
+    }
+    async function awaitCompute(body, ctx) {
+      if (ctx.trace && !ctx.inComputeCall) return ctx.trace('assistant.compute', '在本机沙箱运行只读代码', { codeChars: body.code.length, sources: Object.keys(body.input.refs) }, child => awaitCompute(body, { ...child, inComputeCall: true }), 'operation');
+      ctx.guard();
+      // Not a model call: no selection is sent, and nothing is recorded as model usage.
+      let response = await ai({ action: 'ai_compute_submit', input: body, trace: { conversationId: ctx.task.conversationId || ctx.task.id, turnId: ctx.task.turnId || ctx.task.id, toolCallId: ctx.spanId, startedAt: ctx.task.startedAt, userManaged: true } });
+      const jobId = response?.jobId;
+      if (jobId) {
+        try { await ctx.trackJob(jobId); } catch (error) { await ai({ action: 'ai_job_cancel', jobId }).catch(() => {}); throw error; }
+      }
+      const deadline = Math.min(now() + 20000, (ctx.task.runStartedAt || ctx.task.startedAt || now()) + 300000);
+      while (response?.ok && response.status === 'pending') {
+        ctx.guard();
+        if (now() > deadline) { await ai({ action: 'ai_job_cancel', jobId }).catch(() => {}); throw computeError('COMPUTE_NO_RESPONSE', '代码计算超过 20 秒仍未返回，已请求取消；请检查本机 AI 服务后重试'); }
+        await new Promise(resolve => setTimeout(resolve, 200)); ctx.guard();
+        response = await ai({ action: 'ai_scene_result', jobId });
+      }
+      ctx.guard();
+      if (!response || typeof response !== 'object') throw computeError('COMPUTE_SANDBOX_FAILED', '代码计算服务没有返回结果');
+      if (!response.ok) throw Object.assign(new Error(response.error?.message || response.error || '代码计算请求失败'), { code: response.code || null, execution: response.execution });
+      return response;
+    }
+    // Read-only pure computation over receipts this task already holds. It cannot reach the network, files or any
+    // business tool, so its result is an answer, never evidence that an action happened.
+    async function computeRun(step, ctx) {
+      Contract.validatePlan({ steps: [step] }, ctx.task.input.app);
+      ctx.guard();
+      const { purpose, code, inputRefs = [] } = step.args;
+      const refs = Context.sources(ctx.task, inputRefs);
+      const stamp = new Date(now()), pad = value => String(value).padStart(2, '0');
+      const input = { now: stamp.getTime(), today: `${stamp.getFullYear()}-${pad(stamp.getMonth() + 1)}-${pad(stamp.getDate())}`, utcOffsetMinutes: -stamp.getTimezoneOffset(), refs };
+      const inputBytes = new TextEncoder().encode(JSON.stringify(input)).length;
+      if (inputBytes > Contract.limits.computeInputBytes) throw computeError('COMPUTE_INPUT_TOO_LARGE', `所选来源共 ${inputBytes} 字节，超过代码计算 ${Contract.limits.computeInputBytes} 字节的输入上限；请改用更少或更小的来源，或缩小查询范围后重新读取`);
+      await ctx.progress?.('正在本机沙箱计算（只读，不联网）…');
+      let response;
+      try { response = await awaitCompute({ code, input }, ctx); }
+      catch (error) { throw computeFailure(error); }
+      if (response.status !== 'ready' || response.source !== 'compute' || !Object.hasOwn(response, 'output')) throw computeFailure(computeError('COMPUTE_SANDBOX_FAILED', '代码计算服务返回了无法识别的结果，已丢弃'));
+      const output = response.output, meta = response.execution?.compute || {};
+      const text = typeof output === 'string' ? output : JSON.stringify(output);
+      const shown = text.length > 1000 ? `${text.slice(0, 1000)}…（完整结果见来源引用）` : text;
+      return { message: `计算结果（${purpose}）：${typeof output === 'string' && output.includes('\n') ? '\n' : ''}${shown}`.slice(0, 1400),
+        observation: { purpose, output, outputBytes: response.outputBytes, ...(meta.codeHash ? { codeHash: meta.codeHash } : {}), ...(Number.isFinite(meta.elapsedMs) ? { elapsedMs: meta.elapsedMs } : {}), sources: inputRefs } };
+    }
     async function compact(ctx, force = false) {
       ctx.guard();
       const request = Context.batch(ctx.task, force);
@@ -208,6 +259,12 @@
       if (!local && !Memory.historical(input.text) && !ctx.task.observations?.length && !/如果|否则|队列|队里|队中|清除|移除|删除|删掉|去掉|随机|循环|登录|连接|权限|授权|下一页|翻页|继续搜索/.test(input.text) && !input.app && !input.skill) {
         const intent = Music.parseLocal(input.text);
         if (intent && (intent.action !== 'search' || /歌曲|音乐|歌手|歌单|听|首|^播放.+的/.test(input.text))) local = { steps: [{ tool: 'music.intent', args: { text: input.text } }] };
+      }
+      // An answer to an outline question is not the whole request, so no deterministic shortcut may turn it into one.
+      if (local && !ctx.task.todoTips.items.length && Todo.answers(ctx.task, input)) {
+        await ctx.trace?.('assistant.localPlan', '本地快捷规划未使用：这是对上一轮分析追问的回答', { tool: local.steps?.[0]?.tool },
+          async () => ({ code: 'answers-outline-question', next: 'outline' }), 'decision');
+        local = null;
       }
       if (local && !ctx.task.todoTips.items.length) {
         local = Todo.local(input, local);
@@ -430,6 +487,7 @@
     const management = Management.create(deps, { remember, resolve, publicState, openVideo, safeText, now });
     async function execute(step, ctx) {
       if (step.tool === 'context.read') return Context.read(ctx.task, step.args.ref, step.args.offset || 0);
+      if (step.tool === 'compute.run') return computeRun(step, ctx);
       if (step.tool === 'memory.recall') {
         Contract.validatePlan({ steps: [step] }, ctx.task.input.app);
         const snapshot = await memoryCall('get', null, ctx);
