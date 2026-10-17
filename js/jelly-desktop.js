@@ -79,20 +79,35 @@
   }
 
   /**
+   * 组件有没有按下发的外观应用：回执 appearance.status 必须是 ok，且回报的物种（组件实际画出来的那一种）与下发的一致。
+   * S1a 组件不认识物种、回执里没有 species、永远画水母，所以缺省按水母算：下发水母时它仍是 ok，下发动物时就是不支持；
+   * 组件认得这种动物但还画不出来（回退成水母）同样不算——设置页据此提示“需要更新组件”，不会说成已经应用。
+   */
+  function appearanceApplied(payload, reported) {
+    if (reported?.status !== 'ok') return false;
+    const wanted = payload.species === undefined ? 'jelly' : payload.species;
+    const actual = reported.species === undefined ? 'jelly' : reported.species;
+    return actual === wanted;
+  }
+
+  /**
    * storage：chrome.storage.local；desktop：AlarmDesktop（本函数会设置它的 onConnected / onPortLost / onJellySetting / onNudgeAction 回调）。
    * summary：() => Promise<{ lines, validUntil }>，act：(id, action) => Promise<{ ok, text|error }>（均来自 JellyNudge）。
    * onRestored：重连成功后调用（外部据此重新下发倒计时）。setTimer / clearTimer / retryMs 供测试替换。
    */
-  function create({ storage, desktop, summary = null, act = null, onRestored = null, appearance = null, setTimer = setTimeout, clearTimer = clearTimeout, retryMs = RETRY_MS }) {
+  function create({ storage, desktop, summary = null, act = null, onRestored = null, appearance = null, speciesNames = null, setTimer = setTimeout, clearTimer = clearTimeout, retryMs = RETRY_MS }) {
     let queue = Promise.resolve();
     const serial = fn => { const result = queue.then(fn); queue = result.catch(() => {}); return result; };
     const status = { ok: false, version: 0, error: '', exhausted: false };
     let attempt = 0, timer = null, wasLost = false;
     // 最近一次下发里助手那部分的结果：off（没有带 assistant）、unsupported（组件太旧）、unknown（还没有回报）或原生回报的 ok/invalid/taken/failed
     let assistantInfo = { status: 'unknown' };
-    // 最近一次下发里外观那部分的结果：off（没有外观数据源或本次没取到）、ok（组件回执带了 appearance.status==='ok'）、
-    // unsupported（带了外观但回执没有它：旧组件）、unknown（连接失败或还没有下发）。协议版本不变，靠回执探测能力。
+    // 最近一次下发里外观那部分的结果：off（没有外观数据源或本次没取到）、ok（回执 appearance.status==='ok'，且回报的物种与下发的一致）、
+    // unsupported（带了外观但回执没有它、status 不是 ok，或回报的物种与下发的不同：旧组件，或组件还画不出这一种动物）、
+    // unknown（连接失败或还没有下发）。协议版本不变，靠回执探测能力。
     let appearanceInfo = 'off';
+    // 组件确认正在桌面上画的物种（回执与下发一致才算）：提醒气泡据此称呼。没确认过、连接失败或断开时按水母。
+    let shownSpecies = 'jelly';
 
     const snapshot = () => ({
       connected: status.ok && !!desktop.port,
@@ -110,6 +125,17 @@
       needsResident: assistant.enabled && !settings.resident,
     });
     const stopRetry = () => { if (timer) { clearTimer(timer); timer = null; } };
+    /**
+     * 提醒气泡里的称呼：桌面上确认是别的动物时，把标题与正文里的“水母”按字面换成它的名字；认不出名字就原样。
+     * 返回副本，不改调用方的对象，也不动 id、按钮等其余字段。只影响桌面气泡；退回系统通知时桌面上没有这只动物说话，仍叫水母。
+     */
+    const named = nudge => {
+      const name = shownSpecies !== 'jelly' && isObject(speciesNames) && has(speciesNames, shownSpecies) ? speciesNames[shownSpecies] : null;
+      if (typeof name !== 'string' || !name.trim() || !isObject(nudge)) return nudge;
+      const out = { ...nudge };
+      for (const key of ['title', 'text']) if (typeof out[key] === 'string') out[key] = out[key].split('水母').join(name);
+      return out;
+    };
 
     // 有界退避：每次失败安排下一次，用完 retryMs 就停下（不无限重试），之后由设置变化、重载扩展或新连接重新触发
     function scheduleRetry() {
@@ -150,7 +176,9 @@
           ...(appearancePayload ? { appearance: appearancePayload } : {}) });
         status.ok = true; status.version = Number(result?.version) || 0; status.error = ''; status.exhausted = false;
         attempt = 0; stopRetry();
-        appearanceInfo = appearancePayload ? (result?.appearance?.status === 'ok' ? 'ok' : 'unsupported') : 'off';
+        appearanceInfo = appearancePayload ? (appearanceApplied(appearancePayload, result?.appearance) ? 'ok' : 'unsupported') : 'off';
+        // 本次没带外观（读取失败）时原生保持上一次的外观，所以称呼也保持上一次确认的；带了但组件没有确认同一种，就按水母
+        if (appearancePayload) shownSpecies = appearanceInfo === 'ok' && typeof appearancePayload.species === 'string' ? appearancePayload.species : 'jelly';
         if (assistant) {
           const reported = result?.assistant?.status;
           assistantInfo = { status: status.version < 7 ? 'unsupported' : HOTKEY_STATUSES.includes(reported) ? reported : 'unknown' };
@@ -165,6 +193,7 @@
         status.ok = false; status.version = 0; status.error = String(error?.message || error).slice(0, 120);
         assistantInfo = { status: 'unknown' };
         appearanceInfo = 'unknown';
+        shownSpecies = 'jelly';
         if (settings.resident) { wasLost = true; scheduleRetry(); }
         return false;
       }
@@ -227,7 +256,7 @@
     // ---- 与 AlarmDesktop 的接线 ----
     desktop.onConnected = () => { void sync().catch(() => {}); };
     desktop.onPortLost = info => {
-      status.ok = false; assistantInfo = { status: 'unknown' }; appearanceInfo = 'unknown';
+      status.ok = false; assistantInfo = { status: 'unknown' }; appearanceInfo = 'unknown'; shownSpecies = 'jelly';
       if (info?.quit) { void quit().catch(() => {}); return; }
       void serial(async () => {
         const settings = await read();
@@ -264,7 +293,7 @@
       /** 交给 JellyNudge 的 presenter：原生确认显示才算 shown，失败抛出由它退回系统通知。 */
       presenter: {
         async present(nudge) {
-          const result = await desktop.showNudge(nudge);
+          const result = await desktop.showNudge(named(nudge));
           return { shown: result?.ok === true };
         },
         async cancel(id) { try { desktop.clearNudge(id); } catch (_) { /* 端口已失效，气泡会随连接一起消失 */ } },

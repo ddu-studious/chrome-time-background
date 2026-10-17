@@ -628,7 +628,11 @@ body.sp-has-bg .sp-field {
     border-radius: 12px; box-shadow: 0 0 0 1px rgba(0, 0, 0, .14);
 }
 .sp-jelly-preview[hidden] { display: none; }
-.sp-jelly-preview svg { display: block; width: 100%; height: 100%; }
+.sp-jelly-preview svg, .sp-jelly-preview img { display: block; width: 100%; height: 100%; }
+/* 选了动物（形状数据可用）时显示动物的示意图（<img>，由脚本写入 data: 地址），否则显示水母的内联 svg */
+.sp-jelly-preview[data-art="animal"] svg { display: none; }
+.sp-jelly-preview:not([data-art="animal"]) img { display: none; }
+.sp-jelly-preview img { border-radius: 12px; }
 /* 钟罩填充：纯色与双色同一种；渐变自下而上；七彩横向三段再叠一层自下而上的亮度 */
 .sp-jelly-preview [data-bell] { display: none; }
 .sp-jelly-preview[data-look="solid"] [data-bell="solid"],

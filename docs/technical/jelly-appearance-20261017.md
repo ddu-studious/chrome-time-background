@@ -1,12 +1,12 @@
 ---
 title: 桌面水母形象系统 S1a：颜色与花纹（协议不升版本，默认外观逐像素不变）
 date: 2026-10-17
-status: S1a 已实现，并补完当晚的欠账（午夜自动换一只、设置页示意图、可见性与辨识度测量、花纹“画对了没有”的渲染检查、帧耗时对比、四层系统变异检查）；隔离环境验证通过（Chrome 侧业务替身测试、Swift 纯逻辑自测、独立 Bundle ID 的原生冒烟、默认外观逐像素基线、真实 Chrome 侧模块 ↔ 真实原生进程联调、HTTP 预览里的设置页版面）；带真实鼠标的冒烟没跑；材质（软糖/毛绒/线框/铅笔/像素）、尺寸、节日换装、“换一只”右键菜单与新物种未做（物种设计稿已写、用户已确认）；真实 Chrome 156、重装后的真实组件、多显示器、全屏 Space、Stage Manager、壁纸叠加观感、VoiceOver 未验收
+status: S1a 已实现，并补完当晚的欠账（午夜自动换一只、设置页示意图、可见性与辨识度测量、花纹“画对了没有”的渲染检查、帧耗时对比、四层系统变异检查）；隔离环境验证通过（Chrome 侧业务替身测试、Swift 纯逻辑自测、独立 Bundle ID 的原生冒烟、默认外观逐像素基线、真实 Chrome 侧模块 ↔ 真实原生进程联调、HTTP 预览里的设置页版面）；带真实鼠标的冒烟没跑；材质（软糖/毛绒/线框/铅笔/像素）、尺寸、节日换装、“换一只”右键菜单未做（新物种在 S1a 之后的 Step A 里开始做，见 `jelly-species-hammer-20261018.md`）；真实 Chrome 156、重装后的真实组件、多显示器、全屏 Space、Stage Manager、壁纸叠加观感、VoiceOver 未验收
 ---
 
 # 桌面水母形象系统 S1a：颜色与花纹
 
-设计稿：`docs/superpowers/specs/2026-10-17-jelly-appearance-design.md`（含用户选择的逐项决定与 X 海洋动物 50 帖素材映射）。实施计划：`docs/superpowers/plans/2026-10-17-jelly-appearance-s1a.md`。物种设计稿（用户 2026-10-17 已确认五条默认值，实现从 Step A 开始）：`docs/superpowers/specs/2026-10-17-jelly-species-design.md`。分支 `feat/jelly-appearance`（独立 worktree；S1a 作为单个提交落在该分支，未合并、未发布）。
+设计稿：`docs/superpowers/specs/2026-10-17-jelly-appearance-design.md`（含用户选择的逐项决定与 X 海洋动物 50 帖素材映射）。实施计划：`docs/superpowers/plans/2026-10-17-jelly-appearance-s1a.md`。物种设计稿（用户 2026-10-17 已确认五条默认值）：`docs/superpowers/specs/2026-10-17-jelly-species-design.md`；Step A（动物接口与小锤头鲨）的实现与验证见 `docs/technical/jelly-species-hammer-20261018.md`。分支 `feat/jelly-appearance`（独立 worktree；S1a 作为单个提交落在该分支，未合并、未发布）。
 
 ## 做了什么
 
@@ -111,7 +111,7 @@ status: S1a 已实现，并补完当晚的欠账（午夜自动换一只、设�
 
 - **带真实鼠标的冒烟没跑**（只跑了 `--no-mouse`）：会移动用户的真实指针，需要用户礼让；外观改动不涉及鼠标交互，但这是没有验证的层。
 - 材质（`gummy/plush/wire/pencil/pixel`）、尺寸（`small/medium/large`）、节日换装（`seasonal`）与 `daily` 之外的右键菜单入口**都只在设置模型里解析并保存，原生端这一轮不绘制**：`painter(for:)` 总是返回 `GlassPainter`。设置页卡片文案已如实写“材质与尺寸会在后续版本加入”。
-- 新物种（小锤头鲨、蝠鲼、海龟、鲸鲨）只有设计稿与草图，**没有实现**；等用户确认设计稿后再计划与实现。
+- 新物种：**小锤头鲨已在其后的 Step A 实现**（见 `docs/technical/jelly-species-hammer-20261018.md`）；蝠鲼、海龟、鲸鲨只有设计稿与草图，**没有实现**（Step B/C/D，一次一只）。本文其余部分描述的是 S1a 提交时的状态，其中的测试数量与冒烟场景数是当时的数字。
 - 水母没有常驻时设置页没有实时预览，只保存，下次出现时按设置显示；示意图是静态示意，页面如实说明。
 - 旧桌面组件（不回 `appearance`）下，设置已保存但不会生效，设置页提示更新组件并重载扩展；更新后自动生效。
 - 渲染检查只在白天、浅色外观、玻璃材质、中号下测过；夜晚、深色外观和后续材质/尺寸要各补一组。

@@ -175,6 +175,11 @@ struct JellyPose {
     var night: CGFloat = 0      // 夜晚荧光程度 0…1（0 = 白天或已关闭）
     var ripples = false         // 响铃涟漪
     var ringAge: CGFloat = 1000 // 自响铃气泡（重新）弹出起的秒数：弹出、涟漪、按钮淡入共用
+    // 动物（物种不是水母时）：JellyView 改用 SpeciesPainter 画，下面三项由 SpeciesPose 给出；水母不读它们
+    var species: JellySpecies = .jelly  // 实际生效的物种（动物画不出来时已回退水母）
+    var facing: CGFloat = 1             // 水平缩放：+1 朝右、−1 朝左，转身途中是中间值
+    var pitch: CGFloat = 0              // 俯仰（弧度，鼻子朝上为正）
+    var wave: CGFloat = 0               // 划水相位 −1…1（已乘包络），驱动尾鳍与胸鳍
 }
 
 final class JellyView: NSView {
@@ -347,6 +352,10 @@ final class JellyView: NSView {
             p.paint = p.paint.mixedAll(toward: .nightBlue, 0.05 * night)
         }
         let cx = bodyX ?? bounds.midX
+        if p.species != .jelly, let geometry = JellySpeciesGeometry.of(p.species) {
+            drawAnimal(geometry, cx: cx, night: night, p: p)
+            return
+        }
         let by = JellyView.bellBaseY
         let sq = max(-0.5, min(1.2, p.squash))
         let w = 46 * (1 - 0.16 * p.contraction + 0.10 * sq)
@@ -387,13 +396,34 @@ final class JellyView: NSView {
     }
 
     /// 响铃涟漪：钟罩周围向外扩散的圈，画在水母与气泡之下（曲线见 JellyRingMotion）。
-    private func drawRipples(cx: CGFloat, cy: CGFloat, p: JellyPose) {
-        for ring in JellyRingMotion.ripples(time: p.ringAge, reduceMotion: reduceMotion) where ring.alpha > 0.004 {
+    private func drawRipples(cx: CGFloat, cy: CGFloat, p: JellyPose, outer: CGFloat = JellyRingMotion.rippleOuter) {
+        for ring in JellyRingMotion.ripples(time: p.ringAge, reduceMotion: reduceMotion, outer: outer) where ring.alpha > 0.004 {
             let path = NSBezierPath(ovalIn: NSRect(x: cx - ring.radius, y: cy - ring.radius, width: ring.radius * 2, height: ring.radius * 2))
             path.lineWidth = 2
             p.tint.color(ring.alpha, lighten: 0.15).setStroke()
             path.stroke()
         }
+    }
+
+    /// 动物：光晕与涟漪以动物的中心为圆心（中心比水母低，涟漪外半径按离窗口边缘的余量缩小），睡着的 “z” 跟着头走；气泡与水母共用。
+    private func drawAnimal(_ g: SpeciesGeometry, cx: CGFloat, night: CGFloat, p: JellyPose) {
+        let center = SpeciesPlacement.center(g, centerX: cx)
+        if night > 0.01 { drawNightGlow(cx: center.x, cy: center.y, w: g.union.width, night: night, p: p) }
+        if p.ripples {
+            let outer = JellyRingMotion.outerRadius(centerX: center.x, centerY: center.y, width: bounds.width, height: bounds.height)
+            drawRipples(cx: center.x, cy: center.y, p: p, outer: outer)
+        }
+        SpeciesPainter.draw(g, pose: p, centerX: cx)
+        if p.asleep && !p.grabbed {
+            let anchor = SpeciesPainter.sleepAnchor(g, centerX: cx, pose: p)
+            let side: CGFloat = p.facing >= 0 ? 1 : -1
+            let color = p.tint.color(0.95, darken: 0.45).withAlphaComponent(0.55)
+            for (dx, dy, size) in [(2.0, 4.0, 11.0), (10.0, 15.0, 8.0)] as [(CGFloat, CGFloat, CGFloat)] {
+                let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: size, weight: .semibold), .foregroundColor: color]
+                NSString(string: "z").draw(at: NSPoint(x: anchor.x + side * dx, y: anchor.y + dy), withAttributes: attrs)
+            }
+        }
+        drawBubble(cx: cx, p: p)
     }
 
     private func drawSleepMarks(cx: CGFloat, by: CGFloat, w: CGFloat, h: CGFloat, p: JellyPose) {
@@ -478,10 +508,14 @@ final class JellyCompanion: NSObject {
     let view = JellyView(frame: NSRect(origin: .zero, size: JellyCompanion.size))
     var swim = JellySwim()
     var pose = JellyPose()
+    /// 动物的姿态（朝向、俯仰、划水包络）；水母不用，也不需要为它推进动画帧。
+    private var speciesPose = SpeciesPose()
     var info = JellyInfo()
     var reduceMotion = false
     /// 当前外观（由控制器按 Chrome 下发的具体值设置；Chrome 是设置的唯一所有者，这里不另存）。
     private(set) var appearance = JellyAppearance.default
+    /// 实际生效的物种：设置的物种有几何数据就是它，否则是水母。面板标题、读屏标签、回执与 ping 都用它，选择画法也只看它。
+    var effectiveSpecies: JellySpecies { appearance.species.effective }
     var onGrabEnd: (() -> Void)?
     /// 用户第一次把水母拖离按下点时（真正“抓起”）：控制器据此放弃响铃中的位置约定。
     var onGrabBegin: (() -> Void)?
@@ -511,7 +545,7 @@ final class JellyCompanion: NSObject {
     override init() {
         panel = ReminderPanel(contentRect: NSRect(origin: .zero, size: JellyCompanion.size), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         super.init()
-        panel.title = "桌面水母"
+        panel.title = JellySpecies.default.desktopTitle
         panel.isFloatingPanel = true
         panel.becomesKeyOnlyIfNeeded = true
         panel.hidesOnDeactivate = false
@@ -530,7 +564,7 @@ final class JellyCompanion: NSObject {
         panel.contentView = view
         view.setAccessibilityElement(true)
         view.setAccessibilityRole(.button)
-        view.setAccessibilityLabel("桌面水母")
+        view.setAccessibilityLabel(JellySpecies.default.desktopTitle)
         view.onDown = { [weak self] event in self?.mouseDown(event) }
         view.onDrag = { [weak self] event in self?.mouseDragged(event) }
         view.onUp = { [weak self] event in self?.mouseUp(event) }
@@ -638,7 +672,8 @@ final class JellyCompanion: NSObject {
         if next.ringEpoch != info.ringEpoch { ringStart = CACurrentMediaTime() }
         info = next
         reduceMotion = reduce
-        swim.tuning = JellyTuning.forStage(next.stage)
+        swim.tuning = JellyTuning.forStage(next.stage, species: effectiveSpecies)
+        if reduce && effectiveSpecies != .jelly { speciesPose.step(dt: 1.0 / 30, vx: swim.vx, vy: swim.vy, stroking: false, reduceMotion: true) }
         let wantsRest = next.rest || reduce
         swim.wantsRest = wantsRest
         if !wantsRest && swim.mode == .rest { swim.wake() }
@@ -667,8 +702,15 @@ final class JellyCompanion: NSObject {
     /// 其他阶段的颜色由阶段覆盖，外观记下来，回到 calm 时生效。
     func setAppearance(_ next: JellyAppearance) {
         guard next != appearance else { return }
+        let previousSpecies = effectiveSpecies
         appearance = next
+        if effectiveSpecies != previousSpecies {      // 换了一种：游动调参与姿态都从头来（朝右、不俯仰、鳍不摆）
+            speciesPose = SpeciesPose()
+            swim.tuning = JellyTuning.forStage(info.stage, species: effectiveSpecies)
+        }
         view.jellyAppearance = next
+        panel.title = effectiveSpecies.desktopTitle
+        view.setAccessibilityLabel(effectiveSpecies.desktopTitle)
         if info.stage == .calm { pose.paint = JellyPaint.make(appearance: next) }
         syncPose()      // 同时按“tint 始终等于 paint.a”的约定重算 tint
         ensureTicking()
@@ -692,6 +734,14 @@ final class JellyCompanion: NSObject {
         if info.ripples && !reduceMotion && swim.mode == .rest {
             next.contraction = JellySwim.contraction(atPhase: (next.ringAge / JellyDash.pulsePeriod).truncatingRemainder(dividingBy: 1))
         }
+        next.species = effectiveSpecies
+        if next.species != .jelly {
+            next.facing = speciesPose.facing
+            next.pitch = speciesPose.pitch
+            next.wave = speciesPose.wave(contraction: next.contraction)       // 响铃时的收缩节奏已在上面覆盖，鳍跟着它摆
+        } else {
+            next.facing = 1; next.pitch = 0; next.wave = 0
+        }
         view.reduceMotion = reduceMotion
         next.paint = pose.paint.mixed(toward: JellyPaint.target(stage: info.stage, appearance: appearance), reduceMotion ? 1 : 0.12)
         next.tint = next.paint.a
@@ -704,6 +754,7 @@ final class JellyCompanion: NSObject {
     private var needsFrames: Bool {
         if reduceMotion { return false }
         if info.ripples { return true }        // 响铃时涟漪与弹出需要逐帧绘制（响铃结束即停）
+        if effectiveSpecies != .jelly && !speciesPose.settled { return true }     // 动物：转身、俯仰、鳍落回中位都要走完
         return !(swim.settled && swim.mode == .rest)
     }
 
@@ -731,6 +782,11 @@ final class JellyCompanion: NSObject {
             swim.dashEnded = false
             let done = dashCompletion; dashCompletion = nil
             done?()
+        }
+        if effectiveSpecies != .jelly {
+            // 响铃时鳍也摆（收缩节奏由 syncPose 覆盖）；被抓着时鳍放松
+            let stroking = (swim.mode == .swim && !swim.wantsRest) || info.ripples
+            speciesPose.step(dt: dt, vx: swim.vx, vy: swim.vy, stroking: stroking, reduceMotion: reduceMotion)
         }
         // 眨眼
         if !(swim.mode == .rest && swim.wantsRest && !info.awake) {

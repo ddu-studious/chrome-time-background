@@ -15,6 +15,7 @@ test('importScripts 在使用前加载 jelly-appearance.js，且早于创建控�
 test('JellyDesktop 拿到外观数据源，保存后让它重新下发', () => {
   assert.match(background, /const jellyAppearance = JellyAppearance\.create\(\{[^}]*onChange: \(\) => jellyDesktop\.sync\(\)/s, '外观保存后经 jellyDesktop.sync 重新下发');
   assert.match(background, /JellyDesktop\.create\(\{[\s\S]*?appearance: \(\) => jellyAppearance\.payload\(\)/, 'JellyDesktop 的外观数据源是控制器的 payload');
+  assert.match(background, /JellyDesktop\.create\(\{[\s\S]*?speciesNames: JellyAppearance\.SPECIES_NAMES/, '提醒气泡的称呼用外观模块里的物种名字表');
 });
 
 test('消息：三个动作都校验扩展页面来源，回应带组件支持状态', () => {

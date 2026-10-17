@@ -21,7 +21,7 @@ test('常量与首页水母一致：色位数与花纹种类', () => {
 });
 
 test('默认值：玻璃、冰蓝（色位 5）、纯色、中号，节日与每天换都关', () => {
-  assert.deepEqual(A.normalize(undefined), { color: 5, look: 'solid', material: 'glass', size: 'medium', seasonal: false, daily: false });
+  assert.deepEqual(A.normalize(undefined), { color: 5, look: 'solid', material: 'glass', size: 'medium', seasonal: false, daily: false, species: 'jelly' });
   assert.deepEqual(A.normalize(null), A.normalize({}));
   assert.deepEqual(A.normalize('x'), A.normalize({}));
 });
@@ -62,7 +62,7 @@ test('resolve：同样的设置总得到同样的结果（重启、重连后外�
 
 test('resolve：负载只有下发字段，season 本轮恒为 null，material/size 原样带上', () => {
   const out = A.resolve({ color: 4, look: 'solid', material: 'wire', size: 'large', seasonal: true }, { date: new Date(2026, 9, 17) });
-  assert.deepEqual(Object.keys(out).sort(), ['color', 'colors', 'look', 'material', 'season', 'size']);
+  assert.deepEqual(Object.keys(out).sort(), ['color', 'colors', 'look', 'material', 'season', 'size', 'species']);
   assert.equal(out.season, null); assert.equal(out.material, 'wire'); assert.equal(out.size, 'large');
 });
 
@@ -102,9 +102,9 @@ test('控制器 set：只认已知字段并校验取值，未知键丢弃，非�
   const c = A.create({ storage, onChange: () => changes.push(1), now: () => new Date(2026, 9, 17) });
   const ok = await c.set({ color: 2, look: 'duo', bogus: 1 });
   assert.equal(ok.ok, true); assert.equal(ok.settings.color, 2); assert.equal(ok.settings.look, 'duo');
-  assert.deepEqual(storage.data[A.KEY], { color: 2, look: 'duo', material: 'glass', size: 'medium', seasonal: false, daily: false });
+  assert.deepEqual(storage.data[A.KEY], { color: 2, look: 'duo', material: 'glass', size: 'medium', seasonal: false, daily: false, species: 'jelly' });
   assert.equal(changes.length, 1);
-  for (const bad of [{ color: 9 }, { color: '1' }, { look: 'x' }, { material: 'metal' }, { size: 'xl' }, { seasonal: 'true' }, { daily: 0 }, null, [], 'x']) {
+  for (const bad of [{ color: 9 }, { color: '1' }, { look: 'x' }, { material: 'metal' }, { size: 'xl' }, { seasonal: 'true' }, { daily: 0 }, { species: 'shark' }, null, [], 'x']) {
     const writes = storage.writes.length;
     const r = await c.set(bad);
     assert.equal(r.ok, false, JSON.stringify(bad)); assert.equal(storage.writes.length, writes, '非法输入不写存储');
@@ -125,7 +125,108 @@ test('控制器：并发的 set 串行执行，后一个在前一个结果上合
   const storage = area();
   const c = A.create({ storage, now: () => new Date(2026, 9, 17) });
   await Promise.all([c.set({ color: 1 }), c.set({ look: 'blend' }), c.set({ daily: true })]);
-  assert.deepEqual(storage.data[A.KEY], { color: 1, look: 'blend', material: 'glass', size: 'medium', seasonal: false, daily: true });
+  assert.deepEqual(storage.data[A.KEY], { color: 1, look: 'blend', material: 'glass', size: 'medium', seasonal: false, daily: true, species: 'jelly' });
+});
+
+// ---------- 物种（species）：水母或某种动物；每次只显示一种，每天换/随机一只只换颜色与花纹，不换物种 ----------
+const ALL_SPECIES = ['jelly', 'hammer', 'manta', 'turtle', 'whaleshark'];
+
+test('物种：常量、默认值与冻结（原生端的 JellySpecies 与它逐项对照在 desktop-companion-logic 测试里）', () => {
+  assert.deepEqual([...A.SPECIES], ALL_SPECIES);
+  assert.equal(A.DEFAULTS.species, 'jelly');
+  assert.ok(Object.isFrozen(A.SPECIES), '物种列表不可被改写');
+  assert.equal(A.normalize({}).species, 'jelly');
+});
+
+test('物种 normalize：只认列表里的字符串（区分大小写、不做转换），其余回到水母，且不影响其他字段', () => {
+  for (const species of ALL_SPECIES) assert.equal(A.normalize({ species }).species, species);
+  for (const bad of ['Hammer', 'HAMMER', ' hammer', 'hammer ', 'shark', '', 'dolphin', 3, 0, true, false, null, undefined, {}, [], ['hammer'], { toString: () => 'hammer' }]) {
+    assert.equal(A.normalize({ species: bad }).species, 'jelly', `非法物种 ${JSON.stringify(bad)} 应回到水母`);
+  }
+  const mixed = A.normalize({ color: 2, look: 'rainbow', material: 'wire', size: 'large', species: 'x' });
+  assert.deepEqual([mixed.color, mixed.look, mixed.material, mixed.size, mixed.species], [2, 'rainbow', 'wire', 'large', 'jelly'], '物种非法只影响自己');
+  const keep = A.normalize({ color: 9, species: 'manta' });
+  assert.equal(keep.color, 5); assert.equal(keep.species, 'manta', '别的字段非法不影响物种');
+});
+
+test('物种 resolve：带上物种；颜色与花纹的展开与物种无关（同一设置在五个物种下颜色完全一样）', () => {
+  const date = new Date(2026, 9, 17);
+  for (const look of A.LOOKS) for (let color = 0; color < 8; color++) {
+    const jelly = A.resolve({ color, look }, { date });
+    for (const species of ALL_SPECIES) {
+      const got = A.resolve({ color, look, species }, { date });
+      assert.equal(got.species, species);
+      assert.deepEqual({ ...got, species: 'jelly' }, jelly, `${look}/${color}/${species}：除物种外应与水母一致`);
+    }
+  }
+  assert.equal(A.resolve({ species: 'bogus' }, { date }).species, 'jelly', '非法物种按水母');
+});
+
+test('物种与“每天换一只”：物种由用户选定，换日不变；颜色花纹照常按日期换', () => {
+  const seen = new Set();
+  for (const species of ALL_SPECIES) {
+    for (let day = 1; day <= 40; day++) {
+      const r = A.resolve({ daily: true, species }, { date: new Date(2026, 9, day) });
+      assert.equal(r.species, species, `${species} 第 ${day} 天`);
+      seen.add(`${r.color}/${r.look}`);
+    }
+  }
+  assert.ok(seen.size >= 10, '物种固定时颜色花纹仍随日期变化');
+  const dayA = A.resolve({ daily: true, species: 'hammer' }, { date: new Date(2026, 9, 5) });
+  const dayAjelly = A.resolve({ daily: true }, { date: new Date(2026, 9, 5) });
+  assert.deepEqual({ ...dayA, species: 'jelly' }, dayAjelly, '同一天换物种，颜色花纹不变');
+});
+
+test('物种 reroll：只换颜色与花纹，物种保持不变（五个物种逐个验证）', () => {
+  for (const species of ALL_SPECIES) {
+    for (let i = 0; i < 8; i++) {
+      const r = A.reroll({ color: 3, look: 'duo', species, daily: true }, seq(i / 8, 0.37, 0.9));
+      assert.equal(r.species, species, `${species} 第 ${i} 次随机`);
+      assert.equal(r.daily, false);
+    }
+  }
+  assert.equal(A.reroll({}, seq(0.2, 0.6)).species, 'jelly');
+});
+
+test('物种控制器 set：接受列表里的物种并写入；非法值整体拒绝，不写存储、不触发 onChange', async () => {
+  const storage = area(); const changes = [];
+  const c = A.create({ storage, onChange: () => changes.push(1), now: () => new Date(2026, 9, 17) });
+  const ok = await c.set({ species: 'hammer' });
+  assert.equal(ok.ok, true); assert.equal(ok.settings.species, 'hammer'); assert.equal(ok.resolved.species, 'hammer');
+  assert.equal(storage.data[A.KEY].species, 'hammer'); assert.equal(changes.length, 1);
+  for (const bad of ['shark', 'Hammer', '', 7, null, true, {}, []]) {
+    const writes = storage.writes.length;
+    const r = await c.set({ species: bad });
+    assert.equal(r.ok, false, JSON.stringify(bad)); assert.match(r.error, /species/); assert.equal(storage.writes.length, writes);
+  }
+  assert.equal(changes.length, 1, '失败不触发 onChange');
+  assert.equal(storage.data[A.KEY].species, 'hammer', '失败不改已保存的物种');
+  // 同一次 set 里物种合法而别的字段非法：整体拒绝，物种也不会被写进去
+  const writes = storage.writes.length;
+  assert.equal((await c.set({ species: 'turtle', color: 99 })).ok, false);
+  assert.equal(storage.writes.length, writes); assert.equal(storage.data[A.KEY].species, 'hammer');
+});
+
+test('物种控制器：payload 带物种；随机一只与设置颜色都保留物种；并发 set 不丢更新', async () => {
+  const storage = area({ [A.KEY]: { color: 5, look: 'solid', species: 'whaleshark', daily: true } });
+  const c = A.create({ storage, now: () => new Date(2026, 9, 17), random: seq(0.1, 0.9) });
+  assert.equal((await c.payload()).species, 'whaleshark');
+  const r = await c.rerollNow();
+  assert.equal(r.settings.species, 'whaleshark'); assert.equal(storage.data[A.KEY].species, 'whaleshark');
+  await Promise.all([c.set({ species: 'manta' }), c.set({ color: 1 }), c.set({ look: 'rainbow' })]);
+  assert.equal(storage.data[A.KEY].species, 'manta'); assert.equal(storage.data[A.KEY].color, 1); assert.equal(storage.data[A.KEY].look, 'rainbow');
+  assert.equal((await c.payload()).species, 'manta');
+});
+
+test('物种迁移：S1a 保存的设置没有 species 字段，读取为水母，读取不写回，原有字段不变', async () => {
+  const legacy = { color: 2, look: 'duo', material: 'wire', size: 'large', seasonal: false, daily: false };
+  const storage = area({ [A.KEY]: { ...legacy } });
+  const c = A.create({ storage, now: () => new Date(2026, 9, 17) });
+  const got = await c.get();
+  assert.deepEqual(got.settings, { ...legacy, species: 'jelly' });
+  assert.equal(got.resolved.species, 'jelly');
+  assert.equal(storage.writes.length, 0, '读取旧数据不写存储');
+  assert.deepEqual(storage.data[A.KEY], legacy, '存储里的旧值原样保留（回滚到 S1a 也读得懂）');
 });
 
 test('控制器：onChange 抛错或返回被拒绝的 Promise 都不影响保存', async () => {

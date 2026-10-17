@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const read = file => fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
 const html = read('settings.html');
+const Shapes = require('../js/jelly-species-shapes.js');
 const source = read('js/settings-jelly-appearance.js');
 const css = read('css/settings-page.css');
 
@@ -51,8 +52,11 @@ test('卡片里没有内联事件处理器与内联脚本（MV3 CSP）', () => {
 });
 
 test('脚本加载：在 settings-page.js 之后、带版本号', () => {
-  assert.ok(html.indexOf('js/settings-page.js?v=10') < html.indexOf('js/settings-jelly-appearance.js?v=1'));
-  assert.match(html, /<script src="js\/settings-jelly-appearance\.js\?v=1"><\/script>/);
+  assert.ok(html.indexOf('js/settings-page.js?v=10') < html.indexOf('js/settings-jelly-appearance.js?v=2'));
+  assert.match(html, /<script src="js\/settings-jelly-appearance\.js\?v=2"><\/script>/);
+  // 动物示意图用同一份形状数据：形状脚本必须先于外观脚本加载，且带版本号
+  assert.match(html, /<script src="js\/jelly-species-shapes\.js\?v=1"><\/script>/);
+  assert.ok(html.indexOf('js/jelly-species-shapes.js?v=1') < html.indexOf('js/settings-jelly-appearance.js?v=2'));
 });
 
 test('色板与随机按钮有样式：选中态、键盘焦点环、禁用态', () => {
@@ -76,13 +80,15 @@ const TEST_HEX = ['#ff736b', '#ff9e4d', '#f5d152', '#6bd17a', '#5cd6b3', '#66bde
 //   dom.noPreview / dom.noCard / dom.missing（缺失的元素 id）/ dom.noTitles（色块没有 title）/ dom.reverseSwatches（querySelectorAll 返回的顺序与 data-color 相反）
 //   hold：消息不自动回复，进入 pending，由测试调用 answer(响应)；lastError：回调执行期间 chrome.runtime.lastError 的值
 //   timers：替身 setTimeout/clearTimeout；readyState：document.readyState；noDocument：不提供 document（非页面环境）
-function load(reply, { dom = {}, hold = false, lastError = null, timers = null, readyState = 'complete', noDocument = false } = {}) {
+//   noShapes：页面里没有形状脚本；shapes：换成这份形状模块（合成的替身，测形状数据异常与真实动物覆盖不到的几何）
+function load(reply, { dom = {}, hold = false, lastError = null, timers = null, readyState = 'complete', noDocument = false, noShapes = false, shapes = null } = {}) {
   const els = {}, listeners = {}, domListeners = {}, pending = [];
   const missing = new Set(dom.missing || []);
   const make = id => (els[id] = { id, dataset: {}, disabled: false, hidden: false, value: '', checked: false, textContent: '', attrs: {}, listeners: {}, vars: {},
     style: { setProperty(k, v) { this.owner.vars[k] = v; }, getPropertyValue(k) { return this.owner.vars[k] || ''; } },
     addEventListener(type, fn) { this.listeners[type] = fn; }, setAttribute(k, v) { this.attrs[k] = v; }, getAttribute(k) { return this.attrs[k]; }, removeAttribute(k) { delete this.attrs[k]; } });
-  const ids = ['sp-jelly-appearance-card', 'set-jellyLook', 'set-jellyDaily', 'set-jellyReroll', 'set-jellyAppearanceStatus', 'set-jellyColorSwatches', ...(dom.noPreview ? [] : ['set-jellyPreview', 'set-jellyPreviewLabel', 'set-jellyPreviewText'])];
+  const ids = ['sp-jelly-appearance-card', 'set-jellyLook', 'set-jellyDaily', 'set-jellyReroll', 'set-jellyAppearanceStatus', 'set-jellyColorSwatches', ...(dom.noPreview ? [] : ['set-jellyPreview', 'set-jellyPreviewLabel', 'set-jellyPreviewText']),
+    ...(dom.noSpecies ? [] : ['set-jellySpecies']), ...(dom.noAnimalImg || dom.noPreview ? [] : ['set-jellyAnimalPreview'])];
   for (const id of ids) if (!missing.has(id) && !(dom.noCard && id === 'sp-jelly-appearance-card')) make(id);
   for (const el of Object.values(els)) el.style.owner = el;
   const NAMES = ['红', '橙', '黄', '绿', '薄荷', '冰蓝（默认）', '紫', '洋红'];
@@ -108,12 +114,12 @@ function load(reply, { dom = {}, hold = false, lastError = null, timers = null, 
     } },
     storage: { onChanged: { addListener(fn) { listeners.storage = fn; } } },
   };
-  const window = {};
+  const window = noShapes ? {} : { JellySpeciesShapes: shapes || Shapes };      // 页面里由 js/jelly-species-shapes.js 提供（settings.html 先于本脚本加载）
   new Function('window', 'document', 'chrome', 'setTimeout', 'clearTimeout', `${source}`)(window, noDocument ? undefined : document, chrome, timers?.setTimeout || setTimeout, timers?.clearTimeout || clearTimeout);
   return { els, swatches, sent, window, listeners, domListeners, pending };
 }
 const tick = () => new Promise(resolve => setTimeout(resolve, 20));
-const view = (settings, extra = {}) => ({ ok: true, settings: { color: 5, look: 'solid', material: 'glass', size: 'medium', seasonal: false, daily: false, ...settings }, resolved: {}, component: 'ok', connected: true, ...extra });
+const view = (settings, extra = {}) => ({ ok: true, settings: { color: 5, look: 'solid', material: 'glass', size: 'medium', seasonal: false, daily: false, species: 'jelly', ...settings }, resolved: {}, component: 'ok', connected: true, ...extra });
 
 test('状态文字：每种组件状态都给出可行动的说明，没生效就不说已生效', () => {
   const { window } = load(view({}));
@@ -339,7 +345,9 @@ test('取色规则与原生 JellyPaint 一致（源码绊线）：Swift 里的�
     [/case\s+\.rainbow:\s*return JellyPaint\(kind:\s*\.rainbow,\s*a:\s*tints\[0\],\s*b:\s*tints\[1\],\s*c:\s*tints\[2\]\)/, 'rainbow 的 a、b、c'],
     [/case\s+\.duo:\s*return b\b/, '双色触手用第二色'],
     [/case\s+\.blend:\s*return a\.mixed\(toward:\s*b,\s*0\.7\)/, '渐变触手偏向第二色 0.7'],
-    [/return u < 0\.5 \? a\.mixed\(toward:\s*b,\s*u \* 2\) : b\.mixed\(toward:\s*c,\s*\(u - 0\.5\) \* 2\)/, '七彩触手沿横向三色取色'],
+    [/case\s+\.rainbow:\s*return t < 0\.5 \? a\.mixed\(toward:\s*b,\s*t \* 2\) : b\.mixed\(toward:\s*c,\s*\(t - 0\.5\) \* 2\)/, '七彩肢体（触手、鳍）沿长轴三色取色（limbTone）'],
+    [/let t = u\.isFinite \? max\(0,\s*min\(1,\s*u\)\) : 0\.5/, 'limbTone 的 u 夹到 0…1、非有限数取正中'],
+    [/func tentacleTone\(index: Int,\s*count: Int\) -> JellyTint \{\s*limbTone\(u:\s*count > 1 \? CGFloat\(index\) \/ CGFloat\(count - 1\) : 0\.5\)/, '触手是 limbTone 在等距 u 上的特例'],
     [/var oralTone: JellyTint \{ kind == \.solid \? a : b \}/, '口腕：纯色用主色，其余第二色'],
     [/var outlineTone: JellyTint \{ kind == \.rainbow \? b : a \}/, '描边：七彩用第二色，其余主色'],
   ];
@@ -603,4 +611,541 @@ test('paintOf 细节：多余的颜色位被截断（solid 只留 1 个、duo/bl
   const svg = cardOf().match(/<svg[\s\S]*?<\/svg>/)?.[0] || '';
   const hooks = (svg.match(/data-tentacle="\d"/g) || []).length;
   for (const paint of [solid, duo, blend, rainbow]) assert.equal(paint.tentacles.length, hooks, '触手数要等于示意图里的 data-tentacle 个数（也是原生画的根数）');
+});
+
+// ---------- 2026-10-17 动物（物种）：下拉、示意图、文案 ----------
+// 设计见 docs/superpowers/specs/2026-10-17-jelly-species-design.md；示意图用 js/jelly-species-shapes.js 的同一份形状数据，颜色规则与原生 SpeciesPainter 一致。
+
+const JellyAppearance = require('../js/jelly-appearance.js');
+const painterSource = read('desktop-reminder/jelly-species-painter.swift');
+const HAMMER_RESOLVED = { color: 5, colors: [5], look: 'solid', species: 'hammer' };
+const speciesView = (species, resolved = {}, extra = {}) => view({ species }, { resolved: { color: 5, colors: [5], look: 'solid', species, ...resolved }, ...extra });
+
+test('动物下拉：选项恰好是“已经画得出来”的物种（水母在前），值都合法，名称与脚本里的名称表一致，默认水母', () => {
+  const card = cardOf();
+  const select = card.match(/<select[^>]*id="set-jellySpecies"[^>]*>([\s\S]*?)<\/select>/)?.[1] || '';
+  const options = [...select.matchAll(/<option value="([^"]+)"([^>]*)>([^<]+)<\/option>/g)].map(m => ({ value: m[1], attrs: m[2], label: m[3] }));
+  assert.deepEqual(options.map(o => o.value), [...Shapes.AVAILABLE], '下拉里只列形状数据已有的物种：加一种动物要同时加形状数据、下拉选项和示意图，缺一不可');
+  for (const option of options) assert.ok(JellyAppearance.SPECIES.includes(option.value), `${option.value} 应是后台认的物种`);
+  const names = load(view({})).window.JellyAppearanceSettings.SPECIES_NAMES;
+  for (const option of options) assert.equal(option.label, names[option.value], `${option.value} 的下拉文字应与名称表一致`);
+  assert.deepEqual(options.filter(o => /\bselected\b/.test(o.attrs)).map(o => o.value), ['jelly'], '默认选中水母');
+  assert.deepEqual(Object.keys(names), [...JellyAppearance.SPECIES], '名称表覆盖全部物种（含还没画出来的），顺序与后台一致');
+  assert.equal(Object.isFrozen(names), true);
+  // 后台还有一份（提醒气泡的称呼用它）：与设置页这一份逐项相同，Swift 那一份由 test/desktop-companion-logic.test.mjs 与设置页对照
+  assert.deepEqual({ ...JellyAppearance.SPECIES_NAMES }, { ...names }, '后台的名称表与设置页的一致');
+  assert.deepEqual(Object.keys(JellyAppearance.SPECIES_NAMES), [...JellyAppearance.SPECIES]);
+  assert.equal(Object.isFrozen(JellyAppearance.SPECIES_NAMES), true);
+  assert.ok(card.indexOf('id="set-jellyPreview"') < card.indexOf('id="set-jellySpecies"') && card.indexOf('id="set-jellySpecies"') < card.indexOf('id="set-jellyColorSwatches"'), '动物在示意图之后、颜色之前');
+});
+
+test('动物下拉的说明：每天换/随机只换颜色与花纹不换动物；需要已更新的组件，否则仍是水母', () => {
+  const card = cardOf();
+  const field = card.slice(card.indexOf('<span class="sp-field-label">动物</span>'), card.indexOf('id="set-jellySpecies"'));
+  assert.match(field, /每天换一只/); assert.match(field, /随机一只/);
+  assert.match(field, /只换颜色与花纹，不会换动物/);
+  assert.match(field, /已更新的桌面组件/); assert.match(field, /仍是水母/);
+  assert.match(card, /给桌面水母换动物、颜色和花纹/);
+});
+
+test('动物示意图元素：在预览容器里、紧跟水母 svg，对读屏隐藏（说明文字在容器的 aria-label），没有预置地址', () => {
+  const card = cardOf();
+  const box = card.match(/<div class="sp-jelly-preview"[^>]*id="set-jellyPreview"[\s\S]*?<\/svg>(<img[^>]*>)<\/div>/);
+  assert.ok(box, '预览容器里应在 svg 之后有一个 img');
+  const img = box[1];
+  assert.match(img, /id="set-jellyAnimalPreview"/); assert.match(img, /\balt=""/); assert.match(img, /aria-hidden="true"/);
+  assert.doesNotMatch(img, /\ssrc=/, '地址由脚本写入，页面里没有预置（水母状态下不应加载任何图片）');
+});
+
+test('动物示意图样式：选了动物显示 img、隐藏水母 svg，其余相反；只靠 data-art，不依赖 hidden', () => {
+  assert.match(css, /\.sp-jelly-preview\[data-art="animal"\] svg\s*\{\s*display:\s*none;?\s*\}/);
+  assert.match(css, /\.sp-jelly-preview:not\(\[data-art="animal"\]\) img\s*\{\s*display:\s*none;?\s*\}/);
+  assert.match(css, /\.sp-jelly-preview svg,\s*\.sp-jelly-preview img\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%/);
+});
+
+// ---- 示意图 SVG：结构、取色、位置 ----
+
+// 极简严格 XML 解析（只为核对结构）：标签与双引号属性；示意图里没有文本节点，标签之间不允许有任何别的字符
+function parseXml(text) {
+  const root = { name: '#root', attrs: {}, children: [] };
+  const stack = [root];
+  const tag = /<(\/?)([A-Za-z][A-Za-z0-9]*)((?:\s+[A-Za-z][A-Za-z0-9:-]*="[^"<>&]*")*)\s*(\/?)>/y;
+  let index = 0;
+  while (index < text.length) {
+    tag.lastIndex = index;
+    const m = tag.exec(text);
+    assert.ok(m, `位置 ${index} 附近不是合法标签：${text.slice(index, index + 60)}`);
+    index = tag.lastIndex;
+    const [, closing, name, attrText, selfClose] = m;
+    if (closing) {
+      assert.ok(!selfClose && !attrText.trim(), `闭合标签 ${name} 不应带属性`);
+      const top = stack.pop();
+      assert.equal(top.name, name, `标签没有正确嵌套：期望闭合 ${top.name}，遇到 ${name}`);
+      continue;
+    }
+    const attrs = {};
+    for (const a of attrText.matchAll(/([A-Za-z][A-Za-z0-9:-]*)="([^"]*)"/g)) { assert.ok(!(a[1] in attrs), `${name} 的属性 ${a[1]} 重复`); attrs[a[1]] = a[2]; }
+    const node = { name, attrs, children: [] };
+    stack[stack.length - 1].children.push(node);
+    if (!selfClose) stack.push(node);
+  }
+  assert.equal(stack.length, 1, '有标签没有闭合');
+  assert.equal(root.children.length, 1, '只应有一个根元素');
+  return root.children[0];
+}
+const walk = (node, visit) => { visit(node); node.children.forEach(child => walk(child, visit)); };
+const ALLOWED_ELEMENTS = new Set(['svg', 'defs', 'linearGradient', 'stop', 'rect', 'g', 'path', 'circle', 'ellipse']);
+const ALLOWED_ATTRIBUTES = new Set(['xmlns', 'viewBox', 'width', 'height', 'id', 'x1', 'y1', 'x2', 'y2', 'gradientUnits', 'offset', 'stop-color', 'stop-opacity', 'rx', 'ry', 'cx', 'cy', 'r',
+  'fill', 'fill-opacity', 'stroke', 'stroke-opacity', 'stroke-width', 'stroke-linejoin', 'stroke-linecap', 'transform', 'd']);
+const toHexTest = rgb => `#${rgb.map(v => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0')).join('')}`;
+const lighter = (rgb, amount = 0, dark = 0) => rgb.map(c => Math.min(1, c + (1 - c) * amount) * (1 - dark));
+const swatchRgb = TEST_HEX.map(hex => [0, 2, 4].map(i => parseInt(hex.slice(1 + i, 3 + i), 16) / 255));
+const LOOKS_UNDER_TEST = [
+  ['solid', { colors: [5], look: 'solid' }],
+  ['duo', { colors: [6, 0], look: 'duo' }],
+  ['blend', { colors: [2, 4], look: 'blend' }],
+  ['rainbow', { colors: [5, 7, 1], look: 'rainbow' }],
+];
+const previewPaint = (window, resolved) => window.JellyAppearanceSettings.paintOf(resolved, swatchRgb);
+const gradientOf = (root, id) => { let found = null; walk(root, node => { if (node.name === 'linearGradient' && node.attrs.id === id) found = node; }); return found; };
+const stopsOf = gradient => gradient.children.map(stop => ({ color: stop.attrs['stop-color'], offset: Number(stop.attrs.offset), opacity: Number(stop.attrs['stop-opacity']) }));
+
+test('animalPreviewSvg：水母、未知物种、没有颜料、形状脚本缺失都返回 null（调用方回到水母示意图），不抛错', () => {
+  const { window } = load(view({}));
+  const api = window.JellyAppearanceSettings;
+  const paint = previewPaint(window, { colors: [5], look: 'solid' });
+  assert.equal(api.animalPreviewSvg('jelly', paint), null, '水母不是数据驱动的，示意图用页面里的内联 svg');
+  assert.equal(api.animalPreviewSvg('dragon', paint), null);
+  assert.equal(api.animalPreviewSvg('manta', paint), null, '数据里还没有的物种');
+  for (const bad of [undefined, null, 5, {}, [], '', '__proto__', 'constructor', 'toString']) assert.equal(api.animalPreviewSvg(bad, paint), null, `物种 ${String(bad)}`);
+  assert.equal(api.animalPreviewSvg('hammer', null), null);
+  assert.equal(api.animalPreviewSvg('hammer', undefined), null);
+  assert.equal(api.animalPreviewUri('hammer', null), null);
+  const bare = load(view({}), { noShapes: true }).window.JellyAppearanceSettings;
+  assert.equal(bare.animalPreviewSvg('hammer', paint), null, '形状脚本没加载：画不出来，不抛错');
+  assert.equal(bare.animalPreviewUri('hammer', paint), null);
+});
+
+test('animalPreviewSvg：每种可用动物 × 四种花纹都得到结构合法的 SVG（元素与属性白名单、颜色格式、引用与 id、路径来自形状数据）', () => {
+  const { window } = load(view({}));
+  const animals = Shapes.AVAILABLE.filter(id => id !== 'jelly');
+  assert.ok(animals.length >= 1);
+  for (const id of animals) for (const [name, resolved] of LOOKS_UNDER_TEST) {
+    const label = `${id}/${name}`;
+    const svg = window.JellyAppearanceSettings.animalPreviewSvg(id, previewPaint(window, resolved));
+    assert.equal(typeof svg, 'string', label);
+    const root = parseXml(svg);
+    assert.equal(root.name, 'svg'); assert.equal(root.attrs.xmlns, 'http://www.w3.org/2000/svg'); assert.equal(root.attrs.viewBox, '0 0 100 136');
+    const ids = [];
+    walk(root, node => {
+      assert.ok(ALLOWED_ELEMENTS.has(node.name), `${label}：不允许的元素 ${node.name}`);
+      for (const [key, value] of Object.entries(node.attrs)) {
+        assert.ok(ALLOWED_ATTRIBUTES.has(key), `${label}：不允许的属性 ${key}`);
+        if (['fill', 'stroke', 'stop-color'].includes(key)) assert.match(value, /^(#[0-9a-f]{6}|#fff|none|url\(#[A-Za-z0-9]+\))$/, `${label}：${key}=${value}`);
+        if (['fill-opacity', 'stroke-opacity', 'stop-opacity'].includes(key)) assert.ok(Number(value) >= 0 && Number(value) <= 1, `${label}：${key}=${value} 应在 0…1`);
+        if (['stroke-width', 'cx', 'cy', 'r', 'rx', 'ry', 'x1', 'y1', 'x2', 'y2', 'offset'].includes(key)) assert.ok(/^-?\d+(\.\d+)?$/.test(value) && Number.isFinite(Number(value)), `${label}：${key}=${value} 应是有限的普通小数`);
+        if (key === 'id') ids.push(value);
+      }
+    });
+    assert.equal(new Set(ids).size, ids.length, `${label}：id 重复`);
+    walk(root, node => { for (const value of Object.values(node.attrs)) for (const ref of value.matchAll(/url\(#([^)]+)\)/g)) assert.ok(ids.includes(ref[1]), `${label}：引用了没有定义的 ${ref[1]}`); });
+    // 路径只来自形状数据：每条 d 都能被参考解析器接受
+    walk(root, node => { if (node.attrs.d !== undefined) assert.ok(Shapes.parsePath(node.attrs.d), `${label}：d 不合规 ${node.attrs.d.slice(0, 40)}`); });
+    assert.doesNotMatch(svg, /<script|\son[a-z]+=|href|xlink|<image|foreignObject|javascript:|style=|&|<!/i, label);
+  }
+});
+
+test('animalPreviewSvg：路径与形状数据逐部件一致，躯干与肢体、腹部、斑点、高光各按角色上色（取色规则与原生一致）', () => {
+  const { window } = load(view({}));
+  const animals = Shapes.AVAILABLE.filter(id => id !== 'jelly');
+  for (const id of animals) for (const [name, resolved] of LOOKS_UNDER_TEST) {
+    const label = `${id}/${name}`;
+    const paint = previewPaint(window, resolved);
+    const root = parseXml(window.JellyAppearanceSettings.animalPreviewSvg(id, paint));
+    const group = root.children.find(node => node.name === 'g');
+    assert.ok(group, label);
+    const layered = paint.kind === 'blend' || paint.kind === 'rainbow';
+    const shape = Shapes.expand(id);
+    const k = Number(group.attrs.transform.match(/scale\(([^)]+)\)/)[1]);
+    let cursor = 0;
+    shape.parts.forEach((part, index) => {
+      const at = () => group.children[cursor++];
+      const where = `${label} 部件 ${index}（${part.role}）`;
+      if (part.role === 'limb') {
+        const path = at();
+        assert.equal(path.attrs.d, part.d, `${where}：路径`);
+        const tone = window.JellyAppearanceSettings.limbTone(paint, part.u);
+        const gradient = gradientOf(root, path.attrs.fill.match(/url\(#([^)]+)\)/)[1]);
+        assert.ok(gradient, where);
+        assert.deepEqual([gradient.attrs.x1, gradient.attrs.y1, gradient.attrs.x2, gradient.attrs.y2, gradient.attrs.gradientUnits], ['0', '1', '0', '0', undefined],
+          `${where}：肢体渐变在自身包围盒里自下（y1=1）而上（y2=0），正竖直`);
+        const [bottom, top] = stopsOf(gradient);
+        assert.deepEqual([bottom.offset, top.offset], [0, 1], `${where}：两个色标分别在渐变的起点与终点`);
+        assert.equal(bottom.color, toHexTest(lighter(tone, 0, 0.06)), `${where}：下端颜色`); assert.equal(bottom.opacity, 0.92);
+        assert.equal(top.color, toHexTest(lighter(tone, 0.34)), `${where}：上端颜色`); assert.equal(top.opacity, 0.95);
+        assert.equal(path.attrs.stroke, toHexTest(lighter(tone, 0, 0.3)), `${where}：描边`); assert.equal(Number(path.attrs['stroke-opacity']), 0.9);
+        assert.ok(Math.abs(Number(path.attrs['stroke-width']) * k - 1.0) < 0.01, `${where}：描边宽度按底板像素是 1.0`);
+      } else if (part.role === 'body') {
+        const fill = at();
+        assert.equal(fill.attrs.d, part.d, `${where}：路径`); assert.equal(fill.attrs.fill, 'url(#bodyFill)');
+        if (layered) { const overlay = at(); assert.equal(overlay.attrs.d, part.d); assert.equal(overlay.attrs.fill, 'url(#bodyLight)'); }
+        const outline = at();
+        assert.equal(outline.attrs.d, part.d); assert.equal(outline.attrs.fill, 'none');
+        assert.equal(outline.attrs.stroke, toHexTest(lighter(paint.outline, 0, 0.28)), `${where}：描边用 outlineTone`);
+        assert.ok(Math.abs(Number(outline.attrs['stroke-width']) * k - 1.1) < 0.01, `${where}：描边宽度按底板像素是 1.1`);
+      } else {
+        const path = at();
+        assert.equal(path.attrs.d, part.d, `${where}：路径`);
+        if (part.role === 'belly') { assert.equal(path.attrs.fill, toHexTest(lighter(paint.a, 0.72))); assert.equal(Number(path.attrs['fill-opacity']), 0.92); }
+        if (part.role === 'accent') { assert.equal(path.attrs.fill, '#fff'); assert.equal(Number(path.attrs['fill-opacity']), 0.55); }
+        if (part.role === 'shine') { assert.equal(path.attrs.fill, '#fff'); assert.equal(Number(path.attrs['fill-opacity']), 0.4); }
+      }
+    });
+    // 之后依次是每只眼睛两个圆（瞳孔、高光点），再是腮红
+    for (const [x, y] of shape.eyes.at) {
+      const pupil = group.children[cursor++], spark = group.children[cursor++];
+      assert.equal(pupil.name, 'circle'); assert.equal(pupil.attrs.cx, Shapes.num(x)); assert.equal(pupil.attrs.cy, Shapes.num(y)); assert.equal(pupil.attrs.r, Shapes.num(shape.eyes.r));
+      assert.equal(spark.attrs.cx, Shapes.num(x + 0.2 * shape.eyes.r)); assert.equal(spark.attrs.cy, Shapes.num(y - 0.4 * shape.eyes.r)); assert.equal(spark.attrs.r, Shapes.num(0.3 * shape.eyes.r));
+    }
+    for (const [x, y, rx, ry] of shape.blush) { const cheek = group.children[cursor++]; assert.equal(cheek.name, 'ellipse'); assert.equal(cheek.attrs.cx, Shapes.num(x)); assert.equal(cheek.attrs.cy, Shapes.num(y)); assert.equal(cheek.attrs.rx, Shapes.num(rx)); assert.equal(cheek.attrs.ry, Shapes.num(ry)); }
+    assert.equal(cursor, group.children.length, `${label}：除上面列出的，没有多余的图形`);
+  }
+});
+
+test('animalPreviewSvg：躯干渐变——纯色/双色自下而上由主色；渐变与七彩沿尾→头铺色并叠一层亮度；肢体颜色随花纹（双色用第二色，七彩沿位置取色）', () => {
+  const { window } = load(view({}));
+  const api = window.JellyAppearanceSettings;
+  const hammer = Shapes.expand('hammer');
+  const bodyFillOf = (resolved) => { const paint = previewPaint(window, resolved); const root = parseXml(api.animalPreviewSvg('hammer', paint)); return { paint, root, fill: gradientOf(root, 'bodyFill'), light: gradientOf(root, 'bodyLight') }; };
+  for (const resolved of [{ colors: [5], look: 'solid' }, { colors: [6, 0], look: 'duo' }]) {
+    const { paint, fill, light } = bodyFillOf(resolved);
+    assert.equal(light, null, '纯色/双色没有亮度层');
+    assert.equal(fill.attrs.gradientUnits, 'userSpaceOnUse');
+    assert.equal(fill.attrs.x1, fill.attrs.x2, '纯色/双色是纵向渐变'); assert.ok(Number(fill.attrs.y1) > Number(fill.attrs.y2), '自下（y 大）而上');
+    assert.deepEqual(stopsOf(fill), [
+      { color: toHexTest(lighter(paint.a, 0, 0.05)), offset: 0, opacity: 0.93 },
+      { color: toHexTest(lighter(paint.a, 0.22)), offset: 0.55, opacity: 0.95 },
+      { color: toHexTest(lighter(paint.a, 0.5)), offset: 1, opacity: 0.97 },
+    ], `${resolved.look}：躯干只用主色`);
+  }
+  {
+    const { paint, fill, light } = bodyFillOf({ colors: [2, 4], look: 'blend' });
+    assert.equal(fill.attrs.y1, fill.attrs.y2, '渐变是横向（尾→头）'); assert.ok(Number(fill.attrs.x1) < Number(fill.attrs.x2));
+    assert.deepEqual(stopsOf(fill), [{ color: toHexTest(lighter(paint.a, 0.22)), offset: 0, opacity: 0.95 }, { color: toHexTest(lighter(paint.b, 0.22)), offset: 1, opacity: 0.95 }]);
+    assert.ok(light, '渐变有亮度层');
+    assert.deepEqual(stopsOf(light), [{ color: '#ffffff', offset: 0, opacity: 0 }, { color: '#ffffff', offset: 1, opacity: 0.32 }]);
+    assert.ok(Number(light.attrs.y1) > Number(light.attrs.y2), '亮度层自下而上变亮');
+  }
+  {
+    const { paint, fill, light } = bodyFillOf({ colors: [5, 7, 1], look: 'rainbow' });
+    assert.deepEqual(stopsOf(fill).map(s => s.color), [paint.a, paint.b, paint.c].map(rgb => toHexTest(lighter(rgb, 0.22))), '七彩三色沿尾→头');
+    assert.deepEqual(stopsOf(fill).map(s => s.offset), [0, 0.5, 1]);
+    assert.deepEqual(stopsOf(fill).map(s => s.opacity), [0.95, 0.95, 0.95], '七彩三段的透明度都是 0.95（与原生 gradient 的 0.95 一致）');
+    assert.ok(light);
+    assert.deepEqual(stopsOf(light), [{ color: '#ffffff', offset: 0, opacity: 0 }, { color: '#ffffff', offset: 1, opacity: 0.32 }], '七彩同样叠自下而上的亮度层');
+    assert.ok(Number(light.attrs.y1) > Number(light.attrs.y2));
+  }
+  // 肢体颜色：双色用第二色；七彩沿 u 取色（与 limbTone 一致，这里用独立的写法再算一遍）
+  const limbColors = resolved => {
+    const paint = previewPaint(window, resolved), root = parseXml(api.animalPreviewSvg('hammer', paint));
+    const group = root.children.find(node => node.name === 'g');
+    return { paint, colors: group.children.filter(node => node.attrs.fill?.startsWith('url(#limb')).map(node => stopsOf(gradientOf(root, node.attrs.fill.match(/url\(#([^)]+)\)/)[1]))[0].color) };
+  };
+  const limbUs = hammer.parts.filter(part => part.role === 'limb').map(part => part.u);
+  const mixRgb = (x, y, t) => x.map((v, i) => v + (y[i] - v) * t);
+  const duo = limbColors({ colors: [6, 0], look: 'duo' });
+  assert.deepEqual(duo.colors, limbUs.map(() => toHexTest(lighter(swatchRgb[0], 0, 0.06))), '双色：鳍与尾用第二色');
+  const rainbow = limbColors({ colors: [5, 7, 1], look: 'rainbow' });
+  const [a, b, c] = [swatchRgb[5], swatchRgb[7], swatchRgb[1]];
+  assert.deepEqual(rainbow.colors, limbUs.map(u => toHexTest(lighter(u < 0.5 ? mixRgb(a, b, u * 2) : mixRgb(b, c, (u - 0.5) * 2), 0, 0.06))), '七彩：肢体沿身体长轴取色');
+  const blend = limbColors({ colors: [2, 4], look: 'blend' });
+  assert.deepEqual(blend.colors, limbUs.map(() => toHexTest(lighter(mixRgb(swatchRgb[2], swatchRgb[4], 0.7), 0, 0.06))), '渐变：肢体偏向第二色 0.7');
+});
+
+test('animalPreviewSvg：动物整体落在 100×136 的底板内（四周留白）并居中，描边与形状随缩放保持原有粗细', () => {
+  const { window } = load(view({}));
+  for (const id of Shapes.AVAILABLE.filter(name => name !== 'jelly')) {
+    const root = parseXml(window.JellyAppearanceSettings.animalPreviewSvg(id, previewPaint(window, { colors: [5], look: 'solid' })));
+    const group = root.children.find(node => node.name === 'g');
+    const [, tx, ty] = group.attrs.transform.match(/translate\(([-\d.]+) ([-\d.]+)\)/).map(Number);
+    const k = Number(group.attrs.transform.match(/scale\(([^)]+)\)/)[1]);
+    const shape = Shapes.expand(id);
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const part of shape.parts) for (const [x, y] of Shapes.sample(Shapes.parsePath(part.d))) { minX = Math.min(minX, tx + k * x); maxX = Math.max(maxX, tx + k * x); minY = Math.min(minY, ty + k * y); maxY = Math.max(maxY, ty + k * y); }
+    assert.ok(minX >= 6 && maxX <= 94, `${id}：横向 ${minX.toFixed(1)}…${maxX.toFixed(1)} 应留出 ≥6 的边`);
+    assert.ok(minY >= 6 && maxY <= 130, `${id}：纵向 ${minY.toFixed(1)}…${maxY.toFixed(1)} 应留出 ≥6 的边`);
+    // 底板居中的是“并集包围盒”（含各划水相位）：静止形状的每个取样点都必须落在以 (50, 68) 为中心、按同一缩放得到的并集盒内，
+    // 且并集盒本身没有被挤出底板——这样 translate/scale 与 union 的换算（原生坐标 y 向上）才是自洽的，不只是公式重写了一遍
+    const union = Shapes.union(id), fit = k / shape.scale;
+    assert.ok(fit > 0 && fit <= 1 + 1e-9, `${id}：缩放只缩小不放大`);
+    const halfW = fit * (union.maxX - union.minX) / 2, halfH = fit * (union.maxY - union.minY) / 2;
+    assert.ok(50 - halfW >= 6 && 50 + halfW <= 94 && 68 - halfH >= 6 && 68 + halfH <= 130, `${id}：并集盒在底板内留白`);
+    const eps = 0.011;
+    assert.ok(minX >= 50 - halfW - eps && maxX <= 50 + halfW + eps, `${id}：静止形状横向在居中的并集盒内`);
+    assert.ok(minY >= 68 - halfH - eps && maxY <= 68 + halfH + eps, `${id}：静止形状纵向在居中的并集盒内`);
+    // 并集盒由静止形状与转动部件的各相位撑开：至少有一条边贴着静止形状（否则并集盒不是紧的，居中就没有意义）
+    const touches = [minX - (50 - halfW), (50 + halfW) - maxX, minY - (68 - halfH), (68 + halfH) - maxY].some(gap => Math.abs(gap) < 0.05);
+    assert.ok(touches, `${id}：并集盒与静止形状至少有一条边重合`);
+  }
+});
+
+test('animalPreviewSvg：确定性——相同输入逐字相同，颜色或花纹不同则结果不同；data: 地址可还原且不含需要转义的裸字符', () => {
+  const { window } = load(view({}));
+  const api = window.JellyAppearanceSettings;
+  const a = api.animalPreviewSvg('hammer', previewPaint(window, { colors: [5], look: 'solid' }));
+  assert.equal(api.animalPreviewSvg('hammer', previewPaint(window, { colors: [5], look: 'solid' })), a);
+  assert.notEqual(api.animalPreviewSvg('hammer', previewPaint(window, { colors: [4], look: 'solid' })), a);
+  assert.notEqual(api.animalPreviewSvg('hammer', previewPaint(window, { colors: [5, 7], look: 'blend' })), a);
+  const uri = api.animalPreviewUri('hammer', previewPaint(window, { colors: [5], look: 'solid' }));
+  assert.ok(uri.startsWith('data:image/svg+xml;charset=utf-8,'));
+  const body = uri.slice('data:image/svg+xml;charset=utf-8,'.length);
+  assert.doesNotMatch(body, /[<>"#\s]/, '尖括号、引号、# 与空白都已转义');
+  assert.equal(decodeURIComponent(body), a);
+});
+
+test('animalPreviewSvg：躯干渐变的轴就是躯干部件的包围盒——横向从尾端到头端、纵向从下沿到上沿，只算躯干（不含鳍、尾、眼睛、高光）', () => {
+  const { window } = load(view({}));
+  const api = window.JellyAppearanceSettings;
+  const shape = Shapes.expand('hammer');
+  const boundsOf = parts => {
+    const points = parts.flatMap(part => Shapes.sample(Shapes.parsePath(part.d)));
+    const xs = points.map(p => p[0]), ys = points.map(p => p[1]);
+    return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+  };
+  const body = boundsOf(shape.parts.filter(part => part.role === 'body')), all = boundsOf(shape.parts);
+  assert.ok(all.x0 < body.x0 - 1 && all.y0 < body.y0 - 1, '前提：算上鳍与尾，横纵范围都比躯干大（否则这个测试分不出“只算躯干”）');
+  const n = Shapes.num;
+  const solid = parseXml(api.animalPreviewSvg('hammer', previewPaint(window, { colors: [5], look: 'solid' })));
+  const fill = gradientOf(solid, 'bodyFill');
+  assert.equal(fill.attrs.gradientUnits, 'userSpaceOnUse');
+  assert.deepEqual([fill.attrs.y1, fill.attrs.y2], [n(body.y1), n(body.y0)], '纯色：纵向，自下沿（y 大）到上沿');
+  const blend = parseXml(api.animalPreviewSvg('hammer', previewPaint(window, { colors: [2, 4], look: 'blend' })));
+  const lengthwise = gradientOf(blend, 'bodyFill'), light = gradientOf(blend, 'bodyLight');
+  assert.equal(lengthwise.attrs.gradientUnits, 'userSpaceOnUse');
+  assert.deepEqual([lengthwise.attrs.x1, lengthwise.attrs.x2], [n(body.x0), n(body.x1)], '渐变：横向，自尾端到头端');
+  assert.deepEqual([light.attrs.y1, light.attrs.y2], [n(body.y1), n(body.y0)], '亮度层：纵向，自下沿到上沿');
+});
+
+// ---- 合成形状（替身）：真实模块里目前只有一种动物，它比 84 窄、并集盒上下对称，覆盖不到“过宽要缩小”“不对称也居中”与各种数据异常的防线 ----
+// 替身只换 expand/union/AVAILABLE（sample、parsePath、num 沿用真实模块）；部件都是矩形，数据坐标 y 向下，union 是原生坐标（已乘 scale、y 向上）。
+const rectD = (x0, y0, x1, y1) => `M ${x0} ${y0} L ${x1} ${y0} L ${x1} ${y1} L ${x0} ${y1} Z`;
+const stubShapes = ({ scale = 1, body = [-10, -4, 10, 4], limbs = [], union = { minX: -10, maxX: 10, minY: -4, maxY: 4 }, bodyRole = 'body' } = {}) => {
+  const animal = {
+    view: 'top', scale, eyes: { r: 2, at: [[0, 0]] }, blush: [],
+    parts: [{ role: bodyRole, u: 0.5, d: rectD(...body), motion: null }, ...limbs.map(box => ({ role: 'limb', u: 0.5, d: rectD(...box), motion: null }))],
+  };
+  return { ...Shapes, AVAILABLE: ['jelly', 'stub'], expand: id => (id === 'stub' ? animal : Shapes.expand(id)), union: id => (id === 'stub' ? union : Shapes.union(id)) };
+};
+const stubSvg = (stub, resolved = { colors: [5], look: 'solid' }) => {
+  const { window } = load(view({}), { shapes: stub });
+  return window.JellyAppearanceSettings.animalPreviewSvg('stub', previewPaint(window, resolved));
+};
+const placementOf = svg => {
+  const group = parseXml(svg).children.find(node => node.name === 'g');
+  const [, tx, ty] = group.attrs.transform.match(/translate\(([-\d.]+) ([-\d.]+)\)/).map(Number);
+  return { tx, ty, k: Number(group.attrs.transform.match(/scale\(([^)]+)\)/)[1]) };
+};
+
+test('animalPreviewSvg：形状数据异常一律返回 null（不抛错、不画半张图）——没有 expand、AVAILABLE 不是数组、expand/union 给 null、没有躯干、躯干退化成线、并集宽度不是正数', () => {
+  assert.equal(typeof stubSvg(stubShapes()), 'string', '前提：合法的替身动物能画出来');
+  const cases = [
+    ['没有 expand', { ...stubShapes(), expand: undefined }],
+    ['expand 不是函数', { ...stubShapes(), expand: 'expand' }],
+    ['AVAILABLE 是字符串（子串匹配不算“在列表里”）', { ...stubShapes(), AVAILABLE: 'jelly,stub' }],
+    ['AVAILABLE 是带 includes 的对象', { ...stubShapes(), AVAILABLE: { includes: () => true } }],
+    ['AVAILABLE 里没有它', { ...stubShapes(), AVAILABLE: ['jelly'] }],
+    ['expand 给 null', { ...stubShapes(), expand: () => null }],
+    ['union 给 null', { ...stubShapes(), union: () => null }],
+    ['没有躯干部件', stubShapes({ bodyRole: 'limb' })],
+    ['躯干宽度为零（竖线）', stubShapes({ body: [5, -4, 5, 4] })],
+    ['躯干高度为零（横线）', stubShapes({ body: [-10, 3, 10, 3] })],
+    ['并集宽度为零', stubShapes({ union: { minX: 3, maxX: 3, minY: -4, maxY: 4 } })],
+    ['并集宽度为负', stubShapes({ union: { minX: 3, maxX: 2, minY: -4, maxY: 4 } })],
+    ['并集不是有限数', stubShapes({ union: { minX: NaN, maxX: 3, minY: -4, maxY: 4 } })],
+  ];
+  for (const [name, stub] of cases) assert.equal(stubSvg(stub), null, name);
+  // 边界的另一侧：很窄但为正的并集盒仍然画得出来（不会被误当成无效）
+  assert.equal(typeof stubSvg(stubShapes({ union: { minX: 0, maxX: 0.5, minY: -4, maxY: 4 } })), 'string', '宽度 0.5 的并集盒');
+});
+
+test('animalPreviewSvg：比 84 宽的动物缩到 84 宽并按并集盒居中（并集盒上下不对称也居中）；缩放 = 形状缩放 × 适配系数；不超宽的不缩', () => {
+  // 数据坐标 y 向下：躯干 x -20…360、y -10…10，一个肢体在躯干上方（y -70…-10）；scale 0.5 → 原生并集盒 x -10…180（宽 190，中心 85）、y -5…35（中心 15，不对称）
+  const wide = stubShapes({ scale: 0.5, body: [-20, -10, 360, 10], limbs: [[100, -70, 200, -10]], union: { minX: -10, maxX: 180, minY: -5, maxY: 35 } });
+  const { tx, ty, k } = placementOf(stubSvg(wide));
+  const fit = 84 / 190;
+  assert.ok(Math.abs(k - 0.5 * fit) < 0.0006, `缩放 ${k}，期望 ${0.5 * fit}（形状缩放 0.5 × 适配 84/190）`);
+  assert.ok(Math.abs(tx - (50 - fit * 85)) < 0.0006, `横向平移 ${tx}，期望 ${50 - fit * 85}`);
+  assert.ok(Math.abs(ty - (68 + fit * 15)) < 0.0006, `纵向平移 ${ty}，期望 ${68 + fit * 15}`);
+  // 几何上自洽：躯干在底板上宽 84、横向中心 50；躯干+肢体的纵向范围（数据 y -70…10）中心 68
+  const x = value => tx + k * value, y = value => ty + k * value;
+  assert.ok(Math.abs((x(360) - x(-20)) - 84) < 0.1, `躯干宽 ${x(360) - x(-20)} 应为 84`);
+  assert.ok(Math.abs((x(-20) + x(360)) / 2 - 50) < 0.1 && Math.abs((y(-70) + y(10)) / 2 - 68) < 0.1, '并集盒中心在底板中心 (50, 68)');
+  // 本来就窄的不放大：并集宽 40 → 适配系数 1，缩放就是形状缩放
+  const narrow = placementOf(stubSvg(stubShapes({ scale: 0.8, union: { minX: -25, maxX: 15, minY: -4, maxY: 4 } })));
+  assert.equal(narrow.k, 0.8, '不超宽的不缩');
+  assert.ok(Math.abs(narrow.tx - 55) < 0.0006, `横向平移 ${narrow.tx}（并集盒中心 -5 → 底板 50 − (−5) = 55）`);
+});
+
+test('limbTone：沿身体长轴取色——u 夹在 0…1、不是有限数取正中不外推、七彩在 0.5 前后分别混合 a→b 与 b→c；没有颜料返回 null', () => {
+  const { window } = load(view({}));
+  const api = window.JellyAppearanceSettings;
+  assert.equal(api.limbTone(null, 0.5), null); assert.equal(api.limbTone(undefined, 0.5), null);
+  const [a, b, c] = [swatchRgb[5], swatchRgb[7], swatchRgb[1]];
+  const at = u => api.limbTone(previewPaint(window, { colors: [5, 7, 1], look: 'rainbow' }), u);
+  near(at(0), a, 'u=0'); near(at(0.25), mix(a, b, 0.5), 'u=0.25'); near(at(0.45), mix(a, b, 0.9), 'u=0.45'); near(at(0.5), b, 'u=0.5');
+  near(at(0.55), mix(b, c, 0.1), 'u=0.55'); near(at(0.75), mix(b, c, 0.5), 'u=0.75'); near(at(1), c, 'u=1');
+  near(at(1.5), c, 'u>1 夹到 1'); near(at(100), c, 'u=100'); near(at(-0.5), a, 'u<0 夹到 0');
+  for (const bad of [NaN, Infinity, -Infinity, undefined, null, '0.2', {}]) near(at(bad), b, `u=${String(bad)} 取正中`);
+});
+
+test('示意图取色规则与原生 SpeciesPainter 一致（源码绊线）：Swift 里的取色、透明度与描边常数一改，这里就会失败，提醒同步示意图', () => {
+  const rules = [
+    [/case \.limb: paintLimb\(ctx, path, tone: p\.paint\.limbTone\(u: part\.u\)\)/, '肢体取 limbTone(u)'],
+    [/case \.body: paintBody\(ctx, path, bounds: g\.bodyBounds, paint: p\.paint\)/, '躯干渐变沿躯干部件的包围盒铺开'],
+    [/case \.belly: paintFlat\(ctx, path, color: p\.paint\.a\.color\(0\.92, lighten: 0\.72\)\)/, '腹部：主色提亮 0.72、透明度 0.92'],
+    [/case \.accent: paintFlat\(ctx, path, color: NSColor\.white\.withAlphaComponent\(0\.55\)\)/, '斑点：白 0.55'],
+    [/case \.shine: paintFlat\(ctx, path, color: NSColor\.white\.withAlphaComponent\(0\.40\)\)/, '高光：白 0.40'],
+    [/gradient\(\[tone\.color\(0\.92, darken: 0\.06\), tone\.color\(0\.95, lighten: 0\.34\)\], \[0, 1\]\)/, '肢体渐变：下深上浅'],
+    [/stroke\(ctx, path, color: tone\.color\(0\.9, darken: 0\.30\), width: 1\.0\)/, '肢体描边：深 0.30、宽 1.0'],
+    [/gradient\(\[paint\.a\.color\(0\.93, darken: 0\.05\), paint\.a\.color\(0\.95, lighten: 0\.22\), paint\.a\.color\(0\.97, lighten: 0\.50\)\], \[0, 0\.55, 1\]\)/, '纯色/双色躯干：自下而上三段'],
+    [/case \.blend:\s*gradient\(\[paint\.a\.color\(0\.95, lighten: 0\.22\), paint\.b\.color\(0\.95, lighten: 0\.22\)\], \[0, 1\]\)/, '渐变躯干：尾→头 主色 → 第二色'],
+    [/paint\.c\.color\(0\.95, lighten: 0\.22\)\], \[0, 0\.5, 1\]\)/, '七彩躯干：三色沿尾→头'],
+    [/NSColor\.white\.withAlphaComponent\(0\), NSColor\.white\.withAlphaComponent\(0\.32\)\], \[0, 1\]\)/, '渐变与七彩叠一层自下而上的亮度'],
+    [/stroke\(ctx, path, color: paint\.outlineTone\.color\(0\.9, darken: 0\.28\), width: 1\.1\)/, '躯干描边：outlineTone 深 0.28、宽 1.1'],
+    [/NSColor\(calibratedRed: 1\.0, green: 0\.55, blue: 0\.62, alpha: 0\.34\)/, '腮红颜色与透明度'],
+    [/NSRect\(x: ex - radius \* 0\.1 \* narrow, y: ey \+ radius \* 0\.1 \* open, width: radius \* 0\.6 \* narrow, height: radius \* 0\.6 \* open\)/, '眼睛高光点的位置与大小'],
+  ];
+  for (const [pattern, label] of rules) assert.match(painterSource, pattern, `原生画法变了：${label}。请同步 js/settings-jelly-appearance.js 的 animalPreviewSvg`);
+});
+
+// ---- 页面行为（替身 DOM） ----
+
+test('打开页面：下拉显示已存的物种；选动物发送 set(species)，成功后示意图换成动物（img 有地址、容器标记为 animal）、文字点名动物、状态说已应用到桌面', async () => {
+  let current = speciesView('jelly');
+  const { els, sent } = load(message => (message.action === 'jelly_appearance_set' ? (current = speciesView(message.settings.species, {}, {})) : current));
+  await tick();
+  assert.equal(els['set-jellySpecies'].value, 'jelly');
+  assert.equal(els['set-jellyPreview'].attrs['data-art'], 'jelly');
+  assert.equal(els['set-jellyAnimalPreview'].attrs.src, undefined, '水母状态下不加载图片');
+  els['set-jellySpecies'].listeners.change({ target: { value: 'hammer' } }); await tick();
+  assert.deepEqual(sent[1], { action: 'jelly_appearance_set', settings: { species: 'hammer' } });
+  assert.equal(els['set-jellySpecies'].value, 'hammer');
+  assert.equal(els['set-jellyPreview'].attrs['data-art'], 'animal'); assert.equal(els['set-jellyPreview'].attrs['data-species'], 'hammer');
+  assert.match(els['set-jellyAnimalPreview'].attrs.src, /^data:image\/svg\+xml;charset=utf-8,/);
+  assert.equal(els['set-jellyPreviewText'].textContent, '小锤头鲨，纯色（冰蓝）');
+  assert.equal(els['set-jellyPreview'].attrs['aria-label'], '当前形象：小锤头鲨，纯色（冰蓝）');
+  assert.equal(els['set-jellyAppearanceStatus'].textContent, '外观已应用到桌面：小锤头鲨。');
+  assert.equal(els['set-jellyPreview'].hidden, false);
+  // 切回水母：容器标记回 jelly，图片地址被清掉（不留着一张看不见的图）
+  els['set-jellySpecies'].listeners.change({ target: { value: 'jelly' } }); await tick();
+  assert.equal(els['set-jellyPreview'].attrs['data-art'], 'jelly'); assert.equal(els['set-jellyPreview'].attrs['data-species'], 'jelly');
+  assert.equal(els['set-jellyAnimalPreview'].attrs.src, undefined);
+  assert.equal(els['set-jellyPreviewText'].textContent, '纯色（冰蓝）', '水母的文字不带物种前缀');
+  assert.equal(els['set-jellyAppearanceStatus'].textContent, '外观已应用到桌面水母。');
+});
+
+test('选了动物后示意图随颜色与花纹更新：文字用“躯干/鳍与尾/尾端/头端/由尾到头”，不再说钟罩与触须', async () => {
+  const cases = [
+    [{ colors: [6, 0], look: 'duo' }, '小锤头鲨，双色（躯干紫，鳍与尾红）'],
+    [{ colors: [2, 4], look: 'blend' }, '小锤头鲨，渐变（尾端黄 → 头端薄荷）'],
+    [{ colors: [5, 7, 1], look: 'rainbow' }, '小锤头鲨，七彩（冰蓝、洋红、橙，由尾到头铺开）'],
+    [{ colors: [5], look: 'solid' }, '小锤头鲨，纯色（冰蓝）'],
+  ];
+  for (const [resolved, expected] of cases) {
+    const { els } = load(speciesView('hammer', { color: resolved.colors[0], ...resolved }));
+    await tick();
+    assert.equal(els['set-jellyPreviewText'].textContent, expected);
+    assert.doesNotMatch(els['set-jellyPreviewText'].textContent, /钟罩|触须|下缘|顶部/);
+  }
+});
+
+test('“每天换一只”开着：物种下拉仍可用（日期只换颜色与花纹），颜色与花纹锁住；请求进行中物种下拉也禁用', async () => {
+  const { els } = load(view({ species: 'hammer', daily: true }, { resolved: HAMMER_RESOLVED }));
+  await tick();
+  assert.equal(els['set-jellySpecies'].disabled, false, '物种与每天换无关');
+  assert.equal(els['set-jellyLook'].disabled, true);
+  assert.equal(els['set-jellyPreviewLabel'].textContent, '今天这只');
+  assert.equal(els['set-jellyPreview'].attrs['data-art'], 'animal', '今天这只也按所选动物画');
+  const held = load(null, { hold: true });
+  await tick();
+  held.pending[0].answer(speciesView('jelly')); await tick();
+  held.els['set-jellySpecies'].listeners.change({ target: { value: 'hammer' } }); await tick();
+  assert.equal(held.els['set-jellySpecies'].disabled, true, '保存中禁用，防连点');
+  assert.equal(held.els['set-jellyAppearanceStatus'].textContent, '正在保存…');
+  held.pending[1].answer(speciesView('hammer')); await tick();
+  assert.equal(held.els['set-jellySpecies'].disabled, false);
+});
+
+test('随机一只与每天换一只只换颜色和花纹：物种保持用户的选择', async () => {
+  let current = speciesView('hammer');
+  const { els, sent } = load(message => {
+    if (message.action === 'jelly_appearance_reroll') current = speciesView('hammer', { color: 3, colors: [3, 1], look: 'duo' });
+    return current;
+  });
+  await tick();
+  els['set-jellyReroll'].listeners.click(); await tick();
+  assert.deepEqual(sent.map(m => m.action), ['jelly_appearance_get', 'jelly_appearance_reroll']);
+  assert.equal(els['set-jellySpecies'].value, 'hammer');
+  assert.equal(els['set-jellyPreview'].attrs['data-art'], 'animal');
+  assert.match(els['set-jellyPreviewText'].textContent, /^小锤头鲨，双色/);
+});
+
+test('状态文字：选了动物时点名动物；组件没有画出它时如实说明现在显示的是水母，并给出更新办法，不说已应用', () => {
+  const { window } = load(view({}));
+  const d = window.JellyAppearanceSettings.describe;
+  assert.equal(d({ component: 'ok', connected: true, settings: { species: 'hammer' } }), '外观已应用到桌面：小锤头鲨。');
+  assert.equal(d({ component: 'ok', connected: true, settings: { species: 'jelly' } }), '外观已应用到桌面水母。');
+  assert.equal(d({ component: 'ok', connected: true }), '外观已应用到桌面水母。', '旧回执没有 settings：按水母');
+  const old = d({ component: 'unsupported', connected: true, settings: { species: 'hammer' } });
+  assert.match(old, /“小锤头鲨”/); assert.match(old, /更新桌面组件/); assert.match(old, /现在桌面上显示的是水母/);
+  assert.doesNotMatch(old, /已应用|已生效/);
+  assert.match(d({ component: 'unsupported', connected: true, settings: { species: 'jelly' } }), /不支持形象设置/, '水母的旧提示保持原样');
+  assert.doesNotMatch(d({ component: 'unsupported', connected: true, settings: { species: 'jelly' } }), /现在桌面上显示的是水母/);
+  for (const component of ['unknown', 'off']) assert.doesNotMatch(d({ component, connected: component === 'off', settings: { species: 'hammer' } }), /已应用/);
+  for (const odd of ['dragon', '', 5, null, undefined, '__proto__', 'toString']) assert.equal(d({ component: 'ok', connected: true, settings: { species: odd } }), '外观已应用到桌面水母。', `物种 ${String(odd)} 按水母`);
+});
+
+test('所选动物没有形状数据（后台认、页面画不出，如还没加入的蝠鲼，或形状脚本没加载）：示意图退回水母并如实说明，不抛错', async () => {
+  const manta = load(speciesView('manta'));
+  await tick();
+  assert.equal(manta.els['set-jellyPreview'].attrs['data-art'], 'jelly');
+  assert.equal(manta.els['set-jellyAnimalPreview'].attrs.src, undefined);
+  assert.equal(manta.els['set-jellyPreviewText'].textContent, '暂时显示水母（“蝠鲼”还没有加入），纯色（冰蓝）');
+  assert.equal(manta.els['set-jellyPreviewText'].textContent.includes('undefined'), false);
+  const bare = load(speciesView('hammer'), { noShapes: true });
+  await tick();
+  assert.equal(bare.els['set-jellyPreview'].attrs['data-art'], 'jelly');
+  assert.match(bare.els['set-jellyPreviewText'].textContent, /^暂时显示水母（“小锤头鲨”还没有加入）/);
+  assert.equal(bare.els['set-jellyPreview'].hidden, false, '预览本身仍显示');
+});
+
+test('后台给的物种不认识：当水母处理（不抛错、不写地址）；后台没带 species 的旧回执同样按水母', async () => {
+  for (const species of ['dragon', '', 7, null, '__proto__']) {
+    const { els } = load(view({ species }, { resolved: { color: 5, colors: [5], look: 'solid', species } }));
+    await tick();
+    assert.equal(els['set-jellyPreview'].attrs['data-art'], 'jelly', String(species));
+    assert.equal(els['set-jellyPreviewText'].textContent, '纯色（冰蓝）');
+  }
+  const { els } = load({ ok: true, settings: { color: 5, look: 'solid', daily: false }, resolved: { color: 5, colors: [5], look: 'solid' }, component: 'ok', connected: true });
+  await tick();
+  assert.equal(els['set-jellyPreview'].attrs['data-art'], 'jelly');
+  assert.equal(els['set-jellySpecies'].value, 'jelly');
+});
+
+test('旧页面结构（没有动物下拉或没有动物图片元素）：脚本照常工作，不抛错；没有图片元素时诚实地退回水母', async () => {
+  const noSelect = load(speciesView('hammer'), { dom: { noSpecies: true } });
+  await tick();
+  assert.match(noSelect.els['set-jellyAppearanceStatus'].textContent, /已应用/);
+  assert.equal(noSelect.els['set-jellyPreview'].attrs['data-art'], 'animal');
+  const noImg = load(speciesView('hammer'), { dom: { noAnimalImg: true } });
+  await tick();
+  assert.equal(noImg.els['set-jellyPreview'].attrs['data-art'], 'jelly', '没有 img 就画不了动物，不能让容器标记成 animal 而把水母隐藏掉');
+  assert.match(noImg.els['set-jellyPreviewText'].textContent, /^暂时显示水母/);
+  assert.equal(noImg.els['set-jellySpecies'].value, 'hammer');
+});
+
+test('动物脚本里没有 innerHTML、网络、直接写存储、eval；形状数据只经全局 JellySpeciesShapes 读取', () => {
+  const code = source.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.match(code, /root\.JellySpeciesShapes/);
+  assert.doesNotMatch(code, /innerHTML|outerHTML|insertAdjacentHTML|document\.write|createElementNS|\bfetch\(|XMLHttpRequest|chrome\.storage\.(local|sync)|eval\(|new Function|importScripts|\.src\s*=/);
 });

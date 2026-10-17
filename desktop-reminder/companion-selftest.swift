@@ -1,11 +1,12 @@
 import Foundation
 import CoreGraphics
 
-// 纯逻辑自测：countdown-model.swift + jelly-model.swift + jelly-swim.swift + jelly-palette.swift + jelly-appearance.swift + jelly-paint.swift + assistant-model.swift（无 AppKit）。
+// 纯逻辑自测：countdown-model.swift + jelly-model.swift + jelly-swim.swift + jelly-palette.swift + jelly-appearance.swift + jelly-species.swift + jelly-species-data.swift（生成物）+ jelly-paint.swift + assistant-model.swift（无 AppKit）。
 // 运行：node --test test/desktop-companion-logic.test.mjs，或手工（入口文件须叫 main.swift，所以先复制一份）
-//   cp desktop-reminder/companion-selftest.swift /tmp/main.swift && xcrun swiftc desktop-reminder/countdown-model.swift desktop-reminder/jelly-model.swift desktop-reminder/jelly-swim.swift desktop-reminder/jelly-palette.swift desktop-reminder/jelly-appearance.swift desktop-reminder/jelly-paint.swift desktop-reminder/assistant-model.swift /tmp/main.swift -o /tmp/companion-selftest && /tmp/companion-selftest
+//   cp desktop-reminder/companion-selftest.swift /tmp/main.swift && cd desktop-reminder && xcrun swiftc countdown-model.swift jelly-model.swift jelly-swim.swift jelly-palette.swift jelly-appearance.swift jelly-species.swift jelly-species-data.swift jelly-paint.swift assistant-model.swift /tmp/main.swift -o /tmp/companion-selftest && /tmp/companion-selftest
 // 环境变量 HOTKEY_CASES 指向一个 JSON 数组文件时，额外打印每一项的规范化结果（HOTKEY 行）与展示符号（GLYPH 行），供 Node 测试与 JS 实现逐条对照。
 // 环境变量 APPEARANCE_CASES 同理：打印每个外观负载解析后的结果（APPEARANCE 行）与各部位颜色（PAINT 行）。
+// 环境变量 PARSE_CASES 同理：打印每个路径串的解析结果（PARSE 行），供 Node 与 JS 的 parsePath 逐条对照；动物几何（SPEC* 行）每次都打印。
 var failures = 0
 func check(_ condition: @autoclosure () -> Bool, _ message: String) {
     if condition() { print("ok   \(message)") } else { failures += 1; print("FAIL \(message)") }
@@ -808,6 +809,444 @@ do {
         check(A.parse(["colors": [1], "look": "duo"] as [String: Any]).look == .solid && A.parse(["colors": [1], "look": "blend"] as [String: Any]).look == .solid, "双色与渐变各需要两个色位，只有一个时退回纯色")
         check(A.parse(["colors": [1, 4], "look": "blend"] as [String: Any]).look == .blend && A.parse(["colors": [1, 4, 6], "look": "duo"] as [String: Any]).look == .duo, "给足（或多给）色位时保持所选花纹")
     }
+    // ---- 物种（见 jelly-species.swift；Chrome 侧是 js/jelly-appearance.js 的 SPECIES，Node 测试逐项对照）----
+    do {
+        typealias S = JellySpecies
+        typealias A = JellyAppearance
+        check(S.allCases.map { $0.rawValue } == ["jelly", "hammer", "manta", "turtle", "whaleshark"], "物种列表与顺序")
+        print("SPECIES \(S.allCases.map { $0.rawValue }.joined(separator: ","))")
+        for species in S.allCases { print("SPECIESNAME \(species.rawValue) \(species.displayName)") }
+        check(S.default == .jelly && A.default.species == .jelly, "默认物种是水母")
+        check(S.jelly.displayName == "水母" && S.hammer.displayName == "小锤头鲨" && S.manta.displayName == "蝠鲼" && S.turtle.displayName == "海龟" && S.whaleshark.displayName == "鲸鲨", "物种中文名")
+        check(Set(S.allCases.map { $0.displayName }).count == S.allCases.count, "物种中文名互不相同")
+        check(S.jelly.desktopTitle == "桌面水母" && S.hammer.desktopTitle == "桌面小锤头鲨" && S.whaleshark.desktopTitle == "桌面鲸鲨", "面板标题：水母保持“桌面水母”，动物用物种名")
+        for species in S.allCases { check(S.parse(species.rawValue) == species, "解析 \(species.rawValue)") }
+        let badValues: [(String, Any?)] = [("nil", nil), ("空串", ""), ("首字母大写", "Hammer"), ("全大写", "HAMMER"), ("前导空格", " hammer"), ("尾随空格", "hammer "),
+                                           ("未知名", "shark"), ("整数", 3), ("NSNumber 1", NSNumber(value: 1)), ("布尔", true), ("NSNull", NSNull()), ("数组", ["hammer"]), ("字典", ["species": "hammer"])]
+        for (name, value) in badValues { check(S.parse(value) == .jelly, "非法物种（\(name)）回到水母，不崩溃") }
+        // 还画不出来的物种（没有几何数据）：生效的永远是水母——Chrome 据回执里的 species 判断，不会把没画出来的说成已应用
+        check(S.jelly.isAvailable && S.jelly.effective == .jelly, "水母永远可用")
+        for species in S.allCases { check(species.isAvailable ? species.effective == species : species.effective == .jelly, "\(species.rawValue)：可用则原样生效，不可用回退水母") }
+        // 外观里的物种
+        check(A.parse(["species": "hammer"] as [String: Any]).species == .hammer, "负载里的物种被解析")
+        check(A.parse(["species": "Hammer"] as [String: Any]).species == .jelly && A.parse(["species": 3] as [String: Any]).species == .jelly && A.parse(["species": true] as [String: Any]).species == .jelly, "负载里的非法物种回到水母")
+        check(A.parse(["species": NSNull()] as [String: Any]).species == .jelly && A.parse(["color": 2] as [String: Any]).species == .jelly, "负载里没有（或为 null 的）物种是水母")
+        let withSpecies = A.parse(["colors": [1, 4, 6], "look": "rainbow", "material": "wire", "size": "large", "season": "christmas", "species": "hammer"] as [String: Any])
+        check(withSpecies.colors == [1, 4, 6] && withSpecies.look == .rainbow && withSpecies.material == .wire && withSpecies.size == .large && withSpecies.season == "christmas" && withSpecies.species == .hammer, "物种与其他字段互不影响")
+        let badSpecies = A.parse(["colors": [1, 4], "look": "duo", "species": "x"] as [String: Any])
+        check(badSpecies.colors == [1, 4] && badSpecies.look == .duo && badSpecies.species == .jelly, "物种非法不影响别的字段")
+        check(A.default != A.parse(["species": "hammer"] as [String: Any]), "物种参与相等判断（换物种要触发重绘与重新取调参）")
+        check(A.parse(nil).species == .jelly && A.parse("x").species == .jelly, "没有或不是字典：水母")
+    }
+    // ---- 动物几何（见 jelly-species.swift 的解析与放置；形状数据由 gen-species.mjs 从 js/jelly-species-shapes.js 生成，Node 逐项对拍）----
+    do {
+        typealias P = SpeciesPath
+        typealias S = JellySpecies
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x, y: y) }
+        func f(_ value: CGFloat) -> String { String(format: "%.9f", Double(value)) }
+        // 路径解析：合规输入逐命令还原
+        let valid = P.parse("M 10 -7 L -2 -25 C -6 -22 -8 -14 -9 -6 Q 1.5 2.25 3 4 Z")
+        check(valid?.map { $0.kind } == [.move, .line, .cubic, .quad, .close], "路径：M/L/C/Q/Z 逐命令还原")
+        check(valid?[0].points == [pt(10, -7)] && valid?[1].points == [pt(-2, -25)] && valid?[2].points == [pt(-6, -22), pt(-8, -14), pt(-9, -6)], "路径：M、L、C 的点")
+        check(valid?[3].points == [pt(1.5, 2.25), pt(3, 4)] && valid?[4].points.isEmpty == true, "路径：Q 的点、Z 没有点")
+        check(P.parse("M 0 0 L 1 1 Z M 5 5 L 6 6 Z")?.count == 6, "路径：Z 之后可以再开子路径")
+        check(P.parse("M\t1\n2  L   3\r\n4")?.map { $0.points[0] } == [pt(1, 2), pt(3, 4)], "路径：空白只认空格、制表、换行（含 CRLF）")
+        check(P.parse("M -0 0.5")?.first?.points.first == pt(0, 0.5), "路径：负零可以解析")
+        // 不合规的输入一律 nil（与 JS 的 parsePath 同一份清单；PARSE_CASES 另外逐项对拍）
+        let tooLong = "M 0 0 " + String(repeating: "L 1 1 ", count: P.maxChars)
+        let tooMany = "M 0 0 " + String(repeating: "L 1 1 ", count: P.maxCommands + 1)
+        let badPaths: [(String, String)] = [
+            ("空串", ""), ("只有空白", "   \n"), ("不以 M 开头", "L 1 1"), ("Z 开头", "Z"),
+            ("小写命令", "m 0 0 l 1 1"), ("相对命令", "M 0 0 l 1 1"), ("H", "M 0 0 H 5"), ("V", "M 0 0 V 5"), ("S", "M 0 0 S 1 1 2 2"), ("T", "M 0 0 T 1 1"), ("A", "M 0 0 A 1 1 0 0 0 5 5"),
+            ("未知字母", "M 0 0 X 1 1"), ("命令与数字粘在一起", "M0 0 L 1 1"), ("数字粘着命令", "M 0 0L 1 1"),
+            ("缺数字（M）", "M 1"), ("缺数字（L）", "M 0 0 L 1"), ("缺数字（C）", "M 0 0 C 1 1 2 2 3"), ("缺数字（Q）", "M 0 0 Q 1 1 2"),
+            ("多余数字（隐式重复 L）", "M 0 0 L 1 1 2 2"), ("多余数字（M 后三个）", "M 0 0 5"), ("Z 后跟数字", "M 0 0 L 1 1 Z 5"), ("Z 之后不是 M", "M 0 0 L 1 1 Z L 2 2"),
+            ("逗号分隔", "M 0,0 L 1,1"), ("指数", "M 1e3 0"), ("前导加号", "M +1 0"), ("省略整数部分", "M .5 0"), ("省略小数部分", "M 5. 0"), ("十六进制", "M 0x10 0"),
+            ("无穷", "M Infinity 0"), ("NaN", "M NaN 0"), ("两个负号", "M --1 0"), ("数字里有字母", "M 1a 0"), ("全角数字", "M １ ０"), ("不间断空格", "M\u{00A0}0 0"),
+            ("过长", tooLong), ("命令过多", tooMany),
+        ]
+        for (name, d) in badPaths { check(P.parse(d) == nil, "路径：不合规（\(name)）→ nil") }
+        check(P.parse("M 0 0 " + String(repeating: "L 1 1 ", count: P.maxCommands - 1)) != nil, "路径：命令数刚好在上限内可以解析")
+        check(P.parse("M 0 0 " + String(repeating: "L 1 1 ", count: P.maxCommands)) == nil, "路径：命令数超出上限一条就拒绝")
+        let atLimit = "M 0 0 L 1." + String(repeating: "0", count: P.maxChars - 12) + " 1"
+        check(atLimit.utf16.count == P.maxChars && P.parse(atLimit) != nil, "路径：长度刚好等于上限可以解析")
+        let overLimit = "M 0 0 L 1." + String(repeating: "0", count: P.maxChars - 11) + " 1"
+        check(overLimit.utf16.count == P.maxChars + 1 && P.parse(overLimit) == nil, "路径：长度超出上限一个字符就拒绝")
+        // 取样点：端点原样，贝塞尔每段 16 个点（t = i/16）
+        let cubic = P.sample(P.parse("M 0 0 C 0 10 10 10 10 0")!)
+        check(cubic.count == 1 + P.samplesPerSegment && cubic.first == pt(0, 0) && cubic.last == pt(10, 0), "取样：三次贝塞尔 1 + 16 个点，首尾是端点")
+        check(abs(cubic[8].x - 5) < 1e-9 && abs(cubic[8].y - 7.5) < 1e-9, "取样：三次贝塞尔 t = 0.5 处是 (5, 7.5)")
+        let quad = P.sample(P.parse("M 0 0 Q 5 10 10 0")!)
+        check(quad.count == 1 + P.samplesPerSegment && abs(quad[8].x - 5) < 1e-9 && abs(quad[8].y - 5) < 1e-9, "取样：二次贝塞尔 t = 0.5 处是 (5, 5)")
+        check(P.sample(P.parse("M 1 2 L 3 4 Z")!) == [pt(1, 2), pt(3, 4)], "取样：直线端点原样，Z 不产生点")
+        // 二次贝塞尔之后的曲线以它的终点为起点：第 17 个点是后面三次曲线 t = 1/16 处，起点必须是 (20, 0)
+        let chain = P.sample(P.parse("M 0 0 Q 10 10 20 0 C 30 0 40 10 50 10")!)
+        let t1: CGFloat = 1.0 / 16, s1 = 1 - t1
+        let w0 = s1 * s1 * s1, w1 = 3 * s1 * s1 * t1, w2 = 3 * s1 * t1 * t1, w3 = t1 * t1 * t1
+        check(chain.count == 1 + 2 * P.samplesPerSegment && chain[P.samplesPerSegment] == pt(20, 0), "取样：二次贝塞尔的最后一个点是它的终点")
+        check(abs(chain[P.samplesPerSegment + 1].x - (w0 * 20 + w1 * 30 + w2 * 40 + w3 * 50)) < 1e-9 && abs(chain[P.samplesPerSegment + 1].y - (w2 * 10 + w3 * 10)) < 1e-9, "取样：二次贝塞尔之后的曲线以它的终点为起点（\(chain[P.samplesPerSegment + 1])）")
+        // 动物：数据表与几何
+        let animals = S.allCases.filter { $0 != .jelly }
+        let available = animals.filter { $0.isAvailable }
+        print("SPECAVAILABLE \(S.allCases.filter { $0.isAvailable }.map { $0.rawValue }.joined(separator: ","))")
+        check(Set(JellySpeciesData.sources.keys) == Set(available), "可用的动物 = 数据表里的动物（每一项的全部路径都能解析成几何）")
+        check(JellySpeciesGeometry.of(.jelly) == nil && S.jelly.isAvailable, "水母没有几何（过程式画法），但永远可用")
+        // 一个坏数据表项（路径解析不了、没有部件、非有限缩放）不产生几何，物种就不可用
+        let badSource = SpeciesSource(view: .top, scale: 1, parts: [SpeciesPartSource(role: .body, u: 0.5, path: "M 0 0 L 1", motion: nil)], eyeRadius: 1, eyes: [], blush: [])
+        check(SpeciesGeometry(species: .hammer, source: badSource) == nil, "几何：路径解析不了 → 没有几何")
+        let emptySource = SpeciesSource(view: .top, scale: 1, parts: [], eyeRadius: 1, eyes: [], blush: [])
+        check(SpeciesGeometry(species: .hammer, source: emptySource) == nil, "几何：没有部件 → 没有几何")
+        let zeroScale = SpeciesSource(view: .top, scale: 0, parts: [SpeciesPartSource(role: .body, u: 0.5, path: "M 0 0 L 1 1 Z", motion: nil)], eyeRadius: 1, eyes: [], blush: [])
+        check(SpeciesGeometry(species: .hammer, source: zeroScale) == nil, "几何：缩放为 0 → 没有几何")
+        let noBody = SpeciesSource(view: .top, scale: 1, parts: [SpeciesPartSource(role: .limb, u: 0.5, path: "M 0 0 L 1 1 Z", motion: nil)], eyeRadius: 1, eyes: [], blush: [])
+        check(SpeciesGeometry(species: .hammer, source: noBody) == nil, "几何：没有躯干部件 → 没有几何（渐变与光晕无处定位）")
+        let badEye = SpeciesSource(view: .top, scale: 1, parts: [SpeciesPartSource(role: .body, u: 0.5, path: "M 0 0 L 1 1 Z", motion: nil)], eyeRadius: 1, eyes: [[1]], blush: [])
+        check(SpeciesGeometry(species: .hammer, source: badEye) == nil, "几何：眼睛坐标不是两个数 → 没有几何")
+        // 转动部件：转轴随缩放换算并翻成 y 向上，角度取反；包围盒随相位按解析值变化（缩放 0.5、转轴 (2, 1)、90°，方块 20…24 × 0…4；
+        // 转轴有意不在方块的中线上，否则上下对称，转动公式里 y 分量的符号写反了也看不出来）
+        let spinSource = SpeciesSource(view: .top, scale: 0.5, parts: [SpeciesPartSource(role: .body, u: 1.5, path: "M 20 0 L 24 0 L 24 4 L 20 4 Z", motion: SpeciesMotionSource(pivotX: 2, pivotY: 1, degrees: 90))], eyeRadius: 1, eyes: [], blush: [])
+        if let spin = SpeciesGeometry(species: .hammer, source: spinSource), let motion = spin.parts[0].motion {
+            func sameBox(_ box: CGRect, _ x0: CGFloat, _ x1: CGFloat, _ y0: CGFloat, _ y1: CGFloat) -> Bool {
+                abs(box.minX - x0) < 1e-9 && abs(box.maxX - x1) < 1e-9 && abs(box.minY - y0) < 1e-9 && abs(box.maxY - y1) < 1e-9
+            }
+            check(abs(motion.pivot.x - 1) < 1e-12 && abs(motion.pivot.y + 0.5) < 1e-12 && abs(motion.maxAngle + .pi / 2) < 1e-12, "转动：转轴按缩放换算并翻成 y 向上（(1, −0.5)），角度取反（−90°）")
+            check(spin.parts[0].u == 1, "转动：取色位置超过 1 时夹到 1")
+            check(sameBox(spin.bounds(wave: 0), 10, 12, -2, 0), "转动：wave = 0 时方块不动（x 10…12、y −2…0）")
+            check(sameBox(spin.bounds(wave: 1), -0.5, 1.5, -11.5, -9.5), "转动：wave = 1 时绕转轴顺时针转 90°（x −0.5…1.5、y −11.5…−9.5）")
+            check(sameBox(spin.bounds(wave: -1), 0.5, 2.5, 8.5, 10.5), "转动：wave = −1 时逆时针转 90°（x 0.5…2.5、y 8.5…10.5）")
+            let c = CGFloat(0.5).squareRoot()
+            check(sameBox(spin.bounds(wave: 0.5), 1 + 7.5 * c, 1 + 11.5 * c, -0.5 - 12.5 * c, -0.5 - 8.5 * c), "转动：wave = 0.5 时转 45°（包围盒按解析值）")
+            check(sameBox(spin.bounds(wave: -0.5), 1 + 8.5 * c, 1 + 12.5 * c, -0.5 + 7.5 * c, -0.5 + 11.5 * c), "转动：wave = −0.5 时反向转 45°（包围盒按解析值）")
+            check(sameBox(spin.union, -0.5, 12, -11.5, 10.5), "转动：并集是各相位包围盒的并（x −0.5…12、y −11.5…10.5）")
+            check(sameBox(spin.bodyBounds, 10, 12, -2, 0), "转动：躯干包围盒取 wave = 0（部件有转动时也不随相位变）")
+        } else { check(false, "转动：合成数据应能生成几何") }
+        // 绘制路径：命令逐条还原（M/L/C/Q/Z），转动部件按相位绕转轴摆动，wave 越界夹住、非有限当作 0
+        if let spin = SpeciesGeometry(species: .hammer, source: spinSource), let part = spin.parts.first, let motion = part.motion {
+            func corners(_ path: CGPath) -> [CGPoint] {
+                var points: [CGPoint] = []
+                path.applyWithBlock { element in
+                    let e = element.pointee
+                    if e.type == .moveToPoint || e.type == .addLineToPoint { points.append(e.points[0]) }
+                }
+                return points
+            }
+            let rest = corners(part.path(wave: 0))
+            check(rest == [pt(10, 0), pt(12, 0), pt(12, -2), pt(10, -2)], "路径：wave = 0 时就是换算后的四个角（\(rest)）")
+            let turned = corners(part.path(wave: 1))
+            // 绕 (1, −0.5) 转 −90°：(x, y) → (1 + (y + 0.5), −0.5 − (x − 1))
+            let expected = [pt(1.5, -9.5), pt(1.5, -11.5), pt(-0.5, -11.5), pt(-0.5, -9.5)]
+            check(zip(turned, expected).allSatisfy { abs($0.x - $1.x) < 1e-9 && abs($0.y - $1.y) < 1e-9 } && turned.count == 4, "路径：wave = 1 时四个角绕转轴转 −90°（\(turned)）")
+            check(part.path(wave: 3).boundingBoxOfPath == part.path(wave: 1).boundingBoxOfPath && part.path(wave: -7).boundingBoxOfPath == part.path(wave: -1).boundingBoxOfPath, "路径：wave 越界夹到 ±1")
+            check(part.path(wave: .nan).boundingBoxOfPath == part.path(wave: 0).boundingBoxOfPath && part.path(wave: .infinity).boundingBoxOfPath == part.path(wave: 0).boundingBoxOfPath, "路径：wave 非有限当作 0")
+            let t = motion.transform(wave: 1)
+            let moved = pt(10, 0).applying(t), pivotMoved = motion.pivot.applying(t)
+            check(abs(moved.x - 1.5) < 1e-9 && abs(moved.y + 9.5) < 1e-9 && abs(pivotMoved.x - 1) < 1e-9 && abs(pivotMoved.y + 0.5) < 1e-9, "转动变换：转轴不动，其他点绕它转（\(moved)）")
+        } else { check(false, "路径：合成数据应能生成几何") }
+        // 取色位置夹到 0…1
+        let clampSource = SpeciesSource(view: .side, scale: 1, parts: [SpeciesPartSource(role: .body, u: 0.4, path: "M 0 0 L 4 0 L 4 4 Z", motion: nil), SpeciesPartSource(role: .limb, u: -3, path: "M 0 0 L 1 1 Z", motion: nil), SpeciesPartSource(role: .limb, u: 9, path: "M 0 0 L 1 1 Z", motion: nil)], eyeRadius: 1, eyes: [], blush: [])
+        check(SpeciesGeometry(species: .hammer, source: clampSource)?.parts.map { $0.u } == [0.4, 0, 1], "几何：取色位置夹到 0…1（−3 → 0、9 → 1）")
+        for species in available {
+            let id = species.rawValue
+            guard let g = JellySpeciesGeometry.of(species), let source = JellySpeciesData.sources[species] else { check(false, "\(id)：有几何"); continue }
+            check(g.parts.map { $0.role } == source.parts.map { $0.role } && g.parts.count == source.parts.count, "\(id)：部件数与角色顺序和数据表一致")
+            check(g.parts.contains { $0.role == .body } && g.view == source.view && g.scale == CGFloat(source.scale), "\(id)：有躯干、视角与缩放照数据表")
+            check(g.parts.allSatisfy { $0.u >= 0 && $0.u <= 1 }, "\(id)：取色位置都在 0…1")
+            // y 翻成向上、按缩放换算：第一个部件的起点
+            if let first = SpeciesPath.parse(source.parts[0].path)?.first?.points.first, let got = g.parts[0].commands.first?.points.first {
+                check(abs(got.x - first.x * g.scale) < 1e-9 && abs(got.y + first.y * g.scale) < 1e-9, "\(id)：缩放后 y 翻成向上")
+            } else { check(false, "\(id)：第一个部件的起点") }
+            check(g.union.width >= 72 && g.union.width <= 94 && g.union.height > 20, "\(id)：整体长度 \(f(g.union.width)) 在水母量级内（72–94 pt）")
+            check(g.bodyBounds.minX >= g.union.minX - 1e-9 && g.bodyBounds.maxX <= g.union.maxX + 1e-9 && g.bodyBounds.minY >= g.union.minY - 1e-9 && g.bodyBounds.maxY <= g.union.maxY + 1e-9, "\(id)：躯干包围盒在并集里")
+            var contained = true
+            for wave in SpeciesGeometry.waves { let b = g.bounds(wave: wave); if !(b.minX >= g.union.minX - 1e-9 && b.maxX <= g.union.maxX + 1e-9 && b.minY >= g.union.minY - 1e-9 && b.maxY <= g.union.maxY + 1e-9) { contained = false } }
+            check(contained, "\(id)：并集包含每个相位的包围盒")
+            // 绘制用的路径（CGPath）与放置用的包围盒是同一份几何：各相位下 CGPath 的紧包围盒与取样得到的包围盒相差不到 0.1 pt，且不会越出并集
+            var pathBox = true, pathInside = true
+            for wave in SpeciesGeometry.waves {
+                var drawn = CGRect.null
+                for part in g.parts { drawn = drawn.union(part.path(wave: wave).boundingBoxOfPath) }
+                let b = g.bounds(wave: wave)
+                if abs(drawn.minX - b.minX) > 0.1 || abs(drawn.maxX - b.maxX) > 0.1 || abs(drawn.minY - b.minY) > 0.1 || abs(drawn.maxY - b.maxY) > 0.1 { pathBox = false }
+                if drawn.minX < g.union.minX - 0.1 || drawn.maxX > g.union.maxX + 0.1 || drawn.minY < g.union.minY - 0.1 || drawn.maxY > g.union.maxY + 0.1 { pathInside = false }
+            }
+            check(pathBox, "\(id)：绘制路径各相位的包围盒与几何包围盒一致（相差 < 0.1 pt）")
+            check(pathInside, "\(id)：绘制路径不越出并集（放置与余量按并集算）")
+            check(g.eyes.allSatisfy { $0.x >= g.union.minX && $0.x <= g.union.maxX && $0.y >= g.union.minY && $0.y <= g.union.maxY }, "\(id)：眼睛在并集里")
+            // 与 JS 对拍用的行：各相位包围盒、并集、各部件的角色/取色位置/转动、眼睛与腮红
+            for wave in SpeciesGeometry.waves { let b = g.bounds(wave: wave); print("SPEC \(id) \(wave) \(f(b.minX)) \(f(b.maxX)) \(f(b.minY)) \(f(b.maxY))") }
+            print("SPECUNION \(id) \(f(g.union.minX)) \(f(g.union.maxX)) \(f(g.union.minY)) \(f(g.union.maxY))")
+            print("SPECVIEW \(id) \(g.view.rawValue) \(f(g.scale))")
+            for (index, part) in g.parts.enumerated() {
+                let motion = part.motion.map { "\(f($0.pivot.x)),\(f($0.pivot.y)),\(f($0.maxAngle))" } ?? "-"
+                print("SPECPART \(id) \(index) \(part.role.rawValue) \(f(part.u)) \(motion)")
+            }
+            print("SPECEYES \(id) \(f(g.eyeRadius)) \(g.eyes.map { "\(f($0.x)),\(f($0.y))" }.joined(separator: " "))")
+            print("SPECBLUSH \(id) \(g.blush.map { "\(f($0.center.x)),\(f($0.center.y)),\(f($0.rx)),\(f($0.ry))" }.joined(separator: " "))")
+            // 放置：窗口 170×150（JellyCompanion.size，Node 测试核对源码里的这两个数），并集顶端离底边 91 pt，水平居中，任何姿态不越出
+            let width: CGFloat = 170, height: CGFloat = 150, cx = width / 2
+            func extent(_ facing: CGFloat, _ pitch: CGFloat) -> CGRect { g.union.applying(SpeciesPlacement.transform(g, centerX: cx, facing: facing, pitch: pitch)) }
+            let right = extent(1, 0), left = extent(-1, 0)
+            check(abs(right.maxY - 91) < 1e-6 && abs(right.midX - cx) < 1e-6, "\(id)：朝右平放时并集顶端离窗口底边 91 pt、水平居中")
+            check(abs(left.maxY - 91) < 1e-6 && abs(left.midX - cx) < 1e-6, "\(id)：朝左平放时同样")
+            check(abs(SpeciesPlacement.center(g, centerX: cx).y - (91 - g.union.height / 2)) < 1e-9 && SpeciesPlacement.topAboveWindowBottom == 91, "\(id)：放置中心在 91 − 高/2")
+            var mirrored = true
+            for pitch in [CGFloat(-0.35), 0, 0.2, 0.35] {
+                let a = extent(1, pitch), b = extent(-1, pitch)
+                if !(abs(b.minX - (2 * cx - a.maxX)) < 1e-6 && abs(b.maxX - (2 * cx - a.minX)) < 1e-6 && abs(b.minY - a.minY) < 1e-6 && abs(b.maxY - a.maxY) < 1e-6) { mirrored = false }
+            }
+            check(mirrored, "\(id)：朝左是朝右关于窗口中线的镜像（含俯仰，鼻子朝上的符号不随朝向变）")
+            var margin = CGFloat.infinity
+            for facing in [CGFloat(1), 0.5, 0, -0.5, -1] {
+                for pitch in [CGFloat(-0.35), -0.1, 0, 0.1, 0.35] {
+                    let e = extent(facing, pitch)
+                    margin = min(margin, e.minX, width - e.maxX, e.minY, height - e.maxY)
+                }
+            }
+            check(margin >= 8, "\(id)：朝向（含转身途中）与俯仰 ±0.35 弧度的所有组合里，并集离窗口四边最少 \(f(margin)) pt（≥ 8）")
+            // 俯仰的方向：鼻子（朝向一侧的最前端）在 pitch > 0 时升高
+            let noseUp = SpeciesPlacement.transform(g, centerX: cx, facing: 1, pitch: 0.3)
+            let noseDown = SpeciesPlacement.transform(g, centerX: cx, facing: 1, pitch: -0.3)
+            let nose = CGPoint(x: g.union.maxX, y: g.union.midY)
+            check(nose.applying(noseUp).y > nose.applying(noseDown).y, "\(id)：pitch > 0 抬头（朝右时前端升高）")
+            let noseLeftUp = SpeciesPlacement.transform(g, centerX: cx, facing: -1, pitch: 0.3)
+            let noseLeftDown = SpeciesPlacement.transform(g, centerX: cx, facing: -1, pitch: -0.3)
+            check(nose.applying(noseLeftUp).y > nose.applying(noseLeftDown).y, "\(id)：朝左时 pitch > 0 同样抬头")
+        }
+    }
+    // ---- 动物的姿态（朝向、俯仰、划水包络，见 jelly-species.swift 的 SpeciesPose）与逐物种游动调参 ----
+    do {
+        typealias Pose = SpeciesPose
+        typealias S = JellySpecies
+        let nan: CGFloat = .nan, inf: CGFloat = .infinity
+        func near(_ a: CGFloat, _ b: CGFloat, _ eps: CGFloat = 1e-9) -> Bool { abs(a - b) <= eps }
+        // 俯仰目标：符号只由纵向速度决定，横向速度下限 30，夹在 ±0.35，非有限速度当作 0
+        check(Pose.targetPitch(vx: 0, vy: 0) == 0, "俯仰目标：静止是 0")
+        check(near(Pose.targetPitch(vx: 100, vy: 20), atan2(20, 100)) && Pose.targetPitch(vx: 100, vy: 20) > 0, "俯仰目标：向上游时鼻子朝上，值是 atan2(vy, |vx|)")
+        check(near(Pose.targetPitch(vx: -100, vy: 20), atan2(20, 100)), "俯仰目标：符号只由纵向速度决定，朝左游时数值相同")
+        check(near(Pose.targetPitch(vx: 0, vy: 10), atan2(10, 30)) && near(Pose.targetPitch(vx: 0, vy: -10), -atan2(10, 30)), "俯仰目标：横向速度小于 30 时分母取 30")
+        check(near(Pose.targetPitch(vx: 29.9, vy: 10), atan2(10, 30)) && near(Pose.targetPitch(vx: 30.1, vy: 10), atan2(10, 30.1)), "俯仰目标：下限的交界在 30")
+        check(Pose.targetPitch(vx: 5, vy: 1000) == 0.35 && Pose.targetPitch(vx: 5, vy: -1000) == -0.35, "俯仰目标：夹在 ±0.35")
+        check(Pose.targetPitch(vx: nan, vy: 5) == 0 && Pose.targetPitch(vx: 5, vy: nan) == 0 && Pose.targetPitch(vx: inf, vy: 5) == 0 && Pose.targetPitch(vx: 5, vy: -inf) == 0, "俯仰目标：非有限速度当作 0")
+        // 朝向迟滞：横向速度要超过 12 才改变目标
+        check(Pose.heading(after: 1, vx: 12) == 1 && Pose.heading(after: 1, vx: 12.0001) == 1 && Pose.heading(after: 1, vx: -12) == 1 && Pose.heading(after: 1, vx: -12.0001) == -1, "朝向：朝右时，向左的速度超过 12 才转")
+        check(Pose.heading(after: -1, vx: -12) == -1 && Pose.heading(after: -1, vx: 12) == -1 && Pose.heading(after: -1, vx: 12.0001) == 1, "朝向：朝左时，向右的速度超过 12 才转")
+        check(Pose.heading(after: -1, vx: 0) == -1 && Pose.heading(after: 1, vx: 0) == 1 && Pose.heading(after: -1, vx: nan) == -1 && Pose.heading(after: 1, vx: nan) == 1, "朝向：停下或速度非法时保持原朝向")
+        check(Pose.heading(after: -1, vx: inf) == -1 && Pose.heading(after: 1, vx: -inf) == 1, "朝向：无穷大的速度不是有效数据，保持原朝向")
+        // 转身：0.3 秒线性，单调、不过冲，途中可以反悔
+        do {
+            var pose = Pose()
+            let dt: CGFloat = 1.0 / 60
+            var previous = pose.facing, monotone = true, steps = 0
+            while pose.facing > -1 && steps < 200 { pose.step(dt: dt, vx: -50, vy: 0, stroking: true, reduceMotion: false); if pose.facing > previous { monotone = false }; previous = pose.facing; steps += 1; if steps == 9 { check(near(pose.facing, 0, 1e-9), "转身：0.15 秒时正侧着（水平缩放 0）") } }
+            check(pose.facing == -1 && pose.heading == -1 && monotone && steps == 18, "转身：18 帧（0.3 秒）转完，单调、不过冲（实际 \(steps) 帧）")
+            pose.step(dt: dt, vx: -50, vy: 0, stroking: true, reduceMotion: false)
+            check(pose.facing == -1, "转身完成后保持朝向")
+            var back = Pose()
+            for _ in 0..<5 { back.step(dt: dt, vx: -50, vy: 0, stroking: true, reduceMotion: false) }
+            let midway = back.facing
+            back.step(dt: dt, vx: 50, vy: 0, stroking: true, reduceMotion: false)
+            check(back.heading == 1 && near(back.facing, midway + 2 * dt / 0.3), "转身途中反悔：从当前位置折回，不跳变")
+            var calm = Pose()
+            for _ in 0..<5 { calm.step(dt: dt, vx: -10, vy: 0, stroking: true, reduceMotion: false) }
+            check(calm.facing == 1 && calm.heading == 1, "速度在迟滞带里不会开始转身")
+            var still = Pose()
+            still.step(dt: 1.0 / 30, vx: -50, vy: 20, stroking: true, reduceMotion: true)
+            check(still.facing == -1 && still.pitch == 0 && still.envelope == 0, "减少动态效果：立即朝向目标、不俯仰、不划水")
+            var restful = Pose(facing: 1, heading: 1, pitch: 0.3, envelope: 0.8)
+            restful.step(dt: 1.0 / 30, vx: 0, vy: 0, stroking: true, reduceMotion: true)
+            check(restful.pitch == 0 && restful.envelope == 0 && restful.settled, "减少动态效果：已有的俯仰与包络也立刻归零，姿态静止")
+        }
+        // 俯仰：低通、单调逼近目标、不越界
+        do {
+            var pose = Pose()
+            var previous: CGFloat = 0, monotone = true, bounded = true
+            for _ in 0..<60 { pose.step(dt: 1.0 / 30, vx: 0, vy: 20, stroking: true, reduceMotion: false); if pose.pitch < previous { monotone = false }; if pose.pitch > 0.35 { bounded = false }; previous = pose.pitch }
+            check(monotone && bounded && pose.pitch > 0.349, "俯仰：向上游时单调升向 0.35，不过冲（实际 \(String(format: "%.4f", Double(pose.pitch)))）")
+            pose.step(dt: 1.0 / 30, vx: 0, vy: -20, stroking: true, reduceMotion: false)
+            check(near(pose.pitch, 0.35 - 0.7 * (8.0 / 30), 1e-6), "俯仰：目标反向时只走一小步（低通 8/秒 × 1/30 秒 = 26.7%），不跳变（实际 \(String(format: "%.4f", Double(pose.pitch)))）")
+            for _ in 0..<90 { pose.step(dt: 1.0 / 30, vx: 0, vy: -20, stroking: true, reduceMotion: false) }
+            check(pose.pitch < -0.349 && pose.pitch >= -0.35, "俯仰：向下游时转为低头（实际 \(String(format: "%.4f", Double(pose.pitch)))）")
+        }
+        // 划水包络：游动时升到 1，停下后 1 秒内落到 0.01 以下；落回之前 settled 为 false
+        do {
+            var pose = Pose()
+            check(pose.settled, "初始姿态是静止的")
+            for _ in 0..<30 { pose.step(dt: 1.0 / 30, vx: 40, vy: 0, stroking: true, reduceMotion: false) }
+            check(pose.envelope > 0.99 && !pose.settled, "游动 1 秒后包络接近 1，姿态不静止")
+            var frames = 0
+            while !pose.settled && frames < 600 { pose.step(dt: 1.0 / 30, vx: 0, vy: 0, stroking: false, reduceMotion: false); frames += 1 }
+            check(pose.settled && frames > 10 && frames <= 60 && pose.envelope < 0.01 && abs(pose.pitch) < 0.003, "停下后包络与俯仰在 2 秒内落回，之后不再需要动画帧（实际 \(frames) 帧）")
+            var flipping = Pose(facing: 1, heading: 1, pitch: 0, envelope: 0)
+            flipping.step(dt: 1.0 / 30, vx: -50, vy: 0, stroking: false, reduceMotion: false)
+            check(!flipping.settled, "转身途中不算静止")
+        }
+        // 划水相位：收缩量 0.5 为中位，包络是幅度
+        do {
+            var pose = Pose(); pose.envelope = 1
+            check(pose.wave(contraction: 0) == -1 && pose.wave(contraction: 0.5) == 0 && pose.wave(contraction: 1) == 1 && near(pose.wave(contraction: 0.25), -0.5) && near(pose.wave(contraction: 0.75), 0.5), "划水：收缩量 0 / 0.25 / 0.5 / 0.75 / 1 对应 −1 / −0.5 / 0 / 0.5 / 1")
+            check(pose.wave(contraction: 3) == 1 && pose.wave(contraction: -2) == -1 && pose.wave(contraction: nan) == 0 && pose.wave(contraction: inf) == 0, "划水：越界夹住，非有限值为 0")
+            pose.envelope = 0.5
+            check(near(pose.wave(contraction: 1), 0.5) && near(pose.wave(contraction: 0), -0.5), "划水：幅度乘包络")
+            pose.envelope = 0
+            check(pose.wave(contraction: 1) == 0 && pose.wave(contraction: 0) == 0, "划水：包络为 0 时尾鳍回到中位")
+            check(pose.wave(contraction: 0).sign == .plus && pose.wave(contraction: 0.25).sign == .plus && pose.wave(contraction: -2).sign == .plus, "划水：包络为 0 时是 +0（不是 −0，诊断读数不显示 “-0.000”）")
+        }
+        // 无效的步长不改变姿态（包括不让朝向目标改变：第二个起点朝右，−50 的横向速度本会让它开始转身）
+        do {
+            for start in [Pose(facing: 0.3, heading: -1, pitch: 0.1, envelope: 0.4), Pose(facing: 1, heading: 1, pitch: 0.1, envelope: 0.4)] {
+                for bad in [CGFloat(0), -1, nan, inf] {
+                    var pose = start
+                    pose.step(dt: bad, vx: -50, vy: 20, stroking: true, reduceMotion: false)
+                    check(pose == start, "步长 \(bad) 不改变姿态（朝向目标 \(start.heading)）")
+                }
+            }
+        }
+        // 单步的数值：包络按 5×dt、俯仰按 8×dt 走向各自的目标（dt = 1/30 一步）；步长大到 rate×dt ≥ 1 时一步到位而不过冲
+        do {
+            var rising = Pose()
+            rising.step(dt: 1.0 / 30, vx: 0, vy: 0, stroking: true, reduceMotion: false)
+            check(near(rising.envelope, 5.0 / 30, 1e-12), "包络：游动时每步向 1 走 5×dt（1/30 秒一步是 1/6），实际 \(rising.envelope)")
+            var falling = Pose(facing: 1, heading: 1, pitch: 0, envelope: 1)
+            falling.step(dt: 1.0 / 30, vx: 0, vy: 0, stroking: false, reduceMotion: false)
+            check(near(falling.envelope, 1 - 5.0 / 30, 1e-12), "包络：停下时每步向 0 落 5×dt，实际 \(falling.envelope)")
+            var tilting = Pose()
+            tilting.step(dt: 1.0 / 30, vx: 0, vy: 20, stroking: true, reduceMotion: false)
+            check(near(tilting.pitch, Pose.targetPitch(vx: 0, vy: 20) * 8.0 / 30, 1e-12), "俯仰：每步向目标走 8×dt，实际 \(tilting.pitch)")
+            for dt: CGFloat in [0.2, 0.5, 1, 10] {
+                var big = Pose()
+                big.step(dt: dt, vx: 0, vy: 20, stroking: true, reduceMotion: false)
+                check(big.pitch == Pose.pitchLimit && big.envelope == 1, "大步长 \(dt) 秒：俯仰与包络一步到位，不过冲（俯仰 \(big.pitch)、包络 \(big.envelope)）")
+                big.step(dt: dt, vx: 0, vy: -20, stroking: false, reduceMotion: false)
+                check(big.pitch == -Pose.pitchLimit && big.envelope == 0, "大步长 \(dt) 秒：反向也一步到位，不过冲（俯仰 \(big.pitch)、包络 \(big.envelope)）")
+            }
+        }
+        // 静止判据的边界：包络、俯仰恰好等于阈值都还不算静止（严格小于），略小于才算
+        do {
+            let rest = { (pitch: CGFloat, envelope: CGFloat) in Pose(facing: 1, heading: 1, pitch: pitch, envelope: envelope) }
+            check(!rest(0, Pose.settledEnvelope).settled && rest(0, Pose.settledEnvelope * 0.99).settled, "包络恰好等于阈值：不算静止；略小于：静止")
+            check(!rest(Pose.settledPitch, 0).settled && !rest(-Pose.settledPitch, 0).settled, "俯仰恰好等于阈值（正负）：不算静止")
+            check(rest(Pose.settledPitch * 0.99, 0).settled && rest(-Pose.settledPitch * 0.99, 0).settled, "俯仰略小于阈值（正负）：静止")
+            check(!rest(0.005, 0).settled && !rest(-0.005, 0).settled, "俯仰 0.005 仍在动（阈值 0.003，约 0.17°）")
+            check(!Pose(facing: 0.99, heading: 1, pitch: 0, envelope: 0).settled && !Pose(facing: -1, heading: 1, pitch: 0, envelope: 0).settled, "朝向没转完不算静止")
+        }
+        // 与游动物理联动：60 秒里朝向只在横向速度超过 12 时才变，俯仰不越界，包络起来
+        do {
+            var rng = SeededRandom(state: 42)
+            var swim = JellySwim(); swim.setBounds(lo: 100, hi: 1500); swim.x = 800
+            swim.tuning = JellyTuning.forStage(.soon, species: .hammer); swim.wantsRest = false; swim.mode = .swim
+            var pose = Pose(), flips = 0, wrongFlip = false, maxPitch: CGFloat = 0
+            for _ in 0..<(30 * 60) {
+                swim.step(dt: 1.0 / 30, random: { rng.next() })
+                let before = pose.heading
+                pose.step(dt: 1.0 / 30, vx: swim.vx, vy: swim.vy, stroking: swim.mode == .swim && !swim.wantsRest, reduceMotion: false)
+                if pose.heading != before { flips += 1; if abs(swim.vx) <= 12 { wrongFlip = true } }
+                maxPitch = max(maxPitch, abs(pose.pitch))
+            }
+            check(!wrongFlip, "联动：朝向只在横向速度超过 12 时才改变")
+            check(flips >= 1 && flips <= 20, "联动：60 秒里会掉头，但不是来回抖（\(flips) 次）")
+            check(maxPitch <= 0.35 && maxPitch > 0.05, "联动：俯仰在 ±0.35 内且确有起伏（最大 \(String(format: "%.3f", Double(maxPitch)))）")
+            check(pose.envelope > 0.99, "联动：一直在游，包络保持满")
+        }
+        // 游动调参：水母不变；动物乘系数；不可用的物种回退水母
+        let animals = S.allCases.filter { $0 != .jelly }
+        for stage in [CountdownStage.calm, .soon, .imminent, .final, .due] {
+            let base = JellyTuning.forStage(stage)
+            check(base.sink == JellySwim.sink && base.dragX == JellySwim.dragX && base.dragY == JellySwim.dragY, "\(stage)：水母调参的下沉与阻力就是 JellySwim 的常量（与加入这三项之前相同）")
+            check(JellyTuning.forStage(stage, species: .jelly) == base, "\(stage)：水母的物种调参与原来完全相同")
+            for species in animals {
+                let tuning = JellyTuning.forStage(stage, species: species)
+                if !species.isAvailable { check(tuning == base, "\(stage)/\(species.rawValue)：不可用（回退水母）的调参与水母相同"); continue }
+                let positive = tuning.period > 0 && tuning.thrustX >= 0 && tuning.thrustY > 0 && tuning.sink > 0 && tuning.dragX > 0 && tuning.dragY > 0
+                check(positive && tuning.hover == base.hover, "\(stage)/\(species.rawValue)：系数有限且为正，愿意停留的高度不乘系数")
+            }
+        }
+        check(S.jelly.swimProfile == SwimProfile() && S.hammer.swimProfile != SwimProfile(), "水母的系数全是 1，小锤头鲨有自己的系数")
+        // 系数怎么乘：用合成系数逐项核对“六项各乘各的、愿意停留的高度不乘”（真实动物只有几项不是 1，光靠它们分不出某一项被漏乘）
+        do {
+            let synthetic = SwimProfile(period: 1.1, thrustX: 1.2, thrustY: 1.3, sink: 1.4, dragX: 1.5, dragY: 1.6)
+            for stage in [CountdownStage.calm, .soon, .imminent, .final, .due] {
+                let base = JellyTuning.forStage(stage), t = JellyTuning.forStage(stage, profile: synthetic)
+                check(t.period == base.period * 1.1 && t.thrustX == base.thrustX * 1.2 && t.thrustY == base.thrustY * 1.3, "\(stage)：周期与两个冲量各乘各的系数")
+                check(t.sink == base.sink * 1.4 && t.dragX == base.dragX * 1.5 && t.dragY == base.dragY * 1.6, "\(stage)：下沉与两个阻力各乘各的系数")
+                check(t.hover == base.hover, "\(stage)：愿意停留的高度不乘系数")
+                check(JellyTuning.forStage(stage, profile: SwimProfile()) == base, "\(stage)：系数全是 1 时与原调参完全相同")
+                for species in S.allCases {
+                    check(JellyTuning.forStage(stage, species: species) == JellyTuning.forStage(stage, profile: species.effective.swimProfile), "\(stage)/\(species.rawValue)：物种入口 = 实际生效物种的系数")
+                }
+            }
+            // 小锤头鲨的系数是用种子化模拟标定的：改它们必须重跑下面逐阶段的纵向分布与平均速度检查，并同步这里与技术文档
+            check(S.hammer.swimProfile == SwimProfile(period: 1, thrustX: 0.8, thrustY: 0.55, sink: 0.6, dragX: 0.7, dragY: 1), "小锤头鲨的标定系数：冲量 0.8 / 0.55、下沉 0.6、横向阻力 0.7，其余为 1")
+        }
+        // 水母的游动轨迹与改动前逐位一致：用改动前（只有 JellyTuning 的四项）的代码在同一批种子下跑出的值
+        let pinned: [(CountdownStage, Int, CGFloat, CGFloat, CGFloat, CGFloat)] = [
+            (.calm, 900, 898.651897697, 30.310247839, 7.980068039, -4.672575696), (.calm, 3600, 1030.028533784, 22.104397719, -2.252631295, -10.709088363),
+            (.soon, 900, 999.449280200, 28.140844166, 11.168110470, -5.933704919), (.soon, 3600, 1037.086099057, 26.411190833, -13.043823988, -5.710048515),
+            (.imminent, 900, 1211.366413456, 31.834731570, -25.625907073, -6.668073275), (.imminent, 3600, 1002.301850173, 32.980472004, -22.691314693, -6.480545441),
+            (.final, 900, 1230.798880200, 38.444499813, -29.738351468, -4.471501553), (.final, 3600, 1242.724851723, 40.002126977, -9.348166065, -0.307942660),
+            (.due, 900, 800.000000000, 45.194950610, 0.0, -3.679063839), (.due, 3600, 800.000000000, 45.448911620, 0.0, -3.359734256),
+        ]
+        for stage in [CountdownStage.calm, .soon, .imminent, .final, .due] {
+            for tuning in [JellyTuning.forStage(stage), JellyTuning.forStage(stage, species: .jelly)] {
+                var rng = SeededRandom(state: 42)
+                var swim = JellySwim(); swim.setBounds(lo: 100, hi: 1500); swim.x = 800
+                swim.tuning = tuning; swim.wantsRest = false; swim.mode = .swim
+                var reached = 0
+                for step in 1...3600 {
+                    swim.step(dt: 1.0 / 30, random: { rng.next() })
+                    for row in pinned where row.0 == stage && row.1 == step {
+                        reached += 1
+                        check(near(swim.x, row.2, 1e-6) && near(swim.y, row.3, 1e-6) && near(swim.vx, row.4, 1e-6) && near(swim.vy, row.5, 1e-6), "\(stage) 第 \(step) 步：水母轨迹与改动前一致（x \(String(format: "%.6f", Double(swim.x)))）")
+                    }
+                }
+                check(reached == 2, "\(stage)：两个钉住的检查点都到了")
+            }
+        }
+        // 逐物种、逐阶段的纵向分布与平均速度（与水母同一套判据；动物的垂直起伏更小、平均速度与水母相当）
+        func simulate(_ stage: CountdownStage, _ species: S) -> (mean: CGFloat, high: Double, ceiling: Double, below: Int, outside: Int, speed: CGFloat, range: CGFloat, vyMax: CGFloat, hover: CGFloat) {
+            var rng = SeededRandom(state: 42)
+            var swim = JellySwim(); swim.setBounds(lo: 100, hi: 1500); swim.x = 800
+            swim.tuning = JellyTuning.forStage(stage, species: species); swim.wantsRest = false; swim.mode = .swim
+            var n = 0, high = 0, ceiling = 0, below = 0, outside = 0
+            var sumY: CGFloat = 0, sumSpeed: CGFloat = 0, minX = CGFloat.infinity, maxX = -CGFloat.infinity, vyMax: CGFloat = 0
+            for _ in 0..<(30 * 600) {
+                swim.step(dt: 1.0 / 30, random: { rng.next() })
+                n += 1; sumY += swim.y; sumSpeed += abs(swim.vx)
+                if swim.y > 60 { high += 1 }
+                if swim.y >= JellySwim.maxLift - 0.01 { ceiling += 1 }
+                if swim.y < 0 { below += 1 }
+                if swim.x < 100 || swim.x > 1500 { outside += 1 }
+                minX = min(minX, swim.x); maxX = max(maxX, swim.x); vyMax = max(vyMax, abs(swim.vy))
+            }
+            return (sumY / CGFloat(n), Double(high) / Double(n), Double(ceiling) / Double(n), below, outside, sumSpeed / CGFloat(n), maxX - minX, vyMax, swim.tuning.hover)
+        }
+        for species in S.allCases where species.isAvailable && species != .jelly {
+            for stage in [CountdownStage.soon, .imminent, .final] {
+                let id = "\(species.rawValue)/\(stage)"
+                let a = simulate(stage, species), j = simulate(stage, .jelly)
+                check(a.below == 0 && a.outside == 0, "\(id)：不沉到游泳线以下、不越过屏幕边界")
+                check(a.high < 0.05 && a.ceiling < 0.02, "\(id)：超过 60 点的时间 < 5%、顶到上限 < 2%（\(String(format: "%.1f", a.high * 100))% / \(String(format: "%.1f", a.ceiling * 100))%）")
+                check(a.mean > 3 && a.mean < a.hover + 18, "\(id)：平均高度接近愿意停留的高度（\(String(format: "%.1f", Double(a.mean)))，目标 \(a.hover)）")
+                check(a.range > 150, "\(id)：会水平游动（范围 \(String(format: "%.0f", Double(a.range)))）")
+                check(a.speed >= j.speed * 0.7 && a.speed <= j.speed * 1.4, "\(id)：平均横向速度与水母相当（\(String(format: "%.1f", Double(a.speed))) 对 \(String(format: "%.1f", Double(j.speed)))，要求 0.7–1.4 倍）")
+                check(a.vyMax < j.vyMax, "\(id)：垂直起伏比水母更小（最大纵向速度 \(String(format: "%.1f", Double(a.vyMax))) 对 \(String(format: "%.1f", Double(j.vyMax)))）")
+            }
+        }
+        // 响铃涟漪的外半径：默认 62；离窗口最近一边不足 70 时缩小，最外圈离边缘至少 8 点；下限 inner + 4
+        typealias R = JellyRingMotion
+        check(R.outerRadius(centerX: 85, centerY: 76.4, width: 170, height: 150) == 62, "涟漪外半径：水母的中心离边缘够远，仍是 62")
+        check(R.outerRadius(centerX: 85, centerY: 69, width: 170, height: 150) == 61, "涟漪外半径：中心离底边 69 点时缩到 61（边缘留 8 点）")
+        check(R.outerRadius(centerX: 85, centerY: 69, width: 170, height: 150) + 8 <= 69, "涟漪外半径：最外圈不碰窗口边缘")
+        check(R.outerRadius(centerX: 40, centerY: 69, width: 300, height: 300) == 32 && R.outerRadius(centerX: 260, centerY: 69, width: 300, height: 300) == 32, "涟漪外半径：窗口被夹到屏幕边时左右两边同样收缩")
+        check(R.outerRadius(centerX: 85, centerY: 140, width: 170, height: 150) == R.rippleInner + 4, "涟漪外半径：太靠边时不小于 inner + 4")
+        check(R.outerRadius(centerX: .nan, centerY: 69, width: 170, height: 150) == R.rippleOuter && R.outerRadius(centerX: 85, centerY: .infinity, width: 170, height: .nan) == R.rippleOuter, "涟漪外半径：非有限输入按默认 62")
+        func flat(_ rings: [(radius: CGFloat, alpha: CGFloat)]) -> [CGFloat] { rings.flatMap { [$0.radius, $0.alpha] } }
+        check(flat(R.ripples(time: 1, reduceMotion: false)) == flat(R.ripples(time: 1, reduceMotion: false, outer: R.rippleOuter)) && flat(R.ripples(time: 0.5, reduceMotion: true)) == flat(R.ripples(time: 0.5, reduceMotion: true, outer: 62)), "涟漪：不传 outer 与传 62 完全相同（水母不变）")
+        let rings = R.ripples(time: 1, reduceMotion: false)
+        check(rings.count == 2 && abs(rings[0].radius - (20 + 42 * (1 / 2.2))) < 1e-9 && abs(rings[0].alpha - 0.55 * (1 - 1 / 2.2) * (1 - 1 / 2.2)) < 1e-9 && abs(rings[1].radius - (20 + 42 * (0.27 / 2.2))) < 1e-9, "涟漪：水母的涟漪数值与改动前一致（time = 1：两圈，半径 39.09 与 25.15）")
+        let small = R.ripples(time: 1.4, reduceMotion: false, outer: 40)
+        check(!small.isEmpty && small.allSatisfy { $0.radius >= R.rippleInner && $0.radius <= 40 }, "涟漪：外半径缩小后所有圈都在 inner…outer 里")
+        check(R.ripples(time: 0.5, reduceMotion: true, outer: 40).map({ $0.radius }) == [R.rippleInner + 20 * 0.35, R.rippleInner + 20 * 0.75], "涟漪：减少动态效果的两圈也按新的外半径算")
+    }
     // ---- 色相（HSV 定义，度）：只在自测里核对调色板顺序，但公式本身用独立的基准点钉住（各分支、灰色、0° 与 360° 的临界、红色分支里的负值折回）----
     do {
         func hue(_ r: Double, _ g: Double, _ b: Double) -> Double { JellyAppearance.hue((r: r, g: g, b: b)) }
@@ -888,9 +1327,44 @@ do {
         check(same(rainbow.tentacleTone(index: 3, count: 6), rainbow.b.mixed(toward: rainbow.c, 0.2)), "六根：第 3 根 u=0.6，在第二、三色之间（0.2）")
         check(same(rainbow.tentacleTone(index: 5, count: 12), rainbow.a.mixed(toward: rainbow.b, 10.0 / 11.0)), "十二根：第 5 根 u=5/11≈0.455，还没到正中")
         check(same(rainbow.tentacleTone(index: 6, count: 12), rainbow.b.mixed(toward: rainbow.c, 1.0 / 11.0)), "十二根：第 6 根 u=6/11≈0.545，已过正中")
+        // 肢体取色 limbTone(u:)：触手、鳍、四肢共用同一条规则（u 沿身体长轴，0 尾端 → 1 头端）；触手只是它在等距 u 上的特例
+        for u in [0, 0.1, 0.25, 0.5, 0.57, 0.9, 1] as [CGFloat] {
+            check(solid.limbTone(u: u) == solid.a, "肢体：纯色在 u=\(u) 用主色")
+            check(duo.limbTone(u: u) == duo.b, "肢体：双色在 u=\(u) 用第二色")
+            check(same(blend.limbTone(u: u), blend.a.mixed(toward: blend.b, 0.7)), "肢体：渐变在 u=\(u) 偏向第二色（0.7）")
+        }
+        check(rainbow.limbTone(u: 0) == rainbow.a && rainbow.limbTone(u: 0.5) == rainbow.b && same(rainbow.limbTone(u: 1), rainbow.c), "肢体：七彩的 u=0 / 0.5 / 1 是 a / b / c")
+        check(same(rainbow.limbTone(u: 0.25), rainbow.a.mixed(toward: rainbow.b, 0.5)) && same(rainbow.limbTone(u: 0.75), rainbow.b.mixed(toward: rainbow.c, 0.5)), "肢体：七彩的 u=0.25 / 0.75 在相邻两色正中")
+        check(same(rainbow.limbTone(u: 0.57), rainbow.b.mixed(toward: rainbow.c, 0.14)), "肢体：七彩 u=0.57（已过交界）在 b、c 之间（0.14）")
+        check(same(rainbow.limbTone(u: 0.4999), rainbow.a.mixed(toward: rainbow.b, 0.9998)), "肢体：七彩 u 刚好在交界之前仍在 a、b 之间")
+        for (name, paint) in [("纯色", solid), ("双色", duo), ("渐变", blend), ("七彩", rainbow)] {
+            let same_ = (1...9).allSatisfy { count in (0..<count).allSatisfy { index in
+                paint.tentacleTone(index: index, count: count) == paint.limbTone(u: count > 1 ? CGFloat(index) / CGFloat(count - 1) : 0.5) } }
+            check(same_, "\(name)：1…9 根触手逐根等于 limbTone(i/(n-1))（只有一根取 0.5）")
+        }
+        check(rainbow.limbTone(u: -3) == rainbow.limbTone(u: 0) && rainbow.limbTone(u: 7) == rainbow.limbTone(u: 1), "肢体：u 越界夹到两端，不外推")
+        let centre = rainbow.limbTone(u: 0.5)
+        let nan: CGFloat = .nan, inf: CGFloat = .infinity
+        check(rainbow.limbTone(u: nan) == centre, "肢体：u 是 NaN 时取正中")
+        check(rainbow.limbTone(u: inf) == centre && rainbow.limbTone(u: -inf) == centre, "肢体：u 是正负无穷时取正中（不是夹到两端）")
         // 口腕与描边
         check(solid.oralTone == solid.a && duo.oralTone == duo.b && blend.oralTone == blend.b && rainbow.oralTone == rainbow.b, "口腕：纯色用主色，其余用第二色")
         check(solid.outlineTone == solid.a && duo.outlineTone == duo.a && blend.outlineTone == blend.a && rainbow.outlineTone == rainbow.b, "描边：七彩用第二色，其余用主色")
+    }
+    // 与 JS 对照：Node 把一批路径串（JSON 数组）交给这里，逐项回显解析结果：不合规是 “-”，合规是以分号分隔的 “命令字母 + 逗号分隔的数字”（Z 没有数字）
+    if let path = ProcessInfo.processInfo.environment["PARSE_CASES"], let data = FileManager.default.contents(atPath: path),
+       let cases = (try? JSONSerialization.jsonObject(with: data)) as? [Any] {
+        for (index, value) in cases.enumerated() {
+            guard let d = value as? String, let commands = SpeciesPath.parse(d) else { print("PARSE \(index) -"); continue }
+            let letters: [PathCommand.Kind: String] = [.move: "M", .line: "L", .cubic: "C", .quad: "Q", .close: "Z"]
+            let text = commands.map { command in
+                (letters[command.kind] ?? "?") + command.points.flatMap { [$0.x, $0.y] }.map { String(format: "%.9g", Double($0)) }.joined(separator: ",")
+            }.joined(separator: ";")
+            print("PARSE \(index) \(text)")
+            // 取样点：Node 与 JS 的 sample 逐点对照（独立的 De Casteljau 校验在 Node 一侧，对 JS 的取样做）
+            let samples = SpeciesPath.sample(commands).map { String(format: "%.9g,%.9g", Double($0.x), Double($0.y)) }.joined(separator: ";")
+            print("SAMPLES \(index) \(samples)")
+        }
     }
     // 与 JS 对照：Node 把一批外观负载（JSON 数组）交给这里，Swift 解析后逐项回显（APPEARANCE 行）并给出各部位颜色（PAINT 行）；调色板色相供 Node 对照首页调色板
     if let path = ProcessInfo.processInfo.environment["APPEARANCE_CASES"], let data = FileManager.default.contents(atPath: path),
@@ -898,10 +1372,13 @@ do {
         func rgb(_ t: JellyTint) -> String { String(format: "%.6f,%.6f,%.6f", Double(t.r), Double(t.g), Double(t.b)) }
         for (index, value) in cases.enumerated() {
             let a = JellyAppearance.parse(value)
-            print("APPEARANCE \(index) \(a.colors.map(String.init).joined(separator: ",")) \(a.look.rawValue) \(a.material.rawValue) \(a.size.rawValue) \(a.season ?? "-")")
+            print("APPEARANCE \(index) \(a.colors.map(String.init).joined(separator: ",")) \(a.look.rawValue) \(a.material.rawValue) \(a.size.rawValue) \(a.season ?? "-") \(a.species.rawValue)")
             let paint = JellyPaint.make(appearance: a)
             let tentacles = (0..<5).map { rgb(paint.tentacleTone(index: $0, count: 5)) }.joined(separator: " ")
             print("PAINT \(index) \(paint.kind.rawValue) \(rgb(paint.a)) \(rgb(paint.b)) \(rgb(paint.c)) \(rgb(paint.oralTone)) \(rgb(paint.outlineTone)) \(tentacles)")
+            // 肢体取色：固定的 u 采样点（含交界两侧与越界），Node 与设置页示意图的 limbTone 逐点对照
+            let limbs = [0.0, 0.1, 0.25, 0.4999, 0.5, 0.57, 0.9, 1.0, -2.0, 5.0].map { rgb(paint.limbTone(u: CGFloat($0))) }.joined(separator: " ")
+            print("LIMB \(index) \(limbs)")
         }
     }
     for (index, rgb) in JellyAppearance.palette.enumerated() { print("PALETTEHUE \(index) \(String(format: "%.1f", JellyAppearance.hue(rgb)))") }

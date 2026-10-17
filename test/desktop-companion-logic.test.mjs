@@ -14,6 +14,8 @@ const JellyfishCore = createRequire(import.meta.url)('../js/jellyfish-core.js');
 const JellyDesktop = createRequire(import.meta.url)('../js/jelly-desktop.js');
 const JellyAppearance = createRequire(import.meta.url)('../js/jelly-appearance.js');
 const JellyfishSkin = createRequire(import.meta.url)('../js/jellyfish.js');
+const SpeciesShapes = createRequire(import.meta.url)('../js/jelly-species-shapes.js');
+const SpeciesPathCases = createRequire(import.meta.url)('./fixtures/species-path-cases.js');
 const AssistantNative = createRequire(import.meta.url)('../js/assistant-native.js');
 const swiftc = '/usr/bin/xcrun';
 const canCompile = process.platform === 'darwin' && existsSync(swiftc);
@@ -37,14 +39,18 @@ const HOTKEY_CASES = [
 test('原生水母：构建清单包含所有水母源文件，且 main.swift 在最后', () => {
   const build = readFileSync(resolve(root, 'desktop-reminder/build.mjs'), 'utf8');
   const listed = build.match(/const sources = \[([^\]]*)\]/)?.[1].split(',').map(s => s.trim().replace(/'/g, '')).filter(Boolean) ?? [];
-  assert.deepEqual(listed, ['countdown-model', 'jelly-model', 'jelly-swim', 'jelly-palette', 'jelly-appearance', 'jelly-paint', 'assistant-model', 'glass-view', 'jelly-ring', 'jelly-materials', 'jelly-companion', 'jelly-controller', 'confirmation-view', 'assistant-hotkey', 'assistant-panel', 'main'], '构建清单：纯逻辑在前、AppKit 在后、main.swift 最后');
+  assert.deepEqual(listed, ['countdown-model', 'jelly-model', 'jelly-swim', 'jelly-palette', 'jelly-appearance', 'jelly-species', 'jelly-species-data', 'jelly-paint', 'assistant-model', 'glass-view', 'jelly-ring', 'jelly-materials', 'jelly-species-painter', 'jelly-companion', 'jelly-controller', 'confirmation-view', 'assistant-hotkey', 'assistant-panel', 'main'], '构建清单：纯逻辑在前、AppKit 在后、main.swift 最后');
   for (const name of listed) assert.ok(existsSync(resolve(root, `desktop-reminder/${name}.swift`)), `${name}.swift 必须存在`);
   assert.match(build, /com\.timekeeper\.desktop\.qa/, '隔离构建使用独立 Bundle ID，避免改写真实组件的窗口记忆');
   const main = readFileSync(resolve(root, 'desktop-reminder/main.swift'), 'utf8');
   assert.doesNotMatch(main, /buildCountdown|layoutCountdown|resizeCountdown/, '旧倒计时实现不应残留在 main.swift');
   // 水母外观：跟着 jelly 命令走，回执带 appearance.status 供 Chrome 探测；协议版本不升（“水母差事”已占 v8）
   assert.match(main, /jelly\.setAppearance\(object\["appearance"\]\)/, 'jelly 命令里的 appearance 交给水母控制器');
-  assert.match(main, /extra\["appearance"\] = \["status": "ok"\]/, '回执带 appearance.status，Chrome 靠它探测组件是否支持');
+  assert.match(main, /extra\["appearance"\] = \["status": "ok", "species": jelly\.speciesName\]/, '回执带 appearance.status 与实际生效的物种，Chrome 靠它探测组件是否支持、是否真的画出了所选动物');
+  assert.match(main, /reply\["jellySpecies"\] = jelly\.speciesName/, 'ping 诊断：实际生效的物种（不是设置里的那个）');
+  assert.match(main, /reply\["jellyTuning"\] = jelly\.tuningSummary/, 'ping 诊断：运行中的游动调参（冒烟据此核对物种的系数确实接到了游动上）');
+  assert.match(main, /reply\["jellyTitle"\] = jelly\.titleSummary/, 'ping 诊断：窗口标题（实际生效的物种名）');
+  assert.match(main, /reply\["jellyLabel"\] = jelly\.labelSummary/, 'ping 诊断：读屏名称（实际生效的物种名）');
   assert.match(main, /"version": 7/, '协议版本仍是 7：外观走回执探测，不占 v8');
   assert.match(main, /reply\["jellyLook"\] = jelly\.lookSummary/, 'ping 诊断：外观（jellyAppearance 是系统浅/深外观，不能复用）');
   assert.match(main, /reply\["jellyTint"\] = jelly\.tintSummary/, 'ping 诊断：tint（约定始终等于 paint.a，冒烟据此核对）');
@@ -92,7 +98,7 @@ test('原生水母：纯逻辑（阶段、协议解析、显示规则、文案�
     // 变异检查用：外部已按（被改动的）源码增量编译好自测时，设置 TIMEKEEPER_SELFTEST_EXE 指向它，这里就跳过编译（常规运行不设置）
     const prebuilt = process.env.TIMEKEEPER_SELFTEST_EXE;
     const exe = prebuilt || join(dir, 'selftest');
-    if (!prebuilt) execFileSync(swiftc, ['swiftc', resolve(root, 'desktop-reminder/countdown-model.swift'), resolve(root, 'desktop-reminder/jelly-model.swift'), resolve(root, 'desktop-reminder/jelly-swim.swift'), resolve(root, 'desktop-reminder/jelly-palette.swift'), resolve(root, 'desktop-reminder/jelly-appearance.swift'), resolve(root, 'desktop-reminder/jelly-paint.swift'), resolve(root, 'desktop-reminder/assistant-model.swift'), join(dir, 'main.swift'), '-module-cache-path', join(dir, 'cache'), '-o', exe], { stdio: 'pipe' });
+    if (!prebuilt) execFileSync(swiftc, ['swiftc', resolve(root, 'desktop-reminder/countdown-model.swift'), resolve(root, 'desktop-reminder/jelly-model.swift'), resolve(root, 'desktop-reminder/jelly-swim.swift'), resolve(root, 'desktop-reminder/jelly-palette.swift'), resolve(root, 'desktop-reminder/jelly-appearance.swift'), resolve(root, 'desktop-reminder/jelly-species.swift'), resolve(root, 'desktop-reminder/jelly-species-data.swift'), resolve(root, 'desktop-reminder/jelly-paint.swift'), resolve(root, 'desktop-reminder/assistant-model.swift'), join(dir, 'main.swift'), '-module-cache-path', join(dir, 'cache'), '-o', exe], { stdio: 'pipe' });
     // 全局快捷键语法在 JS（normalizeHotkey）与 Swift（AssistantModel.parseHotkey）各有一份实现：同一批输入逐条对照
     const cases = HOTKEY_CASES;
     const casesFile = join(dir, 'hotkey-cases.json');
@@ -101,11 +107,17 @@ test('原生水母：纯逻辑（阶段、协议解析、显示规则、文案�
     const appearanceCases = [];
     for (const look of JellyAppearance.LOOKS) for (let color = 0; color < JellyAppearance.COLORS; color++) appearanceCases.push(JellyAppearance.resolve({ color, look, material: 'wire', size: 'large' }, { date: new Date(2026, 9, 17) }));
     for (let day = 1; day <= 20; day++) appearanceCases.push(JellyAppearance.resolve({ daily: true }, { date: new Date(2026, 9, day) }));
+    for (const species of JellyAppearance.SPECIES) appearanceCases.push(JellyAppearance.resolve({ species, color: 2, look: 'duo' }, { date: new Date(2026, 9, 17) }));
     const resolvedCount = appearanceCases.length;
-    appearanceCases.push({ color: 3, colors: [9], look: 'duo' }, { colors: [1], look: 'rainbow' }, 'x', null, { colors: [true, 1] }, { season: 'christmas' });
+    appearanceCases.push({ color: 3, colors: [9], look: 'duo' }, { colors: [1], look: 'rainbow' }, 'x', null, { colors: [true, 1] }, { season: 'christmas' },
+      { species: 'hammer' }, { species: 'Hammer' }, { species: 3 }, { species: true }, { species: ' hammer', color: 1 });
     const appearanceFile = join(dir, 'appearance-cases.json');
     writeFileSync(appearanceFile, JSON.stringify(appearanceCases));
-    const output = execFileSync(exe, [], { encoding: 'utf8', env: { ...process.env, HOTKEY_CASES: casesFile, APPEARANCE_CASES: appearanceFile } });
+    // 动物路径解析：共用的合规/不合规用例（含非字符串）交给 Swift 逐项回显
+    const parseCases = [...SpeciesPathCases.VALID, ...SpeciesPathCases.BAD.map(([, input]) => input)];
+    const parseFile = join(dir, 'parse-cases.json');
+    writeFileSync(parseFile, JSON.stringify(parseCases));
+    const output = execFileSync(exe, [], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, env: { ...process.env, HOTKEY_CASES: casesFile, APPEARANCE_CASES: appearanceFile, PARSE_CASES: parseFile } });
     assert.doesNotMatch(output, /^FAIL/m, output);
     assert.match(output, /ALL PASS/);
     // 夜晚荧光曲线：Swift 与首页水母的 JS 曲线逐点一致（同一套产品行为，两边各有一份实现）
@@ -135,19 +147,27 @@ test('原生水母：纯逻辑（阶段、协议解析、显示规则、文案�
       assert.equal(glyph, label, `${value} 的展示符号：原生 ${glyph} 与设置页 ${label} 不一致`);
     }
     // 水母外观：Chrome 的 resolve 结果经 Swift 解析后一致；桌面调色板与首页调色板的色相顺序一致（数值不比，桌面是半透明叠在壁纸上）
-    const swiftAppearance = new Map([...output.matchAll(/^APPEARANCE (\d+) (\S+) (\S+) (\S+) (\S+) (\S+)$/gm)].map(match => [Number(match[1]), match.slice(2)]));
+    const swiftAppearance = new Map([...output.matchAll(/^APPEARANCE (\d+) (\S+) (\S+) (\S+) (\S+) (\S+) (\S+)$/gm)].map(match => [Number(match[1]), match.slice(2)]));
     assert.equal(swiftAppearance.size, appearanceCases.length, 'Swift 应对每个外观用例各输出一行');
     appearanceCases.slice(0, resolvedCount).forEach((expected, index) => {
-      const [colors, look, material, size, season] = swiftAppearance.get(index);
+      const [colors, look, material, size, season, species] = swiftAppearance.get(index);
       assert.deepEqual(colors.split(',').map(Number), expected.colors, `外观用例 ${index} 颜色`);
       assert.equal(look, expected.look, `外观用例 ${index} 花纹`); assert.equal(material, expected.material); assert.equal(size, expected.size); assert.equal(season, '-');
+      assert.equal(species, expected.species, `外观用例 ${index} 物种：Chrome 下发的值经 Swift 白名单解析后应原样回显`);
     });
-    assert.deepEqual(swiftAppearance.get(resolvedCount), ['3', 'solid', 'glass', 'medium', '-'], 'colors 越界：回到 color，duo 颜色不够退回纯色');
-    assert.deepEqual(swiftAppearance.get(resolvedCount + 1), ['1', 'solid', 'glass', 'medium', '-'], '花纹要的颜色不够：退回纯色');
-    assert.deepEqual(swiftAppearance.get(resolvedCount + 2), ['5', 'solid', 'glass', 'medium', '-'], '非字典：默认');
-    assert.deepEqual(swiftAppearance.get(resolvedCount + 3), ['5', 'solid', 'glass', 'medium', '-'], 'null：默认');
-    assert.deepEqual(swiftAppearance.get(resolvedCount + 4), ['5', 'solid', 'glass', 'medium', '-'], 'colors 含布尔：整体丢弃');
-    assert.deepEqual(swiftAppearance.get(resolvedCount + 5), ['5', 'solid', 'glass', 'medium', 'christmas'], '合法节日保留');
+    assert.deepEqual(swiftAppearance.get(resolvedCount), ['3', 'solid', 'glass', 'medium', '-', 'jelly'], 'colors 越界：回到 color，duo 颜色不够退回纯色');
+    assert.deepEqual(swiftAppearance.get(resolvedCount + 1), ['1', 'solid', 'glass', 'medium', '-', 'jelly'], '花纹要的颜色不够：退回纯色');
+    assert.deepEqual(swiftAppearance.get(resolvedCount + 2), ['5', 'solid', 'glass', 'medium', '-', 'jelly'], '非字典：默认');
+    assert.deepEqual(swiftAppearance.get(resolvedCount + 3), ['5', 'solid', 'glass', 'medium', '-', 'jelly'], 'null：默认');
+    assert.deepEqual(swiftAppearance.get(resolvedCount + 4), ['5', 'solid', 'glass', 'medium', '-', 'jelly'], 'colors 含布尔：整体丢弃');
+    assert.deepEqual(swiftAppearance.get(resolvedCount + 5), ['5', 'solid', 'glass', 'medium', 'christmas', 'jelly'], '合法节日保留');
+    assert.deepEqual(swiftAppearance.get(resolvedCount + 6), ['5', 'solid', 'glass', 'medium', '-', 'hammer'], '合法物种保留');
+    assert.deepEqual(swiftAppearance.get(resolvedCount + 7), ['5', 'solid', 'glass', 'medium', '-', 'jelly'], '物种区分大小写：Hammer 回到水母');
+    assert.deepEqual(swiftAppearance.get(resolvedCount + 8), ['5', 'solid', 'glass', 'medium', '-', 'jelly'], '物种不是字符串（数字）：水母');
+    assert.deepEqual(swiftAppearance.get(resolvedCount + 9), ['5', 'solid', 'glass', 'medium', '-', 'jelly'], '物种不是字符串（布尔）：水母');
+    assert.deepEqual(swiftAppearance.get(resolvedCount + 10), ['1', 'solid', 'glass', 'medium', '-', 'jelly'], '物种带空白不被裁剪：水母，别的字段不受影响');
+    // 物种列表：Chrome 的 SPECIES 与 Swift 的 JellySpecies.allCases 逐项相同（含顺序）
+    assert.equal(output.match(/^SPECIES (\S+)$/m)?.[1], JellyAppearance.SPECIES.join(','), '物种列表 Chrome 与原生一致');
     const hueOf = ([r, g, b]) => { const hi = Math.max(r, g, b), lo = Math.min(r, g, b), d = hi - lo; if (!d) return 0; const h = hi === r ? ((g - b) / d) % 6 : hi === g ? (b - r) / d + 2 : (r - g) / d + 4; return (h * 60 + 360) % 360; };
     const swiftHues = new Map([...output.matchAll(/^PALETTEHUE (\d+) ([\d.]+)$/gm)].map(match => [Number(match[1]), Number(match[2])]));
     assert.equal(swiftHues.size, JellyAppearance.COLORS, 'Swift 应输出 8 个色位的色相');
@@ -171,6 +191,10 @@ test('原生水母：纯逻辑（阶段、协议解析、显示规则、文案�
     const paintSandbox = {};
     vm.runInNewContext(readFileSync(resolve(root, 'js/settings-jelly-appearance.js'), 'utf8'), paintSandbox);
     const jsPaintOf = paintSandbox.JellyAppearanceSettings.paintOf;
+    // 物种中文名：Swift 的 displayName 与设置页的 SPECIES_NAMES 逐项相同（设置页下拉与状态文字、桌面面板标题与菜单用的是同一个名字）
+    const swiftNames = new Map([...output.matchAll(/^SPECIESNAME (\S+) (\S+)$/gm)].map(match => [match[1], match[2]]));
+    assert.deepEqual([...swiftNames.keys()], [...JellyAppearance.SPECIES], 'Swift 应按同一顺序输出每个物种的名字');
+    assert.deepEqual(Object.fromEntries(swiftNames), { ...paintSandbox.JellyAppearanceSettings.SPECIES_NAMES }, '物种中文名：原生 displayName 与设置页 SPECIES_NAMES 一致');
     const palette01 = paletteRows.map(row => [Number(row[1]), Number(row[2]), Number(row[3])]);
     const swiftPaint = new Map(output.split('\n').filter(line => line.startsWith('PAINT ')).map(line => { const [, index, ...rest] = line.split(' '); return [Number(index), rest]; }));
     assert.equal(swiftPaint.size, appearanceCases.length, 'Swift 应对每个外观用例各输出一行颜料');
@@ -188,6 +212,86 @@ test('原生水母：纯逻辑（阶段、协议解析、显示规则、文案�
     assert.deepEqual([...seenKinds].sort(), ['blend', 'duo', 'rainbow', 'solid'], '对照用例必须覆盖四种花纹');
     assert.equal(swiftPaint.get(resolvedCount)[0], 'solid', '颜色位越界、duo 颜色不够：颜料退回纯色');
     assert.equal(swiftPaint.get(resolvedCount + 1)[0], 'solid', 'rainbow 只有一个颜色位：颜料退回纯色');
+    // 肢体取色：Swift 的 limbTone(u:) 与设置页示意图的 limbTone（JS 版）在同一批 u 上逐点一致——含花纹交界两侧与越界
+    const LIMB_US = [0, 0.1, 0.25, 0.4999, 0.5, 0.57, 0.9, 1, -2, 5];
+    const jsLimbTone = paintSandbox.JellyAppearanceSettings.limbTone;
+    const swiftLimb = new Map(output.split('\n').filter(line => line.startsWith('LIMB ')).map(line => { const [, index, ...rest] = line.split(' '); return [Number(index), rest]; }));
+    assert.equal(swiftLimb.size, appearanceCases.length, 'Swift 应对每个外观用例各输出一行肢体取色');
+    appearanceCases.slice(0, resolvedCount).forEach((resolved, index) => {
+      const paint = jsPaintOf(resolved, palette01), row = swiftLimb.get(index);
+      assert.equal(row.length, LIMB_US.length, `用例 ${index} 的肢体取色点个数`);
+      LIMB_US.forEach((u, i) => {
+        const expected = jsLimbTone(paint, u);
+        row[i].split(',').forEach((text, k) => assert.ok(Math.abs(Number(text) - expected[k]) < 2e-6, `用例 ${index}（${resolved.look}）u=${u}：Swift ${row[i]} 与 JS ${[...expected]} 不一致`));
+      });
+    });
+    const rainbowPaint = jsPaintOf(appearanceCases.find(item => item.look === 'rainbow'), palette01);
+    for (const odd of [NaN, Infinity, -Infinity, '0.2', null, undefined, {}]) assert.deepEqual(jsLimbTone(rainbowPaint, odd), jsLimbTone(rainbowPaint, 0.5), `u=${String(odd)} 不是有限数：取正中`);
+    assert.deepEqual(jsLimbTone(rainbowPaint, -2), jsLimbTone(rainbowPaint, 0), 'u 越界夹到两端');
+    assert.equal(jsLimbTone(null, 0.5), null, '没有颜料返回 null');
+    // 动物形状：Swift 的路径解析与包围盒与 JS 参考实现（js/jelly-species-shapes.js）逐点一致；数据表里的动物集合两边相同
+    const swiftParse = new Map([...output.matchAll(/^PARSE (\d+) (\S+)$/gm)].map(match => [Number(match[1]), match[2]]));
+    assert.equal(swiftParse.size, parseCases.length, 'Swift 应对每个路径用例各输出一行');
+    let accepted = 0, rejected = 0;
+    parseCases.forEach((input, index) => {
+      const js = SpeciesShapes.parsePath(input), swift = swiftParse.get(index), label = `路径用例 ${index}（${String(input).slice(0, 40).replace(/\s+/g, ' ')}）`;
+      if (!js) { rejected++; assert.equal(swift, '-', `${label}：JS 拒绝，Swift 却接受了 ${swift?.slice(0, 60)}`); return; }
+      accepted++;
+      assert.notEqual(swift, '-', `${label}：JS 接受，Swift 却拒绝了`);
+      const commands = swift.split(';');
+      assert.equal(commands.length, js.length, `${label}：命令个数`);
+      commands.forEach((text, i) => {
+        assert.equal(text[0], js[i].cmd, `${label}：第 ${i} 条命令`);
+        const numbers = text.slice(1) ? text.slice(1).split(',').map(Number) : [];
+        assert.deepEqual(numbers.length, js[i].pts.length * 2, `${label}：第 ${i} 条命令的数字个数`);
+        numbers.forEach((value, k) => assert.ok(Math.abs(value - js[i].pts[k >> 1][k & 1]) < 1e-6, `${label}：第 ${i} 条命令的第 ${k} 个数字`));
+      });
+    });
+    // 取样点：Swift 的 SpeciesPath.sample 与 JS 的 sample 在每个合规用例上逐点一致（JS 一侧另由 test/jelly-species-shapes.test.js 用独立的 De Casteljau 算法核对）
+    const swiftSamples = new Map([...output.matchAll(/^SAMPLES (\d+) (\S+)$/gm)].map(match => [Number(match[1]), match[2]]));
+    parseCases.forEach((input, index) => {
+      const js = SpeciesShapes.parsePath(input);
+      if (!js) { assert.ok(!swiftSamples.has(index), `路径用例 ${index}：被拒绝的路径不该有取样点`); return; }
+      const expected = SpeciesShapes.sample(js), got = swiftSamples.get(index).split(';').map(pair => pair.split(',').map(Number));
+      assert.equal(got.length, expected.length, `路径用例 ${index}：取样点个数`);
+      got.forEach((p, i) => assert.ok(Math.abs(p[0] - expected[i][0]) < 1e-6 && Math.abs(p[1] - expected[i][1]) < 1e-6, `路径用例 ${index}：第 ${i} 个取样点 Swift ${p} 与 JS ${expected[i]} 不一致`));
+    });
+    assert.ok(accepted >= 8 && rejected >= 30, `路径对照必须同时覆盖接受（${accepted}）与拒绝（${rejected}）`);
+    assert.equal(output.match(/^SPECAVAILABLE (\S+)$/m)?.[1], SpeciesShapes.AVAILABLE.join(','), '可画出来的物种：Swift（有几何数据）与 JS（有形状数据）一致，水母永远在内');
+    const animals = SpeciesShapes.AVAILABLE.filter(id => id !== 'jelly');
+    const nums = text => text.split(' ').map(Number);
+    for (const id of animals) {
+      const js = SpeciesShapes.native(id);
+      for (const wave of SpeciesShapes.WAVES) {
+        const row = output.match(new RegExp(`^SPEC ${id} ${Number.isInteger(wave) ? wave.toFixed(1) : wave} (\\S+ \\S+ \\S+ \\S+)$`, 'm'))?.[1];
+        assert.ok(row, `${id} wave=${wave}：Swift 应打印包围盒`);
+        const [minX, maxX, minY, maxY] = nums(row), box = SpeciesShapes.bounds(id, wave);
+        for (const [name, swift, expected] of [['minX', minX, box.minX], ['maxX', maxX, box.maxX], ['minY', minY, box.minY], ['maxY', maxY, box.maxY]]) assert.ok(Math.abs(swift - expected) < 1e-6, `${id} wave=${wave} ${name}：Swift ${swift} 与 JS ${expected} 不一致`);
+      }
+      const union = nums(output.match(new RegExp(`^SPECUNION ${id} (\\S+ \\S+ \\S+ \\S+)$`, 'm'))[1]), jsUnion = SpeciesShapes.union(id);
+      [jsUnion.minX, jsUnion.maxX, jsUnion.minY, jsUnion.maxY].forEach((expected, i) => assert.ok(Math.abs(union[i] - expected) < 1e-6, `${id} 并集第 ${i} 项：Swift ${union[i]} 与 JS ${expected} 不一致`));
+      const [view, scale] = output.match(new RegExp(`^SPECVIEW ${id} (\\S+) (\\S+)$`, 'm')).slice(1);
+      assert.equal(view, js.view, `${id} 视角`); assert.ok(Math.abs(Number(scale) - js.scale) < 1e-9, `${id} 缩放`);
+      const partRows = [...output.matchAll(new RegExp(`^SPECPART ${id} (\\d+) (\\S+) (\\S+) (\\S+)$`, 'gm'))];
+      assert.equal(partRows.length, js.parts.length, `${id} 部件个数`);
+      partRows.forEach(([, index, role, u, motion]) => {
+        const part = js.parts[Number(index)];
+        assert.equal(role, part.role, `${id} 第 ${index} 个部件的角色`); assert.ok(Math.abs(Number(u) - part.u) < 1e-9, `${id} 第 ${index} 个部件的取色位置`);
+        if (!part.motion) { assert.equal(motion, '-', `${id} 第 ${index} 个部件不该有转动`); return; }
+        const [px, py, angle] = motion.split(',').map(Number);
+        assert.ok(Math.abs(px - part.motion.pivot[0]) < 1e-6 && Math.abs(py - part.motion.pivot[1]) < 1e-6, `${id} 第 ${index} 个部件的转轴`);
+        assert.ok(Math.abs(angle - part.motion.maxAngle) < 1e-6, `${id} 第 ${index} 个部件的最大转角：Swift ${angle} 与 JS ${part.motion.maxAngle}`);
+      });
+      const eyes = output.match(new RegExp(`^SPECEYES ${id} (\\S+) (.+)$`, 'm'));
+      assert.ok(Math.abs(Number(eyes[1]) - js.eyes.r) < 1e-6, `${id} 眼睛半径`);
+      eyes[2].split(' ').forEach((pair, i) => { const [x, y] = pair.split(',').map(Number); assert.ok(Math.abs(x - js.eyes.at[i][0]) < 1e-6 && Math.abs(y - js.eyes.at[i][1]) < 1e-6, `${id} 第 ${i} 只眼睛`); });
+      const blush = output.match(new RegExp(`^SPECBLUSH ${id} (.+)$`, 'm'))[1].split(' ');
+      assert.equal(blush.length, js.blush.length, `${id} 腮红个数`);
+      blush.forEach((text, i) => text.split(',').map(Number).forEach((value, k) => assert.ok(Math.abs(value - js.blush[i][k]) < 1e-6, `${id} 第 ${i} 个腮红第 ${k} 项`)));
+    }
+    // 放置用的窗口尺寸：自测里写的 170×150 必须就是水母窗口的真实尺寸（改了窗口而没改自测，放置余量检查就失效）
+    assert.match(readFileSync(resolve(root, 'desktop-reminder/jelly-companion.swift'), 'utf8'), /static let size = NSSize\(width: 170, height: 150\)/, '水母窗口 170×150');
+    assert.match(readFileSync(resolve(root, 'desktop-reminder/companion-selftest.swift'), 'utf8'), /let width: CGFloat = 170, height: CGFloat = 150, cx = width \/ 2/, '自测里的放置窗口尺寸与水母窗口一致');
     // 任务状态集合：Chrome 投影出的 status 与原生能解析的完全一致（否则新增状态会被原生当成非法负载丢弃）
     const statuses = output.match(/^STATUSES (\S+)$/m)?.[1];
     assert.equal(statuses, [...AssistantNative.STATUSES].sort().join(','), '任务状态集合 Chrome 与原生一致');

@@ -594,6 +594,7 @@ importScripts('jelly-nudge.js', 'jelly-appearance.js', 'jelly-desktop.js', 'quic
         act: (id, action) => jellyNudge.act(id, action),
         onRestored: () => alarmCountdown.sync(),
         appearance: () => jellyAppearance.payload(),
+        speciesNames: JellyAppearance.SPECIES_NAMES, // 桌面上确认是别的动物时，提醒气泡里的“水母”换成它的名字
     });
     // 水母关怀（喝水 / 起身活动）：只用 chrome.alarms 与 chrome.notifications，默认关闭，设置页“水母关怀”里开启。见 js/jelly-nudge.js
     // 到点先请桌面水母接手（3 秒内确认才算），水母不在或没确认时退回系统通知；计数变化后让水母刷新“今天的记录”。

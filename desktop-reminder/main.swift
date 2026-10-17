@@ -78,7 +78,8 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
                 // 没带就保持上一次（Chrome 读取外观失败时水母不会闪回默认）。负载不合规回默认，不影响水母显示。
                 if let object = message["jelly"] as? [String: Any], object.keys.contains("appearance") {
                     jelly.setAppearance(object["appearance"])
-                    extra["appearance"] = ["status": "ok"]
+                    // species 是实际生效的那一种：设置的动物还画不出来（没有几何数据）时回退成水母，这里如实报告，Chrome 据此不把它说成已应用
+                    extra["appearance"] = ["status": "ok", "species": jelly.speciesName]
                 }
                 // 助手配置跟着 jelly 命令走：没带或明确关闭就注销全局快捷键、收起面板；启用时把注册结果带在回执里，
                 // Chrome 据此在设置页如实显示（被占用 / 不合法 / 失败），不会把“没注册上”说成“已生效”
@@ -150,6 +151,11 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
         reply["jellyBubble"] = jelly.bubbleName
         reply["jellyAppearance"] = jelly.appearanceName
         reply["jellyLook"] = jelly.lookSummary
+        reply["jellySpecies"] = jelly.speciesName
+        reply["jellyPose"] = jelly.poseSummary
+        reply["jellyTuning"] = jelly.tuningSummary
+        reply["jellyTitle"] = jelly.titleSummary
+        reply["jellyLabel"] = jelly.labelSummary
         reply["jellyPaintA"] = jelly.paintSummary
         reply["jellyTint"] = jelly.tintSummary
         reply["nudgeId"] = jelly.nudgeID ?? NSNull()

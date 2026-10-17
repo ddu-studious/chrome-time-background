@@ -154,15 +154,17 @@ node --test test/desktop-companion-logic.test.mjs test/jelly-desktop.test.js tes
 外观（颜色与花纹，见 `docs/technical/jelly-appearance-20261017.md`）的隔离验收：不连接 Chrome、不读写闹钟、不操作键鼠，只用 `ping` 读数与 `screencapture -l` 截自家窗口（构建时 `--extension-id=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`）：
 
 ```sh
-node desktop-reminder/appearance-smoke.mjs --app=/tmp/tk/QA.app                                   # 11 个场景：下发、回执探测、阶段覆盖、开着动态效果时的过渡
+node desktop-reminder/appearance-smoke.mjs --app=/tmp/tk/QA.app                                   # 24 个场景：下发、回执探测、阶段覆盖、开着动态效果时的过渡；物种（小锤头鲨）的下发/回退/标题/调参/游动/响铃（约 1 分钟，其中游动与响铃场景要系统没开“减少动态效果”）
+node desktop-reminder/species-render.mjs [--species=hammer] [--keep --out=/tmp/x] [--sheet=/tmp/x.png]   # 动物绘制层的离屏语义渲染检查：产品里同一个 JellyView.draw 画进位图，Node 独立量像素；不创建窗口、不截屏、不碰键鼠
+node desktop-reminder/gen-species.mjs [--check]                                                    # 由 js/jelly-species-shapes.js 生成 jelly-species-data.swift；--check 只比较（测试调用）
 node desktop-reminder/appearance-snapshot.mjs --app=/tmp/tk/QA.app --out=/tmp/tk/appearance-new   # 默认外观 4 张图（平静/夜晚 × 浅/深）
 node desktop-reminder/appearance-snapshot.mjs --compare=<基线目录>,/tmp/tk/appearance-new          # 逐像素对比；改绘制代码前先截基线
 node desktop-reminder/appearance-snapshot.mjs --app=/tmp/tk/QA.app --out=/tmp/tk/appearance-colors --all-colors && node desktop-reminder/appearance-contrast.mjs --dir=/tmp/tk/appearance-colors
 node desktop-reminder/appearance-snapshot.mjs --app=/tmp/tk/QA.app --out=/tmp/tk/appearance-looks --all-looks && node desktop-reminder/appearance-looks.mjs --dir=/tmp/tk/appearance-looks
 ```
 
-- 源文件：`countdown-model.swift` / `jelly-model.swift` / `jelly-swim.swift` / `jelly-palette.swift` / `jelly-appearance.swift` / `jelly-paint.swift` 是纯逻辑（只依赖 Foundation，由 `companion-selftest.swift` 单独编译运行，`test/desktop-companion-logic.test.mjs` 调用）；`glass-view.swift`、`jelly-ring.swift`、`jelly-materials.swift`（水母画法，目前只有 `GlassPainter`）、`jelly-companion.swift`、`jelly-controller.swift`、`confirmation-view.swift`、`main.swift` 是 AppKit。新增源文件须同步 `build.mjs` 清单与该合同测试。
-- 测试钩子：环境变量 `TIMEKEEPER_TEST_HOOKS=1` 时命令 `menuItem {title}` 才能按标题触发右键菜单或状态栏菜单条目、命令 `ringButton {id}` 才能走响铃气泡的按钮动作入口，正式运行恒回 `ok:false`；`TIMEKEEPER_NIGHT_HOUR`、`TIMEKEEPER_REDUCE_MOTION`、`TIMEKEEPER_APPEARANCE=light|dark`（强制气泡外观）同为仅测试用。`ping` 回执里的 `mouse`（原生端看到的指针位置）只用于验收失败时的诊断。
+- 源文件：`countdown-model.swift` / `jelly-model.swift` / `jelly-swim.swift` / `jelly-palette.swift` / `jelly-appearance.swift` / `jelly-paint.swift` / `jelly-species.swift`（物种：白名单解析、严格路径解析、几何、放置、姿态、游动系数）/ `jelly-species-data.swift`（**生成物**，由 `gen-species.mjs` 从 `js/jelly-species-shapes.js` 生成，不要手改）是纯逻辑（只依赖 Foundation，由 `companion-selftest.swift` 单独编译运行，`test/desktop-companion-logic.test.mjs` 调用）；`glass-view.swift`、`jelly-ring.swift`、`jelly-materials.swift`（水母画法，目前只有 `GlassPainter`）、`jelly-species-painter.swift`（动物画法）、`jelly-companion.swift`、`jelly-controller.swift`、`confirmation-view.swift`、`main.swift` 是 AppKit。新增源文件须同步 `build.mjs` 清单与该合同测试；`species-render.swift` 只是离屏检查工具，不进产品构建。物种的设计与验证见 `docs/technical/jelly-species-hammer-20261018.md`。
+- 测试钩子：环境变量 `TIMEKEEPER_TEST_HOOKS=1` 时命令 `menuItem {title}` 才能按标题触发右键菜单或状态栏菜单条目、命令 `ringButton {id}` 才能走响铃气泡的按钮动作入口，正式运行恒回 `ok:false`；`TIMEKEEPER_NIGHT_HOUR`、`TIMEKEEPER_REDUCE_MOTION`、`TIMEKEEPER_APPEARANCE=light|dark`（强制气泡外观）同为仅测试用。`ping` 回执里的 `mouse`（原生端看到的指针位置）只用于验收失败时的诊断；`jellySpecies`、`jellyPose`（朝向/俯仰/划水）、`jellyTuning`（当前游动系数）、`jellyTitle`（面板标题）、`jellyLabel`（读屏名称）同样只是验收读数，业务路径不读它们。
 - 没有新增权限、网络、依赖，不读键鼠空闲状态，不使用摄像头或麦克风；“怎么确认喝了水”只做了调研，见 `docs/research/research-jellyfish-drink-confirmation-20261016.md`。
 - 验证边界：Chrome 侧业务替身测试、Swift 纯逻辑自测、隔离原生冒烟、真实 Chrome 侧模块 ↔ 真实原生进程联调已通过；真实 Chrome 156、真实账号、重装后的真实组件与全屏 Space 未验收，多显示器只在本机两块屏幕上用合成鼠标验证过响铃场景。详见 `docs/technical/jellyfish-resident-companion-20261016.md`。
 

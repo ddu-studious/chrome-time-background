@@ -73,16 +73,22 @@ struct JellyPaint: Equatable {
         JellyPaint(kind: kind, a: a.mixed(toward: tint, t), b: b.mixed(toward: tint, t), c: c.mixed(toward: tint, t))
     }
 
-    /// 第 index 根触手（共 count 根）的颜色：纯色一个色；双色一律第二种；渐变偏向第二种；彩带按横向位置在三色之间取色。
-    func tentacleTone(index: Int, count: Int) -> JellyTint {
+    /// 肢体（触手、鳍、四肢）在位置 u（沿身体长轴，0 = 尾端 → 1 = 头端）处的颜色：纯色一个色；双色一律第二种；
+    /// 渐变偏向第二种；彩带沿长轴在三色之间取色。u 夹到 0…1；不是有限数（NaN、无穷）取正中，不外推。
+    /// 水母的触手与各种动物的鳍、肢共用这一条规则（设置页示意图的 limbTone 是它的 JS 版，Node 测试逐点对照）。
+    func limbTone(u: CGFloat) -> JellyTint {
+        let t = u.isFinite ? max(0, min(1, u)) : 0.5
         switch kind {
         case .solid: return a
         case .duo: return b
         case .blend: return a.mixed(toward: b, 0.7)
-        case .rainbow:
-            let u = count > 1 ? CGFloat(index) / CGFloat(count - 1) : 0.5
-            return u < 0.5 ? a.mixed(toward: b, u * 2) : b.mixed(toward: c, (u - 0.5) * 2)
+        case .rainbow: return t < 0.5 ? a.mixed(toward: b, t * 2) : b.mixed(toward: c, (t - 0.5) * 2)
         }
+    }
+
+    /// 第 index 根触手（共 count 根）的颜色：等距落在 limbTone 的 0…1 上（只有一根或没有时取正中）。
+    func tentacleTone(index: Int, count: Int) -> JellyTint {
+        limbTone(u: count > 1 ? CGFloat(index) / CGFloat(count - 1) : 0.5)
     }
 
     /// 口腕（两条短而粗的）的颜色。

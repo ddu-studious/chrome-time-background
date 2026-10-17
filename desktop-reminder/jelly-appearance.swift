@@ -30,8 +30,9 @@ struct JellyAppearance: Equatable {
     var material: Material
     var size: Size
     var season: String?
+    var species: JellySpecies = .jelly      // 物种（见 jelly-species.swift）：只改“画谁”，颜色、花纹、材质照常适用
 
-    static let `default` = JellyAppearance(colors: [defaultColor], look: .solid, material: .glass, size: .medium, season: nil)
+    static let `default` = JellyAppearance(colors: [defaultColor], look: .solid, material: .glass, size: .medium, season: nil, species: .jelly)
 
     /// JSON 里的布尔会以 NSNumber 到达，直接按数字读会把 true 当成 1；这里先识别出来。
     private static func isBoolean(_ value: Any) -> Bool {
@@ -59,7 +60,8 @@ struct JellyAppearance: Equatable {
         let season = (object["season"] as? String).flatMap { seasons.contains($0) ? $0 : nil }
         return JellyAppearance(colors: colors, look: look,
                                material: Material(rawValue: object["material"] as? String ?? "") ?? .glass,
-                               size: Size(rawValue: object["size"] as? String ?? "") ?? .medium, season: season)
+                               size: Size(rawValue: object["size"] as? String ?? "") ?? .medium, season: season,
+                               species: JellySpecies.parse(object["species"]))
     }
 
     /// 色相（度，0…360），用来在自测里核对调色板与首页调色板的色相顺序一致。
