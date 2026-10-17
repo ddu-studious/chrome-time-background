@@ -1,9 +1,11 @@
 # 调研文档索引
 
-> 最后更新：2026-10-12
+> 最后更新：2026-10-16
 
 | 更新日期 | 文档 | 标题 |
 |----------|------|------|
+| 2026-10-16 | [research-jellyfish-summon-assistant-20261016.md](research-jellyfish-summon-assistant-20261016.md) | 用桌面水母在浏览器之外唤出 / 驱动 AI 工作台：三层可行性（L0 全局快捷键唤出、L1 水母上直接对话、L2 通用浏览器操控）、现有链路盘点（引擎在 Service Worker、原生 `open` 路径与文字输入已存在）、原生 `RegisterEventHotKey` 与 Chrome `global` 命令两条路、`activeTab` 缺失导致落到独立小窗、原生来源提交文字的授权取舍；用户选定 L1（原生工作台）；`/tmp` 原型验证热键注册与送达（合成按键）、面板拿键盘焦点（24/24 + 偶发 4 次失败未定位）、输入法下回车提交、`Esc` 归还焦点；调研本身未改业务实现；同日 L1 已实现（见 technical 索引的 `native-assistant-workbench-20261016.md`），文末“九、实现后更正”记录被实测推翻的设想（热键注册返回“已存在”不代表被别的应用占用：两个进程注册同一组合都成功、都收到，跨应用冲突发现不了）、协议与文件名的差异和焦点重试的实际验证范围；真实键盘与真实 Chrome 整链路仍未验证 |
+| 2026-10-16 | [research-jellyfish-drink-confirmation-20261016.md](research-jellyfish-drink-confirmation-20261016.md) | 水母“确认喝了水”调研：证据层级（只能确认“看到你举杯”而非“喝了水”）、自报 / 系统空闲时间 / 摄像头 + Apple Vision / 本地多模态模型 / 可穿戴 / 称重杯垫的对照；本机能力探测与 18 张 CC 授权照片的 Vision 小实验（手到嘴与嘴边容器两个信号互补，整帧有杯子不能当证据）、摄像头授权归属（宿主是 Chrome 的子进程，须用独立小 App）、分级路线与需获同意后才做的真机验证；没有打开过摄像头，未改业务实现 |
 | 2026-10-12 | [research-native-popup-generated-ui-20261012.md](research-native-popup-generated-ui-20261012.md) | 原生弹窗提示 UI 的“自主编码”可行性调研（现状问题、U0–U4 四档方案、锁定 WKWebView 实测、生成耗时与质量；只调研，未改弹窗实现） |
 | 2026-10-12 | [research-assistant-dynamic-tools-20261012.md](research-assistant-dynamic-tools-20261012.md) | AI 工作台“临时写代码 / 自主编写工具”可行性调研（pi 0.85.1、MV3/CWS 约束、沙箱方案、分阶段建议）；v1.1：A 档已实现为默认关闭的 `compute.run`，B/C 档仍不做 |
 | 2026-08-22 | [research-player-recent-publish-switch-2026.md](research-player-recent-publish-switch-2026.md) | B 站与 YouTube 播放器最近发布切换调研（2026） |

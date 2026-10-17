@@ -979,7 +979,15 @@ class MusicController {
 
     // ===================== UI 更新 =====================
 
+    /** “正在播放”变化时通知首页背景（水母随音乐起舞）：与播放键图标同一个状态，只在变化时发一次，只读。 */
+    _announcePlaying(playing) {
+        if (this._announcedPlaying === playing) return;
+        this._announcedPlaying = playing;
+        try { window.dispatchEvent(new CustomEvent('music:playing', { detail: { playing } })); } catch (_) {}
+    }
+
     _updateUI() {
+        this._announcePlaying(Boolean(this.state.isPlaying));
         window.ProductUIV5?.updatePlayer?.({
             isPlaying: Boolean(this.state.isPlaying),
             title: this.state.title || '',
@@ -2994,7 +3002,7 @@ class MusicController {
                     ${allPlaylists.slice(0, 9).map(pl => `
                         <div class="mc-pl-card" data-pl-id="${pl.id || ''}" title="${this._esc((pl.copywriter ? pl.copywriter + '\n' : '') + (pl.name || ''))}">
                             <div class="mc-pl-card-cover">
-                                ${pl.picUrl ? `<img src="${this._esc(pl.picUrl)}?param=120y120" alt="" loading="lazy" onerror="this.style.display='none'">` : '<i class="fas fa-music"></i>'}
+                                ${pl.picUrl ? `<img src="${this._esc(pl.picUrl)}?param=120y120" alt="" loading="lazy" data-img-fallback="hide">` : '<i class="fas fa-music"></i>'}
                                 <div class="mc-pl-card-play"><i class="fas fa-play"></i></div>
                                 ${pl.playCount || pl.playcount ? `<span class="mc-pl-card-count"><i class="fas fa-headphones"></i> ${this._formatCount(pl.playCount || pl.playcount)}</span>` : ''}
                             </div>
@@ -3032,7 +3040,7 @@ class MusicController {
                     ${topCharts.map(chart => `
                         <div class="mc-toplist-card" data-pl-id="${chart.id || ''}" title="${this._esc(chart.name || '')}">
                             <div class="mc-toplist-cover">
-                                ${chart.coverImgUrl ? `<img src="${this._esc(chart.coverImgUrl)}?param=80y80" alt="" loading="lazy" onerror="this.style.display='none'">` : '<i class="fas fa-trophy"></i>'}
+                                ${chart.coverImgUrl ? `<img src="${this._esc(chart.coverImgUrl)}?param=80y80" alt="" loading="lazy" data-img-fallback="hide">` : '<i class="fas fa-trophy"></i>'}
                                 <div class="mc-toplist-play-overlay"><i class="fas fa-play"></i></div>
                                 ${chart.updateFrequency ? `<span class="mc-toplist-freq">${this._esc(chart.updateFrequency)}</span>` : ''}
                             </div>
@@ -3635,7 +3643,7 @@ class MusicController {
             ${playlists.map(pl => `
                 <div class="mc-pl-card" data-pl-id="${pl.id || ''}" title="${this._esc(pl.name || '')}">
                     <div class="mc-pl-card-cover">
-                        ${pl.coverImgUrl ? `<img src="${this._esc(pl.coverImgUrl)}?param=120y120" alt="" loading="lazy" onerror="this.style.display='none'">` : '<i class="fas fa-music"></i>'}
+                        ${pl.coverImgUrl ? `<img src="${this._esc(pl.coverImgUrl)}?param=120y120" alt="" loading="lazy" data-img-fallback="hide">` : '<i class="fas fa-music"></i>'}
                         <div class="mc-pl-card-play"><i class="fas fa-play"></i></div>
                         ${pl.playCount ? `<span class="mc-pl-card-count"><i class="fas fa-headphones"></i> ${this._formatCount(pl.playCount)}</span>` : ''}
                     </div>
@@ -3999,7 +4007,7 @@ class MusicController {
             ${albums.map(al => `
                 <div class="mc-as-album-card" data-album-id="${al.id || ''}">
                     <div class="mc-as-album-cover">
-                        ${al.picUrl ? `<img src="${this._esc(al.picUrl)}?param=120y120" alt="" loading="lazy" onerror="this.style.display='none'">` : '<i class="fas fa-compact-disc"></i>'}
+                        ${al.picUrl ? `<img src="${this._esc(al.picUrl)}?param=120y120" alt="" loading="lazy" data-img-fallback="hide">` : '<i class="fas fa-compact-disc"></i>'}
                         <div class="mc-as-album-play-overlay"><i class="fas fa-play"></i></div>
                     </div>
                     <div class="mc-as-album-name">${this._esc(al.name || '未知专辑')}</div>

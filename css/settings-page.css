@@ -241,6 +241,10 @@ body {
 
 .sp-input-num { min-width: 80px; text-align: center; }
 
+/* 一行里放多个控件（下拉 + 开关、起止时间） */
+.sp-field-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.sp-field-controls .sp-input[type="time"] { min-width: 110px; }
+
 /* ====== Toggle ====== */
 
 .sp-toggle {

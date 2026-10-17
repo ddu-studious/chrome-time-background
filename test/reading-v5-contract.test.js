@@ -14,7 +14,7 @@ test('今日阅读五个设计页面映射真实书签复习状态', () => {
     assert.match(memo, new RegExp(`['\"]${page}['\"]`));
   }
   assert.match(memo, /setBusinessPage\?\.\('reading', page\)/);
-  assert.match(html, /js\/memo\.js\?v=10/);
+  assert.match(html, /js\/memo\.js\?v=13/);
 });
 
 test('阅读详情不会在未点击时自动打开外部网址', () => {

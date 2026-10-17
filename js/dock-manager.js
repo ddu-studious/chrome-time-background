@@ -11,6 +11,18 @@
   const RECENT_APPS_KEY = 'dockManagerRecentApps';
   const DOCK_SHELL_KEY = 'dockShellConfig';
 
+  // Dock 重排（拖拽排序、加入/移出、成组）后的 FLIP 回弹，见 js/spring-feel.js。
+  // 键必须在重排前后保持不变：应用用 id，分组用名称+成员（分组下标会随排序变化）。
+  const DOCK_SPRING = {
+    selector: '.dock-btn[data-dock-app-id], .dock-btn[data-dock-group-key], #dock-launchpad-btn',
+    key: (el) => {
+      if (el.dataset.dockAppId) return 'app:' + el.dataset.dockAppId;
+      if (el.dataset.dockGroupKey) return 'group:' + el.dataset.dockGroupKey;
+      return el.id === 'dock-launchpad-btn' ? 'launchpad' : '';
+    },
+    preset: 'bouncy',
+  };
+
   const DOCK_EFFECTS = {
     magnify: { name: '经典放大', desc: 'macOS 风格图标放大', maxScale: 1.5, range: 100 },
     tilt: { name: '3D 倾斜', desc: '视差透视效果', maxTilt: 15, range: 80 },
@@ -687,6 +699,7 @@
 
     render() {
       if (!this.dockEl) return;
+      const springBefore = this._springCapture();
 
       this.dockEl.querySelectorAll('.dock-btn, .dock-divider, .dock-group').forEach(el => {
         el.style.display = 'none';
@@ -775,6 +788,19 @@
       this.dockEl.querySelectorAll('.dock-managed').forEach(el => el.remove());
       this.dockEl.appendChild(frag);
       this._applyDockShellState();
+      this._springSettle(springBefore);
+    }
+
+    // 回弹只是装饰：缺少 SpringFeel、浏览器不支持、任何异常都只意味着“瞬间重排”，不能影响 Dock 本身。
+    _springCapture() {
+      try {
+        return window.SpringFeel?.capture ? window.SpringFeel.capture(this.dockEl, DOCK_SPRING) : null;
+      } catch { return null; }
+    }
+
+    _springSettle(before) {
+      if (!before || !before.size) return;
+      try { window.SpringFeel.settle(this.dockEl, before, DOCK_SPRING); } catch { /* 装饰动画失败不处理 */ }
     }
 
     _createAppButton(app, index) {
@@ -799,6 +825,7 @@
       btn.setAttribute('draggable', 'true');
       btn.dataset.dockGroupIndex = index;
       btn.dataset.dockIndex = index;
+      btn.dataset.dockGroupKey = `${group.name || ''}|${(group.children || []).join(',')}`;
 
       const children = (group.children || []).slice(0, 4);
       let previewHtml = '<div class="dock-group-preview">';

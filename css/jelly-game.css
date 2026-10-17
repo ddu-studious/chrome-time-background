@@ -1,0 +1,393 @@
+/* 解压果冻：游戏中心的第四款，以及番茄钟自然结束后的“歇一歇”入口。
+ * 说明见 docs/technical/touch-feel-weave-liquid-clock-20261014.md
+ *
+ * 1. 必须在 product-ui-v5.css、spring-feel.css 之后加载：本文件覆盖游戏大厅的列数，并给面板加 .games-v5-above。
+ * 2. 画布的显示尺寸完全由这里撑满舞台（js/jelly-game.js 只管像素缓冲，并按舞台的布局尺寸建世界），
+ *    所以 .jelly-canvas 必须 position:absolute —— 否则画布的固有尺寸会反过来撑大舞台，ResizeObserver 逐帧循环。
+ * 3. 没有任何远程资源；颜色只用 --v5-* 令牌和少量固定色。弹簧曲线复用 spring-feel.css 的令牌。
+ */
+
+/* ---------- 游戏大厅：四张卡片按宽度排成 4 / 2 / 1 列 ---------- */
+.games-v5-grid {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.games-v5-grid,
+.games-v5-local {
+    max-width: 1180px;
+}
+
+@media (min-width: 1100px) {
+    .games-v5-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+@media (max-width: 760px) {
+    .games-v5-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* 从番茄钟（z-index 10002）打开时，游戏中心要盖在它上面。
+ * 这个类只在 openHost 里按需加上或去掉，关闭时不摘：摘掉会让淡出中的面板瞬间沉到番茄钟下面。 */
+.games-v5-panel.games-v5-above {
+    z-index: 10010;
+}
+
+/* ---------- 果冻视图（游戏中心内） ---------- */
+.games-v5-panel > main.games-v5-jelly {
+    display: flex;
+    flex-direction: column;
+    padding: 16px 22px 18px;
+}
+
+.games-v5-jelly-root {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    width: 100%;
+    max-width: 1000px;
+    min-height: 0;
+    margin: 0 auto;
+}
+
+.games-v5-jelly-missing {
+    margin: auto;
+    color: var(--v5-text-secondary, rgba(226, 231, 244, 0.72));
+    text-align: center;
+}
+
+.jelly-game {
+    position: relative;
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+}
+
+.jelly-stage {
+    position: relative;
+    flex: 1 1 320px;
+    min-height: 240px;
+    overflow: hidden;
+    border: 1px solid var(--v5-border, rgba(255, 255, 255, 0.11));
+    border-radius: 18px;
+    background:
+        radial-gradient(120% 90% at 50% 0%, rgba(170, 145, 255, 0.13), transparent 62%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012));
+    box-shadow: inset 0 1px rgba(255, 255, 255, 0.05), inset 0 -30px 60px rgba(0, 0, 0, 0.18);
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.jelly-canvas {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.jelly-canvas.is-grabbing {
+    cursor: grabbing;
+}
+
+/* 舞台带 overflow:hidden，外侧的焦点环会被裁掉，所以向内收 */
+.jelly-canvas:focus-visible {
+    outline: 2px solid var(--v5-accent-bright, #aa91ff);
+    outline-offset: -4px;
+    border-radius: 16px;
+}
+
+.jelly-hint {
+    position: absolute;
+    top: 14px;
+    right: 0;
+    left: 0;
+    color: var(--v5-text-muted, rgba(214, 221, 237, 0.48));
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-align: center;
+    pointer-events: none;
+    transition: opacity 0.4s ease;
+}
+
+.jelly-game.is-quiet .jelly-hint {
+    opacity: 0;
+}
+
+.jelly-stage[data-jelly-failed="true"] .jelly-canvas {
+    opacity: 0.2;
+    cursor: default;
+}
+
+.jelly-stage[data-jelly-failed="true"]::after {
+    content: "果冻暂时无法显示，可以刷新页面再试";
+    position: absolute;
+    inset: 0;
+    display: grid;
+    padding: 20px;
+    place-items: center;
+    color: var(--v5-text-secondary, rgba(226, 231, 244, 0.72));
+    font-size: 13px;
+    text-align: center;
+    pointer-events: none;
+}
+
+/* ---------- 颜色与按钮 ---------- */
+.jelly-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.jelly-swatches {
+    display: flex;
+    gap: 10px;
+}
+
+.jelly-swatch {
+    position: relative;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--jelly-swatch, #8b6cff);
+    box-shadow:
+        inset 0 -6px 10px rgba(0, 0, 0, 0.18),
+        inset 0 4px 8px rgba(255, 255, 255, 0.35);
+    cursor: pointer;
+    transition: scale var(--spring-snappy-dur, 420ms) var(--spring-snappy, ease), box-shadow 0.2s ease;
+}
+
+/* 视觉只有 30px，点击范围向外多留一圈，触屏和手抖都更容易点中 */
+.jelly-swatch::before {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+}
+
+.jelly-swatch:hover {
+    scale: 1.1;
+}
+
+.jelly-swatch[aria-pressed="true"] {
+    scale: 1.14;
+    box-shadow:
+        inset 0 -6px 10px rgba(0, 0, 0, 0.18),
+        inset 0 4px 8px rgba(255, 255, 255, 0.35),
+        0 0 0 2px rgba(7, 14, 25, 0.97),
+        0 0 0 4px rgba(255, 255, 255, 0.86);
+}
+
+.jelly-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.jelly-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 36px;
+    padding: 0 14px;
+    border: 1px solid var(--v5-border, rgba(255, 255, 255, 0.11));
+    border-radius: 10px;
+    background: var(--v5-surface-soft, rgba(255, 255, 255, 0.045));
+    color: var(--v5-text-secondary, rgba(226, 231, 244, 0.72));
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.jelly-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--v5-text, rgba(255, 255, 255, 0.96));
+}
+
+/* .jelly-btn 的 display 会盖过浏览器默认的 [hidden]，必须单独写回去 */
+.jelly-btn[hidden] {
+    display: none;
+}
+
+/* ---------- 底栏：累计时长与番茄钟提醒开关 ---------- */
+.jelly-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px 16px;
+    color: var(--v5-text-muted, rgba(214, 221, 237, 0.48));
+    font-size: 12px;
+}
+
+.jelly-offer-toggle {
+    padding: 6px 2px;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+    cursor: pointer;
+}
+
+.jelly-offer-toggle:hover {
+    color: var(--v5-text-secondary, rgba(226, 231, 244, 0.72));
+}
+
+.jelly-offer-toggle[aria-pressed="true"] {
+    color: var(--v5-success, #42c98b);
+}
+
+/* ---------- 休息倒计时（从番茄钟进入时） ---------- */
+.jelly-rest {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    padding: 10px 14px;
+    border: 1px solid rgba(255, 107, 107, 0.28);
+    border-radius: 12px;
+    background: rgba(255, 107, 107, 0.08);
+}
+
+.jelly-rest-text {
+    min-width: 9.5em;
+    color: rgba(255, 214, 214, 0.92);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+}
+
+.jelly-rest-bar {
+    flex: 1 1 120px;
+    height: 6px;
+    overflow: hidden;
+    border-radius: 99px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.jelly-rest-fill {
+    display: block;
+    width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #ff9a9a, #ff6b6b);
+    transition: width 0.25s linear;
+}
+
+.jelly-rest-done {
+    border-color: transparent;
+    background: rgba(255, 107, 107, 0.3);
+    color: #ffe3e3;
+}
+
+.jelly-rest-done:hover {
+    background: rgba(255, 107, 107, 0.42);
+    color: #fff;
+}
+
+/* 只给读屏用的播报区：视觉上不占位 */
+.jelly-live {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ---------- 番茄钟：专注自然结束后的“歇 60 秒”入口 ---------- */
+.pomodoro-rest-offer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    margin: -8px 0 20px;
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 107, 107, 0.26);
+    border-radius: 12px;
+    background: rgba(255, 107, 107, 0.1);
+    color: rgba(255, 255, 255, 0.82);
+    font-size: 13px;
+    animation: pomodoro-rest-offer-in 0.32s ease both;
+}
+
+.pomodoro-rest-offer-text {
+    flex: 1 1 100%;
+}
+
+.pomodoro-rest-offer-text i {
+    margin-right: 6px;
+    color: #ff8f8f;
+}
+
+.pomodoro-rest-offer-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.pomodoro-rest-offer button {
+    padding: 5px 11px;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.75);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.pomodoro-rest-offer button:hover {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+}
+
+.pomodoro-rest-offer button[data-rest-offer="go"] {
+    background: rgba(255, 107, 107, 0.3);
+    color: #ffd6d6;
+}
+
+.pomodoro-rest-offer button[data-rest-offer="go"]:hover {
+    background: rgba(255, 107, 107, 0.45);
+}
+
+@keyframes pomodoro-rest-offer-in {
+    from { opacity: 0; translate: 0 -6px; }
+    to { opacity: 1; translate: 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .jelly-swatch,
+    .jelly-hint,
+    .jelly-btn,
+    .jelly-rest-fill,
+    .pomodoro-rest-offer button {
+        transition: none;
+    }
+
+    .jelly-swatch:hover,
+    .jelly-swatch[aria-pressed="true"] {
+        scale: 1;
+    }
+
+    .pomodoro-rest-offer {
+        animation: none;
+    }
+}

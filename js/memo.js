@@ -3164,6 +3164,12 @@ class MemoManager {
         const countEl = panel.querySelector('#pomodoro-count');
         const focusTimeEl = panel.querySelector('#pomodoro-focus-time');
         const tabs = panel.querySelectorAll('.pomodoro-tab');
+
+        // 陪伴水母（纯视觉，见 js/pomodoro-jelly.js）：面板里一只小水母，随计时状态改变动作；没加载、被设置关闭或减少动态效果时没有它。
+        // 它不读写番茄钟数据；下面只在状态变化的几个点告诉它一声。
+        let companion = null;
+        try { companion = window.PomodoroJelly?.attach?.(panel.querySelector('.pomodoro-body')) || null; } catch (_) { companion = null; }   // 装饰性功能出错不能影响计时
+        const syncCompanion = () => companion?.setState({ mode: currentMode, running: isRunning });
         
         // 更新显示
         const updateDisplay = () => {
@@ -3185,8 +3191,48 @@ class MemoManager {
             localStorage.setItem('pomodoroStats', JSON.stringify(stats));
         };
         
+        // ---- 专注自然结束后的“歇 60 秒”入口（解压果冻，在游戏中心里打开） ----
+        // 只在计时走完时出现；点“跳过”、重置、切换标签都不算。解压果冻脚本没加载、或用户在果冻页里关掉了提醒，就完全不出现。
+        const REST_SECONDS = 60;
+        let restOfferEl = null;
+        const clearRestOffer = () => {
+            if (restOfferEl) restOfferEl.remove();
+            restOfferEl = null;
+        };
+        const showRestOffer = () => {
+            clearRestOffer();
+            const jelly = window.JellyGame;
+            const hub = window.GamesV5;
+            if (!jelly?.restOfferEnabled?.() || typeof hub?.showJelly !== 'function') return;
+            const offer = document.createElement('div');
+            offer.className = 'pomodoro-rest-offer';
+            offer.setAttribute('role', 'group');
+            offer.setAttribute('aria-label', '休息一下');
+            offer.innerHTML = `<span class="pomodoro-rest-offer-text"><i class="fas fa-droplet" aria-hidden="true"></i>歇 ${REST_SECONDS} 秒，捏捏果冻？</span><span class="pomodoro-rest-offer-actions"><button type="button" data-rest-offer="go">去歇一下</button><button type="button" data-rest-offer="skip">不用了</button><button type="button" data-rest-offer="never">不再提示</button></span>`;
+            offer.addEventListener('click', (event) => {
+                const action = event.target.closest?.('[data-rest-offer]')?.dataset.restOffer;
+                if (action === 'go') {
+                    // 提示保留在原处：游戏中心关闭时焦点回到这个按钮，回到番茄钟的原样
+                    hub.showJelly({ rest: REST_SECONDS, origin: 'pomodoro' });
+                    return;
+                }
+                if (action !== 'skip' && action !== 'never') return;
+                if (action === 'never') {
+                    jelly.setRestOfferEnabled?.(false);
+                    this.showToast('已关闭休息提示，可以在解压果冻页面里重新打开');
+                }
+                clearRestOffer();
+                toggleBtn.focus();
+            });
+            const controls = panel.querySelector('.pomodoro-controls');
+            if (controls) controls.insertAdjacentElement('afterend', offer);
+            else panel.querySelector('.pomodoro-body')?.appendChild(offer);
+            restOfferEl = offer;
+        };
+
         // 设置模式
         const setMode = (mode) => {
+            clearRestOffer();
             currentMode = mode;
             timeLeft = modes[mode].duration * 60;
             isRunning = false;
@@ -3199,6 +3245,7 @@ class MemoManager {
             tabs.forEach(tab => {
                 tab.classList.toggle('active', tab.dataset.mode === mode);
             });
+            syncCompanion();
         };
         
         // 开始/暂停
@@ -3208,8 +3255,11 @@ class MemoManager {
                 toggleIcon.className = 'fas fa-play';
                 toggleBtn.classList.remove('running');
                 clearInterval(interval);
+                syncCompanion();
             } else {
                 isRunning = true;
+                syncCompanion();
+                clearRestOffer();
                 toggleIcon.className = 'fas fa-pause';
                 toggleBtn.classList.add('running');
                 
@@ -3223,14 +3273,16 @@ class MemoManager {
                     }
                     
                     if (timeLeft <= 0) {
-                        complete();
+                        complete(true);
                     }
                 }, 1000);
             }
         };
         
         // 完成
-        const complete = () => {
+        // natural：计时走完才是 true。“跳过”按钮的点击事件不能当它用（事件对象是真值），所以绑定时单独包了一层。
+        const complete = (natural = false) => {
+            const finishedWork = currentMode === 'work';
             isRunning = false;
             clearInterval(interval);
             
@@ -3252,6 +3304,9 @@ class MemoManager {
                 this.showToast('休息结束！继续专注吧 💪');
                 setMode('work');
             }
+
+            // 放在最后：上面的 setMode 会清掉旧提示
+            if (natural === true && finishedWork) { showRestOffer(); companion?.finish(); }
         };
         
         // 初始化显示
@@ -3261,7 +3316,7 @@ class MemoManager {
         // 绑定事件
         toggleBtn.addEventListener('click', toggle);
         resetBtn.addEventListener('click', () => setMode(currentMode));
-        skipBtn.addEventListener('click', complete);
+        skipBtn.addEventListener('click', () => complete(false));
         
         tabs.forEach(tab => {
             tab.addEventListener('click', () => setMode(tab.dataset.mode));
@@ -3270,12 +3325,14 @@ class MemoManager {
         // 关闭按钮
         panel.querySelector('#pomodoro-close').addEventListener('click', () => {
             clearInterval(interval);
+            companion?.destroy();
             panel.classList.remove('active');
             setTimeout(() => panel.remove(), 300);
         });
         
         panel.querySelector('.pomodoro-overlay').addEventListener('click', () => {
             clearInterval(interval);
+            companion?.destroy();
             panel.classList.remove('active');
             setTimeout(() => panel.remove(), 300);
         });
@@ -13019,6 +13076,55 @@ MemoManager.prototype.getTaskById = function (id) {
     const m = this.memos.find(t => t.id === id);
     if (!m) return null;
     return { id: m.id, title: m.title || '(无标题)', completed: !!m.completed, categoryId: m.categoryId, priority: m.priority };
+};
+
+/**
+ * 供首页背景里的水母皮肤调用：抓住一只水母扔进纸篓 = 点了这个任务前面的圆圈。
+ * 不另写一套完成逻辑，直接走任务列表自己的入口：每日习惯走打卡（toggleHabitCompletion），其他走 toggleSidebarTaskComplete，
+ * 所以保存、活动日志、列表重绘、日历刷新、进度补满都和手点完全一致。这两个入口都是“切换”，因此这里先挡住不该切换的情况：
+ * 已完成的只回报 already（绝不取消完成）、失败态拒绝（列表里失败任务的勾选框同样不响应）、找不到的回报 missing。
+ * 切换会先在内存里改好再等保存（saveMemos 去抖 100 ms，被后一次保存顶替的那次 Promise 永远不会结束，这是既有行为），
+ * 所以最多等 waitMs（默认 3 秒）就按内存里的结果判断；切换抛错时把它改过的字段原样放回去，不留“内存里已完成、存储没存上”的状态。
+ * 没能完成时统一用 Toast 告诉用户原因（调用方——水母——只负责把水母放回去）。
+ * 返回 { ok, reason?, already? }：reason 为 missing / failed / error / not-completed。
+ */
+MemoManager.prototype.completeTaskById = async function (id, options) {
+    const refuse = (reason, message) => {
+        if (typeof this.showToast === 'function') this.showToast(message, 3000);
+        return { ok: false, reason };
+    };
+    if (typeof id !== 'string' && typeof id !== 'number') return refuse('missing', '找不到这个任务，可能刚被删除');
+    const find = () => (Array.isArray(this.memos) ? this.memos.find(m => m && m.id === id) : null);
+    const task = find();
+    if (!task) return refuse('missing', '找不到这个任务，可能刚被删除');
+    if (task.status === 'failed') return refuse('failed', '已标记为失败的任务不能直接完成，请先重新激活');
+    if (task.completed) return { ok: true, already: true };
+
+    const isHabit = !!(task.recurrence && task.recurrence.enabled && task.recurrence.type === 'daily');
+    const touched = ['completed', 'completedAt', 'updatedAt', 'progress', 'habit'];      // 两个切换入口会改的字段
+    const before = {};
+    for (const key of touched) {
+        before[key] = key in task ? { value: key === 'habit' && task.habit ? JSON.parse(JSON.stringify(task.habit)) : task[key] } : null;
+    }
+    const waitMs = options && Number(options.waitMs) > 0 ? Number(options.waitMs) : 3000;
+    let timer = null;
+    try {
+        const run = isHabit ? this.toggleHabitCompletion(id) : this.toggleSidebarTaskComplete(id);
+        await Promise.race([run, new Promise(resolve => { timer = setTimeout(resolve, waitMs); })]);
+    } catch (error) {
+        const current = find();
+        if (current) {
+            for (const key of touched) {
+                if (before[key]) current[key] = before[key].value;
+                else delete current[key];
+            }
+        }
+        return refuse('error', '任务没有完成，请稍后再试');
+    } finally {
+        if (timer !== null) clearTimeout(timer);
+    }
+    const done = find();
+    return done && done.completed ? { ok: true } : refuse('not-completed', '任务没有完成，请稍后再试');
 };
 
 window.memoManager = new MemoManager();

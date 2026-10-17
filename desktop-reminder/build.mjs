@@ -9,21 +9,26 @@ if (!id || !/^[a-p]{32}$/.test(id)) throw new Error('请传入 --extension-id=�
 if (process.platform !== 'darwin') throw new Error('桌面提醒组件仅支持 macOS');
 const app = process.argv.find(a => a.startsWith('--app='))?.slice(6) || resolve(root, 'local-ai/.local/TimeKeeperDesktop.app');
 const executable = resolve(app, 'Contents/MacOS/TimeKeeperDesktop');
+// 隔离测试构建（--app）用独立的 Bundle ID：窗口位置/尺寸记忆（NSUserDefaults）不与正在使用的真实组件共用，
+// 否则验收脚本会改写用户保存的倒计时位置。Native Messaging 注册只看可执行文件路径，不受影响。
+const bundleId = process.argv.some(a => a.startsWith('--app=')) ? 'com.timekeeper.desktop.qa' : 'com.timekeeper.desktop';
 mkdirSync(dirname(executable), { recursive: true });
 const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-<key>CFBundleIdentifier</key><string>com.timekeeper.desktop</string>
+<key>CFBundleIdentifier</key><string>${bundleId}</string>
 <key>CFBundleExecutable</key><string>TimeKeeperDesktop</string>
 <key>CFBundleName</key><string>桌面闹钟</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleVersion</key><string>5</string>
+<key>CFBundleVersion</key><string>8</string>
 <key>LSUIElement</key><true/>
 <key>NSHighResolutionCapable</key><true/>
 <key>AllowedExtensionOrigins</key><array><string>chrome-extension://${id}/</string></array>
 </dict></plist>`;
 writeFileSync(resolve(app, 'Contents/Info.plist'), plist);
-execFileSync('/usr/bin/xcrun', ['swiftc', resolve(root, 'desktop-reminder/countdown-view.swift'), resolve(root, 'desktop-reminder/confirmation-view.swift'), resolve(root, 'desktop-reminder/main.swift'), '-framework', 'AppKit', '-module-cache-path', resolve(root, 'local-ai/.local/swift-cache'), '-o', executable], { stdio: 'inherit' });
+// 编译清单：纯逻辑（可单独自测）在前，AppKit 在后，main.swift 最后；新增源文件须同步这里与 test/desktop-companion-logic.test.mjs。
+const sources = ['countdown-model', 'jelly-model', 'jelly-swim', 'jelly-palette', 'assistant-model', 'glass-view', 'jelly-ring', 'jelly-companion', 'jelly-controller', 'confirmation-view', 'assistant-hotkey', 'assistant-panel', 'main'];
+execFileSync('/usr/bin/xcrun', ['swiftc', ...sources.map(name => resolve(root, `desktop-reminder/${name}.swift`)), '-framework', 'AppKit', '-module-cache-path', resolve(root, 'local-ai/.local/swift-cache'), '-o', executable], { stdio: 'inherit' });
 execFileSync('/usr/bin/codesign', ['--force', '--sign', '-', app], { stdio: 'inherit' });
 console.log(`组件已构建：${app}`);
 if (process.argv.includes('--install')) {

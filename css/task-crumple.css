@@ -1,0 +1,99 @@
+/* 任务完成“揉纸入篓”动效层（js/task-crumple.js）。
+   只在动画期间存在于 body 末尾，纯视觉：不接收事件、对读屏隐藏。几何与动画由脚本用 Web Animations 驱动，
+   这里只有静态外观。纸团的折痕用 conic-gradient 的硬边色块表现，不引入图片资源。 */
+
+.task-crumple-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483000;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+/* 克隆出来的条目沿用原来的类名（.sidebar-task-item 等）以保持外观，但它的过渡/动画不能在揉皱期间自己动起来。 */
+.task-crumple-layer,
+.task-crumple-layer * {
+    transition: none !important;
+    animation: none !important;
+}
+
+.task-crumple-layer .tc-run {
+    position: fixed;
+    inset: 0;
+}
+
+.task-crumple-layer .tc-paper {
+    position: fixed;
+    overflow: hidden;
+    z-index: 2;
+    will-change: transform, opacity;
+}
+
+.task-crumple-layer .tc-paper > .tc-clone {
+    position: absolute;
+    margin: 0;
+}
+
+.task-crumple-layer .tc-shade {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    background:
+        conic-gradient(from 25deg at 38% 44%,
+            rgba(255, 255, 255, 0.34) 0deg 38deg,
+            rgba(0, 0, 0, 0.2) 38deg 92deg,
+            rgba(255, 255, 255, 0.22) 92deg 140deg,
+            rgba(0, 0, 0, 0.28) 140deg 205deg,
+            rgba(255, 255, 255, 0.3) 205deg 262deg,
+            rgba(0, 0, 0, 0.18) 262deg 318deg,
+            rgba(255, 255, 255, 0.36) 318deg 360deg),
+        #ece5d3;
+}
+
+.task-crumple-layer .tc-ball {
+    position: fixed;
+    z-index: 3;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    opacity: 0;
+    background:
+        conic-gradient(from 25deg at 38% 44%,
+            rgba(255, 255, 255, 0.34) 0deg 38deg,
+            rgba(0, 0, 0, 0.2) 38deg 92deg,
+            rgba(255, 255, 255, 0.22) 92deg 140deg,
+            rgba(0, 0, 0, 0.28) 140deg 205deg,
+            rgba(255, 255, 255, 0.3) 205deg 262deg,
+            rgba(0, 0, 0, 0.18) 262deg 318deg,
+            rgba(255, 255, 255, 0.36) 318deg 360deg),
+        #ece5d3;
+    box-shadow:
+        inset -3px -4px 7px rgba(0, 0, 0, 0.28),
+        inset 2px 2px 4px rgba(255, 255, 255, 0.55),
+        0 3px 8px rgba(0, 0, 0, 0.38);
+    will-change: transform, opacity;
+}
+
+.task-crumple-layer .tc-bin {
+    position: fixed;
+    opacity: 0;
+    transform-origin: 50% 100%;
+    will-change: transform, opacity;
+}
+
+.task-crumple-layer .tc-bin-back { z-index: 1; }
+.task-crumple-layer .tc-bin-front {
+    z-index: 4;
+    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.35));
+}
+
+.task-crumple-layer .tc-bin svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .task-crumple-layer { display: none !important; }
+}

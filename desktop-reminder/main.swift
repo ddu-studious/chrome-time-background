@@ -5,28 +5,14 @@ final class ReminderPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
+/// 桌面组件宿主（协议 v7）：Native Messaging 的收发与路由，自己不保存任何业务状态。
+/// 到点响铃、倒计时、喝水/起身提醒都由桌面水母（JellyController）承载，交互确认卡由 ConfirmationPanelController 承载，
+/// 桌面 AI 助手面板与它的全局快捷键由 AssistantController 承载（v7，只显示与转发，任务全在 Chrome 的 AssistantEngine）；
+/// 2026-10-16 起不再有独立的“提醒卡片”窗口（旧版深色卡片已被响铃气泡取代）。
 final class DesktopReminder: NSObject, NSApplicationDelegate {
-    var panel: ReminderPanel!
     var confirmation: ConfirmationPanelController!
-    var countdownPanel: ReminderPanel!
-    var countdownGlass: CountdownGlass!
-    var countdownIcon: NSImageView!
-    var countdownClose: NSButton!
-    var countdownGrip: CountdownResizeGrip!
-    var countdownTitle = NSTextField(labelWithString: "")
-    var countdownTime = NSTextField(labelWithString: "")
-    var countdownMeta = NSTextField(labelWithString: "")
-    var countdownData: [String: Any]?
-    var countdownTicker: Timer?
-    var countdownPositioned = false
-    var titleLabel = NSTextField(wrappingLabelWithString: "")
-    var timeLabel = NSTextField(labelWithString: "")
-    var statusLabel = NSTextField(wrappingLabelWithString: "当前桌面提醒 · 不切换应用")
-    var stopButton: NSButton!
-    var snoozeButton: NSButton!
-    var sessionID: String?
-    var actionID: String?
-    var snoozeMinutes = 10
+    var assistant: AssistantController!
+    let jelly = JellyController()
     var demo = false
     var spaceTransitions = 0
     var focusStayed = true
@@ -34,9 +20,17 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        buildPanel()
-        buildCountdown()
+        jelly.send = { [weak self] message in
+            // --demo 没有 Chrome：点任一响铃按钮就结束进程（沿用旧卡片的行为）；其余消息丢弃
+            if self?.demo == true { if message["type"] as? String == "action" { NSApp.terminate(nil) }; return }
+            self?.send(message)
+        }
+        jelly.onFocusCheck = { [weak self] stayed in self?.focusStayed = stayed }
         confirmation = ConfirmationPanelController { [weak self] message in self?.send(message) }
+        assistant = AssistantController()
+        assistant.send = { [weak self] message in self?.send(message) }
+        assistant.onMenuTitle = { [weak self] title in self?.jelly.assistantMenuTitle = title }
+        jelly.onAskAssistant = { [weak self] in self?.assistant.show() }
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main) { [weak self] _ in self?.spaceTransitions += 1 }
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = NSImage(systemSymbolName: "bell.badge", accessibilityDescription: "桌面闹钟")
@@ -45,313 +39,153 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
         menu.addItem(withTitle: "退出桌面组件", action: #selector(quit), keyEquivalent: "").target = self
         statusItem.menu = menu
         if demo {
-            show(["sessionId": "demo", "title": "桌面提醒测试", "timeText": "这是测试卡片，不会修改你的闹钟", "canSnooze": true, "snoozeMinutes": 10])
+            let clock = DateFormatter(); clock.dateFormat = "HH:mm"
+            let sample: [String: Any] = ["sessionId": "demo", "title": "桌面提醒测试", "timeText": "这是测试，不会修改你的闹钟", "clock": clock.string(from: Date()),
+                                         "labels": ["桌面提醒测试"], "more": 0, "canSnooze": true, "snoozeMinutes": 10]
+            _ = jelly.showRing(sample)
         } else {
             DispatchQueue.global(qos: .utility).async { self.readMessages() }
         }
     }
 
-    func buildPanel() {
-        panel = ReminderPanel(contentRect: NSRect(x: 0, y: 0, width: 440, height: 250), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-        panel.title = "桌面闹钟"
-        panel.isFloatingPanel = true
-        panel.becomesKeyOnlyIfNeeded = true
-        panel.hidesOnDeactivate = false
-        panel.level = .floating
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        if #available(macOS 13.0, *) { panel.collectionBehavior.insert(.canJoinAllApplications) }
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = true
-        panel.isMovableByWindowBackground = true
-        let content = NSView()
-        content.wantsLayer = true
-        content.layer?.backgroundColor = NSColor(calibratedRed: 0.055, green: 0.085, blue: 0.14, alpha: 0.98).cgColor
-        content.layer?.cornerRadius = 20
-        content.layer?.borderWidth = 1
-        content.layer?.borderColor = NSColor(calibratedWhite: 1, alpha: 0.18).cgColor
-        panel.contentView = content
-        let kicker = NSTextField(labelWithString: "⏰  时间到了")
-        kicker.font = .systemFont(ofSize: 13, weight: .semibold)
-        kicker.textColor = .systemOrange
-        titleLabel.font = .systemFont(ofSize: 24, weight: .semibold)
-        titleLabel.textColor = .white
-        titleLabel.maximumNumberOfLines = 3
-        timeLabel.font = .systemFont(ofSize: 13)
-        timeLabel.textColor = .lightGray
-        statusLabel.font = .systemFont(ofSize: 12)
-        statusLabel.textColor = .lightGray
-        statusLabel.maximumNumberOfLines = 2
-        stopButton = NSButton(title: "停止提醒", target: self, action: #selector(dismiss))
-        snoozeButton = NSButton(title: "10 分钟后再提醒", target: self, action: #selector(snooze))
-        for button in [stopButton!, snoozeButton!] { button.bezelStyle = .rounded; button.controlSize = .large }
-        stopButton.bezelColor = .systemOrange
-        let buttons = NSStackView(views: [stopButton, snoozeButton])
-        buttons.orientation = .horizontal
-        buttons.spacing = 12
-        let stack = NSStackView(views: [kicker, titleLabel, timeLabel, statusLabel, buttons])
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 13
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        content.addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24),
-            stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -24),
-            stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 22),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -22),
-            titleLabel.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            statusLabel.widthAnchor.constraint(equalTo: stack.widthAnchor)
-        ])
+    /// 状态栏“显示当前提醒”：响铃进行中让水母重新游到落点并重播气泡；没有响铃时只是刷新水母的可见性。
+    @objc func showCurrent() { jelly.replayRing() }
+    /// 状态栏菜单“退出桌面组件”：先告诉 Chrome 这是用户主动退出（水母据此取消常驻、不再自动拉起），写出后才结束进程。
+    @objc func quit() {
+        send(["type": "componentQuit"])
+        NSApp.terminate(nil)
     }
 
-    func buildCountdown() {
-        countdownPanel = ReminderPanel(contentRect: NSRect(x: 0, y: 0, width: 340, height: 100), styleMask: [.borderless, .nonactivatingPanel, .resizable], backing: .buffered, defer: false)
-        countdownPanel.title = "闹钟倒计时"
-        countdownPanel.isFloatingPanel = true
-        countdownPanel.becomesKeyOnlyIfNeeded = true
-        countdownPanel.hidesOnDeactivate = false
-        countdownPanel.level = .floating
-        countdownPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        if #available(macOS 13.0, *) { countdownPanel.collectionBehavior.insert(.canJoinAllApplications) }
-        countdownPanel.isOpaque = false
-        countdownPanel.backgroundColor = .clear
-        countdownPanel.hasShadow = true
-        countdownPanel.isMovableByWindowBackground = true
-        countdownPanel.minSize = NSSize(width: 272, height: 80)
-        countdownPanel.maxSize = NSSize(width: 544, height: 160)
-        countdownPanel.contentAspectRatio = NSSize(width: 3.4, height: 1)
-        countdownPanel.setFrameAutosaveName("CountdownPanelV1")
-        let glass = CountdownGlass()
-        countdownGlass = glass
-        glass.material = .popover
-        glass.blendingMode = .behindWindow
-        glass.state = .active
-        glass.appearance = NSAppearance(named: .aqua)
-        glass.wantsLayer = true
-        glass.layer?.borderWidth = 0.5
-        glass.layer?.borderColor = NSColor.white.withAlphaComponent(0.48).cgColor
-        countdownPanel.contentView = glass
-        countdownIcon = NSImageView(image: NSImage(systemSymbolName: "timer", accessibilityDescription: "倒计时")!)
-        countdownIcon.contentTintColor = NSColor(calibratedRed: 0.22, green: 0.40, blue: 0.42, alpha: 1)
-        countdownTitle.textColor = NSColor(calibratedRed: 0.30, green: 0.36, blue: 0.37, alpha: 1)
-        countdownTitle.lineBreakMode = .byTruncatingTail
-        countdownMeta.textColor = .secondaryLabelColor
-        countdownMeta.lineBreakMode = .byTruncatingTail
-        countdownClose = NSButton(image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "隐藏倒计时，闹钟继续运行")!, target: self, action: #selector(hideCountdown))
-        countdownClose.isBordered = false
-        countdownClose.contentTintColor = .secondaryLabelColor
-        countdownClose.toolTip = "隐藏倒计时，不取消闹钟"
-        countdownGrip = CountdownResizeGrip()
-        countdownGrip.setAccessibilityElement(true)
-        countdownGrip.setAccessibilityRole(.button)
-        countdownGrip.setAccessibilityLabel("调整倒计时大小")
-        countdownGrip.toolTip = "拖动调整大小 · 点击选择尺寸"
-        countdownGrip.onResize = { [weak self] width in self?.resizeCountdown(to: width) }
-        countdownGrip.onFinish = { [weak self] in self?.countdownPanel.saveFrame(usingName: "CountdownPanelV1") }
-        for view in [countdownIcon!, countdownTitle, countdownTime, countdownMeta, countdownClose!, countdownGrip!] { glass.addSubview(view) }
-        let sizes = NSMenu()
-        for (name, width) in [("小巧", 272), ("标准", 340), ("舒展", 442)] {
-            let item = sizes.addItem(withTitle: name, action: #selector(selectCountdownSize(_:)), keyEquivalent: "")
-            item.target = self; item.tag = width
-        }
-        glass.menu = sizes
-        countdownGrip.menu = sizes
-        glass.onLayout = { [weak self] in self?.layoutCountdown() }
-        layoutCountdown()
-    }
-
-    func layoutCountdown() {
-        let scale = countdownGlass.bounds.width / 340
-        func rect(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat) -> NSRect {
-            NSRect(x: x * scale, y: y * scale, width: w * scale, height: h * scale)
-        }
-        countdownIcon.frame = rect(23, 33, 34, 34)
-        countdownIcon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 27 * scale, weight: .light)
-        countdownTitle.frame = rect(73, 67, 211, 17)
-        countdownTitle.font = .systemFont(ofSize: 11.5 * scale, weight: .medium)
-        countdownTime.frame = rect(71, 27, 216, 40)
-        countdownTime.font = .monospacedDigitSystemFont(ofSize: 30 * scale, weight: .regular)
-        countdownMeta.frame = rect(73, 14, 211, 15)
-        countdownMeta.font = .systemFont(ofSize: 10 * scale)
-        countdownClose.frame = rect(296, 49, 23, 23)
-        countdownClose.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "隐藏倒计时，闹钟继续运行")?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 11 * scale, weight: .regular))
-        countdownClose.imageScaling = .scaleProportionallyDown
-        countdownGrip.frame = rect(295, 25, 25, 23)
-        countdownGrip.needsDisplay = true
-    }
-
-    func resizeCountdown(to requestedWidth: CGFloat) {
-        let old = countdownPanel.frame
-        let screen = countdownPanel.screen ?? NSScreen.main
-        let maxWidth = min(544, min(screen?.visibleFrame.width ?? 544, (screen?.visibleFrame.height ?? 160) * 3.4))
-        let width = max(272, min(requestedWidth, maxWidth))
-        let height = width / 3.4
-        var next = NSRect(x: old.minX, y: old.maxY - height, width: width, height: height)
-        if let bounds = screen?.visibleFrame {
-            next.origin.x = max(bounds.minX, min(next.minX, bounds.maxX - width))
-            next.origin.y = max(bounds.minY, min(next.minY, bounds.maxY - height))
-        }
-        countdownPanel.setFrame(next, display: true)
-        countdownGlass.layoutSubtreeIfNeeded()
-        countdownPanel.invalidateShadow()
-    }
-
-    @objc func selectCountdownSize(_ item: NSMenuItem) {
-        resizeCountdown(to: CGFloat(item.tag))
-        countdownPanel.saveFrame(usingName: "CountdownPanelV1")
-    }
-
-    func positionCountdown() {
-        if !countdownPositioned {
-            countdownPositioned = true
-            if !countdownPanel.setFrameUsingName("CountdownPanelV1") {
-                let screen = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) ?? NSScreen.main
-                if let bounds = screen?.visibleFrame {
-                    countdownPanel.setFrameOrigin(NSPoint(x: bounds.maxX - 364, y: bounds.maxY - 124))
-                }
-            }
-        }
-        // Preserve the saved size as well as position; clamp if a monitor disappears.
-        resizeCountdown(to: countdownPanel.frame.width)
-    }
-
-    func refreshCountdown() {
-        guard let data = countdownData, let at = data["fireAt"] as? Double else { return }
-        let seconds = max(0, Int(ceil(at / 1000 - Date().timeIntervalSince1970)))
-        if seconds >= 86400 {
-            countdownTime.stringValue = "\(seconds / 86400)天 " + String(format: "%02d:%02d", (seconds % 86400) / 3600, (seconds % 3600) / 60)
-        } else if seconds >= 3600 {
-            countdownTime.stringValue = String(format: "%02d:%02d:%02d", seconds / 3600, (seconds % 3600) / 60, seconds % 60)
-        } else {
-            countdownTime.stringValue = String(format: "%02d:%02d", seconds / 60, seconds % 60)
-        }
-        let date = Date(timeIntervalSince1970: at / 1000)
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_CN")
-        formatter.dateFormat = Calendar.current.isDateInToday(date) ? "HH:mm" : "M月d日 HH:mm"
-        let count = data["count"] as? Int ?? 1
-        countdownMeta.stringValue = seconds == 0 ? "时间到了 · 等待 Chrome 响铃" : "\(formatter.string(from: date)) 到点" + (count > 1 ? " · 同时 \(count) 条" : data["snoozed"] as? Bool == true ? " · 稍后提醒" : " · 最近提醒")
-        countdownTime.textColor = seconds <= 60 ? .systemOrange : NSColor(calibratedRed: 0.12, green: 0.19, blue: 0.20, alpha: 1)
-    }
-
-    func updateCountdownVisibility() {
-        countdownTicker?.invalidate(); countdownTicker = nil
-        guard countdownData != nil, sessionID == nil else { countdownPanel.orderOut(nil); return }
-        refreshCountdown()
-        if !countdownPanel.isVisible {
-            positionCountdown()
-            let frontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier
-            countdownPanel.orderFrontRegardless()
-            focusStayed = frontmost == NSWorkspace.shared.frontmostApplication?.processIdentifier
-        }
-        let ticker = Timer(timeInterval: 1, repeats: true) { [weak self] _ in self?.refreshCountdown() }
-        ticker.tolerance = 0.1
-        RunLoop.main.add(ticker, forMode: .common)
-        countdownTicker = ticker
-    }
-
-    @objc func hideCountdown() {
-        guard let id = countdownData?["id"] as? String else { return }
-        countdownPanel.saveFrame(usingName: "CountdownPanelV1")
-        countdownData = nil
-        updateCountdownVisibility()
-        send(["type": "countdownHidden", "id": id])
-    }
-
-    func position() {
-        let point = NSEvent.mouseLocation
-        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(point) }) ?? NSScreen.main else { return }
-        let frame = screen.visibleFrame
-        let width = min(440, frame.width - 32)
-        let titleHeight = titleLabel.cell?.cellSize(forBounds: NSRect(x: 0, y: 0, width: width - 48, height: 1000)).height ?? 30
-        let height = min(frame.height - 40, 220 + max(0, min(90, titleHeight) - 30))
-        panel.setFrame(NSRect(x: frame.maxX - width - 20, y: frame.maxY - height - 20, width: width, height: height), display: true)
-    }
-
-    func show(_ message: [String: Any]) {
-        guard let id = message["sessionId"] as? String, !id.isEmpty, id.count <= 200,
-              let title = message["title"] as? String, title.count <= 320 else { return }
-        let changed = sessionID != id
-        sessionID = id
-        updateCountdownVisibility()
-        if changed { actionID = nil }
-        titleLabel.stringValue = title
-        timeLabel.stringValue = String((message["timeText"] as? String ?? "").prefix(100))
-        snoozeMinutes = max(1, min(60, message["snoozeMinutes"] as? Int ?? 10))
-        snoozeButton.title = "\(snoozeMinutes) 分钟后再提醒"
-        snoozeButton.isHidden = message["canSnooze"] as? Bool != true
-        stopButton.isEnabled = actionID == nil; snoozeButton.isEnabled = actionID == nil
-        statusLabel.stringValue = actionID == nil ? "当前桌面提醒 · 不切换应用" : "正在同步到 Chrome…"
-        if changed || !panel.isVisible { position() }
-        let frontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier
-        panel.orderFrontRegardless()
-        focusStayed = frontmost == NSWorkspace.shared.frontmostApplication?.processIdentifier
-    }
-
-    @objc func showCurrent() { if sessionID != nil { position(); panel.orderFrontRegardless() } else { updateCountdownVisibility() } }
-    @objc func quit() { NSApp.terminate(nil) }
-    @objc func dismiss() { perform("dismiss") }
-    @objc func snooze() { perform("snooze") }
-    func perform(_ action: String) {
-        guard let id = sessionID, actionID == nil else { return }
-        if demo { panel.orderOut(nil); NSApp.terminate(nil); return }
-        let actionID = UUID().uuidString
-        self.actionID = actionID
-        stopButton.isEnabled = false; snoozeButton.isEnabled = false
-        statusLabel.stringValue = "正在同步到 Chrome…"
-        send(["type": "action", "sessionId": id, "actionId": actionID, "action": action, "minutes": snoozeMinutes])
-        DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
-            if self.actionID == actionID {
-                self.actionID = nil
-                self.stopButton.isEnabled = true; self.snoozeButton.isEnabled = true
-                self.statusLabel.stringValue = "Chrome 尚未确认，请重试或在浏览器中处理"
-            }
-        }
+    /// 仅隔离验收用：按标题触发状态栏菜单项（同 JellyController.chooseMenuItem 的做法）。
+    func chooseStatusItem(_ title: String?) -> Bool {
+        guard let title = title, let item = statusItem.menu?.items.first(where: { $0.title == title && $0.isEnabled }),
+              let action = item.action, let target = item.target as? NSObjectProtocol, target.responds(to: action) else { return false }
+        return NSApp.sendAction(action, to: item.target, from: item)
     }
 
     func handle(_ message: [String: Any]) {
         let command = message["command"] as? String ?? ""
         var ok = true
+        var extra: [String: Any] = [:]
         switch command {
         case "ping": break
         case "confirmation": ok = confirmation.set(message["card"])
         case "confirmationResult": confirmation.result(message)
-        case "countdown":
-            if let timer = message["timer"] as? [String: Any] {
-                guard let id = timer["id"] as? String, !id.isEmpty, id.count <= 200,
-                      let title = timer["title"] as? String, title.count <= 320,
-                      let at = timer["fireAt"] as? Double, at.isFinite, at > 0, at < 8640000000000000 else { respond(message, ok: false); return }
-                countdownData = timer
-                countdownTitle.stringValue = title
-                countdownTitle.toolTip = title
-            } else if message["timer"] is NSNull {
-                countdownData = nil
-            } else { respond(message, ok: false); return }
-            updateCountdownVisibility()
-        case "show":
-            guard let id = message["sessionId"] as? String, !id.isEmpty, id.count <= 200,
-                  let title = message["title"] as? String, title.count <= 320 else { respond(message, ok: false); return }
-            show(message)
-        case "hide":
-            if message["sessionId"] as? String == sessionID { panel.orderOut(nil); sessionID = nil; actionID = nil; updateCountdownVisibility() }
-        case "actionResult":
-            if message["sessionId"] as? String == sessionID && message["actionId"] as? String == actionID {
-                actionID = nil
-                if message["ok"] as? Bool == true { panel.orderOut(nil); sessionID = nil; updateCountdownVisibility() }
-                else {
-                    statusLabel.stringValue = String((message["error"] as? String ?? "操作失败，请重试").prefix(160))
-                    stopButton.isEnabled = true; snoozeButton.isEnabled = true
+        case "jelly":
+            ok = jelly.setJelly(message["jelly"])
+            if ok {
+                // 助手配置跟着 jelly 命令走：没带或明确关闭就注销全局快捷键、收起面板；启用时把注册结果带在回执里，
+                // Chrome 据此在设置页如实显示（被占用 / 不合法 / 失败），不会把“没注册上”说成“已生效”
+                let report = assistant.apply((message["jelly"] as? [String: Any])?["assistant"])
+                if assistant.enabled {
+                    var item: [String: Any] = ["status": report.status.rawValue]
+                    if let hotkey = report.hotkey { item["hotkey"] = hotkey }
+                    extra["assistant"] = item
                 }
             }
+        case "assistantState": ok = assistant.update(state: message["state"])
+        case "assistantResult": assistant.result(message)
+        case "countdown": ok = jelly.set(timer: message["timer"])
+        case "countdownActionResult": jelly.actionResult(message)
+        case "nudge": ok = jelly.showNudge(message["nudge"])
+        case "nudgeClear": jelly.clearNudge(id: message["id"] as? String)
+        case "nudgeActionResult": jelly.nudgeActionResult(message)
+        case "menuItem":
+            // 仅隔离验收：环境变量 TIMEKEEPER_TEST_HOOKS=1 时才可用，按标题触发水母右键菜单项或状态栏菜单项，效果等同用户点选；正式使用时恒为 false。
+            // 状态栏的“退出桌面组件”会直接结束进程，不会有回执，调用方只能等 componentQuit 与进程退出。
+            let title = message["title"] as? String
+            ok = ProcessInfo.processInfo.environment["TIMEKEEPER_TEST_HOOKS"] == "1" && (jelly.chooseMenuItem(title) || chooseStatusItem(title))
+        case "show": ok = jelly.showRing(message)
+        case "hide": jelly.hideRing(id: message["sessionId"] as? String)
+        case "actionResult": jelly.ringActionResult(message)
+        case "ringButton":
+            // 仅隔离验收：TIMEKEEPER_TEST_HOOKS=1 时才可用，直接走气泡按钮的动作入口（含弹出后 0.5 秒的防误触），
+            // 让防误触窗口的测试不依赖鼠标时序；返回 ok 表示动作真的发出了。正式使用时恒为 false。
+            ok = ProcessInfo.processInfo.environment["TIMEKEEPER_TEST_HOOKS"] == "1" && jelly.ringButton(message["id"] as? String)
+        case "assistantHook":
+            // 仅隔离验收：TIMEKEEPER_TEST_HOOKS=1 时才可用，走与用户操作相同的面板入口（显示、输入、发送、停止……），
+            // 让测试不依赖键盘时序；返回 ok 表示操作真的被面板接受。正式使用时恒为 false。
+            ok = ProcessInfo.processInfo.environment["TIMEKEEPER_TEST_HOOKS"] == "1" && assistant.hook(message["op"] as? String, text: message["text"] as? String)
         default: ok = false
         }
-        respond(message, ok: ok)
+        respond(message, ok: ok, extra: extra)
     }
-    func respond(_ message: [String: Any], ok: Bool) {
-        if let requestID = message["requestId"] as? String {
-            send(["type": "response", "requestId": requestID, "ok": ok, "version": 4, "confirmationKind": confirmation.card?["kind"] ?? "confirm", "confirmationChoiceCount": confirmation.choices.count, "confirmationVisible": confirmation.panel.isVisible, "confirmationId": confirmation.card?["id"] ?? NSNull(), "confirmationWindowNumber": confirmation.panel.windowNumber, "confirmationFocusStayed": confirmation.focusStayed, "confirmationFrame": NSStringFromRect(confirmation.panel.frame), "countdownVisible": countdownPanel.isVisible, "countdownText": countdownTime.stringValue, "countdownTitle": countdownTitle.stringValue, "countdownWindowNumber": countdownPanel.windowNumber, "countdownFrame": NSStringFromRect(countdownPanel.frame), "visible": panel.isVisible, "onActiveSpace": panel.isOnActiveSpace, "screenCount": NSScreen.screens.count, "spaceTransitions": spaceTransitions, "focusStayed": focusStayed])
-        }
+    func respond(_ message: [String: Any], ok: Bool, extra: [String: Any] = [:]) {
+        guard let requestID = message["requestId"] as? String else { return }
+        var reply: [String: Any] = ["type": "response", "requestId": requestID, "ok": ok, "version": 7]
+        // 响铃与桌面水母（同一个窗口）
+        reply["visible"] = jelly.ringVisible
+        reply["onActiveSpace"] = jelly.companion.panel.isOnActiveSpace
+        reply["screenCount"] = NSScreen.screens.count
+        reply["mouse"] = NSStringFromPoint(NSEvent.mouseLocation)    // 验收诊断：水母按指针所在屏幕选落点，指针被挪动时失败信息里要看得到
+        reply["spaceTransitions"] = spaceTransitions
+        reply["focusStayed"] = focusStayed
+        reply["confirmationKind"] = confirmation.card?["kind"] ?? "confirm"
+        reply["confirmationChoiceCount"] = confirmation.choices.count
+        reply["confirmationVisible"] = confirmation.panel.isVisible
+        reply["confirmationId"] = confirmation.card?["id"] ?? NSNull()
+        reply["confirmationWindowNumber"] = confirmation.panel.windowNumber
+        reply["confirmationFocusStayed"] = confirmation.focusStayed
+        reply["confirmationFrame"] = NSStringFromRect(confirmation.panel.frame)
+        // 桌面水母：倒计时只是水母身上的一条气泡，countdown* 字段沿用旧名，指向水母的窗口
+        reply["countdownVisible"] = jelly.countdownVisible
+        reply["countdownText"] = jelly.timeText
+        reply["countdownTitle"] = jelly.titleText
+        reply["countdownWindowNumber"] = jelly.windowNumber
+        reply["countdownFrame"] = jelly.frameString
+        reply["countdownStage"] = jelly.lastStage.rawValue
+        reply["countdownMenu"] = jelly.menuTitles()
+        reply["countdownNight"] = Double(jelly.lastNight)
+        reply["countdownReduceMotion"] = jelly.reduceMotion
+        reply["jellyVisible"] = jelly.visible
+        reply["jellyResident"] = jelly.resident
+        reply["jellyNight"] = jelly.night
+        reply["jellyLines"] = jelly.shownLines
+        reply["jellyBubble"] = jelly.bubbleName
+        reply["jellyAppearance"] = jelly.appearanceName
+        reply["nudgeId"] = jelly.nudgeID ?? NSNull()
+        reply["nudgeBusy"] = jelly.nudgeBusy
+        reply["nudgeButtons"] = jelly.nudgeButtonFrames()
+        // 响铃气泡（2026-10-16）：ringFrame 是水母窗口，ringLane 是所在屏幕可见区，ringBubble 是气泡本体在窗口里的矩形
+        reply["ringId"] = jelly.ringID ?? NSNull()
+        reply["ringBusy"] = jelly.ringBusy
+        reply["ringPhase"] = jelly.ringPhaseName
+        reply["ringStatus"] = jelly.ringStatusText
+        reply["ringClock"] = jelly.ringClockText
+        reply["ringLines"] = jelly.ringLinesShown
+        reply["ringButtons"] = jelly.ringButtonFrames()
+        reply["ringFrame"] = jelly.frameString
+        reply["ringLane"] = jelly.laneString
+        reply["ringBubble"] = jelly.bubbleRectString
+        // 桌面 AI 助手面板（协议 v7）：除 assistant（jelly 命令的热键注册结果）外都是验收诊断，Chrome 不依赖
+        reply["assistantEnabled"] = assistant.enabled
+        reply["assistantVisible"] = assistant.visible
+        reply["assistantKey"] = assistant.isKey
+        reply["assistantEditing"] = assistant.isEditing
+        reply["assistantActive"] = NSApp.isActive
+        reply["assistantKeyWindow"] = NSApp.keyWindow?.title ?? NSNull()           // 验收诊断：谁拿着键盘（面板、水母窗口还是确认卡）；失败信息里要看得到
+        reply["assistantFocusFailed"] = assistant.focusFailed
+        reply["assistantHotkey"] = assistant.hotkeyText ?? NSNull()
+        reply["assistantHotkeyStatus"] = assistant.hotkeyStatusName
+        reply["assistantHotkeyPresses"] = assistant.hotkey.pressCount          // 验收诊断：系统递给本进程的热键次数（注销后应不再增加）
+        reply["assistantMenu"] = assistant.menuTitle ?? NSNull()
+        reply["assistantWindowNumber"] = assistant.windowNumber
+        reply["assistantFrame"] = assistant.frameString
+        reply["assistantInput"] = assistant.inputText
+        reply["assistantYou"] = assistant.youText
+        reply["assistantStatus"] = assistant.statusText
+        reply["assistantTone"] = assistant.toneName
+        reply["assistantBody"] = assistant.bodyText
+        reply["assistantFooter"] = assistant.footerText
+        reply["assistantPending"] = assistant.pendingName
+        reply["assistantStopVisible"] = assistant.stopVisible
+        reply["assistantSendEnabled"] = assistant.sendEnabled
+        reply["assistantButtons"] = assistant.buttonFrames()
+        reply["assistantTask"] = assistant.state?.taskId ?? NSNull()
+        reply["assistantTaskStatus"] = assistant.state?.status.rawValue ?? NSNull()
+        reply["assistantTaskVersion"] = assistant.state?.version ?? NSNull()
+        for (key, value) in extra { reply[key] = value }
+        send(reply)
     }
     func send(_ object: [String: Any]) {
         guard !demo, let data = try? JSONSerialization.data(withJSONObject: object), data.count < 65536 else { return }

@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>触感实验预览：壁纸转场（八种风格）+ 液态时钟</title>
+<!--
+  加载真实的 css/touch-feel.css 与四个脚本，在普通 HTTP 页面里验证（不需要 chrome.* API）。
+  用法（仓库根目录）：python3 -m http.server 8765，打开 /test/demos/touch-feel-preview.html
+  ?real=1 使用真实图床图片（验证跨域读取）；默认用同源生成的渐变图。
+  调试接口（Playwright / 控制台）：
+    __runWeave(duration, toIndex, style)   按 main.js 的流程播放一次转场（style 缺省 = 每次随机）
+    __frame(style, progress, seed)         渲染某一风格某一进度的一帧（不显示），返回 { data(ImageData), copy(canvas) }
+    __diff(a, b)                           两帧逐像素差：{ max, mean, over2 }
+    __coverReference()                     用 2D canvas 按 CSS cover 规则画出的旧图/新图参考（端点应与之一致）
+    __sheet(styles, progresses, cell)      把各风格各进度排成一张联系表铺满页面，便于截图肉眼检查
+  技术说明：docs/technical/touch-feel-weave-liquid-clock-20261014.md
+-->
+<link rel="stylesheet" href="../../css/touch-feel.css">
+<style>
+    html, body { margin: 0; height: 100%; overflow: hidden; }
+    body { position: fixed; inset: 0; background-size: cover; background-position: center; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body::before { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,.3); z-index: 1; }
+    .main-layout { position: relative; z-index: 3; display: flex; height: 100vh; align-items: center; justify-content: center; }
+    .time-wrapper { width: 100%; display: flex; flex-direction: column; align-items: center; }
+    .time-container { text-align: center; display: flex; flex-direction: column; align-items: center; min-height: 250px; width: 100%; max-width: 600px; justify-content: center; }
+    .time { font-size: 5.5rem; font-weight: 700; margin-bottom: .5rem; letter-spacing: -2px; color: #fff; text-shadow: 2px 2px 20px rgba(0,0,0,.2); height: 6.5rem; display: flex; align-items: center; justify-content: center; width: 100%; font-variant-numeric: tabular-nums; }
+    .date { font-size: 1.8rem; margin-bottom: .5rem; font-weight: 500; opacity: .95; height: 2.5rem; display: flex; align-items: center; justify-content: center; color: #fff; }
+    .lunar { font-size: 1.4rem; margin-bottom: .5rem; font-weight: 400; opacity: .9; height: 2rem; display: flex; align-items: center; justify-content: center; color: #fff; }
+    .holiday { font-size: 1.2rem; color: #ffd700; font-weight: 500; opacity: .95; height: 1.8rem; display: flex; align-items: center; justify-content: center; }
+    #log { position: fixed; left: 8px; bottom: 8px; z-index: 50; color: #fff; font: 12px monospace; background: rgba(0,0,0,.5); padding: 4px 8px; border-radius: 6px; }
+</style>
+</head>
+<body>
+<div class="main-layout"><div class="time-wrapper"><div class="time-container">
+    <div class="time" id="time">17:24:36</div>
+    <div class="date" id="date">2026年10月14日 星期三</div>
+    <div class="lunar" id="lunar">农历丙午年九月初五</div>
+    <div class="holiday" id="holiday">重阳节</div>
+</div></div></div>
+<div id="log"></div>
+<script src="../../js/wallpaper-weave-core.js"></script>
+<script src="../../js/wallpaper-weave.js"></script>
+<script src="../../js/clock-liquid-core.js"></script>
+<script src="../../js/clock-liquid.js"></script>
+<script>
+(function () {
+    const params = new URLSearchParams(location.search);
+    const log = text => { document.getElementById('log').textContent = text; };
+
+    // 同源生成的“壁纸”：渐变 + 地平线 + 一些色块，便于看清丝带方向与位置。
+    function makeImage(seed, w = 1600, h = 900) {
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const g = canvas.getContext('2d');
+        const hue = seed * 70;
+        const grad = g.createLinearGradient(0, 0, w, h);
+        grad.addColorStop(0, `hsl(${hue},70%,35%)`);
+        grad.addColorStop(1, `hsl(${hue + 80},75%,55%)`);
+        g.fillStyle = grad; g.fillRect(0, 0, w, h);
+        g.fillStyle = `hsla(${hue + 160},80%,70%,.9)`;
+        for (let i = 0; i < 9; i++) {
+            const x = (i * 197 + seed * 53) % w, y = (i * 131 + seed * 29) % h;
+            g.beginPath(); g.arc(x, y, 60 + (i % 4) * 25, 0, Math.PI * 2); g.fill();
+        }
+        g.fillStyle = 'rgba(255,255,255,.85)';
+        g.font = 'bold 140px sans-serif';
+        g.fillText('WALLPAPER ' + seed, 120, h - 120);
+        return new Promise(resolve => canvas.toBlob(blob => resolve(URL.createObjectURL(blob))));
+    }
+
+    window.__ready = (async () => {
+        const urls = params.get('real')
+            ? ['https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1600', 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=1600']
+            : [await makeImage(1), await makeImage(2)];
+        document.body.style.backgroundImage = `url(${urls[0]})`;
+        window.__urls = urls;
+        window.__current = { url: urls[0] };
+        return urls;
+    })();
+
+    // 与 main.js 的 _transitionToBackground 相同的流程，只是没有 Engine 与设置。
+    // options.hold：转场结束并换好 body 背景后先不 release，等 __release() 再放（用来截“画布在上”与“只剩 body”两张图比较交接）。
+    window.__runWeave = async (duration, toIndex = 1, style, options = {}) => {
+        const urls = await window.__ready;
+        const from = window.__current;
+        const to = { url: urls[toIndex] };
+        const verdict = WallpaperWeave.canPlay({ from, to, settings: {} });
+        if (!verdict.ok) { log('不播放：' + verdict.reason); document.body.style.backgroundImage = `url(${to.url})`; window.__current = to; return verdict; }
+        const result = await WallpaperWeave.play({ from, to, duration, style });
+        document.body.style.backgroundImage = `url(${to.url})`;
+        window.__current = to;
+        if (options.hold) window.__release = () => result.release && result.release();
+        else result.release && result.release();
+        log('结果：' + result.reason + (result.style ? '（' + result.style + '）' : ''));
+        return { played: result.played, reason: result.reason, style: result.style };
+    };
+
+    // ---- 逐帧检查（不经过 rAF）：渲染某风格某进度的一帧，并复制到 2D canvas 里读像素 ----
+    async function loadBoth() {
+        const urls = await window.__ready;
+        return Promise.all([WallpaperWeave._loadImage(urls[0]), WallpaperWeave._loadImage(urls[1])]);
+    }
+    window.__frame = async (style, progress, seed = 12345) => {
+        const [fromImage, toImage] = await loadBoth();
+        const width = innerWidth, height = innerHeight;
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const renderer = WallpaperWeave._createRenderer(canvas, { fromImage, toImage, width, height, seed, style });
+        if (!renderer) return null;
+        renderer.draw(progress);
+        const copy = document.createElement('canvas');
+        copy.width = width; copy.height = height;
+        const g = copy.getContext('2d', { willReadFrequently: true });
+        g.drawImage(canvas, 0, 0);               // 与 draw 在同一任务内，绘制缓冲仍然有效
+        const data = g.getImageData(0, 0, width, height);
+        const used = renderer.style;
+        renderer.dispose();
+        return { data, copy, style: used };
+    };
+    window.__diff = (a, b) => {
+        const x = a.data.data, y = b.data.data;
+        let max = 0, sum = 0, over2 = 0;
+        for (let i = 0; i < x.length; i += 4) {
+            const d = Math.max(Math.abs(x[i] - y[i]), Math.abs(x[i + 1] - y[i + 1]), Math.abs(x[i + 2] - y[i + 2]));
+            if (d > max) max = d;
+            sum += d;
+            if (d > 2) over2++;
+        }
+        const pixels = x.length / 4;
+        return { max, mean: +(sum / pixels).toFixed(4), over2, pixels };
+    };
+    // 与 CSS background-size: cover; background-position: center 一致地把图画到 2D canvas 上（高质量缩放）。
+    window.__coverReference = async () => {
+        const [fromImage, toImage] = await loadBoth();
+        const make = image => {
+            const width = innerWidth, height = innerHeight;
+            const copy = document.createElement('canvas');
+            copy.width = width; copy.height = height;
+            const g = copy.getContext('2d', { willReadFrequently: true });
+            g.imageSmoothingQuality = 'high';
+            const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
+            const sw = width / scale, sh = height / scale;
+            g.drawImage(image, (image.naturalWidth - sw) / 2, (image.naturalHeight - sh) / 2, sw, sh, 0, 0, width, height);
+            return { data: g.getImageData(0, 0, width, height), copy };
+        };
+        return { from: make(fromImage), to: make(toImage) };
+    };
+    window.__sheet = async (styles, progresses, cell = { w: 320, h: 180 }) => {
+        const sheet = document.createElement('canvas');
+        sheet.width = progresses.length * cell.w; sheet.height = styles.length * cell.h;
+        sheet.style.cssText = 'position:fixed;left:0;top:0;z-index:1000;';
+        const g = sheet.getContext('2d');
+        g.fillStyle = '#111'; g.fillRect(0, 0, sheet.width, sheet.height);
+        for (let r = 0; r < styles.length; r++) {
+            for (let c = 0; c < progresses.length; c++) {
+                const frame = await window.__frame(styles[r], progresses[c]);
+                if (!frame) { g.fillStyle = '#f33'; g.fillRect(c * cell.w, r * cell.h, cell.w, cell.h); g.fillStyle = '#fff'; g.fillText('编译失败 ' + styles[r], c * cell.w + 8, r * cell.h + 20); continue; }
+                g.drawImage(frame.copy, c * cell.w, r * cell.h, cell.w, cell.h);
+                g.fillStyle = 'rgba(0,0,0,.6)'; g.fillRect(c * cell.w, r * cell.h, 112, 16);
+                g.fillStyle = '#fff'; g.font = '12px monospace';
+                g.fillText(styles[r] + ' p=' + progresses[c], c * cell.w + 4, r * cell.h + 12);
+            }
+        }
+        document.body.appendChild(sheet);
+        return { w: sheet.width, h: sheet.height };
+    };
+
+    // 为了截图，可以把真实时钟的“按住”状态换成程序化的划动。
+    window.__swipe = async (points, intervalMs = 12) => {
+        for (const [x, y] of points) {
+            document.dispatchEvent(new PointerEvent('pointermove', { clientX: x, clientY: y, bubbles: true, buttons: 0 }));
+            await new Promise(r => setTimeout(r, intervalMs));
+        }
+    };
+
+    setInterval(() => {
+        if (window.__freezeClock) return;     // 截图对比时冻结时钟
+        const d = new Date();
+        const el = document.getElementById('time');
+        const text = [d.getHours(), d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2, '0')).join(':');
+        if (el.textContent !== text) el.textContent = text;
+    }, 1000);
+})();
+</script>
+</body>
+</html>

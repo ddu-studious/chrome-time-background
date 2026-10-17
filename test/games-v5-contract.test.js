@@ -16,7 +16,7 @@ test('游戏六个设计页面复用三款真实游戏入口', () => {
     assert.match(source, new RegExp(`['\"]${page}['\"]`));
   }
   for (const id of ['snake-dock-btn', 'tetris-dock-btn', 'tetris-3d-dock-btn']) assert.match(source, new RegExp(id));
-  assert.match(html, /js\/games-v5\.js\?v=2/);
+  assert.match(html, /js\/games-v5\.js\?v=3/);
   for (const script of ['snake-game', 'tetris-game', 'tetris-3d-game']) {
     assert.match(html, new RegExp(`js/${script}\\.js\\?v=2`));
   }

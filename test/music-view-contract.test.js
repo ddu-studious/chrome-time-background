@@ -92,7 +92,7 @@ test('歌手专辑工作区具备模态背景、初始焦点、Esc 关闭与焦�
   assert.match(controllerSource, /#mc-as-close, \.mc-as-tab/);
   assert.match(controllerSource, /e\.key === 'Escape'[\s\S]*?_closeActionSheet\(\)/);
   assert.match(controllerSource, /_actionSheetReturnFocus\?\.focus\?\.\(\)/);
-  assert.ok(indexSource.includes('js/music-controller.js?v=19'));
+  assert.ok(indexSource.includes('js/music-controller.js?v=20'));
 });
 
 test('睡眠定时和更多操作使用可键盘操作的标准菜单语义', () => {

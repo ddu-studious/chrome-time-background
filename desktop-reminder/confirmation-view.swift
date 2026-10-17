@@ -21,7 +21,7 @@ final class InteractionInput: NSTextField {
 // Display and input only. Chrome owns all candidates, authorization and execution.
 final class ConfirmationPanelController: NSObject {
     let panel: ReminderPanel
-    let glass = CountdownGlass()
+    let glass = GlassView()
     let heading = NSTextField(labelWithString: "需要你处理")
     let caption = NSTextField(labelWithString: "AI 工作台 · 选择或补充后继续")
     let detail = NSTextView(), scroll = NSScrollView()

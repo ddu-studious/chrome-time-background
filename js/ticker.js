@@ -1806,7 +1806,7 @@ class TechTicker {
         this._previewCard.dataset.url = item.url || '';
         this._previewCard.innerHTML = `
             <div class="tpc-header">
-                ${faviconUrl ? `<img class="tpc-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">` : ''}
+                ${faviconUrl ? `<img class="tpc-favicon" src="${faviconUrl}" alt="" data-img-fallback="hide">` : ''}
                 <span class="tpc-source">${sourceIcon} ${this.escapeHtml(sourceName)}</span>
                 ${item.metric ? `<span class="tpc-metric" style="color:${metricColor}">${this.escapeHtml(String(item.metric))}</span>` : ''}
             </div>

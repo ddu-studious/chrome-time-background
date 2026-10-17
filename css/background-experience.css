@@ -125,6 +125,19 @@ body.home-background-suspended .task-ticker-track {
 /* v2：时间光色 */
 .bgx-root[data-visual="time"] .bgx-time { opacity: var(--bgx-time-opacity); }
 
+/* v2：深海水母。水母本身由 js/jellyfish.js 画在共享画布上（screen 混合只会提亮），所以先铺一层深海色调，
+   让发光在明亮的壁纸上也看得清。 */
+.bgx-root[data-visual="jellyfish"] .bgx-tone {
+    opacity: var(--bgx-tone-opacity);
+    background: linear-gradient(180deg, rgba(3, 20, 46, .52), rgba(1, 8, 24, .46));
+}
+
+/* 深海水母：鼠标移到可抓的水母上变成手；抓着的时候整页是抓取手势、不选中文字（指针事件由 js/background-experience.js 转发给皮肤）。 */
+html.jellyfish-grabbable,
+html.jellyfish-grabbable :is(body, .main-layout, .main-content, .time-wrapper, .time-container, #background-video) { cursor: grab; }
+html.jellyfish-grabbing,
+html.jellyfish-grabbing * { cursor: grabbing !important; -webkit-user-select: none !important; user-select: none !important; }
+
 .bgx-toggle {
     --v5-orb-accent: 139, 207, 255;
     position: fixed;

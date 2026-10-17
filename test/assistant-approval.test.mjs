@@ -153,6 +153,36 @@ test('取消前已保存但回执晚到，持久化 unknown 并且重启不重�
   assert.equal((await restored.snapshot()).status, 'cancelled');
 });
 
+test('桌面输入（origin:desktop）的明确提醒不经自动确认：不调用 pi 策略，停在确认卡，人工确认后才保存；浏览器输入同一句仍自动确认', async () => {
+  const desktop = fixture(); await desktop.engine.submit({ text, app: 'alarm', origin: 'desktop' });
+  let task = await desktop.engine.settled();
+  assert.equal(task.status, 'review', task.message);
+  assert.equal(task.input.origin, 'desktop');
+  assert.equal(desktop.calls.approvals, 0, '桌面来源不能调用自动确认判断');
+  assert.equal(desktop.calls.writes, 0, '确认前不能保存');
+  assert.equal(task.choices.length, 1);
+  assert.ok(!task.trace.some(row => row.tool === 'assistant.approval'));
+  await desktop.engine.choose(task.id, task.choices[0].id, task.version); task = await desktop.engine.settled();
+  assert.equal(task.status, 'completed', task.message); assert.equal(desktop.calls.writes, 1);
+  const browser = fixture(); await browser.engine.submit({ text, app: 'alarm' });
+  task = await browser.engine.settled();
+  assert.equal(task.status, 'completed', task.message);
+  assert.equal(browser.calls.approvals, 1); assert.equal(browser.calls.writes, 1);
+});
+
+test('桌面输入修改既有提醒同样保留确认卡，不放行也不写入', async () => {
+  const record = Alarm.normalizeAlarm({ ...alarm, id: 'existing' }, anchor); let writes = 0, approvals = 0;
+  const task = { id: 'desktop-update', version: 1, startedAt: anchor, input: { text: '把喝水提醒改到15:00', app: 'alarm', origin: 'desktop' }, memory: {}, turns: [] };
+  const ctx = { task, guard() {} };
+  const tools = Tools.create({ now: () => anchor, listAlarms: async () => ({ alarms: [structuredClone(record)] }),
+    ai: async message => { approvals++; return { ok: true, ...await evaluateApproval(message.body) }; },
+    mutateAlarm: async () => { writes++; return { alarm: record }; } });
+  const list = await tools.execute({ tool: 'alarm.list', args: { query: '喝水' } }, ctx);
+  const result = await tools.execute({ tool: 'alarm.update.prepare', args: { ref: list.observation.items[0].ref, time: '15:00' } }, ctx);
+  assert.equal(approvals, 0); assert.equal(writes, 0);
+  assert.equal(result.status, 'review');
+});
+
 test('鉴权 HTTP 策略路由使用真实 SDK，不调用模型，拒绝无令牌及无效请求', async () => {
   let models = 0;
   const token = 'test'.repeat(16);

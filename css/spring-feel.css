@@ -1,0 +1,109 @@
+/* 弹簧手感：面板入场与 Dock 重排的回弹。说明见 docs/technical/touch-feel-weave-liquid-clock-20261014.md
+ *
+ * 1. --spring-* 令牌由 js/spring-feel.js 的阻尼弹簧公式生成，test/spring-feel-css.test.js 校验两边一致；
+ *    不要手改曲线数字，改 PRESETS 后按测试提示重新生成。
+ * 2. 弹簧只作用在独立的 scale / translate 属性上，与 transform 叠加而不是覆盖：
+ *    - 群组弹层被 JS 写了内联 transform（translateX(-50%)），类里的 transform 不会生效；
+ *    - Dock 的放大/果冻效果会逐帧写按钮的内联 transform。
+ * 3. 只覆盖“打开”状态上的 transition（入场用弹簧）；关闭状态保留短促的 ease，离场不拖泥带水。
+ * 4. 本文件必须在 dock-manager.css、product-ui-v4/v5.css、alarm-center.css 之后加载（同权重按顺序覆盖）。
+ */
+
+:root {
+    --spring-snappy: cubic-bezier(0.3, 1.25, 0.5, 1);
+    --spring-snappy-dur: 420ms;
+    --spring-soft: cubic-bezier(0.34, 1.4, 0.64, 1);
+    --spring-soft-dur: 600ms;
+    --spring-bouncy: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --spring-bouncy-dur: 750ms;
+}
+
+@supports (animation-timing-function: linear(0, 1)) {
+    :root {
+        --spring-snappy: linear(0, 0.0088, 0.0328, 0.069, 0.1145, 0.167, 0.2242, 0.2843, 0.3458, 0.4075, 0.4682, 0.527, 0.5834, 0.6367, 0.6867, 0.7331, 0.7757, 0.8145, 0.8495, 0.8807, 0.9085, 0.9328, 0.9539, 0.972, 0.9873, 1.0002, 1.0107, 1.0191, 1.0257, 1.0307, 1.0343, 1.0367, 1.038, 1.0384, 1.0381, 1.0372, 1.0359, 1.0341, 1.0321, 1.0299, 1.0276, 1.0253, 1.0229, 1.0206, 1.0183, 1.0161, 1.0141, 1.0121, 1.0104, 1.0087, 1.0072, 1.0059, 1.0046, 1.0036, 1.0026, 1.0018, 1);
+        --spring-soft: linear(0, 0.0145, 0.054, 0.1131, 0.1864, 0.2695, 0.3582, 0.449, 0.539, 0.6259, 0.7077, 0.7831, 0.851, 0.911, 0.9628, 1.0063, 1.0419, 1.0699, 1.0909, 1.1057, 1.1148, 1.1191, 1.1192, 1.116, 1.1101, 1.1022, 1.0928, 1.0825, 1.0718, 1.0609, 1.0503, 1.0401, 1.0307, 1.0221, 1.0144, 1.0077, 1.0019, 0.9972, 0.9933, 0.9904, 0.9882, 0.9868, 0.986, 0.9857, 0.9859, 0.9864, 0.9872, 0.9883, 0.9895, 0.9907, 0.992, 0.9933, 0.9946, 0.9957, 0.9968, 0.9978, 1);
+        --spring-bouncy: linear(0, 0.0314, 0.116, 0.2392, 0.3865, 0.5448, 0.7024, 0.8499, 0.9801, 1.0882, 1.1716, 1.2296, 1.2634, 1.275, 1.2679, 1.2458, 1.2127, 1.1726, 1.1292, 1.0857, 1.0448, 1.0085, 0.9781, 0.9546, 0.938, 0.9281, 0.9244, 0.9259, 0.9317, 0.9406, 0.9515, 0.9634, 0.9754, 0.9867, 0.9968, 1.0053, 1.012, 1.0167, 1.0196, 1.0208, 1.0205, 1.019, 1.0166, 1.0136, 1.0104, 1.0071, 1.0039, 1.0011, 0.9987, 0.9968, 0.9955, 0.9947, 0.9943, 0.9943, 0.9947, 0.9954, 1);
+    }
+}
+
+/* ---- Dock：拖拽排序时目标按钮让出位置，松手后由 JS 做 FLIP 回弹（js/spring-feel.js） ---- */
+/* 原规则（dock-manager.css）为 transform/opacity/box-shadow，这里原样保留并追加 translate。 */
+.dock-bar .dock-btn[draggable="true"] {
+    transition: transform 0.2s, opacity 0.2s, box-shadow 0.2s, translate var(--spring-snappy-dur) var(--spring-snappy);
+}
+.dock-bar .dock-btn.dock-drop-before { translate: 10px 0; }
+.dock-bar .dock-btn.dock-drop-after { translate: -10px 0; }
+
+/* ---- 面板入场：从略小、略低的位置弹出，轻微过冲后落定 ---- */
+/* 应用启动台 */
+.dock-launchpad .dock-launchpad-content {
+    transform: none;
+    scale: 0.92;
+    translate: 0 18px;
+    transition: opacity 0.2s, scale 0.18s ease, translate 0.18s ease;
+}
+.dock-launchpad.open .dock-launchpad-content {
+    scale: 1;
+    translate: 0 0;
+    transition: opacity 0.2s, scale var(--spring-soft-dur) var(--spring-soft), translate var(--spring-soft-dur) var(--spring-soft);
+}
+
+/* 群组弹层（内联 transform: translateX(-50%) 保留，只用独立属性） */
+.dock-group-popover {
+    scale: 0.86;
+    translate: 0 14px;
+    transition: opacity 0.2s, transform 0.2s, scale 0.18s ease, translate 0.18s ease;
+}
+.dock-group-popover.open {
+    scale: 1;
+    translate: 0 0;
+    transition: opacity 0.2s, transform 0.2s, scale var(--spring-snappy-dur) var(--spring-snappy), translate var(--spring-snappy-dur) var(--spring-snappy);
+}
+
+/* 休闲游戏、诗词电台：整屏面板 */
+.games-v5-panel,
+.poetry-v5-panel {
+    transform: none;
+    scale: 0.95;
+    translate: 0 20px;
+    transition: opacity 0.2s ease, visibility 0.2s ease, scale 0.18s ease, translate 0.18s ease;
+}
+.games-v5-panel.visible,
+.poetry-v5-panel.visible {
+    scale: 1;
+    translate: 0 0;
+    transition: opacity 0.2s ease, visibility 0.2s ease, scale var(--spring-soft-dur) var(--spring-soft), translate var(--spring-soft-dur) var(--spring-soft);
+}
+
+/* 常用信息详情、写作空间弹窗、闹钟中心：遮罩淡入，面板弹出 */
+.kw-detail-panel,
+.blog-v5-modal,
+.alarm-center {
+    transform: none;
+    scale: 0.94;
+    translate: 0 18px;
+    transition: scale 0.18s ease, translate 0.18s ease;
+}
+.kw-detail-overlay.open .kw-detail-panel,
+.blog-v5-overlay.open .blog-v5-modal,
+.alarm-center-overlay.open .alarm-center {
+    scale: 1;
+    translate: 0 0;
+    transition: scale var(--spring-soft-dur) var(--spring-soft), translate var(--spring-soft-dur) var(--spring-soft);
+}
+
+/* 减少动态效果：不缩放、不位移，沿用各面板原有的淡入淡出 */
+@media (prefers-reduced-motion: reduce) {
+    .dock-bar .dock-btn.dock-drop-before,
+    .dock-bar .dock-btn.dock-drop-after,
+    .dock-launchpad .dock-launchpad-content,
+    .dock-group-popover,
+    .games-v5-panel,
+    .poetry-v5-panel,
+    .kw-detail-panel,
+    .blog-v5-modal,
+    .alarm-center {
+        scale: none;
+        translate: none;
+    }
+}

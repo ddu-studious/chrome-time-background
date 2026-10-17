@@ -144,7 +144,9 @@
     if (selected && !app && selected.apps.length === 1) app = selected.apps[0];
     if (selected && app && !selected.apps.includes(app)) throw new Error('这个动作不适用于已选应用');
     if (!text && !['pause', 'resume', 'next', 'alarms', 'history'].includes(skill)) throw new Error('请描述要执行的需求');
-    return { text, app, skill };
+    // Where the words were typed. Only the exact native-desktop marker survives; anything else (a model, a page, a typo)
+    // is dropped, so a forged origin can only ever make approval stricter and never looser.
+    return { text, app, skill, ...(value?.origin === 'desktop' ? { origin: 'desktop' } : {}) };
   }
   function validatePlan(raw, selectedApp = null) {
     // These messages go back to the model as its repair instruction, so they say what shape is wanted.

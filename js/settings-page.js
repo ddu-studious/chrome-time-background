@@ -152,9 +152,33 @@
         playgroundEnabled: true,
         soundEnabled: false,
         autoCalmSeconds: 12,
+        wallpaperTransition: 'on',
+        wallpaperTransitionStyle: 'random',
+        clockLiquid: true,
+        taskCrumple: true,
+        jellyfishTasks: true,
+        jellyfishNight: true,
+        jellyfishDance: true,
+        jellyfishGrow: true,
+        pomodoroJelly: true,
     };
-    const BG_VISUAL_EFFECTS = new Set(['none', 'depth', 'weather', 'memory', 'liquid', 'time']);
+    const BG_VISUAL_EFFECTS = new Set(['none', 'depth', 'weather', 'memory', 'liquid', 'time', 'jellyfish']);
     let bgExperienceSettings = { ...BG_EXPERIENCE_DEFAULTS };
+    // 转场风格的注册表（id、名称）在 wallpaper-weave-core.js，设置页只读它来生成下拉选项，避免两处各写一份名单。
+    const weaveCore = window.WallpaperWeaveCore || null;
+
+    function renderTransitionOptions() {
+        const select = document.getElementById('set-bgWallpaperTransition');
+        if (!select) return;
+        if (!weaveCore) { select.disabled = true; return; }
+        const options = [['random', '每次随机（推荐）'], ...weaveCore.STYLES.map(style => [style.id, style.label]), ['none', '直接切换（不播放转场）']];
+        select.replaceChildren(...options.map(([value, label]) => {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = label;
+            return option;
+        }));
+    }
 
     function normalizeBgExperienceSettings(value) {
         const stored = value && typeof value === 'object' ? value : {};
@@ -167,6 +191,17 @@
             autoCalmSeconds: [0, 8, 12, 20].includes(Number(stored.autoCalmSeconds))
                 ? Number(stored.autoCalmSeconds)
                 : BG_EXPERIENCE_DEFAULTS.autoCalmSeconds,
+            wallpaperTransition: stored.wallpaperTransition === 'none' ? 'none' : BG_EXPERIENCE_DEFAULTS.wallpaperTransition,
+            wallpaperTransitionStyle: typeof stored.wallpaperTransitionStyle === 'string' && /^[a-z]{1,16}$/.test(stored.wallpaperTransitionStyle)
+                ? stored.wallpaperTransitionStyle
+                : BG_EXPERIENCE_DEFAULTS.wallpaperTransitionStyle,
+            clockLiquid: stored.clockLiquid !== false,
+            taskCrumple: stored.taskCrumple !== false,
+            jellyfishTasks: stored.jellyfishTasks !== false,
+            jellyfishNight: stored.jellyfishNight !== false,
+            jellyfishDance: stored.jellyfishDance !== false,
+            jellyfishGrow: stored.jellyfishGrow !== false,
+            pomodoroJelly: stored.pomodoroJelly !== false,
         };
     }
 
@@ -189,6 +224,7 @@
     }
 
     function applyBgExperienceUI() {
+        renderTransitionOptions();
         const enabled = document.getElementById('set-bgExperienceEnabled');
         const visual = document.getElementById('set-bgVisualEffect');
         const intensity = document.getElementById('set-bgEffectIntensity');
@@ -203,6 +239,23 @@
         if (playground) playground.checked = bgExperienceSettings.playgroundEnabled;
         if (sound) sound.checked = bgExperienceSettings.soundEnabled;
         if (autoCalm) autoCalm.value = String(bgExperienceSettings.autoCalmSeconds);
+        const transition = document.getElementById('set-bgWallpaperTransition');
+        const clockLiquid = document.getElementById('set-bgClockLiquid');
+        const taskCrumple = document.getElementById('set-bgTaskCrumple');
+        const jellyfishTasks = document.getElementById('set-bgJellyfishTasks');
+        const jellyfishNight = document.getElementById('set-bgJellyfishNight');
+        const jellyfishDance = document.getElementById('set-bgJellyfishDance');
+        const jellyfishGrow = document.getElementById('set-bgJellyfishGrow');
+        const pomodoroJelly = document.getElementById('set-bgPomodoroJelly');
+        // 一个下拉框对应两个字段：none（直接切换）/ random（每次随机）/ 某一种风格。选项来自转场模块的注册表，见 renderTransitionOptions。
+        if (transition) transition.value = weaveCore ? weaveCore.choiceFromSettings(bgExperienceSettings) : 'random';
+        if (clockLiquid) clockLiquid.checked = bgExperienceSettings.clockLiquid;
+        if (taskCrumple) taskCrumple.checked = bgExperienceSettings.taskCrumple;
+        if (jellyfishTasks) jellyfishTasks.checked = bgExperienceSettings.jellyfishTasks;
+        if (jellyfishNight) jellyfishNight.checked = bgExperienceSettings.jellyfishNight;
+        if (jellyfishDance) jellyfishDance.checked = bgExperienceSettings.jellyfishDance;
+        if (jellyfishGrow) jellyfishGrow.checked = bgExperienceSettings.jellyfishGrow;
+        if (pomodoroJelly) pomodoroJelly.checked = bgExperienceSettings.pomodoroJelly;
     }
 
     function bindBgExperienceEvents() {
@@ -212,6 +265,13 @@
             ['set-bgPlaygroundEnabled', 'playgroundEnabled', element => element.checked],
             ['set-bgExperienceSound', 'soundEnabled', element => element.checked],
             ['set-bgAutoCalmSeconds', 'autoCalmSeconds', element => Number(element.value)],
+            ['set-bgClockLiquid', 'clockLiquid', element => element.checked],
+            ['set-bgTaskCrumple', 'taskCrumple', element => element.checked],
+            ['set-bgJellyfishTasks', 'jellyfishTasks', element => element.checked],
+            ['set-bgJellyfishNight', 'jellyfishNight', element => element.checked],
+            ['set-bgJellyfishDance', 'jellyfishDance', element => element.checked],
+            ['set-bgJellyfishGrow', 'jellyfishGrow', element => element.checked],
+            ['set-bgPomodoroJelly', 'pomodoroJelly', element => element.checked],
         ];
         for (const [id, key, read] of bindings) {
             const element = document.getElementById(id);
@@ -220,6 +280,12 @@
                 saveBgExperienceSettings();
             });
         }
+        const transition = document.getElementById('set-bgWallpaperTransition');
+        transition?.addEventListener('change', () => {
+            if (!weaveCore) return;
+            Object.assign(bgExperienceSettings, weaveCore.settingsFromChoice(transition.value));
+            saveBgExperienceSettings();
+        });
         const intensity = document.getElementById('set-bgEffectIntensity');
         const output = document.getElementById('set-bgEffectIntensityOutput');
         intensity?.addEventListener('input', () => {
@@ -227,6 +293,206 @@
             if (output) output.value = `${bgExperienceSettings.intensity}%`;
         });
         intensity?.addEventListener('change', saveBgExperienceSettings);
+    }
+
+    // ====== 水母关怀（喝水 / 起身活动提醒）======
+    // 配置与计数由后台（js/jelly-nudge.js）拥有；这里只经扩展消息读写，页面不直接写存储，也不自己建闹钟。
+    const NUDGE_IDS = ['set-nudgeWater', 'set-nudgeWaterEvery', 'set-nudgeStretch', 'set-nudgeStretchEvery', 'set-nudgeFrom', 'set-nudgeTo', 'set-nudgeWeekdays'];
+    let nudgeChain = Promise.resolve();
+
+    function nudgeRequest(message, timeoutMs = 5000) {
+        return new Promise((resolve, reject) => {
+            if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) { reject(new Error('当前页面无法连接扩展后台')); return; }
+            let settled = false;
+            const timer = setTimeout(() => { if (!settled) { settled = true; reject(new Error('后台没有响应')); } }, timeoutMs);
+            try {
+                chrome.runtime.sendMessage(message, response => {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timer);
+                    const error = chrome.runtime.lastError;
+                    if (error) reject(new Error(error.message || '后台没有响应'));
+                    else if (!response?.ok) reject(new Error(response?.error || '后台没有响应'));
+                    else resolve(response);
+                });
+            } catch (error) {
+                settled = true;
+                clearTimeout(timer);
+                reject(error);
+            }
+        });
+    }
+
+    function setNudgeStatus(text) {
+        const status = document.getElementById('set-nudgeStatus');
+        if (status) status.textContent = text || '';
+    }
+
+    function readNudgeConfig() {
+        const value = id => document.getElementById(id);
+        return {
+            water: { on: !!value('set-nudgeWater')?.checked, everyMin: Number(value('set-nudgeWaterEvery')?.value) },
+            stretch: { on: !!value('set-nudgeStretch')?.checked, everyMin: Number(value('set-nudgeStretchEvery')?.value) },
+            from: value('set-nudgeFrom')?.value || '',
+            to: value('set-nudgeTo')?.value || '',
+            weekdaysOnly: !!value('set-nudgeWeekdays')?.checked,
+        };
+    }
+
+    function applyNudgeUI(result) {
+        const { config, stats } = result;
+        const value = id => document.getElementById(id);
+        if (value('set-nudgeWater')) value('set-nudgeWater').checked = config.water.on;
+        if (value('set-nudgeWaterEvery')) value('set-nudgeWaterEvery').value = String(config.water.everyMin);
+        if (value('set-nudgeStretch')) value('set-nudgeStretch').checked = config.stretch.on;
+        if (value('set-nudgeStretchEvery')) value('set-nudgeStretchEvery').value = String(config.stretch.everyMin);
+        if (value('set-nudgeFrom')) value('set-nudgeFrom').value = config.from;
+        if (value('set-nudgeTo')) value('set-nudgeTo').value = config.to;
+        if (value('set-nudgeWeekdays')) value('set-nudgeWeekdays').checked = config.weekdaysOnly;
+        const statsEl = value('set-nudgeStats');
+        if (statsEl) statsEl.textContent = `喝水 ${stats.water} 次，起身活动 ${stats.stretch} 次（只保存今天，次日自动清零）`;
+    }
+
+    function setNudgeControlsDisabled(disabled) {
+        for (const id of NUDGE_IDS) {
+            const element = document.getElementById(id);
+            if (element) element.disabled = disabled;
+        }
+    }
+
+    function loadNudgeSettings() {
+        if (!document.getElementById('sp-jelly-nudge-card')) return;
+        setNudgeControlsDisabled(true);
+        nudgeChain = nudgeChain
+            .then(() => nudgeRequest({ action: 'jelly_nudge_get' }))
+            .then(result => { applyNudgeUI(result); setNudgeControlsDisabled(false); setNudgeStatus(''); })
+            .catch(error => {
+                const statsEl = document.getElementById('set-nudgeStats');
+                if (statsEl) statsEl.textContent = '无法读取';
+                setNudgeStatus(`无法读取水母关怀设置：${error.message}。请在已加载的扩展里打开本页。`);
+            });
+    }
+
+    function bindNudgeEvents() {
+        if (!document.getElementById('sp-jelly-nudge-card')) return;
+        for (const id of NUDGE_IDS) {
+            document.getElementById(id)?.addEventListener('change', () => {
+                const config = readNudgeConfig();
+                nudgeChain = nudgeChain
+                    .then(() => nudgeRequest({ action: 'jelly_nudge_set', config }))
+                    .then(result => {
+                        applyNudgeUI(result);
+                        // 后台会把不合法的时段改回默认；让用户看到发生了什么，而不是静默改值
+                        const adjusted = result.config.from !== config.from || result.config.to !== config.to;
+                        setNudgeStatus(adjusted ? `时段需要“开始早于结束”，已恢复为 ${result.config.from}–${result.config.to}` : '已保存');
+                    })
+                    .catch(error => setNudgeStatus(`保存失败：${error.message}。再改一次即可重试。`));
+            });
+        }
+        loadNudgeSettings();
+    }
+
+    // ====== 桌面水母（macOS 原生组件）======
+    // 设置与连接由后台（js/jelly-desktop.js）拥有；这里只经扩展消息读写，页面不直接写存储，也不自己连接组件。
+    const DESKTOP_JELLY_IDS = ['set-desktopJellyResident', 'set-desktopJellyNight', 'set-desktopAssistantEnabled', 'set-desktopAssistantHotkey'];
+    const DEFAULT_ASSISTANT_HOTKEY = 'ctrl+shift+b';
+    const HOTKEY_SYMBOLS = { ctrl: '⌃', option: '⌥', shift: '⇧', cmd: '⌘' };
+    let desktopJellyChain = Promise.resolve();
+
+    function setDesktopJellyStatus(text) {
+        const status = document.getElementById('set-desktopJellyStatus');
+        if (status) status.textContent = text || '';
+    }
+
+    function setDesktopJellyControlsDisabled(disabled) {
+        for (const id of DESKTOP_JELLY_IDS) {
+            const element = document.getElementById(id);
+            if (element) element.disabled = disabled;
+        }
+    }
+
+    /** 状态文字：常驻时说明是否连上；没有常驻时说明只在倒计时或提醒期间临时出现；组件的问题把原因直接写出来。 */
+    function describeDesktopJelly(result) {
+        const { settings, status } = result;
+        const problem = status?.error ? `${status.error}。` : '';
+        if (settings.resident) {
+            return status?.connected
+                ? `桌面水母已常驻（组件协议 v${status.version}）。`
+                : `已设为常驻，但还没连上桌面组件。${problem}请按 desktop-reminder/README.md 安装或更新组件，再重载扩展。`;
+        }
+        return `${problem}没有常驻：只在倒计时或提醒期间临时出现。`;
+    }
+
+    /** 规范热键串（如 ctrl+shift+b）显示成符号（⌃⇧B）；空格与功能键写成文字。 */
+    function hotkeyLabel(hotkey) {
+        const parts = String(hotkey || '').split('+');
+        const key = parts.pop() || '';
+        return parts.map(part => HOTKEY_SYMBOLS[part] || '').join('') + (key === 'space' ? '空格' : key.toUpperCase());
+    }
+
+    /** 桌面 AI 助手的状态说明：每种热键状态都给出可行动的下一步；菜单里的“问 AI…”不依赖快捷键。 */
+    function describeAssistant(assistant) {
+        if (!assistant?.enabled) return '';
+        if (assistant.needsResident) return '桌面 AI 助手需要先打开上面的“常驻桌面”才会生效。';
+        const label = hotkeyLabel(assistant.hotkey);
+        switch (assistant.hotkeyStatus) {
+            case 'ok': return `桌面 AI 助手已就绪：在任意应用里按 ${label} 唤出输入面板，也可以右键水母选“问 AI…”。macOS 不会告知快捷键是否与其他应用冲突，按下后没有反应或同时触发了别的应用时，请换一个组合。`;
+            case 'taken': return `系统报告快捷键 ${label} 已被占用，请换一个组合；右键水母选“问 AI…”仍可使用。`;
+            case 'invalid': return `快捷键 ${label} 无效，请换一个组合；右键水母选“问 AI…”仍可使用。`;
+            case 'failed': return `系统没有接受快捷键 ${label}，请换一个组合；右键水母选“问 AI…”仍可使用。`;
+            case 'unsupported': return '桌面组件版本过旧，不支持桌面 AI 助手：请按 desktop-reminder/README.md 更新组件，再重载扩展。';
+            case 'unknown':
+            default: return '正在等待桌面组件连接并注册快捷键…';
+        }
+    }
+
+    function applyDesktopJellyUI(result) {
+        const resident = document.getElementById('set-desktopJellyResident');
+        const night = document.getElementById('set-desktopJellyNight');
+        const assistantEnabled = document.getElementById('set-desktopAssistantEnabled');
+        const assistantHotkey = document.getElementById('set-desktopAssistantHotkey');
+        if (resident) resident.checked = result.settings.resident === true;
+        if (night) night.checked = result.settings.night !== false;
+        if (assistantEnabled) assistantEnabled.checked = result.assistant?.enabled === true;
+        if (assistantHotkey) {
+            const hotkey = result.assistant?.hotkey;
+            assistantHotkey.value = [...assistantHotkey.options].some(option => option.value === hotkey) ? hotkey : DEFAULT_ASSISTANT_HOTKEY;
+        }
+        setDesktopJellyStatus(describeDesktopJelly(result));
+        const assistantStatus = document.getElementById('set-desktopAssistantStatus');
+        if (assistantStatus) assistantStatus.textContent = describeAssistant(result.assistant);
+    }
+
+    function loadDesktopJelly() {
+        desktopJellyChain = desktopJellyChain
+            .then(() => nudgeRequest({ action: 'jelly_desktop_get' }))
+            .then(applyDesktopJellyUI)
+            .catch(error => setDesktopJellyStatus(`无法读取桌面水母设置：${error.message}。请在已加载的扩展里打开本页。`));
+    }
+
+    function bindDesktopJellyEvents() {
+        if (!document.getElementById('sp-desktop-jelly-card')) return;
+        for (const id of DESKTOP_JELLY_IDS) {
+            document.getElementById(id)?.addEventListener('change', () => {
+                const settings = {
+                    resident: !!document.getElementById('set-desktopJellyResident')?.checked,
+                    night: !!document.getElementById('set-desktopJellyNight')?.checked,
+                    assistant: { enabled: !!document.getElementById('set-desktopAssistantEnabled')?.checked, hotkey: document.getElementById('set-desktopAssistantHotkey')?.value || DEFAULT_ASSISTANT_HOTKEY },
+                };
+                setDesktopJellyControlsDisabled(true);
+                setDesktopJellyStatus('正在保存并连接桌面组件…');
+                desktopJellyChain = desktopJellyChain
+                    .then(() => nudgeRequest({ action: 'jelly_desktop_set', settings }, 15000))
+                    .then(applyDesktopJellyUI)
+                    .catch(error => setDesktopJellyStatus(`保存失败：${error.message}。再改一次即可重试。`))
+                    .then(() => setDesktopJellyControlsDisabled(false));
+            });
+        }
+        // 水母右键菜单的“收起水母”、状态栏退出组件都会改设置；打开着的设置页跟着刷新
+        chrome.storage?.onChanged?.addListener?.((changes, area) => {
+            if (area === 'local' && (changes.desktopJellyV1 || changes.desktopAssistantV1)) loadDesktopJelly();
+        });
+        loadDesktopJelly();
     }
 
     async function loadBgProviderSettings() {
@@ -366,5 +632,7 @@
         bindGuideEvents();
         loadBgProviderSettings().then(bindBgProviderEvents);
         loadBgExperienceSettings().then(bindBgExperienceEvents);
+        bindNudgeEvents();
+        bindDesktopJellyEvents();
     });
 })();

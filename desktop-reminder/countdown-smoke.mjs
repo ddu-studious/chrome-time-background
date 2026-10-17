@@ -34,13 +34,9 @@ try {
   const first = await request('countdown', { timer });
   assert.equal(first.ok, true); assert.equal(first.countdownVisible, true); assert.equal(first.visible, false); assert.equal(first.focusStayed, true);
   console.log('SHOW', JSON.stringify(first));
-  const expectedWidth = Number(process.argv.find(a => a.startsWith('--expect-width='))?.split('=')[1]);
-  if (expectedWidth) {
-    const size = first.countdownFrame.match(/\{([\d.]+), ([\d.]+)\}\}$/);
-    assert.ok(size, '需要真实窗口尺寸回执');
-    assert.equal(Number(size[1]), expectedWidth, '重新启动必须保留用户选择的宽度');
-    assert.ok(Math.abs(Number(size[2]) - expectedWidth / 3.4) < 1, '恢复胶囊比例');
-  }
+  // v6：倒计时由桌面水母承载（胶囊已取消）；没有常驻时，水母只在倒计时期间临时出现
+  assert.equal(first.version, 7); assert.equal(first.jellyVisible, true); assert.equal(first.jellyResident, false);
+  assert.equal(first.jellyBubble, 'clock'); assert.match(first.countdownFrame, /\{170, 150\}\}$/, '水母窗口为基础尺寸 170×150');
   await delay(1600);
   const tick = await request('ping');
   assert.notEqual(tick.countdownText, first.countdownText);
@@ -49,12 +45,13 @@ try {
   assert.equal(invalid.ok, false); assert.equal(invalid.countdownVisible, true);
   const renamed = await request('countdown', { timer: { ...timer, title: '改名后的提醒' } });
   assert.equal(renamed.countdownTitle, '改名后的提醒'); assert.equal(renamed.countdownFrame, first.countdownFrame);
-  const ringing = await request('show', { sessionId: 'ring-smoke', title: '倒计时切换测试', timeText: '隔离测试，不修改真实闹钟', canSnooze: true });
-  assert.equal(ringing.visible, true); assert.equal(ringing.countdownVisible, false);
+  // 响铃也是水母的气泡（深色提醒卡片已取消）：到点时水母游到屏幕底部正中报时，倒计时气泡让位；响完恢复
+  const ringing = await request('show', { sessionId: 'ring-smoke', title: '倒计时切换测试', clock: '09:30', labels: ['倒计时切换测试'], timeText: '隔离测试，不修改真实闹钟', canSnooze: true });
+  assert.equal(ringing.visible, true); assert.equal(ringing.countdownVisible, false); assert.equal(ringing.ringId, 'ring-smoke');
   const stale = await request('hide', { sessionId: 'stale' });
-  assert.equal(stale.visible, true);
+  assert.equal(stale.visible, true); assert.equal(stale.ringId, 'ring-smoke', '过期会话的 hide 不能收走响铃');
   const stopped = await request('hide', { sessionId: 'ring-smoke' });
-  assert.equal(stopped.visible, false); assert.equal(stopped.countdownVisible, true);
+  assert.equal(stopped.visible, false); assert.equal(stopped.ringId, null); assert.equal(stopped.countdownVisible, true);
   const elapsed = await request('countdown', { timer: { ...timer, fireAt: Date.now() - 1000 } });
   assert.equal(elapsed.countdownText, '00:00');
   const long = await request('countdown', { timer: { ...timer, fireAt: Date.now() + 90000000 } });
@@ -67,6 +64,6 @@ try {
     console.log('AFTER_PREVIEW', JSON.stringify(await request('ping')));
   }
   const hidden = await request('countdown', { timer: null });
-  assert.equal(hidden.countdownVisible, false);
+  assert.equal(hidden.countdownVisible, false); assert.equal(hidden.jellyVisible, false, '没有常驻、也没有倒计时时水母退场');
   console.log('PASS: 原生显示、每秒更新、不抢焦点、输入校验、更新不移位、响铃优先、过期会话隔离、到期归零、跨天显示、隐藏');
 } finally { child.stdin.end(); }

@@ -18,20 +18,20 @@ test('正式首页加载独立背景体验层并保持在业务内容之下', ()
   ]) {
     assert.ok(html.includes(`id="${id}"`), id);
   }
-  assert.ok(html.includes('css/background-experience.css?v=4'));
+  assert.ok(html.includes('css/background-experience.css?v=6'));
   assert.match(html, /class="bgx-tooltip" aria-hidden="true">背景玩法<\/span>/);
   assert.match(html, /id="v5-right-floating-rail"[\s\S]*?id="background-experience-hud"[\s\S]*?id="background-experience-toggle"/);
   assert.match(css, /\.bgx-toggle \.bgx-tooltip[\s\S]*?right: calc\(100% \+ 8px\)/);
   assert.match(css, /\.bgx-toggle::before[\s\S]*?radial-gradient/);
   assert.match(css, /\.bgx-toggle:hover,[\s\S]*?scale\(1\.045\)/);
-  assert.ok(html.includes('js/background-experience.js?v=4'));
+  assert.match(html, /js\/background-experience\.js\?v=\d+/);
   assert.match(css, /\.bgx-root \{[\s\S]*?z-index: 2;[\s\S]*?pointer-events: none;/);
   assert.match(read('css/style.css'), /\.main-layout \{[\s\S]*?z-index: 3;/);
 });
 
-test('v2 五种视觉皮肤与 v3 手势世界进入正式控制器', () => {
+test('v2 六种视觉皮肤（含深海水母）与 v3 手势世界进入正式控制器', () => {
   const source = read('js/background-experience.js');
-  for (const effect of ['depth', 'weather', 'memory', 'liquid', 'time']) {
+  for (const effect of ['depth', 'weather', 'memory', 'liquid', 'time', 'jellyfish']) {
     assert.ok(source.includes(`'${effect}'`), effect);
   }
   for (const gesture of ['脉冲', '织光', '引力核心', '彗光', '旋涡']) {
@@ -69,8 +69,8 @@ test('背景切换同步视觉层，设置中心完整持久化体验配置', ()
   }
   assert.ok(settingsSource.includes("chrome.storage.sync.get('backgroundExperienceSettings')"));
   assert.ok(settingsSource.includes('backgroundExperienceSettings: bgExperienceSettings'));
-  assert.ok(settingsHtml.includes('js/settings-page.js?v=4'));
-  assert.ok(settingsHtml.indexOf('js/chrome-shim.js?v=5') < settingsHtml.indexOf('js/settings-page.js?v=4'));
+  assert.ok(settingsHtml.includes('js/settings-page.js?v=10'));
+  assert.ok(settingsHtml.indexOf('js/chrome-shim.js?v=5') < settingsHtml.indexOf('js/settings-page.js?v=10'));
   assert.ok(read('js/settings-v5.js').includes("'backgroundExperienceSettings'"));
   assert.ok(read('js/settings-v5.js').includes("targets: ['time', 'background-experience', 'weather', 'appearance']"));
 });

@@ -13,8 +13,17 @@
         playgroundEnabled: true,
         soundEnabled: false,
         autoCalmSeconds: 12,
+        wallpaperTransition: 'on',
+        wallpaperTransitionStyle: 'random',
+        clockLiquid: true,
+        taskCrumple: true,
+        jellyfishTasks: true,
+        jellyfishNight: true,
+        jellyfishDance: true,
+        jellyfishGrow: true,
+        pomodoroJelly: true,
     });
-    const VISUAL_EFFECTS = new Set(['none', 'depth', 'weather', 'memory', 'liquid', 'time']);
+    const VISUAL_EFFECTS = new Set(['none', 'depth', 'weather', 'memory', 'liquid', 'time', 'jellyfish']);
     const COLORS = [[112, 205, 255], [170, 111, 255], [79, 239, 194]];
 
     function clamp(value, min, max) {
@@ -32,6 +41,24 @@
             autoCalmSeconds: [0, 8, 12, 20].includes(Number(source.autoCalmSeconds))
                 ? Number(source.autoCalmSeconds)
                 : DEFAULTS.autoCalmSeconds,
+            // 触感实验：壁纸转场 / 液态时钟 / 任务完成动效，由 wallpaper-weave.js、clock-liquid.js、task-crumple.js 读取。
+            // wallpaperTransition 只有 'none' 表示关闭（旧版保存的 'weave' 与新值 'on' 都是开启）；
+            // wallpaperTransitionStyle 是 'random' 或某个风格 id，具体取值范围由转场模块校验，这里只保证是一个短小写字母串。
+            wallpaperTransition: source.wallpaperTransition === 'none' ? 'none' : DEFAULTS.wallpaperTransition,
+            wallpaperTransitionStyle: typeof source.wallpaperTransitionStyle === 'string' && /^[a-z]{1,16}$/.test(source.wallpaperTransitionStyle)
+                ? source.wallpaperTransitionStyle
+                : DEFAULTS.wallpaperTransitionStyle,
+            clockLiquid: source.clockLiquid !== false,
+            taskCrumple: source.taskCrumple !== false,
+            // 深海水母皮肤：水母上隐约显示任务名，并可以抓住水母拖进纸篓来完成任务（只在选了水母皮肤时有意义）。
+            jellyfishTasks: source.jellyfishTasks !== false,
+            // 夜晚荧光：晚 8 点到次日早 6 点（前后各 1 小时渐变）水母更亮、偏深海蓝紫；只用本机时间。
+            jellyfishNight: source.jellyfishNight !== false,
+            // 随音乐起舞：音乐播放器显示“正在播放”时水母每拍都收缩并摇摆（不是真实节拍）；成长：按连续完成任务的天数让钟罩略大一圈；
+            // pomodoroJelly 由 pomodoro-jelly.js 读取（番茄钟面板里的陪伴水母），与是否选了水母皮肤无关。
+            jellyfishDance: source.jellyfishDance !== false,
+            jellyfishGrow: source.jellyfishGrow !== false,
+            pomodoroJelly: source.pomodoroJelly !== false,
         };
     }
 
@@ -74,7 +101,14 @@
                 vx: 0, vy: 0, down: false, started: 0,
                 startX: 0, startY: 0, distance: 0, stroke: null, samples: [],
             };
+            // pointer 的初始值只是屏幕中心的占位：水母只躲真实收到过、并且仍在页面里的指针（见 jellyfishPointer）。
+            this.pointerSeen = false;
+            this.pointerInside = false;
+            this.grab = null;               // 正在抓水母：{ id }；水母的抓取状态机在皮肤里，这里只转发指针并管光标/点击
+            this.grabHover = false;         // 指针下面是不是一只可抓的水母（光标变成手）
+            this.swallowClickUntil = 0;     // 拖拽结束后紧跟着的那次 click 不让页面当成“点了空白处”
             this.bound = false;
+            this.musicPlaying = false;
         }
 
         async init() {
@@ -99,7 +133,10 @@
 
         applySettings() {
             const intensity = this.settings.intensity / 100;
-            const visual = this.settings.enabled ? this.settings.visualEffect : 'none';
+            const requested = this.settings.enabled ? this.settings.visualEffect : 'none';
+            // 水母靠持续的收缩与漂浮才成立：开启“减少动态效果”时直接当作没选皮肤，连深海色调层一起不出现，
+            // 否则只会看到一层没有内容的暗色。其他皮肤沿用原有行为。
+            const visual = requested === 'jellyfish' && this.reduceMotion ? 'none' : requested;
             this.root.classList.toggle('enabled', this.settings.enabled && (visual !== 'none' || this.settings.playgroundEnabled));
             this.root.dataset.visual = visual;
             this.root.style.setProperty('--bgx-intensity', intensity.toFixed(2));
@@ -114,7 +151,109 @@
             this.applyTimeVisual();
             this.seedWeather();
             this.seedLiquid();
+            this.syncJellyfish(visual);
             this.syncAnimation();
+        }
+
+        // 水母皮肤的画法、待办名单、时钟拍点与抓取状态机都在 js/jellyfish*.js；这里只负责按设置启停、在 drawPassive 里把共享画布借给它，
+        // 并把真实的指针事件转发过去（抓取、悬停、拖动结束）。皮肤脚本缺席时这些入口都是空操作。
+        // visual 已经把“减少动态效果”折算为 none（见 applySettings），所以这里只看它。
+        skin() {
+            return window.JellyfishSkin || null;
+        }
+
+        syncJellyfish(visual) {
+            const skin = this.skin();
+            if (!skin) return;
+            if (visual === 'jellyfish') {
+                // 关掉“任务名与抓取”（例如在设置页或别的标签页里）：正在抓着的水母放开，松手时不再完成任务；水母本身照常游
+                if (!this.settings.jellyfishTasks) { this.cancelGrab(); this.setGrabHover(false); }
+                skin.start();
+                return;
+            }
+            this.cancelGrab();
+            this.setGrabHover(false);
+            skin.stop();
+        }
+
+        jellyfishRunning() {
+            const skin = this.skin();
+            return this.settings.visualEffect === 'jellyfish' && !!skin && skin.isActive();   // 减少动态效果下皮肤从未启动（见 applySettings），所以 isActive 为 false
+        }
+
+        /** 交给水母的指针：只有真实收到过位置、且仍在页面里（或正拖着水母）时才有，否则水母既不躲避也不被它牵动。 */
+        jellyfishPointer() {
+            return this.pointerSeen && (this.pointerInside || this.grab) ? this.pointer : null;
+        }
+
+        drawJellyfish(now, dt, amount) {
+            // 不传 colors：水母用皮肤自己的七彩调色板（每只一种颜色）；宿主的 COLORS 只有几种，传过去会让七彩失效
+            this.skin()?.frame({
+                ctx: this.ctx, width: this.width, height: this.height, now, dt, amount,
+                pointer: this.jellyfishPointer(), lowPower: this.saveData, labels: this.settings.jellyfishTasks, night: this.settings.jellyfishNight,
+                dance: this.settings.jellyfishDance && this.musicPlaying ? 1 : 0, grow: this.settings.jellyfishGrow,
+            });
+        }
+
+        /** 水母是否允许被抓：皮肤在运行、设置开着、页面可见。 */
+        canGrabJelly() {
+            return !this.hidden && this.settings.jellyfishTasks && this.jellyfishRunning();
+        }
+
+        setGrabHover(value) {
+            if (this.grabHover === value) return;
+            this.grabHover = value;
+            document.documentElement?.classList.toggle('jellyfish-grabbable', value);
+        }
+
+        /** 鼠标移到可抓的水母上时把光标变成手（只看空白背景处的鼠标；触摸没有悬停）。 */
+        updateGrabHover(event) {
+            const over = !this.grab && event.pointerType === 'mouse' && this.canGrabJelly()
+                && this.isBackgroundTarget(event.target) && !!this.skin().hoverAt(event.clientX, event.clientY);
+            this.setGrabHover(over);
+        }
+
+        /** 在空白背景上按下主键，且正好按在一只绑定了任务的水母上：抓住它。返回是否抓住（抓住就不再交给背景玩法）。 */
+        tryGrab(event) {
+            if (this.grab || event.button !== 0 || event.isPrimary === false) return false;
+            if (!this.canGrabJelly() || !this.isBackgroundTarget(event.target)) return false;
+            if (!this.skin().grabAt(event.clientX, event.clientY)) return false;
+            event.preventDefault();                 // 不选中文字、不开始原生拖拽
+            this.setPointer(event);
+            this.grab = { id: event.pointerId };
+            this.setGrabHover(false);
+            document.documentElement?.classList.add('jellyfish-grabbing');
+            return true;
+        }
+
+        /** 抓取结束：松手（含按键在窗口外被放开）交给皮肤判断是否落进纸篓。拖过的话随后那次 click 要吞掉。 */
+        endGrab(event) {
+            const grab = this.grab;
+            if (!grab) return;
+            this.grab = null;
+            document.documentElement?.classList.remove('jellyfish-grabbing');
+            const skin = this.skin();
+            if (!skin) return;
+            this.setPointer(event);
+            if (skin.drop(event.clientX, event.clientY)) this.swallowClickUntil = performance.now() + 450;
+        }
+
+        /** 被打断（失焦、页面隐藏、指针取消、关掉水母皮肤）：放开水母、收起纸篓，不完成任何任务。 */
+        cancelGrab() {
+            if (!this.grab) return;
+            this.grab = null;
+            document.documentElement?.classList.remove('jellyfish-grabbing');
+            this.skin()?.cancel();
+        }
+
+        /** 拖拽结束后随即到来的那次 click：它不是用户想点的东西，不让页面当成“点了空白处”（关面板之类）。 */
+        onClickCapture(event) {
+            if (!this.swallowClickUntil) return;
+            const fresh = performance.now() < this.swallowClickUntil;
+            this.swallowClickUntil = 0;
+            if (!fresh) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
         }
 
         setSuspended(value) {
@@ -126,6 +265,7 @@
 
         needsAnimation() {
             return this.settings.enabled && (this.active || this.settings.visualEffect === 'liquid'
+                || this.jellyfishRunning()
                 || (this.settings.visualEffect === 'weather' && !['clear', 'night'].includes(this.weather)));
         }
 
@@ -233,6 +373,8 @@
         bind() {
             if (this.bound) return;
             this.bound = true;
+            // 音乐播放器（music-controller.js）在“正在播放”变化时发出：与播放键图标是同一个状态，只读；晚到或缺席都当没在播
+            window.addEventListener('music:playing', event => { this.musicPlaying = event?.detail?.playing === true; });
             this.toggle.addEventListener('click', () => this.setActive(!this.active));
             window.addEventListener('resize', () => {
                 this.resize();
@@ -248,6 +390,16 @@
             document.addEventListener('pointerup', event => this.onPointerUp(event), true);
             document.addEventListener('pointercancel', () => this.cancelPointer(), true);
             document.addEventListener('dblclick', event => this.onDoubleClick(event), true);
+            // 抓水母相关：拖拽结束后的那次 click 不当成点空白处；指针离开页面后水母不再躲它；失焦或按 Esc 放开水母
+            document.addEventListener('click', event => this.onClickCapture(event), true);
+            document.documentElement?.addEventListener('pointerleave', () => {
+                this.pointerInside = false;
+                this.setGrabHover(false);
+            });
+            window.addEventListener('blur', () => this.cancelPointer());
+            document.addEventListener('keydown', event => {
+                if (event.key === 'Escape' && this.grab) this.cancelGrab();
+            }, true);
             chrome.storage.onChanged.addListener((changes, area) => {
                 if (area !== 'sync' || !changes[STORAGE_KEY]) return;
                 this.settings = normalizeSettings(changes[STORAGE_KEY].newValue);
@@ -273,6 +425,8 @@
             p.y = event.clientY;
             p.vx = p.x - p.px;
             p.vy = p.y - p.py;
+            this.pointerSeen = true;
+            this.pointerInside = true;
             this.root.style.setProperty('--bgx-x', `${p.x}px`);
             this.root.style.setProperty('--bgx-y', `${p.y}px`);
             const nx = p.x / Math.max(1, this.width) - .5;
@@ -348,6 +502,7 @@
         }
 
         onPointerDown(event) {
+            if (this.tryGrab(event)) return;           // 按在一只水母上：抓水母优先于背景玩法
             if (!this.active || !this.isBackgroundTarget(event.target)) return;
             event.preventDefault();
             this.setPointer(event);
@@ -367,6 +522,11 @@
         onPointerMove(event) {
             if (this.hidden) return;
             this.setPointer(event);
+            if (this.grab) {
+                if (event.pointerId === this.grab.id && event.buttons === 0) this.endGrab(event);    // 在窗口外放开时没收到 pointerup：按放开处理
+                return;
+            }
+            this.updateGrabHover(event);
             if (!this.active) return;
             const p = this.pointer;
             if (!p.down || p.id !== event.pointerId) return;
@@ -381,6 +541,10 @@
         }
 
         onPointerUp(event) {
+            if (this.grab) {
+                if (event.pointerId === this.grab.id) this.endGrab(event);
+                return;
+            }
             const p = this.pointer;
             if (!this.active || !p.down || p.id !== event.pointerId) return;
             const now = performance.now();
@@ -433,6 +597,7 @@
             this.pointer.id = null;
             this.pointer.stroke = null;
             this.pointer.samples = [];
+            this.cancelGrab();
         }
 
         tone(note, strength) {
@@ -467,6 +632,7 @@
         drawPassive(now, dt) {
             const effect = this.root.dataset.visual;
             const amount = this.settings.intensity / 100;
+            if (effect === 'jellyfish') this.drawJellyfish(now, dt, amount);
             if (effect === 'weather' && this.weather !== 'clear' && this.weather !== 'night') {
                 for (const bit of this.weatherBits) {
                     if (this.weather === 'snow') {

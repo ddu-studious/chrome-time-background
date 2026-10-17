@@ -2,14 +2,20 @@
   'use strict';
   const COMMAND = 'toggle-quick-assistant';
   function install(deps) {
-    let confirmation, voice;
+    let confirmation, voice, native;
     const handlers = root.AssistantTools.create({ ...deps, memory: (action, body) => root.LocalAIBridge.request({ action: action === 'get' ? 'ai_memory_get' : 'ai_memory_write', body }) });
-    const engine = root.AssistantEngine.create({ storage: chrome.storage.local, ...handlers, onChange: task => { confirmation?.sync(task); void voice?.onChange(task).catch(() => {}); }, history: event => root.LocalAIBridge.request({ action: 'ai_history_write', body: { operation: 'event', event } }), cancelJob: jobId => root.LocalAIBridge.request({ action: 'ai_job_cancel', jobId }) });
+    const engine = root.AssistantEngine.create({ storage: chrome.storage.local, ...handlers, onChange: task => { confirmation?.sync(task); native?.sync(task); void voice?.onChange(task).catch(() => {}); }, history: event => root.LocalAIBridge.request({ action: 'ai_history_write', body: { operation: 'event', event } }), cancelJob: jobId => root.LocalAIBridge.request({ action: 'ai_job_cancel', jobId }) });
     voice = root.AssistantVoiceBackground?.create({ snapshot: () => engine.snapshot(), request: message => root.LocalAIBridge.request(message), storage: chrome.storage.session });
     void voice?.onChange().catch(() => {});
     if (deps.desktop && root.AssistantConfirmation) {
       confirmation = root.AssistantConfirmation.create({ desktop: deps.desktop, engine, openWorkspace: () => open(false) });
       void engine.snapshot().then(task => confirmation.sync(task)).catch(() => {});
+    }
+    // 桌面 AI 助手（macOS 原生面板，协议 v7）：与确认卡共用同一条 Native Messaging 连接和同一个 Engine，原生输入走 engine.submit，
+    // 任务状态投影回原生面板；是否生效由 jelly（桌面水母设置：常驻且已启用）决定。见 js/assistant-native.js
+    if (deps.desktop && deps.jelly && root.AssistantNative) {
+      native = root.AssistantNative.create({ desktop: deps.desktop, engine, jelly: deps.jelly, openWorkspace: () => open(false), log: (category, action, detail) => deps.log?.(category, action, detail) });
+      void engine.snapshot().then(task => native.sync(task)).catch(() => {});
     }
     const BINDINGS = 'quickAssistantOverlaysV1';
     let opening = null;
@@ -248,7 +254,7 @@
       return true;
     });
     // A lightweight status request also keeps active UI sessions connected to the worker.
-    return { open, engine };
+    return { open, engine, native };
   }
   root.QuickAssistant = { install, COMMAND };
 })(globalThis);

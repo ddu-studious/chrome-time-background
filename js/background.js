@@ -1,4 +1,4 @@
-importScripts('quick-capture.js', 'app-video.js', 'youtube-home.js', 'huya-core.js', 'huya-follow.js', 'music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'music-search.js', 'alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'alarm-countdown.js', 'local-ai-client.js', 'background-provider.js', 'hermes-writing-sync.js', 'site-workspace-core.js', '../vendor/pinyin-match/pinyin-match.js', 'assistant-match.js', 'assistant-memory.js', 'assistant-contract.js', 'assistant-context-state.js', 'assistant-todo.js', 'assistant-engine.js', 'assistant-confirmation.js', 'assistant-music.js', 'assistant-management.js', 'assistant-tools.js', 'assistant-voice-background.js', 'assistant-background.js');
+importScripts('jelly-nudge.js', 'jelly-desktop.js', 'quick-capture.js', 'app-video.js', 'youtube-home.js', 'huya-core.js', 'huya-follow.js', 'music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'music-search.js', 'alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'alarm-countdown.js', 'local-ai-client.js', 'background-provider.js', 'hermes-writing-sync.js', 'site-workspace-core.js', '../vendor/pinyin-match/pinyin-match.js', 'assistant-match.js', 'assistant-memory.js', 'assistant-contract.js', 'assistant-context-state.js', 'assistant-todo.js', 'assistant-engine.js', 'assistant-confirmation.js', 'assistant-native.js', 'assistant-music.js', 'assistant-management.js', 'assistant-tools.js', 'assistant-voice-background.js', 'assistant-background.js');
 
 (function() {
     let assistantMusicRevision = 0;
@@ -580,6 +580,42 @@ importScripts('quick-capture.js', 'app-video.js', 'youtube-home.js', 'huya-core.
     const musicSleep = MusicSleep.create({ storage: chrome.storage.local, alarms: chrome.alarms, pause: () => sendToOffscreen({ command: 'pause' }) });
     chrome.alarms.onAlarm.addListener(alarm => { void musicSleep.fire(alarm.name).catch(error => console.warn('[MusicSleep]', error.message)); });
     void musicSleep.restore().catch(error => console.warn('[MusicSleep]', error.message));
+
+    // 桌面水母（macOS 原生组件里的水母）：独立于闹钟的桌面伙伴，设置只有“常驻”和“夜晚荧光”，连接与重连在 js/jelly-desktop.js。
+    // 倒计时与喝水/起身提醒只是委托方：下面的 summary / act 把提醒模块的“今天的记录”和气泡按钮接进来，onRestored 在重连后重发倒计时。
+    const jellyDesktop = JellyDesktop.create({
+        storage: chrome.storage.local, desktop: desktopAlarm,
+        summary: () => jellyNudge.summary(),
+        act: (id, action) => jellyNudge.act(id, action),
+        onRestored: () => alarmCountdown.sync(),
+    });
+    // 水母关怀（喝水 / 起身活动）：只用 chrome.alarms 与 chrome.notifications，默认关闭，设置页“水母关怀”里开启。见 js/jelly-nudge.js
+    // 到点先请桌面水母接手（3 秒内确认才算），水母不在或没确认时退回系统通知；计数变化后让水母刷新“今天的记录”。
+    const jellyNudge = JellyNudge.create({
+        syncStorage: chrome.storage.sync, localStorage: chrome.storage.local, alarms: chrome.alarms, notifications: chrome.notifications,
+        getURL: path => chrome.runtime.getURL(path),
+        presenter: jellyDesktop.presenter,
+        onChange: () => jellyDesktop.sync(),
+    });
+    chrome.alarms.onAlarm.addListener(alarm => { void jellyNudge.fire(alarm.name).catch(error => console.warn('[JellyNudge]', error.message)); });
+    chrome.notifications.onButtonClicked.addListener((id, index) => { void jellyNudge.button(id, index).catch(error => console.warn('[JellyNudge]', error.message)); });
+    void jellyNudge.restore().catch(error => console.warn('[JellyNudge]', error.message));
+    // 先让提醒补好闹钟，水母下发的“下一次提醒”才读得到；常驻时这里会建立与桌面组件的连接
+    void jellyDesktop.restore().catch(error => console.warn('[JellyDesktop]', error.message));
+    chrome.runtime.onMessage.addListener((message, sender, respond) => {
+        if (!['jelly_desktop_get', 'jelly_desktop_set'].includes(message?.action)) return;
+        if (sender.id !== chrome.runtime.id || !sender.url?.startsWith(chrome.runtime.getURL(''))) { respond({ ok: false, error: '仅扩展页面可设置桌面水母' }); return; }
+        (message.action === 'jelly_desktop_set' ? jellyDesktop.set(message.settings) : jellyDesktop.get())
+            .then(respond).catch(error => respond({ ok: false, error: error.message }));
+        return true;
+    });
+    chrome.runtime.onMessage.addListener((message, sender, respond) => {
+        if (!['jelly_nudge_get', 'jelly_nudge_set'].includes(message?.action)) return;
+        if (sender.id !== chrome.runtime.id || !sender.url?.startsWith(chrome.runtime.getURL(''))) { respond({ ok: false, error: '仅扩展页面可设置水母关怀' }); return; }
+        (message.action === 'jelly_nudge_set' ? jellyNudge.set(message.config) : jellyNudge.get())
+            .then(respond).catch(error => respond({ ok: false, error: error.message }));
+        return true;
+    });
     chrome.runtime.onMessage.addListener((message, sender, respond) => {
         if (!['music_sleep_set', 'music_sleep_get', 'music_sleep_expire'].includes(message.action)) return;
         if (sender.id !== chrome.runtime.id || !sender.url?.startsWith(chrome.runtime.getURL(''))) { respond({ ok: false, error: '仅扩展页面可设置音乐定时' }); return; }
@@ -1049,6 +1085,33 @@ importScripts('quick-capture.js', 'app-video.js', 'youtube-home.js', 'huya-core.
         return { ok: true };
     }
 
+    // 通知点击与桌面倒计时的“在 Chrome 中打开闹钟中心”共用：已有首页则聚焦并展开，否则新开一页。
+    async function openAlarmCenterPage() {
+        const indexUrl = chrome.runtime.getURL('index.html');
+        const tabs = await chrome.tabs.query({ url: `${indexUrl}*` });
+        if (tabs[0]?.id != null) {
+            await chrome.tabs.update(tabs[0].id, { active: true });
+            if (tabs[0].windowId != null) await chrome.windows.update(tabs[0].windowId, { focused: true });
+            await chrome.runtime.sendMessage({ action: 'user_alarm_open_center' }).catch(() => {});
+        } else {
+            await chrome.storage.local.set({ pendingAction: 'openAlarmCenter' });
+            await chrome.tabs.create({ url: `${indexUrl}?alarmAction=open`, active: true });
+        }
+    }
+
+    // 桌面倒计时“延后 / 跳过本次”：与保存、改名、删除同一条串行队列；规则在 AlarmCountdown.applyAction。
+    function runUserAlarmCountdownAction(message) {
+        const operation = userAlarmSaveQueue.then(async () => {
+            const { alarms, runtime } = await loadUserAlarmState();
+            const result = self.AlarmCountdown.applyAction(AlarmCore, alarms, runtime, message, Date.now());
+            await saveUserAlarmState(alarms, runtime);
+            await reconcileUserAlarmSchedule({ recoverDue: false });
+            return result;
+        }).catch(error => ({ ok: false, error: error?.message || '操作失败' }));
+        userAlarmSaveQueue = operation.catch(() => {});
+        return operation;
+    }
+
     async function getUserAlarmViewState() {
         const { alarms, runtime } = await loadUserAlarmState();
         const next = AlarmCore.nextDispatch(alarms, runtime, Date.now());
@@ -1064,6 +1127,9 @@ importScripts('quick-capture.js', 'app-video.js', 'youtube-home.js', 'huya-core.
             countdown: await alarmCountdown.sync()
         };
     }
+
+    alarmCountdown.runAction = runUserAlarmCountdownAction;
+    alarmCountdown.openCenter = openAlarmCenterPage;
 
     // 图标右键的音乐快捷播放不应打断用户正在浏览的页面。这里在 Service Worker 中
     // 获取推荐、维护队列，并交给 Offscreen Document 播放；主页只是稍后查看和控制的界面。
@@ -2787,16 +2853,7 @@ importScripts('quick-capture.js', 'app-video.js', 'youtube-home.js', 'huya-core.
         console.log('通知点击:', notificationId);
 
         if (notificationId.startsWith(USER_ALARM_NOTIFICATION_PREFIX) || notificationId.startsWith(USER_ALARM_MISSED_PREFIX)) {
-            const indexUrl = chrome.runtime.getURL('index.html');
-            const tabs = await chrome.tabs.query({ url: `${indexUrl}*` });
-            if (tabs[0]?.id != null) {
-                await chrome.tabs.update(tabs[0].id, { active: true });
-                if (tabs[0].windowId != null) await chrome.windows.update(tabs[0].windowId, { focused: true });
-                await chrome.runtime.sendMessage({ action: 'user_alarm_open_center' }).catch(() => {});
-            } else {
-                await chrome.storage.local.set({ pendingAction: 'openAlarmCenter' });
-                await chrome.tabs.create({ url: `${indexUrl}?alarmAction=open`, active: true });
-            }
+            await openAlarmCenterPage();
             if (notificationId.startsWith(USER_ALARM_MISSED_PREFIX)) {
                 await chrome.notifications.clear(notificationId);
             }
@@ -2826,6 +2883,9 @@ importScripts('quick-capture.js', 'app-video.js', 'youtube-home.js', 'huya-core.
             await chrome.notifications.clear(notificationId);
             return;
         }
+
+        // 水母关怀的提醒：点通知本身只关掉它，不打开新标签页（“喝了/动了”在按钮上）
+        if (await jellyNudge.dismiss(notificationId)) return;
 
         // 打开新标签页
         await chrome.tabs.create({ url: 'chrome://newtab/' });
@@ -4116,6 +4176,7 @@ importScripts('quick-capture.js', 'app-video.js', 'youtube-home.js', 'huya-core.
 
     const quickAssistant = QuickAssistant.install({
         desktop: desktopAlarm,
+        jelly: jellyDesktop,
         log: (category, action, detail) => { void logExtEvent(category, action, detail); },
         storage: chrome.storage.local,
         async connectionStatus(platform, ctx) {

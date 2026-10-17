@@ -363,7 +363,7 @@
     favicon(url, label) {
       const fallback = this.escape((label || '?').trim().slice(0, 1).toUpperCase());
       const src = chrome.runtime.getURL('_favicon/') + `?pageUrl=${encodeURIComponent(url || '')}&size=32`;
-      return `<span class="sw-favicon"><img src="${this.escape(src)}" alt="" data-favicon onerror="this.remove()"><span>${fallback}</span></span>`;
+      return `<span class="sw-favicon"><img src="${this.escape(src)}" alt="" data-favicon data-img-fallback="remove"><span>${fallback}</span></span>`;
     }
 
     hostname(url) {

@@ -407,7 +407,8 @@
         if (response.action === 'select' && ['select', 'confirm'].includes(expected.kind)) return this.choose(taskId, response.choiceId, version, undefined, false, expected);
         if (response.action === 'reply' && expected.allowText) {
           if (typeof response.text !== 'string' || !response.text.trim() || response.text.length > 500) throw new Error('请输入1至500字的补充内容');
-          return this.submit({ text: response.text, app: current.scope, taskId, version }, expected);
+          // respond() is only reachable from the native desktop card, so the retyped answer keeps the desktop origin.
+          return this.submit({ text: response.text, app: current.scope, taskId, version, origin: 'desktop' }, expected);
         }
         throw new Error('当前交互不支持该操作');
       },

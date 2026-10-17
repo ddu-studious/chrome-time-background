@@ -29,6 +29,11 @@ let _bgAutoSwitchTimer = null;
 let _activeBackground = null;
 let _bgSuspended = null;
 let _bgPlayAttempt = 0;
+// _bgTransitionRun：每次发起“换壁纸”都会递增，编织转场的回调只在自己仍是最新一轮时才生效。
+// 必须在下面 getBackgrounds 请求之前声明：本地预览的 chrome-shim 会同步回调，let 未执行就访问会触发 TDZ 错误。
+let _bgTransitionRun = 0;
+// _bgWarmRun：预热轮次，同样要先于 getBackgrounds 请求声明（原先在 _scheduleBackgroundWarm 之前，本地预览同步回调时会触发 TDZ）。
+let _bgWarmRun = 0;
 
 function _isBackgroundSuspended() {
     return document.hidden || document.body.classList.contains('bili-panel-open')
@@ -55,6 +60,8 @@ function _syncBackgroundActivity() {
     _bgSuspended = suspended;
     document.body.classList.toggle('home-background-suspended', suspended);
     window.backgroundExperience?.setSuspended(suspended);
+    // 工作台遮住首页时不再播转场：取消后回调会直接把新壁纸设好（看不见，但状态正确）。
+    if (suspended) { try { window.WallpaperWeave?.cancel?.('suspended'); } catch { /* 忽略 */ } }
     const video = document.getElementById('background-video');
     if (!video) return;
     if (suspended) {
@@ -94,9 +101,15 @@ function _getVideoElement() {
     return el;
 }
 
-function _applyBackground(background) {
+function _applyBackground(background, options) {
     if (!background) return;
     ++_bgPlayAttempt;
+    // 转场结束时的最终应用（options.fromWeave）要保留画布直到 body 背景换好；其余任何路径直接设置背景，
+    // 都意味着正在进行的转场已经过时。
+    if (!options || !options.fromWeave) {
+        ++_bgTransitionRun;
+        try { window.WallpaperWeave?.cancel?.(); } catch { /* 转场只是装饰 */ }
+    }
     _activeBackground = background;
     const video = _getVideoElement();
     const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
@@ -171,7 +184,6 @@ function _pickBackground() {
     return backgroundImages[Math.floor(Math.random() * backgroundImages.length)];
 }
 
-let _bgWarmRun = 0;
 // 当前这张下载完后再预热下一批，下次打开几乎瞬间出图。不抢当前壁纸的带宽；打开时就不可见的页面（如恢复会话的
 // 后台标签）和省流量模式不启动预热；已开始的预热不因切走标签而中断，只会被更新的一轮取代。
 function _scheduleBackgroundWarm() {
@@ -195,12 +207,48 @@ function initBackgrounds() {
     }
 }
 
+// 换壁纸：满足条件时先播转场（js/wallpaper-weave.js，八种风格每次随机），结束后再用原来的 _applyBackground 真正设置背景；
+// 不满足条件、模块缺席、加载失败、被取消都退回原来的瞬间切换，不会让壁纸停在旧图上。
+function _transitionToBackground(background, done) {
+    const weave = window.WallpaperWeave;
+    const from = _activeBackground;
+    let verdict = { ok: false };
+    if (weave && typeof weave.canPlay === 'function' && typeof weave.play === 'function') {
+        try {
+            verdict = weave.canPlay({
+                settings: window.backgroundExperience?.settings,
+                from,
+                to: background,
+                reduceMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true,
+                saveData: navigator.connection?.saveData === true,
+                hidden: document.hidden,
+                suspended: _isBackgroundSuspended(),
+            });
+        } catch { verdict = { ok: false }; }
+    }
+    if (!verdict.ok) {
+        _applyBackground(background);
+        done?.();
+        return;
+    }
+    const run = ++_bgTransitionRun;
+    const finish = result => {
+        // 有更新的一轮（或别处直接设置了背景）时，这一轮什么都不做，只释放自己的画布。
+        if (run !== _bgTransitionRun) { try { result?.release?.(); } catch { /* 忽略 */ } return; }
+        _applyBackground(background, { fromWeave: true });
+        try { result?.release?.(); } catch { /* 忽略 */ }
+        done?.();
+    };
+    let pending;
+    // 风格由设置决定：random（默认）每次随机、也可固定某一种；缺省或未知值由转场模块当作 random。
+    const style = window.backgroundExperience?.settings?.wallpaperTransitionStyle;
+    try { pending = weave.play({ from, to: background, style }); } catch { pending = null; }
+    Promise.resolve(pending).then(finish, () => finish(null));
+}
+
 function changeBackground() {
     const background = _pickBackground();
-    if (background) {
-        _applyBackground(background);
-        _scheduleBackgroundWarm();
-    }
+    if (background) _transitionToBackground(background, _scheduleBackgroundWarm);
 }
 
 function setupBackgroundAutoSwitch() {
@@ -1171,6 +1219,7 @@ function initPoetryRadio() {
             panel.setAttribute('aria-hidden', 'true');
             panel.tabIndex = -1;
             document.body.appendChild(panel);
+            void panel.offsetWidth;   // 先提交“关闭态”样式：否则随后同步加 visible，首次打开没有入场过渡
         }
         return panel;
     }

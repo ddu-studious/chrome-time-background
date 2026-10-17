@@ -2948,6 +2948,10 @@ class BlogManager {
                 case 'overview': {
                     const stats = await fetch(`${BRIDGE}/writing/knowledge/stats`).then(r => r.json());
                     body.innerHTML = this._kwRenderOverview(stats);
+                    // MV3 CSP 禁止内联事件处理器，空状态按钮在渲染后绑定
+                    body.querySelector('[data-kw-empty-index]')?.addEventListener('click', () => {
+                        overlay.querySelector('[data-kw-action="index-all"]')?.click();
+                    });
                     break;
                 }
                 case 'search': {
@@ -3038,7 +3042,7 @@ class BlogManager {
                         <i class="fas fa-seedling" style="font-size:56px;color:#4CAF50;opacity:0.6"></i>
                         <p style="font-size:18px;font-weight:600;color:#ccc">知识库尚未索引</p>
                         <p style="color:#999;font-size:14px;max-width:400px;line-height:1.6">写作空间中的故事需要先经过 LLM 索引，才能自动提取朝代、人物、事件、地点等知识实体，构建知识图谱。</p>
-                        <button class="kw-btn" onclick="this.closest('.kw-wiki-overlay')?.querySelector('[data-kw-action=\\'index-all\\']')?.click()" style="margin-top:8px;padding:10px 24px;font-size:14px;background:rgba(76,175,80,.15);border:1px solid rgba(76,175,80,.3);color:#4CAF50;cursor:pointer;border-radius:8px"><i class="fas fa-magic"></i> 开始一键索引</button>
+                        <button class="kw-btn" data-kw-empty-index style="margin-top:8px;padding:10px 24px;font-size:14px;background:rgba(76,175,80,.15);border:1px solid rgba(76,175,80,.3);color:#4CAF50;cursor:pointer;border-radius:8px"><i class="fas fa-magic"></i> 开始一键索引</button>
                     </div>
                 `}
             </div>

@@ -50,6 +50,8 @@
         if (method !== 'execute' || outcome?.status !== 'review' || outcome.choices?.length !== 1) return outcome;
         const choice = outcome.choices[0];
         if (!['alarm.create', 'alarm.commit'].includes(choice.action) || choice.data?.action === 'delete') return outcome;
+        // Words typed into the native desktop panel never skip the confirmation card; the origin can only tighten approval.
+        if (ctx.task.input?.origin === 'desktop') return { ...outcome, observation: { ...outcome.observation, approval: { decision: 'confirm', policy: 'desktop-origin', reason: '来自桌面输入，保留手动确认' } } };
         ctx.guard();
         const requestId = `${ctx.task.id}:${ctx.task.version}:${ctx.spanId || 'approval'}`;
         const body = { requestId, version: ctx.task.version, text: ctx.task.input?.text || '',

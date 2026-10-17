@@ -15,7 +15,7 @@
     { id: 'blog', name: '写作空间', summary: '沉浸写作、整理和发布内容', icon: 'fas fa-pen-nib', category: 'productivity', dockBtnId: 'blog-dock-btn', defaultOrder: 6 },
     { id: 'quick-nav', name: '快捷导航', summary: '集中访问常用网站与工具', icon: 'fas fa-compass', category: 'tools', dockBtnId: 'quick-nav-dock-btn', defaultOrder: 6.5, defaultInDock: true },
     { id: 'site-workspace', name: '网站工作区', summary: '分组管理常用网站与真实 Chrome 标签', icon: 'fas fa-layer-group', category: 'tools', dockBtnId: 'site-workspace-dock-btn', defaultOrder: 6.6, defaultInDock: true },
-    { id: 'games-hub', name: '休闲游戏', summary: '统一进入贪吃蛇、俄罗斯方块与立体方块', icon: 'fas fa-gamepad', category: 'games', dockBtnId: 'games-hub-dock-btn', defaultOrder: 6.8 },
+    { id: 'games-hub', name: '休闲游戏', summary: '统一进入贪吃蛇、俄罗斯方块、立体方块与解压果冻', icon: 'fas fa-gamepad', category: 'games', dockBtnId: 'games-hub-dock-btn', defaultOrder: 6.8 },
     { id: 'snake-game', name: '贪吃蛇', summary: '轻量键盘休闲游戏', icon: 'fas fa-gamepad', category: 'games', dockBtnId: 'snake-dock-btn', defaultOrder: 7 },
     { id: 'tetris-game', name: '俄罗斯方块', summary: '经典方块消除与得分挑战', icon: 'fas fa-th', category: 'games', dockBtnId: 'tetris-dock-btn', defaultOrder: 8 },
     { id: 'tetris-3d-game', name: '立体方块', summary: '带空间效果的方块挑战', icon: 'fas fa-cube', category: 'games', dockBtnId: 'tetris-3d-dock-btn', panelId: 'tetris-3d-game-panel', defaultOrder: 8.5 },

@@ -13,7 +13,7 @@ test('应用启动台五个页面映射现有分类搜索与 Dock 操作', () =>
     assert.match(source, new RegExp(`['\"]${page}['\"]`));
   }
   assert.match(source, /setBusinessPage\?\.\('launchpad'/);
-  assert.match(html, /js\/dock-manager\.js\?v=13/);
+  assert.match(html, /js\/dock-manager\.js\?v=14/);
 });
 
 test('关闭启动台和 Dock 菜单会恢复产品外壳', () => {
@@ -28,7 +28,7 @@ test('启动台关闭态不会残留在无障碍树或键盘焦点中', () => {
   assert.match(source, /hideLaunchpad\(restoreFocus = true, restoreShell = true\)/);
   assert.match(source, /_setLaunchpadBackgroundInert\(true\)/);
   assert.match(source, /_handleLaunchpadKeydown/);
-  assert.match(html, /js\/dock-manager\.js\?v=13/);
+  assert.match(html, /js\/dock-manager\.js\?v=14/);
 });
 
 test('Dock 使用烟熏透明外壳并支持固定、离开收起与靠近安全唤出', () => {

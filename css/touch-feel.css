@@ -1,0 +1,36 @@
+/* 首页触感实验：壁纸编织转场 + 液态时钟。见 docs/technical/touch-feel-weave-liquid-clock-20261014.md */
+
+/* 转场画布与 #background-video 同层（z-index 0），位于 body::before 压暗层之下，所以压暗效果与静态壁纸一致。 */
+.wallpaper-weave-canvas {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 1;
+    transition: opacity .22s ease;
+}
+.wallpaper-weave-canvas.is-releasing { opacity: 0; }
+
+/* 液态时钟：画布盖在原文字上，原文字临时透明，由画布自己画同样位置的文字。 */
+.clock-liquid-canvas {
+    position: fixed;
+    z-index: 6;
+    pointer-events: none;
+    opacity: 1;
+    transition: opacity .16s ease;
+}
+.clock-liquid-canvas.is-fading { opacity: 0; }
+
+/* 时间、日期、农历、节日都会被画布接管，所以不再只限定 #time。 */
+.time-container .clock-liquid-active,
+#time.clock-liquid-active {
+    color: transparent !important;
+    text-shadow: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .wallpaper-weave-canvas,
+    .clock-liquid-canvas { display: none; }
+}

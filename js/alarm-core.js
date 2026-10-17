@@ -185,6 +185,11 @@
         }
       }
       candidate ||= nextCandidate(alarm, afterMs);
+      // 这一次已被处理（例如桌面倒计时“跳过/延后本次”）而时间还没到：重复闹钟顺延到之后的下一次，
+      // 否则在这一时刻过去之前调度器没有下一个目标，明天的提醒会断档。时间已过的情形与原来相同。
+      for (let hop = 0; hop < 8 && candidate && alarm.repeat !== 'once' && handled[candidate.occurrenceId]; hop += 1) {
+        candidate = nextCandidate(alarm, candidate.scheduledAt);
+      }
       if (!candidate && alarm.repeat === 'once' && alarm.fireAt && !handled[occurrenceId(alarm.id, alarm.fireAt)]) {
         candidate = {
           kind: 'base',

@@ -250,7 +250,7 @@ function playbackFixture({ url = async () => 'https://music.example.test/track.m
   let captured;
   const math = Object.create(Math); math.random = random || Math.random;
   const context = { MusicQueuePolicy: require('../js/music-queue-policy.js'), Math: math, TextEncoder, crypto: { subtle: require('node:crypto').webcrypto.subtle, randomUUID: () => 'fixture-revision' }, Date: { now: () => clock }, setTimeout: fn => { clock += 250; queueMicrotask(fn); },
-    QuickAssistant: { install(deps) { captured = deps; return {}; } }, LocalAIBridge: {}, desktopAlarm: {},
+    QuickAssistant: { install(deps) { captured = deps; return {}; } }, LocalAIBridge: {}, desktopAlarm: {}, jellyDesktop: {},
     chrome: { storage: { local: { async get() { return { musicPlaylistCache: cache, musicPlayMode: mode }; }, async set(value) { if (value.musicPlaylistCache) cache = value.musicPlaylistCache; if (value.musicPlayMode) mode = value.musicPlayMode; writes++; }, async remove() {} } }, tabs: {} },
     musicSleep: {}, getUserAlarmViewState() {}, saveUserAlarm() {}, neteaseApiCall() {}, bilibiliApiCall() {}, youtubeApiCall() {},
     getSilentMusicSongUrl: url,
