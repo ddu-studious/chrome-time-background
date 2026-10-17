@@ -27,7 +27,7 @@ const plist = `<?xml version="1.0" encoding="UTF-8"?>
 </dict></plist>`;
 writeFileSync(resolve(app, 'Contents/Info.plist'), plist);
 // 编译清单：纯逻辑（可单独自测）在前，AppKit 在后，main.swift 最后；新增源文件须同步这里与 test/desktop-companion-logic.test.mjs。
-const sources = ['countdown-model', 'jelly-model', 'jelly-swim', 'jelly-palette', 'assistant-model', 'glass-view', 'jelly-ring', 'jelly-companion', 'jelly-controller', 'confirmation-view', 'assistant-hotkey', 'assistant-panel', 'main'];
+const sources = ['countdown-model', 'jelly-model', 'jelly-swim', 'jelly-palette', 'jelly-appearance', 'jelly-paint', 'assistant-model', 'glass-view', 'jelly-ring', 'jelly-materials', 'jelly-companion', 'jelly-controller', 'confirmation-view', 'assistant-hotkey', 'assistant-panel', 'main'];
 execFileSync('/usr/bin/xcrun', ['swiftc', ...sources.map(name => resolve(root, `desktop-reminder/${name}.swift`)), '-framework', 'AppKit', '-module-cache-path', resolve(root, 'local-ai/.local/swift-cache'), '-o', executable], { stdio: 'inherit' });
 execFileSync('/usr/bin/codesign', ['--force', '--sign', '-', app], { stdio: 'inherit' });
 console.log(`组件已构建：${app}`);

@@ -6,10 +6,14 @@ import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import vm from 'node:vm';
+import { deltaE } from '../desktop-reminder/appearance-contrast.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const JellyfishCore = createRequire(import.meta.url)('../js/jellyfish-core.js');
 const JellyDesktop = createRequire(import.meta.url)('../js/jelly-desktop.js');
+const JellyAppearance = createRequire(import.meta.url)('../js/jelly-appearance.js');
+const JellyfishSkin = createRequire(import.meta.url)('../js/jellyfish.js');
 const AssistantNative = createRequire(import.meta.url)('../js/assistant-native.js');
 const swiftc = '/usr/bin/xcrun';
 const canCompile = process.platform === 'darwin' && existsSync(swiftc);
@@ -33,11 +37,17 @@ const HOTKEY_CASES = [
 test('原生水母：构建清单包含所有水母源文件，且 main.swift 在最后', () => {
   const build = readFileSync(resolve(root, 'desktop-reminder/build.mjs'), 'utf8');
   const listed = build.match(/const sources = \[([^\]]*)\]/)?.[1].split(',').map(s => s.trim().replace(/'/g, '')).filter(Boolean) ?? [];
-  assert.deepEqual(listed, ['countdown-model', 'jelly-model', 'jelly-swim', 'jelly-palette', 'assistant-model', 'glass-view', 'jelly-ring', 'jelly-companion', 'jelly-controller', 'confirmation-view', 'assistant-hotkey', 'assistant-panel', 'main'], '构建清单：纯逻辑在前、AppKit 在后、main.swift 最后');
+  assert.deepEqual(listed, ['countdown-model', 'jelly-model', 'jelly-swim', 'jelly-palette', 'jelly-appearance', 'jelly-paint', 'assistant-model', 'glass-view', 'jelly-ring', 'jelly-materials', 'jelly-companion', 'jelly-controller', 'confirmation-view', 'assistant-hotkey', 'assistant-panel', 'main'], '构建清单：纯逻辑在前、AppKit 在后、main.swift 最后');
   for (const name of listed) assert.ok(existsSync(resolve(root, `desktop-reminder/${name}.swift`)), `${name}.swift 必须存在`);
   assert.match(build, /com\.timekeeper\.desktop\.qa/, '隔离构建使用独立 Bundle ID，避免改写真实组件的窗口记忆');
   const main = readFileSync(resolve(root, 'desktop-reminder/main.swift'), 'utf8');
   assert.doesNotMatch(main, /buildCountdown|layoutCountdown|resizeCountdown/, '旧倒计时实现不应残留在 main.swift');
+  // 水母外观：跟着 jelly 命令走，回执带 appearance.status 供 Chrome 探测；协议版本不升（“水母差事”已占 v8）
+  assert.match(main, /jelly\.setAppearance\(object\["appearance"\]\)/, 'jelly 命令里的 appearance 交给水母控制器');
+  assert.match(main, /extra\["appearance"\] = \["status": "ok"\]/, '回执带 appearance.status，Chrome 靠它探测组件是否支持');
+  assert.match(main, /"version": 7/, '协议版本仍是 7：外观走回执探测，不占 v8');
+  assert.match(main, /reply\["jellyLook"\] = jelly\.lookSummary/, 'ping 诊断：外观（jellyAppearance 是系统浅/深外观，不能复用）');
+  assert.match(main, /reply\["jellyTint"\] = jelly\.tintSummary/, 'ping 诊断：tint（约定始终等于 paint.a，冒烟据此核对）');
   // 胶囊形态已取消：倒计时只是水母身上的一条气泡，旧胶囊源文件与样式开关不应残留
   for (const file of ['countdown-view.swift', 'countdown-companion.swift', 'countdown-controller.swift']) {
     assert.ok(!existsSync(resolve(root, `desktop-reminder/${file}`)), `${file} 已被水母宿主取代，不应残留`);
@@ -79,13 +89,23 @@ test('原生水母：纯逻辑（阶段、协议解析、显示规则、文案�
   try {
     // 顶层代码要求入口文件名为 main.swift，复制到临时目录，不改动仓库文件。
     copyFileSync(resolve(root, 'desktop-reminder/companion-selftest.swift'), join(dir, 'main.swift'));
-    const exe = join(dir, 'selftest');
-    execFileSync(swiftc, ['swiftc', resolve(root, 'desktop-reminder/countdown-model.swift'), resolve(root, 'desktop-reminder/jelly-model.swift'), resolve(root, 'desktop-reminder/jelly-swim.swift'), resolve(root, 'desktop-reminder/jelly-palette.swift'), resolve(root, 'desktop-reminder/assistant-model.swift'), join(dir, 'main.swift'), '-module-cache-path', join(dir, 'cache'), '-o', exe], { stdio: 'pipe' });
+    // 变异检查用：外部已按（被改动的）源码增量编译好自测时，设置 TIMEKEEPER_SELFTEST_EXE 指向它，这里就跳过编译（常规运行不设置）
+    const prebuilt = process.env.TIMEKEEPER_SELFTEST_EXE;
+    const exe = prebuilt || join(dir, 'selftest');
+    if (!prebuilt) execFileSync(swiftc, ['swiftc', resolve(root, 'desktop-reminder/countdown-model.swift'), resolve(root, 'desktop-reminder/jelly-model.swift'), resolve(root, 'desktop-reminder/jelly-swim.swift'), resolve(root, 'desktop-reminder/jelly-palette.swift'), resolve(root, 'desktop-reminder/jelly-appearance.swift'), resolve(root, 'desktop-reminder/jelly-paint.swift'), resolve(root, 'desktop-reminder/assistant-model.swift'), join(dir, 'main.swift'), '-module-cache-path', join(dir, 'cache'), '-o', exe], { stdio: 'pipe' });
     // 全局快捷键语法在 JS（normalizeHotkey）与 Swift（AssistantModel.parseHotkey）各有一份实现：同一批输入逐条对照
     const cases = HOTKEY_CASES;
     const casesFile = join(dir, 'hotkey-cases.json');
     writeFileSync(casesFile, JSON.stringify(cases));
-    const output = execFileSync(exe, [], { encoding: 'utf8', env: { ...process.env, HOTKEY_CASES: casesFile } });
+    // 外观：JS 解析出的具体值经 Swift 解析后原样回显；越界/不完整/非字典的负载在 Swift 侧回到默认
+    const appearanceCases = [];
+    for (const look of JellyAppearance.LOOKS) for (let color = 0; color < JellyAppearance.COLORS; color++) appearanceCases.push(JellyAppearance.resolve({ color, look, material: 'wire', size: 'large' }, { date: new Date(2026, 9, 17) }));
+    for (let day = 1; day <= 20; day++) appearanceCases.push(JellyAppearance.resolve({ daily: true }, { date: new Date(2026, 9, day) }));
+    const resolvedCount = appearanceCases.length;
+    appearanceCases.push({ color: 3, colors: [9], look: 'duo' }, { colors: [1], look: 'rainbow' }, 'x', null, { colors: [true, 1] }, { season: 'christmas' });
+    const appearanceFile = join(dir, 'appearance-cases.json');
+    writeFileSync(appearanceFile, JSON.stringify(appearanceCases));
+    const output = execFileSync(exe, [], { encoding: 'utf8', env: { ...process.env, HOTKEY_CASES: casesFile, APPEARANCE_CASES: appearanceFile } });
     assert.doesNotMatch(output, /^FAIL/m, output);
     assert.match(output, /ALL PASS/);
     // 夜晚荧光曲线：Swift 与首页水母的 JS 曲线逐点一致（同一套产品行为，两边各有一份实现）
@@ -114,6 +134,60 @@ test('原生水母：纯逻辑（阶段、协议解析、显示规则、文案�
       const glyph = output.match(new RegExp(`^GLYPH ${index} (.+)$`, 'm'))?.[1];
       assert.equal(glyph, label, `${value} 的展示符号：原生 ${glyph} 与设置页 ${label} 不一致`);
     }
+    // 水母外观：Chrome 的 resolve 结果经 Swift 解析后一致；桌面调色板与首页调色板的色相顺序一致（数值不比，桌面是半透明叠在壁纸上）
+    const swiftAppearance = new Map([...output.matchAll(/^APPEARANCE (\d+) (\S+) (\S+) (\S+) (\S+) (\S+)$/gm)].map(match => [Number(match[1]), match.slice(2)]));
+    assert.equal(swiftAppearance.size, appearanceCases.length, 'Swift 应对每个外观用例各输出一行');
+    appearanceCases.slice(0, resolvedCount).forEach((expected, index) => {
+      const [colors, look, material, size, season] = swiftAppearance.get(index);
+      assert.deepEqual(colors.split(',').map(Number), expected.colors, `外观用例 ${index} 颜色`);
+      assert.equal(look, expected.look, `外观用例 ${index} 花纹`); assert.equal(material, expected.material); assert.equal(size, expected.size); assert.equal(season, '-');
+    });
+    assert.deepEqual(swiftAppearance.get(resolvedCount), ['3', 'solid', 'glass', 'medium', '-'], 'colors 越界：回到 color，duo 颜色不够退回纯色');
+    assert.deepEqual(swiftAppearance.get(resolvedCount + 1), ['1', 'solid', 'glass', 'medium', '-'], '花纹要的颜色不够：退回纯色');
+    assert.deepEqual(swiftAppearance.get(resolvedCount + 2), ['5', 'solid', 'glass', 'medium', '-'], '非字典：默认');
+    assert.deepEqual(swiftAppearance.get(resolvedCount + 3), ['5', 'solid', 'glass', 'medium', '-'], 'null：默认');
+    assert.deepEqual(swiftAppearance.get(resolvedCount + 4), ['5', 'solid', 'glass', 'medium', '-'], 'colors 含布尔：整体丢弃');
+    assert.deepEqual(swiftAppearance.get(resolvedCount + 5), ['5', 'solid', 'glass', 'medium', 'christmas'], '合法节日保留');
+    const hueOf = ([r, g, b]) => { const hi = Math.max(r, g, b), lo = Math.min(r, g, b), d = hi - lo; if (!d) return 0; const h = hi === r ? ((g - b) / d) % 6 : hi === g ? (b - r) / d + 2 : (r - g) / d + 4; return (h * 60 + 360) % 360; };
+    const swiftHues = new Map([...output.matchAll(/^PALETTEHUE (\d+) ([\d.]+)$/gm)].map(match => [Number(match[1]), Number(match[2])]));
+    assert.equal(swiftHues.size, JellyAppearance.COLORS, 'Swift 应输出 8 个色位的色相');
+    assert.equal(JellyfishSkin.PALETTE.length, JellyAppearance.COLORS);
+    JellyfishSkin.PALETTE.forEach((rgb, slot) => {
+      const diff = Math.abs(swiftHues.get(slot) - hueOf(rgb)), wrapped = Math.min(diff, 360 - diff);
+      assert.ok(wrapped <= 20, `色位 ${slot}：桌面色相 ${swiftHues.get(slot)}° 与首页 ${hueOf(rgb).toFixed(1)}° 相差 ${wrapped.toFixed(1)}°，顺序应一致`);
+    });
+    // 调色板色差：Swift 自测与 Node 测量脚本各有一份 Lab 实现，这里用同一份调色板对照最小色差——其中一份公式写错，检查就形同虚设
+    const paletteRows = [...readFileSync(resolve(root, 'desktop-reminder/jelly-appearance.swift'), 'utf8').matchAll(/\(\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)\)\s*,\s*\/\/\s*(\d)/g)];
+    assert.equal(paletteRows.length, 8, '应能从 jelly-appearance.swift 读出 8 个调色板色位');
+    const paletteRgb = paletteRows.map(row => [Number(row[1]) * 255, Number(row[2]) * 255, Number(row[3]) * 255]);
+    let jsClosest = { i: -1, j: -1, delta: Infinity };
+    for (let i = 0; i < 8; i++) for (let j = i + 1; j < 8; j++) { const delta = deltaE(paletteRgb[i], paletteRgb[j]); if (delta < jsClosest.delta) jsClosest = { i, j, delta }; }
+    const swiftClosest = output.match(/^PALETTEMIN (\d+) (\d+) ([\d.]+)$/m);
+    assert.ok(swiftClosest, 'Swift 自测应打印调色板最小色差');
+    assert.deepEqual([Number(swiftClosest[1]), Number(swiftClosest[2])], [jsClosest.i, jsClosest.j], '最相近的一对色位两边一致');
+    assert.ok(Math.abs(Number(swiftClosest[3]) - jsClosest.delta) < 0.01, `最小色差：Swift ${swiftClosest[3]} 与 JS ${jsClosest.delta.toFixed(3)} 不一致`);
+    assert.ok(jsClosest.delta >= 20, `调色板任意两色的色差应 ≥ 20，最近的一对 ${jsClosest.i}/${jsClosest.j} 只有 ${jsClosest.delta.toFixed(1)}`);
+    // 颜料：Swift 的 JellyPaint 与设置页示意图的 paintOf（同一套规则的 JS 版）逐部位一致——钟罩三色、五根触手、口腕、描边
+    const paintSandbox = {};
+    vm.runInNewContext(readFileSync(resolve(root, 'js/settings-jelly-appearance.js'), 'utf8'), paintSandbox);
+    const jsPaintOf = paintSandbox.JellyAppearanceSettings.paintOf;
+    const palette01 = paletteRows.map(row => [Number(row[1]), Number(row[2]), Number(row[3])]);
+    const swiftPaint = new Map(output.split('\n').filter(line => line.startsWith('PAINT ')).map(line => { const [, index, ...rest] = line.split(' '); return [Number(index), rest]; }));
+    assert.equal(swiftPaint.size, appearanceCases.length, 'Swift 应对每个外观用例各输出一行颜料');
+    const seenKinds = new Set();
+    appearanceCases.slice(0, resolvedCount).forEach((resolved, index) => {
+      const [kind, a, b, c, oral, outline, ...tentacles] = swiftPaint.get(index);
+      const js = jsPaintOf(resolved, palette01);
+      seenKinds.add(kind);
+      assert.equal(kind, js.kind, `用例 ${index} 花纹种类`);
+      const close = (swiftText, expected, what) => swiftText.split(',').map(Number).forEach((value, i) => assert.ok(Math.abs(value - expected[i]) < 2e-6, `用例 ${index}（颜色位 ${JSON.stringify(resolved.colors)}，${resolved.look}）${what}：Swift ${swiftText} 与 JS ${[...expected]} 不一致`));
+      close(a, js.a, '钟罩主色'); close(b, js.b, '第二色'); close(c, js.c, '第三色'); close(oral, js.oral, '口腕'); close(outline, js.outline, '描边');
+      assert.equal(tentacles.length, 5, '五根触手');
+      tentacles.forEach((text, i) => close(text, js.tentacles[i], `第 ${i} 根触手`));
+    });
+    assert.deepEqual([...seenKinds].sort(), ['blend', 'duo', 'rainbow', 'solid'], '对照用例必须覆盖四种花纹');
+    assert.equal(swiftPaint.get(resolvedCount)[0], 'solid', '颜色位越界、duo 颜色不够：颜料退回纯色');
+    assert.equal(swiftPaint.get(resolvedCount + 1)[0], 'solid', 'rainbow 只有一个颜色位：颜料退回纯色');
     // 任务状态集合：Chrome 投影出的 status 与原生能解析的完全一致（否则新增状态会被原生当成非法负载丢弃）
     const statuses = output.match(/^STATUSES (\S+)$/m)?.[1];
     assert.equal(statuses, [...AssistantNative.STATUSES].sort().join(','), '任务状态集合 Chrome 与原生一致');

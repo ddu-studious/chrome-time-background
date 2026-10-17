@@ -74,6 +74,12 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
         case "jelly":
             ok = jelly.setJelly(message["jelly"])
             if ok {
+                // 外观跟着 jelly 命令走：带了就应用，并在回执里告诉 Chrome（它据此知道组件支持外观，协议版本不变）；
+                // 没带就保持上一次（Chrome 读取外观失败时水母不会闪回默认）。负载不合规回默认，不影响水母显示。
+                if let object = message["jelly"] as? [String: Any], object.keys.contains("appearance") {
+                    jelly.setAppearance(object["appearance"])
+                    extra["appearance"] = ["status": "ok"]
+                }
                 // 助手配置跟着 jelly 命令走：没带或明确关闭就注销全局快捷键、收起面板；启用时把注册结果带在回执里，
                 // Chrome 据此在设置页如实显示（被占用 / 不合法 / 失败），不会把“没注册上”说成“已生效”
                 let report = assistant.apply((message["jelly"] as? [String: Any])?["assistant"])
@@ -143,6 +149,9 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
         reply["jellyLines"] = jelly.shownLines
         reply["jellyBubble"] = jelly.bubbleName
         reply["jellyAppearance"] = jelly.appearanceName
+        reply["jellyLook"] = jelly.lookSummary
+        reply["jellyPaintA"] = jelly.paintSummary
+        reply["jellyTint"] = jelly.tintSummary
         reply["nudgeId"] = jelly.nudgeID ?? NSNull()
         reply["nudgeBusy"] = jelly.nudgeBusy
         reply["nudgeButtons"] = jelly.nudgeButtonFrames()

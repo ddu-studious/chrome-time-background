@@ -5,27 +5,8 @@ import AppKit
 // 它只显示与互动，不拥有任何业务状态：倒计时、喝水/起身提醒、今天的记录都由 JellyController 拼好气泡交给它，
 // 点击、按钮、右键菜单的动作也都交回 JellyController，再由它转给 Chrome 执行。
 
-struct JellyTint {
-    var r: CGFloat, g: CGFloat, b: CGFloat
-    static let calm = JellyTint(r: 0.40, g: 0.74, b: 0.90)
-    static let soon = JellyTint(r: 0.98, g: 0.76, b: 0.42)
-    static let imminent = JellyTint(r: 1.0, g: 0.56, b: 0.46)
-    static let final = JellyTint(r: 1.0, g: 0.40, b: 0.50)
-    static let due = JellyTint(r: 1.0, g: 0.85, b: 0.45)
-    static let nightBlue = JellyTint(r: 0.38, g: 0.52, b: 1.0)       // 夜晚荧光：把阶段颜色略推向深海蓝紫
-
-    static func forStage(_ stage: CountdownStage) -> JellyTint {
-        switch stage {
-        case .calm: return .calm
-        case .soon: return .soon
-        case .imminent: return .imminent
-        case .final: return .final
-        case .due: return .due
-        }
-    }
-    func mixed(toward other: JellyTint, _ t: CGFloat) -> JellyTint {
-        JellyTint(r: r + (other.r - r) * t, g: g + (other.g - g) * t, b: b + (other.b - b) * t)
-    }
+// JellyTint / JellyPaint 的数据与插值（纯逻辑）在 jelly-paint.swift；这里只补上转 NSColor 的绘制用法。
+extension JellyTint {
     func color(_ alpha: CGFloat, lighten: CGFloat = 0, darken: CGFloat = 0) -> NSColor {
         NSColor(calibratedRed: min(1, r + (1 - r) * lighten) * (1 - darken),
                 green: min(1, g + (1 - g) * lighten) * (1 - darken),
@@ -186,7 +167,8 @@ struct JellyPose {
     var asleep = true
     var grabbed = false
     var look = CGPoint.zero
-    var tint = JellyTint.calm
+    var tint = JellyTint.calm          // 约定：始终等于 paint.a（光晕、涟漪、睡觉标记、气泡边框用它）
+    var paint = JellyPaint.solid(.calm) // 钟罩、触手的颜料（花纹由外观决定，阶段色覆盖时整只一色）
     var blink: CGFloat = 0
     var alert = false
     var bubble: JellyBubble?
@@ -204,6 +186,8 @@ final class JellyView: NSView {
         }
     }
     var reduceMotion = false { didSet { if reduceMotion != oldValue { syncButtonAlpha(); needsDisplay = true } } }
+    /// 水母的外观（颜色/花纹/材质）；注意不能叫 appearance，NSView 自带同名属性。目前只有材质决定用哪个 painter，颜色走 pose.paint。
+    var jellyAppearance = JellyAppearance.default { didSet { if jellyAppearance != oldValue { needsDisplay = true } } }
     /// 当前外观是否深色，以及对应的调色板（所有水母气泡共用；测试用环境变量 TIMEKEEPER_APPEARANCE 通过窗口外观强制）。
     var isDark: Bool { effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua }
     var palette: JellyBubblePalette { isDark ? .dark : .light }
@@ -358,7 +342,10 @@ final class JellyView: NSView {
         guard let ctx = NSGraphicsContext.current?.cgContext else { return }
         var p = pose
         let night = max(0, min(1, p.night))
-        if night > 0 { p.tint = p.tint.mixed(toward: .nightBlue, 0.05 * night) }   // 只在绘制时推色，不污染按阶段渐变的 tint
+        if night > 0 {   // 只在绘制时推色，不污染按阶段渐变的 tint / paint
+            p.tint = p.tint.mixed(toward: .nightBlue, 0.05 * night)
+            p.paint = p.paint.mixedAll(toward: .nightBlue, 0.05 * night)
+        }
         let cx = bodyX ?? bounds.midX
         let by = JellyView.bellBaseY
         let sq = max(-0.5, min(1.2, p.squash))
@@ -373,8 +360,10 @@ final class JellyView: NSView {
         ctx.translateBy(x: cx, y: by + h * 0.5)
         ctx.rotate(by: tilt)
         ctx.translateBy(x: -cx, y: -(by + h * 0.5))
-        drawTentacles(cx: cx, by: by, w: w, p: p)
-        drawBell(cx: cx, by: by, w: w, h: h, p: p)
+        let painter = JellyPainters.painter(for: jellyAppearance.material)
+        painter.tentacles(cx: cx, by: by, w: w, p: p)
+        painter.bell(cx: cx, by: by, w: w, h: h, p: p)
+        painter.face(cx: cx, by: by, w: w, h: h, p: p)
         ctx.restoreGState()
 
         if p.asleep && !p.grabbed { drawSleepMarks(cx: cx, by: by, w: w, h: h, p: p) }
@@ -404,113 +393,6 @@ final class JellyView: NSView {
             path.lineWidth = 2
             p.tint.color(ring.alpha, lighten: 0.15).setStroke()
             path.stroke()
-        }
-    }
-
-    private func drawTentacles(cx: CGFloat, by: CGFloat, w: CGFloat, p: JellyPose) {
-        let count = 5
-        let asleep = p.asleep && !p.grabbed
-        for i in 0..<count {
-            let u = CGFloat(i) / CGFloat(count - 1)
-            let x0 = cx - w * 0.34 + u * w * 0.68
-            let length: CGFloat = (asleep ? 20 : 34) + CGFloat((i * 7) % 5) * 3
-            let amp: CGFloat = asleep ? 1.2 : 3.6
-            let path = NSBezierPath()
-            path.lineWidth = 1.9
-            path.lineCapStyle = .round
-            path.lineJoinStyle = .round
-            for k in 0...8 {
-                let t = CGFloat(k) / 8
-                let sway = sin(p.time * 2.6 + CGFloat(i) * 1.4 + t * 3.2) * amp * t
-                let trailX = -p.vx * 0.055 * t * t
-                let px = x0 + sway + trailX
-                let py = by + 1 - t * length - max(0, p.vy) * 0.03 * t * t + max(0, -p.vy) * 0.02 * t * t
-                if k == 0 { path.move(to: NSPoint(x: px, y: py)) } else { path.line(to: NSPoint(x: px, y: py)) }
-            }
-            p.tint.color(0.55, lighten: 0.15).setStroke()
-            path.stroke()
-        }
-        // 两条较短、较粗的口腕
-        for side in [-1, 1] {
-            let path = NSBezierPath()
-            path.lineWidth = 3.2
-            path.lineCapStyle = .round
-            let x0 = cx + CGFloat(side) * w * 0.10
-            for k in 0...6 {
-                let t = CGFloat(k) / 6
-                let sway = sin(p.time * 2.0 + CGFloat(side) * 0.9 + t * 3.0) * (asleep ? 0.8 : 2.2) * t
-                let px = x0 + sway - p.vx * 0.04 * t * t
-                let py = by + 1 - t * (asleep ? 14 : 22)
-                if k == 0 { path.move(to: NSPoint(x: px, y: py)) } else { path.line(to: NSPoint(x: px, y: py)) }
-            }
-            p.tint.color(0.34, lighten: 0.4).setStroke()
-            path.stroke()
-        }
-    }
-
-    private func drawBell(cx: CGFloat, by: CGFloat, w: CGFloat, h: CGFloat, p: JellyPose) {
-        let left = cx - w / 2, right = cx + w / 2
-        let bell = NSBezierPath()
-        bell.move(to: NSPoint(x: left, y: by))
-        bell.curve(to: NSPoint(x: cx, y: by + h), controlPoint1: NSPoint(x: cx - w * 0.52, y: by + h * 0.55), controlPoint2: NSPoint(x: cx - w * 0.30, y: by + h))
-        bell.curve(to: NSPoint(x: right, y: by), controlPoint1: NSPoint(x: cx + w * 0.30, y: by + h), controlPoint2: NSPoint(x: cx + w * 0.52, y: by + h * 0.55))
-        // 下缘做成四段起伏的裙边
-        let segments = 4
-        for i in 0..<segments {
-            let x1 = right - w * CGFloat(i + 1) / CGFloat(segments)
-            let mid = right - w * (CGFloat(i) + 0.5) / CGFloat(segments)
-            bell.curve(to: NSPoint(x: x1, y: by), controlPoint1: NSPoint(x: mid, y: by - 4.5), controlPoint2: NSPoint(x: mid, y: by - 4.5))
-        }
-        bell.close()
-        let gradient = NSGradient(colors: [p.tint.color(0.50), p.tint.color(0.74, lighten: 0.22), p.tint.color(0.94, lighten: 0.45)],
-                                  atLocations: [0, 0.55, 1], colorSpace: .deviceRGB)
-        gradient?.draw(in: bell, angle: 90)
-        p.tint.color(0.85, darken: 0.12).setStroke()
-        bell.lineWidth = 1.2
-        bell.stroke()
-
-        // 高光与斑点
-        NSColor.white.withAlphaComponent(0.42).setFill()
-        NSBezierPath(ovalIn: NSRect(x: cx - w * 0.30, y: by + h * 0.58, width: w * 0.20, height: h * 0.20)).fill()
-        NSColor.white.withAlphaComponent(0.22).setFill()
-        for (dx, dy, r) in [(0.18, 0.72, 2.2), (0.30, 0.55, 1.6), (0.06, 0.82, 1.4)] as [(CGFloat, CGFloat, CGFloat)] {
-            NSBezierPath(ovalIn: NSRect(x: cx + w * dx - r, y: by + h * dy - r, width: r * 2, height: r * 2)).fill()
-        }
-
-        // 脸
-        let eyeY = by + h * 0.40
-        let dark = NSColor(calibratedRed: 0.16, green: 0.22, blue: 0.30, alpha: 0.88)
-        dark.setFill(); dark.setStroke()
-        for side in [-1, 1] as [CGFloat] {
-            let ex = cx + side * w * 0.17 + p.look.x * 1.4
-            let ey = eyeY + p.look.y * 1.0
-            if p.asleep && !p.grabbed {
-                let arc = NSBezierPath()
-                arc.lineWidth = 1.3
-                arc.lineCapStyle = .round
-                arc.move(to: NSPoint(x: ex - 2.8, y: ey + 0.8))
-                arc.curve(to: NSPoint(x: ex + 2.8, y: ey + 0.8), controlPoint1: NSPoint(x: ex - 1.6, y: ey - 2.2), controlPoint2: NSPoint(x: ex + 1.6, y: ey - 2.2))
-                arc.stroke()
-            } else {
-                let open = max(0.12, 1 - p.blink)
-                NSBezierPath(ovalIn: NSRect(x: ex - 2.2, y: ey - 2.4 * open, width: 4.4, height: 4.8 * open)).fill()
-                NSColor.white.withAlphaComponent(0.85).setFill()
-                NSBezierPath(ovalIn: NSRect(x: ex - 0.2, y: ey + 0.2 * open, width: 1.3, height: 1.3 * open)).fill()
-                dark.setFill()
-            }
-            NSColor(calibratedRed: 1.0, green: 0.55, blue: 0.62, alpha: 0.30).setFill()
-            NSBezierPath(ovalIn: NSRect(x: cx + side * w * 0.29 - 3.2, y: eyeY - 6.2, width: 6.4, height: 3.6)).fill()
-        }
-        dark.setStroke(); dark.setFill()
-        if p.alert && !p.asleep {
-            NSBezierPath(ovalIn: NSRect(x: cx - 1.8 + p.look.x * 0.8, y: eyeY - 6.4, width: 3.6, height: 4.2)).fill()
-        } else if !p.asleep || p.grabbed {
-            let smile = NSBezierPath()
-            smile.lineWidth = 1.2
-            smile.lineCapStyle = .round
-            smile.move(to: NSPoint(x: cx - 2.4, y: eyeY - 4.6))
-            smile.curve(to: NSPoint(x: cx + 2.4, y: eyeY - 4.6), controlPoint1: NSPoint(x: cx - 1.2, y: eyeY - 7.2), controlPoint2: NSPoint(x: cx + 1.2, y: eyeY - 7.2))
-            smile.stroke()
         }
     }
 
@@ -598,6 +480,8 @@ final class JellyCompanion: NSObject {
     var pose = JellyPose()
     var info = JellyInfo()
     var reduceMotion = false
+    /// 当前外观（由控制器按 Chrome 下发的具体值设置；Chrome 是设置的唯一所有者，这里不另存）。
+    private(set) var appearance = JellyAppearance.default
     var onGrabEnd: (() -> Void)?
     /// 用户第一次把水母拖离按下点时（真正“抓起”）：控制器据此放弃响铃中的位置约定。
     var onGrabBegin: (() -> Void)?
@@ -779,6 +663,17 @@ final class JellyCompanion: NSObject {
         ensureTicking()
     }
 
+    /// 控制器收到 Chrome 下发的外观后调用。calm 阶段立即换色（不等每次刷新 0.12 的慢速收敛）；
+    /// 其他阶段的颜色由阶段覆盖，外观记下来，回到 calm 时生效。
+    func setAppearance(_ next: JellyAppearance) {
+        guard next != appearance else { return }
+        appearance = next
+        view.jellyAppearance = next
+        if info.stage == .calm { pose.paint = JellyPaint.make(appearance: next) }
+        syncPose()      // 同时按“tint 始终等于 paint.a”的约定重算 tint
+        ensureTicking()
+    }
+
     private func syncPose() {
         var next = pose
         next.contraction = swim.contraction
@@ -798,7 +693,8 @@ final class JellyCompanion: NSObject {
             next.contraction = JellySwim.contraction(atPhase: (next.ringAge / JellyDash.pulsePeriod).truncatingRemainder(dividingBy: 1))
         }
         view.reduceMotion = reduceMotion
-        next.tint = pose.tint.mixed(toward: JellyTint.forStage(info.stage), reduceMotion ? 1 : 0.12)
+        next.paint = pose.paint.mixed(toward: JellyPaint.target(stage: info.stage, appearance: appearance), reduceMotion ? 1 : 0.12)
+        next.tint = next.paint.a
         pose = next
         view.pose = next
     }

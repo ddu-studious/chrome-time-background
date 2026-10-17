@@ -71,6 +71,28 @@ final class JellyController: NSObject, NSMenuDelegate {
         return true
     }
 
+    /// Chrome 下发的外观（已是具体值）：解析成白名单值交给水母；非法字段回默认，永不失败。
+    /// 没带 appearance 的 jelly 命令不会调用这里（Chrome 读取外观失败时水母保持上一次，不闪回默认）。
+    func setAppearance(_ raw: Any?) {
+        companion.setAppearance(JellyAppearance.parse(raw))
+    }
+
+    /// 验收诊断：当前外观（色位/花纹/材质/尺寸/节日）。注意与 ping 里的 jellyAppearance（系统浅/深外观）不是一回事。
+    var lookSummary: String {
+        let a = companion.appearance
+        return "colors=\(a.colors.map(String.init).joined(separator: ",")) look=\(a.look.rawValue) material=\(a.material.rawValue) size=\(a.size.rawValue) season=\(a.season ?? "-")"
+    }
+    /// 验收诊断：当前颜料主色（阶段覆盖与换色据此核对）。
+    var paintSummary: String {
+        let t = companion.pose.paint.a
+        return String(format: "%.3f,%.3f,%.3f", Double(t.r), Double(t.g), Double(t.b))
+    }
+    /// 验收诊断：当前 tint（光晕、涟漪、睡觉标记与气泡边框的颜色）。约定它始终等于 paint.a，冒烟据此核对。
+    var tintSummary: String {
+        let t = companion.pose.tint
+        return String(format: "%.3f,%.3f,%.3f", Double(t.r), Double(t.g), Double(t.b))
+    }
+
     /// 校验并接收一条倒计时；NSNull 表示没有可显示的倒计时。返回是否接受。
     func set(timer: Any?) -> Bool {
         if let timer = timer as? [String: Any] {

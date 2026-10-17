@@ -83,13 +83,16 @@
    * summary：() => Promise<{ lines, validUntil }>，act：(id, action) => Promise<{ ok, text|error }>（均来自 JellyNudge）。
    * onRestored：重连成功后调用（外部据此重新下发倒计时）。setTimer / clearTimer / retryMs 供测试替换。
    */
-  function create({ storage, desktop, summary = null, act = null, onRestored = null, setTimer = setTimeout, clearTimer = clearTimeout, retryMs = RETRY_MS }) {
+  function create({ storage, desktop, summary = null, act = null, onRestored = null, appearance = null, setTimer = setTimeout, clearTimer = clearTimeout, retryMs = RETRY_MS }) {
     let queue = Promise.resolve();
     const serial = fn => { const result = queue.then(fn); queue = result.catch(() => {}); return result; };
     const status = { ok: false, version: 0, error: '', exhausted: false };
     let attempt = 0, timer = null, wasLost = false;
     // 最近一次下发里助手那部分的结果：off（没有带 assistant）、unsupported（组件太旧）、unknown（还没有回报）或原生回报的 ok/invalid/taken/failed
     let assistantInfo = { status: 'unknown' };
+    // 最近一次下发里外观那部分的结果：off（没有外观数据源或本次没取到）、ok（组件回执带了 appearance.status==='ok'）、
+    // unsupported（带了外观但回执没有它：旧组件）、unknown（连接失败或还没有下发）。协议版本不变，靠回执探测能力。
+    let appearanceInfo = 'off';
 
     const snapshot = () => ({
       connected: status.ok && !!desktop.port,
@@ -136,11 +139,18 @@
       // 只有常驻且已启用才带 assistant；不带就是关闭，原生据此注销全局快捷键。读取失败按关闭，不影响水母本身。
       let assistant = null;
       try { const stored = await readAssistant(); if (settings.resident && stored.enabled) assistant = stored; } catch (_) { /* 按关闭处理 */ }
+      // 外观读取失败只影响外观：本次不带该字段（原生端保持上一次），水母照常下发
+      let appearancePayload = null;
+      if (appearance) {
+        try { const value = await appearance(); if (value && typeof value === 'object') appearancePayload = value; } catch (_) { /* 按没有外观处理 */ }
+      }
       try {
         const result = await desktop.setJelly({ resident: settings.resident, night: settings.night, lines, linesUntil,
-          ...(assistant ? { assistant: { enabled: true, hotkey: assistant.hotkey } } : {}) });
+          ...(assistant ? { assistant: { enabled: true, hotkey: assistant.hotkey } } : {}),
+          ...(appearancePayload ? { appearance: appearancePayload } : {}) });
         status.ok = true; status.version = Number(result?.version) || 0; status.error = ''; status.exhausted = false;
         attempt = 0; stopRetry();
+        appearanceInfo = appearancePayload ? (result?.appearance?.status === 'ok' ? 'ok' : 'unsupported') : 'off';
         if (assistant) {
           const reported = result?.assistant?.status;
           assistantInfo = { status: status.version < 7 ? 'unsupported' : HOTKEY_STATUSES.includes(reported) ? reported : 'unknown' };
@@ -154,6 +164,7 @@
       } catch (error) {
         status.ok = false; status.version = 0; status.error = String(error?.message || error).slice(0, 120);
         assistantInfo = { status: 'unknown' };
+        appearanceInfo = 'unknown';
         if (settings.resident) { wasLost = true; scheduleRetry(); }
         return false;
       }
@@ -216,7 +227,7 @@
     // ---- 与 AlarmDesktop 的接线 ----
     desktop.onConnected = () => { void sync().catch(() => {}); };
     desktop.onPortLost = info => {
-      status.ok = false; assistantInfo = { status: 'unknown' };
+      status.ok = false; assistantInfo = { status: 'unknown' }; appearanceInfo = 'unknown';
       if (info?.quit) { void quit().catch(() => {}); return; }
       void serial(async () => {
         const settings = await read();
@@ -248,6 +259,8 @@
       /** 启动时调用：常驻就建立连接并下发，否则什么都不做。 */
       restore: sync,
       status: snapshot,
+      /** 外观是否被组件接受（见 appearanceInfo）；设置页据此提示“需要更新组件”。 */
+      appearanceStatus: () => appearanceInfo,
       /** 交给 JellyNudge 的 presenter：原生确认显示才算 shown，失败抛出由它退回系统通知。 */
       presenter: {
         async present(nudge) {

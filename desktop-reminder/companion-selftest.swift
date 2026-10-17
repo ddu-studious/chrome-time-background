@@ -1,10 +1,11 @@
 import Foundation
 import CoreGraphics
 
-// 纯逻辑自测：countdown-model.swift + jelly-model.swift + jelly-swim.swift + jelly-palette.swift + assistant-model.swift（无 AppKit）。
+// 纯逻辑自测：countdown-model.swift + jelly-model.swift + jelly-swim.swift + jelly-palette.swift + jelly-appearance.swift + jelly-paint.swift + assistant-model.swift（无 AppKit）。
 // 运行：node --test test/desktop-companion-logic.test.mjs，或手工（入口文件须叫 main.swift，所以先复制一份）
-//   cp desktop-reminder/companion-selftest.swift /tmp/main.swift && xcrun swiftc desktop-reminder/countdown-model.swift desktop-reminder/jelly-model.swift desktop-reminder/jelly-swim.swift desktop-reminder/jelly-palette.swift desktop-reminder/assistant-model.swift /tmp/main.swift -o /tmp/companion-selftest && /tmp/companion-selftest
+//   cp desktop-reminder/companion-selftest.swift /tmp/main.swift && xcrun swiftc desktop-reminder/countdown-model.swift desktop-reminder/jelly-model.swift desktop-reminder/jelly-swim.swift desktop-reminder/jelly-palette.swift desktop-reminder/jelly-appearance.swift desktop-reminder/jelly-paint.swift desktop-reminder/assistant-model.swift /tmp/main.swift -o /tmp/companion-selftest && /tmp/companion-selftest
 // 环境变量 HOTKEY_CASES 指向一个 JSON 数组文件时，额外打印每一项的规范化结果（HOTKEY 行）与展示符号（GLYPH 行），供 Node 测试与 JS 实现逐条对照。
+// 环境变量 APPEARANCE_CASES 同理：打印每个外观负载解析后的结果（APPEARANCE 行）与各部位颜色（PAINT 行）。
 var failures = 0
 func check(_ condition: @autoclosure () -> Bool, _ message: String) {
     if condition() { print("ok   \(message)") } else { failures += 1; print("FAIL \(message)") }
@@ -751,6 +752,159 @@ do {
             if let parsed = M.parseHotkey(value) { print("GLYPH \(index) \(M.glyphs(parsed))") }
         }
     }
+    // ---- 外观解析与调色板（见 jelly-appearance.swift；Chrome 侧是 js/jelly-appearance.js）----
+    do {
+        typealias A = JellyAppearance
+        check(A.palette.count == A.colorCount, "调色板有 8 个色位")
+        check(A.palette[5].r == 0.40 && A.palette[5].g == 0.74 && A.palette[5].b == 0.90, "色位 5 恰好是平静色（默认外观才逐像素不变）")
+        let hues = A.palette.map { A.hue($0) }
+        check(zip(hues, hues.dropFirst()).allSatisfy { $0 < $1 }, "色位的色相严格递增（红→橙→黄→绿→薄荷→冰蓝→紫→洋红）")
+        // 调色板的辨识度：任意两个色位的 CIE76 Lab 色差 ≥ 20（当前最近的一对是绿与薄荷，约 27）。
+        // 半透明叠在壁纸上会压缩色差——真实渲染的数据见 desktop-reminder/appearance-contrast.mjs；Node 测试用另一份 Lab 实现对照这里的最小值
+        func lab(_ c: (r: Double, g: Double, b: Double)) -> (l: Double, a: Double, b: Double) {
+            func linear(_ v: Double) -> Double { v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
+            let r = linear(c.r), g = linear(c.g), b = linear(c.b)
+            let x = (0.4124564 * r + 0.3575761 * g + 0.1804375 * b) / 0.95047
+            let y = 0.2126729 * r + 0.7151522 * g + 0.0721750 * b
+            let z = (0.0193339 * r + 0.1191920 * g + 0.9503041 * b) / 1.08883
+            func f(_ t: Double) -> Double { t > 0.008856 ? cbrt(t) : 7.787 * t + 16.0 / 116.0 }
+            return (116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z)))
+        }
+        var closest = (i: 0, j: 1, delta: Double.infinity)
+        for i in 0..<A.palette.count {
+            for j in (i + 1)..<A.palette.count {
+                let p = lab(A.palette[i]), q = lab(A.palette[j])
+                let delta = (pow(p.l - q.l, 2) + pow(p.a - q.a, 2) + pow(p.b - q.b, 2)).squareRoot()
+                if delta < closest.delta { closest = (i, j, delta) }
+            }
+        }
+        check(closest.delta >= 20, "调色板任意两个色位的 Lab 色差 ≥ 20（最近的一对：色位 \(closest.i) 与 \(closest.j)，\(String(format: "%.1f", closest.delta))）")
+        print("PALETTEMIN \(closest.i) \(closest.j) \(String(format: "%.2f", closest.delta))")
+        check(A.parse(nil) == .default && A.parse("x") == .default && A.parse([String: Any]()) == .default, "没有或不是字典：默认")
+        let full = A.parse(["color": 2, "colors": [2, 4, 6], "look": "rainbow", "material": "wire", "size": "large", "season": "christmas"] as [String: Any])
+        check(full.colors == [2, 4, 6] && full.look == .rainbow && full.material == .wire && full.size == .large && full.season == "christmas", "完整负载逐项解析")
+        check(A.parse(["colors": [9], "color": 3] as [String: Any]).colors == [3], "colors 里有越界色位：整体回到 color")
+        check(A.parse(["colors": [1, 2, 3, 4]] as [String: Any]).colors == [A.defaultColor], "colors 超过 3 个：整体丢弃")
+        check(A.parse(["colors": [] as [Int], "color": 6] as [String: Any]).colors == [6], "colors 为空：用 color")
+        check(A.parse(["color": true] as [String: Any]).colors == [A.defaultColor], "布尔不是色位")
+        check(A.parse(["color": 2.5] as [String: Any]).colors == [A.defaultColor], "小数不是色位")
+        check(A.parse(["color": "1"] as [String: Any]).colors == [A.defaultColor], "字符串不是色位")
+        check(A.parse(["colors": [true, 1]] as [String: Any]).colors == [A.defaultColor], "colors 里有布尔：整体丢弃")
+        let thin = A.parse(["colors": [1], "look": "rainbow"] as [String: Any])
+        check(thin.look == .solid && thin.colors == [1], "花纹要的颜色不够：退回纯色")
+        check(A.parse(["colors": [1, 4], "look": "duo"] as [String: Any]).look == .duo, "两色可以是 duo")
+        check(A.parse(["season": "easter"] as [String: Any]).season == nil, "未知节日丢弃")
+        check(A.parse(["material": "metal"] as [String: Any]).material == .glass, "未知材质回到玻璃")
+        check(A.parse(["size": "xl"] as [String: Any]).size == .medium, "未知尺寸回到中号")
+        // 色位边界：0…7 合法，8 与 -1 不合法（只测过 9 时，把 `< 8` 写成 `<= 8` 也能通过）
+        check(A.parse(["color": 0] as [String: Any]).colors == [0] && A.parse(["color": 7] as [String: Any]).colors == [7], "色位 0 与 7 合法")
+        check(A.parse(["color": 8] as [String: Any]).colors == [A.defaultColor] && A.parse(["color": -1] as [String: Any]).colors == [A.defaultColor], "色位 8 与 -1 不合法，回到默认")
+        check(A.parse(["colors": [7], "color": 3] as [String: Any]).colors == [7] && A.parse(["colors": [8], "color": 3] as [String: Any]).colors == [3], "colors 里的 7 合法，8 整体回到 color")
+        check(A.parse(["colors": [0, 8], "color": 3] as [String: Any]).colors == [3], "colors 里只要有一个越界（哪怕在末位）就整体回到 color")
+        // 花纹需要的色位数：七彩 3、双色与渐变 2、纯色 1
+        let twoRainbow = A.parse(["colors": [1, 4], "look": "rainbow"] as [String: Any])
+        check(twoRainbow.look == .solid && twoRainbow.colors == [1], "七彩只给两个色位：退回纯色，只留主色")
+        check(A.parse(["colors": [1, 4, 6], "look": "rainbow"] as [String: Any]).look == .rainbow, "给足三个色位才是七彩")
+        check(A.parse(["colors": [1], "look": "duo"] as [String: Any]).look == .solid && A.parse(["colors": [1], "look": "blend"] as [String: Any]).look == .solid, "双色与渐变各需要两个色位，只有一个时退回纯色")
+        check(A.parse(["colors": [1, 4], "look": "blend"] as [String: Any]).look == .blend && A.parse(["colors": [1, 4, 6], "look": "duo"] as [String: Any]).look == .duo, "给足（或多给）色位时保持所选花纹")
+    }
+    // ---- 色相（HSV 定义，度）：只在自测里核对调色板顺序，但公式本身用独立的基准点钉住（各分支、灰色、0° 与 360° 的临界、红色分支里的负值折回）----
+    do {
+        func hue(_ r: Double, _ g: Double, _ b: Double) -> Double { JellyAppearance.hue((r: r, g: g, b: b)) }
+        let cases: [(Double, Double, Double, Double, String)] = [
+            (1, 0, 0, 0, "红 0°（不能被折成 360°）"), (1, 1, 0, 60, "黄 60°"), (0, 1, 0, 120, "绿 120°"), (0, 1, 1, 180, "青 180°"), (0, 0, 1, 240, "蓝 240°"), (1, 0, 1, 300, "洋红 300°"),
+            (1, 0.5, 0, 30, "橙 30°"), (0.5, 1, 0, 90, "黄绿 90°"), (0, 1, 0.5, 150, "春绿 150°"), (0, 0.5, 1, 210, "天蓝 210°"), (0.5, 0, 1, 270, "紫 270°"),
+            (1, 0, 0.5, 330, "玫红 330°（红色分支里的负值要折回）"), (1, 0, 0.25, 345, "345°"), (1, 0.01, 0, 0.6, "刚过 0° 的红是 0.6°，不能被折成 360.6°"),
+            (0.5, 0.5, 0.5, 0, "灰色没有色相，约定为 0"), (0, 0, 0, 0, "黑色为 0"), (1, 1, 1, 0, "白色为 0"),
+        ]
+        for (r, g, b, expected, name) in cases { check(abs(hue(r, g, b) - expected) < 1e-9, "色相：\(name)（得到 \(hue(r, g, b))）") }
+        check(hue(1, 0.2, 0.2) == hue(0.5, 0.1, 0.1), "色相与明暗无关")
+    }
+    // ---- 颜料（见 jelly-paint.swift）：花纹 → 各部位颜色，阶段/夜晚过渡；与 JS 的 paintOf 逐部位对照在 Node 测试里（数值来自下面的 PAINT 行）----
+    do {
+        typealias T = JellyTint
+        typealias P = JellyPaint
+        typealias A = JellyAppearance
+        func same(_ x: T, _ y: T) -> Bool { abs(x.r - y.r) < 1e-12 && abs(x.g - y.g) < 1e-12 && abs(x.b - y.b) < 1e-12 }
+        func look(_ colors: [Int], _ look: String) -> A { A.parse(["colors": colors, "look": look] as [String: Any]) }
+        let red = T(r: 1, g: 0, b: 0), blue = T(r: 0, g: 0, b: 1)
+        // 阶段色与夜晚色是产品行为（默认外观必须与重构前逐像素一致），数值被钉死
+        check(T.calm == T(r: 0.40, g: 0.74, b: 0.90), "平静色就是调色板的默认色位（冰蓝 0.40/0.74/0.90）")
+        check(T.soon == T(r: 0.98, g: 0.76, b: 0.42) && T.imminent == T(r: 1.0, g: 0.56, b: 0.46), "将至、临近的阶段色数值")
+        check(T.final == T(r: 1.0, g: 0.40, b: 0.50) && T.due == T(r: 1.0, g: 0.85, b: 0.45), "最后阶段、到点的阶段色数值")
+        check(T.nightBlue == T(r: 0.38, g: 0.52, b: 1.0), "夜晚荧光色数值")
+        check(T.forStage(.calm) == .calm && T.forStage(.soon) == .soon && T.forStage(.imminent) == .imminent && T.forStage(.final) == .final && T.forStage(.due) == .due, "阶段与颜色一一对应")
+        let stageColors = [T.forStage(.calm), .forStage(.soon), .forStage(.imminent), .forStage(.final), .forStage(.due)]
+        check(Set(stageColors.map { "\($0.r),\($0.g),\($0.b)" }).count == 5, "五个阶段的颜色各不相同")
+        // 插值
+        check(red.mixed(toward: blue, 0) == red && red.mixed(toward: blue, 1) == blue, "插值：t=0 是自己、t=1 是目标")
+        check(same(red.mixed(toward: blue, 0.25), T(r: 0.75, g: 0, b: 0.25)), "插值：t=1/4")
+        check(same(T(r: 0.2, g: 0.4, b: 0.6).mixed(toward: T(r: 0.6, g: 0.0, b: 1.0), 0.5), T(r: 0.4, g: 0.2, b: 0.8)), "插值：三个通道各算各的")
+        // 色位 → 颜色
+        check(P.tint(slot: 3) == T(r: CGFloat(A.palette[3].r), g: CGFloat(A.palette[3].g), b: CGFloat(A.palette[3].b)), "色位取调色板对应项")
+        check(P.tint(slot: -3) == P.tint(slot: 0) && P.tint(slot: 99) == P.tint(slot: A.colorCount - 1), "色位越界夹到两端，不崩溃")
+        check((0..<A.colorCount).allSatisfy { P.tint(slot: $0) != P.tint(slot: ($0 + 1) % A.colorCount) }, "相邻色位的颜色不同")
+        // 花纹 → 三个主要颜色
+        let solid = P.make(appearance: look([2], "solid")), duo = P.make(appearance: look([1, 4], "duo"))
+        let blend = P.make(appearance: look([1, 4], "blend")), rainbow = P.make(appearance: look([0, 3, 6], "rainbow"))
+        check(solid == P.solid(P.tint(slot: 2)) && solid.kind == .solid, "纯色：三个部位同一种颜色")
+        check(duo.kind == .duo && duo.a == P.tint(slot: 1) && duo.b == P.tint(slot: 4) && duo.c == P.tint(slot: 4), "双色：a 主色，b 与 c 第二色")
+        check(blend.kind == .blend && blend.a == P.tint(slot: 1) && blend.b == P.tint(slot: 4) && blend.c == P.tint(slot: 4), "渐变：与双色同样的三色，只是种类不同")
+        check(rainbow.kind == .rainbow && rainbow.a == P.tint(slot: 0) && rainbow.b == P.tint(slot: 3) && rainbow.c == P.tint(slot: 6), "七彩：三个色位依次放在 a、b、c")
+        check(P.solid(red) != P(kind: .duo, a: red, b: red, c: red), "花纹种类参与相等判断")
+        // 阶段覆盖
+        check(P.target(stage: .calm, appearance: look([1, 4], "duo")) == duo, "平静阶段用自选外观")
+        for stage in [CountdownStage.soon, .imminent, .final, .due] {
+            check(P.target(stage: stage, appearance: look([0, 3, 6], "rainbow")) == P.solid(T.forStage(stage)), "\(stage) 阶段整只变成阶段色（覆盖自选色与花纹）")
+        }
+        // 平滑过渡
+        let toDuo = rainbow.mixed(toward: duo, 0)
+        check(toDuo.kind == .duo && toDuo.a == rainbow.a && toDuo.b == rainbow.b && toDuo.c == rainbow.c, "过渡 t=0：颜色不动，花纹种类立刻取目标的")
+        check(rainbow.mixed(toward: duo, 1) == duo, "过渡 t=1：等于目标")
+        let half = rainbow.mixed(toward: duo, 0.5)
+        check(half.kind == .duo && same(half.a, rainbow.a.mixed(toward: duo.a, 0.5)) && same(half.b, rainbow.b.mixed(toward: duo.b, 0.5)) && same(half.c, rainbow.c.mixed(toward: duo.c, 0.5)), "过渡 t=0.5：三个颜色各向目标走一半")
+        var walking = solid
+        for _ in 0..<80 { walking = walking.mixed(toward: P.solid(T.final), 0.12) }
+        check(abs(walking.a.r - T.final.r) < 1e-3 && abs(walking.a.g - T.final.g) < 1e-3 && abs(walking.a.b - T.final.b) < 1e-3 && walking.kind == .solid, "每步靠近 12%，80 步后几乎到位")
+        // 夜晚：整体略推向夜蓝，花纹种类不变
+        let night = rainbow.mixedAll(toward: .nightBlue, 0.05)
+        check(night.kind == .rainbow && same(night.a, rainbow.a.mixed(toward: .nightBlue, 0.05)) && same(night.b, rainbow.b.mixed(toward: .nightBlue, 0.05)) && same(night.c, rainbow.c.mixed(toward: .nightBlue, 0.05)), "夜晚：保持花纹，三个颜色各自略推向夜蓝")
+        check(rainbow.mixedAll(toward: .nightBlue, 0) == rainbow && rainbow.mixedAll(toward: .nightBlue, 1).c == .nightBlue, "夜晚强度 0 不变、1 全变夜蓝")
+        // 触手：五根，各花纹的取色规则
+        for index in 0..<5 {
+            check(solid.tentacleTone(index: index, count: 5) == solid.a, "纯色：第 \(index) 根触手用主色")
+            check(duo.tentacleTone(index: index, count: 5) == duo.b, "双色：第 \(index) 根触手用第二色")
+            check(same(blend.tentacleTone(index: index, count: 5), blend.a.mixed(toward: blend.b, 0.7)), "渐变：第 \(index) 根触手偏向第二色（0.7）")
+        }
+        check(rainbow.tentacleTone(index: 0, count: 5) == rainbow.a, "七彩：最左一根是第一色")
+        check(same(rainbow.tentacleTone(index: 1, count: 5), rainbow.a.mixed(toward: rainbow.b, 0.5)), "七彩：第 1 根在第一、二色正中")
+        check(rainbow.tentacleTone(index: 2, count: 5) == rainbow.b, "七彩：正中一根恰是第二色（分段交界）")
+        check(same(rainbow.tentacleTone(index: 3, count: 5), rainbow.b.mixed(toward: rainbow.c, 0.5)), "七彩：第 3 根在第二、三色正中")
+        check(same(rainbow.tentacleTone(index: 4, count: 5), rainbow.c), "七彩：最右一根是第三色")
+        check(rainbow.tentacleTone(index: 0, count: 1) == rainbow.b && rainbow.tentacleTone(index: 0, count: 0) == rainbow.b, "只有一根（或没有）：取正中，不除零")
+        check(rainbow.tentacleTone(index: 0, count: 2) == rainbow.a && same(rainbow.tentacleTone(index: 1, count: 2), rainbow.c), "两根：左右两端")
+        // 个数不是 5 时的分段（u = i/(count-1)）：u<0.5 在第一、二色之间，其余在第二、三色之间；0.4 与 0.5 两侧各取点，分界写偏了会被发现
+        check(same(rainbow.tentacleTone(index: 2, count: 6), rainbow.a.mixed(toward: rainbow.b, 0.8)), "六根：第 2 根 u=0.4，在第一、二色之间（0.8）")
+        check(same(rainbow.tentacleTone(index: 3, count: 6), rainbow.b.mixed(toward: rainbow.c, 0.2)), "六根：第 3 根 u=0.6，在第二、三色之间（0.2）")
+        check(same(rainbow.tentacleTone(index: 5, count: 12), rainbow.a.mixed(toward: rainbow.b, 10.0 / 11.0)), "十二根：第 5 根 u=5/11≈0.455，还没到正中")
+        check(same(rainbow.tentacleTone(index: 6, count: 12), rainbow.b.mixed(toward: rainbow.c, 1.0 / 11.0)), "十二根：第 6 根 u=6/11≈0.545，已过正中")
+        // 口腕与描边
+        check(solid.oralTone == solid.a && duo.oralTone == duo.b && blend.oralTone == blend.b && rainbow.oralTone == rainbow.b, "口腕：纯色用主色，其余用第二色")
+        check(solid.outlineTone == solid.a && duo.outlineTone == duo.a && blend.outlineTone == blend.a && rainbow.outlineTone == rainbow.b, "描边：七彩用第二色，其余用主色")
+    }
+    // 与 JS 对照：Node 把一批外观负载（JSON 数组）交给这里，Swift 解析后逐项回显（APPEARANCE 行）并给出各部位颜色（PAINT 行）；调色板色相供 Node 对照首页调色板
+    if let path = ProcessInfo.processInfo.environment["APPEARANCE_CASES"], let data = FileManager.default.contents(atPath: path),
+       let cases = (try? JSONSerialization.jsonObject(with: data)) as? [Any] {
+        func rgb(_ t: JellyTint) -> String { String(format: "%.6f,%.6f,%.6f", Double(t.r), Double(t.g), Double(t.b)) }
+        for (index, value) in cases.enumerated() {
+            let a = JellyAppearance.parse(value)
+            print("APPEARANCE \(index) \(a.colors.map(String.init).joined(separator: ",")) \(a.look.rawValue) \(a.material.rawValue) \(a.size.rawValue) \(a.season ?? "-")")
+            let paint = JellyPaint.make(appearance: a)
+            let tentacles = (0..<5).map { rgb(paint.tentacleTone(index: $0, count: 5)) }.joined(separator: " ")
+            print("PAINT \(index) \(paint.kind.rawValue) \(rgb(paint.a)) \(rgb(paint.b)) \(rgb(paint.c)) \(rgb(paint.oralTone)) \(rgb(paint.outlineTone)) \(tentacles)")
+        }
+    }
+    for (index, rgb) in JellyAppearance.palette.enumerated() { print("PALETTEHUE \(index) \(String(format: "%.1f", JellyAppearance.hue(rgb)))") }
     print("STATUSES \(M.Status.allCases.map { $0.rawValue }.sorted().joined(separator: ","))")
 }
 

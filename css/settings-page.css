@@ -608,3 +608,58 @@ body.sp-has-bg .sp-field {
     .sp-guide-tabs { flex-wrap: wrap; }
     .sp-guide-ic-grid { grid-template-columns: 1fr; }
 }
+
+/* 桌面水母形象：色板与“随机”按钮 */
+.sp-jelly-swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+.sp-jelly-swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; background: var(--swatch); cursor: pointer; padding: 0; box-shadow: 0 0 0 1px rgba(0, 0, 0, .18) inset; }
+.sp-jelly-swatch[aria-checked="true"] { border-color: var(--sp-accent); box-shadow: 0 0 0 2px rgba(255, 255, 255, .9) inset; }
+.sp-jelly-swatch:focus-visible { outline: 2px solid var(--sp-accent); outline-offset: 2px; }
+.sp-jelly-swatch:disabled { opacity: .45; cursor: default; }
+.sp-jelly-reroll { padding: 6px 16px; border-radius: 8px; border: 1px solid var(--sp-accent); background: var(--sp-accent-light); color: var(--sp-accent); font: inherit; cursor: pointer; }
+.sp-jelly-reroll:focus-visible { outline: 2px solid var(--sp-accent); outline-offset: 2px; }
+.sp-jelly-reroll:disabled { opacity: .5; cursor: default; }
+
+/* 桌面水母形象：示意图（静态；颜色由 js/settings-jelly-appearance.js 按后台解析出的外观写入 --jp-* 变量，取色规则与原生 JellyPaint 一致） */
+.sp-jelly-preview {
+    --jp-a: #66bde6; --jp-b: #66bde6; --jp-c: #66bde6; --jp-mid: #66bde6;
+    --jp-t0: #66bde6; --jp-t1: #66bde6; --jp-t2: #66bde6; --jp-t3: #66bde6; --jp-t4: #66bde6;
+    --jp-oral: #66bde6; --jp-outline: #66bde6;
+    flex: 0 0 auto; width: 100px; height: 136px; margin-left: 16px; line-height: 0;
+    border-radius: 12px; box-shadow: 0 0 0 1px rgba(0, 0, 0, .14);
+}
+.sp-jelly-preview[hidden] { display: none; }
+.sp-jelly-preview svg { display: block; width: 100%; height: 100%; }
+/* 钟罩填充：纯色与双色同一种；渐变自下而上；七彩横向三段再叠一层自下而上的亮度 */
+.sp-jelly-preview [data-bell] { display: none; }
+.sp-jelly-preview[data-look="solid"] [data-bell="solid"],
+.sp-jelly-preview[data-look="duo"] [data-bell="solid"],
+.sp-jelly-preview[data-look="blend"] [data-bell="blend"],
+.sp-jelly-preview[data-look="rainbow"] [data-bell="rainbow"],
+.sp-jelly-preview[data-look="rainbow"] [data-bell="light"] { display: inline; }
+.sp-jelly-preview [data-bell="solid"] { fill: url(#jpBellSolid); }
+.sp-jelly-preview [data-bell="blend"] { fill: url(#jpBellBlend); }
+.sp-jelly-preview [data-bell="rainbow"] { fill: url(#jpBellRainbow); }
+.sp-jelly-preview [data-bell="light"] { fill: url(#jpLight); }
+.sp-jelly-preview .jp-s0 { stop-color: var(--jp-a); stop-opacity: .5; }
+.sp-jelly-preview .jp-s1 { stop-color: color-mix(in srgb, var(--jp-a), #fff 22%); stop-opacity: .74; }
+.sp-jelly-preview .jp-s2 { stop-color: color-mix(in srgb, var(--jp-a), #fff 45%); stop-opacity: .94; }
+.sp-jelly-preview .jp-b0 { stop-color: var(--jp-a); stop-opacity: .5; }
+.sp-jelly-preview .jp-b1 { stop-color: color-mix(in srgb, var(--jp-mid), #fff 22%); stop-opacity: .74; }
+.sp-jelly-preview .jp-b2 { stop-color: color-mix(in srgb, var(--jp-b), #fff 45%); stop-opacity: .94; }
+.sp-jelly-preview .jp-r0 { stop-color: color-mix(in srgb, var(--jp-a), #fff 22%); stop-opacity: .74; }
+.sp-jelly-preview .jp-r1 { stop-color: color-mix(in srgb, var(--jp-b), #fff 22%); stop-opacity: .74; }
+.sp-jelly-preview .jp-r2 { stop-color: color-mix(in srgb, var(--jp-c), #fff 22%); stop-opacity: .74; }
+.sp-jelly-preview .jp-outline { fill: none; stroke: color-mix(in srgb, var(--jp-outline), #000 12%); stroke-opacity: .85; stroke-width: 1.9; }
+.sp-jelly-preview [data-tentacle] { fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-opacity: .55; }
+.sp-jelly-preview [data-tentacle="0"] { stroke: color-mix(in srgb, var(--jp-t0), #fff 15%); }
+.sp-jelly-preview [data-tentacle="1"] { stroke: color-mix(in srgb, var(--jp-t1), #fff 15%); }
+.sp-jelly-preview [data-tentacle="2"] { stroke: color-mix(in srgb, var(--jp-t2), #fff 15%); }
+.sp-jelly-preview [data-tentacle="3"] { stroke: color-mix(in srgb, var(--jp-t3), #fff 15%); }
+.sp-jelly-preview [data-tentacle="4"] { stroke: color-mix(in srgb, var(--jp-t4), #fff 15%); }
+.sp-jelly-preview [data-oral] { fill: none; stroke: color-mix(in srgb, var(--jp-oral), #fff 40%); stroke-width: 5.1; stroke-linecap: round; stroke-opacity: .34; }
+.sp-jelly-preview .jp-shine { fill: #fff; fill-opacity: .42; }
+.sp-jelly-preview .jp-spot { fill: #fff; fill-opacity: .22; }
+.sp-jelly-preview .jp-eye { fill: #293a4d; fill-opacity: .88; }
+.sp-jelly-preview .jp-eye-hl { fill: #fff; fill-opacity: .85; }
+.sp-jelly-preview .jp-cheek { fill: #ff8c9e; fill-opacity: .3; }
+.sp-jelly-preview .jp-smile { fill: none; stroke: #293a4d; stroke-opacity: .88; stroke-width: 1.9; stroke-linecap: round; }
