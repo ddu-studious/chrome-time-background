@@ -2,7 +2,12 @@
 // 判定写错的后果是把用户的按键送进测试面板，所以用假的空闲时间和时钟把规则逐条钉住。
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Quiet, EXIT_USER_ACTIVE } from '../desktop-reminder/user-quiet.mjs';
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 // 假的世界：now() 是毫秒时钟，idle() 是“距最后一次任何键鼠事件”的秒数；合成输入与用户输入都会把它清零，睡眠推进时钟
 function world({ idleAtStart = 100 } = {}) {
@@ -119,4 +124,14 @@ test('seconds=0 关闭礼让：不等、不盯、不报闯入（只在无人值�
   w.advance(5); w.userTouches(); w.advance(1);
   await new Promise(done => setTimeout(done, 520));
   stop();
+});
+
+test('bridge-smoke：4d 的助手面板会拿走键盘焦点，进入前必须礼让；真实输入打断以退出码 75 结束；合成鼠标输入之后必须 touch()', () => {
+  const source = readFileSync(resolve(root, 'desktop-reminder/bridge-smoke.mjs'), 'utf8');
+  const gate = source.indexOf('await quiet.waitIfActive()'), show = source.indexOf("assistantHook('show')");
+  assert.ok(gate > 0 && show > gate, '第一次让面板出现之前先等用户安静');
+  assert.match(source, /quiet\.watch\(reason => \{ interrupted = reason; void assistantHook\('hide'\)/, '运行中发现真实输入立刻撤掉面板');
+  assert.match(source, /const mouse = \(\.\.\.a\) => \{ try \{ return execFileSync\(helper, a\.map\(String\)\); \} finally \{ quiet\.touch\(\); \} \}/, '合成鼠标输入会重置系统空闲时间，必须 touch()');
+  assert.match(source, /process\.exitCode = EXIT_USER_ACTIVE/, '被真实输入打断不算验收失败');
+  assert.match(source, /if \(interrupted\) throw new Error\(interrupted\)/, '阶段内发生过真实输入时，即使断言碰巧通过也不报告通过');
 });

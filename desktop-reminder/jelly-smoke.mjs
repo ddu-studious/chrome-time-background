@@ -1,7 +1,7 @@
-// 隔离验收：桌面水母（协议 v6 引入、v7 沿用；常驻与临时出现、倒计时委托、喝水/起身提醒气泡、到点响铃、右键菜单动作、夜晚荧光、减少动态效果、真实鼠标）。
+// 隔离验收：桌面水母（协议 v6 引入、v10 沿用；含 v8 的水母差事气泡与 presence、v9 的推荐歌曲三按钮气泡与右键菜单“水母，给我…”、v10 的活动行为（白天清醒、巡游、小动作、睡觉规则，--only=patrol），可单独跑 --only=errand / --only=presence；常驻与临时出现、倒计时委托、喝水/起身提醒气泡、到点响铃、右键菜单动作、夜晚荧光、减少动态效果、真实鼠标）。
 // 用独立构建的原生组件（--app，独立 Bundle ID，不改写真实组件保存的位置），不连接 Chrome，不读写任何闹钟或喝水记录。
 //   node desktop-reminder/build.mjs --extension-id=<id> --app=/tmp/tk/QA.app
-//   node desktop-reminder/jelly-smoke.mjs --extension-id=<id> --app=/tmp/tk/QA.app [--no-mouse] [--shots=/tmp/tk/shots] [--only=ring|ring-mouse|nudge-mouse]
+//   node desktop-reminder/jelly-smoke.mjs --extension-id=<id> --app=/tmp/tk/QA.app [--no-mouse] [--shots=/tmp/tk/shots] [--only=ring|ring-mouse|nudge-mouse|presence|errand|patrol [--scenario=名字里的正则]]
 // 右键菜单动作与响铃按钮经隔离测试钩子 menuItem / ringButton 触发（环境变量 TIMEKEEPER_TEST_HOOKS=1，只有本脚本设置；正式组件对它们恒回 ok:false）。
 // 鼠标阶段用 mouse-helper.swift 合成真实事件，只点击水母自己的窗口；截图只用 `screencapture -l <窗口号>`，不截整屏或区域。
 // 真实鼠标与截图需要终端的“辅助功能/屏幕录制”权限；--no-mouse 跳过鼠标阶段；--only=ring 只跑到点响铃阶段、--only=ring-mouse 只跑其中的真实鼠标场景、--only=nudge-mouse 只跑喝水提醒按钮的真实鼠标阶段（都是调试用）。
@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { idleSeconds, Quiet, EXIT_USER_ACTIVE } from './user-quiet.mjs';
 const JellyfishCore = createRequire(import.meta.url)('../js/jellyfish-core.js');
 
 const arg = name => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3);
@@ -25,7 +26,8 @@ const app = arg('app');
 if (!app) throw new Error('必须用 --app 指向隔离构建，避免改写真实组件的窗口记忆');
 const shots = arg('shots');
 const only = arg('only');
-if (only && !['ring', 'ring-mouse', 'nudge-mouse'].includes(only)) throw new Error('--only 目前只支持 ring、ring-mouse、nudge-mouse');
+const scenarioFilter = arg('scenario') ? new RegExp(arg('scenario')) : null;      // 调试 / 变异检查用：--only=errand 时只跑名字匹配的差事场景
+if (only && !['ring', 'ring-mouse', 'nudge-mouse', 'presence', 'errand', 'patrol'].includes(only)) throw new Error('--only 目前只支持 ring、ring-mouse、nudge-mouse、presence、errand、patrol');
 if ((only === 'ring-mouse' || only === 'nudge-mouse') && process.argv.includes('--no-mouse')) throw new Error(`--only=${only} 需要真实鼠标，不能带 --no-mouse`);
 const withMouse = !process.argv.includes('--no-mouse');
 if (shots) mkdirSync(shots, { recursive: true });
@@ -68,7 +70,9 @@ function start(env = {}) {
 }
 const frameOf = text => { const m = text.match(/\{\{(-?[\d.]+), (-?[\d.]+)\}, \{([\d.]+), ([\d.]+)\}\}/); return { x: +m[1], y: +m[2], w: +m[3], h: +m[4] }; };
 const center = text => { const f = frameOf(text); return { x: f.x + f.w / 2, y: f.y + f.h / 2 }; };
-const mouse = (...a) => execFileSync(helper, a.map(String));
+// 礼让用户（user-quiet.mjs）：只有活动行为的真实鼠标场景用它（--quiet=秒，默认 20，0 关闭）；合成输入会重置系统空闲时间，所以每次都要 touch()，才分得清真实用户
+const quiet = new Quiet(Number(arg('quiet') ?? 20));
+const mouse = (...a) => { try { return execFileSync(helper, a.map(String)); } finally { quiet.touch(); } };
 // 截图偶发失败：要么命令报错（三十多次里出现过 1 次），要么“成功”却只给一张 1×1 的图（2026-10-16 在鼠标整轮验收里出现过 1 次，原因未查明）。
 // 两种情况都隔 0.5 秒重试，最多三次，仍取不到有效图像才报告（调用方把它当作“跳过”，不当作通过）。
 const pngWidth = file => { try { return readFileSync(file).readUInt32BE(16); } catch { return 0; } };
@@ -227,7 +231,7 @@ async function ringPhase() {
       assert.equal(reply.ringId, null); assert.equal(reply.jellyVisible, false); assert.equal(reply.visible, false);
     }
     let reply = await h.request('show', ring());
-    assert.equal(reply.ok, true); assert.equal(reply.version, 7); assert.equal(reply.focusStayed, true, '响铃不抢焦点');
+    assert.equal(reply.ok, true); assert.equal(reply.version, 10); assert.equal(reply.focusStayed, true, '响铃不抢焦点');
     assert.equal(reply.ringId, 'ring-1'); assert.equal(reply.jellyVisible, true); assert.equal(reply.visible, true); assert.equal(reply.countdownVisible, false);
     assert.equal(reply.ringClock, '09:30'); assert.deepEqual(reply.ringLines, ['开会', '喝水'], 'Chrome 发来的 clock / labels 经清洗后原样显示');
     assert.equal(reply.ringPhase, 'arriving'); assert.equal(reply.jellyBubble, 'none', '游向落点的途中没有气泡');
@@ -781,11 +785,734 @@ if (only === 'ring' || only === 'ring-mouse') {
   process.exit(0);
 }
 
+// ---------- 阶段 P：presence（协议 v8，系统空闲秒数 → active / away，只在变化时上报） ----------
+// 空闲秒数经隔离测试钩子 TIMEKEEPER_IDLE_SECONDS 注入（需要 TIMEKEEPER_TEST_HOOKS=1，正式组件恒读系统）；不碰真实键鼠。
+if (only !== 'errand' && only !== 'patrol') {
+for (const [idle, expected] of [['0', 'active'], ['299', 'active'], ['300', 'away'], ['99999', 'away']]) {
+  host = start({ TIMEKEEPER_IDLE_SECONDS: idle });
+  try {
+    host.noEvent('presence', '没有常驻前不上报');
+    let reply = await host.request('jelly', { jelly: jelly() });
+    assert.equal(reply.ok, true);
+    const event = await host.waitEvent('presence', 2000);
+    assert.equal(event.state, expected, `空闲 ${idle} 秒应为 ${expected}`);
+    assert.deepEqual(Object.keys(event).sort(), ['state', 'type'], 'presence 只有 type 与 state，不带具体秒数');
+    assert.equal((await host.request('ping')).presence, expected);
+    // 状态没变就不重复上报：再发一次 jelly 命令（同样常驻）不会产生第二个事件
+    await host.request('jelly', { jelly: jelly() });
+    await delay(300);
+    host.noEvent('presence', `空闲 ${idle} 秒：状态没变不应重复上报`);
+    // 取消常驻即停止采样并忘掉状态；重新常驻后再报一次，Chrome 据此拿到新的初始状态
+    reply = await host.request('jelly', { jelly: jelly({ resident: false }) });
+    assert.equal(reply.presence, null, '不常驻就忘掉上一次的结果');
+    await delay(300);
+    host.noEvent('presence', '不常驻不上报');
+    await host.request('jelly', { jelly: jelly() });
+    assert.equal((await host.waitEvent('presence', 2000)).state, expected, '重新常驻后再报一次');
+  } finally { await host.stop(); }
+}
+{
+  // 没有常驻只靠倒计时临时出现：不采样、不上报（presence 只服务常驻的水母差事）
+  host = start({ TIMEKEEPER_IDLE_SECONDS: '99999' });
+  try {
+    await host.request('jelly', { jelly: jelly({ resident: false }) });
+    await host.request('countdown', { timer: timer() });
+    await delay(500);
+    host.noEvent('presence', '临时出现的水母不上报 presence');
+    assert.equal((await host.request('ping')).presence, null);
+  } finally { await host.stop(); }
+}
+{
+  // 对照：没有 TIMEKEEPER_TEST_HOOKS 时 TIMEKEEPER_IDLE_SECONDS 无效，presence 只读系统（正式使用时环境变量不能谎报“离开”）。
+  // 真实空闲接近阈值（用户真的离开了一阵）时系统读数本身就可能是 away，此时跳过，不把“人不在”算成失败。
+  const real = idleSeconds();
+  if (real < 240) {
+    host = start({ TIMEKEEPER_TEST_HOOKS: '0', TIMEKEEPER_IDLE_SECONDS: '99999' });
+    try {
+      await host.request('jelly', { jelly: jelly() });
+      const event = await host.waitEvent('presence', 2000);
+      assert.equal(event.state, 'active', '没有测试钩子时环境变量不能覆盖真实空闲时间');
+    } finally { await host.stop(); }
+  } else console.log(`  - 跳过“钩子关闭时忽略注入的空闲秒数”：真实空闲 ${Math.round(real)} 秒，接近阈值`);
+}
+console.log('PASS 阶段 P：presence 上报（阈值 300 秒、只在变化时、不常驻不上报）');
+}
+if (only === 'presence') { console.log('PASS: jelly presence 阶段'); process.exit(0); }
+
+// ---------- 阶段 E：水母差事气泡（协议 v8：类别与按钮白名单、先游到你所在的屏幕再开口；v9：歌曲三按钮气泡与右键菜单请求） ----------
+// 差事复用喝水/起身提醒的气泡与 nudge 命令，只是类别与按钮不同；按钮经测试钩子 nudgeButton 触发（走真实动作入口）。
+// 水母按“鼠标所在屏幕”选落点，所以运行期间不要碰鼠标（指针被外部挪到另一块屏幕会改变“是否需要游过来”）。
+const errand = (extra = {}) => ({
+  id: 'jelly-errand-brief-1', kind: 'brief', title: '今天的安排', text: '今天有 3 个任务，另有 1 个已过期',
+  buttons: [{ id: 'open', title: '看看' }, { id: 'later', title: '知道了' }], ttl: 90, ...extra
+});
+// 协议 v9 的推荐歌曲气泡：三个按钮（播放 / 换一首 / 不听），是唯一允许 3 个按钮的类别
+const songBubble = (extra = {}) => errand({
+  id: 'jelly-errand-song-1', kind: 'song', title: '给你一首歌', text: '《夜曲》· 周杰伦',
+  buttons: [{ id: 'play', title: '播放' }, { id: 'another', title: '换一首' }, { id: 'dismiss', title: '不听' }], ...extra
+});
+const errandScenario = async (name, env, body) => {
+  if (scenarioFilter && !scenarioFilter.test(name)) return;
+  const h = start(env);
+  try { await body(h); console.log(`  ✓ 差事：${name}`); } finally { await h.stop(); }
+};
+if (!only || only === 'errand') {
+  await errandScenario('协议校验：每个类别只认自己的按钮，只有歌曲能有 3 个，未知类别与错配的按钮被拒绝，被拒绝的不替换当前气泡', {}, async h => {
+    for (const bad of [
+      errand({ kind: 'song', buttons: [{ id: 'open', title: '看看' }] }),                                  // 歌曲不能用差事的按钮
+      songBubble({ buttons: [{ id: 'play', title: 'a' }, { id: 'another', title: 'b' }, { id: 'dismiss', title: 'c' }, { id: 'play', title: 'd' }] }),   // 最多 3 个
+      songBubble({ buttons: [{ id: 'play', title: 'a' }, { id: 'play', title: 'b' }] }),                   // 不能重复
+      songBubble({ buttons: [{ id: 'play', title: 'a' }, { id: 'done', title: 'b' }] }),                   // 喝水的按钮
+      songBubble({ buttons: [] }),
+      errand({ buttons: [{ id: 'play', title: '听' }] }),                                                  // 概览不能放歌
+      errand({ kind: 'tidbit', buttons: [{ id: 'another', title: '换' }, { id: 'dismiss', title: '够了' }] }),
+      errand({ kind: 'concert', buttons: [{ id: 'open', title: '看看' }] }),                               // 未知类别
+      errand({ buttons: [{ id: 'done', title: '喝了' }] }),                       // 差事不能用喝水的按钮
+      errand({ kind: 'tidbit', buttons: [{ id: 'open', title: '看看' }] }),       // 小乐子只认 more / dismiss
+      errand({ kind: 'task', buttons: [{ id: 'more', title: '再来' }] }),
+      errand({ buttons: [{ id: 'open', title: 'a' }, { id: 'later', title: 'b' }, { id: 'open', title: 'c' }] }),
+      errand({ buttons: [{ id: 'Open', title: '看看' }] }),
+      nudge({ buttons: [{ id: 'open', title: '看看' }] }),                         // 喝水也不能用差事的按钮
+      nudge({ buttons: [{ id: 'play', title: '播放' }] })
+    ]) {
+      const reply = await h.request('nudge', { nudge: bad });
+      assert.equal(reply.ok, false, `应拒绝：${JSON.stringify(bad).slice(0, 90)}`);
+      assert.equal(reply.nudgeId, null);
+    }
+    for (const [kind, buttons] of [['brief', ['open', 'later']], ['task', ['open', 'later']], ['worklog', ['open', 'later']], ['tidbit', ['more', 'dismiss']],
+      ['song', ['play']], ['song', ['play', 'dismiss']], ['song', ['play', 'another', 'dismiss']], ['song', ['dismiss', 'another', 'play']]]) {
+      const reply = await h.request('nudge', { nudge: errand({ id: `jelly-errand-${kind}-1`, kind, buttons: buttons.map(id => ({ id, title: id })) }) });
+      assert.equal(reply.ok, true, `${kind} ${buttons} 应接受`);
+      await h.request('nudgeClear', { id: `jelly-errand-${kind}-1` });
+    }
+  });
+
+  await errandScenario('没有常驻：水母先从屏幕右边游入，到位之前没有气泡也点不了，到位后才开口', {}, async h => {
+    let reply = await h.request('nudge', { nudge: errand() });
+    assert.equal(reply.ok, true, '已接手：Chrome 据此不再发系统通知'); assert.equal(reply.nudgeId, 'jelly-errand-brief-1');
+    assert.equal(reply.nudgeArriving, true, '刚接手时水母还在路上');
+    assert.notEqual(reply.jellyBubble, 'nudge', '到位之前气泡不出现');
+    assert.equal((await h.request('nudgeButton', { id: 'open' })).ok, false, '到位之前按钮不发动作');
+    h.noEvent('nudgeAction', '到位之前不会有动作');
+    const shown = await until(h, r => r.nudgeArriving === false && r.jellyBubble === 'nudge', 4500, '水母到位后气泡出现');
+    assert.deepEqual(Object.keys(shown.nudgeButtons).sort(), ['later', 'open']);
+    assert.equal(shown.focusStayed, true, '差事气泡不抢焦点');
+    await delay(400); shot('errand-brief', shown.countdownWindowNumber);
+  });
+
+  await errandScenario('点“看看”：只发一个 open 动作，回执成功后收起并交还水母', {}, async h => {
+    await h.request('nudge', { nudge: errand() });
+    await until(h, r => r.nudgeArriving === false && r.jellyBubble === 'nudge', 4500, '到位');
+    const first = await h.request('nudgeButton', { id: 'open' });
+    assert.equal(first.ok, true); assert.equal(first.nudgeBusy, true, '等待回执期间按钮禁用');
+    const action = await h.waitEvent('nudgeAction', 1500);
+    assert.equal(action.id, 'jelly-errand-brief-1'); assert.equal(action.action, 'open'); assert.ok(action.actionId);
+    assert.equal((await h.request('nudgeButton', { id: 'later' })).ok, false, '等回执时不能再发第二个动作');
+    h.noEvent('nudgeAction', '只有一个动作');
+    await h.request('nudgeActionResult', { id: action.id, actionId: action.actionId, ok: true, text: '已打开' });
+    await until(h, r => r.nudgeId === null, 4500, '成功回执显示后气泡收起');
+    const hidden = await h.waitEvent('nudgeHidden', 1500); assert.equal(hidden.id, 'jelly-errand-brief-1');
+    assert.equal((await h.request('ping')).jellyVisible, false, '没有常驻：水母随气泡退场');
+  });
+
+  await errandScenario('失败回执：显示原因、按钮恢复可重试，不声称成功', {}, async h => {
+    await h.request('nudge', { nudge: errand({ id: 'jelly-errand-task-1', kind: 'task', title: '任务提醒', text: '3 个任务已过期', buttons: [{ id: 'open', title: '去处理' }, { id: 'later', title: '明天再说' }] }) });
+    await until(h, r => r.nudgeArriving === false && r.jellyBubble === 'nudge', 4500, '到位');
+    assert.equal((await h.request('nudgeButton', { id: 'later' })).ok, true);
+    const action = await h.waitEvent('nudgeAction', 1500); assert.equal(action.action, 'later');
+    const reply = await h.request('nudgeActionResult', { id: action.id, actionId: action.actionId, ok: false, error: '没有成功' });
+    assert.equal(reply.nudgeBusy, false, '失败后按钮恢复'); assert.equal(reply.nudgeId, 'jelly-errand-task-1', '失败不收起气泡');
+    assert.equal((await h.request('nudgeButton', { id: 'later' })).ok, true, '可以重试');
+  });
+
+  await errandScenario('水母已常驻且就在你所在的屏幕上：原地开口，不游动', {}, async h => {
+    let reply = await h.request('jelly', { jelly: jelly() });
+    assert.equal(reply.jellyVisible, true);
+    await delay(500);
+    reply = await h.request('nudge', { nudge: errand() });
+    assert.equal(reply.ok, true);
+    assert.equal(reply.nudgeArriving, false, `已经在鼠标所在屏幕：不需要游过来（鼠标 ${reply.mouse}，屏幕数 ${reply.screenCount}）`);
+    assert.equal(reply.jellyBubble, 'nudge', '立即开口');
+  });
+
+  await errandScenario('喝水提醒不变：没有“游过来”阶段，立即出现', {}, async h => {
+    const reply = await h.request('nudge', { nudge: nudge() });
+    assert.equal(reply.ok, true); assert.equal(reply.nudgeArriving, false); assert.equal(reply.jellyBubble, 'nudge');
+    assert.deepEqual(Object.keys(reply.nudgeButtons).sort(), ['done', 'snooze']);
+  });
+
+  await errandScenario('减少动态效果：不游动，水母原位直接就位后很快开口', { TIMEKEEPER_REDUCE_MOTION: '1' }, async h => {
+    const reply = await h.request('nudge', { nudge: errand() });
+    assert.equal(reply.ok, true);
+    await until(h, r => r.nudgeArriving === false && r.jellyBubble === 'nudge', 1500, '减少动态效果下快速开口');
+  });
+
+  await errandScenario('游过来的途中被撤回：状态干净，不会残留“还在路上”', {}, async h => {
+    await h.request('nudge', { nudge: errand() });
+    const reply = await h.request('nudgeClear', { id: 'jelly-errand-brief-1' });
+    assert.equal(reply.nudgeId, null); assert.equal(reply.nudgeArriving, false);
+    await delay(800);
+    assert.equal((await h.request('ping')).jellyBubble, 'none', '到位回调作废，不会冒出已撤回的气泡');
+  });
+
+  await errandScenario('游过来的途中响铃接管：响完气泡恢复且按钮可用（到位回调不会卡住）', {}, async h => {
+    await h.request('nudge', { nudge: errand() });
+    let reply = await h.request('show', ring());
+    assert.equal(reply.ok, true); assert.equal(reply.nudgeArriving, false, '响铃接管后不再等“到位”');
+    await until(h, r => r.ringPhase === 'shown', 4500, '响铃气泡弹出');
+    reply = await h.request('hide', { sessionId: 'ring-1' });
+    const back = await until(h, r => r.ringId === null && r.jellyBubble === 'nudge', 5000, '响铃结束后差事气泡回来');
+    assert.equal(back.nudgeArriving, false);
+    assert.equal((await h.request('nudgeButton', { id: 'later' })).ok, true, '按钮可用');
+  });
+
+  await errandScenario('响铃中差事被拒绝（Chrome 据此退回系统通知）', {}, async h => {
+    await h.request('show', ring());
+    const reply = await h.request('nudge', { nudge: errand() });
+    assert.equal(reply.ok, false); assert.equal(reply.nudgeId, null);
+  });
+
+  // ---- 协议 v9：推荐歌曲三按钮气泡 ----
+  await errandScenario('歌曲气泡：播放 / 换一首 / 不听三个按钮齐全，都在窗口里且互不重叠，没抢焦点', {}, async h => {
+    const sent = await h.request('nudge', { nudge: songBubble() });
+    assert.equal(sent.ok, true, '协议 v9：歌曲气泡被接受'); assert.equal(sent.nudgeId, 'jelly-errand-song-1');
+    const shown = await until(h, r => r.nudgeArriving === false && r.jellyBubble === 'nudge', 4500, '水母到位后歌曲气泡出现');
+    assert.deepEqual(Object.keys(shown.nudgeButtons).sort(), ['another', 'dismiss', 'play']);
+    assert.equal(shown.focusStayed, true, '歌曲气泡不抢焦点');
+    const win = frameOf(shown.countdownFrame);
+    const boxes = Object.entries(shown.nudgeButtons).map(([button, text]) => [button, frameOf(text)]);
+    for (const [button, f] of boxes) {
+      assert.ok(f.w > 20 && f.h > 10, `${button} 按钮有实际大小：${JSON.stringify(f)}`);
+      assert.ok(f.x >= win.x - 0.5 && f.x + f.w <= win.x + win.w + 0.5 && f.y >= win.y - 0.5 && f.y + f.h <= win.y + win.h + 0.5, `${button} 按钮在窗口之内：${JSON.stringify(f)} 对 ${JSON.stringify(win)}`);
+    }
+    for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+      const a = boxes[i][1], b = boxes[j][1];
+      const overlap = a.x < b.x + b.w - 0.5 && b.x < a.x + a.w - 0.5 && a.y < b.y + b.h - 0.5 && b.y < a.y + a.h - 0.5;
+      assert.equal(overlap, false, `${boxes[i][0]} 与 ${boxes[j][0]} 不重叠`);
+    }
+    await delay(400); shot('errand-song', shown.countdownWindowNumber);
+  });
+
+  await errandScenario('歌曲气泡的三个按钮各发自己的动作；等回执时只能有一个，成功回执后收起并交还水母', {}, async h => {
+    for (const [action, text] of [['play', '已开始播放《夜曲》'], ['another', '换一首～'], ['dismiss', '好的，少说点']]) {
+      const bubbleId = `jelly-errand-song-${action}`;
+      assert.equal((await h.request('nudge', { nudge: songBubble({ id: bubbleId }) })).ok, true);
+      await until(h, r => r.nudgeArriving === false && r.jellyBubble === 'nudge' && r.nudgeId === bubbleId, 4500, `${action}：到位`);
+      assert.equal((await h.request('nudgeButton', { id: 'open' })).ok, false, '歌曲没有 open 按钮');
+      const first = await h.request('nudgeButton', { id: action });
+      assert.equal(first.ok, true, `${action} 可点`); assert.equal(first.nudgeBusy, true, '等回执期间按钮禁用');
+      const event = await h.waitEvent('nudgeAction', 1500);
+      assert.equal(event.id, bubbleId); assert.equal(event.action, action); assert.ok(event.actionId);
+      for (const other of ['play', 'another', 'dismiss'].filter(id => id !== action)) assert.equal((await h.request('nudgeButton', { id: other })).ok, false, `${action} 等回执时不能再发 ${other}`);
+      h.noEvent('nudgeAction', `${action}：只有一个动作`);
+      await h.request('nudgeActionResult', { id: event.id, actionId: event.actionId, ok: true, text });
+      await until(h, r => r.nudgeId === null, 4500, `${action}：成功回执显示后气泡收起`);
+      assert.equal((await h.waitEvent('nudgeHidden', 1500)).id, bubbleId);
+      assert.equal((await h.request('ping')).jellyVisible, false, '没有常驻：水母随气泡退场');
+    }
+  });
+
+  await errandScenario('歌曲“播放”失败：显示 Chrome 给的原因，三个按钮恢复，“换一首”仍可点；不声称已播放', {}, async h => {
+    await h.request('nudge', { nudge: songBubble() });
+    await until(h, r => r.nudgeArriving === false && r.jellyBubble === 'nudge', 4500, '到位');
+    assert.equal((await h.request('nudgeButton', { id: 'play' })).ok, true);
+    const play = await h.waitEvent('nudgeAction', 1500); assert.equal(play.action, 'play');
+    const failed = await h.request('nudgeActionResult', { id: play.id, actionId: play.actionId, ok: false, error: '这首歌暂不可播放，点“换一首”试试' });
+    assert.equal(failed.nudgeBusy, false, '失败后按钮恢复'); assert.equal(failed.nudgeId, 'jelly-errand-song-1', '失败不收起气泡');
+    assert.deepEqual(Object.keys(failed.nudgeButtons).sort(), ['another', 'dismiss', 'play']);
+    assert.equal((await h.request('nudgeButton', { id: 'another' })).ok, true, '“换一首”可以点');
+    assert.equal((await h.waitEvent('nudgeAction', 1500)).action, 'another');
+  });
+
+  // ---- 协议 v9：右键菜单“水母，给我…” ----
+  const MENU = [['今日概览', 'brief'], ['来首歌', 'song'], ['来点乐子', 'tidbit'], ['工作日志', 'worklog']];
+  await errandScenario('右键菜单“水母，给我…”：不带 errands 字段没有；带了才有；四项各发自己的 errandRequest，等回执时全部禁用', {}, async h => {
+    let reply = await h.request('jelly', { jelly: jelly() });
+    assert.equal(reply.errandsMenu, false, '默认没有差事菜单'); assert.equal(reply.countdownMenu.includes('水母，给我…'), false);
+    for (const [title] of MENU) assert.equal((await h.request('menuItem', { title })).ok, false, `${title}：没开差事菜单时不可点`);
+    reply = await h.request('jelly', { jelly: jelly({ errands: { enabled: true } }) });
+    assert.equal(reply.errandsMenu, true); assert.ok(reply.countdownMenu.includes('水母，给我…'), `菜单：${reply.countdownMenu.join(' | ')}`);
+    assert.equal(reply.countdownMenu[0], '水母，给我…', '没有“问 AI…”时它排在第一段第一项');
+    assert.equal(reply.countdownMenu[1], '---');
+    for (const [title, kind] of MENU) {
+      reply = await h.request('menuItem', { title });
+      assert.equal(reply.ok, true, `${title} 可点`);
+      const event = await h.waitEvent('errandRequest', 1500);
+      assert.equal(event.kind, kind); assert.equal(typeof event.errandId, 'string'); assert.ok(event.errandId.length >= 8); assert.equal('requestId' in event, false, '事件不带 requestId（那是命令回执的关联键）');
+      assert.deepEqual(Object.keys(event).sort(), ['errandId', 'kind', 'type'], '请求只有类别与编号，不带任何内容');
+      assert.equal(reply.errandRequestBusy, true); assert.equal(reply.feedback, '稍等，水母在准备…');
+      for (const [other] of MENU) assert.equal((await h.request('menuItem', { title: other })).ok, false, `${title} 等回执时 ${other} 被禁用`);
+      h.noEvent('errandRequest', '等回执时不会发第二个请求');
+      reply = await h.request('errandRequestResult', { errandId: event.errandId, ok: true });
+      assert.equal(reply.errandRequestBusy, false, `${kind}：回执后可以再点`); assert.equal(reply.feedback, '', 'ok 没文字：气泡由 nudge 命令呈现，这里只清掉“正在准备”');
+    }
+    reply = await h.request('jelly', { jelly: jelly() });
+    assert.equal(reply.errandsMenu, false, 'Chrome 不再带 errands（总开关关了）：菜单消失'); assert.equal(reply.countdownMenu.includes('水母，给我…'), false);
+  });
+
+  await errandScenario('菜单请求的回执：没有内容显示文字、失败显示原因；对不上或重复的回执被忽略', {}, async h => {
+    await h.request('jelly', { jelly: jelly({ errands: { enabled: true } }) });
+    await h.request('menuItem', { title: '今日概览' });
+    const first = await h.waitEvent('errandRequest', 1500);
+    let reply = await h.request('errandRequestResult', { errandId: 'someone-else', ok: true, text: '不该显示' });
+    assert.equal(reply.errandRequestBusy, true, '对不上的回执不改状态'); assert.equal(reply.feedback, '稍等，水母在准备…');
+    reply = await h.request('errandRequestResult', { errandId: first.errandId, ok: true, text: '今天没有到期或已过期的任务' });
+    assert.equal(reply.errandRequestBusy, false); assert.equal(reply.feedback, '今天没有到期或已过期的任务');
+    reply = await h.request('errandRequestResult', { errandId: first.errandId, ok: true, text: '重复的回执' });
+    assert.equal(reply.feedback, '今天没有到期或已过期的任务', '重复回执不改显示');
+    await h.request('menuItem', { title: '工作日志' });
+    const second = await h.waitEvent('errandRequest', 1500);
+    reply = await h.request('errandRequestResult', { errandId: second.errandId, ok: false, error: '水母正忙着响铃，等一下再叫它' });
+    assert.equal(reply.errandRequestBusy, false); assert.equal(reply.feedback, '水母正忙着响铃，等一下再叫它');
+    await h.request('menuItem', { title: '来点乐子' });
+    const third = await h.waitEvent('errandRequest', 1500);
+    reply = await h.request('errandRequestResult', { errandId: third.errandId, ok: false });
+    assert.equal(reply.feedback, '没能完成，请重试', '失败没给原因也要有交代，不声称成功');
+  });
+
+  await errandScenario('菜单请求 15 秒没有回执：提示 Chrome 没有回应，菜单恢复可点；迟到的旧回执不影响新请求', {}, async h => {
+    await h.request('jelly', { jelly: jelly({ errands: { enabled: true } }) });
+    await h.request('menuItem', { title: '来首歌' });
+    const old = await h.waitEvent('errandRequest', 1500);
+    await delay(15500);
+    let reply = await h.request('ping');
+    assert.equal(reply.errandRequestBusy, false, '超时后不再卡住'); assert.equal(reply.feedback, 'Chrome 没有回应，请重试');
+    assert.equal((await h.request('menuItem', { title: '来首歌' })).ok, true, '可以重试');
+    const retry = await h.waitEvent('errandRequest', 1500);
+    assert.notEqual(retry.errandId, old.errandId, '重试是新的请求编号');
+    reply = await h.request('errandRequestResult', { errandId: old.errandId, ok: true, text: '迟到的旧回执' });
+    assert.equal(reply.errandRequestBusy, true, '迟到的旧回执不能当作新请求的回执'); assert.equal(reply.feedback, '稍等，水母在准备…');
+    reply = await h.request('errandRequestResult', { errandId: retry.errandId, ok: true });
+    assert.equal(reply.errandRequestBusy, false);
+  });
+
+  await errandScenario('菜单请求：前一个请求的 15 秒计时器不会清掉后一个请求（旧计时器按请求编号核对）', {}, async h => {
+    await h.request('jelly', { jelly: jelly({ errands: { enabled: true } }) });
+    await h.request('menuItem', { title: '今日概览' });
+    const first = await h.waitEvent('errandRequest', 1500);
+    let reply = await h.request('errandRequestResult', { errandId: first.errandId, ok: true });
+    assert.equal(reply.errandRequestBusy, false, '第一个请求已有回执');
+    await delay(5000);
+    assert.equal((await h.request('menuItem', { title: '来首歌' })).ok, true);
+    const second = await h.waitEvent('errandRequest', 1500);
+    assert.notEqual(second.errandId, first.errandId);
+    await delay(11500);      // 第一个请求的 15 秒计时器此刻已过（距第一个请求约 16.5 秒），第二个请求自己的计时器要到约 20 秒才响
+    reply = await h.request('ping');
+    assert.equal(reply.errandRequestBusy, true, '旧计时器不能把还在等回执的新请求清掉'); assert.equal(reply.feedback, '稍等，水母在准备…');
+    reply = await h.request('errandRequestResult', { errandId: second.errandId, ok: true });
+    assert.equal(reply.errandRequestBusy, false);
+  });
+
+  await errandScenario('响铃中没有“水母，给我…”、也发不出请求；响铃结束后菜单回来', {}, async h => {
+    await h.request('jelly', { jelly: jelly({ errands: { enabled: true } }) });
+    let reply = await h.request('show', ring());
+    assert.equal(reply.ok, true);
+    assert.equal(reply.countdownMenu.includes('水母，给我…'), false, `响铃时菜单：${reply.countdownMenu.join(' | ')}`);
+    assert.equal((await h.request('menuItem', { title: '来首歌' })).ok, false);
+    h.noEvent('errandRequest', '响铃中不发请求');
+    await h.request('hide', { sessionId: 'ring-1' });
+    reply = await until(h, r => r.ringId === null && r.countdownMenu.includes('水母，给我…'), 6000, '响铃结束后菜单回来');
+    assert.equal((await h.request('menuItem', { title: '来首歌' })).ok, true);
+    assert.equal((await h.waitEvent('errandRequest', 1500)).kind, 'song');
+  });
+
+  await errandScenario('验收钩子 menuItem 在正式使用时对差事菜单同样无效', { TIMEKEEPER_TEST_HOOKS: '0' }, async h => {
+    const reply = await h.request('jelly', { jelly: jelly({ errands: { enabled: true } }) });
+    assert.equal(reply.errandsMenu, true);
+    assert.equal((await h.request('menuItem', { title: '来首歌' })).ok, false);
+    h.noEvent('errandRequest', '没有测试钩子时不能凭空发出请求');
+  });
+
+  await errandScenario('验收钩子 nudgeButton 在正式使用时无效', { TIMEKEEPER_TEST_HOOKS: '0' }, async h => {
+    await h.request('nudge', { nudge: errand() });
+    await delay(2500);
+    assert.equal((await h.request('nudgeButton', { id: 'open' })).ok, false);
+  });
+  console.log('PASS 阶段 E：水母差事气泡');
+}
+if (only === 'errand') { console.log('PASS: jelly 差事阶段'); process.exit(0); }
+
+// ---------- 阶段 A：活动行为（协议 v10：jelly 命令 errands:{enabled:true, patrol:true} 时水母白天清醒、偶尔巡游、清醒静止时做小动作；
+// 只在夜里、你离开电脑太久、或活动行为关闭时才睡） ----------
+// 睡与不睡、什么时候游都是水母自己的动作，不产生业务数据、不向 Chrome 回报——所以这里只通过 ping 回执的诊断字段与窗口位置核对。
+// 计时经 TIMEKEEPER_PATROL_SECONDS="出发,时长,小动作"（秒；仅 TIMEKEEPER_TEST_HOOKS=1 时生效）缩短，本地小时经 TIMEKEEPER_NIGHT_HOUR 固定（真实时间可能在夜里），
+// 空闲秒数经 TIMEKEEPER_IDLE_SECONDS 注入。运行期间不要碰鼠标：鼠标停在水母身上本来就会让它不动（那是被验证的行为，但会让别的场景误判）。
+const lively = (extra = {}) => jelly({ errands: { enabled: true, patrol: true }, ...extra });
+const DAY = { TIMEKEEPER_NIGHT_HOUR: '11', TIMEKEEPER_IDLE_SECONDS: '5' };
+const patrolScenario = async (name, env, body) => {
+  if (scenarioFilter && !scenarioFilter.test(name)) return;
+  const h = start({ ...DAY, ...env });
+  try { await body(h); console.log(`  ✓ 活动：${name}`); } finally { await h.stop(); }
+};
+// 巡游中持续采样窗口位置直到结束；返回 { xs, ys, ms, last }，超过 limit 毫秒仍没结束就报错
+const sampleUntilPatrolEnds = async (h, limit = 12000) => {
+  const xs = [], ys = [], started = Date.now(); let last;
+  for (;;) {
+    last = await h.request('ping');
+    if (!last.patrolling) return { xs, ys, ms: Date.now() - started, last };
+    const f = frameOf(last.countdownFrame); xs.push(f.x); ys.push(f.y);
+    if (Date.now() - started > limit) throw new Error(`巡游超过 ${limit} ms 还没结束`);
+    await delay(80);
+  }
+};
+if (!only || only === 'patrol') {
+  for (const [label, errands] of [['没带 errands', undefined], ['只开差事、没带 patrol（v9 的写法）', { enabled: true }], ['patrol 为 false', { enabled: true, patrol: false }], ['patrol 不是布尔', { enabled: true, patrol: 'true' }], ['差事没开却带了 patrol', { enabled: false, patrol: true }]]) {
+    await patrolScenario(`老样子：${label} → 休息就睡、不巡游、没有小动作`, { TIMEKEEPER_PATROL_SECONDS: '0.5,3,0.5' }, async h => {
+      let reply = await h.request('jelly', { jelly: jelly(errands ? { errands } : {}) });
+      assert.equal(reply.ok, true); assert.equal(reply.jellyLively, false);
+      await delay(2500);
+      reply = await h.request('ping');
+      assert.equal(reply.jellyAsleep, true, '活动行为关闭：休息就睡（老样子）');
+      assert.equal(reply.patrolling, false); assert.equal(reply.patrolCount, 0); assert.equal(reply.fidgetCount, 0);
+    });
+  }
+
+  await patrolScenario('活动行为开：白天清醒；等一段后出发，窗口真的在横向游动；结束后沉回泳线并静止（不游回原位）；再隔一段等待才第二次出发', { TIMEKEEPER_PATROL_SECONDS: '4,5.5,600' }, async h => {
+    let reply = await h.request('jelly', { jelly: lively() });
+    assert.equal(reply.ok, true); assert.equal(reply.jellyLively, true);
+    assert.equal(reply.jellyAsleep, false, '活动行为开：白天清醒（睁着眼）');
+    assert.equal(reply.patrolling, false, '刚出现时不立刻出发，先等一段');
+    const home = frameOf((await h.request('ping')).countdownFrame);
+    reply = await until(h, r => r.patrolling === true, 6000, '等待约 4 秒后出发巡游');
+    assert.equal(reply.patrolCount, 1); assert.equal(reply.jellyAsleep, false); assert.equal(reply.personality, 'steady', '11 点是“专注”');
+    assert.ok(Math.abs(reply.swimPeriod - 1.4) < 0.01, `巡游用巡游的游法（11 点游速 1.0 → 周期 1.4，实际 ${reply.swimPeriod}）`);
+    const run = await sampleUntilPatrolEnds(h);
+    // 巡游时长故意取 5.5 秒：巡游期间每秒一次的刷新落在整数秒上，时长若也是整数秒，结束与那一拍会撞在一起，
+    // “结束时有没有刷新”就看不出来；半秒错开后，漏掉刷新会让游法在最多半秒内仍是巡游的那份，第一次读到“已结束”时就能看出。
+    assert.ok(Math.abs(run.last.swimPeriod - 2.4) < 0.01, `巡游一结束就换回平静阶段的游法（周期应为 2.4，实际 ${run.last.swimPeriod}）`);
+    const spread = Math.max(...run.xs) - Math.min(...run.xs);
+    assert.ok(spread >= 60, `巡游时水母应在横向游动（范围 ${spread.toFixed(0)} 点）`);
+    assert.ok(run.ms > 4000 && run.ms < 8000, `巡游约 5.5 秒（实际 ${run.ms} ms）`);
+    const endedAt = Date.now();
+    const lastX = run.xs[run.xs.length - 1];
+    await until(h, r => Math.abs(frameOf(r.countdownFrame).y - home.y) < 0.6, 6000, '结束后沉回泳线');
+    const restFrame = (await h.request('ping')).countdownFrame; await delay(700);
+    const stillFrame = (await h.request('ping')).countdownFrame;
+    assert.equal(stillFrame, restFrame, '回到泳线后静止（窗口不再移动）');
+    assert.ok(Math.abs(frameOf(stillFrame).x - lastX) < 90, `结束只是沉回泳线、不游回原位（结束时 x=${lastX.toFixed(0)}，静止后 x=${frameOf(stillFrame).x.toFixed(0)}，原位 x=${home.x.toFixed(0)}）`);
+    reply = await until(h, r => r.patrolling === true, 7000, '隔一段等待后第二次出发');
+    assert.equal(reply.patrolCount, 2);
+    assert.ok(Date.now() - endedAt >= 3000, `两次巡游之间要重新等一段完整的时间（实际 ${Date.now() - endedAt} ms）`);
+    assert.equal(reply.jellyAsleep, false);
+  });
+
+  // 时段性格：本地小时 → 性格与游速倍率。出发、时长、小动作的秒数被覆盖缩短了（真实取值路径由纯逻辑自测守住），这里核对控制器按“当地小时”选对了哪一档、
+  // 并把这一档的游速交给水母（patrolPace 是最近一次巡游用的倍率，swimPeriod 是水母此刻实际在用的脉动周期，巡游时应为 1.4 / 游速）。
+  for (const [hour, id, pace] of [['7', 'lively', 1.15], ['10', 'steady', 1.0], ['13', 'drowsy', 0.75], ['16', 'busy', 1.05], ['19', 'mellow', 0.85]]) {
+    await patrolScenario(`时段性格：${hour} 点 → ${id}（游速 ${pace}）`, { TIMEKEEPER_NIGHT_HOUR: hour, TIMEKEEPER_PATROL_SECONDS: '0.5,3,600' }, async h => {
+      assert.equal((await h.request('ping')).patrolPace, 0, '还没巡游过时游速为 0');
+      await h.request('jelly', { jelly: lively() });
+      const reply = await until(h, r => r.patrolling === true, 5000, '约 0.5 秒后出发');
+      assert.equal(reply.personality, id, `${hour} 点的性格`);
+      assert.equal(reply.patrolPace, pace, `${hour} 点（${id}）的游速倍率`);
+      assert.ok(Math.abs(reply.swimPeriod - 1.4 / pace) < 0.005, `${hour} 点（${id}）：交到水母手里的游法周期应为 1.4 / ${pace}（实际 ${reply.swimPeriod}）`);
+    });
+  }
+
+  // 睡觉规则：夜晚曲线 ≥ 0.5 睡（19:30–06:30），按小时对；荧光开关关闭也一样睡（睡觉是行为，不是视觉效果）
+  for (const [hour, asleepExpected, label] of [['23', true, '23 点'], ['3', true, '凌晨 3 点'], ['6.4', true, '06:24（曲线仍大于 0.5）'], ['6.6', false, '06:36（已起床）'], ['19.4', false, '19:24（还没睡）'], ['19.6', true, '19:36（已睡下）'], ['12', false, '中午']]) {
+    await patrolScenario(`睡觉规则：${label} → ${asleepExpected ? '睡着、不巡游、没有小动作' : '清醒、会巡游'}`, { TIMEKEEPER_NIGHT_HOUR: hour, TIMEKEEPER_PATROL_SECONDS: '0.5,3,0.5' }, async h => {
+      await h.request('jelly', { jelly: lively() });
+      await delay(2800);
+      const reply = await h.request('ping');
+      assert.equal(reply.jellyAsleep, asleepExpected, `${label}：asleep 应为 ${asleepExpected}`);
+      if (asleepExpected) { assert.equal(reply.patrolCount, 0); assert.equal(reply.fidgetCount, 0); }
+      else assert.ok(reply.patrolCount >= 1, `${label}：清醒的水母应该出发过（巡游 ${reply.patrolCount} 次）`);
+    });
+  }
+  await patrolScenario('关掉“夜晚荧光”不影响夜里睡觉（睡觉是行为，荧光是视觉效果）', { TIMEKEEPER_NIGHT_HOUR: '23' }, async h => {
+    await h.request('jelly', { jelly: lively({ night: false }) });
+    await delay(600);
+    const reply = await h.request('ping');
+    assert.equal(reply.jellyAsleep, true); assert.equal(reply.countdownNight, 0, '荧光确实关了'); assert.equal(reply.jellyNight, false);
+  });
+
+  // 空闲：presence 在 300 秒起为 away（不巡游、仍清醒），睡觉要 600 秒
+  for (const [idle, asleepExpected, patrolExpected] of [['5', false, true], ['299.9', false, true], ['300', false, false], ['400', false, false], ['599.9', false, false], ['600', true, false], ['700', true, false]]) {
+    await patrolScenario(`空闲 ${idle} 秒 → ${asleepExpected ? '睡着' : '清醒'}、${patrolExpected ? '会巡游' : '不巡游也没有小动作'}`, { TIMEKEEPER_IDLE_SECONDS: idle, TIMEKEEPER_PATROL_SECONDS: '0.5,3,0.5' }, async h => {
+      await h.request('jelly', { jelly: lively() });
+      await delay(2800);
+      const reply = await h.request('ping');
+      assert.equal(reply.jellyAsleep, asleepExpected, `空闲 ${idle} 秒：asleep 应为 ${asleepExpected}`);
+      if (patrolExpected) assert.ok(reply.patrolCount >= 1, `空闲 ${idle} 秒应巡游过（${reply.patrolCount} 次）`);
+      else { assert.equal(reply.patrolCount, 0); assert.equal(reply.fidgetCount, 0); assert.equal(reply.patrolling, false); }
+    });
+  }
+
+  await patrolScenario('减少动态效果：清醒，但不巡游也没有小动作', { TIMEKEEPER_REDUCE_MOTION: '1', TIMEKEEPER_PATROL_SECONDS: '0.5,3,0.5' }, async h => {
+    await h.request('jelly', { jelly: lively() });
+    await delay(2800);
+    const reply = await h.request('ping');
+    assert.equal(reply.countdownReduceMotion, true);
+    assert.equal(reply.jellyAsleep, false, '清醒不是“动”，减少动态效果不让水母睡着'); assert.equal(reply.patrolCount, 0); assert.equal(reply.fidgetCount, 0);
+  });
+
+  await patrolScenario('只在常驻时有活动行为：不常驻只靠倒计时临时出现时仍是老样子', { TIMEKEEPER_PATROL_SECONDS: '0.5,3,0.5' }, async h => {
+    await h.request('jelly', { jelly: lively({ resident: false }) });
+    const reply = await h.request('countdown', { timer: timer() });
+    assert.equal(reply.jellyVisible, true);
+    await delay(2500);
+    const after = await h.request('ping');
+    assert.equal(after.jellyAsleep, true, '临时出现的水母休息就睡'); assert.equal(after.patrolCount, 0); assert.equal(after.fidgetCount, 0);
+  });
+
+  await patrolScenario('巡游中来差事气泡：立刻结束巡游；气泡收起后重新等一段再出发', { TIMEKEEPER_PATROL_SECONDS: '1,30,600' }, async h => {
+    await h.request('jelly', { jelly: lively() });
+    await until(h, r => r.patrolling === true, 4000, '出发');
+    let reply = await h.request('nudge', { nudge: errand() });
+    assert.equal(reply.ok, true);
+    assert.equal(reply.patrolling, false, '差事气泡一到，巡游立刻结束');
+    await delay(2500);
+    reply = await h.request('ping');
+    assert.equal(reply.patrolling, false, '气泡显示期间不出发'); assert.equal(reply.patrolCount, 1);
+    await h.request('nudgeClear', { id: 'jelly-errand-brief-1' });
+    reply = await until(h, r => r.patrolling === true && r.patrolCount === 2, 6000, '气泡收起后重新等待并再次巡游');
+    assert.equal(reply.jellyBubble, 'none');
+  });
+
+  // 出发前被打断：旧的出发计时器要作废，条件恢复后重新等一段完整的时间（“回到电脑前不会立刻被拉去游”）。
+  // 时间线（出发等待 6 秒）：0 秒装上计时器 → 约 1 秒气泡到（没有资格，计时器应被取消）→ 约 4 秒气泡收起（重新装 6 秒的计时器，约 10 秒到点）；
+  // 旧计时器若没被取消，会在约 6 秒（气泡收起后 2 秒）到点并出发；所以在“收起后 4 秒”必须还没出发，随后才在满 6 秒时出发。
+  await patrolScenario('出发前被打断：旧的出发计时器作废，气泡收起后重新等一段完整的时间才出发', { TIMEKEEPER_PATROL_SECONDS: '6,30,600' }, async h => {
+    await h.request('jelly', { jelly: lively() });
+    await delay(1000);
+    assert.equal((await h.request('nudge', { nudge: errand() })).ok, true);
+    await delay(3000);
+    let reply = await h.request('ping');
+    assert.equal(reply.patrolCount, 0, '气泡显示期间不出发');
+    const clearedAt = Date.now();
+    await h.request('nudgeClear', { id: 'jelly-errand-brief-1' });
+    await delay(4000);
+    reply = await h.request('ping');
+    assert.equal(reply.patrolCount, 0, `旧的出发计时器应已作废：气泡收起后 ${Date.now() - clearedAt} ms 还不该出发`);
+    reply = await until(h, r => r.patrolling === true, 5000, '气泡收起满一个完整的等待（6 秒）后出发');
+    assert.ok(Date.now() - clearedAt >= 5400, `要重新等满 6 秒才出发（实际 ${Date.now() - clearedAt} ms）`);
+  });
+
+  await patrolScenario('巡游中响铃：立刻结束巡游，响铃期间不出发', { TIMEKEEPER_PATROL_SECONDS: '1,30,600' }, async h => {
+    await h.request('jelly', { jelly: lively() });
+    await until(h, r => r.patrolling === true, 4000, '出发');
+    let reply = await h.request('show', ring());
+    assert.equal(reply.ok, true);
+    assert.equal(reply.patrolling, false, '响铃一到，巡游立刻结束');
+    await until(h, r => r.ringPhase === 'shown', 4000, '水母游到落点并弹出气泡');
+    await delay(2500);
+    reply = await h.request('ping');
+    assert.equal(reply.patrolling, false); assert.equal(reply.patrolCount, 1, '响铃期间不出发');
+    await h.request('hide', { sessionId: 'ring-1' });
+    await until(h, r => r.ringId === null && r.patrolling === true && r.patrolCount === 2, 9000, '响铃收尾后重新等待并再次巡游');
+  });
+
+  await patrolScenario('倒计时进入临近阶段（≤10 分钟）不巡游；平静阶段（时钟读数气泡在）照常巡游', { TIMEKEEPER_PATROL_SECONDS: '0.5,3,600' }, async h => {
+    await h.request('countdown', { timer: timer({ fireAt: Date.now() + 5 * 60000 }) });
+    await h.request('jelly', { jelly: lively() });
+    await delay(2500);
+    let reply = await h.request('ping');
+    assert.equal(reply.countdownStage, 1, '5 分钟是“临近”阶段'); assert.equal(reply.patrolCount, 0, '临近阶段水母自己在游，不另外巡游');
+    await h.request('countdown', { timer: timer({ fireAt: Date.now() + 40 * 60000 }) });
+    reply = await until(h, r => r.patrolling === true, 4000, '回到平静阶段后出发');
+    assert.equal(reply.jellyBubble, 'clock', '时钟读数气泡不算“忙”，巡游时它跟着水母');
+  });
+
+  await patrolScenario('右键菜单打开期间不出发、巡游中打开立刻结束；菜单关闭后重新等待再出发', { TIMEKEEPER_PATROL_SECONDS: '1,30,600' }, async h => {
+    await h.request('jelly', { jelly: lively() });
+    assert.equal((await h.request('menuTracking', { open: true })).ok, true);
+    await delay(2500);
+    let reply = await h.request('ping');
+    assert.equal(reply.patrolCount, 0, '菜单开着：不出发');
+    await h.request('menuTracking', { open: false });
+    await until(h, r => r.patrolling === true, 4000, '菜单关闭后出发');
+    reply = await h.request('menuTracking', { open: true });
+    assert.equal(reply.patrolling, false, '巡游中打开菜单：立刻结束');
+    await delay(2200);
+    assert.equal((await h.request('ping')).patrolCount, 1);
+    await h.request('menuTracking', { open: false });
+    await until(h, r => r.patrolling === true && r.patrolCount === 2, 4000, '菜单关闭后重新等待并再次出发');
+  });
+
+  await patrolScenario('差事菜单请求在等回执（反馈气泡）时不出发；回执失败显示完、气泡收起后才重新等待再出发', { TIMEKEEPER_PATROL_SECONDS: '1,30,600' }, async h => {
+    await h.request('jelly', { jelly: lively() });
+    assert.equal((await h.request('menuItem', { title: '来首歌' })).ok, true, '菜单项点中了');
+    const asked = await h.waitEvent('errandRequest', 1500);
+    await delay(2500);                  // 越过 1 秒的出发时间：这时“正在准备”的反馈气泡还在等 Chrome 的回执
+    let reply = await h.request('ping');
+    assert.equal(reply.errandRequestBusy, true, '请求还在等回执');
+    assert.equal(reply.feedback, '稍等，水母在准备…');
+    assert.equal(reply.patrolCount, 0, '反馈气泡在：不出发');
+    reply = await h.request('errandRequestResult', { errandId: asked.errandId, ok: false, error: '水母差事没有开启' });
+    reply = await until(h, r => r.errandRequestBusy === false && r.feedback === '水母差事没有开启', 3000, '回执失败：原生显示原因');
+    assert.equal(reply.patrolCount, 0, '原因气泡显示期间仍不出发');
+    await until(h, r => r.feedback === '' && r.jellyBubble !== 'note', 8000, '失败原因的气泡 5 秒后消失');
+    await until(h, r => r.patrolling === true, 5000, '气泡消失后重新等待并出发');
+  });
+
+  await patrolScenario('巡游中关掉活动行为 / 取消常驻：立刻结束，之后不再出发；重新打开后重新计时', { TIMEKEEPER_PATROL_SECONDS: '1,30,600' }, async h => {
+    await h.request('jelly', { jelly: lively() });
+    await until(h, r => r.patrolling === true, 4000, '出发');
+    let reply = await h.request('jelly', { jelly: jelly({ errands: { enabled: true, patrol: false } }) });
+    assert.equal(reply.patrolling, false); assert.equal(reply.jellyLively, false);
+    await delay(2500);
+    reply = await h.request('ping');
+    assert.equal(reply.patrolCount, 1, '关掉后不再出发'); assert.equal(reply.jellyAsleep, true, '关掉活动行为：休息就睡');
+    await h.request('jelly', { jelly: lively() });
+    reply = await h.request('ping');
+    assert.equal(reply.patrolling, false, '重新打开不立刻出发，先等一段');
+    reply = await until(h, r => r.patrolling === true && r.patrolCount === 2, 4000, '重新打开后出发');
+    reply = await h.request('jelly', { jelly: lively({ resident: false }) });
+    assert.equal(reply.patrolling, false); assert.equal(reply.jellyVisible, false, '取消常驻：水母退场');
+    await delay(2200);
+    assert.equal((await h.request('ping')).patrolCount, 2, '退场后没有遗留的计时器');
+  });
+
+  // 一次小跳从起跳到落回约 2.4 秒（初速 70、休息时的下沉 40、阻尼 1.4；selftest 另有“落回泳线”的物理断言），所以间隔取 3.5 秒；
+  // 间隔短于落地时间就会在空中被接连戳起，永远落不回泳线——那是测试参数不合理，不是产品行为（真实间隔 ≥ 15 秒）
+  await patrolScenario('小动作：清醒静止时隔一阵原地小跳一下（窗口纵向起伏、回落后静止）；有气泡时没有', { TIMEKEEPER_PATROL_SECONDS: '600,30,3.5' }, async h => {
+    await h.request('jelly', { jelly: lively() });
+    const base = frameOf((await h.request('ping')).countdownFrame).y;
+    let peak = 0, reply; const started = Date.now();
+    while (Date.now() - started < 6000 && !(peak > 5)) { reply = await h.request('ping'); peak = Math.max(peak, frameOf(reply.countdownFrame).y - base); await delay(40); }
+    assert.ok(reply.fidgetCount >= 1, `应做过小动作（${reply.fidgetCount} 次）`);
+    assert.ok(peak > 5, `小动作的起伏要看得出来（最高 ${peak.toFixed(1)} 点）`);
+    assert.equal(reply.patrolCount, 0);
+    await until(h, r => Math.abs(frameOf(r.countdownFrame).y - base) < 0.6, 3300, '回落到泳线（下一次小跳要再过约 2 秒才来）');
+    // 有差事气泡时没有小动作
+    await h.request('nudge', { nudge: errand() });
+    await delay(1200);
+    const before = (await h.request('ping')).fidgetCount;
+    await delay(3500);
+    assert.equal((await h.request('ping')).fidgetCount, before, '气泡显示期间没有小动作');
+  });
+
+  await patrolScenario('钩子关闭（没有 TIMEKEEPER_TEST_HOOKS）时计时覆盖与菜单钩子无效', { TIMEKEEPER_TEST_HOOKS: '0', TIMEKEEPER_PATROL_SECONDS: '0.5,3,0.5' }, async h => {
+    let reply = await h.request('jelly', { jelly: lively() });
+    assert.equal(reply.jellyLively, true, '活动行为本身不依赖测试钩子');
+    await delay(9000);          // 比“分钟当成秒”的错误（3–8 秒）更长，那种错误才抓得住
+    reply = await h.request('ping');
+    assert.equal(reply.patrolCount, 0, '真实的出发间隔是 3–8 分钟，注入的 0.5 秒无效'); assert.equal(reply.fidgetCount, 0, '真实的小动作间隔至少 15 秒');
+    assert.equal((await h.request('menuTracking', { open: true })).ok, false, '菜单钩子在正式使用时无效');
+  });
+
+  // 真实鼠标场景的外壳：要移动真实鼠标，先等用户安静；失败时若发现真实用户输入（比我们最后一次合成输入更晚），多半是被打断而不是真失败：
+  // 礼让后重跑，多次被打断以 75 结束（外层稍后重试）。每次结束（无论成败）把指针停到离水母很远的地方：残留的指针位置压在下一个场景的水母身上，
+  // 会让“等巡游 / 小动作出发”的场景超时（变异检查里出现过一批这样的假“抓到”）。
+  const parkPointer = () => {
+    try {
+      const [x, y, w, hgt] = execFileSync(helper, ['screens'], { encoding: 'utf8' }).trim().split('\n')[0].split(' ').map(Number);
+      mouse('move', x + w * 0.3, y + hgt * 0.6);
+    } catch { /* 停不到也不影响结果判定 */ }
+  };
+  const mouseScenario = async (name, env, body) => {
+    for (let attempt = 1; !scenarioFilter || scenarioFilter.test(name); attempt++) {
+      await quiet.waitIfActive();
+      try {
+        await patrolScenario(name, env, body);
+        break;
+      } catch (error) {
+        const reason = quiet.intrusion();
+        if (!reason) throw error;
+        console.log(`  （${reason}；本场景重跑，第 ${attempt} 次）`);
+        if (attempt >= 3) { console.log('多次被用户的真实输入打断，不当作验收失败，稍后重试'); process.exit(EXIT_USER_ACTIVE); }
+      } finally { parkPointer(); }
+    }
+  };
+  if (withMouse) {
+    // 首次出发定在 5 秒后：水母刚出现时窗口还在入场（第一次读到的窗口位置不是站定后的位置，按它放鼠标会放偏），要等它站稳再放鼠标
+    await mouseScenario('真实鼠标：停在水母身上时不出发，移开后才出发；巡游中鼠标停到身上（靠每秒刷新）或被抓住都立刻结束、放手后重新等待再出发', { TIMEKEEPER_PATROL_SECONDS: '5,30,600' }, async h => {
+      await h.request('jelly', { jelly: lively() });
+      let f = frameOf((await h.request('ping')).countdownFrame);
+      for (let i = 0, stable = 0; i < 16 && stable < 3; i++) {
+        await delay(250);
+        const g = frameOf((await h.request('ping')).countdownFrame);
+        stable = Math.abs(g.x - f.x) < 0.5 && Math.abs(g.y - f.y) < 0.5 ? stable + 1 : 0;
+        f = g;
+      }
+      let reply = await h.request('ping');
+      assert.equal(reply.patrolCount, 0, '站稳时还没到出发时间');
+      mouse('move', f.x + f.w / 2, f.y + 77); await delay(400);
+      await delay(5200);                  // 越过 5 秒的出发时间：那一刻鼠标停在水母身上，出发被挡住
+      reply = await h.request('ping');
+      assert.equal(reply.patrolCount, 0, `鼠标停在水母身上：不出发（原生看到的鼠标 ${reply.mouse}，窗口 ${reply.countdownFrame}）`);
+      mouse('move', f.x + f.w / 2, f.y + 600); await delay(300);
+      // 鼠标移开没有事件：最多 3 秒后的再核对才发现可以出发，再重新等一段完整的 5 秒（实测约 9 秒），所以窗口给 12 秒
+      reply = await until(h, r => r.patrolling === true, 12000, '鼠标移开后出发（最多 3 秒再核对 + 重新等 5 秒）');
+      assert.equal(reply.patrolCount, 1);
+      // 巡游中把鼠标放到水母身上（不按键）：没有任何事件通知“鼠标来了”，只有巡游期间每秒一次的刷新会发现并结束巡游。
+      // 水母在游，窗口可能漂出“身体”范围，所以最多重新瞄准 4 次（每次等 1.7 秒，够一次每秒刷新）。
+      for (let aim = 0; aim < 4 && reply.patrolling; aim++) {
+        const swimming = frameOf(reply.countdownFrame);
+        mouse('move', swimming.x + swimming.w / 2, swimming.y + 77);
+        await delay(1700);
+        reply = await h.request('ping');
+      }
+      assert.equal(reply.patrolling, false, `巡游中鼠标停到水母身上：下一次每秒刷新就结束巡游（原生看到的鼠标 ${reply.mouse}，窗口 ${reply.countdownFrame}）`);
+      assert.equal(reply.patrolCount, 1);
+      mouse('move', f.x + f.w / 2, f.y + 600); await delay(300);
+      reply = await until(h, r => r.patrolling === true && r.patrolCount === 2, 14000, '鼠标移开后再次出发（最多 3 秒再核对 + 重新等 5 秒）');
+      // 巡游中抓住它：从窗口身体位置拖一小段
+      const now = frameOf(reply.countdownFrame);
+      mouse('drag', now.x + now.w / 2, now.y + 77, now.x + now.w / 2 - 70, now.y + 140, 16);
+      reply = await h.request('ping');
+      assert.equal(reply.patrolling, false, '被抓住：巡游立刻结束');
+      mouse('move', f.x + f.w / 2, f.y + 700); await delay(300);
+      reply = await until(h, r => r.patrolling === true && r.patrolCount === 3, 14000, '放手并移开鼠标后重新等待再出发');
+    });
+
+    // 小动作与巡游一样要看鼠标：鼠标停到水母身上没有任何事件通知，旧的小动作计时器还在，到点时必须再核对资格，否则水母会在鼠标底下突然跳走。
+    // 小动作间隔 6 秒（比站稳需要的时间长，鼠标一定先到）；跳一次约 2.4 秒。
+    await mouseScenario('真实鼠标：停在水母身上时没有小动作，移开后才继续', { TIMEKEEPER_PATROL_SECONDS: '600,30,6' }, async h => {
+      await h.request('jelly', { jelly: lively() });
+      let f = frameOf((await h.request('ping')).countdownFrame);
+      for (let i = 0, stable = 0; i < 16 && stable < 3; i++) {
+        await delay(250);
+        const g = frameOf((await h.request('ping')).countdownFrame);
+        stable = Math.abs(g.x - f.x) < 0.5 && Math.abs(g.y - f.y) < 0.5 ? stable + 1 : 0;
+        f = g;
+      }
+      assert.equal((await h.request('ping')).fidgetCount, 0, '站稳时还没到小动作的时间');
+      mouse('move', f.x + f.w / 2, f.y + 77); await delay(400);
+      await delay(9000);                  // 越过 6 秒的到点时刻：那一刻鼠标停在水母身上，小动作被挡住
+      let reply = await h.request('ping');
+      assert.equal(reply.fidgetCount, 0, `鼠标停在水母身上：没有小动作（原生看到的鼠标 ${reply.mouse}，窗口 ${reply.countdownFrame}）`);
+      mouse('move', f.x + f.w / 2, f.y + 600); await delay(300);
+      reply = await until(h, r => r.fidgetCount >= 1, 14000, '鼠标移开后继续小动作（最多 3 秒再核对 + 重新等 6 秒）');
+    });
+  } else console.log('  - 跳过真实鼠标场景（--no-mouse）');
+
+  // 隔离环境下的 CPU 实测（只是记录，不是性能保证）：睡着 / 清醒静止 / 巡游中，各取 top 的区间平均
+  {
+    const rows = [];
+    for (const [label, env, setup] of [
+      ['睡着（夜里）', { TIMEKEEPER_NIGHT_HOUR: '23', TIMEKEEPER_PATROL_SECONDS: '600,30,600' }, null],
+      ['清醒静止（白天，没有巡游与小动作）', { TIMEKEEPER_PATROL_SECONDS: '600,30,600' }, null],
+      ['巡游中', { TIMEKEEPER_PATROL_SECONDS: '1,60,600' }, r => r.patrolling === true],
+      ['小动作（每 3.5 秒跳一次，比真实的 15–90 秒频繁得多，只是上限估计）', { TIMEKEEPER_PATROL_SECONDS: '600,30,3.5' }, r => r.fidgetCount >= 2],
+    ]) {
+      if (scenarioFilter && !scenarioFilter.test('CPU')) break;
+      const h = start({ ...DAY, ...env });
+      try {
+        await h.request('jelly', { jelly: lively() });
+        if (setup) await until(h, setup, 12000, label);
+        await delay(800);
+        const cpu = cpuPercent(h.child.pid);
+        const reply = await h.request('ping');
+        rows.push({ label, cpu, asleep: reply.jellyAsleep, patrolling: reply.patrolling, animating: reply.patrolling || reply.fidgetCount > 0 });
+        console.log(`  CPU ${label}：${cpu === null ? '读取失败' : cpu.toFixed(1) + '%'}（asleep=${reply.jellyAsleep}, patrolling=${reply.patrolling}）`);
+      } finally { await h.stop(); }
+    }
+    for (const row of rows) if (row.cpu !== null) {
+      const limit = row.animating ? 30 : 3;
+      assert.ok(row.cpu < limit, `${row.label}：CPU ${row.cpu.toFixed(1)}% 超过记录上限 ${limit}%（这是异常，不是性能保证）`);
+    }
+  }
+  console.log('PASS 阶段 A：活动行为（睡觉规则、巡游、小动作、让路与打断）');
+}
+if (only === 'patrol') { console.log('PASS: jelly 活动行为阶段'); process.exit(0); }
+
 // ---------- 阶段 1：协议、常驻与临时出现、记录文字、倒计时委托、菜单、阶段 ----------
 host = start();
 try {
   let reply = await host.request('jelly', { jelly: jelly() });
-  assert.equal(reply.ok, true); assert.equal(reply.version, 7); assert.equal(reply.focusStayed, true, '水母出现不抢焦点');
+  assert.equal(reply.ok, true); assert.equal(reply.version, 10); assert.equal(reply.focusStayed, true, '水母出现不抢焦点');
   assert.equal(reply.jellyVisible, true); assert.equal(reply.jellyResident, true); assert.equal(reply.jellyBubble, 'none'); assert.equal(reply.countdownVisible, false);
   assert.match(reply.countdownFrame, BASE, '常驻休息时是基础尺寸 170×150');
   assert.deepEqual(reply.jellyLines, ['今天喝了 3 次水', '今天起身 2 次', '下次喝水提醒 15:30']);
@@ -874,6 +1601,7 @@ try {
   assert.ok(Math.abs(reply.countdownNight - expectedNight()) < 0.02, `真实本机时间：夜晚程度 ${reply.countdownNight} 应约等于 ${expectedNight()}`);
 } finally { await host.stop(); }
 console.log('PASS 阶段 1b：夜晚荧光读数、开关、窗口边缘透明');
+
 
 // ---------- 阶段 1c：到点响铃（水母报时；旧的深色提醒卡片已取消） ----------
 await ringPhase();
@@ -1142,4 +1870,4 @@ if (shots) {
     console.log('PASS 阶段 6：各阶段截图已写入', shots);
   } finally { await host.stop(); }
 }
-console.log('PASS: jelly（协议 v7）全部阶段');
+console.log('PASS: jelly（协议 v10）全部阶段');

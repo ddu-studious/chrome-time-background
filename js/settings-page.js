@@ -392,6 +392,109 @@
         loadNudgeSettings();
     }
 
+    // ====== 水母差事（让常驻的桌面水母主动开口）======
+    // 配置与当天状态由后台（js/jelly-errands.js）拥有；这里只经扩展消息读写，页面不直接写存储，也不自己建闹钟。
+    // 状态提示要看桌面水母是否常驻、组件是否连上、协议版本是否 ≥ 8，所以同时读 jelly_desktop_get（只读）。
+    const ERRANDS_IDS = ['set-errandsEnabled', 'set-errandsLevel', 'set-errandsTask', 'set-errandsWorklog', 'set-errandsSong', 'set-errandsTidbit', 'set-errandsTitles', 'set-errandsFrom', 'set-errandsTo', 'set-errandsWeekdays', 'set-errandsPatrol'];
+    const ERRANDS_LEVEL_TEXT = { quiet: 2, mid: 4, busy: 8 };
+    let errandsChain = Promise.resolve();
+
+    function setErrandsStatus(text) {
+        const status = document.getElementById('set-errandsStatus');
+        if (status) status.textContent = text || '';
+    }
+
+    function readErrandsConfig() {
+        const value = id => document.getElementById(id);
+        return {
+            enabled: !!value('set-errandsEnabled')?.checked,
+            level: value('set-errandsLevel')?.value || 'mid',
+            kinds: { task: !!value('set-errandsTask')?.checked, worklog: !!value('set-errandsWorklog')?.checked, song: !!value('set-errandsSong')?.checked, tidbit: !!value('set-errandsTidbit')?.checked },
+            showTitles: !!value('set-errandsTitles')?.checked,
+            from: value('set-errandsFrom')?.value || '',
+            to: value('set-errandsTo')?.value || '',
+            weekdaysOnly: !!value('set-errandsWeekdays')?.checked,
+            patrol: !!value('set-errandsPatrol')?.checked,
+        };
+    }
+
+    function applyErrandsUI(config) {
+        const value = id => document.getElementById(id);
+        if (value('set-errandsEnabled')) value('set-errandsEnabled').checked = config.enabled === true;
+        if (value('set-errandsLevel')) value('set-errandsLevel').value = config.level;
+        if (value('set-errandsTask')) value('set-errandsTask').checked = config.kinds.task !== false;
+        if (value('set-errandsWorklog')) value('set-errandsWorklog').checked = config.kinds.worklog !== false;
+        if (value('set-errandsSong')) value('set-errandsSong').checked = config.kinds.song !== false;
+        if (value('set-errandsTidbit')) value('set-errandsTidbit').checked = config.kinds.tidbit !== false;
+        if (value('set-errandsTitles')) value('set-errandsTitles').checked = config.showTitles === true;
+        if (value('set-errandsFrom')) value('set-errandsFrom').value = config.from;
+        if (value('set-errandsTo')) value('set-errandsTo').value = config.to;
+        if (value('set-errandsWeekdays')) value('set-errandsWeekdays').checked = config.weekdaysOnly !== false;
+        if (value('set-errandsPatrol')) value('set-errandsPatrol').checked = config.patrol !== false;
+    }
+
+    /** 状态文字：每种“开了却不会开口”的原因都给出下一步；说明里只写代码里真有的限制。 */
+    function describeErrands(config, desktop) {
+        if (!config.enabled) return '';
+        const settings = desktop?.settings;
+        const status = desktop?.status;
+        if (!settings?.resident) return '水母差事需要先打开上方“桌面水母”里的“常驻桌面”才会开口；在此之前提醒仍按原来的系统通知弹出。';
+        if (!status?.connected) return `桌面组件还没有连上。${status?.error ? `${status.error}。` : ''}请按 desktop-reminder/README.md 安装或更新组件，再重载扩展；在此之前提醒仍按原来的系统通知弹出。`;
+        if (Number(status.version) < 8) return `桌面组件协议 v${status.version} 太旧，不认识水母差事：请按 desktop-reminder/README.md 更新组件（需要 v8），再重载扩展；在此之前提醒仍按原来的系统通知弹出。`;
+        if (Number(status.version) < 9) return `桌面组件协议 v${status.version} 已能说任务、日志和小乐子，但推荐歌曲和右键“水母，给我…”需要 v9：请按 desktop-reminder/README.md 更新组件，再重载扩展。`;
+        const base = `水母差事已开启（组件协议 v${status.version}）：${config.from}–${config.to}${config.weekdaysOnly ? '（周一至周五）' : ''}，每小时最多 ${ERRANDS_LEVEL_TEXT[config.level] || 4} 个气泡；你离开电脑 5 分钟以上就不打扰，回来后稍等片刻再开口；右键水母选“水母，给我…”可以随时要一条。`;
+        // 活动行为（协议 v10）：组件太旧时它不起作用，要说清楚；关掉就不提
+        if (config.patrol !== false && Number(status.version) < 10) return `${base}“让水母活动起来”（白天不睡觉、巡游、小动作）需要组件协议 v10：请按 desktop-reminder/README.md 更新组件，再重载扩展。`;
+        return base;
+    }
+
+    function setErrandsControlsDisabled(disabled) {
+        for (const id of ERRANDS_IDS) {
+            const element = document.getElementById(id);
+            if (element) element.disabled = disabled;
+        }
+    }
+
+    /** 读桌面水母状态只为了写提示；读不到就不写提示，不影响设置本身。 */
+    const readDesktopForErrands = () => nudgeRequest({ action: 'jelly_desktop_get' }).catch(() => null);
+
+    function loadErrandsSettings() {
+        if (!document.getElementById('sp-jelly-errands-card')) return;
+        setErrandsControlsDisabled(true);
+        errandsChain = errandsChain
+            .then(() => nudgeRequest({ action: 'jelly_errands_get' }))
+            .then(async result => {
+                applyErrandsUI(result.config);
+                setErrandsControlsDisabled(false);
+                setErrandsStatus(describeErrands(result.config, await readDesktopForErrands()));
+            })
+            .catch(error => setErrandsStatus(`无法读取水母差事设置：${error.message}。请在已加载的扩展里打开本页。`));
+    }
+
+    function bindErrandsEvents() {
+        if (!document.getElementById('sp-jelly-errands-card')) return;
+        for (const id of ERRANDS_IDS) {
+            document.getElementById(id)?.addEventListener('change', () => {
+                const config = readErrandsConfig();
+                errandsChain = errandsChain
+                    .then(() => nudgeRequest({ action: 'jelly_errands_set', config }))
+                    .then(async result => {
+                        applyErrandsUI(result.config);
+                        // 后台会把不合法的时段改回默认；让用户看到发生了什么，而不是静默改值
+                        const adjusted = result.config.from !== config.from || result.config.to !== config.to;
+                        const hint = describeErrands(result.config, await readDesktopForErrands());
+                        setErrandsStatus((adjusted ? `时段需要“开始早于结束”，已恢复为 ${result.config.from}–${result.config.to}。` : '已保存。') + (hint ? ` ${hint}` : ''));
+                    })
+                    .catch(error => setErrandsStatus(`保存失败：${error.message}。再改一次即可重试。`));
+            });
+        }
+        // 桌面水母的常驻 / 连接状态变化后，提示跟着刷新
+        chrome.storage?.onChanged?.addListener?.((changes, area) => {
+            if (area === 'local' && changes.desktopJellyV1) loadErrandsSettings();
+        });
+        loadErrandsSettings();
+    }
+
     // ====== 桌面水母（macOS 原生组件）======
     // 设置与连接由后台（js/jelly-desktop.js）拥有；这里只经扩展消息读写，页面不直接写存储，也不自己连接组件。
     const DESKTOP_JELLY_IDS = ['set-desktopJellyResident', 'set-desktopJellyNight', 'set-desktopAssistantEnabled', 'set-desktopAssistantHotkey'];
@@ -634,5 +737,6 @@
         loadBgExperienceSettings().then(bindBgExperienceEvents);
         bindNudgeEvents();
         bindDesktopJellyEvents();
+        bindErrandsEvents();
     });
 })();

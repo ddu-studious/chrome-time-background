@@ -35,7 +35,7 @@ async function waitEvent() {
 }
 try {
   const initial = await request('confirmation', { card: card(1) });
-  assert.equal(initial.version, 7); assert.equal(initial.ok, true); assert.equal(initial.confirmationVisible, true); assert.equal(initial.confirmationFocusStayed, true); assert.equal(initial.confirmationChoiceCount, 3);
+  assert.equal(initial.version, 10); assert.equal(initial.ok, true); assert.equal(initial.confirmationVisible, true); assert.equal(initial.confirmationFocusStayed, true); assert.equal(initial.confirmationChoiceCount, 3);
   for (const kind of ['input', 'confirm', 'inspect']) {
     const result = await request('confirmation', { card: card(2, kind) }); assert.equal(result.ok, true); assert.equal(result.confirmationKind, kind);
   }

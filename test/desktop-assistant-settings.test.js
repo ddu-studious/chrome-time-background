@@ -122,7 +122,7 @@ test('脚本（实际执行）：下拉只能显示预设——存储里手改�
   assert.equal(select.value, Jelly.DEFAULT_HOTKEY); assert.equal(elements['set-desktopAssistantEnabled'].checked, false, '旧后台没有 assistant 字段时按关闭显示');
 });
 
-test('脚本版本钉子：settings-page.js?v=10，且仍在 chrome-shim 之后加载', () => {
-  assert.ok(settingsHtml.includes('js/settings-page.js?v=10'));
-  assert.ok(settingsHtml.indexOf('js/chrome-shim.js?v=5') < settingsHtml.indexOf('js/settings-page.js?v=10'));
+test('脚本版本钉子：settings-page.js?v=13，且仍在 chrome-shim 之后加载', () => {
+  assert.ok(settingsHtml.includes('js/settings-page.js?v=13'));
+  assert.ok(settingsHtml.indexOf('js/chrome-shim.js?v=5') < settingsHtml.indexOf('js/settings-page.js?v=13'));
 });

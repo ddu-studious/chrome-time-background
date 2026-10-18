@@ -773,3 +773,291 @@ test('onAssistantConnected：每条新连接一次，晚于 onConnected、早于
     assert.equal(host.ports.length, 2);
   } finally { clearTimeout(bridge.idleTimer); host.port?.disconnect(); }
 });
+
+// ---------- 水母差事（协议 v8）：复用 nudge 气泡管线，按 id 前缀分流动作；presence 与气泡自行消失的信号 ----------
+
+const errandOf = (id = 'jelly-errand-task-1760000000000') => ({ id, kind: 'task', title: '有任务过期了', text: '2 个任务已过期，处理一下吧', buttons: [{ id: 'open', title: '去处理' }, { id: 'later', title: '明天再说' }], ttl: 90 });
+
+test('差事气泡复用 nudge 命令：发出原样负载并占用当前气泡 id', async () => {
+  const f = fixture(undefined, 8);
+  const errand = errandOf();
+  await f.bridge.showNudge(errand);
+  assert.deepEqual(f.sent.find(m => m.command === 'nudge').nudge, errand);
+  assert.equal(f.bridge.nudgeId, errand.id);
+  shutdown(f);
+});
+
+test('差事动作按 id 前缀分流到 onErrandAction：喝水动作（done/snooze）落不到差事气泡上，差事动作落不到喝水气泡上，幂等，不会误入喝水提醒的处理器', async () => {
+  const f = fixture(undefined, 8); const errandCalls = [], nudgeCalls = [];
+  f.bridge.onErrandAction = async message => { errandCalls.push([message.id, message.action]); return { ok: true, text: `errand:${message.action}` }; };
+  f.bridge.onNudgeAction = async message => { nudgeCalls.push([message.id, message.action]); return { ok: true, text: 'nudge' }; };
+  const errand = errandOf();
+  await f.bridge.showNudge(errand);
+  const last = () => f.sent.at(-1);
+  f.emit({ type: 'nudgeAction', id: errand.id, actionId: 'e1', action: 'open' });
+  await tick();
+  assert.deepEqual(errandCalls, [[errand.id, 'open']]);
+  assert.deepEqual([last().command, last().ok, last().text, last().actionId, last().id], ['nudgeActionResult', true, 'errand:open', 'e1', errand.id]);
+  f.emit({ type: 'nudgeAction', id: errand.id, actionId: 'e1', action: 'open' });
+  await tick();
+  assert.equal(errandCalls.length, 1, '同一个 actionId 重发只补回执');
+  // 喝水动作不能落在差事气泡上，差事动作也不能落在喝水气泡上
+  f.emit({ type: 'nudgeAction', id: errand.id, actionId: 'e2', action: 'done' });
+  await tick();
+  assert.equal(last().ok, false); assert.match(last().error, /失效/);
+  f.emit({ type: 'nudgeAction', id: errand.id, actionId: 'e3', action: 'snooze' });
+  await tick();
+  assert.equal(last().ok, false);
+  const water = nudgeOf();
+  await f.bridge.showNudge(water);
+  f.emit({ type: 'nudgeAction', id: water.id, actionId: 'w1', action: 'open' });
+  await tick();
+  assert.equal(last().ok, false);
+  f.emit({ type: 'nudgeAction', id: water.id, actionId: 'w2', action: 'done' });
+  await tick();
+  assert.equal(last().ok, true);
+  assert.deepEqual(nudgeCalls, [[water.id, 'done']]);
+  assert.equal(errandCalls.length, 1);
+  shutdown(f);
+});
+
+test('差事动作：没有处理器、旧气泡 id、Chrome 拒绝都如实回报失败', async () => {
+  const f = fixture(undefined, 8);
+  const errand = errandOf();
+  await f.bridge.showNudge(errand);
+  f.emit({ type: 'nudgeAction', id: errand.id, actionId: 'n1', action: 'open' });
+  await tick();
+  assert.equal(f.sent.at(-1).ok, false);
+  f.bridge.onErrandAction = async () => ({ ok: false, error: '没能打开页面' });
+  f.emit({ type: 'nudgeAction', id: errand.id, actionId: 'n2', action: 'open' });
+  await tick();
+  assert.deepEqual([f.sent.at(-1).ok, f.sent.at(-1).error], [false, '没能打开页面']);
+  f.emit({ type: 'nudgeAction', id: 'jelly-errand-task-1', actionId: 'n3', action: 'open' });
+  await tick();
+  assert.equal(f.sent.at(-1).ok, false);
+  shutdown(f);
+});
+
+test('nudgeHidden：当前气泡自行消失时通知 onNudgeHidden（用来记一次“被忽略”）；别的 id 不通知', async () => {
+  const f = fixture(undefined, 8); const hidden = [];
+  f.bridge.onNudgeHidden = id => { hidden.push(id); };
+  const errand = errandOf();
+  await f.bridge.showNudge(errand);
+  f.emit({ type: 'nudgeHidden', id: 'jelly-errand-task-9' });
+  await tick();
+  assert.deepEqual(hidden, []);
+  f.emit({ type: 'nudgeHidden', id: errand.id });
+  await tick();
+  assert.deepEqual(hidden, [errand.id]);
+  assert.equal(f.bridge.nudgeId, null);
+  f.bridge.onNudgeHidden = () => { throw new Error('回调失败'); };
+  const second = errandOf('jelly-errand-task-2');
+  await f.bridge.showNudge(second);
+  f.emit({ type: 'nudgeHidden', id: second.id });
+  await tick();
+  assert.equal(f.bridge.nudgeId, null, '回调抛错不影响连接状态');
+  shutdown(f);
+});
+
+test('presence：旧连接迟到的上报不转给 onPresence（只认当前连接）', async () => {
+  const host = nativeDesktop(8);
+  const bridge = new AlarmDesktop(host.runtime, async () => ({ ok: true })); const states = [];
+  bridge.onPresence = state => { states.push(state); };
+  try {
+    await bridge.status();
+    const old = host.port;
+    old.remoteDisconnect();
+    await bridge.status();
+    assert.notEqual(host.port, old, '已重连到新端口');
+    old.emit({ type: 'presence', state: 'away' });
+    assert.deepEqual(states, [], '旧连接的 presence 被忽略');
+    host.emit({ type: 'presence', state: 'active' });
+    assert.deepEqual(states, ['active'], '新连接的照常转发');
+  } finally { clearTimeout(bridge.idleTimer); host.port?.disconnect(); }
+});
+
+test('presence：只认 active / away，来自当前连接才转给 onPresence；回调抛错不影响桥接', async () => {
+  const f = fixture(undefined, 8); const states = [];
+  f.bridge.onPresence = state => { states.push(state); };
+  await f.bridge.showNudge(errandOf());
+  f.emit({ type: 'presence', state: 'away' });
+  f.emit({ type: 'presence', state: 'active' });
+  f.emit({ type: 'presence', state: 'sleeping' });
+  f.emit({ type: 'presence' });
+  f.emit({ type: 'presence', state: 5 });
+  await tick();
+  assert.deepEqual(states, ['away', 'active']);
+  f.bridge.onPresence = () => { throw new Error('回调失败'); };
+  assert.doesNotThrow(() => f.emit({ type: 'presence', state: 'away' }));
+  shutdown(f);
+});
+
+// ---------- 水母差事第二期（协议 v9）：歌曲气泡的按钮与右键菜单请求 ----------
+
+const songErrandOf = (id = 'jelly-errand-song-1760000000000') => ({ id, kind: 'song', title: '来首歌？', text: '《晴天》 · 周杰伦', buttons: [{ id: 'play', title: '播放' }, { id: 'another', title: '换一首' }, { id: 'dismiss', title: '不听' }], ttl: 90 });
+
+test('歌曲气泡：play / another / dismiss 经 onErrandAction（桥接层认差事动作的并集，各类别的限定由控制器负责）；喝水气泡仍只认 done / snooze', async () => {
+  const f = fixture(undefined, 9); const calls = [];
+  f.bridge.onErrandAction = async message => { calls.push([message.id, message.action]); return { ok: true, text: `ok:${message.action}` }; };
+  f.bridge.onNudgeAction = async message => { calls.push(['nudge', message.action]); return { ok: true, text: 'nudge' }; };
+  const song = songErrandOf();
+  await f.bridge.showNudge(song);
+  assert.deepEqual(f.sent.find(m => m.command === 'nudge').nudge, song, '歌曲气泡复用 nudge 命令，原样发出');
+  const last = () => f.sent.at(-1);
+  for (const [index, action] of ['play', 'another', 'dismiss'].entries()) {
+    f.emit({ type: 'nudgeAction', id: song.id, actionId: `s${index}`, action });
+    await tick();
+    assert.deepEqual([last().command, last().ok, last().text, last().actionId], ['nudgeActionResult', true, `ok:${action}`, `s${index}`]);
+  }
+  assert.deepEqual(calls, [[song.id, 'play'], [song.id, 'another'], [song.id, 'dismiss']]);
+  f.emit({ type: 'nudgeAction', id: song.id, actionId: 's0', action: 'play' });
+  await tick();
+  assert.equal(calls.length, 3, '同一个 actionId 重发只补回执，不再交给控制器（播放不会被重放）');
+  assert.deepEqual([last().ok, last().text], [true, 'ok:play']);
+  for (const [index, action] of ['done', 'snooze', 'fly', undefined].entries()) {
+    f.emit({ type: 'nudgeAction', id: song.id, actionId: `x${index}`, action });
+    await tick();
+    assert.equal(last().ok, false, String(action));
+  }
+  const water = nudgeOf();
+  await f.bridge.showNudge(water);
+  for (const [index, action] of ['play', 'another'].entries()) {
+    f.emit({ type: 'nudgeAction', id: water.id, actionId: `w${index}`, action });
+    await tick();
+    assert.equal(last().ok, false, `喝水气泡不认 ${action}`);
+  }
+  assert.equal(calls.length, 3);
+  shutdown(f);
+});
+
+test('errandRequest（菜单请求）：转给 onErrandRequest 并按结果回 errandRequestResult——气泡已交给水母只回 ok，没有内容回 text，失败回 error；不缓存，每个 errandId 各算各的', async () => {
+  const f = fixture(undefined, 9); const seen = [];
+  const replies = [{ ok: true }, { ok: true, text: '今天的小乐子都说完啦' }, { ok: false, error: '水母正忙着响铃，等一下再叫它' }];
+  f.bridge.onErrandRequest = async message => { seen.push([message.errandId, message.kind]); return replies[seen.length - 1]; };
+  await f.bridge.status();
+  const last = () => f.sent.at(-1);
+  f.emit({ type: 'errandRequest', errandId: 'r1', kind: 'song' });
+  await tick();
+  assert.deepEqual(last(), { command: 'errandRequestResult', errandId: 'r1', ok: true });
+  assert.equal('requestId' in last(), false, '结果命令不能带 requestId——那是“命令 → 回执”的关联键，原生会把回执标成这个编号');
+  f.emit({ type: 'errandRequest', errandId: 'r2', kind: 'tidbit' });
+  await tick();
+  assert.deepEqual(last(), { command: 'errandRequestResult', errandId: 'r2', ok: true, text: '今天的小乐子都说完啦' });
+  f.emit({ type: 'errandRequest', errandId: 'r3', kind: 'brief' });
+  await tick();
+  assert.deepEqual(last(), { command: 'errandRequestResult', errandId: 'r3', ok: false, error: '水母正忙着响铃，等一下再叫它' });
+  assert.deepEqual(seen, [['r1', 'song'], ['r2', 'tidbit'], ['r3', 'brief']]);
+  shutdown(f);
+});
+
+test('errandRequest：同一个 errandId 还在处理时的重发被忽略（不重复调用处理器），处理完成只回执一次', async () => {
+  const f = fixture(undefined, 9); let release, calls = 0;
+  f.bridge.onErrandRequest = () => { calls += 1; return new Promise(resolve => { release = () => resolve({ ok: true }); }); };
+  await f.bridge.status();
+  f.emit({ type: 'errandRequest', errandId: 'r1', kind: 'song' });
+  f.emit({ type: 'errandRequest', errandId: 'r1', kind: 'song' });
+  await tick();
+  assert.equal(calls, 1);
+  const before = f.sent.length;
+  release();
+  await tick();
+  assert.equal(f.sent.length, before + 1);
+  assert.deepEqual([f.sent.at(-1).command, f.sent.at(-1).errandId], ['errandRequestResult', 'r1']);
+  assert.equal(f.bridge.errandRequestProcessing.size, 0, '处理完成后在途编号被清掉（否则这个集合会无限增长）');
+  f.emit({ type: 'errandRequest', errandId: 'r1', kind: 'song' });
+  await tick();
+  assert.equal(calls, 2, '结果不缓存：处理完成后同一个编号再来就是一次新请求');
+  release();
+  await tick();
+  assert.equal(f.sent.length, before + 2);
+  shutdown(f);
+});
+
+test('errandRequest：没有处理器、处理器抛错、返回异常形状都如实回 ok:false 与原因；kind 不是字符串时不调用处理器', async () => {
+  const f = fixture(undefined, 9);
+  await f.bridge.status();
+  const last = () => f.sent.at(-1);
+  f.emit({ type: 'errandRequest', errandId: 'r1', kind: 'song' });
+  await tick();
+  assert.deepEqual([last().command, last().ok, last().errandId], ['errandRequestResult', false, 'r1'], '没有处理器');
+  assert.match(last().error, /不可用/);
+  f.bridge.onErrandRequest = async () => { throw new Error('boom'); };
+  f.emit({ type: 'errandRequest', errandId: 'r2', kind: 'song' });
+  await tick();
+  assert.deepEqual([last().ok, last().error], [false, 'boom']);
+  f.bridge.onErrandRequest = () => { throw new Error('同步抛错'); };
+  f.emit({ type: 'errandRequest', errandId: 'r3', kind: 'song' });
+  await tick();
+  assert.deepEqual([last().ok, last().error], [false, '同步抛错']);
+  for (const [index, reply] of [undefined, null, 'ok', 7, { ok: 'yes' }, { ok: false }].entries()) {
+    f.bridge.onErrandRequest = async () => reply;
+    f.emit({ type: 'errandRequest', errandId: `bad${index}`, kind: 'song' });
+    await tick();
+    assert.equal(last().ok, false, JSON.stringify(reply));
+    assert.equal(last().errandId, `bad${index}`);
+    assert.ok(typeof last().error === 'string' && last().error.length > 0, '失败必须带原因');
+  }
+  let called = 0;
+  f.bridge.onErrandRequest = async () => { called += 1; return { ok: true }; };
+  for (const [index, kind] of [undefined, 5, null, { x: 1 }, 'x'.repeat(40)].entries()) {
+    f.emit({ type: 'errandRequest', errandId: `k${index}`, kind });
+    await tick();
+    assert.deepEqual([last().ok, last().errandId, last().error], [false, `k${index}`, '不认识这个请求']);
+  }
+  assert.equal(called, 0);
+  shutdown(f);
+});
+
+test('errandRequest：没有合法 errandId（空、超长、非字符串、缺失、只带旧字段 requestId）就无处回执，直接忽略；回执文字有长度上限', async () => {
+  const f = fixture(undefined, 9); let calls = 0;
+  f.bridge.onErrandRequest = async () => { calls += 1; return { ok: true, text: '长'.repeat(200) }; };
+  await f.bridge.status();
+  const count = f.sent.length;
+  for (const bad of [{ errandId: '', kind: 'song' }, { errandId: 'x'.repeat(101), kind: 'song' }, { errandId: 5, kind: 'song' }, { kind: 'song' }, { requestId: 'legacy', kind: 'song' }]) {
+    f.emit({ type: 'errandRequest', ...bad });
+    await tick();
+  }
+  assert.equal(f.sent.length, count);
+  assert.equal(calls, 0);
+  f.emit({ type: 'errandRequest', errandId: 'long', kind: 'tidbit' });
+  await tick();
+  assert.equal([...f.sent.at(-1).text].length, 80);
+  f.bridge.onErrandRequest = async () => ({ ok: false, error: '错'.repeat(300) });
+  f.emit({ type: 'errandRequest', errandId: 'long-error', kind: 'tidbit' });
+  await tick();
+  assert.equal([...f.sent.at(-1).error].length, 120);
+  shutdown(f);
+});
+
+test('errandRequest：旧连接迟到的请求不处理也不回执；处理期间连接断开，晚到的结果不抛错、不发到新连接', async () => {
+  const host = nativeDesktop(9);
+  const bridge = new AlarmDesktop(host.runtime, async () => ({ ok: true })); let release, calls = 0;
+  bridge.onErrandRequest = () => { calls += 1; return new Promise(resolve => { release = () => resolve({ ok: true }); }); };
+  try {
+    await bridge.status();
+    const old = host.port;
+    old.emit({ type: 'errandRequest', errandId: 'r1', kind: 'song' });
+    await tick();
+    assert.equal(calls, 1);
+    old.remoteDisconnect();
+    await bridge.status();
+    assert.notEqual(host.port, old, '已重连到新端口');
+    old.emit({ type: 'errandRequest', errandId: 'r-stale', kind: 'song' });
+    await tick();
+    assert.equal(calls, 1, '旧连接迟到的请求被忽略');
+    release();
+    await tick();
+    assert.equal(host.sent.some(message => message.command === 'errandRequestResult'), false, '旧连接上的结果没有发出，也没有串到新连接');
+  } finally { clearTimeout(bridge.idleTimer); host.port?.disconnect(); }
+});
+
+test('errandRequest：处理器回调属于桥接的公开属性，默认为空，不影响既有消息处理', async () => {
+  const f = fixture(undefined, 9);
+  assert.equal(f.bridge.onErrandRequest, null);
+  await f.bridge.status();
+  f.emit({ type: 'presence', state: 'away' });
+  f.emit({ type: 'errandRequest', errandId: 'r1', kind: 'song' });
+  await tick();
+  assert.equal(f.sent.at(-1).command, 'errandRequestResult');
+  shutdown(f);
+});

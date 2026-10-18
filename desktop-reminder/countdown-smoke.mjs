@@ -35,7 +35,7 @@ try {
   assert.equal(first.ok, true); assert.equal(first.countdownVisible, true); assert.equal(first.visible, false); assert.equal(first.focusStayed, true);
   console.log('SHOW', JSON.stringify(first));
   // v6：倒计时由桌面水母承载（胶囊已取消）；没有常驻时，水母只在倒计时期间临时出现
-  assert.equal(first.version, 7); assert.equal(first.jellyVisible, true); assert.equal(first.jellyResident, false);
+  assert.equal(first.version, 10); assert.equal(first.jellyVisible, true); assert.equal(first.jellyResident, false);
   assert.equal(first.jellyBubble, 'clock'); assert.match(first.countdownFrame, /\{170, 150\}\}$/, '水母窗口为基础尺寸 170×150');
   await delay(1600);
   const tick = await request('ping');

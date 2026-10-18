@@ -11,6 +11,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const JellyfishCore = createRequire(import.meta.url)('../js/jellyfish-core.js');
 const JellyDesktop = createRequire(import.meta.url)('../js/jelly-desktop.js');
 const AssistantNative = createRequire(import.meta.url)('../js/assistant-native.js');
+const JellyErrandsCore = createRequire(import.meta.url)('../js/jelly-errands-core.js');
 const swiftc = '/usr/bin/xcrun';
 const canCompile = process.platform === 'darwin' && existsSync(swiftc);
 
@@ -45,8 +46,8 @@ test('原生水母：构建清单包含所有水母源文件，且 main.swift �
   }
   assert.doesNotMatch(main, /CountdownController|countdownStyle|countdownCompact|activeStyle/, 'main.swift 不应再引用胶囊控制器与样式字段');
   assert.match(main, /let jelly = JellyController\(\)/, '水母控制器是唯一宿主');
-  assert.match(main, /"version": 7/, '协议版本 7（桌面 AI 助手）');
-  assert.doesNotMatch(main, /"version": 6/, '不应残留旧的协议版本');
+  assert.match(main, /"version": 10/, '协议版本 10（水母差事第三期：活动行为与巡游；v9 是歌曲气泡与右键菜单请求，v8 是差事与 presence）');
+  assert.doesNotMatch(main, /"version": [6789]\b/, '不应残留旧的协议版本');
   assert.doesNotMatch(main, /buildPanel|springIn|stopButton|snoozeButton|titleLabel|timeLabel|statusLabel/, '旧的深色提醒卡片界面不应残留在 main.swift');
   assert.match(main, /case "show":[^\n]*jelly\.showRing/, '响铃由水母承载：show 路由到 showRing');
   assert.match(main, /case "hide":[^\n]*jelly\.hideRing/, 'hide 路由到 hideRing');
@@ -56,6 +57,25 @@ test('原生水母：构建清单包含所有水母源文件，且 main.swift �
   assert.match(main, /case "nudge":[^\n]*jelly\.showNudge/, '处理提醒气泡');
   assert.match(main, /case "nudgeClear":/, '处理提醒撤销');
   assert.match(main, /case "nudgeActionResult":/, '处理提醒动作回执');
+  assert.match(main, /case "errandRequestResult": jelly\.errandRequestResult\(message\)/, '处理菜单请求的回执（只认未决请求的 errandId）');
+  // 菜单请求的编号必须叫 errandId：requestId 是“命令 → 回执”的关联键，respond() 会把它原样写进回执，
+  // 结果命令若也带 requestId，原生的回执就被标成菜单请求的编号（第一次实跑 jelly-smoke 时等回执的一方因此超时）
+  const controller = readFileSync(resolve(root, 'desktop-reminder/jelly-controller.swift'), 'utf8');
+  assert.match(controller, /\["type": "errandRequest", "errandId": errandID, "kind": kind\]/, '菜单请求事件用 errandId 作编号');
+  assert.match(controller, /guard let errandID = message\["errandId"\] as\? String, errandID == errandRequestPending/, '回执只认未决请求的 errandId');
+  assert.doesNotMatch(controller, /"requestId": (?:requestID|errandID)|message\["requestId"\]/, '菜单请求的编号不能占用命令回执的 requestId');
+  // 水母的活动行为（协议 v10）：睡觉、巡游、小动作都是水母自己的动作，不产生业务数据，不向 Chrome 回报，也不改写记住的窗口位置
+  const behavior = controller.slice(controller.indexOf('// MARK: 活动行为（协议 v10）'), controller.indexOf('// MARK: 点击水母：看看详情'));
+  assert.ok(behavior.length > 1500, '应能截出活动行为一节');
+  assert.doesNotMatch(behavior, /send\?\(|UserDefaults|URLSession|Process\(\)|NSAppleScript/, '活动行为不向 Chrome 回报、不写位置记忆、不联网、不起子进程');
+  assert.match(controller, /private func grabBegan\(\) \{\s*\n\s*endPatrol\(refresh: false\)/, '被用户抓住时巡游立刻结束');
+  assert.match(controller, /JellyBehavior\.isAsleep\(lively: lively && resident,/, '睡不睡只由 JellyBehavior.isAsleep 决定，且只有“常驻”的水母才有活动行为（倒计时临时拉起的水母仍是老样子）');
+  assert.match(controller, /awake: kind > \.clock \|\| ringing \|\| !sleeping/, '活动行为关闭时 isAsleep 恒为真，awake 与旧版一致');
+  assert.match(controller, /rest: \(ringing \|\| ringExiting \|\| stage == \.calm \|\| nudge != nil\) && !patrolling/, '只有巡游改变了“想休息”的判定');
+  assert.match(main, /guard jelly\.resident else \{ lastPresence = nil; jelly\.noteIdle\(nil\); return \}/, '不常驻就忘掉空闲读数');
+  assert.match(main, /jelly\.noteIdle\(idle\)/, '每次采样都把空闲秒数交给水母（不论 presence 有没有变化）');
+  assert.match(main, /case "menuTracking":\s*\n(?:\s*\/\/[^\n]*\n)*\s*ok = ProcessInfo\.processInfo\.environment\["TIMEKEEPER_TEST_HOOKS"\] == "1"/, '菜单打开的测试钩子只在 TIMEKEEPER_TEST_HOOKS=1 时可用');
+  assert.match(controller, /env\["TIMEKEEPER_TEST_HOOKS"\] == "1" \? JellyBehavior\.parseOverrides\(env\["TIMEKEEPER_PATROL_SECONDS"\]\) : nil/, '巡游计时覆盖只在测试钩子打开时生效');
   assert.match(main, /send\(\["type": "componentQuit"\]\)\s*\n\s*NSApp\.terminate/, '状态栏退出先告知 Chrome 再结束进程，Chrome 才不会自动把水母拉起');
   // 桌面 AI 助手（协议 v7）：面板与热键由 AssistantController 承载；main.swift 只接线，业务状态与任务全在 Chrome
   assert.match(main, /var assistant: AssistantController!/, '助手控制器是唯一宿主');
@@ -114,6 +134,18 @@ test('原生水母：纯逻辑（阶段、协议解析、显示规则、文案�
       const glyph = output.match(new RegExp(`^GLYPH ${index} (.+)$`, 'm'))?.[1];
       assert.equal(glyph, label, `${value} 的展示符号：原生 ${glyph} 与设置页 ${label} 不一致`);
     }
+    // 水母差事（协议 v8）：类别、按钮白名单与主按钮在 JS（JellyErrandsCore.KINDS）与 Swift（JellyModel.nudgeButtonRules / primaryNudgeButton）各有一份，必须逐类逐按钮一致
+    const swiftErrands = new Map([...output.matchAll(/^ERRAND (\S+) (\S+) (\S+)$/gm)].map(match => [match[1], { primary: match[2], ids: match[3].split(',') }]));
+    assert.deepEqual([...swiftErrands.keys()].sort(), [...JellyErrandsCore.KIND_IDS].sort(), '差事类别 Swift 与 JS 一致');
+    for (const kind of JellyErrandsCore.KIND_IDS) {
+      const buttons = JellyErrandsCore.KINDS[kind].buttons.map(button => button.id);
+      assert.deepEqual(swiftErrands.get(kind).ids, [...buttons].sort(), `${kind} 的按钮白名单 Swift 与 JS 一致`);
+      assert.equal(swiftErrands.get(kind).primary, buttons[0], `${kind} 的主按钮是 JS 的第一个按钮`);
+    }
+    // 右键菜单“水母，给我…”（协议 v9）：菜单项的类别与 Chrome 侧 request() 接受的类别完全一致
+    const swiftRequests = [...output.matchAll(/^ERRAND_REQUEST (\S+)$/gm)].map(match => match[1]);
+    assert.deepEqual([...swiftRequests].sort(), [...JellyErrandsCore.REQUEST_KINDS].sort(), '菜单请求的类别 Swift 与 JS 一致');
+    assert.equal(new Set(swiftRequests).size, swiftRequests.length, '菜单项不重复');
     // 任务状态集合：Chrome 投影出的 status 与原生能解析的完全一致（否则新增状态会被原生当成非法负载丢弃）
     const statuses = output.match(/^STATUSES (\S+)$/m)?.[1];
     assert.equal(statuses, [...AssistantNative.STATUSES].sort().join(','), '任务状态集合 Chrome 与原生一致');

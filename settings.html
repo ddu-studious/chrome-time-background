@@ -253,6 +253,55 @@
                     </div>
                     <p class="sp-card-desc" id="set-nudgeStatus" role="status" aria-live="polite"></p>
                 </div>
+                <div class="sp-card" id="sp-jelly-errands-card">
+                    <h3 class="sp-card-title">水母差事（让常驻的水母主动开口）</h3>
+                    <p class="sp-card-desc">开启后，桌面水母会在你设的时段里主动游到你面前，说今天的任务概览、已过期的任务、工作日志还差多少，偶尔推荐一首歌或来一条小乐子；每条只是一个气泡。点“去处理 / 记一条”只会替你打开页面，不会修改任务、不会代写日志，也不调用模型。推荐歌曲时，水母只读取歌曲列表（登录了网易云就用网易云每日推荐，没登录用热歌榜，与音乐页同一来源，需要联网；浏览器里没有任何网易云登录信息时音乐接口本身不可用，也就不会推荐歌曲），只有你点“播放”才会把这一首加入播放队列并开始播放；不点就什么也不放，正在放歌时也不会来打扰。随时可以右键水母，选“水母，给我…”主动要一条。需要先打开上方“桌面水母”的“常驻桌面”，并安装带协议 v9 的桌面组件（v8 组件只有任务、日志和小乐子，没有推荐歌曲和右键菜单）；水母没有常驻、组件太旧或 3 秒内没有确认时，已有的系统通知照旧弹出，开启差事不会让提醒变少。为了在你离开电脑时保持安静，桌面组件只读取系统“距离上次键盘或鼠标操作过了多少秒”（不读按了什么、不需要额外权限），并只告诉 Chrome“在电脑前 / 已离开 5 分钟以上”两种状态。默认关闭。</p>
+                    <div class="sp-field">
+                        <div class="sp-field-info"><span class="sp-field-label">开启水母差事</span><span class="sp-field-hint">总开关；关闭后一切照旧</span></div>
+                        <label class="sp-toggle"><input type="checkbox" id="set-errandsEnabled"><span class="sp-toggle-slider"></span></label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info"><span class="sp-field-label">活跃程度</span><span class="sp-field-hint">每小时最多冒几个气泡（包含喝水、起身提醒），两个之间至少隔 15 分钟</span></div>
+                        <select class="sp-select" id="set-errandsLevel"><option value="quiet">安静（每小时最多 2 个）</option><option value="mid" selected>适中（每小时最多 4 个）</option><option value="busy">活跃（每小时最多 8 个）</option></select>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info"><span class="sp-field-label">过期任务</span><span class="sp-field-hint">提醒还有几个任务已过期，以及每天早上的任务概览</span></div>
+                        <label class="sp-toggle"><input type="checkbox" id="set-errandsTask" checked><span class="sp-toggle-slider"></span></label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info"><span class="sp-field-label">工作日志</span><span class="sp-field-hint">到 12 点 / 15 点 / 17 点记录的工时明显不够时提醒</span></div>
+                        <label class="sp-toggle"><input type="checkbox" id="set-errandsWorklog" checked><span class="sp-toggle-slider"></span></label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info"><span class="sp-field-label">推荐歌曲</span><span class="sp-field-hint">偶尔推荐一首歌，可以点“播放”“换一首”或“不听”；正在放歌时不推荐</span></div>
+                        <label class="sp-toggle"><input type="checkbox" id="set-errandsSong" checked><span class="sp-toggle-slider"></span></label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info"><span class="sp-field-label">小乐子</span><span class="sp-field-hint">偶尔来一句名言或小贴士，可以点“再来一条”或“够了”</span></div>
+                        <label class="sp-toggle"><input type="checkbox" id="set-errandsTidbit" checked><span class="sp-toggle-slider"></span></label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info"><span class="sp-field-label">气泡里显示任务名</span><span class="sp-field-hint">默认只说数量；打开后会在桌面气泡里露出最紧的一个任务名，旁边的人也看得到</span></div>
+                        <label class="sp-toggle"><input type="checkbox" id="set-errandsTitles"><span class="sp-toggle-slider"></span></label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info"><span class="sp-field-label">开口时段</span><span class="sp-field-hint">只在这段时间内主动开口；开始时刻含、结束时刻不含。开始需早于结束，否则恢复为 09:00–18:00</span></div>
+                        <div class="sp-field-controls">
+                            <input type="time" class="sp-input" id="set-errandsFrom" value="09:00">
+                            <span>至</span>
+                            <input type="time" class="sp-input" id="set-errandsTo" value="18:00">
+                        </div>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info"><span class="sp-field-label">只在周一至周五开口</span><span class="sp-field-hint">按本机日期判断，不区分法定节假日与调休</span></div>
+                        <label class="sp-toggle"><input type="checkbox" id="set-errandsWeekdays" checked><span class="sp-toggle-slider"></span></label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info"><span class="sp-field-label">让水母活动起来</span><span class="sp-field-hint">白天不睡觉：每隔几分钟自己游一圈，偶尔原地小跳一下；夜里（约 19:30 到次日 06:30）或你离开电脑超过 10 分钟仍会睡着。有气泡、倒计时临近、鼠标停在它身上或系统开了“减少动态效果”时不动。只在“常驻桌面”时生效，需要桌面组件协议 v10；关掉后休息时就睡觉</span></div>
+                        <label class="sp-toggle"><input type="checkbox" id="set-errandsPatrol" checked><span class="sp-toggle-slider"></span></label>
+                    </div>
+                    <p class="sp-card-desc" id="set-errandsStatus" role="status" aria-live="polite"></p>
+                </div>
             </section>
 
             <!-- 天气设置 -->
@@ -961,7 +1010,7 @@
     <script src="js/product-pages-v5.js?v=1"></script>
     <script src="js/product-ui-v5.js?v=2"></script>
     <script src="js/wallpaper-weave-core.js?v=1"></script>
-    <script src="js/settings-page.js?v=10"></script>
+    <script src="js/settings-page.js?v=13"></script>
     <script src="js/settings-v5.js?v=7"></script>
     <script src="js/ai-control.js?v=6"></script>
     <script src="js/ai-history.js?v=3"></script>

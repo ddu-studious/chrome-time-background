@@ -3,19 +3,24 @@
 // 这是介于“各自用替身的单元测试”与“真实 Chrome”之间的一层：协议字段、回执与生命周期由两端真实代码互相检验。
 // 仍然不是真实 Chrome：没有 Service Worker 休眠、没有真实 Native Messaging 宿主清单、存储/闹钟/通知都是内存替身。
 //   node desktop-reminder/build.mjs --extension-id=<id> --app=/tmp/tk/QA.app
-//   node desktop-reminder/bridge-smoke.mjs --extension-id=<id> --app=/tmp/tk/QA.app [--no-mouse]
+//   node desktop-reminder/bridge-smoke.mjs --extension-id=<id> --app=/tmp/tk/QA.app [--no-mouse] [--quiet=秒]
 // 不读写真实闹钟、喝水记录或设置；原生组件用独立 Bundle ID；点击只发生在水母自己的窗口上。
+// 礼让用户（desktop-reminder/user-quiet.mjs）：4d（桌面 AI 助手）的面板会拿走键盘焦点，进入前先等用户至少安静 --quiet=秒（默认 20），
+// 运行中发现真实键盘 / 鼠标输入就立刻撤掉面板，并以退出码 75（稍后重试，不算验收失败）结束。
 import { spawn, execFileSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { setTimeout as delay } from 'node:timers/promises';
 import assert from 'node:assert/strict';
+import { Quiet, EXIT_USER_ACTIVE } from './user-quiet.mjs';
 
 const require = createRequire(import.meta.url);
 const AlarmDesktop = require('../js/alarm-desktop.js');
 const JellyDesktop = require('../js/jelly-desktop.js');
 const JellyNudge = require('../js/jelly-nudge.js');
+const JellyErrandsCore = require('../js/jelly-errands-core.js');
+const JellyErrands = require('../js/jelly-errands.js');
 const AlarmCountdown = require('../js/alarm-countdown.js');
 const AlarmCore = require('../js/alarm-core.js');
 const AssistantEngine = require('../js/assistant-engine.js');
@@ -28,12 +33,14 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const app = arg('app');
 if (!app) throw new Error('必须用 --app 指向隔离构建，避免改写真实组件的窗口记忆');
 const withMouse = !process.argv.includes('--no-mouse');
+const quiet = new Quiet(Number(arg('quiet') ?? 20));
+let interrupted = null;      // 4d 期间发现真实输入的原因（见顶部说明）；有值时不把后续断言失败当作验收失败
 let helper = null;
 if (withMouse) {
   helper = resolve('/tmp', `tk-mouse-helper-${process.pid}`);
   execFileSync('/usr/bin/xcrun', ['swiftc', resolve(root, 'desktop-reminder/mouse-helper.swift'), '-module-cache-path', resolve(root, 'local-ai/.local/swift-cache'), '-o', helper], { stdio: 'inherit' });
 }
-const mouse = (...a) => execFileSync(helper, a.map(String));
+const mouse = (...a) => { try { return execFileSync(helper, a.map(String)); } finally { quiet.touch(); } };   // 合成输入会重置系统空闲时间，记下来才分得清哪些是真实用户
 const frameOf = text => { const m = text.match(/\{\{(-?[\d.]+), (-?[\d.]+)\}, \{([\d.]+), ([\d.]+)\}\}/); return { x: +m[1], y: +m[2], w: +m[3], h: +m[4] }; };
 const center = text => { const f = frameOf(text); return { x: f.x + f.w / 2, y: f.y + f.h / 2 }; };
 
@@ -147,7 +154,31 @@ const jellyDesktop = JellyDesktop.create({
   onRestored: () => { restored++; },
   retryMs: [300, 600],
 });
-const jellyNudge = JellyNudge.create({ syncStorage, localStorage, alarms, notifications, presenter: jellyDesktop.presenter, onChange: () => jellyDesktop.sync() });
+const jellyNudge = JellyNudge.create({ syncStorage, localStorage, alarms, notifications, presenter: jellyDesktop.presenter, onChange: () => jellyDesktop.sync(), onSent: at => jellyErrands.noteExternal(at) });
+// 水母差事：与 background.js 同一种接法（presenter 与可用性来自 JellyDesktop，动作 / 气泡消失 / presence / 菜单请求回到控制器）。
+// 歌曲来源、播放器状态与播放是替身（不联网、不碰真实播放器）：songStub 记下被问了几次、被交给播放了哪几首，outcome 决定播放结果。
+const errandOpened = [], presenceSeen = [];
+const SONG_TITLES = { 1001: '夜曲', 1002: '晴天', 1003: '七里香', 1004: '稻香', 1005: '告白气球', 1006: '青花瓷', 1007: '简单爱', 1008: '以父之名' };
+const songStub = { suggested: 0, playing: false, plays: [], outcome: () => ({ ok: true, dispatched: true }) };
+const jellyErrands = JellyErrands.create({
+  syncStorage, localStorage, alarms, presenter: jellyDesktop.presenter,
+  readMemos: async () => [{ title: '写周报', dueDate: '2000-01-01' }, { title: '回邮件', dueDate: '2000-01-02' }],
+  readWorklog: async () => [], tips: () => [{ text: '先开始，才有灵感', type: 'quote', author: '联调' }],
+  openPage: async kind => { errandOpened.push(kind); },
+  isAvailable: minVersion => jellyDesktop.errandsReady(minVersion),
+  songs: { suggest: async () => { songStub.suggested++; return Object.entries(SONG_TITLES).map(([songId, title]) => ({ songId, title, artist: '周杰伦' })); } },
+  isPlaying: async () => songStub.playing,
+  playSong: async song => { songStub.plays.push(song.songId); return songStub.outcome(); },
+  onChange: () => jellyDesktop.sync(),
+});
+// 与 background.js 同一句：只在差事总开关打开时才给原生端“errands”字段（右键菜单），直接读配置
+jellyDesktop.errandsEnabled = async () => JellyErrandsCore.normalize((await syncStorage.get(JellyErrands.CONFIG_KEY))[JellyErrands.CONFIG_KEY]).enabled === true;
+// 协议 v10 的“活动行为”：同样直接读配置（缺省为开）；只在上面的总开关打开时才会被问
+jellyDesktop.errandsPatrol = async () => JellyErrandsCore.normalize((await syncStorage.get(JellyErrands.CONFIG_KEY))[JellyErrands.CONFIG_KEY]).patrol === true;
+desktop.onErrandAction = message => jellyErrands.act(message?.id, message?.action);
+desktop.onErrandRequest = message => jellyErrands.request(message?.kind);
+desktop.onNudgeHidden = hiddenId => { void jellyErrands.onHidden(hiddenId); };
+desktop.onPresence = presence => { presenceSeen.push(presence); jellyErrands.onPresence(presence); };
 const stats = () => localStorage.data.jellyNudgeStatsV1;
 
 // 桌面 AI 助手：真实 AssistantEngine（计划与执行是替身，只验证接线与协议）+ 真实 AssistantNative，与 background.js 里 QuickAssistant.install 同一种接法
@@ -221,7 +252,7 @@ try {
   await jellyNudge.set({ water: { on: true, everyMin: 30 }, stretch: { on: false, everyMin: 50 }, from: '00:00', to: '23:59', weekdaysOnly: false });
   await jellyDesktop.restore();
   let state = await until(async () => { const reply = await runtime.probe(); return reply.jellyVisible && reply.jellyLines.length >= 2 ? reply : null; }, 5000, '常驻水母带着记录出现');
-  assert.equal(state.version, 7); assert.equal(state.jellyResident, true); assert.equal(state.focusStayed, true);
+  assert.equal(state.version, 10); assert.equal(state.jellyResident, true); assert.equal(state.focusStayed, true);
   assert.equal(state.jellyLines[0], '今天还没喝水'); assert.match(state.jellyLines[1], /^下次喝水提醒 \d\d:\d\d$/);
   assert.equal(jellyDesktop.status().connected, true); assert.equal(runtime.ports.length, 1, '只启动了一个组件进程');
   assert.ok(state.countdownMenu.includes('收起水母') && state.countdownMenu.includes('今天还没喝水'));
@@ -268,6 +299,147 @@ try {
     await until(async () => (await runtime.probe()).jellyLines[0] === '今天喝了 1 次水', 3000, '记录刷新');
     desktop.clearNudge(fired.id);
   }
+
+  // ---------- 4a. 水母差事：presence 上报 → 定时评估 → 气泡 → 点“去处理” → 只打开页面并记结果；offer 与“再来一条” ----------
+  // 按钮经验收钩子 nudgeButton 触发（与点击同一个动作入口，真实鼠标点击由 jelly-smoke 的 nudge-mouse 阶段覆盖气泡按钮）。
+  await until(() => presenceSeen.length > 0, 3000, '原生在常驻后上报了 presence');
+  assert.equal(presenceSeen[0], 'active', '正在用电脑：presence 为 active（读的是真实系统空闲秒数）');
+  assert.equal((await jellyDesktop.errandsReady(9)), true, '常驻、已连接、协议 v9：差事（含歌曲与右键菜单）可以开口');
+  const pressNudge = async name => {
+    const requestId = `nhook_${Date.now()}_${name}`;
+    runtime.current().sendRaw({ command: 'nudgeButton', id: name, requestId });
+    return until(() => runtime.current().received.find(message => message.requestId === requestId), 3000, `气泡钩子 ${name}`);
+  };
+  // 这两段（4a / 4a2）验收的是气泡与菜单，不是巡游：活动行为（patrol）显式关掉，水母的休息行为与 v9 时代的基线一致；活动行为有自己的 4a3
+  assert.equal((await jellyErrands.set({ enabled: true, patrol: false, level: 'busy', from: '00:00', to: '23:59', weekdaysOnly: false, kinds: { task: true, worklog: false, tidbit: true } })).ok, true);
+  let errand = await jellyErrands.fire('jelly-errands-tick');
+  assert.equal(errand.sent, true, `定时评估应发出一条：${JSON.stringify(errand)}`); assert.equal(errand.kind, 'task', '过期任务优先于小乐子');
+  assert.equal((await jellyErrands.fire('jelly-nudge-water')), undefined, '不是差事的闹钟忽略');
+  state = await until(async () => { const reply = await runtime.probe(); return reply.nudgeId === errand.id && reply.nudgeArriving === false && reply.jellyBubble === 'nudge' ? reply : null; }, 6000, '差事气泡出现（水母先游到你面前）');
+  assert.deepEqual(Object.keys(state.nudgeButtons).sort(), ['later', 'open']); assert.equal(state.focusStayed, true);
+  assert.equal(desktop.nudgeId, errand.id, 'Chrome 一侧记住了当前气泡');
+  assert.equal(notifications.created.length, 0, '差事不弹系统通知');
+  assert.equal((await jellyErrands.fire('jelly-errands-tick')).reason, 'gap', '紧接着的评估被最小间隔挡住');
+  assert.equal((await pressNudge('open')).ok, true);
+  await until(() => errandOpened.length === 1, 3000, '点“去处理”后 Chrome 打开页面');
+  assert.deepEqual(errandOpened, ['task']);
+  await until(async () => (await runtime.probe()).nudgeId === null, 4500, '成功回执显示后气泡收起');
+  await until(() => desktop.nudgeId === null, 2000, '原生回报 nudgeHidden 后 Chrome 一侧清空');
+  const day = localStorage.data.jellyErrandsStateV1;
+  assert.equal(day.strikes.task, undefined, '接受不记拒绝'); assert.ok(day.seen.some(fp => fp.startsWith('task:')) && day.lastAt > 0, 'Chrome 记下了今天说过什么');
+  assert.equal(stats().water, 1, '差事不碰喝水计数');
+  // offer：已有系统通知发送器先问水母；水母接手 → handled，不再弹系统通知
+  assert.deepEqual(await jellyErrands.offer('tidbit'), { handled: true, kind: 'tidbit' });
+  state = await until(async () => { const reply = await runtime.probe(); return reply.nudgeArriving === false && reply.jellyBubble === 'nudge' && reply.nudgeButtons.more ? reply : null; }, 4000, '小乐子气泡出现');
+  assert.deepEqual(Object.keys(state.nudgeButtons).sort(), ['dismiss', 'more']);
+  assert.equal((await pressNudge('more')).ok, true);
+  state = await until(async () => { const reply = await runtime.probe(); return reply.nudgeBusy === false && reply.nudgeId ? reply : null; }, 3000, '“再来一条”失败（今天的都说完）后按钮恢复');
+  assert.equal(state.jellyBubble, 'nudge', '失败不收起气泡，也不声称成功');
+  assert.equal((await pressNudge('dismiss')).ok, true);
+  await until(async () => (await runtime.probe()).nudgeId === null, 4500, '“够了”后气泡收起');
+  assert.equal(localStorage.data.jellyErrandsStateV1.strikes.tidbit, 1, '“够了”记一次拒绝');
+  // 关闭差事：之后 offer 不再接手，系统通知照旧
+  await jellyErrands.set({ enabled: false });
+  assert.equal((await jellyErrands.offer('task')).handled, false);
+  console.log('PASS 4a：水母差事（presence → 评估 → 气泡 → 去处理 → 只开页面并记结果；offer 接手；再来一条/够了）');
+
+  // ---------- 4a2. 推荐歌曲与右键菜单“水母，给我…”（协议 v9）：菜单 → errandRequest → 真实控制器 → 三按钮歌曲气泡 → 播放（替身播放器）→ 回执 ----------
+  assert.equal((await jellyErrands.set({ enabled: true, patrol: false, level: 'busy', from: '00:00', to: '23:59', weekdaysOnly: false, kinds: { task: false, worklog: false, song: true, tidbit: false } })).ok, true);
+  state = await until(async () => { const reply = await runtime.probe(); return reply.errandsMenu === true ? reply : null; }, 4000, '差事总开关打开后，Chrome 经 onChange → sync 给原生端带上 errands，右键菜单出现');
+  assert.ok(state.countdownMenu.includes('水母，给我…'), `菜单：${state.countdownMenu.join(' | ')}`);
+  const suggestedBefore = songStub.suggested;
+  menu('来首歌');
+  state = await until(async () => { const reply = await runtime.probe(); return reply.nudgeId?.startsWith('jelly-errand-song-') && reply.nudgeArriving === false && reply.jellyBubble === 'nudge' ? reply : null; }, 6000, '菜单“来首歌”→ Chrome 取候选 → 水母游到你面前，三按钮歌曲气泡出现');
+  assert.deepEqual(Object.keys(state.nudgeButtons).sort(), ['another', 'dismiss', 'play']); assert.equal(state.focusStayed, true);
+  assert.equal(songStub.suggested, suggestedBefore + 1, '一次菜单请求只取一次歌曲候选');
+  assert.equal(state.errandRequestBusy, false, 'Chrome 回了 ok：只清掉“正在准备”，气泡由 nudge 命令呈现'); assert.equal(state.feedback, '');
+  assert.equal(desktop.nudgeId, state.nudgeId, 'Chrome 一侧记住了当前气泡');
+  assert.equal(songStub.plays.length, 0, '给出歌曲只是一个气泡：没点“播放”之前什么也不会放');
+  assert.equal(notifications.created.length, 0, '没有系统通知');
+  // 点“播放”：恰好一次交给播放器，回执成功后气泡收起
+  const songBubbleId = state.nudgeId;
+  assert.equal((await pressNudge('play')).ok, true);
+  await until(() => songStub.plays.length === 1, 3000, '点“播放”后 Chrome 把这一首交给播放器');
+  assert.ok(songStub.plays[0] in SONG_TITLES);
+  await until(async () => (await runtime.probe()).nudgeId === null, 4500, '播放确认后气泡收起');
+  await until(() => desktop.nudgeId === null, 2000, '原生回报 nudgeHidden 后 Chrome 一侧清空');
+  assert.equal(songStub.plays.length, 1, '收起气泡不会再放一次');
+  assert.equal((await jellyErrands.act(songBubbleId, 'play')).text, `已开始播放《${SONG_TITLES[songStub.plays[0]]}》`, '同一个气泡再点只回上次结果');
+  assert.equal(songStub.plays.length, 1, '已播放的气泡不会重放');
+  // 播放器没确认（已发出但没确认到）：按“未知”处理，Chrome 不重放，也不声称成功
+  songStub.outcome = () => ({ ok: false, dispatched: true });
+  menu('来首歌');
+  state = await until(async () => { const reply = await runtime.probe(); return reply.nudgeId?.startsWith('jelly-errand-song-') && reply.nudgeId !== songBubbleId && reply.nudgeArriving === false && reply.jellyBubble === 'nudge' ? reply : null; }, 6000, '第二次“来首歌”：新的歌曲气泡');
+  const unknownId = state.nudgeId;
+  assert.equal((await pressNudge('play')).ok, true);
+  await until(() => songStub.plays.length === 2, 3000, '第二次点“播放”交给播放器一次');
+  await until(async () => (await runtime.probe()).nudgeId === null, 4500, '未知结果显示后气泡收起');
+  const again = await jellyErrands.act(unknownId, 'play');
+  assert.equal(again.text, '已交给播放器，还没确认开始播放，请在播放器里看看', '没确认到：如实说明，不说“已开始播放”');
+  assert.equal(songStub.plays.length, 2, 'unknown 不重放');
+  // 再来一首：Chrome 立刻换一个新的歌曲气泡（不重复刚给过的）
+  songStub.outcome = () => ({ ok: true, dispatched: true });
+  menu('来首歌');
+  await until(async () => { const reply = await runtime.probe(); return reply.nudgeId?.startsWith('jelly-errand-song-') && reply.nudgeId !== unknownId && reply.nudgeArriving === false && reply.jellyBubble === 'nudge' ? reply : null; }, 6000, '第三次“来首歌”');
+  const firstOfThird = desktop.nudgeId;
+  assert.equal((await pressNudge('another')).ok, true);
+  await until(async () => { const reply = await runtime.probe(); return reply.nudgeId?.startsWith('jelly-errand-song-') && reply.nudgeId !== firstOfThird && reply.nudgeBusy === false ? reply : null; }, 6000, '“换一首”后出现新的歌曲气泡');
+  assert.equal(songStub.plays.length, 2, '“换一首”不放歌');
+  assert.equal((await pressNudge('dismiss')).ok, true);
+  await until(async () => (await runtime.probe()).nudgeId === null, 4500, '“不听”后气泡收起');
+  // 定时评估只在播放器空闲时推荐歌曲：先放行间隔与条数（测试里直接清掉当天状态的 lastAt / shown），对照“空闲会发”，再验证“在放歌就不发”
+  const openGate = () => Object.assign(localStorage.data.jellyErrandsStateV1, { lastAt: 0, shown: [] });
+  songStub.playing = false; openGate();
+  const idleTick = await jellyErrands.fire('jelly-errands-tick');
+  assert.equal(idleTick.sent, true, `对照：播放器空闲时定时评估会发一首歌：${JSON.stringify(idleTick)}`); assert.equal(idleTick.kind, 'song');
+  await until(async () => { const reply = await runtime.probe(); return reply.nudgeId === idleTick.id && reply.nudgeArriving === false && reply.jellyBubble === 'nudge' ? reply : null; }, 6000, '定时发出的歌曲气泡出现');
+  assert.equal((await pressNudge('dismiss')).ok, true);
+  await until(async () => (await runtime.probe()).nudgeId === null, 4500, '“不听”后气泡收起');
+  const playsBefore = songStub.plays.length;
+  songStub.playing = true; openGate();
+  const busyTick = await jellyErrands.fire('jelly-errands-tick');
+  assert.deepEqual([busyTick.sent, busyTick.reason], [false, 'idle'], `正在放歌时定时评估不会发歌曲（间隔与条数都放行了，仍没有候选）：${JSON.stringify(busyTick)}`);
+  assert.equal(songStub.plays.length, playsBefore, '没有放歌');
+  songStub.playing = false;
+  // 竞态：菜单还在、差事刚被关掉 → Chrome 如实回“没有开启”，原生显示原因而不是一直“正在准备”
+  const realEnabled = jellyDesktop.errandsEnabled;
+  jellyDesktop.errandsEnabled = async () => true;
+  assert.equal((await jellyErrands.set({ enabled: false })).ok, true);
+  await until(async () => (await runtime.probe()).errandsMenu === true, 3000, '模拟菜单仍在');
+  menu('来首歌');
+  state = await until(async () => { const reply = await runtime.probe(); return reply.feedback === '水母差事没有开启' ? reply : null; }, 4000, '原生显示 Chrome 回的失败原因');
+  assert.equal(state.errandRequestBusy, false, '失败回执后不再卡在等待');
+  assert.equal(songStub.plays.length, 2, '这一次什么也没放');
+  // 恢复：总开关关闭 → 下发不再带 errands → 菜单消失
+  jellyDesktop.errandsEnabled = realEnabled;
+  await jellyDesktop.sync();
+  state = await until(async () => { const reply = await runtime.probe(); return reply.errandsMenu === false ? reply : null; }, 4000, '总开关关闭后菜单消失');
+  assert.equal(state.countdownMenu.includes('水母，给我…'), false);
+  // 失败原因是 5 秒的反馈气泡（note），盖在倒计时读数之上；等它自己消失，后面的阶段（4b 要看到倒计时读数）才不会撞上它
+  await until(async () => { const reply = await runtime.probe(); return reply.feedback === '' && reply.jellyBubble !== 'note' ? reply : null; }, 8000, '失败原因的反馈气泡 5 秒后自行消失');
+  console.log('PASS 4a2：右键菜单“水母，给我…”与推荐歌曲（菜单 → 请求 → 三按钮气泡 → 播放 → 回执；unknown 不重放；在放歌时不推荐；关闭后菜单消失）');
+
+  // ---------- 4a3. 活动行为（协议 v10）：真实 JellyDesktop 经 errandsEnabled / errandsPatrol 下发 errands:{ enabled, patrol }，原生据此进入或退出“活动”状态 ----------
+  // 巡游、睡觉规则与小动作本身由 jelly-smoke 的 patrol 阶段验收；这里只验收 Chrome 的设置真的传到了原生端（以及关掉后回到老样子）。
+  assert.equal(await jellyDesktop.errandsReady(10), true, '常驻、已连接、协议 v10');
+  const activity = patch => ({ enabled: true, level: 'busy', from: '00:00', to: '23:59', weekdaysOnly: false, kinds: { task: false, worklog: false, song: false, tidbit: false }, ...patch });
+  // 旧版本存下的配置没有 patrol 键：规范化后缺省为开，原生进入活动状态（升级后无需再去设置页点一下）
+  assert.equal((await jellyErrands.set(activity({}))).ok, true);
+  assert.equal((await syncStorage.get(JellyErrands.CONFIG_KEY))[JellyErrands.CONFIG_KEY].patrol, true, '存下来的是规范化后的配置，patrol 缺省为开');
+  state = await until(async () => { const reply = await runtime.probe(); return reply.jellyLively === true ? reply : null; }, 4000, '差事开启且 patrol 缺省（按开启）：Chrome 经 onChange → sync 下发 patrol:true，原生进入活动状态');
+  assert.equal(state.errandsMenu, true, '差事菜单仍在');
+  // 设置页关掉“让水母活动起来”：差事还开着、菜单还在，但原生回到老样子
+  assert.equal((await jellyErrands.set(activity({ patrol: false }))).ok, true);
+  state = await until(async () => { const reply = await runtime.probe(); return reply.jellyLively === false && reply.errandsMenu === true ? reply : null; }, 4000, 'patrol:false 下发后原生退出活动状态，菜单不受影响');
+  assert.equal(state.patrolling, false);
+  // 再打开
+  assert.equal((await jellyErrands.set(activity({ patrol: true }))).ok, true);
+  await until(async () => (await runtime.probe()).jellyLively === true, 4000, 'patrol:true 重新下发');
+  // 差事总开关关掉：不再带 errands（连带 patrol），原生退出活动状态、菜单消失
+  assert.equal((await jellyErrands.set(activity({ enabled: false }))).ok, true);
+  state = await until(async () => { const reply = await runtime.probe(); return reply.jellyLively === false && reply.errandsMenu === false ? reply : null; }, 4000, '总开关关闭：errands 整体不再下发');
+  assert.equal(state.patrolling, false);
+  console.log('PASS 4a3：活动行为（缺省按开启 → 关闭 → 再打开 → 差事总开关关闭，原生端的“活动”状态逐一跟上；Chrome 没有收到任何关于巡游的回报，因为那只是水母自己的动作）');
 
   // ---------- 4b. 倒计时委托给水母：读数、延后、打开、跳过、隐藏都由 Chrome 执行并回执 ----------
   await countdown.sync();
@@ -343,6 +515,8 @@ try {
   assert.equal(state.assistantEnabled, true); assert.equal(state.assistantHotkey, ASSISTANT_CHORD); assert.equal(state.assistantHotkeyStatus, 'ok');
   assert.equal(state.countdownMenu[0], '问 AI…（⌃⌥⇧⌘F20）', '启用后水母右键菜单第一项是“问 AI…”');
   assert.equal(await jellyDesktop.assistantEnabled(), true, 'Chrome 一侧的生效判定：常驻且已启用');
+  await quiet.waitIfActive();      // 面板要拿走键盘焦点：用户正在打字时先等他安静，否则他的按键会落进测试面板
+  const stopWatching = quiet.watch(reason => { interrupted = reason; void assistantHook('hide').catch(() => {}); });      // 用户回来了：立刻撤掉面板
   assert.equal((await assistantHook('show')).ok, true);
   assert.equal((await assistantHook('type', '联调：找一首歌')).ok, true);
   assert.equal((await assistantHook('submit')).ok, true);
@@ -374,6 +548,8 @@ try {
   await until(() => openedWorkspace === 1, 3000, '“在 Chrome 中查看”走 openWorkspace');
   await until(async () => (await runtime.probe()).assistantPending === 'none', 3000, '打开动作的回执到达');
   assert.equal((await assistantHook('hide')).ok, true);
+  stopWatching();
+  if (interrupted) throw new Error(interrupted);      // 阶段里发生过真实输入：这一段的结论不可信，交给 catch 按“被打断”处理
   console.log('PASS 4d：启用助手 → 热键已注册 → 原生提交 → 同一个 Engine（origin:desktop）→ 状态回到面板 → 停止不被晚到结果复活 → 在 Chrome 中查看');
 
   // ---------- 5. 断线重连：组件被结束后按有界退避重新启动，并重新下发状态 ----------
@@ -429,8 +605,13 @@ try {
 
   console.log('PASS: bridge 全部阶段（真实 Chrome 侧模块 ↔ 真实原生进程）');
 } catch (error) {
-  console.error(error);
-  process.exitCode = 1;
+  if (interrupted) {
+    console.error(`被真实输入打断，不算验收失败：${interrupted}\n等用户安静后重跑（退出码 ${EXIT_USER_ACTIVE}）。`);
+    process.exitCode = EXIT_USER_ACTIVE;
+  } else {
+    console.error(error);
+    process.exitCode = 1;
+  }
 } finally {
   runtime.killAll();
   process.exit(process.exitCode || 0);   // Chrome 一侧模块里还有为生产环境准备的长定时器（提醒有效期等），不等它们

@@ -1,4 +1,4 @@
-importScripts('jelly-nudge.js', 'jelly-desktop.js', 'quick-capture.js', 'app-video.js', 'youtube-home.js', 'huya-core.js', 'huya-follow.js', 'music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'music-search.js', 'alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'alarm-countdown.js', 'local-ai-client.js', 'background-provider.js', 'hermes-writing-sync.js', 'site-workspace-core.js', '../vendor/pinyin-match/pinyin-match.js', 'assistant-match.js', 'assistant-memory.js', 'assistant-contract.js', 'assistant-context-state.js', 'assistant-todo.js', 'assistant-engine.js', 'assistant-confirmation.js', 'assistant-native.js', 'assistant-music.js', 'assistant-management.js', 'assistant-tools.js', 'assistant-voice-background.js', 'assistant-background.js');
+importScripts('jelly-nudge.js', 'jelly-errands-core.js', 'jelly-errand-songs.js', 'jelly-errands.js', 'jelly-desktop.js', 'quick-capture.js', 'app-video.js', 'youtube-home.js', 'huya-core.js', 'huya-follow.js', 'music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'music-search.js', 'alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'alarm-countdown.js', 'local-ai-client.js', 'background-provider.js', 'hermes-writing-sync.js', 'site-workspace-core.js', '../vendor/pinyin-match/pinyin-match.js', 'assistant-match.js', 'assistant-memory.js', 'assistant-contract.js', 'assistant-context-state.js', 'assistant-todo.js', 'assistant-engine.js', 'assistant-confirmation.js', 'assistant-native.js', 'assistant-music.js', 'assistant-management.js', 'assistant-tools.js', 'assistant-voice-background.js', 'assistant-background.js');
 
 (function() {
     let assistantMusicRevision = 0;
@@ -596,7 +596,86 @@ importScripts('jelly-nudge.js', 'jelly-desktop.js', 'quick-capture.js', 'app-vid
         getURL: path => chrome.runtime.getURL(path),
         presenter: jellyDesktop.presenter,
         onChange: () => jellyDesktop.sync(),
+        // 喝水/起身刚发出（气泡或系统通知）：水母差事让出最小间隔与每小时条数，免得两边同时开口
+        onSent: at => jellyErrands.noteExternal(at),
     });
+    // 水母差事的推荐歌曲来源（只读）：与右键“每日推荐”、音乐页“发现”同一套网易云接口——已登录用每日推荐，没登录用热歌榜（neteaseApiCall 要求至少有一个 music.163.com Cookie，一个都没有时直接抛“未登录”，来源按没有候选处理）。
+    // 登录只看有没有 MUSIC_U Cookie；Cookie 只由 neteaseApiCall 带给 music.163.com，不进歌曲模块、日志与气泡。放歌不在这里，见 playJellySong。
+    const jellyErrandSongs = JellyErrandSongs.create({
+        api: (endpoint, params) => neteaseApiCall(endpoint, params),
+        loggedIn: async () => (await getNeteaseCookies()).includes('MUSIC_U'),
+        normalize: normalizeSilentMusicSong,
+    });
+    // 水母差事问“现在有没有在放歌”：只在已经有 Offscreen 文档时才去问（没有文档就是没在放，不为了查询去创建文档）；读不出来返回 null，控制器据此不推荐歌曲。永不抛出。
+    async function isMusicPlaying() {
+        try {
+            const contexts = await chrome.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'], documentUrls: [chrome.runtime.getURL('offscreen.html')] });
+            if (contexts.length === 0) return false;
+            const response = await sendToOffscreen({ command: 'getState' });
+            return response?.ok === true && typeof response.data?.isPlaying === 'boolean' ? response.data.isPlaying : null;
+        } catch (_) { return null; }
+    }
+    // 水母差事的“播放”（用户在气泡上点了“播放”才会走到这里）：复用 AI 助手的 playAssistantMusic——取地址 → 加入保存队列 → 交给 Offscreen 播放 → 等播放器确认起播 → 保存当前曲目。
+    // 给控制器的是诚实的结果：ok:true = 播放器已确认起播；ok:false 且 dispatched:false = 明确没发出（可以再点；code:'unavailable' 表示这首歌放不了）；
+    // dispatched:true = 已经动手但没确认到（控制器按“未知”处理、不重放）。dispatched 由“提交播放请求”这一步的 trace 钩子记下，一进入那一步就算已动手。
+    // signal.cancelled（控制器超时后置位）让迟到的流程在下一个检查点自己停下；返回里的 message 只放中文原文（≤40 字），英文/技术报错一律不外传。
+    async function playJellySong(song, signal) {
+        let dispatched = false;
+        const ctx = {
+            guard() { if (signal?.cancelled) throw new Error('已取消'); },
+            trace(name, title, input, fn) {
+                if (name === 'music.playback.dispatch') { ctx.guard(); dispatched = true; }
+                return fn();
+            },
+        };
+        try {
+            await playAssistantMusic({ ...song, songId: String(song?.songId) }, ctx);
+            return { ok: true, dispatched: true };
+        } catch (error) {
+            const text = String(error?.message || '');
+            return {
+                ok: false, dispatched,
+                ...(error?.code === 'unavailable' ? { code: 'unavailable' } : {}),
+                ...(/[\u4e00-\u9fa5]/.test(text) ? { message: text.slice(0, 40) } : {}),
+            };
+        }
+    }
+    // 水母差事（让常驻的水母主动开口：今天的概览、过期任务、工作日志缺口、推荐歌曲、小乐子）：默认关闭，设置页“水母差事”里开启。
+    // Chrome 仍是唯一的调度者与执行者——这里只读任务与日志、只决定说不说；气泡经桌面水母的 presenter 呈现（复用喝水提醒的气泡通道），
+    // 按钮“去处理/记一条”只打开页面，不改任务、不代写日志；不调用模型。推荐歌曲只读网易云歌曲列表，**只有用户点气泡上的“播放”**才放那一首（走 playJellySong）。
+    // 右键菜单“水母，给我…”的请求也回到这里（desktopAlarm.onErrandRequest）。presence（你在不在电脑前）由原生端上报两态。见 js/jelly-errands.js
+    const jellyErrands = JellyErrands.create({
+        syncStorage: chrome.storage.sync, localStorage: chrome.storage.local, alarms: chrome.alarms,
+        presenter: jellyDesktop.presenter,
+        readMemos: async () => (await chrome.storage.local.get('memos')).memos || [],
+        readWorklog: async () => {
+            // 与工作日志智能提醒同一个开关：关了就不说（抛错 = 这一类这次没有内容）
+            const { settings } = await chrome.storage.sync.get('settings');
+            if (settings?.enableWorklog === false || settings?.worklogReminderEnabled === false) throw new Error('worklog-reminder-off');
+            return (await chrome.storage.local.get('worklogEntries')).worklogEntries || [];
+        },
+        tips: () => WARM_QUOTES,
+        openPage: async kind => {
+            // 与点系统通知同样的去处：日志打开新标签页并展开日志面板，其余只开新标签页；先写标记再开页，免得新页面先读不到
+            if (kind === 'worklog') await chrome.storage.local.set({ pendingAction: 'openWorklogPanel' });
+            await chrome.tabs.create({ url: 'chrome://newtab/' });
+        },
+        isBusy: () => !!(desktopAlarm.sessionId || desktopAlarm.confirmationId),
+        isAvailable: minVersion => jellyDesktop.errandsReady(minVersion),
+        songs: jellyErrandSongs, isPlaying: isMusicPlaying, playSong: playJellySong,
+        onChange: () => jellyDesktop.sync(),
+        log: (name, action, detail) => { void logExtEvent('system', `${name}:${action}`, detail); },
+    });
+    desktopAlarm.onErrandAction = message => jellyErrands.act(message?.id, message?.action);
+    desktopAlarm.onErrandRequest = message => jellyErrands.request(message?.kind);
+    // 右键菜单“水母，给我…”只在差事总开关打开时才让原生端显示：直接读配置，不经控制器的串行队列（免得和耗时的歌曲推荐互相等）
+    jellyDesktop.errandsEnabled = async () => JellyErrandsCore.normalize((await chrome.storage.sync.get(JellyErrands.CONFIG_KEY))[JellyErrands.CONFIG_KEY]).enabled === true;
+    // “活动行为”（协议 v10）同样直接读配置：缺省为开，只有明确关掉才为 false；只在上面的总开关打开时才会被问
+    jellyDesktop.errandsPatrol = async () => JellyErrandsCore.normalize((await chrome.storage.sync.get(JellyErrands.CONFIG_KEY))[JellyErrands.CONFIG_KEY]).patrol === true;
+    desktopAlarm.onNudgeHidden = id => { void jellyErrands.onHidden(id); };
+    desktopAlarm.onPresence = state => jellyErrands.onPresence(state);
+    chrome.alarms.onAlarm.addListener(alarm => { void jellyErrands.fire(alarm.name).catch(error => console.warn('[JellyErrands]', error.message)); });
+    void jellyErrands.restore().catch(error => console.warn('[JellyErrands]', error.message));
     chrome.alarms.onAlarm.addListener(alarm => { void jellyNudge.fire(alarm.name).catch(error => console.warn('[JellyNudge]', error.message)); });
     chrome.notifications.onButtonClicked.addListener((id, index) => { void jellyNudge.button(id, index).catch(error => console.warn('[JellyNudge]', error.message)); });
     void jellyNudge.restore().catch(error => console.warn('[JellyNudge]', error.message));
@@ -613,6 +692,13 @@ importScripts('jelly-nudge.js', 'jelly-desktop.js', 'quick-capture.js', 'app-vid
         if (!['jelly_nudge_get', 'jelly_nudge_set'].includes(message?.action)) return;
         if (sender.id !== chrome.runtime.id || !sender.url?.startsWith(chrome.runtime.getURL(''))) { respond({ ok: false, error: '仅扩展页面可设置水母关怀' }); return; }
         (message.action === 'jelly_nudge_set' ? jellyNudge.set(message.config) : jellyNudge.get())
+            .then(respond).catch(error => respond({ ok: false, error: error.message }));
+        return true;
+    });
+    chrome.runtime.onMessage.addListener((message, sender, respond) => {
+        if (!['jelly_errands_get', 'jelly_errands_set'].includes(message?.action)) return;
+        if (sender.id !== chrome.runtime.id || !sender.url?.startsWith(chrome.runtime.getURL(''))) { respond({ ok: false, error: '仅扩展页面可设置水母差事' }); return; }
+        (message.action === 'jelly_errands_set' ? jellyErrands.set(message.config) : jellyErrands.get())
             .then(respond).catch(error => respond({ ok: false, error: error.message }));
         return true;
     });
@@ -1904,6 +1990,12 @@ importScripts('jelly-nudge.js', 'jelly-desktop.js', 'quick-capture.js', 'app-vid
             message += `过期任务: ${overdueTasks.length} 个`;
         }
         
+        // 水母差事开启且水母能开口时先请它说（只说数量，默认不说任务名）；水母没接手才发系统通知，行为与以前一致
+        if ((await jellyErrands.offer('brief')).handled) {
+            console.log('每日摘要已交给桌面水母');
+            return;
+        }
+
         // v3.0.0: 附加温情提示
         const tip = getRandomWarmTip('quote');
         if (tip) {
@@ -1955,9 +2047,10 @@ importScripts('jelly-nudge.js', 'jelly-desktop.js', 'quick-capture.js', 'app-vid
         const overdueMsg = `您有 ${overdueTasks.length} 个任务已过期，请及时处理`
             + (methodTip ? `\n\n💪 ${methodTip.text}` : '');
 
-        // 发送过期任务通知
+        // 发送过期任务通知（水母差事开启且水母接手时由水母说，不再弹系统通知；两种方式之后都标记已通知）
         try {
-            await chrome.notifications.create('overdue-tasks', {
+            const viaJelly = (await jellyErrands.offer('task')).handled;
+            if (!viaJelly) await chrome.notifications.create('overdue-tasks', {
                 type: 'basic',
                 iconUrl: chrome.runtime.getURL('icons/icon128.png'),
                 title: '⚠️ 任务过期提醒',
@@ -1972,7 +2065,7 @@ importScripts('jelly-nudge.js', 'jelly-desktop.js', 'quick-capture.js', 'app-vid
             }
             await chrome.storage.local.set({ memos });
             
-            console.log('过期任务通知已发送');
+            console.log(viaJelly ? '过期任务已交给桌面水母' : '过期任务通知已发送');
         } catch (error) {
             console.error('发送通知失败:', error);
         }
@@ -2001,6 +2094,8 @@ importScripts('jelly-nudge.js', 'jelly-desktop.js', 'quick-capture.js', 'app-vid
                 const timeStr = h > 0 ? `${h}小时${m}分钟` : `${m}分钟`;
                 message = `今天已记录 ${todayEntries.length} 条，共 ${timeStr}。还有遗漏吗？`;
             }
+
+            if ((await jellyErrands.offer('worklog')).handled) return;      // 水母差事接手了就不再弹系统通知
 
             await chrome.notifications.create('worklog-reminder', {
                 type: 'basic',
@@ -2067,7 +2162,9 @@ importScripts('jelly-nudge.js', 'jelly-desktop.js', 'quick-capture.js', 'app-vid
                 message = `${current.label}已记录 ${logged}，建议至少 ${expectH} 小时`;
             }
 
-            await chrome.notifications.create(`worklog-smart-${current.hour}`, {
+            // 水母差事开启且接手时由水母说；两种方式之后都写“本时段已提醒”标记，不会重复
+            const viaJelly = (await jellyErrands.offer('worklog')).handled;
+            if (!viaJelly) await chrome.notifications.create(`worklog-smart-${current.hour}`, {
                 type: 'basic',
                 iconUrl: chrome.runtime.getURL('icons/icon128.png'),
                 title: '📋 工作日志',
@@ -2093,6 +2190,8 @@ importScripts('jelly-nudge.js', 'jelly-desktop.js', 'quick-capture.js', 'app-vid
         const types = ['quote', 'method', 'joke', 'fable', 'health'];
         const tip = getRandomWarmTip(types[Math.floor(Math.random() * types.length)]);
         if (!tip) return;
+
+        if ((await jellyErrands.offer('tidbit')).handled) return;      // 水母差事接手（换成它自己挑的一条小乐子）就不再弹系统通知
 
         const icons = { quote: '💡', method: '📐', joke: '😄', fable: '📖', health: '💚' };
         const titles = { quote: '名人名言', method: '效率方法论', joke: '轻松一刻', fable: '小故事大道理', health: '健康小贴士' };

@@ -20,6 +20,16 @@ struct JellyTuning {
         case .due: return JellyTuning(period: 0.5, thrustX: 0, thrustY: 25, hover: 28)
         }
     }
+
+    /// 巡游（协议 v10）：比平静阶段从容但快得多的漫游。pace 是时段性格的游速倍率（夹在 0.5–2，非有限或 ≤ 0 按 1）：
+    /// 脉动周期与倍率成反比，水平冲量固定为 62，所以平均水平速度正比于倍率（倍率 1 约 30 点/秒，是平静阶段的 2.6 倍）；
+    /// 垂直冲量同 forStage 的做法按“平均上升 ≈ 平均下沉”标定，否则越快越会一路升到屏幕顶端。物理仍是同一个 JellySwim.step，不另起引擎。
+    static func patrol(pace: Double) -> JellyTuning {
+        let p = pace.isFinite && pace > 0 ? min(2, max(0.5, pace)) : 1
+        let period = 1.4 / p
+        let thrustY = 1.4 * Double(JellySwim.sink) * period / (1 - exp(-Double(JellySwim.dragY) * period))
+        return JellyTuning(period: CGFloat(period), thrustX: 62, thrustY: CGFloat(thrustY), hover: 16)
+    }
 }
 
 /// 一次定时的“冲刺”：从当前位置按三次缓动游到目标，时长随距离在 0.7–1.4 秒之间。

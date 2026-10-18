@@ -477,6 +477,26 @@ test('assistantEnabled：必须同时常驻且启用；读取失败按关闭', a
   assert.equal(await broken.jelly.assistantEnabled(), false);
 });
 
+test('errandsReady：常驻、已连接、组件版本 ≥ 8 才为 true（水母差事据此决定要不要开口）；连接断开、组件太旧、没有常驻、读取失败都是 false', async () => {
+  const e = env(); e.desktop.version = 8;
+  assert.equal(await e.jelly.errandsReady(), false, '还没有常驻');
+  await e.jelly.set({ resident: true });
+  assert.equal(await e.jelly.errandsReady(), true);
+  e.desktop.port = null;
+  assert.equal(await e.jelly.errandsReady(), false, '端口没了');
+  const old = env(); old.desktop.version = 7;
+  await old.jelly.set({ resident: true });
+  assert.equal(await old.jelly.errandsReady(), false, 'v7 组件认不得差事');
+  const down = env(); down.desktop.version = 8; down.desktop.failJelly = '组件没装';
+  await down.jelly.set({ resident: true });
+  assert.equal(await down.jelly.errandsReady(), false, '连接失败');
+  const broken = env(); broken.desktop.version = 8; await broken.jelly.set({ resident: true });
+  broken.storage.get = async () => { throw new Error('读取失败'); };
+  assert.equal(await broken.jelly.errandsReady(), false);
+  const off = env(); off.desktop.version = 8; await off.jelly.set({ resident: true }); await off.jelly.set({ resident: false });
+  assert.equal(await off.jelly.errandsReady(), false, '取消常驻后');
+});
+
 test('onAssistantApplied：带 assistant 的下发被 v7 组件接受后通知一次（用来补发当前任务状态）；旧组件、未启用、失败都不通知；回调抛错不影响下发', async () => {
   const e = env(); e.desktop.version = 7; e.desktop.assistantReply = { status: 'ok', hotkey: 'ctrl+shift+b' };
   let applied = 0; e.jelly.onAssistantApplied = () => { applied++; };
@@ -502,4 +522,109 @@ test('resident 与 assistant 同时设置：一次保存、一次下发', async 
   assert.deepEqual(e.storage.data[Jelly.ASSISTANT_KEY], { enabled: true, hotkey: 'ctrl+shift+space' });
   assert.equal(pushes(e).length, 1);
   assert.deepEqual(pushes(e)[0].assistant, { enabled: true, hotkey: 'ctrl+shift+space' });
+});
+
+// ---------- 水母差事第二期（协议 v9）：组件版本分档与右键菜单开关的下发 ----------
+
+test('errandsReady(minVersion)：默认 8；歌曲与菜单请求要 9；参数不能把门槛放宽到 8 以下；不是数字的参数一律按“不能”处理（不会因为调用写错而在旧组件上放行）', async () => {
+  const e = env(); e.desktop.version = 8;
+  await e.jelly.set({ resident: true });
+  assert.equal(await e.jelly.errandsReady(), true);
+  assert.equal(await e.jelly.errandsReady(8), true);
+  assert.equal(await e.jelly.errandsReady(9), false, 'v8 组件认不得歌曲与菜单请求');
+  assert.equal(await e.jelly.errandsReady(1), true, '低于 8 的参数按 8 算');
+  for (const bad of ['9', NaN, null, Infinity, {}, [], true]) assert.equal(await e.jelly.errandsReady(bad), false, String(bad));
+  const nine = env(); nine.desktop.version = 9;
+  await nine.jelly.set({ resident: true });
+  assert.equal(await nine.jelly.errandsReady(9), true);
+  assert.equal(await nine.jelly.errandsReady(), true);
+  assert.equal(await nine.jelly.errandsReady(10), false);
+  const old = env(); old.desktop.version = 7;
+  await old.jelly.set({ resident: true });
+  assert.equal(await old.jelly.errandsReady(1), false, '参数再小也不能让 v7 组件通过');
+  assert.equal(await old.jelly.errandsReady(9), false);
+  nine.desktop.port = null;
+  assert.equal(await nine.jelly.errandsReady(9), false, '端口没了');
+});
+
+test('下发：只有常驻且 errandsEnabled() 严格返回 true 才带 errands:{enabled:true}；没接回调、返回假值、抛错、没有常驻都不带（原生据此隐藏右键菜单项）', async () => {
+  const e = env(); e.desktop.version = 9;
+  await e.jelly.set({ resident: true });
+  assert.equal('errands' in pushes(e).at(-1), false, '没接回调');
+  assert.equal(e.jelly.errandsEnabled, null, '默认没有回调');
+  e.jelly.errandsEnabled = async () => true;
+  await e.jelly.sync();
+  assert.deepEqual(pushes(e).at(-1).errands, { enabled: true, patrol: false }, '没接 errandsPatrol 回调：patrol 为严格的 false（活动行为是可选的，缺省不带）');
+  assert.deepEqual(Object.keys(pushes(e).at(-1)).sort(), ['errands', 'lines', 'linesUntil', 'night', 'resident'], '其余字段不变');
+  for (const reply of [async () => false, async () => 1, async () => 'yes', async () => undefined, async () => ({ enabled: true }), () => { throw new Error('boom'); }, async () => { throw new Error('boom'); }]) {
+    e.jelly.errandsEnabled = reply;
+    await e.jelly.sync();
+    assert.equal('errands' in pushes(e).at(-1), false, String(reply));
+  }
+  e.jelly.errandsEnabled = () => true;
+  await e.jelly.sync();
+  assert.deepEqual(pushes(e).at(-1).errands, { enabled: true, patrol: false }, '同步返回 true 也认');
+  const idle = env(); idle.desktop.version = 9; idle.desktop.port = { fake: true };
+  idle.jelly.errandsEnabled = async () => true;
+  await idle.jelly.set({ night: false });
+  assert.equal('errands' in pushes(idle).at(-1), false, '没有常驻（组件被倒计时等拉起着）不带');
+});
+
+test('下发：errands 与 assistant 可以同时带，互不影响；回调返回之前不会下发半截状态', async () => {
+  const e = env(); e.desktop.version = 9; e.desktop.assistantReply = { status: 'ok' };
+  e.jelly.errandsEnabled = async () => { await new Promise(resolve => setImmediate(resolve)); return true; };
+  await e.jelly.set({ resident: true, assistant: { enabled: true, hotkey: 'ctrl+shift+space' } });
+  assert.equal(pushes(e).length, 1);
+  assert.deepEqual(pushes(e)[0].assistant, { enabled: true, hotkey: 'ctrl+shift+space' });
+  assert.deepEqual(pushes(e)[0].errands, { enabled: true, patrol: false });
+});
+
+test('下发：errands.patrol（活动行为，协议 v10）只在 errandsPatrol() 严格返回 true 时为 true；没接回调、假值、字符串、抛错一律 false；差事没开就根本不带 errands，patrol 回调也不会被调用', async () => {
+  const e = env(); e.desktop.version = 10;
+  e.jelly.errandsEnabled = async () => true;
+  assert.equal(e.jelly.errandsPatrol, null, '默认没有回调');
+  await e.jelly.set({ resident: true });
+  assert.deepEqual(pushes(e).at(-1).errands, { enabled: true, patrol: false });
+  e.jelly.errandsPatrol = async () => true;
+  await e.jelly.sync();
+  assert.deepEqual(pushes(e).at(-1).errands, { enabled: true, patrol: true });
+  e.jelly.errandsPatrol = () => true;
+  await e.jelly.sync();
+  assert.deepEqual(pushes(e).at(-1).errands, { enabled: true, patrol: true }, '同步返回 true 也认');
+  for (const reply of [async () => false, async () => 1, async () => 'true', async () => 'yes', async () => undefined, async () => null, async () => ({ patrol: true }), () => { throw new Error('boom'); }, async () => { throw new Error('boom'); }]) {
+    e.jelly.errandsPatrol = reply;
+    await e.jelly.sync();
+    assert.deepEqual(pushes(e).at(-1).errands, { enabled: true, patrol: false }, String(reply));
+  }
+  // 差事没开：不带 errands；patrol 的回调连问都不问（避免在差事关闭时读多余的配置）
+  const off = env(); off.desktop.version = 10;
+  let asked = 0;
+  off.jelly.errandsEnabled = async () => false;
+  off.jelly.errandsPatrol = async () => { asked += 1; return true; };
+  await off.jelly.set({ resident: true });
+  assert.equal('errands' in pushes(off).at(-1), false);
+  assert.equal(asked, 0, '差事关闭时不问 patrol');
+  // 没有常驻：同样不带、也不问
+  const idle = env(); idle.desktop.version = 10; idle.desktop.port = { fake: true };
+  let askedIdle = 0;
+  idle.jelly.errandsEnabled = async () => true;
+  idle.jelly.errandsPatrol = async () => { askedIdle += 1; return true; };
+  await idle.jelly.set({ night: false });
+  assert.equal('errands' in pushes(idle).at(-1), false, '没有常驻不带');
+  assert.equal(askedIdle, 0);
+});
+
+test('下发：patrol 变化后重新同步会带上新的值（设置页关掉“活动行为”后原生马上回到老样子，不用重载）', async () => {
+  const e = env(); e.desktop.version = 10;
+  let patrol = true;
+  e.jelly.errandsEnabled = async () => true;
+  e.jelly.errandsPatrol = async () => patrol;
+  await e.jelly.set({ resident: true });
+  assert.equal(pushes(e).at(-1).errands.patrol, true);
+  patrol = false;
+  await e.jelly.sync();
+  assert.deepEqual(pushes(e).at(-1).errands, { enabled: true, patrol: false });
+  patrol = true;
+  await e.jelly.sync();
+  assert.deepEqual(pushes(e).at(-1).errands, { enabled: true, patrol: true });
 });
