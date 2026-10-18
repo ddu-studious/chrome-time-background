@@ -76,7 +76,7 @@ const PURPLE = [0.66, 0.50, 0.95];
 await scenario('没有 appearance：回执不带 appearance（旧 Chrome），默认外观，协议版本仍是 7', async h => {
   const reply = await h.request('jelly', { jelly: jelly() });
   assert.equal(reply.ok, true); assert.equal('appearance' in reply, false);
-  assert.equal(reply.version, 7, '协议版本不变');
+  assert.equal(reply.version, 10, '协议版本 10：外观没有占用版本号（走回执探测），v8–v10 属于水母差事');
   const ping = await pinged(h);
   assert.equal(ping.jellyLook, 'colors=5 look=solid material=glass size=medium season=-');
   assert.ok(near(rgb(ping.jellyPaintA), CALM), `默认应是平静色，实际 ${ping.jellyPaintA}`);

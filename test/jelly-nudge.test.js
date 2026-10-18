@@ -43,11 +43,13 @@ function env(options = {}) {
   if (options.permission !== null) notifications.getPermissionLevel = async () => options.permission || 'granted';
   if (options.getAll !== false) notifications.getAll = async () => Object.fromEntries([...shown.keys()].map(id => [id, true]));
   const changes = { count: 0 };
+  const sentAt = [];
   const nudge = Nudge.create({
     syncStorage: sync, localStorage: local, alarms, notifications, getURL: p => `chrome-extension://abc/${p}`, now: () => clock.date,
     presenter: options.presenter, presentTimeoutMs: options.presentTimeoutMs, onChange: () => { changes.count++; },
+    onSent: options.onSent === undefined ? at => { sentAt.push(at); } : options.onSent,
   });
-  return { nudge, sync, local, scheduled, alarmLog, shown, notifyLog, clock, changes };
+  return { nudge, sync, local, scheduled, alarmLog, shown, notifyLog, clock, changes, sentAt };
 }
 
 const on = (patch = {}) => ({ water: { on: true, everyMin: 60 }, stretch: { on: false, everyMin: 50 }, from: '09:00', to: '18:00', weekdaysOnly: true, ...patch });
@@ -624,4 +626,36 @@ test('隐私与范围：模块不碰网络、活动/空闲状态，不新增权�
   const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '../manifest.json'), 'utf8'));
   assert.ok(manifest.permissions.includes('alarms') && manifest.permissions.includes('notifications'), '用的都是已有权限');
   assert.ok(!manifest.permissions.includes('idle'), '没有也不需要 idle 权限');
+});
+
+// ---------- onSent：真的发出去之后通知外部（水母差事据此让出最小间隔） ----------
+
+test('onSent：水母接手与系统通知两条路径发出后都回调一次，参数是发出时刻', async () => {
+  let e = env({ sync: { [Nudge.CONFIG_KEY]: on() }, date: at(15, 10, 30), presenter: presenterStub() });
+  await e.nudge.fire('jelly-nudge-water');
+  assert.deepEqual(e.sentAt, [e.clock.date.getTime()]);
+
+  e = env({ sync: { [Nudge.CONFIG_KEY]: on() }, date: at(15, 10, 30) });
+  await e.nudge.fire('jelly-nudge-water');
+  assert.equal(e.shown.size, 1);
+  assert.deepEqual(e.sentAt, [e.clock.date.getTime()]);
+});
+
+test('onSent：没有真的发出（权限不足、不在时段）不回调；回调抛错或返回被拒绝的 Promise 不影响提醒', async () => {
+  let e = env({ sync: { [Nudge.CONFIG_KEY]: on() }, date: at(15, 10, 30), permission: 'denied' });
+  await e.nudge.fire('jelly-nudge-water');
+  assert.deepEqual(e.sentAt, []);
+
+  e = env({ sync: { [Nudge.CONFIG_KEY]: on() }, date: at(15, 22, 30) });
+  await e.nudge.fire('jelly-nudge-water');
+  assert.deepEqual(e.sentAt, []);
+
+  for (const onSent of [() => { throw new Error('boom'); }, () => Promise.reject(new Error('boom'))]) {
+    e = env({ sync: { [Nudge.CONFIG_KEY]: on() }, date: at(15, 10, 30), onSent });
+    const result = await e.nudge.fire('jelly-nudge-water');
+    assert.equal(result.sent, true);
+    assert.equal(e.shown.size, 1);
+  }
+  e = env({ sync: { [Nudge.CONFIG_KEY]: on() }, date: at(15, 10, 30), onSent: null });
+  assert.equal((await e.nudge.fire('jelly-nudge-water')).sent, true, '不传 onSent 与以前一样');
 });

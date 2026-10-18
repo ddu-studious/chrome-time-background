@@ -141,7 +141,7 @@ console.log('桌面 AI 助手隔离验收（协议 v7）：键盘与鼠标阶段
 // ---------- 配置：默认关闭、启用、非法、停用 ----------
 await scenario('config', {}, async h => {
   let r = await ping(h);
-  assert.equal(r.version, 7); assert.equal(r.assistantEnabled, false, '默认关闭');
+  assert.equal(r.version, 10); assert.equal(r.assistantEnabled, false, '默认关闭');
   assert.equal(r.assistantHotkeyStatus, 'off'); assert.equal(r.assistantMenu, null); assert.equal(r.assistantVisible, false);
   assert.equal((await hook(h, 'show')).ok, false, '未启用时不能唤出面板');
   assert.equal((await pushState(h, task('running'))).ok, true, '未启用时也接受状态（只存不显示）');

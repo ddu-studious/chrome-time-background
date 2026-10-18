@@ -133,11 +133,13 @@
     return { lines: lines.slice(0, MAX_LINES), validUntil: Math.min(nextMidnight(date), due ? due.at : Infinity) };
   }
 
-  function create({ syncStorage, localStorage, alarms, notifications, getURL = path => path, now = () => new Date(), presenter = null, presentTimeoutMs = PRESENT_TIMEOUT_MS, onChange = null }) {
+  function create({ syncStorage, localStorage, alarms, notifications, getURL = path => path, now = () => new Date(), presenter = null, presentTimeoutMs = PRESENT_TIMEOUT_MS, onChange = null, onSent = null }) {
     let queue = Promise.resolve();
     const serial = fn => { const result = queue.then(fn); queue = result.catch(() => {}); return result; };
     // 数据（设置、计数、稍后提醒）变化后通知外部（例如让水母刷新“今天的记录”）；外部失败不影响这里的结果，也不等待它。
     const changed = () => { try { Promise.resolve(onChange?.()).catch(() => {}); } catch (_) { /* 外部回调失败不影响业务 */ } };
+    // 一条提醒真的发出去之后（水母气泡或系统通知）通知外部，参数是发出时刻（毫秒）；水母差事据此让出最小间隔，免得两边同时开口。
+    const sent = at => { try { Promise.resolve(onSent?.(at)).catch(() => {}); } catch (_) { /* 外部回调失败不影响业务 */ } };
     const bounded = (promise, ms) => new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('presenter timeout')), ms);
       promise.then(value => { clearTimeout(timer); resolve(value); }, error => { clearTimeout(timer); reject(error); });
@@ -183,7 +185,7 @@
           }))(), presentTimeoutMs);
           accepted = !!reply && reply.shown === true;
         } catch (_) { accepted = false; }
-        if (accepted) return { sent: true, id, via: 'jelly' };
+        if (accepted) { sent(now().getTime()); return { sent: true, id, via: 'jelly' }; }
         // 没确认显示：让可能迟到的气泡撤掉，避免它和下面的系统通知同时出现
         try { await presenter.cancel?.(id); } catch (_) { /* 撤销失败不影响退回通知 */ }
       }
@@ -201,6 +203,7 @@
         message, priority: 0,
         buttons: [{ title: KINDS[kind].done }, { title: `${SNOOZE_MIN} 分钟后再提醒` }],
       });
+      sent(now().getTime());
       return { sent: true, id };
     }
 

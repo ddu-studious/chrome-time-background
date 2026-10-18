@@ -69,8 +69,8 @@ test('背景切换同步视觉层，设置中心完整持久化体验配置', ()
   }
   assert.ok(settingsSource.includes("chrome.storage.sync.get('backgroundExperienceSettings')"));
   assert.ok(settingsSource.includes('backgroundExperienceSettings: bgExperienceSettings'));
-  assert.ok(settingsHtml.includes('js/settings-page.js?v=11'));
-  assert.ok(settingsHtml.indexOf('js/chrome-shim.js?v=5') < settingsHtml.indexOf('js/settings-page.js?v=11'));
+  assert.ok(settingsHtml.includes('js/settings-page.js?v=14'));
+  assert.ok(settingsHtml.indexOf('js/chrome-shim.js?v=5') < settingsHtml.indexOf('js/settings-page.js?v=14'));
   assert.ok(read('js/settings-v5.js').includes("'backgroundExperienceSettings'"));
   assert.ok(read('js/settings-v5.js').includes("targets: ['time', 'background-experience', 'weather', 'appearance']"));
 });

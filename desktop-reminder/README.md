@@ -202,3 +202,27 @@ node --test test/desktop-companion-logic.test.mjs test/assistant-native.test.js 
 
 `assistant-smoke.mjs` 有 12 个场景（`config conflict presets protocol no-ack focus hooks-off lifecycle menu keyboard placement shots`），其中 `keyboard`、`placement` 会合成真实键盘与鼠标移动，并且会把 Finder 切到前台再切回来（验证“用户去了第三个应用”）。**脚本会礼让正在使用电脑的人**（`desktop-reminder/user-quiet.mjs`）：每个场景开始前等用户至少安静 `--quiet` 秒（默认 20），运行中发现真实键盘 / 鼠标输入就立刻杀掉测试面板并以退出码 75 结束（不算验收失败，稍后重跑即可）；`--quiet=0` 关闭，只在无人值守时用。判断依据是系统的 `HIDIdleTime`（只读空闲时间，不读按键内容），脚本自己合成的输入会重置它，所以每次合成后都做了标记。
 - 验证结果、与设计稿的差异、验证中发现并修复的缺陷、未验收项见 `docs/technical/native-assistant-workbench-20261016.md`。更新组件须重新构建安装并**重载扩展**：`node desktop-reminder/build.mjs --extension-id=<id> --install`。
+
+## 水母差事 v8–v9（2026-10-17，默认关闭）
+
+水母常驻且设置页打开“水母差事”后，在你在电脑前时主动开口：晨间概览、过期任务、工作日志、推荐歌曲（v9）、小乐子；右键水母还有“水母，给我…”（v9）可以主动要一条。**Chrome 仍是唯一调度器与执行器**，原生端只显示与转发；概览/任务/日志的按钮只打开页面、不改任务、不写日志，**放歌只在你点歌曲气泡上的“播放”时发生**（水母和菜单请求自己都不会放歌）。详细设计、验证与边界见 `docs/technical/jelly-errands-20261017.md`。
+
+- 协议 v8（在 v7 之上增量，旧组件忽略新字段；旧组件校验不认新类别会回 `ok:false`，Chrome 退回系统通知）：不新增命令，复用 `nudge`，`kind` 多 `brief/task/worklog/tidbit`，按钮 id 按类别限定（`open/later`、`more/dismiss`，喝水/起身仍是 `done/snooze`）；回执版本 8。类别与按钮表在 `jelly-model.swift` 与 `js/jelly-errands-core.js` 各一份，`test/desktop-companion-logic.test.mjs` 逐项对照。
+- 新事件 `presence {state:'active'|'away'}`：常驻时每 15 秒采样一次系统空闲秒数（`CGEventSource`，只读时间，不读按键内容，本机实测不需要任何权限），空闲 ≥ 300 秒为 `away`，**只在变化时上报、不带秒数**；读不到按 `active`。不常驻不采样。
+- 差事气泡在水母游到鼠标所在屏幕之后才出现，到位前按钮不可点；4 秒兜底；响铃优先（此时回 `ok:false`，Chrome 退回系统通知）。
+- 测试钩子（只有 `TIMEKEEPER_TEST_HOOKS=1` 才生效）：命令 `nudgeButton`（走真实动作入口，到位前/等回执时不发）与环境变量 `TIMEKEEPER_IDLE_SECONDS`；`ping` 增加 `nudgeArriving`、`presence`。
+- 协议 v9（在 v8 之上增量）：`jelly` 命令可带 `errands:{enabled:true}`（**只有带了才显示右键“水母，给我…”**，缺省关闭）；`nudge` 的 `kind` 多 `song`，按钮 `play/another/dismiss`，**歌曲是唯一允许 3 个按钮的类别**（其余最多 2 个），主按钮 `play`；原生 → Chrome 事件 `errandRequest {errandId, kind}`（`kind` 只能是 `brief/song/tidbit/worklog`），Chrome → 原生命令 `errandRequestResult {errandId, ok, text?|error?}`；回执版本 9，`ping` 增加 `errandsMenu`、`errandRequestBusy`、`feedback`。**菜单请求的编号必须叫 `errandId`，不能叫 `requestId`**——`requestId` 是“命令 → 回执”的关联键，`respond()` 会把命令里的 `requestId` 原样写进回执，结果命令带了它回执就被标成菜单请求的编号。类别、按钮、菜单项在 `jelly-model.swift` 与 `js/jelly-errands-core.js` 各一份，`test/desktop-companion-logic.test.mjs` 与 `companion-selftest.swift` 逐项对照。歌曲与菜单需要组件 ≥ v9，差事其余仍 ≥ v8。
+- 右键菜单：等回执期间整个子菜单禁用，反馈气泡“稍等，水母在准备…”；`ok` 且没有文字只清掉反馈（气泡已由 `nudge` 命令呈现），带文字显示 4 秒，失败显示原因 5 秒；**15 秒没有回执**提示“Chrome 没有回应，请重试”并恢复菜单；编号对不上或重复的回执被忽略，旧请求的 15 秒计时器按编号核对。响铃中菜单里没有“水母，给我…”。
+- 歌曲气泡“播放”：原生只转发动作并等回执（**8 秒**无回执就提示、按钮恢复；Chrome 侧最多等 12 秒，更慢的结果在再点一次时给出）；只有匹配的 `nudgeActionResult` 才显示“已开始播放”，播放器没确认时显示“已交给播放器，还没确认开始播放”之类的话，**不声称已播放，也不重放**。
+- 验收：`jelly-smoke.mjs --no-mouse [--only=presence|errand [--scenario=名字里的正则]]`、`bridge-smoke.mjs --no-mouse [--quiet=秒]`（含“4a 水母差事”“4a2 歌曲与菜单”；4d 会抢键盘，同样礼让用户）、`companion-selftest.swift`（经 `test/desktop-companion-logic.test.mjs`）。更新组件须重新构建安装并**重载扩展**，组件必须是 v9（旧组件下歌曲与菜单不出现）。
+
+## 水母差事 v10：白天清醒、巡游、按时段性格（2026-10-17，差事开启后默认开）
+
+设置页“水母差事”卡片里的“让水母活动起来”（常驻时才生效）打开后：水母白天**保持清醒**，每隔几分钟自己沿泳线**巡游**一圈（按一天里的时段有六档性格），清醒静止时偶尔**原地小跳**；只在夜里（约 19:30 到次日 06:30）或你离开电脑超过 10 分钟时才睡。关掉它水母就回到老样子（休息就睡）。**这些都是水母自己的动作：不触发 Chrome 动作、不通知、不写数据、不向 Chrome 回报。**设计、取舍与验证见 `docs/technical/jelly-errands-20261017.md` 的“第 3 期”。
+
+- 协议 v10（在 v9 之上增量，旧组件忽略新字段）：`jelly` 命令的 `errands` 对象多一个可选布尔 `patrol`；**原生严格解析**，只有 `errands.enabled === true` 且 `errands.patrol === true` 才开启（缺省、`false`、字符串、数字都是老样子）。回执版本 10；`ping` 增加验收诊断 `jellyLively`、`jellyAsleep`、`patrolling`、`patrolCount`、`fidgetCount`、`personality`、`patrolPace`、`swimPeriod`（水母此刻实际在用的脉动周期，巡游时 1.4 / 游速，平静阶段 2.4）。
+- 睡眠规则：活动行为关 → 休息就睡；开 → 夜晚曲线 ≥ 0.5 或系统空闲 ≥ 600 秒才睡（不看“夜晚荧光”开关；读不到空闲秒数按在电脑前）。巡游资格：活动行为开、常驻、没开“减少动态效果”、倒计时不在临近阶段、不忙（响铃、差事 / 喝水气泡、详情与反馈气泡、被抓着、右键菜单打开、鼠标停在水母身上）、没睡着、空闲 < 300 秒；任何一项失去就立刻结束巡游，恢复后重新等一段完整的时间。时钟读数气泡不算“忙”。
+- 时段性格（Swift 一份，没有 JS 副本）：精神 06–09、专注 09–12、犯懒 12–14、忙碌 14–18、悠闲 18–20、夜里 20–06 不巡游；出发间隔 3–8 分钟、时长 20–40 秒、游速倍率 0.75–1.15；数值是设计取舍。空闲清醒仍是 30 秒一次刷新、零动画帧，巡游期间改为每秒一次刷新。
+- 测试钩子（只有 `TIMEKEEPER_TEST_HOOKS=1` 才生效）：环境变量 `TIMEKEEPER_PATROL_SECONDS="出发,时长,小动作"`（秒，恰好三项正有限数，否则整条作废）；命令 `menuTracking {open}`；沿用 `TIMEKEEPER_IDLE_SECONDS`、`TIMEKEEPER_NIGHT_HOUR`、`TIMEKEEPER_REDUCE_MOTION`。
+- 验收：`jelly-smoke.mjs [--no-mouse] [--only=patrol [--scenario=名字里的正则]]`（不带 `--no-mouse` 会合成真实鼠标，**运行期间不要碰鼠标**，脚本用 `user-quiet.mjs` 礼让用户，被打断以退出码 75 结束）、`bridge-smoke.mjs --no-mouse [--quiet=秒]`（含“4a3”）、`companion-selftest.swift`（经 `test/desktop-companion-logic.test.mjs`）。更新组件须重新构建安装并**重载扩展**，组件必须是 v10（旧组件下“让水母活动起来”不起作用，设置页会提示）。
+- 与桌面水母外观 / 物种合并后（2026-10-18 夜，`docs/technical/jelly-errands-20261017.md` 末节“并入实验分支”）：协议整体仍是 v10，外观与物种不占版本号（走回执探测）；**巡游调参乘物种游动系数**（`JellyTuning.current(stage:patrol:species:)`，水母系数全是 1，行为不变，动物按自己的节奏巡游），`jelly-smoke.mjs --only=patrol` 因此多 5 个“巡游 × 物种”场景。验收注意：**真实 Chrome 端到端必须给原生进程注入 `TIMEKEEPER_IDLE_SECONDS=0`**（需 `TIMEKEEPER_TEST_HOOKS=1`），否则用户几分钟没有键鼠输入后系统空闲越过 300 秒，水母按设计不巡游，验收结果会取决于人在不在；`jelly-smoke` 阶段 A 在用户指针停在泳线附近时会因“指针在水母身上按设计不巡游”失败（失败信息里的 `mouse` 字段可判断），不要为此改产品行为；不要用“跳过面板段”的 `bridge-smoke` 副本下结论（第 5 段的助手任务补发依赖 4d 创建的任务）。

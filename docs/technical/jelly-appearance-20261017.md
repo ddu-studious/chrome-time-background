@@ -31,7 +31,7 @@ status: S1a 已实现，并补完当晚的欠账（午夜自动换一只、设�
 
 ## 关键决定与理由
 
-1. **协议仍是 v7，不升版本。** 并行分支的“跑腿”设计声明要用 v8，这里不抢版本号。能力探测靠回执：Chrome 在 `jelly` 命令里带 `appearance` 时，新原生组件回 `appearance:{status:'ok'}`，旧组件不回；`JellyDesktop.appearanceStatus()` 据此给出 `off | ok | unsupported | unknown`，设置页对应显示“已应用 / 请更新组件 / 等待确认”。没带 `appearance` 的命令，原生保持上一次外观（Chrome 读取外观失败时不会闪回默认）；全新进程从默认外观开始。
+1. **协议仍是 v7，不升版本。** 并行分支的“跑腿”设计声明要用 v8，这里不抢版本号（2026-10-18 夜差事分支并入同一实验分支后，整体回执版本是 v10；外观依旧不占版本号，仍由 `appearance.status` 探测，见 `jelly-errands-20261017.md` 末节“并入实验分支”）。能力探测靠回执：Chrome 在 `jelly` 命令里带 `appearance` 时，新原生组件回 `appearance:{status:'ok'}`，旧组件不回；`JellyDesktop.appearanceStatus()` 据此给出 `off | ok | unsupported | unknown`，设置页对应显示“已应用 / 请更新组件 / 等待确认”。没带 `appearance` 的命令，原生保持上一次外观（Chrome 读取外观失败时不会闪回默认）；全新进程从默认外观开始。
 2. **独立存储键 `desktopJellyAppearanceV1`，不并入 `desktopJellyV1`。** 旧版本的 `desktopJellyV1` 解析会丢掉未知字段，并入会让回滚旧版本时抹掉外观；独立键与已有的 `desktopAssistantV1` 同理。
 3. **Chrome 是设置唯一所有者，原生只解析与绘制。** 原生解析走白名单、永不失败：颜色必须是 0–7 的整数（布尔值用 CFBoolean 判别后拒绝）、颜色要么全部合法要么整体回默认、花纹需要的颜色数多于给出的数量时退回纯色；非法载荷（非字典、越界、布尔）回到默认外观，水母不消失。
 4. **JS 与 Swift 各有一份外观解析与调色板**，`test/desktop-companion-logic.test.mjs` 做三项对照，改一边必须改另一边：① JS `resolve()` 的结果（4 种花纹 × 8 种颜色，外加连续 20 天的“每天换一只”）经 Swift 解析后逐项一致；② 桌面 8 色与首页 `JellyfishSkin.PALETTE` 的**色相顺序**一致（每个色位色相相差 ≤20°）；③ 同一批外观下，Swift `JellyPaint` 与首页 `js/jellyfish.js`、设置页示意图 `js/settings-jelly-appearance.js` 两份 JS `paintOf` 逐个部位（钟罩三色、触须、口腕、描边）数值一致（Swift 自测打印 `PAINT` 行，Node 与 JS 比较）。桌面调色板的**具体数值不与首页比较**（桌面水母是半透明叠在壁纸上，数值本来就不同），默认值 `DEFAULTS` 也没有 JS↔Swift 对照，默认外观靠逐像素基线守住。调色板顺序必须保持色相环顺序。

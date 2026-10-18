@@ -5,7 +5,8 @@ final class ReminderPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
-/// 桌面组件宿主（协议 v7）：Native Messaging 的收发与路由，自己不保存任何业务状态。
+/// 桌面组件宿主（协议 v10：在 v7 上，v8 增加水母差事气泡的类别/按钮与 presence 事件，v9 增加推荐歌曲的三按钮气泡与右键菜单“水母，给我…”的请求/结果，
+/// v10 增加水母自己的“活动行为”——jelly 命令 errands.patrol 开启后白天保持清醒、偶尔巡游，纯水母的动作，不产生业务数据也不回报）：Native Messaging 的收发与路由，自己不保存任何业务状态。
 /// 到点响铃、倒计时、喝水/起身提醒都由桌面水母（JellyController）承载，交互确认卡由 ConfirmationPanelController 承载，
 /// 桌面 AI 助手面板与它的全局快捷键由 AssistantController 承载（v7，只显示与转发，任务全在 Chrome 的 AssistantEngine）；
 /// 2026-10-16 起不再有独立的“提醒卡片”窗口（旧版深色卡片已被响铃气泡取代）。
@@ -32,6 +33,12 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
         assistant.onMenuTitle = { [weak self] title in self?.jelly.assistantMenuTitle = title }
         jelly.onAskAssistant = { [weak self] in self?.assistant.show() }
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main) { [weak self] _ in self?.spaceTransitions += 1 }
+        // presence（协议 v8）：水母常驻时每 15 秒读一次系统空闲秒数，只在 active / away 变化时告诉 Chrome（不上报具体秒数）
+        if !demo {
+            let timer = Timer(timeInterval: Self.presenceInterval, repeats: true) { [weak self] _ in self?.samplePresence() }
+            timer.tolerance = 3
+            RunLoop.main.add(timer, forMode: .common)
+        }
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = NSImage(systemSymbolName: "bell.badge", accessibilityDescription: "桌面闹钟")
         let menu = NSMenu()
@@ -46,6 +53,29 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
         } else {
             DispatchQueue.global(qos: .utility).async { self.readMessages() }
         }
+    }
+
+    static let presenceInterval: TimeInterval = 15
+    private var lastPresence: String?
+
+    /// 系统自上一次键盘/鼠标/触控板事件以来的秒数（`CGEventSource`，只读时间，不读按了什么，不需要辅助功能或输入监控权限）。
+    /// 仅隔离验收：TIMEKEEPER_TEST_HOOKS=1 时环境变量 TIMEKEEPER_IDLE_SECONDS 可替代真实读数，正式使用时恒读系统。
+    func systemIdleSeconds() -> Double? {
+        let env = ProcessInfo.processInfo.environment
+        if env["TIMEKEEPER_TEST_HOOKS"] == "1", let fake = env["TIMEKEEPER_IDLE_SECONDS"] { return Double(fake) }
+        guard let anyInput = CGEventType(rawValue: UInt32.max) else { return nil }
+        return CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: anyInput)
+    }
+
+    /// 只在水母常驻时采样；不常驻就忘掉上一次的结果，下次常驻后的第一次采样一定会上报一次，Chrome 以此得到初始状态。
+    func samplePresence() {
+        guard jelly.resident else { lastPresence = nil; jelly.noteIdle(nil); return }
+        let idle = systemIdleSeconds()
+        jelly.noteIdle(idle)        // 协议 v10：水母自己的睡觉与巡游也看这个读数（只在资格变化时才刷新），不管 presence 有没有变化
+        let state = JellyModel.presenceState(idleSeconds: idle)
+        guard state != lastPresence else { return }
+        lastPresence = state
+        send(["type": "presence", "state": state])
     }
 
     /// 状态栏“显示当前提醒”：响铃进行中让水母重新游到落点并重播气泡；没有响铃时只是刷新水母的可见性。
@@ -81,6 +111,7 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
                     // species 是实际生效的那一种：设置的动物还画不出来（没有几何数据）时回退成水母，这里如实报告，Chrome 据此不把它说成已应用
                     extra["appearance"] = ["status": "ok", "species": jelly.speciesName]
                 }
+                samplePresence()
                 // 助手配置跟着 jelly 命令走：没带或明确关闭就注销全局快捷键、收起面板；启用时把注册结果带在回执里，
                 // Chrome 据此在设置页如实显示（被占用 / 不合法 / 失败），不会把“没注册上”说成“已生效”
                 let report = assistant.apply((message["jelly"] as? [String: Any])?["assistant"])
@@ -97,6 +128,7 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
         case "nudge": ok = jelly.showNudge(message["nudge"])
         case "nudgeClear": jelly.clearNudge(id: message["id"] as? String)
         case "nudgeActionResult": jelly.nudgeActionResult(message)
+        case "errandRequestResult": jelly.errandRequestResult(message)
         case "menuItem":
             // 仅隔离验收：环境变量 TIMEKEEPER_TEST_HOOKS=1 时才可用，按标题触发水母右键菜单项或状态栏菜单项，效果等同用户点选；正式使用时恒为 false。
             // 状态栏的“退出桌面组件”会直接结束进程，不会有回执，调用方只能等 componentQuit 与进程退出。
@@ -109,6 +141,14 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
             // 仅隔离验收：TIMEKEEPER_TEST_HOOKS=1 时才可用，直接走气泡按钮的动作入口（含弹出后 0.5 秒的防误触），
             // 让防误触窗口的测试不依赖鼠标时序；返回 ok 表示动作真的发出了。正式使用时恒为 false。
             ok = ProcessInfo.processInfo.environment["TIMEKEEPER_TEST_HOOKS"] == "1" && jelly.ringButton(message["id"] as? String)
+        case "menuTracking":
+            // 仅隔离验收：TIMEKEEPER_TEST_HOOKS=1 时才可用，走与 AppKit 打开 / 关闭右键菜单相同的委托入口（menuWillOpen / menuDidClose），
+            // 让“菜单打开期间水母不巡游”的验收不依赖真实菜单弹出。正式使用时恒为 false。
+            ok = ProcessInfo.processInfo.environment["TIMEKEEPER_TEST_HOOKS"] == "1"
+            if ok { jelly.setMenuTracking(message["open"] as? Bool == true) }
+        case "nudgeButton":
+            // 仅隔离验收：TIMEKEEPER_TEST_HOOKS=1 时才可用，走提醒气泡按钮的动作入口（水母到位之前、等回执期间都不会发出）。正式使用时恒为 false。
+            ok = ProcessInfo.processInfo.environment["TIMEKEEPER_TEST_HOOKS"] == "1" && jelly.pressNudge(message["id"] as? String)
         case "assistantHook":
             // 仅隔离验收：TIMEKEEPER_TEST_HOOKS=1 时才可用，走与用户操作相同的面板入口（显示、输入、发送、停止……），
             // 让测试不依赖键盘时序；返回 ok 表示操作真的被面板接受。正式使用时恒为 false。
@@ -119,7 +159,7 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
     }
     func respond(_ message: [String: Any], ok: Bool, extra: [String: Any] = [:]) {
         guard let requestID = message["requestId"] as? String else { return }
-        var reply: [String: Any] = ["type": "response", "requestId": requestID, "ok": ok, "version": 7]
+        var reply: [String: Any] = ["type": "response", "requestId": requestID, "ok": ok, "version": 10]
         // 响铃与桌面水母（同一个窗口）
         reply["visible"] = jelly.ringVisible
         reply["onActiveSpace"] = jelly.companion.panel.isOnActiveSpace
@@ -131,6 +171,8 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
             return CGDisplayIsActive(CGDirectDisplayID(number.uint32Value)) != 0
         }.count
         reply["mouse"] = NSStringFromPoint(NSEvent.mouseLocation)    // 验收诊断：水母按指针所在屏幕选落点，指针被挪动时失败信息里要看得到
+        reply["nudgeArriving"] = jelly.nudgeIsArriving    // 验收诊断：差事气泡的水母还在游向你
+        reply["presence"] = lastPresence ?? NSNull()    // 验收诊断：最近一次上报的 active / away
         reply["spaceTransitions"] = spaceTransitions
         reply["focusStayed"] = focusStayed
         reply["confirmationKind"] = confirmation.card?["kind"] ?? "confirm"
@@ -166,6 +208,17 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
         reply["jellyTint"] = jelly.tintSummary
         reply["nudgeId"] = jelly.nudgeID ?? NSNull()
         reply["nudgeBusy"] = jelly.nudgeBusy
+        reply["errandsMenu"] = jelly.errandsMenuOn            // 验收诊断：协议 v9 的差事菜单是否开启、有没有请求在等回执、反馈气泡的文字
+        reply["errandRequestBusy"] = jelly.errandRequestBusy
+        reply["feedback"] = jelly.feedbackText
+        reply["jellyLively"] = jelly.livelyOn                 // 验收诊断（协议 v10 的活动行为）：开关、此刻是否睡着、巡游与小动作的次数、时段性格
+        reply["jellyAsleep"] = jelly.asleepNow
+        reply["patrolling"] = jelly.patrolling
+        reply["patrolCount"] = jelly.patrolCount
+        reply["fidgetCount"] = jelly.fidgetCount
+        reply["personality"] = jelly.personalityID
+        reply["patrolPace"] = jelly.patrolPace
+        reply["swimPeriod"] = jelly.swimPeriod                // 验收诊断：游动调校真的交到了水母手里（巡游时 1.4 / 游速，平静阶段 2.4）
         reply["nudgeButtons"] = jelly.nudgeButtonFrames()
         // 响铃气泡（2026-10-16）：ringFrame 是水母窗口，ringLane 是所在屏幕可见区，ringBubble 是气泡本体在窗口里的矩形
         reply["ringId"] = jelly.ringID ?? NSNull()

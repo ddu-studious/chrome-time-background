@@ -15,7 +15,12 @@
   //  · 桌面 AI 助手（协议 v7）：设置在独立的 desktopAssistantV1（{ enabled, hotkey }，旧版本回滚不会把它抹掉）。只有“常驻且已启用”
   //    才在 jelly 下发里带 assistant:{ enabled:true, hotkey }；不带就是关闭（原生据此注销全局快捷键）。热键注册结果随回执返回，
   //    显示在设置页；任务、提交与取消不在这里，见 js/assistant-native.js。
-  // 不联网、不读空闲/活动状态、不碰摄像头。设计与边界见 docs/technical/jellyfish-resident-companion-20261016.md。
+  //  · 水母差事的右键菜单“水母，给我…”（协议 v9）：只有“常驻且 errandsEnabled() 严格返回 true（差事总开关打开）”才在 jelly 下发里带 errands:{ enabled:true }；
+  //    不带就是没有这个菜单项。菜单请求（errandRequest）由 js/alarm-desktop.js 转给 JellyErrands.request，气泡与歌曲推荐都不在这里，见 js/jelly-errands.js。
+  //  · 水母的“活动行为”（协议 v10：白天清醒、定时巡游、小动作）：errands 里多一个严格布尔 patrol，由可选回调 errandsPatrol() 严格返回 true 才为 true（缺省 false）。
+  //    这只是水母自己的动作，不涉及任何业务数据，也不回报给 Chrome；原生端各自忽略/兜底，旧组件认不得这个字段就仍是老样子。
+  // 本模块自己不联网（推荐歌曲读网易云在后台的 jellyErrandSongs 里，经 neteaseApiCall 发出）、Chrome 这一侧不读空闲/活动状态（没有 chrome.idle）、不碰摄像头。设计与边界见 docs/technical/jellyfish-resident-companion-20261016.md。
+  // 例外在原生端：2026-10-17 起原生组件常驻时读系统空闲秒数、只上报 active/away 两态（presence 事件，协议 v8），供水母差事使用；见 docs/technical/jelly-errands-20261017.md。
 
   const KEY = 'desktopJellyV1';
   const ASSISTANT_KEY = 'desktopAssistantV1';
@@ -170,9 +175,16 @@
       if (appearance) {
         try { const value = await appearance(); if (value && typeof value === 'object') appearancePayload = value; } catch (_) { /* 按没有外观处理 */ }
       }
+      // 水母差事（协议 v9 的右键菜单“水母，给我…”）同理：只有常驻且 errandsEnabled() 严格返回 true 才带 errands；不带就是没有这个菜单项。
+      // 协议 v10 的“活动行为”（白天清醒、巡游、小动作）是 errands 里的可选布尔 patrol：只有 errandsPatrol() 严格返回 true 才为 true，其余（没接回调、
+      // 假值、字符串、抛错）一律 false；差事没开时不问。原生端同样只认严格的 true，旧组件忽略这个字段。
+      let errands = false, patrol = false;
+      try { errands = settings.resident && (await api.errandsEnabled?.()) === true; } catch (_) { errands = false; }
+      if (errands) { try { patrol = (await api.errandsPatrol?.()) === true; } catch (_) { patrol = false; } }
       try {
         const result = await desktop.setJelly({ resident: settings.resident, night: settings.night, lines, linesUntil,
           ...(assistant ? { assistant: { enabled: true, hotkey: assistant.hotkey } } : {}),
+          ...(errands ? { errands: { enabled: true, patrol } } : {}),
           ...(appearancePayload ? { appearance: appearancePayload } : {}) });
         status.ok = true; status.version = Number(result?.version) || 0; status.error = ''; status.exhausted = false;
         attempt = 0; stopRetry();
@@ -282,8 +294,22 @@
         try { const [settings, assistant] = await Promise.all([read(), readAssistant()]); return settings.resident && assistant.enabled; }
         catch (_) { return false; }
       },
+      /**
+       * 水母差事能不能开口：设置常驻、端口还在、最近一次下发成功且组件版本 ≥ minVersion（默认 8：旧组件认不得差事类别；
+       * 推荐歌曲与右键菜单请求要 9）。minVersion 只能抬高门槛，不能放宽到 8 以下；不是有限数字（写错了）一律按不能；读取失败按不能。
+       */
+      errandsReady: async (minVersion = 8) => {
+        if (typeof minVersion !== 'number' || !Number.isFinite(minVersion)) return false;
+        const need = Math.max(8, minVersion);
+        try { const settings = await read(); return settings.resident && status.ok && !!desktop.port && status.version >= need; }
+        catch (_) { return false; }
+      },
       /** 外部回调（可选）：带 assistant 的下发被 v7 组件接受后调用，用来补发当前任务状态。 */
       onAssistantApplied: null,
+      /** 外部回调（可选）：() => Promise<boolean>，水母差事总开关是否开着；只有严格返回 true 且常驻，下发才带 errands（右键菜单项）。 */
+      errandsEnabled: null,
+      /** 外部回调（可选）：() => Promise<boolean>，“活动行为”（协议 v10）是否开着；只在 errands 下发时才被问，严格返回 true 才带 patrol:true，否则 patrol:false。 */
+      errandsPatrol: null,
       sync,
       /** 启动时调用：常驻就建立连接并下发，否则什么都不做。 */
       restore: sync,

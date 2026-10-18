@@ -497,6 +497,7 @@ struct JellyInfo {
     var rest = true                 // 想休息（睡在游泳线上）；倒计时临近时为 false，水母游起来
     var ripples = false             // 响铃涟漪
     var ringEpoch = 0               // 变化时重播响铃气泡的弹出（也是响铃的“开始”）；0 表示没有响铃
+    var patrol: JellyTuning?        // 巡游（协议 v10）：非 nil 时用这份调校游动，替换按倒计时阶段挑的那份；是否休息仍由 rest 决定（巡游时控制器给 false）
 }
 
 final class JellyCompanion: NSObject {
@@ -580,6 +581,12 @@ final class JellyCompanion: NSObject {
     deinit { if let observer = observer { NotificationCenter.default.removeObserver(observer) } }
 
     var isVisible: Bool { panel.isVisible }
+
+    /// 鼠标正停在水母身上？取身体附近的矩形（窗口四周各缩进一圈），不是整块透明窗口；巡游据此让路。
+    var isPointerOver: Bool {
+        guard panel.isVisible else { return false }
+        return panel.frame.insetBy(dx: 40, dy: 12).contains(NSEvent.mouseLocation)
+    }
 
     // MARK: 屏幕与位置
 
@@ -672,7 +679,8 @@ final class JellyCompanion: NSObject {
         if next.ringEpoch != info.ringEpoch { ringStart = CACurrentMediaTime() }
         info = next
         reduceMotion = reduce
-        swim.tuning = JellyTuning.forStage(next.stage, species: effectiveSpecies)
+        // 巡游（协议 v10）的调校是按水母标定的，动物巡游时要乘上自己的物种系数；见 JellyTuning.current
+        swim.tuning = JellyTuning.current(stage: next.stage, patrol: next.patrol, species: effectiveSpecies)
         if reduce && effectiveSpecies != .jelly { speciesPose.step(dt: 1.0 / 30, vx: swim.vx, vy: swim.vy, stroking: false, reduceMotion: true) }
         let wantsRest = next.rest || reduce
         swim.wantsRest = wantsRest
@@ -706,7 +714,7 @@ final class JellyCompanion: NSObject {
         appearance = next
         if effectiveSpecies != previousSpecies {      // 换了一种：游动调参与姿态都从头来（朝右、不俯仰、鳍不摆）
             speciesPose = SpeciesPose()
-            swim.tuning = JellyTuning.forStage(info.stage, species: effectiveSpecies)
+            swim.tuning = JellyTuning.current(stage: info.stage, patrol: info.patrol, species: effectiveSpecies)   // 巡游中换物种：不丢掉巡游调校
         }
         view.jellyAppearance = next
         panel.title = effectiveSpecies.desktopTitle

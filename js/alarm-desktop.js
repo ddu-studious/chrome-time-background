@@ -12,6 +12,12 @@
       this.resident = false; this.nudgeId = null; this.nudgeTimer = null; this.quitPort = null;
       this.onNudgeAction = null; this.onJellySetting = null; this.onPortLost = null; this.onConnected = null;
       this.nudgeHandled = new Map(); this.nudgeProcessing = new Set();
+      // 水母差事（协议 v8，复用 nudge 气泡）：id 以 jelly-errand- 开头的气泡，动作交给 onErrandAction；气泡自行消失交给 onNudgeHidden；
+      // presence 是原生按系统空闲时间上报的“在 / 不在电脑前”两态（只有 active 与 away）。
+      // 第二期（协议 v9）：右键菜单“水母，给我…”的请求（errandRequest）交给 onErrandRequest，按结果回 errandRequestResult。
+      // 第三期（协议 v10）：jelly 命令的 errands 多一个可选布尔 patrol（活动行为：白天清醒、巡游、小动作），那是水母自己的动作，这里没有新消息要处理。
+      this.onErrandAction = null; this.onNudgeHidden = null; this.onPresence = null;
+      this.onErrandRequest = null; this.errandRequestProcessing = new Set();
       this.confirmationId = null; this.onConfirmationAction = null; this.onConfirmationHidden = null; this.onConfirmationDisconnect = null;
       this.confirmationHandled = new Set(); this.confirmationProcessing = new Set();
       // 原生 AI 助手面板（协议 v7）：动作处理器、新连接信号；version 是本连接上最近一次回执里的组件版本（未知为 0）。
@@ -40,7 +46,9 @@
         }
         if (message.type === 'countdownAction') void this.handleCountdownAction(port, message);
         if (message.type === 'nudgeAction') void this.handleNudgeAction(port, message);
-        if (message.type === 'nudgeHidden' && this.nudgeId && message.id === this.nudgeId) { this.clearNudgeState(); this.releaseWhenIdle(); }
+        if (message.type === 'errandRequest') void this.handleErrandRequest(port, message);
+        if (message.type === 'nudgeHidden' && this.nudgeId && message.id === this.nudgeId) { this.clearNudgeState(); this.emit('onNudgeHidden', message.id); this.releaseWhenIdle(); }
+        if (port === this.port && message.type === 'presence' && (message.state === 'active' || message.state === 'away')) this.emit('onPresence', message.state);
         // 水母菜单只能“收起”，不能由原生打开常驻；其余取值一律忽略
         if (message.type === 'jellySetting' && message.resident === false) this.emit('onJellySetting', { resident: false });
         if (message.type === 'componentQuit') this.quitPort = port;
@@ -300,8 +308,13 @@
         // 已成功处理过的 actionId 重发（回执丢失）只重复回执，不再计数
         let result = this.nudgeHandled.get(key);
         if (!result) {
-          if (!this.nudgeId || message.id !== this.nudgeId || !['done', 'snooze'].includes(message.action) || !this.onNudgeAction) throw new Error('这条提醒已失效');
-          result = await this.onNudgeAction(message);
+          // 差事气泡（id 前缀 jelly-errand-）与喝水/起身提醒各用各的动作白名单与处理器，互相不能代替；
+          // 差事这一侧只放行各类别按钮的并集（play / another 是歌曲的），哪类气泡认哪些按钮由 JellyErrands.act 按类别再限定一次。
+          const errand = typeof message.id === 'string' && message.id.startsWith('jelly-errand-');
+          const allowed = errand ? ['open', 'later', 'dismiss', 'more', 'play', 'another'] : ['done', 'snooze'];
+          const handler = errand ? this.onErrandAction : this.onNudgeAction;
+          if (!this.nudgeId || message.id !== this.nudgeId || !allowed.includes(message.action) || !handler) throw new Error('这条提醒已失效');
+          result = await handler.call(this, message);
           if (result?.ok !== true) throw new Error(result?.error || 'Chrome 未接受该操作');
           this.nudgeHandled.set(key, result);
           if (this.nudgeHandled.size > 100) this.nudgeHandled.delete(this.nudgeHandled.keys().next().value);   // Map 按键淘汰最旧的一条
@@ -310,6 +323,29 @@
       } catch (error) {
         reply({ ok: false, error: String(error.message).slice(0, 120) });
       } finally { this.nudgeProcessing.delete(key); }
+    }
+    // 右键菜单“水母，给我…”（协议 v9）：转给 onErrandRequest，按结果回 errandRequestResult——{ ok:true } 是气泡已交给水母，
+    // { ok:true, text } 是没有内容可说，{ ok:false, error } 是失败（都带原因）。同一 errandId 处理中的重发忽略；结果不缓存
+    // （每次点菜单都是新的 errandId）；旧连接的消息在 connect() 入口已被丢弃，处理期间连接换了，结果只会发给原来的（已失效的）端口。
+    // 请求编号叫 errandId 而不是 requestId：requestId 是“命令 → 回执”的关联键，原生端会把它原样写进回执；
+    // 联调（jelly-smoke 的第一次实跑）里正是因为菜单请求的结果命令也带 requestId，原生的回执被标成了别的编号，等回执的一方永远等不到。
+    async handleErrandRequest(port, message) {
+      if (port !== this.port || typeof message.errandId !== 'string' || !message.errandId || message.errandId.length > 100) return;
+      const id = message.errandId;
+      if (this.errandRequestProcessing.has(id)) return;
+      this.errandRequestProcessing.add(id);
+      const cut = (text, max) => [...String(text)].slice(0, max).join('');
+      const reply = payload => { try { port.postMessage({ command: 'errandRequestResult', errandId: id, ...payload }); } catch (_) { /* 端口已失效 */ } };
+      try {
+        const kind = message.kind;
+        if (typeof kind !== 'string' || !kind || kind.length > 20) { reply({ ok: false, error: '不认识这个请求' }); return; }
+        if (!this.onErrandRequest) { reply({ ok: false, error: '水母差事暂不可用' }); return; }
+        const result = await this.onErrandRequest(message);
+        if (result?.ok === true) reply({ ok: true, ...(typeof result.text === 'string' && result.text ? { text: cut(result.text, 80) } : {}) });
+        else reply({ ok: false, error: cut(result?.error || 'Chrome 未接受该请求', 120) });
+      } catch (error) {
+        reply({ ok: false, error: cut(error?.message || error, 120) });
+      } finally { this.errandRequestProcessing.delete(id); }
     }
     releaseWhenIdle(delayMs = 2000) {
       clearTimeout(this.idleTimer); this.idleTimer = null;

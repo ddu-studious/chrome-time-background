@@ -52,7 +52,7 @@ test('卡片里没有内联事件处理器与内联脚本（MV3 CSP）', () => {
 });
 
 test('脚本加载：在 settings-page.js 之后、带版本号', () => {
-  assert.ok(html.indexOf('js/settings-page.js?v=10') < html.indexOf('js/settings-jelly-appearance.js?v=4'));
+  assert.ok(html.indexOf('js/settings-page.js?v=14') < html.indexOf('js/settings-jelly-appearance.js?v=4'));
   assert.match(html, /<script src="js\/settings-jelly-appearance\.js\?v=4"><\/script>/);
   // 动物示意图用同一份形状数据：形状脚本必须先于外观脚本加载，且带版本号
   assert.match(html, /<script src="js\/jelly-species-shapes\.js\?v=4"><\/script>/);

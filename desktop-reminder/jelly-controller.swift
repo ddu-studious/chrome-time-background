@@ -35,6 +35,33 @@ final class JellyController: NSObject, NSMenuDelegate {
     private var nudgeStatus: (text: String, bad: Bool)?
     private var nudgeClosing = false            // 成功回执已显示，正在收起
     private var nudgeTimer: Timer?
+    private var nudgeArriving = false           // 差事气泡：水母还在游向你，到位之前气泡不出现、按钮不可点
+    private var nudgeToken = 0                  // 使过期的“到位”回调（被替换、被撤、被响铃或被用户抓走）失效
+    // 右键菜单“水母，给我…”（协议 v9）：由 jelly 命令的 errands 字段开启；同一时刻只有一个请求在等 Chrome 回执
+    private var errandsMenu = false
+    private var errandRequestPending: String?
+    /// 请求发出后等回执的上限：Chrome 取歌最多等 6 秒，再留些余量；超过就提示可重试（迟到的回执按 requestId 不匹配而忽略）。
+    static let errandRequestNoAck = 15.0
+    // 活动行为（协议 v10）：差事开且 patrol 开时，水母白天保持清醒、偶尔巡游一圈、清醒静止时隔一阵做个小动作；
+    // 睡与不睡、什么时候游都由 JellyBehavior 的纯逻辑决定，这里只是状态机。全是水母自己的动作：不产生业务数据，也不向 Chrome 回报。
+    private var lively = false                          // jelly 命令 errands.enabled 与 errands.patrol 都严格为 true
+    private var idleSeconds: Double?                    // main.swift 每 15 秒交来的系统空闲秒数；nil 表示不知道（当作在电脑前）
+    private var menuOpenSince: Date?                    // 右键菜单打开中（menuWillOpen 起）；JellyBehavior.menuBlocks 只让路 180 秒，超过当作遗漏的 menuDidClose
+    private var patrolTimer: Timer?                     // 等待出发 / 巡游时长，同一时刻只有一个
+    private var fidgetTimer: Timer?                     // 清醒静止时下一次小动作
+    private var recheckTimer: Timer?                    // 只因鼠标停在水母身上而暂时不能行动时，隔几秒再核对一次（鼠标移开没有事件通知）
+    private var patrolTuning: JellyTuning?
+    private(set) var patrolling = false
+    private(set) var patrolCount = 0                    // 本进程开始过多少次巡游（验收诊断，不上报）
+    private(set) var fidgetCount = 0                    // 本进程做过多少次小动作（验收诊断，不上报）
+    private(set) var patrolPace = 0.0                   // 最近一次巡游用的游速倍率，0 表示还没巡游过（验收诊断，不上报）
+    private(set) var personalityID = "steady"           // 最近一次安排计时器时的时段性格（验收诊断）
+    /// 仅隔离验收：TIMEKEEPER_TEST_HOOKS=1 时环境变量 TIMEKEEPER_PATROL_SECONDS="出发,时长,小动作"（秒）替换随机取值，让验收不必等几分钟；
+    /// 正式使用时恒为 nil。
+    private let overrides: JellyBehavior.Overrides? = {
+        let env = ProcessInfo.processInfo.environment
+        return env["TIMEKEEPER_TEST_HOOKS"] == "1" ? JellyBehavior.parseOverrides(env["TIMEKEEPER_PATROL_SECONDS"]) : nil
+    }()
     private var countdownShown = false
     // 读数（协议回执与验收脚本用）
     private(set) var lastStage = CountdownStage.calm
@@ -67,6 +94,8 @@ final class JellyController: NSObject, NSMenuDelegate {
         night = state.night
         lines = state.lines
         linesUntil = state.linesUntil
+        errandsMenu = state.errands
+        lively = state.patrol
         updateVisibility()
         return true
     }
@@ -133,6 +162,7 @@ final class JellyController: NSObject, NSMenuDelegate {
         let countdownActive = data != nil && ring == nil
         guard JellyModel.shouldShow(resident: resident, hasCountdown: data != nil, ringing: ringing, hasNudge: nudge != nil) else {
             stopTicker()
+            cancelBehavior()
             detailTimer?.invalidate(); detailUntil = nil
             companion.hide(remember: !ringReturning)      // 回家的路上被隐藏：当前位置不是用户放下的位置，不能记
             ringReturning = false; ringHomeX = nil        // 回家的路取消了：不留“还在回家”的残留，否则下一次响铃会沿用过期的家
@@ -166,7 +196,7 @@ final class JellyController: NSObject, NSMenuDelegate {
         ticker = tick
     }
 
-    private var tickerNeedsSeconds: Bool { (data != nil && ring == nil) || nudge != nil || feedback != nil }
+    private var tickerNeedsSeconds: Bool { (data != nil && ring == nil) || nudge != nil || feedback != nil || patrolling }
 
     private func remainingSeconds() -> (exact: Double, whole: Int)? {
         guard let at = data?["fireAt"] as? Double else { return nil }
@@ -178,11 +208,23 @@ final class JellyController: NSObject, NSMenuDelegate {
         CountdownModel.spoken(seconds: seconds).replacingOccurrences(of: "还有 ", with: "") + (seconds > 0 ? "后" : "")
     }
 
-    /// 本机时间对应的夜晚荧光程度；隔离验收可用环境变量 TIMEKEEPER_NIGHT_HOUR=23 假定本地时间（只用于测试）。
+    /// 本地小时；隔离验收可用环境变量 TIMEKEEPER_NIGHT_HOUR=23 假定本地时间（只用于测试），夜晚荧光、睡觉与时段性格共用这一个读数。
+    private func localHour(_ now: Date) -> Double {
+        Double(ProcessInfo.processInfo.environment["TIMEKEEPER_NIGHT_HOUR"] ?? "") ?? CountdownModel.localHour(now)
+    }
+
+    /// 夜晚荧光程度：受“夜晚荧光”开关控制。
     private func nightAmount(_ now: Date) -> CGFloat {
         guard night else { return 0 }
-        let hour = Double(ProcessInfo.processInfo.environment["TIMEKEEPER_NIGHT_HOUR"] ?? "") ?? CountdownModel.localHour(now)
-        return CGFloat(CountdownModel.nightAmount(hour: hour))
+        return CGFloat(CountdownModel.nightAmount(hour: localHour(now)))
+    }
+
+    /// 睡觉用的夜晚曲线值：不看“夜晚荧光”开关（荧光是视觉效果，睡觉是行为）。
+    private func sleepNightAmount(_ now: Date) -> Double { CountdownModel.nightAmount(hour: localHour(now)) }
+
+    /// 活动行为只对常驻的水母有意义：Chrome 在不常驻时本来就不带 errands，原生这里再认一次（临时出现的水母仍是老样子）。
+    private func isSleeping(_ now: Date) -> Bool {
+        JellyBehavior.isAsleep(lively: lively && resident, nightAmount: sleepNightAmount(now), idleSeconds: idleSeconds)
     }
 
     private var visibleLines: [String] {
@@ -205,7 +247,7 @@ final class JellyController: NSObject, NSMenuDelegate {
         let nightValue = nightAmount(now)
         lastNight = nightValue
         let shown = visibleLines
-        let kind = JellyModel.bubbleKind(ringing: ring != nil, ringArrived: ringPhase == .shown, hasNudge: nudge != nil, hasNote: feedback != nil, detailActive: detailUntil != nil, hasCountdown: remaining != nil)
+        let kind = JellyModel.bubbleKind(ringing: ring != nil, ringArrived: ringPhase == .shown, hasNudge: nudge != nil && !nudgeArriving, hasNote: feedback != nil, detailActive: detailUntil != nil, hasCountdown: remaining != nil)
         lastBubble = kind
         var bubble: JellyBubble?
         switch kind {
@@ -229,7 +271,7 @@ final class JellyController: NSObject, NSMenuDelegate {
             bubble = JellyBubble(kind: .detail, title: title, lines: detail)
         case .nudge:
             if let current = nudge {
-                let buttons = nudgeClosing ? [] : current.buttons.map { JellyBubble.Button(id: $0.id, title: $0.title, enabled: nudgePending == nil, primary: $0.id == "done") }
+                let buttons = nudgeClosing ? [] : current.buttons.map { JellyBubble.Button(id: $0.id, title: $0.title, enabled: nudgePending == nil, primary: JellyModel.isPrimaryNudgeButton(kind: current.kind, id: $0.id)) }
                 bubble = JellyBubble(kind: .nudge, title: current.title, lines: [current.text],
                                      status: nudgeStatus?.text ?? (nudgePending != nil ? "正在同步到 Chrome…" : nil),
                                      bad: nudgeStatus?.bad ?? false, buttons: buttons)
@@ -247,10 +289,167 @@ final class JellyController: NSObject, NSMenuDelegate {
         }
         // 倒计时临近时水母游起来；提醒气泡与响铃期间让它停在游泳线上，按钮才不会从鼠标下游走
         let ringing = ring != nil
-        companion.update(JellyInfo(stage: ringing ? .due : stage, night: nightValue, bubble: bubble, awake: kind > .clock || ringing,
-                                   rest: ringing || ringExiting || stage == .calm || nudge != nil,
-                                   ripples: ringing && ringPhase == .shown, ringEpoch: ringEpoch), reduceMotion: reduceMotion)
+        // 活动行为：先按最新状态决定巡游 / 小动作（可能结束正在进行的巡游），再把结果交给水母。
+        // 睡不睡只影响“休息时是否合眼”：活动行为关闭时 isAsleep 恒为真，awake 与旧版完全一样。
+        syncBehavior(now, stage: stage)
+        let sleeping = isSleeping(now)
+        companion.update(JellyInfo(stage: ringing ? .due : stage, night: nightValue, bubble: bubble, awake: kind > .clock || ringing || !sleeping,
+                                   rest: (ringing || ringExiting || stage == .calm || nudge != nil) && !patrolling,
+                                   ripples: ringing && ringPhase == .shown, ringEpoch: ringEpoch,
+                                   patrol: patrolling ? patrolTuning : nil), reduceMotion: reduceMotion)
         if ticker != nil && JellyModel.tickInterval(active: tickerNeedsSeconds) != tickerInterval { restartTicker() }
+    }
+
+    // MARK: 活动行为（协议 v10）：睡与不睡、巡游、小动作
+
+    /// main.swift 每 15 秒交来系统空闲秒数（nil：读不到）。睡觉与巡游资格可能因此变化时才刷新，平时不额外刷新。
+    func noteIdle(_ seconds: Double?) {
+        let now = Date()
+        let before = (isSleeping(now), behaviorEligible(now, stage: currentStage()))
+        idleSeconds = seconds
+        guard companion.isVisible else { return }
+        let after = (isSleeping(now), behaviorEligible(now, stage: currentStage()))
+        if before != after { refresh() }
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        menuOpenSince = Date()
+        refresh()
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        menuOpenSince = nil
+        refresh()
+    }
+
+    /// 仅隔离验收（main.swift 要求 TIMEKEEPER_TEST_HOOKS=1）：走与 AppKit 打开 / 关闭右键菜单相同的委托入口，让验收不依赖真实菜单弹出。
+    func setMenuTracking(_ open: Bool) {
+        if open { menuWillOpen(menu) } else { menuDidClose(menu) }
+    }
+
+    private func currentStage() -> CountdownStage {
+        guard data != nil, ring == nil, let remaining = remainingSeconds() else { return .calm }
+        return CountdownModel.stage(seconds: remaining.whole)
+    }
+
+    /// “忙”：任何不该被水母自己的动作打扰的状态。时钟读数气泡不算（有闹钟时它一直在）。
+    /// 鼠标停在水母身上单列（includePointer）：只有它没有“结束”事件可等，要靠定时再核对。
+    private func behaviorBusy(_ now: Date, includePointer: Bool = true) -> Bool {
+        if ring != nil || ringExiting || ringReturning || nudge != nil || feedback != nil || detailUntil != nil { return true }
+        if companion.swim.mode == .grabbed || (includePointer && companion.isPointerOver) { return true }
+        return JellyBehavior.menuBlocks(openedSecondsAgo: menuOpenSince.map { now.timeIntervalSince($0) })
+    }
+
+    private func patrolContext(_ now: Date, stage: CountdownStage, includePointer: Bool = true) -> JellyBehavior.PatrolContext {
+        JellyBehavior.PatrolContext(lively: lively, resident: resident, reduceMotion: reduceMotion, stage: stage, busy: behaviorBusy(now, includePointer: includePointer),
+                                    nightAmount: sleepNightAmount(now), idleSeconds: idleSeconds)
+    }
+
+    /// 现在能不能做“自己的动作”（巡游或小动作）：水母在屏幕上，且 JellyBehavior.canPatrol 为真。
+    private func behaviorEligible(_ now: Date, stage: CountdownStage) -> Bool {
+        companion.isVisible && JellyBehavior.canPatrol(patrolContext(now, stage: stage))
+    }
+
+    /// 每次刷新时调用：条件不再满足就取消等待并结束巡游，条件满足而没有计时器就安排一个（回来后重新计一段完整的等待）。
+    private func syncBehavior(_ now: Date, stage: CountdownStage) {
+        let eligible = behaviorEligible(now, stage: stage)
+        if patrolling {
+            if !eligible { endPatrol(refresh: false) }        // 水母沉回泳线并静止；外层 refresh 随后把结果交给水母
+        } else if eligible {
+            if patrolTimer == nil { schedulePatrol(now) }
+        } else if patrolTimer != nil {
+            patrolTimer?.invalidate(); patrolTimer = nil
+        }
+        if eligible && !patrolling {
+            if fidgetTimer == nil { scheduleFidget(now) }
+        } else {
+            cancelFidget()
+        }
+        // 唯一的阻碍是鼠标停在水母身上：鼠标移开没有事件通知，隔 3 秒再核对一次（其余“忙”都有各自的结束事件或 1 秒刷新）
+        let pointerOnly = !eligible && companion.isVisible && companion.isPointerOver
+            && JellyBehavior.canPatrol(patrolContext(now, stage: stage, includePointer: false))
+        if pointerOnly {
+            if recheckTimer == nil {
+                let timer = Timer(timeInterval: 3, repeats: false) { [weak self] _ in self?.recheckTimer = nil; self?.refresh() }
+                timer.tolerance = 0.5
+                RunLoop.main.add(timer, forMode: .common)
+                recheckTimer = timer
+            }
+        } else {
+            recheckTimer?.invalidate(); recheckTimer = nil
+        }
+    }
+
+    private func schedulePatrol(_ now: Date) {
+        let personality = JellyBehavior.personality(hour: localHour(now))
+        personalityID = personality.id
+        guard let plan = personality.patrol else { return }       // 夜里没有巡游（canPatrol 已经排除，这是第二道）
+        let seconds = JellyBehavior.patrolDelaySeconds(plan, unit: Double.random(in: 0...1), overrides: overrides)
+        let timer = Timer(timeInterval: seconds, repeats: false) { [weak self] _ in self?.patrolDue() }
+        timer.tolerance = min(5, seconds * 0.1)
+        RunLoop.main.add(timer, forMode: .common)
+        patrolTimer = timer
+    }
+
+    /// 出发时间到：再核对一遍条件，满足才出发。
+    private func patrolDue() {
+        patrolTimer = nil
+        let now = Date()
+        guard behaviorEligible(now, stage: currentStage()), let plan = JellyBehavior.personality(hour: localHour(now)).patrol else {
+            refresh()       // 条件变了：按新状态重新安排或不安排
+            return
+        }
+        patrolling = true
+        patrolCount += 1
+        patrolPace = plan.pace                              // 验收诊断同时就是游动调校的输入，两者不会各取各的
+        patrolTuning = JellyTuning.patrol(pace: patrolPace)
+        cancelFidget()
+        let seconds = JellyBehavior.patrolDurationSeconds(plan, unit: Double.random(in: 0...1), overrides: overrides)
+        let timer = Timer(timeInterval: seconds, repeats: false) { [weak self] _ in self?.endPatrol(refresh: true) }
+        timer.tolerance = 0.2
+        RunLoop.main.add(timer, forMode: .common)
+        patrolTimer = timer
+        refresh()               // 巡游期间 tickerNeedsSeconds 为真：refresh 会把刷新改成每秒一次（鼠标靠近、菜单、气泡……都在这里被核对），结束后回到 30 秒
+    }
+
+    /// 结束巡游：让水母沉回泳线（不游回原位）。自然结束与被打断都走这里；refresh 为 false 时由调用方负责随后刷新。
+    private func endPatrol(refresh doRefresh: Bool) {
+        patrolTimer?.invalidate(); patrolTimer = nil
+        guard patrolling else { return }
+        patrolling = false
+        patrolTuning = nil
+        if doRefresh { refresh() }
+    }
+
+    private func scheduleFidget(_ now: Date) {
+        guard let range = JellyBehavior.personality(hour: localHour(now)).fidget else { return }
+        let seconds = JellyBehavior.fidgetSeconds(range, unit: Double.random(in: 0...1), overrides: overrides)
+        let timer = Timer(timeInterval: seconds, repeats: false) { [weak self] _ in self?.fidgetDue() }
+        timer.tolerance = min(3, seconds * 0.1)
+        RunLoop.main.add(timer, forMode: .common)
+        fidgetTimer = timer
+    }
+
+    private func cancelFidget() { fidgetTimer?.invalidate(); fidgetTimer = nil }
+
+    /// 小动作：原地小跳一下（同“点一下”的跳，不弹气泡）。条件不满足就不跳；随后 refresh 重新安排下一次。
+    private func fidgetDue() {
+        fidgetTimer = nil
+        let now = Date()
+        if !patrolling, behaviorEligible(now, stage: currentStage()) {
+            fidgetCount += 1
+            companion.jump()
+        }
+        refresh()
+    }
+
+    /// 水母被隐藏或设置被关掉：清掉所有计时器与巡游状态，下次出现时重新计。
+    private func cancelBehavior() {
+        patrolTimer?.invalidate(); patrolTimer = nil
+        recheckTimer?.invalidate(); recheckTimer = nil
+        cancelFidget()
+        patrolling = false
+        patrolTuning = nil
     }
 
     // MARK: 点击水母：看看详情
@@ -272,12 +471,46 @@ final class JellyController: NSObject, NSMenuDelegate {
     /// 显示一条提醒气泡；负载不合规返回 false（Chrome 据此退回系统通知）。返回 true 表示气泡已经出现在桌面上。
     func showNudge(_ raw: Any?) -> Bool {
         guard ring == nil, !ringExiting, let next = JellyModel.parseNudge(raw) else { return false }     // 响铃优先：此时 Chrome 退回系统通知
+        // 差事（协议 v8）先游到你所在的屏幕再开口：水母不在鼠标所在屏幕（或根本没出现）就从该屏右边游入，已经在这块屏幕上则原地不动；
+        // 喝水/起身提醒保持原样（立即出现）。到位之前返回 true 只表示“已接手”，Chrome 据此不再发系统通知。
+        let errand = JellyModel.isErrandKind(next.kind)
+        let wasVisible = companion.isVisible
+        let moves = errand && (!wasVisible || !companion.isOnMouseScreen())
+        if moves && wasVisible { companion.hide(remember: false) }
+        if moves { companion.startAtRightEdgeOnce = true }
+        nudgeToken += 1
         nudge = next
+        nudgeArriving = moves
         nudgePending = nil; nudgeStatus = nil; nudgeClosing = false
         detailTimer?.invalidate(); detailUntil = nil
         armNudgeTimer(after: next.ttl)
         updateVisibility()
+        if moves { startNudgeArrival(fadeIn: true) }
+        else if errand { announceNudge() }
         return companion.isVisible
+    }
+
+    private func startNudgeArrival(fadeIn: Bool) {
+        let token = nudgeToken
+        if fadeIn { setAlpha(0, duration: 0); setAlpha(1, duration: reduceMotion ? 0.2 : 0.25) }
+        refresh()
+        companion.dash(toX: companion.centerX) { [weak self] in self?.nudgeArrived(token) }
+        // 到位回调在被用户抓住或被别的冲刺替换时不会触发：兜底，最多多等 4 秒就开口（同一个 token，已到位则无事发生）
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in self?.nudgeArrived(token) }
+    }
+
+    private func nudgeArrived(_ token: Int) {
+        guard nudge != nil, nudgeToken == token, nudgeArriving else { return }
+        nudgeArriving = false
+        refresh()
+        announceNudge()
+    }
+
+    /// 读屏：差事气泡出现时播报一次（标题 + 正文），不抢键盘焦点。
+    private func announceNudge() {
+        guard let current = nudge else { return }
+        NSAccessibility.post(element: companion.view, notification: .announcementRequested,
+                             userInfo: [.announcement: "\(current.title)，\(current.text)", .priority: NSAccessibilityPriorityLevel.medium.rawValue])
     }
 
     /// 撤掉指定的气泡（迟到或被替换）；id 不是当前气泡就忽略。Chrome 自己发起的撤销不需要再回报 nudgeHidden。
@@ -295,12 +528,13 @@ final class JellyController: NSObject, NSMenuDelegate {
         guard let current = nudge else { return }
         nudgeTimer?.invalidate(); nudgeTimer = nil
         nudge = nil; nudgePending = nil; nudgeStatus = nil; nudgeClosing = false
+        nudgeArriving = false; nudgeToken += 1
         if notify { send?(["type": "nudgeHidden", "id": current.id]) }
         updateVisibility()
     }
 
     private func nudgeButton(_ action: String) {
-        guard let current = nudge, nudgePending == nil, !nudgeClosing, current.buttons.contains(where: { $0.id == action }) else { return }
+        guard let current = nudge, !nudgeArriving, nudgePending == nil, !nudgeClosing, current.buttons.contains(where: { $0.id == action }) else { return }
         let actionID = UUID().uuidString
         nudgePending = actionID
         nudgeStatus = nil
@@ -327,6 +561,41 @@ final class JellyController: NSObject, NSMenuDelegate {
             nudgeStatus = (JellyModel.clean(message["error"], max: 60) ?? "操作失败，请重试", true)
         }
         refresh()
+    }
+
+    // MARK: 右键菜单“水母，给我…”（协议 v9：只转发请求；内容由 Chrome 决定，经 nudge 命令回来；这里只显示结果）
+
+    @objc private func requestErrand(_ sender: NSMenuItem) {
+        guard let kind = sender.representedObject as? String else { return }
+        sendErrandRequest(kind)
+    }
+
+    /// 向 Chrome 要一条差事。没有开启差事菜单、响铃中、上一个请求还在等回执、类别不在菜单里，都不发。
+    private func sendErrandRequest(_ kind: String) {
+        guard errandsMenu, ring == nil, !ringExiting, errandRequestPending == nil, JellyModel.isErrandRequestKind(kind) else { return }
+        let errandID = UUID().uuidString
+        errandRequestPending = errandID
+        setFeedback("稍等，水母在准备…", bad: false, seconds: Self.errandRequestNoAck)
+        send?(["type": "errandRequest", "errandId": errandID, "kind": kind])
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.errandRequestNoAck) { [weak self] in
+            guard let self = self, self.errandRequestPending == errandID else { return }
+            self.errandRequestPending = nil
+            self.setFeedback("Chrome 没有回应，请重试", bad: true, seconds: 4)
+        }
+    }
+
+    /// Chrome 对菜单请求的回执：errandId 要对得上未决请求。ok 且没有文字说明气泡已经由 nudge 命令呈现（只清掉“正在准备”）；
+    /// ok 带文字是“没有内容可说”；失败显示原因。请求编号叫 errandId 而不是 requestId：requestId 是“命令 → 回执”的关联键，
+    /// main.swift 的 respond 会把它原样写进回执，结果命令若也带 requestId，回执就被标成了菜单请求的编号，等回执的一方永远等不到。
+    func errandRequestResult(_ message: [String: Any]) {
+        guard let errandID = message["errandId"] as? String, errandID == errandRequestPending else { return }
+        errandRequestPending = nil
+        if message["ok"] as? Bool == true {
+            if let text = JellyModel.clean(message["text"], max: 60) { setFeedback(text, bad: false, seconds: 4) }
+            else { feedback = nil; refresh() }
+        } else {
+            setFeedback(JellyModel.clean(message["error"], max: 60) ?? "没能完成，请重试", bad: true, seconds: 5)
+        }
     }
 
     // MARK: 倒计时上的操作与反馈（延后/跳过由 Chrome 执行；这里只转发并显示结果）
@@ -416,6 +685,7 @@ final class JellyController: NSObject, NSMenuDelegate {
         if wasVisible && !companion.isOnMouseScreen() { companion.hide(remember: false); fromEdge = true }
         cancelRingTimers()
         ringToken += 1
+        nudgeArriving = false; nudgeToken += 1       // 响铃接管冲刺：差事气泡不再等“到位”
         ring = next
         ringPending = nil; ringStatus = nil; ringClosing = false; ringHideRequested = false
         ringReturning = false; ringExiting = false
@@ -454,6 +724,13 @@ final class JellyController: NSObject, NSMenuDelegate {
         let text = JellyModel.ringAnnouncement(clock: current.clock, names: current.names, more: current.more)
         NSAccessibility.post(element: companion.view, notification: .announcementRequested,
                              userInfo: [.announcement: text, .priority: NSAccessibilityPriorityLevel.high.rawValue])
+    }
+
+    /// 仅隔离验收（TIMEKEEPER_TEST_HOOKS=1）：经提醒气泡按钮的真实入口发动作，返回动作是否真的发出（到位前、等回执时、收起中都不发）。
+    func pressNudge(_ id: String?) -> Bool {
+        guard let id = id, nudge != nil, ring == nil, nudgePending == nil else { return false }
+        nudgeButton(id)
+        return nudgePending != nil
     }
 
     /// 气泡里的按钮：响铃气泡走响铃动作入口，其余是喝水/起身提醒的按钮。
@@ -581,6 +858,8 @@ final class JellyController: NSObject, NSMenuDelegate {
     }
 
     private func grabBegan() {
+        endPatrol(refresh: false)       // 被用户抓住：巡游立刻结束（放手后由 refresh 重新安排）
+        cancelFidget()
         if ring != nil { ringMoved = true }
         if ringReturning || ringExiting {
             ringToken += 1
@@ -635,9 +914,21 @@ final class JellyController: NSObject, NSMenuDelegate {
         }
         var sections = 0
         func newSection() { if sections > 0 { menu.addItem(.separator()) }; sections += 1 }
-        if let title = assistantMenuTitle {
-            newSection()
-            _ = add(title, #selector(askAssistant))
+        // “问 AI…”与“水母，给我…”是同一类入口：放在同一段里，谁有谁出现
+        let errandsAvailable = errandsMenu && ring == nil && !ringExiting
+        if assistantMenuTitle != nil || errandsAvailable { newSection() }
+        if let title = assistantMenuTitle { _ = add(title, #selector(askAssistant)) }
+        if errandsAvailable {
+            let parent = add("水母，给我…", nil)
+            parent.isEnabled = true
+            let submenu = NSMenu()
+            for entry in JellyModel.errandRequestItems {
+                let item = submenu.addItem(withTitle: entry.title, action: #selector(requestErrand(_:)), keyEquivalent: "")
+                item.target = self
+                item.representedObject = entry.kind
+                item.isEnabled = errandRequestPending == nil      // 上一个请求还在等 Chrome 时不能再点
+            }
+            parent.submenu = submenu
         }
         if data != nil && ring == nil {
             newSection()
@@ -720,6 +1011,13 @@ final class JellyController: NSObject, NSMenuDelegate {
     var shownLines: [String] { visibleLines }
     var nudgeID: String? { nudge?.id }
     var nudgeBusy: Bool { nudgePending != nil }
+    var errandsMenuOn: Bool { errandsMenu }                              // 验收诊断：jelly 命令是否开启了差事菜单
+    var errandRequestBusy: Bool { errandRequestPending != nil }          // 验收诊断：有请求在等 Chrome 回执
+    var feedbackText: String { feedback?.text ?? "" }                    // 验收诊断：当前反馈气泡文字（含“没有内容可说”“失败原因”）
+    var livelyOn: Bool { lively }                                        // 验收诊断（协议 v10）：活动行为是否开启
+    var swimPeriod: Double { Double(companion.swim.tuning.period) }      // 验收诊断：水母此刻实际在用的脉动周期（巡游时 = 1.4 / 游速，否则按倒计时阶段挑的那份）
+    var asleepNow: Bool { companion.pose.asleep }                        // 验收诊断：水母此刻是不是合着眼睡着
+    var nudgeIsArriving: Bool { nudgeArriving }
     var ringActive: Bool { ring != nil }
     var ringVisible: Bool { ring != nil && companion.isVisible }
     var ringID: String? { ring?.id }

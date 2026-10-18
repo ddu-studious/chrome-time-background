@@ -85,6 +85,12 @@ do {
     check(empty.resident == false && empty.night == true && empty.lines.isEmpty && empty.linesUntil == 0, "缺省：不常驻、夜晚荧光开、没有记录文字")
     check(JellyModel.parseState(["resident": true, "night": false])! == JellyModel.State(resident: true, night: false, lines: [], linesUntil: 0), "明确的布尔照单全收")
     check(JellyModel.parseState(["resident": "yes", "night": "no"])!.resident == false && JellyModel.parseState(["resident": "yes", "night": "no"])!.night == true, "非布尔：不常驻、夜晚照开")
+    // 水母差事的右键菜单开关（协议 v9）：jelly 命令里 errands.enabled 严格为 true 才有菜单项，缺省与任何别的写法都没有
+    check(empty.errands == false, "缺省：没有差事菜单")
+    check(JellyModel.parseState(["errands": ["enabled": true]])!.errands == true, "errands.enabled 为 true：有差事菜单")
+    check(JellyModel.parseState(["errands": ["enabled": false]])!.errands == false, "errands.enabled 为 false：没有")
+    let notErrands: [Any] = [true, "yes", 1, [Any](), ["enabled": "yes"], ["enabled": 1], ["enabled": NSNull()], ["on": true], [String: Any]()]
+    for value in notErrands { check(JellyModel.parseState(["errands": value])!.errands == false, "errands 不是 {enabled:true} 一律没有菜单：\(value)") }
     let many = JellyModel.parseState(["lines": ["a", "b", "c", "d", "e"]])!
     check(many.lines == ["a", "b", "c"], "记录文字最多 3 行")
     let long = JellyModel.parseState(["lines": [String(repeating: "水", count: 80)]])!
@@ -132,6 +138,247 @@ do {
     check(JellyModel.parseNudge(nudge(["ttl": 1]))?.ttl == 10 && JellyModel.parseNudge(nudge(["ttl": 99999]))?.ttl == 180, "ttl 夹在 10–180 秒")
     check(JellyModel.parseNudge(nudge(["ttl": 45.4]))?.ttl == 45 && JellyModel.parseNudge(nudge(["ttl": nil]))?.ttl == 90, "ttl 取整，缺省 90 秒")
     check(JellyModel.parseNudge(nudge(["ttl": Double.nan]))?.ttl == 90 && JellyModel.parseNudge(nudge(["ttl": "soon"]))?.ttl == 90, "ttl 不是有限数字时用缺省")
+}
+
+// --- 水母协议 v8：差事气泡（复用 nudge 命令；类别与按钮白名单按类别逐项限定）---
+do {
+    func errand(_ kind: String, _ ids: [String], _ patch: [String: Any?] = [:]) -> [String: Any] {
+        var base: [String: Any] = ["id": "jelly-errand-\(kind)-1", "kind": kind, "title": "有任务过期了", "text": "2 个任务已过期，处理一下吧",
+                                   "buttons": ids.map { ["id": $0, "title": "按钮"] as [String: Any] }, "ttl": 90]
+        for (key, value) in patch { if let value = value { base[key] = value } else { base.removeValue(forKey: key) } }
+        return base
+    }
+    let accepted: [(String, [String])] = [("brief", ["open", "later"]), ("task", ["open", "later"]), ("worklog", ["open", "later"]), ("song", ["play", "another", "dismiss"]), ("tidbit", ["more", "dismiss"])]
+    for (kind, ids) in accepted {
+        let parsed = JellyModel.parseNudge(errand(kind, ids))
+        check(parsed != nil && parsed!.kind == kind && parsed!.buttons.map { $0.id } == ids, "差事类别 \(kind) 带合规按钮被接受")
+        check(JellyModel.parseNudge(errand(kind, [ids[0]]))?.buttons.count == 1, "差事类别 \(kind) 一个按钮也可以")
+    }
+    check(JellyModel.parseNudge(errand("task", ["done", "snooze"])) == nil, "差事类别不能带喝水的按钮")
+    check(JellyModel.parseNudge(errand("water", ["open", "later"])) == nil && JellyModel.parseNudge(errand("stretch", ["more", "dismiss"])) == nil, "喝水/起身不能带差事的按钮")
+    check(JellyModel.parseNudge(errand("tidbit", ["open", "later"])) == nil && JellyModel.parseNudge(errand("task", ["more", "dismiss"])) == nil, "按钮 id 必须属于该类别的允许集合")
+    // 逐个按钮核对：期望表写成独立的字面量（不从被测的规则表推出，否则规则表被放宽时期望会跟着放宽）
+    let everyButton = ["done", "snooze", "open", "later", "more", "dismiss", "play", "another"]
+    let expectedButtons: [String: Set<String>] = [
+        "water": ["done", "snooze"], "stretch": ["done", "snooze"], "brief": ["open", "later"], "task": ["open", "later"],
+        "worklog": ["open", "later"], "song": ["play", "another", "dismiss"], "tidbit": ["more", "dismiss"],
+    ]
+    check(Set(JellyModel.nudgeButtonRules.keys) == Set(expectedButtons.keys), "规则表的类别与期望一致")
+    for (kind, owned) in expectedButtons {
+        for id in everyButton {
+            let accepted = JellyModel.parseNudge(errand(kind, [id])) != nil
+            check(accepted == owned.contains(id), "类别 \(kind) 的按钮 \(id)：\(owned.contains(id) ? "应接受" : "应拒绝")")
+        }
+    }
+    check(JellyModel.parseNudge(errand("task", ["open", "open"])) == nil, "差事按钮 id 不能重复")
+    check(JellyModel.parseNudge(errand("task", ["open", "later", "dismiss"])) == nil, "任务气泡带了不属于它的按钮被拒绝（dismiss 是小乐子与歌曲的）")
+    // 歌曲（协议 v9）：3 个按钮，是唯一允许超过 2 个按钮的类别；其余类别仍最多 2 个
+    check(JellyModel.parseNudge(errand("song", ["play", "another", "dismiss"]))?.buttons.map { $0.id } == ["play", "another", "dismiss"], "歌曲气泡 3 个按钮被接受，顺序保留")
+    check(JellyModel.parseNudge(errand("song", ["play", "another"]))?.buttons.count == 2 && JellyModel.parseNudge(errand("song", ["play"]))?.buttons.count == 1, "歌曲气泡 1～2 个按钮也可以")
+    check(JellyModel.parseNudge(errand("song", ["play", "another", "dismiss", "play"])) == nil, "歌曲气泡 4 个按钮被拒绝")
+    check(JellyModel.parseNudge(errand("song", ["play", "another", "dismiss", "open"])) == nil, "歌曲气泡带第 4 个别类按钮被拒绝")
+    check(JellyModel.parseNudge(errand("song", ["play", "play"])) == nil, "歌曲按钮 id 不能重复")
+    check(JellyModel.parseNudge(errand("song", [String]())) == nil, "歌曲气泡没有按钮被拒绝")
+    check(JellyModel.parseNudge(errand("song", ["open", "later"])) == nil && JellyModel.parseNudge(errand("song", ["more"])) == nil && JellyModel.parseNudge(errand("song", ["done", "snooze"])) == nil, "歌曲气泡不能带别类的按钮")
+    check(JellyModel.parseNudge(errand("tidbit", ["more", "dismiss", "another"])) == nil && JellyModel.parseNudge(errand("water", ["done", "snooze", "play"])) == nil, "只有歌曲能带 3 个按钮，play / another 不能落在别的类别上")
+    check(JellyModel.maxNudgeButtons("song") == 3, "歌曲最多 3 个按钮")
+    check(["water", "stretch", "brief", "task", "worklog", "tidbit", "unknown", ""].allSatisfy { JellyModel.maxNudgeButtons($0) == 2 }, "其余类别（含未知）最多 2 个按钮")
+    check(["Task", "TASK", "task ", "tasks", "errand", ""].allSatisfy { JellyModel.parseNudge(errand($0, ["open", "later"])) == nil }, "差事类别的近似写法也拒绝")
+    check(["Open", "OPEN", "open ", "delete", "play"].allSatisfy { JellyModel.parseNudge(errand("task", [$0])) == nil }, "差事按钮的近似写法与未知动作也拒绝")
+    check(JellyModel.parseNudge(errand("task", ["open", "later"], ["title": String(repeating: "题", count: 40)]))?.title.count == 24, "差事标题同样截到 24 字符")
+    check(JellyModel.parseNudge(errand("task", ["open", "later"], ["text": String(repeating: "文", count: 300)]))?.text.count == 120, "差事正文同样截到 120 字符")
+    check(JellyModel.isErrandKind("task") && JellyModel.isErrandKind("tidbit") && JellyModel.isErrandKind("song") && !JellyModel.isErrandKind("water") && !JellyModel.isErrandKind("stretch") && !JellyModel.isErrandKind("radio"), "差事类别判定")
+    check(JellyModel.isPrimaryNudgeButton(kind: "water", id: "done") && !JellyModel.isPrimaryNudgeButton(kind: "water", id: "snooze"), "喝水的主按钮是“喝了”")
+    check(JellyModel.isPrimaryNudgeButton(kind: "task", id: "open") && !JellyModel.isPrimaryNudgeButton(kind: "task", id: "later"), "过期任务的主按钮是“去处理”")
+    check(JellyModel.isPrimaryNudgeButton(kind: "tidbit", id: "more") && !JellyModel.isPrimaryNudgeButton(kind: "tidbit", id: "dismiss"), "小乐子的主按钮是“再来一条”")
+    check(JellyModel.isPrimaryNudgeButton(kind: "song", id: "play") && !JellyModel.isPrimaryNudgeButton(kind: "song", id: "another") && !JellyModel.isPrimaryNudgeButton(kind: "song", id: "dismiss"), "歌曲的主按钮是“播放”")
+    check(!JellyModel.isPrimaryNudgeButton(kind: "task", id: "done") && !JellyModel.isPrimaryNudgeButton(kind: "unknown", id: "open"), "不属于该类别的按钮不是主按钮")
+    for (kind, _) in accepted { print("ERRAND \(kind) \(JellyModel.primaryNudgeButton[kind] ?? "-") \((JellyModel.nudgeButtonRules[kind] ?? []).sorted().joined(separator: ","))") }
+    // 右键菜单“水母，给我…”的四项（协议 v9）：期望写成独立字面量；kind 必须与 JS 的 REQUEST_KINDS 一致（由 Node 侧对照）
+    check(JellyModel.errandRequestItems.map { $0.kind } == ["brief", "song", "tidbit", "worklog"], "菜单请求的类别与顺序")
+    check(JellyModel.errandRequestItems.map { $0.title } == ["今日概览", "来首歌", "来点乐子", "工作日志"], "菜单项的文字")
+    check(Set(JellyModel.errandRequestItems.map { $0.kind }).count == 4 && Set(JellyModel.errandRequestItems.map { $0.title }).count == 4, "菜单项的类别与文字互不重复")
+    check(JellyModel.errandRequestItems.allSatisfy { JellyModel.isErrandKind($0.kind) }, "菜单请求的类别都是差事类别")
+    check(JellyModel.isErrandRequestKind("song") && JellyModel.isErrandRequestKind("brief") && !JellyModel.isErrandRequestKind("task") && !JellyModel.isErrandRequestKind("water") && !JellyModel.isErrandRequestKind("Song") && !JellyModel.isErrandRequestKind(""), "菜单请求的类别判定（任务提醒不在其中，它只由到期情况触发）")
+    for item in JellyModel.errandRequestItems { print("ERRAND_REQUEST \(item.kind)") }
+}
+
+// --- 水母协议 v8：presence（在 / 不在电脑前）---
+do {
+    check(JellyModel.presenceAwaySeconds == 300, "离开阈值 300 秒")
+    check(JellyModel.presenceState(idleSeconds: 0) == "active" && JellyModel.presenceState(idleSeconds: 299.9) == "active", "不足阈值是 active")
+    check(JellyModel.presenceState(idleSeconds: 300) == "away" && JellyModel.presenceState(idleSeconds: 301) == "away" && JellyModel.presenceState(idleSeconds: 86400) == "away", "到达阈值（含恰好）是 away")
+    check(JellyModel.presenceState(idleSeconds: nil) == "active" && JellyModel.presenceState(idleSeconds: -5) == "active" && JellyModel.presenceState(idleSeconds: Double.nan) == "active" && JellyModel.presenceState(idleSeconds: Double.infinity) == "active", "读不到、负数、非有限值都按 active（不能因读不出空闲时间就让水母一直沉默或乱报）")
+}
+
+// --- 水母协议 v10：jelly 命令的 errands.patrol（活动行为开关）---
+do {
+    let plain = JellyModel.parseState([String: Any]())!
+    check(plain.patrol == false, "缺省：没有活动行为（老样子，休息就睡）")
+    check(JellyModel.parseState(["errands": ["enabled": true, "patrol": true]])!.patrol == true, "errands.enabled 与 patrol 都严格为 true：活动行为开")
+    check(JellyModel.parseState(["errands": ["enabled": true, "patrol": true]])!.errands == true, "开活动行为不影响右键菜单开关")
+    check(JellyModel.parseState(["errands": ["enabled": true]])!.patrol == false, "只开差事没带 patrol（v9 的写法）：没有活动行为")
+    check(JellyModel.parseState(["errands": ["enabled": true, "patrol": false]])!.patrol == false, "patrol 为 false：没有")
+    check(JellyModel.parseState(["errands": ["enabled": false, "patrol": true]])!.patrol == false, "差事没开时 patrol 不生效")
+    check(JellyModel.parseState(["errands": ["patrol": true]])!.patrol == false, "没有 enabled：不生效")
+    check(JellyModel.parseState(["patrol": true])!.patrol == false, "patrol 必须放在 errands 里")
+    let notPatrol: [Any] = [1, "true", "yes", NSNull(), [true], ["on": true], [String: Any]()]
+    for value in notPatrol { check(JellyModel.parseState(["errands": ["enabled": true, "patrol": value]])!.patrol == false, "patrol 不是布尔 true 一律没有：\(value)") }
+    check(JellyModel.State(resident: true, night: false, lines: [], linesUntil: 0) == JellyModel.State(resident: true, night: false, lines: [], linesUntil: 0, errands: false, patrol: false), "State 的新字段缺省为关")
+}
+
+// --- 水母协议 v10：睡觉规则（JellyBehavior.isAsleep）---
+do {
+    func asleep(_ lively: Bool, _ night: Double, _ idle: Double?) -> Bool { JellyBehavior.isAsleep(lively: lively, nightAmount: night, idleSeconds: idle) }
+    check(JellyBehavior.sleepIdleSeconds == 600 && JellyBehavior.sleepNightAmount == 0.5, "睡觉门槛：空闲 600 秒、夜晚曲线 0.5")
+    check(asleep(false, 0, 0) && asleep(false, 0, nil) && asleep(false, 0, 100) && asleep(false, 1, 700), "活动行为关：休息就睡，与别的条件无关（老样子）")
+    check(!asleep(true, 0, 0) && !asleep(true, 0, 299) && !asleep(true, 0, 599.9), "活动行为开：白天在电脑前、短暂离开都不睡")
+    check(!asleep(true, 0.49, 0) && asleep(true, 0.5, 0) && asleep(true, 0.51, 0) && asleep(true, 1, 0), "夜晚曲线 0.5 起睡（含恰好 0.5）")
+    check(!asleep(true, 0, 599.9) && asleep(true, 0, 600) && asleep(true, 0, 601) && asleep(true, 0, 86400), "空闲 600 秒起睡（含恰好 600）")
+    check(!asleep(true, 0, nil) && !asleep(true, 0, -1) && !asleep(true, 0, Double.nan) && !asleep(true, 0, Double.infinity), "读不出空闲时间：当作在电脑前，不睡")
+    check(!asleep(true, Double.nan, 0) && !asleep(true, -3, 0) && !asleep(true, Double.infinity, 0), "夜晚值是 NaN、∞ 或负数：不睡")
+    check(asleep(true, 0.5, 700) && asleep(true, 1, 0), "两个睡觉条件同时成立也只是睡")
+    // 把曲线与小时对起来：19:30–06:30 睡（曲线半高处）；不受“夜晚荧光”开关影响，因为这里直接用曲线值
+    func asleepAt(_ hour: Double) -> Bool { asleep(true, CountdownModel.nightAmount(hour: hour), 0) }
+    check(!asleepAt(12) && !asleepAt(19.49) && asleepAt(19.5) && asleepAt(23) && asleepAt(0) && asleepAt(6.49) && !asleepAt(6.51) && !asleepAt(9), "按小时：19:30 睡下、06:30 起床")
+}
+
+// --- 水母协议 v10：什么时候可以巡游（JellyBehavior.canPatrol）---
+do {
+    let base = JellyBehavior.PatrolContext(lively: true, resident: true, reduceMotion: false, stage: .calm, busy: false, nightAmount: 0, idleSeconds: 5)
+    func can(_ edit: (inout JellyBehavior.PatrolContext) -> Void) -> Bool { var c = base; edit(&c); return JellyBehavior.canPatrol(c) }
+    check(JellyBehavior.canPatrol(base), "全部满足：可以巡游")
+    check(!can { $0.lively = false }, "活动行为关：不巡游")
+    check(!can { $0.resident = false }, "不常驻：不巡游")
+    check(!can { $0.reduceMotion = true }, "减少动态效果：不巡游")
+    for stage in [CountdownStage.soon, .imminent, .final, .due] { check(!can { $0.stage = stage }, "倒计时已进入 \(stage)：水母自己在游，不巡游") }
+    check(!can { $0.busy = true }, "忙（气泡、响铃、被抓、菜单、鼠标在身上）：不巡游")
+    check(can { $0.nightAmount = 0.49 } && !can { $0.nightAmount = 0.5 } && !can { $0.nightAmount = 1 }, "夜里不巡游（曲线 0.5 起）")
+    check(can { $0.idleSeconds = 299.9 } && !can { $0.idleSeconds = 300 } && !can { $0.idleSeconds = 601 }, "离开电脑（presence 为 away，300 秒起）不巡游")
+    check(can { $0.idleSeconds = nil } && can { $0.idleSeconds = -2 } && can { $0.idleSeconds = Double.nan }, "读不出空闲时间：当作在电脑前，可以巡游")
+    check(JellyBehavior.patrolIdleSeconds == JellyModel.presenceAwaySeconds, "巡游的空闲门槛就是 presence 的离开阈值，不另起一个数")
+    // 右键菜单打开期间让路，但最多 180 秒（遗漏 menuDidClose 时不能把活动行为永远关掉）
+    check(JellyBehavior.menuOpenMax == 180, "菜单让路上限 180 秒")
+    check(!JellyBehavior.menuBlocks(openedSecondsAgo: nil), "没有打开中的菜单：不让路")
+    check(JellyBehavior.menuBlocks(openedSecondsAgo: 0) && JellyBehavior.menuBlocks(openedSecondsAgo: 60) && JellyBehavior.menuBlocks(openedSecondsAgo: 179.9), "打开不足 180 秒：让路")
+    check(!JellyBehavior.menuBlocks(openedSecondsAgo: 180) && !JellyBehavior.menuBlocks(openedSecondsAgo: 3600), "打开满 180 秒起不再让路（当作遗漏了关闭通知）")
+    check(!JellyBehavior.menuBlocks(openedSecondsAgo: -5) && !JellyBehavior.menuBlocks(openedSecondsAgo: Double.nan) && !JellyBehavior.menuBlocks(openedSecondsAgo: Double.infinity), "时钟回拨的负间隔与非有限值：不让路")
+}
+
+// --- 水母协议 v10：时段性格（JellyBehavior.personality）---
+do {
+    let ids = ["night", "night", "night", "night", "night", "night", "lively", "lively", "lively", "steady", "steady", "steady",
+               "drowsy", "drowsy", "busy", "busy", "busy", "busy", "mellow", "mellow", "night", "night", "night", "night"]
+    for hour in 0..<24 { check(JellyBehavior.personality(hour: Double(hour)).id == ids[hour], "\(hour) 点的性格是 \(ids[hour])（实际 \(JellyBehavior.personality(hour: Double(hour)).id)）") }
+    let edges: [(Double, String)] = [(5.999, "night"), (6, "lively"), (8.999, "lively"), (9, "steady"), (11.999, "steady"), (12, "drowsy"), (13.999, "drowsy"),
+                                      (14, "busy"), (17.999, "busy"), (18, "mellow"), (19.999, "mellow"), (20, "night"), (23.999, "night"),
+                                      (-1, "night"), (-18, "lively"), (24, "night"), (30, "lively"), (33, "steady"), (Double.nan, "steady"), (Double.infinity, "steady")]
+    for (hour, id) in edges { check(JellyBehavior.personality(hour: hour).id == id, "小时 \(hour) 的性格是 \(id)（实际 \(JellyBehavior.personality(hour: hour).id)）") }
+    // 各档数值（对着设计表写成字面量）
+    func plan(_ hour: Double) -> (delay: ClosedRange<Double>, duration: ClosedRange<Double>, pace: Double, fidget: ClosedRange<Double>)? {
+        let p = JellyBehavior.personality(hour: hour)
+        guard let patrol = p.patrol, let fidget = p.fidget else { return nil }
+        return (patrol.delayMinutes, patrol.durationSeconds, patrol.pace, fidget)
+    }
+    let table: [(Double, ClosedRange<Double>, ClosedRange<Double>, Double, ClosedRange<Double>)] = [
+        (7, 3...5, 30...40, 1.15, 15...30), (10, 4...6, 25...35, 1.0, 25...45), (13, 6...8, 20...28, 0.75, 45...90),
+        (16, 4...6, 25...40, 1.05, 20...40), (19, 5...8, 25...35, 0.85, 30...60),
+    ]
+    for (hour, delay, duration, pace, fidget) in table {
+        let got = plan(hour)
+        check(got?.delay == delay && got?.duration == duration && got?.pace == pace && got?.fidget == fidget, "\(hour) 点的出发间隔 \(delay) 分钟、时长 \(duration) 秒、游速 \(pace)、小动作 \(fidget) 秒（实际 \(String(describing: got))）")
+    }
+    check(JellyBehavior.personality(hour: 23).patrol == nil && JellyBehavior.personality(hour: 23).fidget == nil && JellyBehavior.personality(hour: 3).patrol == nil, "夜里没有巡游，也没有小动作")
+    // 所有时段都落在设计稿的“3–8 分钟 / 20–40 秒”之内，游速倍率在调校函数接受的范围里
+    var inside = true
+    for tenth in 0..<240 {
+        guard let patrol = JellyBehavior.personality(hour: Double(tenth) / 10).patrol else { continue }
+        if patrol.delayMinutes.lowerBound < 3 || patrol.delayMinutes.upperBound > 8 || patrol.durationSeconds.lowerBound < 20 || patrol.durationSeconds.upperBound > 40 || patrol.pace < 0.5 || patrol.pace > 2 { inside = false }
+    }
+    check(inside, "所有时段的巡游参数都在 3–8 分钟、20–40 秒、游速 0.5–2 之内")
+    // 取随机：单位随机数 0 与 1 分别取到区间两端，越界与非数夹紧
+    check(JellyBehavior.pick(3...5, unit: 0) == 3 && JellyBehavior.pick(3...5, unit: 1) == 5 && JellyBehavior.pick(3...5, unit: 0.5) == 4, "pick 取区间的两端与中点")
+    check(JellyBehavior.pick(3...5, unit: -1) == 3 && JellyBehavior.pick(3...5, unit: 2) == 5 && JellyBehavior.pick(3...5, unit: Double.nan) == 3, "pick 对越界与非数夹紧")
+    check(JellyBehavior.pick(7...7, unit: 0.3) == 7, "单点区间恒取该点")
+    // 真实用户走的取值路径（验收覆盖会绕过它）：出发的分钟区间要换成秒，时长与小动作本来就是秒
+    if let steady = JellyBehavior.personality(hour: 10).patrol, let drowsy = JellyBehavior.personality(hour: 13).patrol, let fidget = JellyBehavior.personality(hour: 13).fidget {
+        check(JellyBehavior.patrolDelaySeconds(steady, unit: 0, overrides: nil) == 240 && JellyBehavior.patrolDelaySeconds(steady, unit: 1, overrides: nil) == 360
+              && JellyBehavior.patrolDelaySeconds(steady, unit: 0.5, overrides: nil) == 300, "专注（4–6 分钟）：出发要等 240–360 秒，中点 300 秒")
+        check(JellyBehavior.patrolDelaySeconds(drowsy, unit: 0, overrides: nil) == 360 && JellyBehavior.patrolDelaySeconds(drowsy, unit: 1, overrides: nil) == 480, "犯困（6–8 分钟）：360–480 秒")
+        check(JellyBehavior.patrolDurationSeconds(steady, unit: 0, overrides: nil) == 25 && JellyBehavior.patrolDurationSeconds(steady, unit: 1, overrides: nil) == 35
+              && JellyBehavior.patrolDurationSeconds(drowsy, unit: 0.5, overrides: nil) == 24, "巡游时长直接是秒：专注 25–35，犯困中点 24")
+        check(JellyBehavior.fidgetSeconds(fidget, unit: 0, overrides: nil) == 45 && JellyBehavior.fidgetSeconds(fidget, unit: 1, overrides: nil) == 90, "小动作间隔直接是秒：犯困 45–90")
+        let fixed = JellyBehavior.Overrides(delay: 1.5, duration: 7, fidget: 2.5)
+        check(JellyBehavior.patrolDelaySeconds(steady, unit: 0.9, overrides: fixed) == 1.5 && JellyBehavior.patrolDurationSeconds(steady, unit: 0.9, overrides: fixed) == 7
+              && JellyBehavior.fidgetSeconds(fidget, unit: 0.9, overrides: fixed) == 2.5, "有验收覆盖时三项都以覆盖为准（原样的秒数，不再乘 60）")
+        check(JellyBehavior.patrolDelaySeconds(steady, unit: Double.nan, overrides: nil) == 240, "出发等待遇到非数的随机数取区间下端")
+    } else {
+        check(false, "白天的性格应当有巡游与小动作")
+    }
+    // 验收用的覆盖：出发、时长、小动作三个秒数；任一项不是正有限数整条作废
+    check(JellyBehavior.parseOverrides("1,3,2") == JellyBehavior.Overrides(delay: 1, duration: 3, fidget: 2), "覆盖：1,3,2")
+    check(JellyBehavior.parseOverrides(" 0.5 , 2 , 4 ") == JellyBehavior.Overrides(delay: 0.5, duration: 2, fidget: 4), "覆盖允许空格与小数")
+    for bad in [nil, "", "1,2", "1,2,3,4", "a,b,c", "0,1,2", "1,-1,2", "1,2,0", "1,2,inf", "1,nan,2", "1;2;3", ",,", "1,,3", "1,2,3,", ",1,2,3"] as [String?] {
+        check(JellyBehavior.parseOverrides(bad) == nil, "非法覆盖整条作废：\(bad ?? "nil")")
+    }
+}
+
+// --- 水母协议 v10：巡游的游动调校（JellyTuning.patrol）与物理分布 ---
+do {
+    let t1 = JellyTuning.patrol(pace: 1)
+    check(abs(t1.period - 1.4) < 1e-9 && t1.thrustX == 62 && t1.hover == 16, "游速倍率 1：脉动 1.4 秒、水平冲量 62、愿意停留的高度 16")
+    check(abs(t1.thrustY - 41.06) < 0.2, "游速倍率 1 的垂直冲量按“上升≈下沉”标定（约 41.06，实际 \(t1.thrustY)）")
+    let slow = JellyTuning.patrol(pace: 0.75), fast = JellyTuning.patrol(pace: 1.15)
+    check(abs(slow.period - 1.4 / 0.75) < 1e-9 && abs(fast.period - 1.4 / 1.15) < 1e-9, "倍率越大脉动越快（周期与倍率成反比）")
+    check(abs(slow.thrustY - 50.8) < 0.3 && abs(fast.thrustY - 37.5) < 0.3, "周期越短垂直冲量越小，否则会一路升到顶（实际 \(slow.thrustY) / \(fast.thrustY)）")
+    for bad in [0.0, -1.0, Double.nan, Double.infinity] {
+        let t = JellyTuning.patrol(pace: bad)
+        check(abs(t.period - t1.period) < 1e-9 && abs(t.thrustY - t1.thrustY) < 1e-9, "非法倍率 \(bad) 按 1")
+    }
+    check(abs(JellyTuning.patrol(pace: 10).period - 0.7) < 1e-9 && abs(JellyTuning.patrol(pace: 0.1).period - 2.8) < 1e-9, "倍率夹在 0.5–2")
+    let calm = JellyTuning.forStage(.calm)
+    check(calm.period == 2.4 && calm.thrustX == 40 && calm.thrustY == 62 && calm.hover == 12, "平静阶段的调校没有被改动")
+}
+for pace in [0.75, 1.0, 1.15] {
+    var rng = SeededRandom(state: 99)
+    var swim = JellySwim()
+    swim.setBounds(lo: 100, hi: 1500)
+    swim.x = 800
+    swim.tuning = JellyTuning.patrol(pace: pace)
+    swim.wantsRest = false
+    swim.mode = .swim
+    let dt: CGFloat = 1.0 / 30
+    var samples = 0, sumY: CGFloat = 0, high = 0, ceiling = 0, below = 0, outside = 0
+    var path30: CGFloat = 0, lastX = swim.x
+    for step in 0..<(30 * 600) {
+        swim.step(dt: dt, random: { rng.next() })
+        samples += 1; sumY += swim.y
+        if swim.y > 60 { high += 1 }
+        if swim.y >= JellySwim.maxLift - 0.01 { ceiling += 1 }
+        if swim.y < 0 { below += 1 }
+        if swim.x < 100 || swim.x > 1500 { outside += 1 }
+        if step < 30 * 30 { path30 += abs(swim.x - lastX) }
+        lastX = swim.x
+    }
+    let mean = sumY / CGFloat(samples)
+    check(below == 0 && outside == 0, "巡游 \(pace)：不沉到泳线以下、不越界")
+    check(Double(high) / Double(samples) < 0.05, "巡游 \(pace)：超过 60 点高度的时间 < 5%（实际 \(String(format: "%.1f", Double(high) / Double(samples) * 100))%）")
+    check(Double(ceiling) / Double(samples) < 0.02, "巡游 \(pace)：极少顶到高度上限（实际 \(String(format: "%.1f", Double(ceiling) / Double(samples) * 100))%）")
+    check(mean > 3 && mean < swim.tuning.hover + 18, "巡游 \(pace)：平均高度接近愿意停留的高度（实际 \(String(format: "%.1f", mean))，目标 \(swim.tuning.hover)）")
+    check(path30 >= 300, "巡游 \(pace)：前 30 秒水平路程至少 300 点（实际 \(String(format: "%.0f", path30))）")
+    // 比平静阶段明显快：同样的种子与时长，路程至少 1.5 倍
+    var calmRng = SeededRandom(state: 99)
+    var calmSwim = JellySwim()
+    calmSwim.setBounds(lo: 100, hi: 1500); calmSwim.x = 800
+    calmSwim.tuning = JellyTuning.forStage(.calm); calmSwim.wantsRest = false; calmSwim.mode = .swim
+    var calmPath: CGFloat = 0, calmLast = calmSwim.x
+    for _ in 0..<(30 * 30) { calmSwim.step(dt: dt, random: { calmRng.next() }); calmPath += abs(calmSwim.x - calmLast); calmLast = calmSwim.x }
+    check(path30 > calmPath * 1.5, "巡游 \(pace) 比平静阶段的漫游明显更快（\(String(format: "%.0f", path30)) 对 \(String(format: "%.0f", calmPath)) 点）")
+    // 巡游结束（想休息）后落回泳线并静止
+    swim.wantsRest = true
+    var seconds = 0.0
+    while swim.mode != .rest && seconds < 20 { swim.step(dt: dt, random: { rng.next() }); seconds += 1.0 / 30 }
+    check(swim.mode == .rest && swim.y == 0 && swim.vx == 0 && swim.vy == 0, "巡游 \(pace)：结束后落回泳线并静止（用时 \(String(format: "%.1f", seconds)) 秒）")
 }
 
 // --- 水母协议 v6：show 命令（到点响铃气泡）---
@@ -1320,13 +1567,16 @@ do {
             }
         }
         // 逐物种、逐阶段的纵向分布与平均速度（与水母同一套判据；动物的垂直起伏更小、平均速度与水母相当）
-        func simulate(_ stage: CountdownStage, _ species: S, seed: UInt64 = 42) -> (mean: CGFloat, high: Double, ceiling: Double, below: Int, outside: Int, speed: CGFloat, range: CGFloat, vyMax: CGFloat, hover: CGFloat) {
+        typealias Sim = (mean: CGFloat, high: Double, ceiling: Double, below: Int, outside: Int, speed: CGFloat, range: CGFloat, vyMax: CGFloat, hover: CGFloat, path30: CGFloat)
+        // 按任意一份游动调参跑 10 分钟的种子化模拟：阶段调参（forStage）与巡游调参（patrol，协议 v10）共用这一份循环，判据口径一致；path30 是前 30 秒的水平路程
+        func simulateTuning(_ tuning: JellyTuning, seed: UInt64 = 42) -> Sim {
             var rng = SeededRandom(state: seed)
             var swim = JellySwim(); swim.setBounds(lo: 100, hi: 1500); swim.x = 800
-            swim.tuning = JellyTuning.forStage(stage, species: species); swim.wantsRest = false; swim.mode = .swim
+            swim.tuning = tuning; swim.wantsRest = false; swim.mode = .swim
             var n = 0, high = 0, ceiling = 0, below = 0, outside = 0
             var sumY: CGFloat = 0, sumSpeed: CGFloat = 0, minX = CGFloat.infinity, maxX = -CGFloat.infinity, vyMax: CGFloat = 0
-            for _ in 0..<(30 * 600) {
+            var path30: CGFloat = 0, lastX = swim.x
+            for step in 0..<(30 * 600) {
                 swim.step(dt: 1.0 / 30, random: { rng.next() })
                 n += 1; sumY += swim.y; sumSpeed += abs(swim.vx)
                 if swim.y > 60 { high += 1 }
@@ -1334,9 +1584,12 @@ do {
                 if swim.y < 0 { below += 1 }
                 if swim.x < 100 || swim.x > 1500 { outside += 1 }
                 minX = min(minX, swim.x); maxX = max(maxX, swim.x); vyMax = max(vyMax, abs(swim.vy))
+                if step < 30 * 30 { path30 += abs(swim.x - lastX) }
+                lastX = swim.x
             }
-            return (sumY / CGFloat(n), Double(high) / Double(n), Double(ceiling) / Double(n), below, outside, sumSpeed / CGFloat(n), maxX - minX, vyMax, swim.tuning.hover)
+            return (sumY / CGFloat(n), Double(high) / Double(n), Double(ceiling) / Double(n), below, outside, sumSpeed / CGFloat(n), maxX - minX, vyMax, swim.tuning.hover, path30)
         }
+        func simulate(_ stage: CountdownStage, _ species: S, seed: UInt64 = 42) -> Sim { simulateTuning(JellyTuning.forStage(stage, species: species), seed: seed) }
         for species in S.allCases where species.isAvailable && species != .jelly {
             for stage in [CountdownStage.soon, .imminent, .final] {
                 let id = "\(species.rawValue)/\(stage)"
@@ -1382,6 +1635,70 @@ do {
                 }
             }
             check(failures.isEmpty, "\(species.rawValue)：12 个种子 × 三个阶段都满足通用判据（失败：\(failures.prefix(5).joined(separator: "、"))）")
+        }
+        // ---- 巡游（协议 v10）× 物种系数：巡游调校是按水母标定的，动物巡游时必须乘上自己的物种系数（JellyTuning.current）----
+        // 并入 feat/jelly-errands 时发现的交叠：两边各自都对，只有放在一起才出问题——巡游不乘系数的话，侧视动物（鲸鲨、海龟）会按水母的幅度上下摆动（最大纵向速度约 38 对 11–21）。
+        do {
+            let synthetic = SwimProfile(period: 1.1, thrustX: 1.2, thrustY: 1.3, sink: 1.4, dragX: 1.5, dragY: 1.6)
+            for (name, base) in [("巡游 1.0", JellyTuning.patrol(pace: 1)), ("巡游 0.75", JellyTuning.patrol(pace: 0.75)), ("平静", JellyTuning.forStage(.calm)), ("到点", JellyTuning.forStage(.due))] {
+                let t = base.scaled(by: synthetic)
+                check(near(t.period, base.period * 1.1) && near(t.thrustX, base.thrustX * 1.2) && near(t.thrustY, base.thrustY * 1.3) && near(t.sink, base.sink * 1.4) && near(t.dragX, base.dragX * 1.5) && near(t.dragY, base.dragY * 1.6), "\(name)：六项各乘各的系数")
+                check(t.hover == base.hover, "\(name)：愿意停留的高度 hover 不乘系数")
+                check(base.scaled(by: SwimProfile()) == base, "\(name)：系数全是 1 时与原调校完全相同")
+            }
+            for stage in [CountdownStage.calm, .soon, .imminent, .final, .due] {
+                check(JellyTuning.forStage(stage, profile: synthetic) == JellyTuning.forStage(stage).scaled(by: synthetic), "\(stage)：按阶段挑的调参 = 水母调参乘系数（与巡游共用同一个乘法）")
+            }
+            // current：没有巡游时就是 forStage（含不可用物种回退水母）；有巡游时是“巡游乘上实际生效物种的系数”，水母原样，且与阶段无关
+            for species in S.allCases {
+                for stage in [CountdownStage.calm, .soon, .imminent, .final, .due] {
+                    check(JellyTuning.current(stage: stage, patrol: nil, species: species) == JellyTuning.forStage(stage, species: species), "\(species.rawValue)/\(stage)：没有巡游时与阶段调参完全相同")
+                    check(JellyTuning.current(stage: stage, patrol: JellyTuning.patrol(pace: 1), species: species) == JellyTuning.patrol(pace: 1).scaled(by: species.effective.swimProfile), "\(species.rawValue)/\(stage)：有巡游时 = 巡游调校乘实际生效物种的系数")
+                }
+                for pace in [0.75, 1.0, 1.15] {
+                    let patrol = JellyTuning.patrol(pace: pace)
+                    let current = JellyTuning.current(stage: .calm, patrol: patrol, species: species)
+                    check(current.hover == patrol.hover && current.hover == 16, "\(species.rawValue)/\(pace)：巡游时愿意停留的高度仍是 16")
+                    if species.effective == .jelly { check(current == patrol, "\(species.rawValue)/\(pace)：水母的巡游调校原样（与加入物种之前逐位相同）") }
+                    else { check(current != patrol, "\(species.rawValue)/\(pace)：动物的巡游调校不是水母那一份（乘了自己的系数）") }
+                }
+            }
+            check(near(JellyTuning.current(stage: .calm, patrol: JellyTuning.patrol(pace: 1), species: .manta).period, 1.4 * 1.35), "蝠鲼巡游：脉动周期是水母巡游的 1.35 倍（拍翼更慢）")
+            check(JellyTuning.current(stage: .calm, patrol: JellyTuning.patrol(pace: 1), species: .whaleshark).period == JellyTuning.patrol(pace: 1).period, "鲸鲨巡游：脉动周期不变")
+            // 种子化模拟：逐物种、逐倍率；判据与阶段检查同口径，再加三条巡游特有的——比平静阶段明显快、倍率越大越快、不按水母的幅度上下摆
+            for species in S.allCases where species.isAvailable && species != .jelly {
+                var speeds: [Double] = []
+                let calm = simulate(.calm, species)
+                for pace in [0.75, 1.0, 1.15] {
+                    let patrol = JellyTuning.patrol(pace: pace)
+                    let a = simulateTuning(JellyTuning.current(stage: .calm, patrol: patrol, species: species), seed: 99)
+                    let j = simulateTuning(patrol, seed: 99)
+                    let id = "\(species.rawValue)/巡游 \(pace)"
+                    check(a.below == 0 && a.outside == 0, "\(id)：不沉到泳线以下、不越界")
+                    check(a.high < 0.05 && a.ceiling < 0.02, "\(id)：超过 60 点的时间 < 5%、顶到上限 < 2%（\(String(format: "%.1f", a.high * 100))% / \(String(format: "%.1f", a.ceiling * 100))%）")
+                    check(a.mean > a.hover && a.mean < a.hover + 18, "\(id)：平均高度在愿意停留的高度之上、不贴泳线也不飘高（\(String(format: "%.1f", Double(a.mean)))，目标 \(a.hover)）")
+                    check(a.path30 >= 300 && a.range > 400, "\(id)：前 30 秒水平路程至少 300 点、10 分钟内游过的范围 > 400（\(String(format: "%.0f", Double(a.path30))) / \(String(format: "%.0f", Double(a.range)))）")
+                    check(a.path30 >= calm.path30 * 1.5, "\(id)：比这只动物平静阶段明显快（前 30 秒路程 \(String(format: "%.0f", Double(a.path30))) 对 \(String(format: "%.0f", Double(calm.path30)))，至少 1.5 倍）")
+                    check(a.speed >= j.speed * 0.7 && a.speed <= j.speed * 1.4, "\(id)：平均横向速度与同倍率的水母相当（\(String(format: "%.1f", Double(a.speed))) 对 \(String(format: "%.1f", Double(j.speed)))，要求 0.7–1.4 倍）")
+                    check(a.vyMax < j.vyMax * 0.7, "\(id)：纵向起伏明显比水母小（最大纵向速度 \(String(format: "%.1f", Double(a.vyMax))) 对 \(String(format: "%.1f", Double(j.vyMax)))；不乘物种系数时与水母相同）")
+                    speeds.append(Double(a.speed))
+                }
+                check(speeds[0] < speeds[1] && speeds[1] < speeds[2], "\(species.rawValue)：游速倍率越大平均横向速度越大（\(speeds.map { String(format: "%.1f", $0) }.joined(separator: " < "))）")
+            }
+            // 多种子稳健性：系数与巡游调校都是按固定种子标定的，换一批随机数也必须满足同一套判据
+            for species in S.allCases where species.isAvailable && species != .jelly {
+                var failures: [String] = []
+                for pace in [0.75, 1.0, 1.15] {
+                    let patrol = JellyTuning.patrol(pace: pace)
+                    for seed in 1...12 {
+                        let a = simulateTuning(JellyTuning.current(stage: .calm, patrol: patrol, species: species), seed: UInt64(seed)), j = simulateTuning(patrol, seed: UInt64(seed))
+                        let ok = a.below == 0 && a.outside == 0 && a.high < 0.05 && a.ceiling < 0.02 && a.mean > a.hover && a.mean < a.hover + 18
+                            && a.path30 >= 300 && a.range > 400 && a.speed >= j.speed * 0.7 && a.speed <= j.speed * 1.4 && a.vyMax < j.vyMax * 0.7
+                        if !ok { failures.append("倍率 \(pace)/种子 \(seed)") }
+                    }
+                }
+                check(failures.isEmpty, "\(species.rawValue)：三个倍率 × 12 个种子的巡游都满足判据（失败：\(failures.prefix(5).joined(separator: "、"))）")
+            }
         }
         // 响铃涟漪的外半径：默认 62；离窗口最近一边不足 70 时缩小，最外圈离边缘至少 8 点；下限 inner + 4
         typealias R = JellyRingMotion

@@ -407,10 +407,10 @@ extension JellyTuning {
         forStage(stage, profile: species.effective.swimProfile)
     }
 
-    /// 把一组系数乘到某阶段的水母调参上（愿意停留的高度 hover 不乘）；系数全是 1 时与 forStage(_:) 完全相同。
-    /// 单独成函数是为了自测能用合成的系数逐项核对“六项各乘各的”——目前真实动物只有两三项不是 1。
-    static func forStage(_ stage: CountdownStage, profile: SwimProfile) -> JellyTuning {
-        var tuning = forStage(stage)
+    /// 把一组系数乘到某一份水母调参上（愿意停留的高度 hover 不乘）；系数全是 1 时与原调参完全相同。
+    /// 按阶段挑的调参（forStage）与巡游调参（patrol，协议 v10）共用这一个乘法，免得两处各写一遍、改系数时漏掉一处。
+    func scaled(by profile: SwimProfile) -> JellyTuning {
+        var tuning = self
         tuning.period *= profile.period
         tuning.thrustX *= profile.thrustX
         tuning.thrustY *= profile.thrustY
@@ -418,6 +418,20 @@ extension JellyTuning {
         tuning.dragX *= profile.dragX
         tuning.dragY *= profile.dragY
         return tuning
+    }
+
+    /// 把一组系数乘到某阶段的水母调参上（愿意停留的高度 hover 不乘）；系数全是 1 时与 forStage(_:) 完全相同。
+    /// 单独成函数是为了自测能用合成的系数逐项核对“六项各乘各的”——目前真实动物只有两三项不是 1。
+    static func forStage(_ stage: CountdownStage, profile: SwimProfile) -> JellyTuning {
+        forStage(stage).scaled(by: profile)
+    }
+
+    /// 这一刻某物种该用的游动调参：给了巡游调校（协议 v10，按水母标定）就用它，否则按倒计时阶段挑；两种情况都再乘上实际生效物种的系数。
+    /// 水母的系数全是 1，所以水母的调参与没有物种之前逐位相同；动物巡游时同样乘自己的系数（慢而稳的巡游起来也该慢而稳），
+    /// 不能直接用水母的巡游调校。游动窗口刷新与换物种两处都走这一个函数，免得巡游中换物种的那一刻调校被丢回按阶段挑的那份。
+    static func current(stage: CountdownStage, patrol: JellyTuning?, species: JellySpecies) -> JellyTuning {
+        guard let patrol = patrol else { return forStage(stage, species: species) }
+        return patrol.scaled(by: species.effective.swimProfile)
     }
 }
 

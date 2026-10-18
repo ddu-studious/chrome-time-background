@@ -551,7 +551,7 @@ test('index.html：脚本顺序与版本钉子（核心、玩法核心、玩法�
 test('设置页：有水族馆开关，默认开，保存键 aquariumFish，脚本版本已更新', () => {
     const html = read('settings.html');
     assert.match(html, /id="set-bgAquariumFish" checked/);
-    assert.ok(html.includes('js/settings-page.js?v=11'));
+    assert.ok(html.includes('js/settings-page.js?v=14'));
     const page = read('js/settings-page.js');
     assert.match(page, /aquariumFish: true,/);
     assert.match(page, /aquariumFish: stored\.aquariumFish !== false/);
