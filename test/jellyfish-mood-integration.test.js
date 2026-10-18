@@ -69,7 +69,7 @@ test('设置页文案：说明了起舞不是真实节拍、成长只读、陪�
     const html = read('settings.html');
     assert.match(html, /不是真实的音乐节拍，也不读取音频/);
     assert.match(html, /不改任何任务数据/);
-    assert.match(html, /与是否选了“深海水母”背景无关/);
+    assert.match(html, /与是否选了“水族馆”背景无关/);
 });
 
 // ---------- 音乐播放状态广播 ----------

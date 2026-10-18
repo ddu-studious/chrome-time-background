@@ -691,6 +691,8 @@
             start, stop, frame, hoverAt, grabAt, drop, cancel,
             isActive: () => started && !failed,
             growth: () => growth,
+            // 只读：各钟罩的位置与半径，给水族馆里的鱼避让用（鱼读水母，水母不读鱼）。
+            bells: () => (world ? world.jellies.map(j => ({ x: j.x, y: j.y, r: j.r })) : []),
             draw, PALETTE,                // 番茄钟面板里的陪伴水母（pomodoro-jelly.js）复用同一套画法
             isGrabbing: () => !!session,
             state: () => ({ started, failed, pending: pending === null ? null : pending.length, populated, jellies: world ? world.jellies.length : 0 }),

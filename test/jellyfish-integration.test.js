@@ -454,7 +454,7 @@ test('background-experience.js 的归一化：认识 jellyfish，不认识的取
 test('settings.html：水母选项在“v2 视觉风格”下拉框里，说明写清数量规则、秒针与减少动态效果', () => {
     const html = read('settings.html');
     const field = html.slice(html.indexOf('v2 视觉风格'), html.indexOf('</select>', html.indexOf('id="set-bgVisualEffect"')));
-    assert.match(field, /<option value="jellyfish">深海水母<\/option>/);
+    assert.match(field, /<option value="jellyfish">水族馆<\/option>/);
     assert.match(field, /未完成的任务数/);
     assert.match(field, /最多 8 只/);
     assert.match(field, /一只水母对应一个任务/);
@@ -475,7 +475,7 @@ test('index.html：先核心、再皮肤、最后宿主；没有远程脚本，�
     const tags = html.slice(core - 20, host + 80).match(/<script[^>]*>/g);
     assert.ok(tags.every(tag => !/https?:/.test(tag)), '不引用远程脚本');
     assert.match(html, /css\/background-experience\.css\?v=6/);
-    assert.match(html, /js\/background-experience\.js\?v=11/);
+    assert.match(html, /js\/background-experience\.js\?v=12/);
 });
 
 test('CSS：水母色调层只在 data-visual=jellyfish 时出现，用宿主的强度变量，不引入外部资源', () => {
@@ -1089,7 +1089,7 @@ test('settings.html：有“水母夜晚荧光”开关（默认勾选且只出�
     assert.match(field, /只读本机时钟/);
     assert.match(field, /昼夜一个样/);
     const index = read('index.html');
-    for (const [file, version] of [['jellyfish-core.js', 6], ['jellyfish.js', 5], ['background-experience.js', 11]]) {
+    for (const [file, version] of [['jellyfish-core.js', 6], ['jellyfish.js', 6], ['background-experience.js', 12]]) {
         assert.ok(index.includes(`js/${file}?v=${version}`), `${file} 版本号`);
     }
 });

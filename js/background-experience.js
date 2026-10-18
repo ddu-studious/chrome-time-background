@@ -22,6 +22,7 @@
         jellyfishDance: true,
         jellyfishGrow: true,
         pomodoroJelly: true,
+        aquariumFish: true,
     });
     const VISUAL_EFFECTS = new Set(['none', 'depth', 'weather', 'memory', 'liquid', 'time', 'jellyfish']);
     const COLORS = [[112, 205, 255], [170, 111, 255], [79, 239, 194]];
@@ -59,6 +60,8 @@
             jellyfishDance: source.jellyfishDance !== false,
             jellyfishGrow: source.jellyfishGrow !== false,
             pomodoroJelly: source.pomodoroJelly !== false,
+            // 水族馆：在水母皮肤下可以放入、捞出小鱼（js/aquarium*.js）。只有明确 false 才关；关闭后不读写鱼的存储、没有托盘。
+            aquariumFish: source.aquariumFish !== false,
         };
     }
 
@@ -104,7 +107,7 @@
             // pointer 的初始值只是屏幕中心的占位：水母只躲真实收到过、并且仍在页面里的指针（见 jellyfishPointer）。
             this.pointerSeen = false;
             this.pointerInside = false;
-            this.grab = null;               // 正在抓水母：{ id }；水母的抓取状态机在皮肤里，这里只转发指针并管光标/点击
+            this.grab = null;               // 正在抓水母或鱼：{ id, kind: 'jelly'|'fish' }；抓取状态机在各自的模块里，这里只转发指针并管光标/点击
             this.grabHover = false;         // 指针下面是不是一只可抓的水母（光标变成手）
             this.swallowClickUntil = 0;     // 拖拽结束后紧跟着的那次 click 不让页面当成“点了空白处”
             this.bound = false;
@@ -167,13 +170,36 @@
             if (!skin) return;
             if (visual === 'jellyfish') {
                 // 关掉“任务名与抓取”（例如在设置页或别的标签页里）：正在抓着的水母放开，松手时不再完成任务；水母本身照常游
-                if (!this.settings.jellyfishTasks) { this.cancelGrab(); this.setGrabHover(false); }
+                if (!this.settings.jellyfishTasks) {
+                    if (this.grab?.kind === 'jelly') this.cancelGrab();      // 正抓着的鱼不受“任务名与抓取”开关影响
+                    this.setGrabHover(false);                                // 光标类立刻撤掉；指针下若是鱼，下一次移动会重新判定
+                }
                 skin.start();
+                this.syncAquarium(true);
                 return;
             }
             this.cancelGrab();
             this.setGrabHover(false);
+            this.syncAquarium(false);
             skin.stop();
+        }
+
+        // 水族馆（鱼）只在选了水母皮肤、且设置开着时运行；js/aquarium.js 缺席时这些入口都是空操作。
+        aquarium() {
+            return window.Aquarium || null;
+        }
+
+        syncAquarium(visualIsJellyfish) {
+            const aq = this.aquarium();
+            if (!aq) return;
+            if (visualIsJellyfish && this.settings.aquariumFish) { aq.start(); return; }
+            if (this.grab?.kind === 'fish') this.cancelGrab();
+            aq.stop();
+        }
+
+        fishRunning() {
+            const aq = this.aquarium();
+            return this.settings.visualEffect === 'jellyfish' && !!aq && aq.isActive();
         }
 
         jellyfishRunning() {
@@ -187,6 +213,16 @@
         }
 
         drawJellyfish(now, dt, amount) {
+            // 鱼画在水母后面（先画）；它读水母钟罩的位置避让，水母不读鱼。画法出错只停鱼层，不影响水母。
+            const aq = this.aquarium();
+            if (aq && aq.isActive()) {
+                const skin = this.skin();
+                aq.frame({
+                    ctx: this.ctx, width: this.width, height: this.height, dt, amount,
+                    pointer: this.jellyfishPointer(), lowPower: this.saveData, night: this.settings.jellyfishNight,
+                    bells: skin && typeof skin.bells === 'function' ? skin.bells() : [],
+                });
+            }
             // 不传 colors：水母用皮肤自己的七彩调色板（每只一种颜色）；宿主的 COLORS 只有几种，传过去会让七彩失效
             this.skin()?.frame({
                 ctx: this.ctx, width: this.width, height: this.height, now, dt, amount,
@@ -200,6 +236,11 @@
             return !this.hidden && this.settings.jellyfishTasks && this.jellyfishRunning();
         }
 
+        /** 鱼是否允许被抓：水族馆在运行、设置开着、页面可见（与“任务名与抓取”开关无关：鱼不绑任务）。 */
+        canGrabFish() {
+            return !this.hidden && this.settings.aquariumFish && this.fishRunning();
+        }
+
         setGrabHover(value) {
             if (this.grabHover === value) return;
             this.grabHover = value;
@@ -208,19 +249,24 @@
 
         /** 鼠标移到可抓的水母上时把光标变成手（只看空白背景处的鼠标；触摸没有悬停）。 */
         updateGrabHover(event) {
-            const over = !this.grab && event.pointerType === 'mouse' && this.canGrabJelly()
-                && this.isBackgroundTarget(event.target) && !!this.skin().hoverAt(event.clientX, event.clientY);
-            this.setGrabHover(over);
+            const eligible = !this.grab && event.pointerType === 'mouse' && this.isBackgroundTarget(event.target);
+            const overJelly = eligible && this.canGrabJelly() && !!this.skin().hoverAt(event.clientX, event.clientY);
+            const overFish = eligible && !overJelly && this.canGrabFish() && !!this.aquarium().hoverAt(event.clientX, event.clientY);
+            this.setGrabHover(overJelly || overFish);
         }
 
         /** 在空白背景上按下主键，且正好按在一只绑定了任务的水母上：抓住它。返回是否抓住（抓住就不再交给背景玩法）。 */
         tryGrab(event) {
             if (this.grab || event.button !== 0 || event.isPrimary === false) return false;
-            if (!this.canGrabJelly() || !this.isBackgroundTarget(event.target)) return false;
-            if (!this.skin().grabAt(event.clientX, event.clientY)) return false;
+            if (!this.isBackgroundTarget(event.target)) return false;
+            // 重叠时水母优先（保持“抓水母完成任务”的原有行为），没抓到水母才问鱼；一次只抓一个，所以纸篓与网兜不会同时出现
+            let kind = null;
+            if (this.canGrabJelly() && this.skin().grabAt(event.clientX, event.clientY)) kind = 'jelly';
+            else if (this.canGrabFish() && this.aquarium().grabAt(event.clientX, event.clientY)) kind = 'fish';
+            if (!kind) return false;
             event.preventDefault();                 // 不选中文字、不开始原生拖拽
             this.setPointer(event);
-            this.grab = { id: event.pointerId };
+            this.grab = { id: event.pointerId, kind };
             this.setGrabHover(false);
             document.documentElement?.classList.add('jellyfish-grabbing');
             return true;
@@ -232,18 +278,19 @@
             if (!grab) return;
             this.grab = null;
             document.documentElement?.classList.remove('jellyfish-grabbing');
-            const skin = this.skin();
-            if (!skin) return;
+            const target = grab.kind === 'fish' ? this.aquarium() : this.skin();
+            if (!target) return;
             this.setPointer(event);
-            if (skin.drop(event.clientX, event.clientY)) this.swallowClickUntil = performance.now() + 450;
+            if (target.drop(event.clientX, event.clientY)) this.swallowClickUntil = performance.now() + 450;
         }
 
         /** 被打断（失焦、页面隐藏、指针取消、关掉水母皮肤）：放开水母、收起纸篓，不完成任何任务。 */
         cancelGrab() {
             if (!this.grab) return;
+            const kind = this.grab.kind;
             this.grab = null;
             document.documentElement?.classList.remove('jellyfish-grabbing');
-            this.skin()?.cancel();
+            (kind === 'fish' ? this.aquarium() : this.skin())?.cancel();
         }
 
         /** 拖拽结束后随即到来的那次 click：它不是用户想点的东西，不让页面当成“点了空白处”（关面板之类）。 */

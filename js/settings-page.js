@@ -161,6 +161,7 @@
         jellyfishDance: true,
         jellyfishGrow: true,
         pomodoroJelly: true,
+        aquariumFish: true,
     };
     const BG_VISUAL_EFFECTS = new Set(['none', 'depth', 'weather', 'memory', 'liquid', 'time', 'jellyfish']);
     let bgExperienceSettings = { ...BG_EXPERIENCE_DEFAULTS };
@@ -202,6 +203,7 @@
             jellyfishDance: stored.jellyfishDance !== false,
             jellyfishGrow: stored.jellyfishGrow !== false,
             pomodoroJelly: stored.pomodoroJelly !== false,
+            aquariumFish: stored.aquariumFish !== false,
         };
     }
 
@@ -247,6 +249,7 @@
         const jellyfishDance = document.getElementById('set-bgJellyfishDance');
         const jellyfishGrow = document.getElementById('set-bgJellyfishGrow');
         const pomodoroJelly = document.getElementById('set-bgPomodoroJelly');
+        const aquariumFish = document.getElementById('set-bgAquariumFish');
         // 一个下拉框对应两个字段：none（直接切换）/ random（每次随机）/ 某一种风格。选项来自转场模块的注册表，见 renderTransitionOptions。
         if (transition) transition.value = weaveCore ? weaveCore.choiceFromSettings(bgExperienceSettings) : 'random';
         if (clockLiquid) clockLiquid.checked = bgExperienceSettings.clockLiquid;
@@ -256,6 +259,7 @@
         if (jellyfishDance) jellyfishDance.checked = bgExperienceSettings.jellyfishDance;
         if (jellyfishGrow) jellyfishGrow.checked = bgExperienceSettings.jellyfishGrow;
         if (pomodoroJelly) pomodoroJelly.checked = bgExperienceSettings.pomodoroJelly;
+        if (aquariumFish) aquariumFish.checked = bgExperienceSettings.aquariumFish;
     }
 
     function bindBgExperienceEvents() {
@@ -272,6 +276,7 @@
             ['set-bgJellyfishDance', 'jellyfishDance', element => element.checked],
             ['set-bgJellyfishGrow', 'jellyfishGrow', element => element.checked],
             ['set-bgPomodoroJelly', 'pomodoroJelly', element => element.checked],
+            ['set-bgAquariumFish', 'aquariumFish', element => element.checked],
         ];
         for (const [id, key, read] of bindings) {
             const element = document.getElementById(id);

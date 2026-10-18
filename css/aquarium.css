@@ -1,0 +1,198 @@
+/* 水族馆（js/aquarium.js）的托盘、居民列表与网兜，以及喂食按钮（js/aquarium-play.js）。只在选了“水族馆”视觉且开着水族馆小鱼时才有这些元素。
+   托盘按钮放在“唤醒背景玩法”按钮（右下 18px / 82px）的正上方；面板向左展开，不遮挡底部 Dock。
+   网兜是拖鱼时才出现的落点，与水母的纸篓是两个东西，不会同时出现（一次只抓一个）。 */
+
+.aq-ui {
+    position: fixed;
+    right: 18px;
+    bottom: 130px;
+    z-index: 100;               /* 比右侧快捷操作区（99）高：它的透明 HUD 区域也会接收点击，压在下面会点不到面板里的按钮 */
+    width: 40px;
+    height: 40px;
+}
+
+.aq-toggle {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, .2);
+    border-radius: 50%;
+    color: rgba(246, 249, 255, .94);
+    background: linear-gradient(145deg, rgba(255, 255, 255, .13), rgba(8, 13, 22, .22) 56%, rgba(5, 9, 17, .34));
+    box-shadow: 0 10px 24px rgba(0, 0, 0, .2), 0 0 0 1px rgba(79, 239, 194, .1);
+    -webkit-backdrop-filter: blur(9px) saturate(132%);
+    backdrop-filter: blur(9px) saturate(132%);
+    cursor: pointer;
+    transition: transform .22s cubic-bezier(.2, .8, .2, 1), border-color .22s ease, box-shadow .22s ease;
+}
+.aq-toggle:hover { transform: translateY(-1px); border-color: rgba(79, 239, 194, .5); }
+.aq-toggle:focus-visible { outline: 2px solid rgba(139, 207, 255, .9); outline-offset: 2px; }
+.aq-toggle > i { filter: drop-shadow(0 1px 4px rgba(0, 0, 0, .72)); }
+.aq-toggle[aria-expanded="true"] { border-color: rgba(79, 239, 194, .65); box-shadow: 0 10px 24px rgba(0, 0, 0, .2), 0 0 14px rgba(79, 239, 194, .28); }
+
+.aq-panel {
+    position: absolute;
+    right: 48px;
+    bottom: 0;
+    width: 272px;
+    padding: 12px;
+    border: 1px solid rgba(255, 255, 255, .14);
+    border-radius: 16px;
+    color: #f2f7ff;
+    background: linear-gradient(145deg, rgba(7, 12, 22, .82), rgba(9, 14, 25, .62));
+    box-shadow: 0 16px 42px rgba(0, 0, 0, .28), inset 0 1px rgba(255, 255, 255, .07);
+    -webkit-backdrop-filter: blur(18px) saturate(135%);
+    backdrop-filter: blur(18px) saturate(135%);
+    font-size: 13px;
+    line-height: 1.4;
+}
+.aq-panel[hidden] { display: none; }
+
+.aq-title { font-weight: 600; letter-spacing: .04em; margin-bottom: 8px; }
+
+.aq-species-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.aq-species {
+    padding: 4px 10px;
+    border: 1px solid rgba(255, 255, 255, .18);
+    border-radius: 999px;
+    color: inherit;
+    background: rgba(255, 255, 255, .07);
+    font: inherit;
+    cursor: pointer;
+    transition: background .18s ease, border-color .18s ease, opacity .18s ease;
+}
+.aq-species:hover:not(:disabled) { background: rgba(79, 239, 194, .18); border-color: rgba(79, 239, 194, .5); }
+.aq-species:focus-visible, .aq-catch:focus-visible { outline: 2px solid rgba(139, 207, 255, .9); outline-offset: 2px; }
+.aq-species:disabled { opacity: .4; cursor: not-allowed; }
+
+.aq-capacity { margin-top: 8px; color: rgba(242, 247, 255, .72); font-size: 12px; font-variant-numeric: tabular-nums; }
+/* 放不进去的原因：直接写在面板里（不依赖悬浮提示，触屏与键盘也看得到）；暖色以区别于状态栏的青绿 */
+.aq-reason {
+    margin-top: 6px;
+    padding: 6px 8px;
+    border: 1px solid rgba(255, 176, 96, .32);
+    border-radius: 8px;
+    color: rgba(255, 228, 196, .96);
+    background: rgba(255, 176, 96, .12);
+    font-size: 12px;
+    line-height: 1.45;
+}
+.aq-reason[hidden] { display: none; }
+
+.aq-list { list-style: none; margin: 10px 0 0; padding: 0; max-height: 140px; overflow-y: auto; }
+.aq-item, .aq-empty { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0; border-top: 1px solid rgba(255, 255, 255, .07); }
+.aq-empty { color: rgba(242, 247, 255, .6); border-top: 0; }
+.aq-item-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aq-item-meta { flex: 0 0 auto; color: rgba(242, 247, 255, .55); font-size: 12px; white-space: nowrap; }
+.aq-catch {
+    padding: 2px 9px;
+    border: 1px solid rgba(255, 255, 255, .18);
+    border-radius: 999px;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+.aq-catch:hover { background: rgba(255, 130, 110, .2); border-color: rgba(255, 130, 110, .55); }
+
+.aq-status { min-height: 18px; margin-top: 8px; color: rgba(190, 240, 225, .9); font-size: 12px; }
+
+/* 网兜：拖过 6 px 才出现，在屏幕下方正中；鱼拖到上面时亮起。不接收事件，指针事件仍由宿主在 document 上处理。
+   鱼画在网兜下面的背景画布上，所以网兜只能是“网线”：不能有磨砂模糊或深色底，否则被拖着的鱼会被盖暗、模糊，看起来像消失了。
+   提示文字单独做成胶囊浮在网兜上方，不压在落点中间。 */
+.aq-net {
+    position: fixed;
+    left: 50%;
+    bottom: 96px;
+    z-index: 89;
+    width: 190px;
+    height: 74px;
+    margin-left: -95px;
+    border: 2px dashed rgba(139, 207, 255, .6);
+    border-radius: 14px 14px 46px 46px;
+    background:
+        repeating-linear-gradient(45deg, rgba(139, 207, 255, .22) 0 1px, transparent 1px 10px),
+        repeating-linear-gradient(-45deg, rgba(139, 207, 255, .22) 0 1px, transparent 1px 10px),
+        rgba(139, 207, 255, .05);
+    box-shadow: 0 0 0 1px rgba(8, 18, 34, .28);
+    opacity: 0;
+    transform: translateY(14px) scale(.96);
+    pointer-events: none;
+    transition: opacity .18s ease, transform .22s cubic-bezier(.2, .8, .2, 1), border-color .15s ease, background-color .15s ease, box-shadow .15s ease;
+}
+.aq-net.aq-net-on { opacity: 1; transform: none; }
+.aq-net.aq-net-near {
+    border-color: rgba(79, 239, 194, .95);
+    background-color: rgba(79, 239, 194, .1);
+    box-shadow: 0 0 0 1px rgba(8, 18, 34, .28), 0 0 22px rgba(79, 239, 194, .35);
+}
+.aq-net-label {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    margin-bottom: 8px;
+    padding: 3px 12px;
+    border-radius: 999px;
+    color: rgba(225, 242, 255, .95);
+    background: rgba(8, 18, 34, .6);
+    font-size: 12px;
+    letter-spacing: .04em;
+    white-space: nowrap;
+    transform: translateX(-50%);
+}
+
+/* 喂食：一个按钮加一句用法提示。按钮是暖色药丸（以区别于青绿的鱼种按钮），可以点（从上面落下）或按住拖到水里松手（落在松手处）。
+   touch-action: none 让触屏上的拖动不被当成页面滚动；没有鱼时禁用（原因由 aria-describedby 指向居民列表里的“还没有鱼”）。 */
+.aq-feed-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.aq-feed-row[hidden] { display: none; }
+.aq-feed {
+    flex: 0 0 auto;
+    padding: 4px 12px;
+    border: 1px solid rgba(255, 190, 90, .45);
+    border-radius: 999px;
+    color: inherit;
+    background: rgba(255, 190, 90, .14);
+    font: inherit;
+    cursor: grab;
+    touch-action: none;
+    transition: background .18s ease, border-color .18s ease, opacity .18s ease;
+}
+.aq-feed:hover:not(:disabled) { background: rgba(255, 190, 90, .26); border-color: rgba(255, 190, 90, .75); }
+.aq-feed:active:not(:disabled) { cursor: grabbing; }
+.aq-feed:focus-visible { outline: 2px solid rgba(139, 207, 255, .9); outline-offset: 2px; }
+.aq-feed:disabled { opacity: .4; cursor: not-allowed; }
+.aq-feed-hint { min-width: 0; color: rgba(242, 247, 255, .6); font-size: 12px; }
+
+/* 拖出去的那一小撮饲料：跟着指针，不接收事件；比托盘（100）高，才不会被面板盖住。 */
+.aq-feed-ghost {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 101;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+}
+.aq-feed-ghost > span {
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    margin: -3.5px 0 0 -3.5px;
+    border: 1px solid rgba(110, 60, 10, .55);
+    border-radius: 50%;
+    background: rgb(255, 190, 90);
+    box-shadow: 0 0 8px rgba(255, 170, 70, .55);
+}
+.aq-feed-ghost > span:nth-child(1) { transform: translate(-7px, 3px); }
+.aq-feed-ghost > span:nth-child(2) { transform: translate(6px, 5px); }
+.aq-feed-ghost > span:nth-child(3) { transform: translate(0, -6px); }
+
+html.reduce-motion .aq-net, html.reduce-motion .aq-toggle, html.reduce-motion .aq-feed { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+    .aq-net, .aq-toggle, .aq-feed { transition: none; }
+}

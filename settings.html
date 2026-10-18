@@ -139,9 +139,9 @@
                         <label class="sp-toggle"><input type="checkbox" id="set-bgExperienceEnabled" checked><span class="sp-toggle-slider"></span></label>
                     </div>
                     <div class="sp-field">
-                        <div class="sp-field-info"><span class="sp-field-label">v2 视觉风格</span><span class="sp-field-hint">一次只启用一种主视觉，避免互相抢夺注意力。“深海水母”：漂浮的水母数量等于未完成的任务数（最多 8 只，没有待办时只剩浮游光点），一只水母对应一个任务；每只主色都不一样（红橙黄绿青蓝紫粉），有纯色，也有双色、渐变和七彩的；完成一个任务就有一只游走；水母随首页时钟的秒数收缩，鼠标快速划过会惊动附近的水母。系统开启“减少动态效果”时不显示</span></div>
+                        <div class="sp-field-info"><span class="sp-field-label">v2 视觉风格</span><span class="sp-field-hint">一次只启用一种主视觉，避免互相抢夺注意力。“水族馆”：漂浮的水母数量等于未完成的任务数（最多 8 只，没有待办时只剩浮游光点），一只水母对应一个任务；每只主色都不一样（红橙黄绿青蓝紫粉），有纯色，也有双色、渐变和七彩的；完成一个任务就有一只游走；水母随首页时钟的秒数收缩，鼠标快速划过会惊动附近的水母；右下角还有一个小鱼按钮，可以往背景里放装饰性的小鱼（不绑任务，开关在下面的“水族馆小鱼”）。系统开启“减少动态效果”时不显示</span></div>
                         <select class="sp-select" id="set-bgVisualEffect">
-                            <option value="depth">活体景深</option><option value="weather">天气导演</option><option value="memory">记忆显影</option><option value="liquid">液态色场</option><option value="time">时间光色</option><option value="jellyfish">深海水母</option><option value="none">关闭视觉皮肤</option>
+                            <option value="depth">活体景深</option><option value="weather">天气导演</option><option value="memory">记忆显影</option><option value="liquid">液态色场</option><option value="time">时间光色</option><option value="jellyfish">水族馆</option><option value="none">关闭视觉皮肤</option>
                         </select>
                     </div>
                     <div class="sp-field">
@@ -177,23 +177,27 @@
                         <label class="sp-toggle"><input type="checkbox" id="set-bgTaskCrumple" checked><span class="sp-toggle-slider"></span></label>
                     </div>
                     <div class="sp-field">
-                        <div class="sp-field-info"><span class="sp-field-label">水母任务名与抓取</span><span class="sp-field-hint">选了“深海水母”时：水母上方隐约显示它代表的任务名，鼠标靠近会更清楚；用鼠标抓住水母拖进右下角的纸篓松手，就等于勾选完成这个任务（和在任务面板里点圆圈完全一样）。完成失败时水母会被放回原处并提示。关闭后水母不再显示任务名，也不能被抓住</span></div>
+                        <div class="sp-field-info"><span class="sp-field-label">水母任务名与抓取</span><span class="sp-field-hint">选了“水族馆”时：水母上方隐约显示它代表的任务名，鼠标靠近会更清楚；用鼠标抓住水母拖进右下角的纸篓松手，就等于勾选完成这个任务（和在任务面板里点圆圈完全一样）。完成失败时水母会被放回原处并提示。关闭后水母不再显示任务名，也不能被抓住</span></div>
                         <label class="sp-toggle"><input type="checkbox" id="set-bgJellyfishTasks" checked><span class="sp-toggle-slider"></span></label>
                     </div>
                     <div class="sp-field">
-                        <div class="sp-field-info"><span class="sp-field-label">水母夜晚荧光</span><span class="sp-field-hint">选了“深海水母”时：按本机时间，晚上 8 点到次日早上 6 点（前后各 1 小时渐变）水母的体内发光和光晕更亮，浮游生物偏青绿；只读本机时钟。关闭后昼夜一个样。把任务水母拖进纸篓完成时的气泡庆祝不受此开关影响。桌面水母的夜晚荧光在“桌面水母”卡片里单独设置</span></div>
+                        <div class="sp-field-info"><span class="sp-field-label">水母夜晚荧光</span><span class="sp-field-hint">选了“水族馆”时：按本机时间，晚上 8 点到次日早上 6 点（前后各 1 小时渐变）水母的体内发光和光晕更亮，浮游生物偏青绿；只读本机时钟。关闭后昼夜一个样。把任务水母拖进纸篓完成时的气泡庆祝不受此开关影响。桌面水母的夜晚荧光在“桌面水母”卡片里单独设置</span></div>
                         <label class="sp-toggle"><input type="checkbox" id="set-bgJellyfishNight" checked><span class="sp-toggle-slider"></span></label>
                     </div>
                     <div class="sp-field">
-                        <div class="sp-field-info"><span class="sp-field-label">水母随音乐起舞</span><span class="sp-field-hint">选了“深海水母”时：音乐播放器处于“正在播放”（与播放键图标一致）时，水母们开始跳舞，而且每只的“精神状态”不同——嗨（每个舞步都收缩、摇得快、光晕一鼓一鼓）、律动（隔一拍收缩、大幅度慢慢荡）、爱表演（每次收缩向左右扭一步）、悠闲（小幅慢摇）、犯困（几乎不动、身体暗一点）。同屏的各不相同，大约每 30 秒（按跳舞累计时间）整体轮换一位，切换是渐变的。这是视觉节奏，不是真实的音乐节拍，也不读取音频，更不是对歌曲情绪的判断。暂停或停止后恢复原样</span></div>
+                        <div class="sp-field-info"><span class="sp-field-label">水母随音乐起舞</span><span class="sp-field-hint">选了“水族馆”时：音乐播放器处于“正在播放”（与播放键图标一致）时，水母们开始跳舞，而且每只的“精神状态”不同——嗨（每个舞步都收缩、摇得快、光晕一鼓一鼓）、律动（隔一拍收缩、大幅度慢慢荡）、爱表演（每次收缩向左右扭一步）、悠闲（小幅慢摇）、犯困（几乎不动、身体暗一点）。同屏的各不相同，大约每 30 秒（按跳舞累计时间）整体轮换一位，切换是渐变的。这是视觉节奏，不是真实的音乐节拍，也不读取音频，更不是对歌曲情绪的判断。暂停或停止后恢复原样</span></div>
                         <label class="sp-toggle"><input type="checkbox" id="set-bgJellyfishDance" checked><span class="sp-toggle-slider"></span></label>
                     </div>
                     <div class="sp-field">
-                        <div class="sp-field-info"><span class="sp-field-label">水母成长</span><span class="sp-field-hint">选了“深海水母”时：只读任务的完成记录。连续有任务完成的天数越多，水母的钟罩越大（1 天一级起，连续 7 天为最高的第 5 级、大约大 20%）；今天还没完成时从昨天起算，断一天就回到原来的大小。只影响大小，不改任何任务数据</span></div>
+                        <div class="sp-field-info"><span class="sp-field-label">水母成长</span><span class="sp-field-hint">选了“水族馆”时：只读任务的完成记录。连续有任务完成的天数越多，水母的钟罩越大（1 天一级起，连续 7 天为最高的第 5 级、大约大 20%）；今天还没完成时从昨天起算，断一天就回到原来的大小。只影响大小，不改任何任务数据</span></div>
                         <label class="sp-toggle"><input type="checkbox" id="set-bgJellyfishGrow" checked><span class="sp-toggle-slider"></span></label>
                     </div>
                     <div class="sp-field">
-                        <div class="sp-field-info"><span class="sp-field-label">番茄钟陪伴水母</span><span class="sp-field-hint">打开番茄钟面板时，面板里有一只小水母陪着你：专注计时中它放慢动作、像深呼吸一样安静地漂；休息计时中它活泼起来；一个专注自然走完时它放一串庆祝气泡（点“跳过”不算）。与是否选了“深海水母”背景无关；减少动态效果时不显示</span></div>
+                        <div class="sp-field-info"><span class="sp-field-label">水族馆小鱼</span><span class="sp-field-hint">选了“水族馆”时：右下角出现一个小鱼按钮，点开可以放入霓虹灯鱼、蓝吊、小丑鱼、河豚、神仙鱼、小锤头鲨、蝠鲼、鲸鲨（最多 12 个，省流量模式 6 个；大型鱼最多 2 条；面板里会显示已放数量，放不下时直接写明原因），也可以把鱼拖到屏幕下方的网兜里捞出，或在列表里点“捞出”（同一种放了多个时列表里按先后编号，例如“小丑鱼 #1”“小丑鱼 #2”）。鱼还能玩：点一下鱼会把它戳得窜开、水面荡开涟漪，按住后半身拖动会把尾巴拉长、松手后弹回并向前冲一下，面板里的“喂食”点一下就从上面撒饲料、也可以拖到水里松手，附近的鱼会游过去吃，吃到的会亮一阵子（这些互动只在当前页面有效，不保存）。鱼只是装饰：不绑任务、不吃水母、不影响任务和提醒；你放了哪些鱼只保存在本机，不会同步。关闭后背景里不再有鱼、也没有按钮，已放的鱼仍保留，重新打开时回来</span></div>
+                        <label class="sp-toggle"><input type="checkbox" id="set-bgAquariumFish" checked><span class="sp-toggle-slider"></span></label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info"><span class="sp-field-label">番茄钟陪伴水母</span><span class="sp-field-hint">打开番茄钟面板时，面板里有一只小水母陪着你：专注计时中它放慢动作、像深呼吸一样安静地漂；休息计时中它活泼起来；一个专注自然走完时它放一串庆祝气泡（点“跳过”不算）。与是否选了“水族馆”背景无关；减少动态效果时不显示</span></div>
                         <label class="sp-toggle"><input type="checkbox" id="set-bgPomodoroJelly" checked><span class="sp-toggle-slider"></span></label>
                     </div>
                 </div>
@@ -961,7 +965,7 @@
     <script src="js/product-pages-v5.js?v=1"></script>
     <script src="js/product-ui-v5.js?v=2"></script>
     <script src="js/wallpaper-weave-core.js?v=1"></script>
-    <script src="js/settings-page.js?v=10"></script>
+    <script src="js/settings-page.js?v=11"></script>
     <script src="js/settings-v5.js?v=7"></script>
     <script src="js/ai-control.js?v=6"></script>
     <script src="js/ai-history.js?v=3"></script>
