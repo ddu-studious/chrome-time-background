@@ -27,6 +27,23 @@ enum JellySpeciesData {
             ],
             eyeRadius: 2, eyes: [[18, -3.6], [18, 3.6]],
             blush: [[13.5, -5.2, 2.4, 1.5], [13.5, 5.2, 2.4, 1.5]]),
+        .turtle: SpeciesSource(
+            view: .side, scale: 1,
+            parts: [
+                SpeciesPartSource(role: .limb, u: 0.72, path: "M 22 1 C 26 4 31 9 33 15 C 31 17.5 27.5 17 25.5 13.5 C 23.5 10 21 6 19.5 3 Z", motion: SpeciesMotionSource(pivotX: 20, pivotY: 2, degrees: -18, squash: 0)),
+                SpeciesPartSource(role: .limb, u: 0.25, path: "M -9 5 C -11 10 -14 14 -17.5 16.5 C -12.5 17 -7.5 14.5 -4.5 9 Z", motion: SpeciesMotionSource(pivotX: -8, pivotY: 5, degrees: -10, squash: 0)),
+                SpeciesPartSource(role: .limb, u: 0.05, path: "M -24 -1.5 C -29 -1.5 -33 0.5 -35.5 3.8 C -31 5 -27.5 5 -24 3.5 Z", motion: SpeciesMotionSource(pivotX: -24, pivotY: 1, degrees: 8, squash: 0)),
+                SpeciesPartSource(role: .limb, u: 0.95, path: "M 21 -8 C 26 -12.5 36 -12.5 40.5 -6 C 43 -2 42.5 5 37.5 8.5 C 32 12 25 11 21 8 Z", motion: nil),
+                SpeciesPartSource(role: .limb, u: 0.55, path: "M -26 3 C -22 11.5 -8 14.5 2 14.5 C 12 14.5 22 11.5 25.5 3 Z", motion: nil),
+                SpeciesPartSource(role: .belly, u: 0.5, path: "M -23 4 C -19 8.8 -7 11.4 2 11.4 C 11 11.4 20 8.8 23 4 Z", motion: nil),
+                SpeciesPartSource(role: .body, u: 0.5, path: "M -27 4 C -28 -9 -18 -19 -2 -19 C 13 -19 25 -10 26 4 C 15 8.5 -14 8.5 -27 4 Z", motion: nil),
+                SpeciesPartSource(role: .accent, u: 0.5, path: "M -15.625 -8.35 L -19.249 -2.072 L -20.375 -2.722 L -16.375 -9.65 Z M -20.375 -1.422 L -25.16 -1.422 L -25.16 -2.722 L -20.375 -2.722 Z M -16.375 5.506 L -20.375 -1.422 L -19.249 -2.072 L -15.625 4.206 Z M -3.625 -15.278 L -7.249 -9 L -8.375 -9.65 L -4.375 -16.578 Z M -16.375 -9.65 L -8.375 -9.65 L -8.375 -8.35 L -15.625 -8.35 Z M -3.625 -1.422 L -7.625 5.506 L -8.375 4.206 L -4.751 -2.072 Z M -15.625 4.206 L -8.375 4.206 L -7.625 5.506 L -16.375 5.506 Z M -4.751 -2.072 L -8.375 -8.35 L -7.249 -9 L -3.625 -2.722 Z M -4.375 -16.578 L 4.375 -16.578 L 3.625 -15.278 L -3.625 -15.278 Z M 3.625 -2.722 L 7.249 -9 L 8.375 -8.35 L 4.751 -2.072 Z M -3.625 -2.722 L 3.625 -2.722 L 3.625 -1.422 L -3.625 -1.422 Z M 4.375 -16.578 L 8.375 -9.65 L 7.249 -9 L 3.625 -15.278 Z M 4.751 -2.072 L 8.375 4.206 L 7.625 5.506 L 3.625 -1.422 Z M 15.625 -8.35 L 8.375 -8.35 L 8.375 -9.65 L 16.375 -9.65 Z M 15.625 4.206 L 19.249 -2.072 L 20.751 -2.072 L 16.375 5.506 Z M 16.375 5.506 L 7.625 5.506 L 8.375 4.206 L 15.625 4.206 Z M 16.375 -9.65 L 20.751 -2.072 L 19.249 -2.072 L 15.625 -8.35 Z M -19.249 -2.072 L -20.375 -1.422 L -20.375 -2.722 Z M -8.375 -9.65 L -7.249 -9 L -8.375 -8.35 Z M -3.625 -2.722 L -3.625 -1.422 L -4.751 -2.072 Z M 4.751 -2.072 L 3.625 -1.422 L 3.625 -2.722 Z M 8.375 -9.65 L 8.375 -8.35 L 7.249 -9 Z", motion: nil),
+                SpeciesPartSource(role: .shine, u: 0.5, path: "M -6.25 -16.881 C -5.993 -16.33 -9.031 -14.37 -13.035 -12.503 C -17.039 -10.636 -20.494 -9.568 -20.75 -10.119 C -21.007 -10.67 -17.969 -12.63 -13.965 -14.497 C -9.961 -16.364 -6.506 -17.432 -6.25 -16.881 Z", motion: nil),
+                SpeciesPartSource(role: .limb, u: 0.25, path: "M -14 3 C -19 4 -25 8.5 -29 13.5 C -24 14.5 -19 13.5 -15 9.5 C -13 7.5 -12 5 -14 3 Z", motion: SpeciesMotionSource(pivotX: -14, pivotY: 4, degrees: 12, squash: 0)),
+                SpeciesPartSource(role: .limb, u: 0.72, path: "M 19 0.5 C 24 3 23.5 9 17 13.5 C 12 17 5 17.5 2 15.5 C 0.5 14 4.5 10 8 6.5 C 11 3.5 14 1.5 19 0.5 Z", motion: SpeciesMotionSource(pivotX: 15, pivotY: 3.5, degrees: 20, squash: 0)),
+            ],
+            eyeRadius: 2.2, eyes: [[35.2, -3.6]],
+            blush: [[33, 2.6, 2.6, 1.6]], mouth: [[39.4, 2.4], [38.5, 5.2], [35.6, 5.4], [34.2, 3.2]]),
         .whaleshark: SpeciesSource(
             view: .side, scale: 0.9,
             parts: [

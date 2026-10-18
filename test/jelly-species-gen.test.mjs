@@ -38,7 +38,7 @@ test('重新生成到临时文件，与入库文件逐字节相同；检查模�
   const result = run([`--out=${out}`]);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /已写入/); assert.ok(result.stdout.includes(out), '成功信息要带上写到了哪里');
-  assert.match(result.stdout, /3 种动物：hammer、manta、whaleshark/, '成功信息列出写入的动物（全量变异检查里删掉这行信息语句的变异体曾存活）');
+  assert.match(result.stdout, /4 种动物：hammer、manta、turtle、whaleshark/, '成功信息列出写入的动物（全量变异检查里删掉这行信息语句的变异体曾存活）');
   // 用 ok 而不是 equal：两份文件各有几十 KB，不一致时 equal 会去算整份文本的差异，实测要几分钟（变异检查里出现过超时），而这里只需要知道“不一致”。
   assert.ok(readFileSync(out, 'utf8') === readFileSync(committed, 'utf8'), '生成结果应与入库文件完全相同（不一致时运行 node desktop-reminder/gen-species.mjs 重新生成并核对差异）');
   const absent = join(dir, 'absent.swift');
@@ -145,11 +145,15 @@ test('生成物里的嘴：只有侧视动物有 mouth 一项，四个点与来�
   assert.equal([...text.matchAll(/mouth:/g)].length, withMouth, '全文的 mouth 项数与有嘴的动物数相同');
 });
 
-test('生成物里的斑点：鲸鲨的 accent 部件是一条含 60 个子路径的路径（每个圆一个 M），与来源的小圆逐个对应', () => {
+test('生成物里的 accent：鲸鲨是一条含 60 个子路径的路径（每个圆一个 M），海龟是一条含 22 个子路径的细带网（每块一个 M），都与来源逐个对应', () => {
   const text = readFileSync(committed, 'utf8');
   const paths = [...text.matchAll(/role: \.accent, u: [^,]+, path: "([^"]*)"/g)].map(match => match[1]);
-  assert.equal(paths.length, 1, '目前只有鲸鲨用 accent');
+  assert.equal(paths.length, 2, '目前只有鲸鲨（斑点）与海龟（壳纹）用 accent');
   const dots = Shapes.SHAPES.whaleshark.parts.find(part => part.role === 'accent').dots;
-  assert.equal(paths[0].split('M').length - 1, dots.length, '每个小圆一个子路径');
-  assert.equal(paths[0], dots.map(([x, y, r]) => Shapes.ellipsePath(x, y, r, r)).join(' '), '逐个圆按来源顺序连接');
+  const spots = dots.map(([x, y, r]) => Shapes.ellipsePath(x, y, r, r)).join(' ');
+  assert.ok(paths.includes(spots), '鲸鲨：逐个圆按来源顺序连接');
+  assert.equal(spots.split('M').length - 1, dots.length, '每个小圆一个子路径');
+  const seams = Shapes.expand('turtle').parts.find(part => part.role === 'accent').d;
+  assert.ok(paths.includes(seams), '海龟：壳纹的路径与来源一致');
+  assert.equal(seams.split('M').length - 1, 22, '17 条细带加 5 个小三角，每块一个子路径');
 });

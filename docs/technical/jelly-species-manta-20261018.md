@@ -6,7 +6,9 @@ status: Step B 已实现并在隔离环境验证通过（Chrome 侧业务替身�
 
 # 桌面水母物种 Step B：蝠鲼与“拍翼”运动
 
-建立在 Step A（`docs/technical/jelly-species-hammer-20261018.md`：物种接口、形状数据管线、放置、姿态、游动调参、设置页与验证工具）之上，设计稿同 Step A（`docs/superpowers/specs/2026-10-17-jelly-species-design.md`，用户 2026-10-17 批准的五条默认值照旧：蝠鲼俯视、悬在窗口标准高度、长度 76–92 pt 内、“每天换一只/随机一只”不换动物、功能名仍叫“桌面水母”）。Step B 没有单独的计划文件，沿用 Step A 计划的同一套步骤（运动模型 → 形状数据 → 游动标定 → 验证 → 变异检查与文档）。分支 `feat/jelly-appearance`（独立 worktree）；Step A 是本地提交 `a6d897b`，**本步骤的改动尚未提交、未合并、未发布**。
+> **后续（2026-10-18）**：鲸鲨（Step D）与海龟（Step C）都已做，见 `jelly-species-whaleshark-20261018.md`、`jelly-species-turtle-20261018.md`；本文里“海龟与鲸鲨的 `swimProfile` 仍是全 1”“只有水母、小锤头鲨、蝠鲼”等说法是 Step B 写成时的状态，没有逐处改写。
+
+建立在 Step A（`docs/technical/jelly-species-hammer-20261018.md`：物种接口、形状数据管线、放置、姿态、游动调参、设置页与验证工具）之上，设计稿同 Step A（`docs/superpowers/specs/2026-10-17-jelly-species-design.md`，用户 2026-10-17 批准的五条默认值照旧：蝠鲼俯视、悬在窗口标准高度、长度 76–92 pt 内、“每天换一只/随机一只”不换动物、功能名仍叫“桌面水母”）。Step B 没有单独的计划文件，沿用 Step A 计划的同一套步骤（运动模型 → 形状数据 → 游动标定 → 验证 → 变异检查与文档）。分支 `feat/jelly-appearance`（独立 worktree）；Step A 是本地提交 `a6d897b`；写本文时本步骤的改动尚未提交，**之后与 Step D、绘制层差分检查一起合成本地提交 `1b29af1`，未推送、未合并、未发布**。
 
 ## 做了什么
 

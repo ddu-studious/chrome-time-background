@@ -52,11 +52,11 @@ test('卡片里没有内联事件处理器与内联脚本（MV3 CSP）', () => {
 });
 
 test('脚本加载：在 settings-page.js 之后、带版本号', () => {
-  assert.ok(html.indexOf('js/settings-page.js?v=10') < html.indexOf('js/settings-jelly-appearance.js?v=3'));
-  assert.match(html, /<script src="js\/settings-jelly-appearance\.js\?v=3"><\/script>/);
+  assert.ok(html.indexOf('js/settings-page.js?v=10') < html.indexOf('js/settings-jelly-appearance.js?v=4'));
+  assert.match(html, /<script src="js\/settings-jelly-appearance\.js\?v=4"><\/script>/);
   // 动物示意图用同一份形状数据：形状脚本必须先于外观脚本加载，且带版本号
-  assert.match(html, /<script src="js\/jelly-species-shapes\.js\?v=3"><\/script>/);
-  assert.ok(html.indexOf('js/jelly-species-shapes.js?v=3') < html.indexOf('js/settings-jelly-appearance.js?v=3'));
+  assert.match(html, /<script src="js\/jelly-species-shapes\.js\?v=4"><\/script>/);
+  assert.ok(html.indexOf('js/jelly-species-shapes.js?v=4') < html.indexOf('js/settings-jelly-appearance.js?v=4'));
 });
 
 test('色板与随机按钮有样式：选中态、键盘焦点环、禁用态', () => {
@@ -646,6 +646,14 @@ test('动物下拉的说明：每天换/随机只换颜色与花纹不换动物�
   assert.match(field, /只换颜色与花纹，不会换动物/);
   assert.match(field, /已更新的桌面组件/); assert.match(field, /仍是水母/);
   assert.match(card, /给桌面水母换动物、颜色和花纹/);
+  // 每种已经画得出来的动物都要在说明里点名，并写对视角（俯视/侧视取自形状数据）；不留“以后会加”的预告（海龟加入之前写过一句“海龟会陆续加入”，加入后必须删掉）
+  const names = load(view({})).window.JellyAppearanceSettings.SPECIES_NAMES;
+  assert.ok(field.includes(names.jelly), '说明里要点名水母');
+  for (const id of Shapes.AVAILABLE.filter(name => name !== 'jelly')) {
+    const word = Shapes.SHAPES[id].view === 'top' ? '俯视' : '侧视';
+    assert.ok(field.includes(`${names[id]}（${word}`), `说明里要写“${names[id]}（${word}…”`);
+  }
+  assert.doesNotMatch(field, /陆续|即将|敬请期待|还没有|尚未/, '说明里不留“以后会加”的预告');
 });
 
 test('动物示意图元素：在预览容器里、紧跟水母 svg，对读屏隐藏（说明文字在容器的 aria-label），没有预置地址', () => {
@@ -716,7 +724,7 @@ test('animalPreviewSvg：水母、未知物种、没有颜料、形状脚本缺�
   const paint = previewPaint(window, { colors: [5], look: 'solid' });
   assert.equal(api.animalPreviewSvg('jelly', paint), null, '水母不是数据驱动的，示意图用页面里的内联 svg');
   assert.equal(api.animalPreviewSvg('dragon', paint), null);
-  assert.equal(api.animalPreviewSvg('turtle', paint), null, '数据里还没有的物种');
+  assert.equal(typeof api.animalPreviewSvg('turtle', paint), 'string', '海龟已有形状数据：画得出来');
   for (const bad of [undefined, null, 5, {}, [], '', '__proto__', 'constructor', 'toString']) assert.equal(api.animalPreviewSvg(bad, paint), null, `物种 ${String(bad)}`);
   assert.equal(api.animalPreviewSvg('hammer', null), null);
   assert.equal(api.animalPreviewSvg('hammer', undefined), null);
@@ -1114,8 +1122,8 @@ test('状态文字：选了动物时点名动物；组件没有画出它时如�
   for (const odd of ['dragon', '', 5, null, undefined, '__proto__', 'toString']) assert.equal(d({ component: 'ok', connected: true, settings: { species: odd } }), '外观已应用到桌面水母。', `物种 ${String(odd)} 按水母`);
 });
 
-test('所选动物没有形状数据（后台认、页面画不出，如还没加入的海龟，或形状脚本没加载）：示意图退回水母并如实说明，不抛错', async () => {
-  const turtle = load(speciesView('turtle'));
+test('所选动物页面画不出（后台认它，但形状脚本没加载）：示意图退回水母并如实说明，不抛错', async () => {
+  const turtle = load(speciesView('turtle'), { noShapes: true });
   await tick();
   assert.equal(turtle.els['set-jellyPreview'].attrs['data-art'], 'jelly');
   assert.equal(turtle.els['set-jellyAnimalPreview'].attrs.src, undefined);
@@ -1126,6 +1134,22 @@ test('所选动物没有形状数据（后台认、页面画不出，如还没�
   assert.equal(bare.els['set-jellyPreview'].attrs['data-art'], 'jelly');
   assert.match(bare.els['set-jellyPreviewText'].textContent, /^暂时显示水母（“小锤头鲨”还没有加入）/);
   assert.equal(bare.els['set-jellyPreview'].hidden, false, '预览本身仍显示');
+});
+
+test('选海龟：发送 set(species)，示意图是动物（img 有地址、容器标记为 turtle），文字点名龟壳与头鳍，状态说已应用到桌面：海龟', async () => {
+  let current = speciesView('jelly');
+  const { els, sent } = load(message => (message.action === 'jelly_appearance_set' ? (current = speciesView(message.settings.species, { colors: [6, 0], look: 'duo' })) : current));
+  await tick();
+  els['set-jellySpecies'].listeners.change({ target: { value: 'turtle' } }); await tick();
+  assert.deepEqual(sent[1], { action: 'jelly_appearance_set', settings: { species: 'turtle' } });
+  assert.equal(els['set-jellySpecies'].value, 'turtle');
+  assert.equal(els['set-jellyPreview'].attrs['data-art'], 'animal'); assert.equal(els['set-jellyPreview'].attrs['data-species'], 'turtle');
+  assert.match(els['set-jellyAnimalPreview'].attrs.src, /^data:image\/svg\+xml;charset=utf-8,/);
+  assert.equal(els['set-jellyPreviewText'].textContent, '海龟，双色（龟壳紫，头、鳍与尾红）', '海龟的头与鳍、尾同一个肢体色：双色时点名头，躯干叫龟壳');
+  assert.equal(els['set-jellyPreview'].attrs['aria-label'], '当前形象：海龟，双色（龟壳紫，头、鳍与尾红）');
+  assert.equal(els['set-jellyAppearanceStatus'].textContent, '外观已应用到桌面：海龟。');
+  const decoded = decodeURIComponent(els['set-jellyAnimalPreview'].attrs.src.slice('data:image/svg+xml;charset=utf-8,'.length));
+  assert.match(decoded, /^<svg /); assert.ok(decoded.length > 3000, `海龟的示意图应有 11 个部件与壳纹，长度 ${decoded.length}`);
 });
 
 test('后台给的物种不认识：当水母处理（不抛错、不写地址）；后台没带 species 的旧回执同样按水母', async () => {

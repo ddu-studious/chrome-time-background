@@ -819,7 +819,7 @@ do {
         check(S.default == .jelly && A.default.species == .jelly, "默认物种是水母")
         check(S.jelly.displayName == "水母" && S.hammer.displayName == "小锤头鲨" && S.manta.displayName == "蝠鲼" && S.turtle.displayName == "海龟" && S.whaleshark.displayName == "鲸鲨", "物种中文名")
         check(Set(S.allCases.map { $0.displayName }).count == S.allCases.count, "物种中文名互不相同")
-        check(S.jelly.desktopTitle == "桌面水母" && S.hammer.desktopTitle == "桌面小锤头鲨" && S.whaleshark.desktopTitle == "桌面鲸鲨", "面板标题：水母保持“桌面水母”，动物用物种名")
+        check(S.jelly.desktopTitle == "桌面水母" && S.hammer.desktopTitle == "桌面小锤头鲨" && S.manta.desktopTitle == "桌面蝠鲼" && S.turtle.desktopTitle == "桌面海龟" && S.whaleshark.desktopTitle == "桌面鲸鲨", "面板标题：水母保持“桌面水母”，动物用物种名")
         for species in S.allCases { check(S.parse(species.rawValue) == species, "解析 \(species.rawValue)") }
         let badValues: [(String, Any?)] = [("nil", nil), ("空串", ""), ("首字母大写", "Hammer"), ("全大写", "HAMMER"), ("前导空格", " hammer"), ("尾随空格", "hammer "),
                                            ("未知名", "shark"), ("整数", 3), ("NSNumber 1", NSNumber(value: 1)), ("布尔", true), ("NSNull", NSNull()), ("数组", ["hammer"]), ("字典", ["species": "hammer"])]
@@ -1084,10 +1084,15 @@ do {
             }
             print("SPECEYES \(id) \(f(g.eyeRadius)) \(g.eyes.map { "\(f($0.x)),\(f($0.y))" }.joined(separator: " "))")
             print("SPECBLUSH \(id) \(g.blush.map { "\(f($0.center.x)),\(f($0.center.y)),\(f($0.rx)),\(f($0.ry))" }.joined(separator: " "))")
-            // 嘴：俯视动物没有；侧视动物要么没有、要么是四个点，且都在躯干包围盒里（嘴画在身体上）
+            // 嘴：俯视动物没有；侧视动物要么没有、要么是四个点。脸（所有眼睛点与嘴的四个点）落在同一个躯干或肢体部件（静止相位）的包围盒里——
+            // 鲸鲨的头就是躯干，海龟的头是单独的肢体部件（脸不在龟壳的包围盒里）；脸不能一半在头上、一半在壳上
             check(g.view == .side || g.mouth.isEmpty, "\(id)：俯视动物没有嘴")
             check(g.mouth.isEmpty || g.mouth.count == 4, "\(id)：嘴要么没有、要么是四个点")
-            check(g.mouth.allSatisfy { g.bodyBounds.insetBy(dx: -1e-9, dy: -1e-9).contains($0) }, "\(id)：嘴的四个点都在躯干包围盒里")
+            let faceCarriers = g.parts.filter { $0.role == .body || $0.role == .limb }
+            check(g.mouth.isEmpty || faceCarriers.contains { part in
+                let box = part.path(wave: 0).boundingBoxOfPath.insetBy(dx: -1e-9, dy: -1e-9)
+                return (g.eyes + g.mouth).allSatisfy { box.contains($0) }
+            }, "\(id)：眼睛与嘴的所有点落在同一个躯干或肢体部件的包围盒里（脸画在同一个身体部分上）")
             print("SPECMOUTH \(id) \(g.mouth.isEmpty ? "-" : g.mouth.map { "\(f($0.x)),\(f($0.y))" }.joined(separator: " "))")
             // 放置：窗口 170×150（JellyCompanion.size，Node 测试核对源码里的这两个数），并集顶端离底边 91 pt，水平居中，任何姿态不越出
             let width: CGFloat = 170, height: CGFloat = 150, cx = width / 2
@@ -1267,8 +1272,7 @@ do {
                 check(positive && tuning.hover == base.hover, "\(stage)/\(species.rawValue)：系数有限且为正，愿意停留的高度不乘系数")
             }
         }
-        check(S.jelly.swimProfile == SwimProfile() && S.hammer.swimProfile != SwimProfile() && S.manta.swimProfile != SwimProfile() && S.whaleshark.swimProfile != SwimProfile(), "水母的系数全是 1，小锤头鲨、蝠鲼与鲸鲨各有自己的系数")
-        check(S.turtle.swimProfile == SwimProfile(), "海龟还没有标定（它不可用，回退水母）：系数全是 1")
+        check(S.jelly.swimProfile == SwimProfile() && S.hammer.swimProfile != SwimProfile() && S.manta.swimProfile != SwimProfile() && S.turtle.swimProfile != SwimProfile() && S.whaleshark.swimProfile != SwimProfile(), "水母的系数全是 1，小锤头鲨、蝠鲼、海龟与鲸鲨各有自己的系数")
         // 系数怎么乘：用合成系数逐项核对“六项各乘各的、愿意停留的高度不乘”（真实动物只有几项不是 1，光靠它们分不出某一项被漏乘）
         do {
             let synthetic = SwimProfile(period: 1.1, thrustX: 1.2, thrustY: 1.3, sink: 1.4, dragX: 1.5, dragY: 1.6)
@@ -1288,6 +1292,8 @@ do {
             check(S.manta.swimProfile == SwimProfile(period: 1.35, thrustX: 0.6, thrustY: 0.5, sink: 0.5, dragX: 0.5, dragY: 1), "蝠鲼的标定系数：周期 1.35、冲量 0.6 / 0.5、下沉 0.5、横向阻力 0.5，其余为 1")
             // 鲸鲨同样是标定出来的（纵向最平稳）：改它们必须重跑下面的逐阶段检查（含“比小锤头鲨慢”“起伏比蝠鲼和小锤头鲨都小”与多种子稳健性）并同步这里与技术文档
             check(S.whaleshark.swimProfile == SwimProfile(period: 1, thrustX: 0.6, thrustY: 0.3, sink: 0.4, dragX: 0.65, dragY: 1), "鲸鲨的标定系数：冲量 0.6 / 0.3、下沉 0.4、横向阻力 0.65，其余为 1")
+            // 海龟同样是标定出来的（慢而稳：拍鳍放慢、五种里游得最慢、纵向起伏很小）：改它们必须重跑下面的逐阶段检查（含“比小锤头鲨慢”“比蝠鲼略慢”“起伏不到水母的一半”与多种子稳健性）并同步这里与技术文档
+            check(S.turtle.swimProfile == SwimProfile(period: 1.25, thrustX: 0.7, thrustY: 0.4, sink: 0.4, dragX: 0.7, dragY: 1), "海龟的标定系数：周期 1.25、冲量 0.7 / 0.4、下沉 0.4、横向阻力 0.7，其余为 1")
         }
         // 水母的游动轨迹与改动前逐位一致：用改动前（只有 JellyTuning 的四项）的代码在同一批种子下跑出的值
         let pinned: [(CountdownStage, Int, CGFloat, CGFloat, CGFloat, CGFloat)] = [
@@ -1353,6 +1359,14 @@ do {
                     check(a.speed >= j.speed * 0.75, "\(id)：但不至于慢得像停住（不低于水母的 0.75 倍）")
                     check(a.vyMax < h.vyMax && a.vyMax < m.vyMax, "\(id)：鲸鲨的纵向起伏最小，比小锤头鲨与蝠鲼都平稳（最大纵向速度 \(String(format: "%.1f", Double(a.vyMax))) 对 \(String(format: "%.1f", Double(h.vyMax))) / \(String(format: "%.1f", Double(m.vyMax)))）")
                     check(a.vyMax < j.vyMax * 0.5, "\(id)：纵向最大速度不到水母的一半（侧视时上下起伏最明显，要明显更平）")
+                }
+                if species == .turtle {
+                    let h = simulate(stage, .hammer), m = simulate(stage, .manta), w = simulate(stage, .whaleshark)
+                    check(a.speed < h.speed, "\(id)：海龟游得比小锤头鲨慢（平均横向速度 \(String(format: "%.1f", Double(a.speed))) 对 \(String(format: "%.1f", Double(h.speed)))）")
+                    check(a.speed < m.speed && a.speed < w.speed, "\(id)：海龟是五种里游得最慢的，比蝠鲼与鲸鲨都慢（\(String(format: "%.1f", Double(a.speed))) 对 \(String(format: "%.1f", Double(m.speed))) / \(String(format: "%.1f", Double(w.speed)))）")
+                    check(a.speed >= j.speed * 0.75, "\(id)：但不至于慢得像停住（不低于水母的 0.75 倍，留出到 0.7 下限的余量）")
+                    check(a.vyMax < j.vyMax * 0.5, "\(id)：纵向最大速度不到水母的一半（侧视时上下起伏最明显，要明显更平）")
+                    check(a.vyMax < m.vyMax * 1.1 && a.vyMax < h.vyMax, "\(id)：纵向起伏不比蝠鲼大、比小锤头鲨小（\(String(format: "%.1f", Double(a.vyMax))) 对 \(String(format: "%.1f", Double(m.vyMax))) / \(String(format: "%.1f", Double(h.vyMax)))）")
                 }
             }
         }

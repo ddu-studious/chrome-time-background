@@ -33,6 +33,8 @@ const paintBlock = (image, point, rgb, radius = 3) => {
 // 色相相隔很远的三个色位（红、绿、蓝），其余随便
 const PALETTE = Array.from({ length: 8 }, () => [0.5, 0.5, 0.5]);
 PALETTE[0] = [1, 0.1, 0.1]; PALETTE[3] = [0.1, 1, 0.1]; PALETTE[5] = [0.1, 0.1, 1];
+/** 取样点是否被后画的某个部件盖住：逐个部件判断（偶奇规则只适用于同一个部件里的子路径，不同部件叠在一起不能互相挖洞）。 */
+const coveredByLater = (geometry, sample) => geometry.parts.slice(sample.part + 1).some(part => R.insidePolygons(sample.point, part.polygons));
 
 test('flatten：直线路径、两个子路径、贝塞尔取样点数', () => {
   const box = Shapes.native('hammer').parts.find(p => p.role === 'body').cmds;
@@ -145,8 +147,7 @@ test('samplePoints：每个躯干/肢体部件一个点，躯干沿长轴 10/50/
   assert.deepEqual(points.filter(p => p.f !== null).map(p => p.f), [0.1, 0.5, 0.9]);
   for (const p of points) {
     assert.ok(R.insidePolygons(p.point, geometry.parts[p.part].polygons), `${p.role}#${p.part} 的点应在自己里面`);
-    const later = geometry.parts.slice(p.part + 1).flatMap(q => q.polygons);
-    assert.equal(later.length ? R.insidePolygons(p.point, later) : false, false, `${p.role}#${p.part} 的点不应被后画的部件盖住`);
+    assert.equal(coveredByLater(geometry, p), false, `${p.role}#${p.part} 的点不应被后画的部件盖住`);
     assert.ok(p.clearance >= 1.1);
   }
   const f = points.filter(p => p.f !== null);
@@ -379,8 +380,7 @@ test('samplePoints（鲸鲨）：腹部也取一个点；点避开眼睛、腮�
   for (const point of points) {
     assert.ok(!avoid(point.point), `${point.role}#${point.part} 的取样点要避开脸部装饰`);
     assert.ok(point.clearance >= 1.1);
-    const later = geometry.parts.slice(point.part + 1).flatMap(part => part.polygons);
-    assert.equal(later.length ? R.insidePolygons(point.point, later) : false, false, `${point.role}#${point.part} 不应被后画的部件盖住`);
+    assert.equal(coveredByLater(geometry, point), false, `${point.role}#${point.part} 不应被后画的部件盖住`);
   }
   assert.deepEqual(points.filter(point => point.f !== null).map(point => point.f), [0.1, 0.9], '躯干中段整条都被斑点、腹部与高光盖住：没有 50% 的点（这是已知的取样限制，渐变中段由小锤头鲨与蝠鲼核对同一段画法）');
   assert.ok(points.length >= 4);
@@ -542,8 +542,221 @@ test('judgeSpots：accent 里有不是小圆的子路径时直接不通过（而
   try {
     const verdict = R.judgeSpots(WHALE, blank());
     assert.ok(!verdict.ok && /不是小圆/.test(verdict.detail), verdict.detail);
+    assert.deepEqual([verdict.total, verdict.evaluated, verdict.passed, verdict.skipped, verdict.failures.length], [1, 0, 0, 0, 0], '不适用就是不适用：一个子路径、没有参与判定、没有通过、没有跳过、没有失败清单');
   } finally { Shapes.native = real; }
   assert.ok(R.judgeSpots(WHALE, whaleSpotImage()).ok, '还原后恢复正常');
+});
+
+// ---------- 海龟：叠着的部件与壳纹（accent 是一张细带网，不是小圆） ----------
+
+const TURTLE = 'turtle';
+const turtleParts = roles => R.poseGeometry(TURTLE).parts.filter(part => roles.includes(part.role));
+const seamPolygons = () => turtleParts(['accent']).flatMap(part => part.polygons);
+const shadeAt = row => R.mix([0.66, 0.86, 0.96], [0.36, 0.62, 0.84], Math.max(0, Math.min(1, (row - 90) / 100)));     // 自上而下由浅到深：真实躯干不是平的
+/**
+ * 合成图：龟壳（躯干）按 bodyAt(像素行) 涂色（不透明度 0.95），每条细带整条（按多边形光栅化，与真实渲染覆盖的像素一致）涂成
+ * colourFor(序号, 该处的躯干色)；only(序号) 为假的细带不画；其余部件（腹部、鳍、头、高光）不画，判定函数按几何避开它们的位置。
+ */
+const turtleSeamImage = ({ colourFor = (index, base) => spotColour(base), only = () => true, bodyAt = () => BODY_RGB } = {}) => {
+  const image = blank();
+  const put = (mask, rgbAt, alpha) => {
+    for (let i = 0; i < mask.length; i++) if (mask[i]) {
+      const rgb = rgbAt(Math.floor(i / image.width));
+      image.pixels[i * 4] = Math.round(rgb[0] * 255); image.pixels[i * 4 + 1] = Math.round(rgb[1] * 255); image.pixels[i * 4 + 2] = Math.round(rgb[2] * 255); image.pixels[i * 4 + 3] = alpha;
+    }
+  };
+  for (const part of turtleParts(['body'])) put(R.rasterize(part.polygons, image.width, image.height), bodyAt, Math.round(0.95 * 255));
+  seamPolygons().forEach((polygon, index) => { if (only(index)) put(R.rasterize([polygon], image.width, image.height), row => colourFor(index, bodyAt(row)), 255); });
+  return image;
+};
+const evaluatedStrips = () => R.judgeSeams(TURTLE, turtleSeamImage({ only: () => false })).failures.map(text => Number(text.match(/^#(\d+)/)[1]));      // 一条细带都不画：参与判定的细带都在失败清单里
+
+test('samplePoints（海龟）：后画的部件互相叠着时，被腹部与龟板同时盖住的远侧后肢不会被当成没盖住（偶奇规则只用于同一部件里的子路径）', () => {
+  const points = R.samplePoints(TURTLE), geometry = R.poseGeometry(TURTLE);
+  assert.equal(points.length, 12, '躯干、腹部、七个肢体各一个点，躯干沿长轴 10/50/90% 三个点');
+  assert.deepEqual(points.filter(point => point.f === null).map(point => point.part), [0, 1, 2, 3, 4, 5, 6, 9, 10], '部件 7（壳纹）与 8（高光）不取色，其余部件各一个点');
+  for (const sample of points) assert.equal(coveredByLater(geometry, sample), false, `${sample.role}#${sample.part} 的点不应被后画的任何一个部件盖住`);
+  // 回归：龟板（#4，肢体）在腹部（#5）之外一圈，两者再被龟壳（#6）与近侧鳍盖住；远侧后肢（#1）大半在龟板与腹部之下。
+  // 旧办法把后画部件的多边形并在一起做偶奇判定，同时在龟板与腹部里的点被数了两次、当成“没盖住”，选中了一个其实被盖住的点（实际渲染出腹部的浅色，色相错 159°）
+  const far = points.find(sample => sample.part === 1);
+  for (const covering of [4, 5, 6, 9, 10]) assert.equal(R.insidePolygons(far.point, geometry.parts[covering].polygons), false, `远侧后肢的取样点不在部件 #${covering} 里`);
+  const plastron = points.find(sample => sample.part === 4);
+  assert.equal(R.insidePolygons(plastron.point, geometry.parts[5].polygons), false, '龟板的取样点在腹部之外的那一圈里');
+});
+
+test('samplePoints：离后画的躯干/肢体的边多留一个描边半宽（它们的描边伸到多边形外），离后画的腹部、斑点、高光不用', () => {
+  for (const id of ['turtle', WHALE, 'manta', 'hammer']) {
+    const geometry = R.poseGeometry(id);
+    for (const sample of R.samplePoints(id)) {
+      for (const part of geometry.parts.slice(sample.part + 1)) {
+        const stroked = part.role === 'body' || part.role === 'limb', need = 1.1 + (stroked ? R.STROKE_HALF : 0);
+        assert.ok(R.edgeDistance(sample.point, part.polygons) >= need - 1e-9, `${id} ${sample.role}#${sample.part}${sample.f !== null ? `@${sample.f}` : ''}：离后画的 ${part.role} 至少 ${need}（实际 ${R.edgeDistance(sample.point, part.polygons).toFixed(3)}）`);
+      }
+    }
+  }
+  // 不带描边的后画部件不加这个余量：鲸鲨的躯干 10% 处只有 1.18 pt 的空地（被一圈斑点围着），它还在——余量加给所有后画部件时这个点会消失，鲸鲨的颜色检查也会少 16 条
+  assert.deepEqual(R.samplePoints(WHALE).filter(sample => sample.f !== null).map(sample => sample.f), [0.1, 0.9]);
+});
+
+test('discOf 与 accentKind：外接圆的圆心与半径；小圆（半径 ≤ 3）是斑点，细带是壳纹，没有 accent 是 null；边界在 3 与略大于 3 之间', () => {
+  const disc = R.discOf(square(0, 0, 2, 2));
+  assert.deepEqual(disc.centre, [1, 1]); assert.ok(Math.abs(disc.radius - Math.SQRT2) < 1e-12);
+  assert.equal(R.accentKind('hammer'), null); assert.equal(R.accentKind('manta'), null);
+  assert.equal(R.accentKind(WHALE), 'spots'); assert.equal(R.accentKind(TURTLE), 'seams');
+  assert.equal(R.LIMITS.spotRadius, 3);
+  const real = Shapes.native;
+  const withAccentRadius = (radius, probe = () => R.accentKind(WHALE)) => {
+    Shapes.native = id => {
+      const shape = real(id);
+      if (id !== WHALE) return shape;
+      shape.parts.find(part => part.role === 'accent').cmds = [{ cmd: 'M', pts: [[radius, 0]] }, { cmd: 'L', pts: [[0, radius]] }, { cmd: 'L', pts: [[-radius, 0]] }, { cmd: 'L', pts: [[0, -radius]] }, { cmd: 'Z', pts: [] }];
+      return shape;
+    };
+    try { return probe(); } finally { Shapes.native = real; }
+  };
+  assert.equal(withAccentRadius(3), 'spots', '半径恰为 3：仍是斑点');
+  assert.equal(withAccentRadius(3.05), 'seams', '半径略大于 3：按细带处理');
+  const refuses = () => /不是小圆/.test(R.judgeSpots(WHALE, blank()).detail);
+  assert.equal(withAccentRadius(3, refuses), false, 'judgeSpots：半径恰为 3 仍按斑点判定，不拒绝');
+  assert.equal(withAccentRadius(3.05, refuses), true, 'judgeSpots：半径略大于 3 的子路径被拒绝');
+  assert.equal(R.accentKind(WHALE), 'spots', '还原后恢复正常');
+});
+
+test('judgeSeams：每条细带中心按“白 × α 盖在躯干上”画才通过（躯干平涂与自上而下的明暗都行）；没有提亮、α 偏小、纯白、色相不对各自被拦住；没有 accent 返回 null', () => {
+  const good = R.judgeSeams(TURTLE, turtleSeamImage());
+  assert.ok(good.ok, good.detail);
+  assert.equal(good.total, 22, '17 条细带加 5 个接点三角形');
+  assert.ok(good.evaluated >= R.LIMITS.seamMinCount && good.evaluated <= 17, `参与判定的细带：${good.evaluated}`);
+  assert.equal(good.passed, good.evaluated); assert.equal(good.skipped, good.total - good.evaluated);
+  assert.ok(good.maxError < 0.01 && good.minLift > 0.1, `合成图本身应与期望几乎一致：${good.detail}`);
+  assert.ok(good.meanLift >= good.minLift - 1e-9 && good.meanLift - good.minLift < 0.02, `合成图里每条细带的提亮几乎一样：平均 ${good.meanLift}，最小 ${good.minLift}（平均值不能低于最小值，也不能离得远）`);
+  const shaded = R.judgeSeams(TURTLE, turtleSeamImage({ bodyAt: shadeAt }));
+  assert.ok(shaded.ok && shaded.evaluated === good.evaluated, `躯干有明暗时同样通过（参照环按外扩一圈对称取平均）：${shaded.detail}`);
+  assert.ok(shaded.maxError < 0.02, `明暗引起的误差远小于容差 ${R.LIMITS.spotTolerance}：${shaded.maxError}`);
+  const bare = R.judgeSeams(TURTLE, turtleSeamImage({ colourFor: (index, base) => base }));
+  assert.ok(!bare.ok && bare.passed === 0, '细带没有提亮');
+  const weak = R.judgeSeams(TURTLE, turtleSeamImage({ colourFor: (index, base) => spotColour(base, 0.5) }));
+  assert.ok(!weak.ok, `α 0.5 应被拦住：${weak.detail}`);
+  assert.ok(!R.judgeSeams(TURTLE, turtleSeamImage({ colourFor: () => [1, 1, 1] })).ok, '纯白：与期望的通道差超限');
+  assert.ok(!R.judgeSeams(TURTLE, turtleSeamImage({ colourFor: (index, base) => spotColour([0.9, 0.3, 0.3]) })).ok, '偏红的细带：通道差超限');
+  assert.equal(R.judgeSeams('hammer', blank()), null); assert.equal(R.judgeSeams('manta', blank()), null);
+  const empty = R.judgeSeams(TURTLE, blank());
+  assert.ok(!empty.ok && empty.evaluated === 0 && empty.skipped === 22, '什么都没画：没有参照像素，全部跳过而不是用空平均去判定');
+});
+
+test('judgeSeams：参与判定的细带里通过的比例恰为 0.9 时通过、再少一条不通过；参与的细带太少时哪怕全对也不通过；参照不足的被跳过；没有对比度时不放行', () => {
+  const strips = evaluatedStrips(), n = strips.length;
+  assert.ok(n >= R.LIMITS.seamMinCount, `前提：参与判定的细带 ${n} 条`);
+  const allowed = Math.floor(n * (1 - R.LIMITS.spotPass) + 1e-9);
+  assert.ok(allowed >= 1, `前提：允许失败至少 1 条（${n} 条 × ${1 - R.LIMITS.spotPass}）`);
+  const missing = count => R.judgeSeams(TURTLE, turtleSeamImage({ only: index => !strips.slice(0, count).includes(index) }));
+  const edge = missing(allowed), over = missing(allowed + 1);
+  assert.equal(edge.passed, n - allowed); assert.ok(edge.ok, `缺 ${allowed} 条（比例 ${(n - allowed) / n}）达到下限：${edge.detail}`);
+  assert.equal(over.passed, n - allowed - 1); assert.ok(!over.ok, `再缺 1 条（比例 ${(n - allowed - 1) / n}）低于 ${R.LIMITS.spotPass}：${over.detail}`);
+  assert.equal(over.failures.length, allowed + 1, '失败的细带逐条列出序号');
+  // 只留画面右侧：左侧的细带没有像素（跳过），右侧画得完全正确。参与判定的细带不足 seamMinCount（1…seamMinCount-1 条）——检查空转，不算通过；
+  // 边界两侧各钉一个：恰为 seamMinCount 条且全对 → 通过，只差一条 → 不通过（比较写成 > 或下限差一条都会被抓到）
+  const clearLeftOf = (image, cut) => { for (let y = 0; y < image.height; y++) for (let x = 0; x < cut; x++) image.pixels[(y * image.width + x) * 4 + 3] = 0; };
+  let sparse = null, atLimit = null, atLimitCut = null;
+  const centres = strips.map(index => R.discOf(seamPolygons()[index]).centre[0] * R.VIEW.scale).sort((a, b) => a - b);      // 参与判定的细带的中心列（像素），从左到右
+  for (const centre of centres) {
+    const cut = Math.floor(centre) - 2, image = turtleSeamImage();         // 这条细带及其右边的保留，更左边的整列抹掉
+    clearLeftOf(image, cut);
+    const verdict = R.judgeSeams(TURTLE, image);
+    if (!atLimit && verdict.evaluated === R.LIMITS.seamMinCount) { atLimit = verdict; atLimitCut = cut; }
+    if (!sparse && verdict.evaluated > 0 && verdict.evaluated < R.LIMITS.seamMinCount) sparse = verdict;
+    if (atLimit && sparse) break;
+  }
+  assert.ok(sparse, '前提：存在一条竖线，把参与判定的细带减到 1…seamMinCount-1 条');
+  assert.equal(sparse.passed, sparse.evaluated, '参与判定的细带全部正确');
+  assert.ok(!sparse.ok, '参与判定的细带不足下限：检查空转，不能算通过');
+  assert.ok(atLimit, '前提：存在一条竖线，让参与判定的细带恰为 seamMinCount 条');
+  assert.equal(atLimit.passed, atLimit.evaluated, '参与判定的细带全部正确');
+  assert.ok(atLimit.ok, `恰为下限（${atLimit.evaluated} 条全对）应当通过：${atLimit.detail}`);
+  let belowLimit = null;                                                     // 同一条竖线再抹掉某一条细带的像素（它变成“跳过”），参与判定的恰好少一条
+  for (const index of strips) {
+    const image = turtleSeamImage();
+    clearLeftOf(image, atLimitCut);
+    const pixels = seamPolygons()[index].map(point => R.toPixel(point[0], point[1]));
+    for (let y = Math.max(0, Math.floor(Math.min(...pixels.map(q => q[1]))) - 1); y < Math.min(image.height, Math.ceil(Math.max(...pixels.map(q => q[1]))) + 1); y++)
+      for (let x = Math.max(0, Math.floor(Math.min(...pixels.map(q => q[0]))) - 1); x < Math.min(image.width, Math.ceil(Math.max(...pixels.map(q => q[0]))) + 1); x++) image.pixels[(y * image.width + x) * 4 + 3] = 0;
+    const verdict = R.judgeSeams(TURTLE, image);
+    if (verdict.evaluated === R.LIMITS.seamMinCount - 1) { belowLimit = verdict; break; }
+  }
+  assert.ok(belowLimit, '前提：抹掉某一条细带后，参与判定的恰好少一条');
+  assert.equal(belowLimit.passed, belowLimit.evaluated, '参与判定的细带全部正确');
+  assert.ok(!belowLimit.ok, `只差一条（${belowLimit.evaluated} 条全对）不能通过：${belowLimit.detail}`);
+  // 只画细带、不画躯干：参照环是空的，全部跳过
+  const image = blank();
+  for (const polygon of seamPolygons()) {
+    const mask = R.rasterize([polygon], image.width, image.height), rgb = spotColour(BODY_RGB);
+    for (let i = 0; i < mask.length; i++) if (mask[i]) { image.pixels[i * 4] = Math.round(rgb[0] * 255); image.pixels[i * 4 + 1] = Math.round(rgb[1] * 255); image.pixels[i * 4 + 2] = Math.round(rgb[2] * 255); image.pixels[i * 4 + 3] = 255; }
+  }
+  const starved = R.judgeSeams(TURTLE, image);
+  assert.equal(starved.evaluated, 0); assert.equal(starved.skipped, 22); assert.ok(!starved.ok);
+  // 没有对比度：躯干近乎纯白时，白色细带怎么画都看不出提亮——通道误差再小也不放行
+  const white = [0.97, 0.99, 1];
+  const flat = R.judgeSeams(TURTLE, turtleSeamImage({ bodyAt: () => white, colourFor: () => spotColour(white) }));
+  assert.ok(flat.maxError < 0.01, `前提：误差本身几乎为 0（${flat.maxError}）`);
+  assert.ok(!flat.ok && flat.passed === 0, `没有对比度：${flat.detail}`);
+});
+
+test('judgeSeams：眼睛画在细带上时，脸周围的像素不参与判定（避让区）；同一幅图里没有眼睛、只有深色圆盘时那条细带会失败', () => {
+  const strips = evaluatedStrips(), good = R.judgeSeams(TURTLE, turtleSeamImage()), geometry = R.poseGeometry(TURTLE);
+  const centre = R.discOf(seamPolygons()[strips[0]]).centre;                 // 第一条参与判定的细带的中心（窗口点）
+  const darken = (image, at) => {                                            // 在 at 处画一个半径 2.2 pt 的深色圆盘（眼睛的墨色）
+    const [cx, cy] = R.toPixel(at[0], at[1]);
+    for (let y = 0; y < image.height; y++) for (let x = 0; x < image.width; x++) if (Math.hypot(x + 0.5 - cx, y + 0.5 - cy) <= 2.2 * R.VIEW.scale) {
+      const i = (y * image.width + x) * 4; image.pixels[i] = 26; image.pixels[i + 1] = 26; image.pixels[i + 2] = 38; image.pixels[i + 3] = 255;
+    }
+  };
+  // 对照：深色圆盘盖在细带中心，但眼睛不在那里（避让区不覆盖它）→ 圆盘的像素混进细带与参照环，这条细带失败
+  const control = turtleSeamImage(); darken(control, centre);
+  const contaminated = R.judgeSeams(TURTLE, control);
+  assert.deepEqual(contaminated.failures.map(text => Number(text.match(/^#(\d+)/)[1])), [strips[0]], `深色圆盘污染了这一条细带：${contaminated.detail}`);
+  // 把眼睛放到同一处（形状坐标 = 窗口点按放置变换反推）：避让区盖住圆盘及其周围，这条细带没有像素可用，被跳过，没有失败
+  const real = Shapes.native;
+  Shapes.native = id => { const shape = real(id); if (id === TURTLE) shape.eyes = { r: shape.eyes.r, at: [[centre[0] - geometry.target[0] + geometry.mid[0], centre[1] - geometry.target[1] + geometry.mid[1]]] }; return shape; };
+  try {
+    const eye = R.poseGeometry(TURTLE).eyes[0];
+    assert.ok(Math.hypot(eye[0] - centre[0], eye[1] - centre[1]) < 1e-9, '前提：眼睛放在了细带中心');
+    const image = turtleSeamImage(); darken(image, eye);
+    const avoided = R.judgeSeams(TURTLE, image);
+    assert.equal(avoided.failures.length, 0, `避让区里的深色像素不参与判定：${avoided.detail}`);
+    assert.equal(avoided.evaluated, good.evaluated - 1, '被避让区盖住的那一条细带没有像素可用，不参与判定');
+    assert.equal(avoided.skipped, good.skipped + 1); assert.equal(avoided.passed, avoided.evaluated); assert.ok(avoided.ok);
+  } finally { Shapes.native = real; }
+  assert.equal(R.judgeSeams(TURTLE, turtleSeamImage()).evaluated, good.evaluated, '还原后恢复正常');
+});
+
+test('checkSpecies 的分派：accent 是细带网的海龟走壳纹检查（三种花纹各一行，不走斑点），accent 是小圆的鲸鲨走斑点检查（不走壳纹），没有 accent 的动物两样都不走', () => {
+  const cache = {};
+  const imagesOf = id => new Proxy({}, { get: (_, name) => typeof name === 'string' ? (cache[`${id}:${name}`] ??= blank()) : undefined });
+  const calls = [];
+  const judges = id => {
+    const images = imagesOf(id);
+    return {
+      images,
+      judgeSeams: (species, image) => { calls.push(['seams', species]); return { ok: image !== images[`${species}-blend`], detail: '注入' }; },
+      judgeSpots: (species, image) => { calls.push(['spots', species]); return { ok: image !== images[`${species}-rainbow`], detail: '注入' }; },
+    };
+  };
+  const run = id => { const j = judges(id); return R.checkSpecies(id, j.images, PALETTE, { judgeSeams: j.judgeSeams, judgeSpots: j.judgeSpots }); };
+  const turtle = run(TURTLE);
+  assert.deepEqual(turtle.filter(line => line.group === '壳纹').map(line => [line.name, line.ok]), [
+    ['solid：壳纹中心是白色 × α 盖在躯干上的颜色', true], ['blend：壳纹中心是白色 × α 盖在躯干上的颜色', false], ['rainbow：壳纹中心是白色 × α 盖在躯干上的颜色', true]]);
+  assert.equal(turtle.filter(line => line.group === '斑点').length, 0);
+  assert.deepEqual(calls.splice(0), [['seams', TURTLE], ['seams', TURTLE], ['seams', TURTLE]], '海龟只调用壳纹判定，三次');
+  const whale = run(WHALE);
+  assert.deepEqual(whale.filter(line => line.group === '斑点').map(line => [line.name, line.ok]), [
+    ['solid：斑点中心是白色 × α 盖在躯干上的颜色', true], ['blend：斑点中心是白色 × α 盖在躯干上的颜色', true], ['rainbow：斑点中心是白色 × α 盖在躯干上的颜色', false]]);
+  assert.equal(whale.filter(line => line.group === '壳纹').length, 0);
+  assert.deepEqual(calls.splice(0), [['spots', WHALE], ['spots', WHALE], ['spots', WHALE]], '鲸鲨只调用斑点判定，三次');
+  for (const id of ['hammer', 'manta']) {
+    const lines = run(id);
+    assert.equal(lines.filter(line => line.group === '斑点' || line.group === '壳纹').length, 0, `${id} 没有 accent：不出现斑点与壳纹`);
+    assert.deepEqual(calls.splice(0), [], `${id} 没有 accent：两个判定都不调用`);
+  }
 });
 
 test('用例表（鲸鲨）：有睡着又被抓住的用例（asleep 与 grabbed 同时为真）', () => {
@@ -620,7 +833,11 @@ test('检查清单：登记了每个有形状数据的动物，各组条数是�
     assert.equal(lines.length, Object.values(groups).reduce((sum, n) => sum + n, 0));
   }
   assert.deepEqual(Object.keys(R.CHECK_MANIFEST.hammer).filter(g => !(g in R.CHECK_MANIFEST.whaleshark)), [], '鲸鲨的组是小锤头鲨的超集');
-  assert.ok(!('微笑' in R.CHECK_MANIFEST.hammer) && !('斑点' in R.CHECK_MANIFEST.manta) && '微笑' in R.CHECK_MANIFEST.whaleshark, '微笑、腹部、斑点只有鲸鲨有');
+  const groupsOf = id => new Set(Object.keys(R.CHECK_MANIFEST[id]));
+  for (const id of ['hammer', 'manta']) for (const group of ['微笑', '腹部', '斑点', '壳纹']) assert.ok(!groupsOf(id).has(group), `俯视的 ${id} 没有「${group}」`);
+  for (const id of ['whaleshark', 'turtle']) for (const group of ['微笑', '腹部']) assert.ok(groupsOf(id).has(group), `侧视的 ${id} 有「${group}」`);
+  assert.ok(groupsOf('whaleshark').has('斑点') && !groupsOf('whaleshark').has('壳纹'), '鲸鲨的 accent 是小圆：斑点、没有壳纹');
+  assert.ok(groupsOf('turtle').has('壳纹') && !groupsOf('turtle').has('斑点'), '海龟的 accent 是细带网：壳纹、没有斑点');
 });
 
 test('manifestProblem：少一条、多一条、多出新的组、少掉整组、没登记的动物各自给出说明；一致返回 null；可传入自己的清单', () => {
@@ -753,7 +970,7 @@ test('命令行：渲染工具给出的东西不对时按基础设施错误处�
     [{ directAppearance: 'light' }, ['--species=manta'], /manta-direct：请求直接画（与外观无关），渲染工具报告的是 light/],
     [{ omitShow: true }, ['--species=manta'], /manta-solid：请求的元素可见性是 .*渲染工具报告的是 没有报告（旧版渲染工具？）/],
     [{ ignoreShow: true }, ['--species=manta'], /manta-direct-all：请求的元素可见性是 .*"strokes":false.*渲染工具报告的是 .*"strokes":true/],
-    [{}, ['--species=turtle'], /turtle 没有形状数据，无法检查/],
+    [{}, ['--species=dragon'], /dragon 没有形状数据，无法检查/],
     [{}, ['--species=jelly'], /jelly 没有形状数据，无法检查/],
   ];
   for (const [options, args, expected] of cases) {

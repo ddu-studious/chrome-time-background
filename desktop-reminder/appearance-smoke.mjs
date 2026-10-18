@@ -5,7 +5,7 @@
 // 每次读数都核对 jellyTint === jellyPaintA（JellyPose 的约定：光晕、涟漪、睡觉标记与气泡边框用的 tint 始终等于颜料主色）。
 // 大部分场景强制“减少动态效果”（颜色一步到位，读数稳定）；motion 场景不强制，核对“平静期换色立即生效”“阶段色是渐变过去的”、
 // “动物自由游动时朝向/俯仰/划水跟随速度”、“没常驻时入场向左、游走向右两段冲刺的朝向”、“换物种时姿态从头来”和“响铃时鳍（翼）摆动、结束后停稳回中位”
-// （最后一个对小锤头鲨、蝠鲼与鲸鲨各跑一次），系统本身开着“减少动态效果”或屏幕在休眠（ping 的 displaysActive 为 0）时这几个场景明确跳过（不算通过）。
+// （最后一个对小锤头鲨、蝠鲼、海龟与鲸鲨各跑一次），系统本身开着“减少动态效果”或屏幕在休眠（ping 的 displaysActive 为 0）时这几个场景明确跳过（不算通过）。
 // 物种场景（名称以“物种：”开头）覆盖协议 v7 的 appearance.species：回执只报告实际生效的物种、画不出来的退回水母、姿态读数 jellyPose、
 // 窗口标题与读屏名称 jellyTitle / jellyLabel、运行中的游动调参 jellyTuning（这三项与 jellyPose 一样只作验收诊断）。
 // 只跑一部分：--only=名称里的一段文字（例如 --only=物种：）。
@@ -329,6 +329,31 @@ await scenario('物种：鲸鲨的游动调参按实际生效的物种应用—�
   assert.deepEqual(await apply({ ...hammerLook, species: 'whaleshark' }), whale, '换回鲸鲨立刻恢复它的调参');
 });
 
+await scenario('物种：海龟的游动调参按实际生效的物种应用——拍鳍周期 1.25 倍（比水母慢、比蝠鲼的 1.35 短）、水平冲量与横向阻力同为 0.7、纵向冲量与下沉同为 0.4，系数与原生里标定的一致', async h => {
+  const apply = async look => { await h.request('jelly', { jelly: jelly({ appearance: appearance(look) }) }); return tuningOf(await pinged(h)); };
+  await h.request('jelly', { jelly: jelly({ appearance: appearance({ species: 'jelly' }) }) });
+  assert.equal((await h.request('countdown', { timer: fireIn(5 * 60000) })).ok, true);   // 非平静阶段：同一阶段里对比
+  await delay(1300);
+  const jellyTuning = tuningOf(await pinged(h));
+  const hammer = await apply(hammerLook);
+  const manta = await apply({ ...hammerLook, species: 'manta' });
+  const whale = await apply({ ...hammerLook, species: 'whaleshark' });
+  const turtle = await apply({ ...hammerLook, species: 'turtle' });                       // 回执之后的第一次读数就要是海龟的
+  for (const [field, expected] of [['period', 1.25], ['thrustX', 0.7], ['thrustY', 0.4], ['sink', 0.4], ['dragX', 0.7], ['dragY', 1]]) {
+    const ratio = turtle[field] / jellyTuning[field];
+    assert.ok(Math.abs(ratio - expected) < 0.02, `海龟的 ${field} 应是水母的 ${expected} 倍，实际 ${turtle[field]} 对 ${jellyTuning[field]}（${ratio.toFixed(3)} 倍）`);
+  }
+  assert.ok(turtle.period > jellyTuning.period && turtle.period < manta.period, `海龟拍鳍比水母慢、但没有蝠鲼拍翼那么慢：周期 ${turtle.period} 在水母 ${jellyTuning.period} 与蝠鲼 ${manta.period} 之间`);
+  assert.ok(turtle.thrustY > whale.thrustY && turtle.thrustY < manta.thrustY && turtle.sink >= whale.sink && turtle.sink < manta.sink, `海龟的纵向冲量与下沉介于鲸鲨与蝠鲼之间（比鲸鲨多一点浮动、比蝠鲼稳）：${turtle.thrustY}/${turtle.sink} 对鲸鲨 ${whale.thrustY}/${whale.sink}、蝠鲼 ${manta.thrustY}/${manta.sink}`);
+  assert.ok(turtle.thrustX > manta.thrustX && turtle.thrustX < hammer.thrustX, `海龟水平冲量介于蝠鲼与小锤头鲨之间：${manta.thrustX} < ${turtle.thrustX} < ${hammer.thrustX}`);
+  assert.ok(turtle.dragX > whale.dragX && turtle.dragX <= hammer.dragX, `海龟横向阻力比鲸鲨大、不超过小锤头鲨（冲量与阻力同比，平均速度是五种里最慢）：${whale.dragX} < ${turtle.dragX} <= ${hammer.dragX}`);
+  assert.equal(turtle.hover, jellyTuning.hover, '愿意停留的高度不按物种乘系数');
+  await delay(2300);                                                                      // 再经过至少两次每秒刷新：刷新时也要按实际生效的物种取调参
+  assert.deepEqual(tuningOf(await pinged(h)), turtle, '刷新之后调参不应被改回');
+  assert.deepEqual(await apply({ ...hammerLook, species: 'whaleshark' }), whale, '换成鲸鲨立刻是鲸鲨的调参（不残留海龟的）');
+  assert.deepEqual(await apply({ ...hammerLook, species: 'turtle' }), turtle, '换回海龟立刻恢复它的调参');
+});
+
 await scenario('物种：减少动态效果时动物静止——朝右、不俯仰、不划水，读数 jellyPose 与水母的约定一致', async h => {
   await h.request('jelly', { jelly: jelly({ appearance: appearance(hammerLook) }) });
   await h.request('countdown', { timer: fireIn(5 * 60000) });
@@ -339,7 +364,7 @@ await scenario('物种：减少动态效果时动物静止——朝右、不俯�
   assert.match((await pinged(h)).jellyPose, /^facing=1\.000 pitch=0\.000 wave=0\.000 /, '水母的姿态读数恒为朝右/不俯仰/不划水');
 });
 
-for (const species of ['hammer', 'whaleshark']) await motionScenario(`开着动态效果：${species === 'hammer' ? '小锤头鲨' : '鲸鲨'}自由游动时，出现稳定的同向游动就朝向跟上；俯仰与划水相位在界限内，且确实划水了`, async h => {
+for (const species of ['hammer', 'turtle', 'whaleshark']) await motionScenario(`开着动态效果：${SPECIES_NAMES[species]}自由游动时，出现稳定的同向游动就朝向跟上；俯仰与划水相位在界限内，且确实划水了`, async h => {
   await h.request('jelly', { jelly: jelly({ appearance: appearance({ ...hammerLook, species }) }) });
   await h.request('countdown', { timer: fireIn(5 * 60000) });
   await delay(1200);
@@ -456,8 +481,8 @@ await scenario('物种：响铃时动物同样游到落点并弹出气泡（窗�
   await h.request('hide', { sessionId: 'ring-1' });
 });
 
-const FIN_NAMES = { hammer: '小锤头鲨的鳍', manta: '蝠鲼的翼', whaleshark: '鲸鲨的尾鳍与胸鳍' };
-for (const species of ['hammer', 'manta', 'whaleshark']) await motionScenario(`开着动态效果：响铃时${FIN_NAMES[species]}随节奏摆动；响铃结束、游回原位停稳后，鳍（翼）与身体回到中位（不停在半途）`, async h => {
+const FIN_NAMES = { hammer: '小锤头鲨的鳍', manta: '蝠鲼的翼', turtle: '海龟的鳍状肢与尾', whaleshark: '鲸鲨的尾鳍与胸鳍' };
+for (const species of ['hammer', 'manta', 'turtle', 'whaleshark']) await motionScenario(`开着动态效果：响铃时${FIN_NAMES[species]}随节奏摆动；响铃结束、游回原位停稳后，鳍（翼）与身体回到中位（不停在半途）`, async h => {
   await h.request('jelly', { jelly: jelly({ appearance: appearance({ ...hammerLook, species }) }) });
   const ringId = `ring-2-${species}`;
   const shown = await h.request('show', ringPayload(ringId));

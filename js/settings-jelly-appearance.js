@@ -81,12 +81,12 @@
     const swatch = swatches().find(item => Number(item.dataset?.color) === slot);
     return String(swatch?.getAttribute?.('title') || '').replace(/（[^）]*）/g, '').trim() || `色位 ${slot + 1}`;
   };
-  /** 文字说明写清每种颜色在哪里（读屏与色弱用户都靠它，也是对花纹的准确描述）。动物没有钟罩与触须：躯干沿尾→头铺色，鳍与尾取肢体色。 */
+  /** 文字说明写清每种颜色在哪里（读屏与色弱用户都靠它，也是对花纹的准确描述）。动物没有钟罩与触须：躯干沿尾→头铺色，鳍与尾取肢体色；海龟的头也是肢体色，所以双色时点名头。 */
   function previewText(paint, species = 'jelly') {
     const [n0, n1, n2] = paint.slots.map(colorName);
     if (species !== 'jelly') {
       switch (paint.kind) {
-        case 'duo': return `双色（躯干${n0}，鳍与尾${n1}）`;
+        case 'duo': return species === 'turtle' ? `双色（龟壳${n0}，头、鳍与尾${n1}）` : `双色（躯干${n0}，鳍与尾${n1}）`;
         case 'blend': return `渐变（尾端${n0} → 头端${n1}）`;
         case 'rainbow': return `七彩（${n0}、${n1}、${n2}，由尾到头铺开）`;
         default: return `纯色（${n0}）`;

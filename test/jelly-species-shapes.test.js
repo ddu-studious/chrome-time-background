@@ -560,6 +560,134 @@ test('鲸鲨的整体：侧视、有眼睛腮红微笑；长度 85…95、高度
   assert.deepEqual(moves, [true, false, false, false, false, true, false, false]);
 });
 
+// ---- 海龟的数据质量：壳纹是一张互不重叠的细带网，整张网在龟壳里、不碰高光；脸在头上；腹甲一圈、各部件的叠放次序与鳍的反相摆动 ----
+
+const subpathsOf = d => {
+  const out = []; let current = null;
+  for (const { cmd, pts } of cmdsOf(d)) {
+    if (cmd === 'M') current = [pts[0]]; else if (cmd === 'L') current.push(pts[0]);
+    else if (cmd === 'Z') { out.push(current); current = null; }
+    else assert.fail(`壳纹只能是直线段（${cmd}）：曲线的细带在 2× 屏幕上宽窄不匀，也没法保证不重叠`);
+  }
+  assert.equal(current, null, '每个子路径都要闭合');
+  return out;
+};
+const polygonArea = polygon => Math.abs(polygon.reduce((sum, p, i) => { const q = polygon[(i + 1) % polygon.length]; return sum + p[0] * q[1] - q[0] * p[1]; }, 0)) / 2;
+const turtle = () => {
+  const raw = S.SHAPES.turtle, shape = S.expand('turtle');
+  const pick = predicate => shape.parts.find(predicate);
+  return {
+    raw, shape,
+    shell: polygonOf(pick(part => part.role === 'body').d), head: polygonOf(pick(part => part.role === 'limb' && part.u === 0.95).d),
+    plastron: polygonOf(pick(part => part.role === 'limb' && part.u === 0.55).d), belly: polygonOf(pick(part => part.role === 'belly').d),
+    shine: polygonOf(pick(part => part.role === 'shine').d), seams: subpathsOf(pick(part => part.role === 'accent').d),
+    eye: shape.eyes.at[0], eyeRadius: shape.eyes.r, blush: shape.blush[0], mouth: shape.mouth,
+  };
+};
+
+test('海龟的整体：侧视、长度 74…80、高度 36…41（含摆动的鳍与尾）；有眼睛腮红微笑；壳、腹甲的浅色面、壳纹、高光各一个部件；叠放次序固定', () => {
+  const { shape } = turtle();
+  assert.equal(shape.view, 'side');
+  const u = S.union('turtle'), width = u.maxX - u.minX, height = u.maxY - u.minY;
+  assert.ok(width >= 74 && width <= 80, `长度 ${width.toFixed(2)}`); assert.ok(height >= 36 && height <= 41, `高度 ${height.toFixed(2)}`);
+  for (const role of ['body', 'belly', 'accent', 'shine']) assert.equal(shape.parts.filter(part => part.role === role).length, 1, `${role} 只有一个部件`);
+  assert.equal(shape.eyes.at.length, 1, '侧视只看得见一只眼睛'); assert.equal(shape.blush.length, 1);
+  assert.ok(Array.isArray(shape.mouth) && shape.mouth.length === 4, '海龟笑着');
+  // 次序：远侧前鳍、远侧后鳍、尾、头在最底下；腹甲（肢体色一圈）与腹部浅色面在壳之下，壳盖住它们的根部；壳纹与高光在壳上；近侧后鳍与前鳍最后画，盖在壳与腹甲的边缘上
+  const order = shape.parts.map(part => part.role + (part.role === 'limb' ? `@${part.u}` : ''));
+  assert.deepEqual(order, ['limb@0.72', 'limb@0.25', 'limb@0.05', 'limb@0.95', 'limb@0.55', 'belly', 'body', 'accent', 'shine', 'limb@0.25', 'limb@0.72']);
+});
+
+test('海龟的鳍与尾：五个会动的部件只转动不压扁；近侧与远侧的鳍反相摆动（一前一后，划起来是交替的）；前鳍摆得比后鳍大、尾最小', () => {
+  const { raw } = turtle();
+  const moving = raw.parts.map(part => part.motion || null);
+  assert.deepEqual(moving.map(motion => motion !== null), [true, true, true, false, false, false, false, false, false, true, true], '远侧前鳍、远侧后鳍、尾，近侧后鳍、近侧前鳍；头、腹甲、腹部、壳、壳纹、高光不动');
+  for (const motion of moving.filter(Boolean)) assert.ok(!motion.squash, '海龟的鳍不压扁（只有蝠鲼拍翼才压扁）');
+  const [farFront, farRear, tail, , , , , , , nearRear, nearFront] = moving.map(motion => motion && motion.deg);
+  assert.ok(Math.sign(farFront) === -Math.sign(nearFront) && Math.sign(farRear) === -Math.sign(nearRear), `远侧与近侧反相：前鳍 ${farFront}/${nearFront}，后鳍 ${farRear}/${nearRear}`);
+  assert.ok(Math.abs(nearFront) > Math.abs(nearRear) && Math.abs(farFront) > Math.abs(farRear), '前鳍是主要的划水器官，摆得比后鳍大');
+  assert.ok(Math.abs(tail) < Math.abs(nearRear) && Math.abs(tail) < Math.abs(farRear), '尾摆得最小');
+  // 转轴要落在各自的根部：在自己的路径包围盒里（不然转起来整片鳍会甩出去）
+  raw.parts.forEach((part, index) => {
+    if (!part.motion) return;
+    const box = polygonOf(S.expand('turtle').parts[index].d), xs = box.map(p => p[0]), ys = box.map(p => p[1]);
+    assert.ok(part.motion.pivot[0] >= Math.min(...xs) - 1 && part.motion.pivot[0] <= Math.max(...xs) + 1 && part.motion.pivot[1] >= Math.min(...ys) - 1 && part.motion.pivot[1] <= Math.max(...ys) + 1, `部件 #${index} 的转轴 ${part.motion.pivot} 离自己的路径太远`);
+  });
+});
+
+test('海龟的壳纹：22 个互不重叠的多边形（17 条细带加 5 个三岔口的小三角），全是直线段，整张网在龟壳里、离轮廓 ≥ 0.7、不碰高光', () => {
+  const { seams, shell, shine } = turtle();
+  assert.equal(seams.length, 22);
+  assert.deepEqual([seams.filter(polygon => polygon.length === 4).length, seams.filter(polygon => polygon.length === 3).length], [17, 5], '17 个四边形的细带与 5 个三角形');
+  for (const polygon of seams) for (const vertex of polygon) {
+    assert.ok(insidePolygon(vertex, shell), `壳纹顶点 (${vertex.map(n => n.toFixed(2))}) 要在龟壳里`);
+    assert.ok(outlineDistance(vertex, shell) >= 0.7, `壳纹顶点 (${vertex.map(n => n.toFixed(2))}) 离壳的轮廓 ${outlineDistance(vertex, shell).toFixed(2)}（描边半宽 0.55，要 ≥ 0.7，不然壳纹会糊进描边）`);
+  }
+  // 高光（白色半透明）压在壳纹上会变成一团白：整张网离高光至少 1 pt
+  let nearest = Infinity;
+  for (const polygon of seams) for (let i = 0; i < polygon.length; i++) for (let k = 0; k <= 10; k++) {
+    const a = polygon[i], b = polygon[(i + 1) % polygon.length], p = [a[0] + (b[0] - a[0]) * k / 10, a[1] + (b[1] - a[1]) * k / 10];
+    nearest = Math.min(nearest, (insidePolygon(p, shine) ? -1 : 1) * outlineDistance(p, shine));
+  }
+  assert.ok(nearest >= 1.0, `壳纹离高光 ${nearest.toFixed(2)} pt（要 ≥ 1.0）`);
+});
+
+test('海龟的壳纹：任意两块之间没有重叠（偶奇规则下重叠会被挖成洞；非零规则下会叠出更白的一块）；细带宽度一致（不太窄也不太粗）、总面积适中', () => {
+  const { seams } = turtle();
+  let overlapping = 0, samples = 0;
+  seams.forEach((polygon, i) => {
+    const xs = polygon.map(p => p[0]), ys = polygon.map(p => p[1]);
+    for (let x = Math.min(...xs); x <= Math.max(...xs); x += 0.1) for (let y = Math.min(...ys); y <= Math.max(...ys); y += 0.1) {
+      if (!insidePolygon([x, y], polygon)) continue;
+      samples++;
+      if (seams.some((other, j) => j !== i && insidePolygon([x, y], other))) overlapping++;
+    }
+  });
+  assert.ok(samples > 5000, `前提：取样够密（${samples} 个内部点）`);
+  assert.equal(overlapping, 0, `${overlapping} 个内部取样点同时落在两块壳纹里`);
+  // 细带的“半宽”（多边形里最大的内切距离）：四边形 ≥ 0.55（宽 ≥ 1.1 pt，在 2× 屏幕上至少 2 个像素宽，渲染检查才取得到内部像素）；小三角 ≥ 0.25
+  seams.forEach((polygon, index) => {
+    const xs = polygon.map(p => p[0]), ys = polygon.map(p => p[1]);
+    let inradius = 0;
+    for (let x = Math.min(...xs); x <= Math.max(...xs); x += 0.05) for (let y = Math.min(...ys); y <= Math.max(...ys); y += 0.05) if (insidePolygon([x, y], polygon)) inradius = Math.max(inradius, outlineDistance([x, y], polygon));
+    // 上限同样要守：整张网是同一种宽度的接缝（设计宽 1.3 pt，四边形半宽 0.65，三角 0.36–0.38），单条变粗会像多出来的一道白杠（变异检查里“一条变粗”曾经存活，见技术文档）
+    assert.ok(inradius >= (polygon.length === 4 ? 0.55 : 0.25) && inradius <= (polygon.length === 4 ? 0.8 : 0.5), `壳纹 #${index} 半宽 ${inradius.toFixed(2)}（四边形 0.55…0.8，三角 0.25…0.5）`);
+  });
+  const total = seams.reduce((sum, polygon) => sum + polygonArea(polygon), 0), shellArea = polygonArea(turtle().shell);
+  assert.ok(total / shellArea >= 0.10 && total / shellArea <= 0.22, `壳纹占龟壳面积的 ${(100 * total / shellArea).toFixed(1)}%（10%…22%：太少看不出壳纹，太多像一块白板）`);
+});
+
+test('海龟的脸：眼睛在头里（不在壳下）且离头轮廓有余量；腮红整块在头里；微笑整条在头里、在眼睛下方、长度适中、两端差不多高', () => {
+  const { head, shell, eye, eyeRadius, blush, mouth } = turtle();
+  assert.ok(insidePolygon(eye, head) && outlineDistance(eye, head) - eyeRadius >= 2.5, `眼睛离头轮廓 ${(outlineDistance(eye, head) - eyeRadius).toFixed(2)}（≥ 2.5）`);
+  assert.ok(!insidePolygon(eye, shell), '眼睛不在龟壳下面');
+  for (const p of [[blush[0] - blush[2], blush[1]], [blush[0] + blush[2], blush[1]], [blush[0], blush[1] - blush[3]], [blush[0], blush[1] + blush[3]]]) assert.ok(insidePolygon(p, head) && outlineDistance(p, head) >= 3, `腮红的四个端点都在头里且离轮廓 ≥ 3：${p}`);
+  const smile = curvePoints(mouth);
+  for (const p of smile) { assert.ok(insidePolygon(p, head), `微笑的每个点都在头里：${p}`); assert.ok(outlineDistance(p, head) >= 1.5, `微笑离头轮廓 ≥ 1.5（线宽 1.2 的一半约 0.67）：${p}`); }
+  let length = 0; for (let i = 1; i < smile.length; i++) length += Math.hypot(smile[i][0] - smile[i - 1][0], smile[i][1] - smile[i - 1][1]);
+  assert.ok(length >= 5 && length <= 9, `微笑长度 ${length.toFixed(2)}`);
+  assert.ok(Math.min(...smile.map(m => Math.hypot(m[0] - eye[0], m[1] - eye[1]))) - eyeRadius >= 2, '微笑离眼睛 ≥ 2');
+  assert.ok(smile.every(p => p[1] > eye[1]), '微笑整条在眼睛下方（svg y 更大）');
+  const lowest = Math.max(...smile.map(p => p[1]));
+  assert.ok(lowest > mouth[0][1] + 1 && lowest > mouth[3][1] + 1, '弧线中间比两端低至少 1，是笑而不是撇嘴');
+  assert.ok(mouth[0][0] > mouth[3][0], '起点在嘴的前端（x 更大，朝向右）');
+  assert.ok(mouth[0][0] - mouth[3][0] >= 4, `两端的水平距离（弦宽）${(mouth[0][0] - mouth[3][0]).toFixed(2)} ≥ 4`);
+  assert.ok(Math.abs(mouth[0][1] - mouth[3][1]) <= 1, `两端高度差 ${Math.abs(mouth[0][1] - mouth[3][1]).toFixed(2)} ≤ 1：对称的笑，不是钩`);
+});
+
+test('海龟的腹甲：浅色的腹部整块在肢体色的腹甲里，四周留一圈（≥ 0.9，下沿最宽处 ≥ 2.8，渲染检查才取得到腹甲的取样点）；头与壳只在根部交叠', () => {
+  const { belly, plastron, head, shell } = turtle();
+  let margin = Infinity, widest = 0;
+  for (const p of belly) {
+    margin = Math.min(margin, (insidePolygon(p, plastron) ? 1 : -1) * outlineDistance(p, plastron));
+    if (p[1] > 8) widest = Math.max(widest, outlineDistance(p, plastron));
+  }
+  assert.ok(margin >= 0.9, `腹部离腹甲轮廓的最小余量 ${margin.toFixed(2)}（≥ 0.9）`);
+  assert.ok(widest >= 2.8, `下沿一圈最宽 ${widest.toFixed(2)}（≥ 2.8）`);
+  const hidden = head.filter(p => insidePolygon(p, shell)).length;
+  assert.ok(hidden <= head.length * 0.15, `头的轮廓只有根部（≤ 15%）压在壳下：${hidden}/${head.length}`);
+});
+
 test('并集取样的相位表：恰为 −1、−0.5、0、0.5、1（Swift 的 waves 与它逐项对照；少一个相位，并集就盖不住那一帧）', () => {
   assert.deepEqual([...S.WAVES], [-1, -0.5, 0, 0.5, 1]);
   assert.ok(Object.isFrozen(S.WAVES));
@@ -567,7 +695,7 @@ test('并集取样的相位表：恰为 −1、−0.5、0、0.5、1（Swift 的 
 
 test('高光整条落在躯干里：每种动物的高光多边形都不越出躯干轮廓（越出的部分会白白盖在描边外沿，像一道毛边）', () => {
   // 全量变异检查之后的几何排查发现：鲸鲨的高光椭圆在尾侧越出背线约 0.34 pt（仍在 0.55 pt 的描边半宽之内，所以渲染检查与肉眼都看不出），
-  // 小锤头鲨与蝠鲼本来就在里面（余量分别约 0.14 与 7.6 pt）。这里把“不越出躯干”钉成所有动物共同的规则，包括以后要加的海龟。
+  // 小锤头鲨与蝠鲼本来就在里面（余量分别约 0.14 与 7.6 pt）。这里把“不越出躯干”钉成所有动物共同的规则（海龟加入时自动纳入）。
   let checked = 0;
   for (const id of S.AVAILABLE.filter(name => name !== 'jelly')) {
     const shape = S.expand(id);

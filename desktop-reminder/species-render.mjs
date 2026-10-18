@@ -21,6 +21,8 @@
 //  · 腹部（belly，鲸鲨）：规格是“主色提亮后平铺”，色相取主色（所有花纹一样）；纯色花纹里腹部比躯干的代表点明显更亮；
 //  · 斑点（accent，鲸鲨约 60 个小圆）：规格是“白色 × alpha 盖在躯干上”，所以每个斑点中心 = 参照的躯干色向白色靠 alpha，色相不变；
 //    参照色取斑点外一圈只属于躯干的像素（排除其他斑点、腹部、鳍、高光），参照像素不足的斑点不判；
+//  · 壳纹（accent，海龟的六边形细带网，17 条细带加 5 个接点三角形）：规格同样是“白色 × alpha 盖在躯干上”，逐条细带比较缩进 1 像素后的内部颜色与外扩 3.5 pt 的躯干参照色；
+//    accent 全是小圆走斑点检查、否则走壳纹检查（accentKind 分派，不会因为不是小圆就悄悄跳过）；
 //  · 微笑（mouth，侧视动物）：醒着时沿曲线取点都是墨色（跟着朝向与俯仰），睡着时都不是；睡着的被抓住时醒来：睁眼、没有 “z”、有笑；
 //  · 窗口外圈：夜晚荧光不得碰到窗口边缘（最外 8 pt alpha ≤ 1），白天与醒着时轮廓外不得有任何多余的像素；睡着时才有 “z”；
 //  · 响铃涟漪：工具固定开着“减少动态效果”，所以画的是两圈静止的圈（半径 = 20 + (外半径 − 20) × 0.35 / 0.75，透明度 0.30 / 0.18）。
@@ -70,6 +72,9 @@ export const LIMITS = Object.freeze({
   spotTolerance: 0.04,   // 斑点中心每个通道与“白色 × α 盖在参照色上”的期望值的最大差（0–1；实测最大 0.01，α 从 0.72 降到 0.65 就会超过）
   spotMinCount: 55,      // 参与判定的斑点至少这么多个（总数 60；少了说明检查空转）
   spotPass: 0.9,         // 参与判定的斑点里通过的最小比例
+  spotRadius: 3,         // accent 的子路径到质心的最大距离不超过它才算“斑点”（小圆）；超过的是壳纹那样的条带，换 judgeSeams 判
+  seamReach: 7,          // 壳纹：参照像素取到细带外扩多少个像素（7 个像素 = 3.5 pt，与斑点的参照环同宽）
+  seamMinCount: 8,       // 参与判定的细带至少这么多条（海龟的壳纹有 17 条细带，实测其中 10 条够大、没被别的部件盖住；少了说明检查空转）
   // 元素（只画一个元素的图）：以下数值是一次完整真实渲染的实测最大偏差的 2–3 倍（实测值见 --verbose 输出与技术文档）
   elementRatio: 0.03,    // 部件 alpha 质量比与 1 的最大差（实测 0.981–1.012）
   elementShift: 0.15,    // 部件质心偏移上限（pt；实测最大 0.10）
@@ -309,7 +314,7 @@ export function faceAvoider(geometry) {
 }
 
 /**
- * 取样点：对每个躯干/肢体/腹部部件，在网格上找“在自己里面、不在后画的任何部件里、离所有相关边缘最远、避开眼睛、腮红与微笑线”的点。
+ * 取样点：对每个躯干/肢体/腹部部件，在网格上找“在自己里面、不在后画的任何部件里（逐个部件判断；离后画的躯干/肢体的边还要多留一个描边半宽）、离所有相关边缘最远、避开眼睛、腮红与微笑线”的点。
  * 躯干另外沿长轴 10%/50%/90% 各取一个（f 是该点在“全部躯干部件包围盒”里的相对位置，尾 0 → 头 1，与规格一致）。
  * 返回 [{ part, role, u, f, point, clearance }]，point 是静态姿态（朝右、不俯仰、不划水）的窗口点。
  */
@@ -322,8 +327,10 @@ export function samplePoints(id, { minClearance = 1.1, step = 0.5 } = {}) {
   const clearanceAt = (point, index) => {
     const own = parts[index].polygons;
     if (!insidePolygons(point, own)) return -1;
-    const later = parts.slice(index + 1).flatMap(p => p.polygons);
-    if (later.length && (insidePolygons(point, later) || edgeDistance(point, later) < minClearance)) return -1;
+    // 逐个部件判断是否被盖住：后画的多边形并在一起做偶奇判定，会把被两个部件同时盖住的点数成没盖住（腹部在龟板之内，两者又都盖着后肢）。
+    // 离后画的躯干/肢体的边要多留一个描边半宽：它们的描边伸到多边形之外，3×3 像素的取色窗口碰到别的部件的深色描边，低色度的肢体色相会偏几十度（腹部、斑点、高光没有描边）
+    const later = parts.slice(index + 1);
+    if (later.some(p => insidePolygons(point, p.polygons) || edgeDistance(point, p.polygons) < minClearance + (p.role === 'body' || p.role === 'limb' ? STROKE_HALF : 0))) return -1;
     if (avoid(point)) return -1;
     return edgeDistance(point, own);
   };
@@ -492,6 +499,22 @@ export function judgeBelly(id, image, points = samplePoints(id)) {
   return { ok: lift >= LIMITS.bellyLift, lift, detail: `腹部亮度 ${luma(bellyRgb).toFixed(3)}，躯干代表点 ${luma(bodyRgb).toFixed(3)}（差 ${lift.toFixed(3)}，应 ≥ ${LIMITS.bellyLift}）` };
 }
 
+/** 一个子路径的外接圆：质心（顶点的平均）与到质心的最大距离。斑点是小圆，壳纹的细带不是。 */
+export const discOf = polygon => {
+  const centre = [polygon.reduce((sum, p) => sum + p[0], 0) / polygon.length, polygon.reduce((sum, p) => sum + p[1], 0) / polygon.length];
+  return { centre, radius: Math.max(...polygon.map(p => Math.hypot(p[0] - centre[0], p[1] - centre[1]))) };
+};
+
+/**
+ * accent 部件的种类：每个子路径都是小圆（到质心不超过 LIMITS.spotRadius）→ 'spots'（鲸鲨的斑点，judgeSpots 判）；
+ * 否则 → 'seams'（海龟壳纹那样的细带网，judgeSeams 判）；没有 accent 部件 → null。检查按种类分派，不会因为形状不是小圆就悄悄跳过。
+ */
+export function accentKind(id) {
+  const polygons = poseGeometry(id).parts.filter(part => part.role === 'accent').flatMap(part => part.polygons);
+  if (!polygons.length) return null;
+  return polygons.every(polygon => discOf(polygon).radius <= LIMITS.spotRadius) ? 'spots' : 'seams';
+}
+
 /**
  * 斑点（accent 部件里的每个子路径，鲸鲨是约 60 个小圆）：规格是“白色 × alpha 盖在躯干上”，所以斑点中心的颜色 = 躯干色向白色靠 alpha，色相不变。
  * 对每个斑点：参照色 = 斑点周围（离质心 r + 0.2 … r + 3.5 pt）里“只属于躯干”的像素的平均色——在躯干里、离躯干边缘 ≥ 1 pt（避开描边）、
@@ -506,13 +529,10 @@ export function judgeBelly(id, image, points = samplePoints(id)) {
  */
 export function judgeSpots(id, image, { alpha = LIMITS.spotAlpha, bodyAlpha = 0.95 } = {}) {
   const geometry = poseGeometry(id);
-  const spots = geometry.parts.filter(part => part.role === 'accent').flatMap(part => part.polygons).map(polygon => {
-    const centre = [polygon.reduce((sum, p) => sum + p[0], 0) / polygon.length, polygon.reduce((sum, p) => sum + p[1], 0) / polygon.length];
-    return { centre, radius: Math.max(...polygon.map(p => Math.hypot(p[0] - centre[0], p[1] - centre[1]))) };
-  });
+  const spots = geometry.parts.filter(part => part.role === 'accent').flatMap(part => part.polygons).map(discOf);
   if (!spots.length) return null;
-  const big = spots.filter(spot => spot.radius > 3);
-  if (big.length) return { ok: false, total: spots.length, evaluated: 0, passed: 0, skipped: 0, failures: [], detail: `${big.length} 个 accent 子路径不是小圆（到质心最远 ${Math.max(...big.map(spot => spot.radius)).toFixed(1)} pt > 3），斑点检查不适用，需要重新设计` };
+  const big = spots.filter(spot => spot.radius > LIMITS.spotRadius);
+  if (big.length) return { ok: false, total: spots.length, evaluated: 0, passed: 0, skipped: 0, failures: [], detail: `${big.length} 个 accent 子路径不是小圆（到质心最远 ${Math.max(...big.map(spot => spot.radius)).toFixed(1)} pt > ${LIMITS.spotRadius}），斑点检查不适用（细带请用 judgeSeams）` };
   const { width, height } = image;
   const maskOf = predicate => {
     const mask = new Uint8Array(width * height);
@@ -550,6 +570,63 @@ export function judgeSpots(id, image, { alpha = LIMITS.spotAlpha, bodyAlpha = 0.
   });
   const ok = evaluated >= LIMITS.spotMinCount && passed / Math.max(1, evaluated) >= LIMITS.spotPass;
   return { ok, total: spots.length, evaluated, passed, skipped, minLift, meanLift: evaluated ? liftSum / evaluated : NaN, maxError, failures, detail: `${spots.length} 个斑点里 ${evaluated} 个参与判定（${skipped} 个参照像素不足或中心被盖住；应 ≥ ${LIMITS.spotMinCount} 个参与），通过 ${passed} 个（比例应 ≥ ${LIMITS.spotPass}）；亮度提升平均 ${evaluated ? (liftSum / evaluated).toFixed(3) : '无'}、最小 ${evaluated ? minLift.toFixed(3) : '无'}（应 ≥ ${LIMITS.spotLift}）；通道与期望值最大差 ${maxError.toFixed(3)}（应 ≤ ${LIMITS.spotTolerance}）${failures.length ? `；未通过：${failures.slice(0, 5).join('、')}${failures.length > 5 ? ' 等' : ''}` : ''}` };
+}
+
+/**
+ * 壳纹（accent 部件是一张互不重叠的细带网，海龟：17 条细带加 5 个接点三角形）：规格与斑点相同，是“白色 × alpha 盖在躯干上”，
+ * 所以细带中心的颜色 = 参照的躯干色向白色靠 alpha，色相不变。对每条细带：
+ *  · 细带色 = 向内缩 1 个像素（0.5 pt，避开抗锯齿的边）之后的内部像素的平均色；这些像素不在腹部/鳍/头/高光上（外扩 2 个像素）、不在脸的避让区里；
+ *  · 参照色 = 细带外扩 LIMITS.seamReach 个像素（3.5 pt）以内“只属于躯干”的像素的平均色：在躯干里、离躯干边缘 ≥ 1 pt（避开描边）、
+ *    不在腹部/鳍/头/高光上、离任何壳纹至少 1 个像素（整个像素都在壳纹之外，不掺抗锯齿）、不在脸的避让区里。躯干的明暗与渐变在这个范围内几乎是线性的，
+ *    按外扩环取平均，线性渐变的中心值就是环平均，误差远小于 spotTolerance；
+ *  · 判定与斑点一样：亮度比参照高 spotLift，三个通道都在“白 × α 盖在参照色上”的期望值的 spotTolerance 以内。
+ * 缩进后没有像素的（5 个接点三角形，边长约 1.3 pt，面积 0.7 pt²）、参照像素不足 spotRing 个的细带不判（它们的形状与白色由“元素”组按部件单独核对）；
+ * 参与判定的细带至少 seamMinCount 条、通过的比例至少 spotPass。没有 accent 的动物返回 null。
+ * 只适用于细带网：accent 里全是小圆（斑点）时用 judgeSpots，调用方按 accentKind 分派。
+ */
+export function judgeSeams(id, image, { alpha = LIMITS.spotAlpha, bodyAlpha = 0.95 } = {}) {
+  const geometry = poseGeometry(id);
+  const strips = geometry.parts.filter(part => part.role === 'accent').flatMap(part => part.polygons);
+  if (!strips.length) return null;
+  const { width, height } = image;
+  const maskOf = predicate => {
+    const mask = new Uint8Array(width * height);
+    for (const part of geometry.parts) if (predicate(part)) { const one = rasterize(part.polygons, width, height); for (let i = 0; i < mask.length; i++) if (one[i]) mask[i] = 1; }
+    return mask;
+  };
+  const invert = mask => Uint8Array.from(mask, v => 1 - v);
+  const bodyMask = maskOf(part => part.role === 'body');
+  const nearBodyEdge = dilate(invert(bodyMask), width, height, 2);
+  const otherNear = dilate(maskOf(part => part.role !== 'body' && part.role !== 'accent'), width, height, 2);
+  const nearSeam = dilate(maskOf(part => part.role === 'accent'), width, height, 1);
+  const onFace = faceAvoider(geometry);
+  const pixelRgb = i => [image.pixels[i * 4] / 255, image.pixels[i * 4 + 1] / 255, image.pixels[i * 4 + 2] / 255];
+  const average = list => [0, 1, 2].map(k => list.reduce((sum, rgb) => sum + rgb[k], 0) / list.length);
+  const total = alpha + bodyAlpha * (1 - alpha);
+  let evaluated = 0, passed = 0, skipped = 0, minLift = Infinity, liftSum = 0, maxError = 0;
+  const failures = [];
+  strips.forEach((strip, index) => {
+    const own = rasterize([strip], width, height);
+    const inner = invert(dilate(invert(own), width, height, 1));
+    const reach = dilate(own, width, height, LIMITS.seamReach);
+    const core = [], ring = [];
+    for (let i = 0; i < own.length; i++) {
+      if (!reach[i] || image.pixels[i * 4 + 3] < 200 || otherNear[i]) continue;
+      const wx = ((i % width) + 0.5) / VIEW.scale, wy = VIEW.height - (Math.floor(i / width) + 0.5) / VIEW.scale;
+      if (onFace([wx, wy])) continue;
+      if (inner[i]) core.push(pixelRgb(i));
+      else if (!nearSeam[i] && bodyMask[i] && !nearBodyEdge[i]) ring.push(pixelRgb(i));
+    }
+    if (ring.length < LIMITS.spotRing || !core.length) { skipped++; return; }
+    const base = average(ring), seen = average(core);
+    const expected = base.map(value => (alpha + bodyAlpha * (1 - alpha) * value) / total);
+    const lift = luma(seen) - luma(base), error = Math.max(...seen.map((value, k) => Math.abs(value - expected[k])));
+    evaluated++; liftSum += lift; minLift = Math.min(minLift, lift); maxError = Math.max(maxError, error);
+    if (lift >= LIMITS.spotLift && error <= LIMITS.spotTolerance) passed++;
+    else failures.push(`#${index}（亮度提升 ${lift.toFixed(3)}，通道差 ${error.toFixed(3)}）`);
+  });
+  const ok = evaluated >= LIMITS.seamMinCount && passed / Math.max(1, evaluated) >= LIMITS.spotPass;
+  return { ok, total: strips.length, evaluated, passed, skipped, minLift, meanLift: evaluated ? liftSum / evaluated : NaN, maxError, failures, detail: `${strips.length} 个壳纹子路径里 ${evaluated} 个参与判定（${skipped} 个太小、参照像素不足或被别的部件盖住；应 ≥ ${LIMITS.seamMinCount} 个参与），通过 ${passed} 个（比例应 ≥ ${LIMITS.spotPass}）；亮度提升平均 ${evaluated ? (liftSum / evaluated).toFixed(3) : '无'}、最小 ${evaluated ? minLift.toFixed(3) : '无'}（应 ≥ ${LIMITS.spotLift}）；通道与期望值最大差 ${maxError.toFixed(3)}（应 ≤ ${LIMITS.spotTolerance}）${failures.length ? `；未通过：${failures.slice(0, 5).join('、')}${failures.length > 5 ? ' 等' : ''}` : ''}` };
 }
 
 /** 窗口最外 BORDER_PT 点这一圈里的最大 alpha（0–255）。 */
@@ -1060,6 +1137,7 @@ export function buildCases(species) {
 export const CHECK_MANIFEST = Object.freeze({
   hammer: Object.freeze({ 分辨力: 1, 轮廓: 10, 颜色: 57, 外观: 4, 明暗: 21, 眼睛: 5, 被抓住: 3, 窗口外圈: 7, 睡觉标记: 3, 涟漪: 3, 元素: 33, 叠层: 3 }),
   manta: Object.freeze({ 分辨力: 1, 轮廓: 10, 颜色: 61, 外观: 4, 明暗: 9, 眼睛: 5, 被抓住: 3, 窗口外圈: 7, 睡觉标记: 3, 涟漪: 3, 元素: 33, 叠层: 3 }),
+  turtle: Object.freeze({ 分辨力: 1, 轮廓: 10, 颜色: 93, 外观: 4, 明暗: 17, 眼睛: 3, 被抓住: 2, 微笑: 13, 腹部: 1, 壳纹: 3, 窗口外圈: 7, 睡觉标记: 3, 涟漪: 3, 元素: 50, 叠层: 3 }),
   whaleshark: Object.freeze({ 分辨力: 1, 轮廓: 10, 颜色: 61, 外观: 4, 明暗: 17, 眼睛: 3, 被抓住: 2, 微笑: 13, 腹部: 1, 斑点: 3, 窗口外圈: 7, 睡觉标记: 3, 涟漪: 3, 元素: 41, 叠层: 3 }),
 });
 
@@ -1176,7 +1254,7 @@ export function checkElements(species, find, palette, add, J) {
 
 /** judges：只给测试用——替换其中几个判定函数，验证它们的结果真的进入结论（接线）；不传就是真实的判定。 */
 export function checkSpecies(species, images, palette, judges = {}) {
-  const J = { judgeSmile, judgeBelly, judgeSpots, strayPixels, judgeLayer, judgeFillEnds, judgeStroke, judgeEyeImage, judgeBlushImage, judgeMouthImage, judgeComposite, ...judges };
+  const J = { judgeSmile, judgeBelly, judgeSpots, judgeSeams, strayPixels, judgeLayer, judgeFillEnds, judgeStroke, judgeEyeImage, judgeBlushImage, judgeMouthImage, judgeComposite, ...judges };
   const lines = [];
   const add = (group, name, ok, detail) => lines.push({ group, name, ok: Boolean(ok), detail });
   const imageOf = name => images[name];
@@ -1265,10 +1343,16 @@ export function checkSpecies(species, images, palette, judges = {}) {
   const belly = J.judgeBelly(species, find(`${species}-solid`), points);
   if (belly) add('腹部', '纯色花纹里腹部比躯干代表点更亮', belly.ok, belly.detail);
 
-  // 3e) 斑点（只有有 accent 部件的动物）：白色 × alpha 盖在躯干上；三种有代表性的花纹
+  // 3e) 斑点或壳纹（只有有 accent 部件的动物）：白色 × alpha 盖在躯干上；三种有代表性的花纹。accent 全是小圆走斑点（鲸鲨），否则走壳纹的细带网（海龟）
+  const accent = accentKind(species);
   for (const look of ['solid', 'blend', 'rainbow']) {
-    const spots = J.judgeSpots(species, find(`${species}-${look}`));
-    if (spots) add('斑点', `${look}：斑点中心是白色 × α 盖在躯干上的颜色`, spots.ok, spots.detail);
+    if (accent === 'spots') {
+      const spots = J.judgeSpots(species, find(`${species}-${look}`));
+      if (spots) add('斑点', `${look}：斑点中心是白色 × α 盖在躯干上的颜色`, spots.ok, spots.detail);
+    } else if (accent === 'seams') {
+      const seams = J.judgeSeams(species, find(`${species}-${look}`));
+      if (seams) add('壳纹', `${look}：壳纹中心是白色 × α 盖在躯干上的颜色`, seams.ok, seams.detail);
+    }
   }
 
   // 4) 窗口外圈与多余像素

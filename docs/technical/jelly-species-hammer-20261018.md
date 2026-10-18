@@ -6,7 +6,9 @@ status: Step A 已实现并在隔离环境验证通过（Chrome 侧业务替身�
 
 # 桌面水母物种 Step A：动物接口与小锤头鲨
 
-设计稿：`docs/superpowers/specs/2026-10-17-jelly-species-design.md`（用户 2026-10-17 已批准五条默认值，从 Step A 开始）。实施计划：`docs/superpowers/plans/2026-10-17-jelly-species-stepA.md`。外观系统（颜色与花纹）见 `docs/technical/jelly-appearance-20261017.md`，本步骤建立在它之上。分支 `feat/jelly-appearance`（独立 worktree；S1a 已是提交 `8fcb73f`，本步骤的改动尚未提交、未合并、未发布）。
+> **后续（2026-10-18）**：蝠鲼（Step B）、鲸鲨（Step D）与海龟（Step C）都已做，见 `jelly-species-manta-20261018.md`、`jelly-species-whaleshark-20261018.md`、`jelly-species-turtle-20261018.md`；本文里“海龟/鲸鲨未做、游动系数只标定过小锤头鲨”等说法是 Step A 写成时的状态，没有逐处改写。
+
+设计稿：`docs/superpowers/specs/2026-10-17-jelly-species-design.md`（用户 2026-10-17 已批准五条默认值，从 Step A 开始）。实施计划：`docs/superpowers/plans/2026-10-17-jelly-species-stepA.md`。外观系统（颜色与花纹）见 `docs/technical/jelly-appearance-20261017.md`，本步骤建立在它之上。分支 `feat/jelly-appearance`（独立 worktree；S1a 是提交 `8fcb73f`，本步骤是提交 `a6d897b`，都是本地提交，未推送、未合并、未发布；写本文时本步骤尚未提交）。
 
 ## 做了什么
 
