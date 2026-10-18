@@ -3,11 +3,15 @@ import CoreGraphics
 
 // 桌面小伙伴（水母）的游动物理。只依赖 Foundation，无 AppKit，可单独编译并自测。
 // 坐标：x 为全局横坐标（水母中心），y 为离“游泳线”（屏幕可见区底边）的高度，向上为正。
-struct JellyTuning {
+struct JellyTuning: Equatable {
     var period: CGFloat   // 一次脉动的秒数
     var thrustX: CGFloat  // 每次脉动水平冲量（点/秒）
     var thrustY: CGFloat  // 每次脉动向上冲量
     var hover: CGFloat    // 愿意停留的高度
+    /// 游动时的下沉速度、横向与纵向阻力。水母取 JellySwim 里的常量（与加入这三项之前完全相同）；动物按物种乘系数（见 jelly-species.swift 的 forStage(_:species:)）。
+    var sink: CGFloat = JellySwim.sink
+    var dragX: CGFloat = JellySwim.dragX
+    var dragY: CGFloat = JellySwim.dragY
 
     static func forStage(_ stage: CountdownStage) -> JellyTuning {
         switch stage {
@@ -85,18 +89,27 @@ enum JellyRingMotion {
 
     /// 当前可见的涟漪（半径、透明度）：第 i 圈比前一圈晚 rippleSpacing 秒出发，每圈 ripplePeriod 秒从 inner 扩到 outer，
     /// 透明度 0.55 → 0（二次衰减）。减少动态效果时固定画两圈静止的（0.30 / 0.18），与时间无关。
-    static func ripples(time: CGFloat, reduceMotion: Bool) -> [(radius: CGFloat, alpha: CGFloat)] {
+    /// outer 默认是水母的 62；动物的中心比水母低、离窗口边缘的余量不同，由 outerRadius 另算。
+    static func ripples(time: CGFloat, reduceMotion: Bool, outer: CGFloat = rippleOuter) -> [(radius: CGFloat, alpha: CGFloat)] {
         if reduceMotion {
-            return [(rippleInner + (rippleOuter - rippleInner) * 0.35, 0.30), (rippleInner + (rippleOuter - rippleInner) * 0.75, 0.18)]
+            return [(rippleInner + (outer - rippleInner) * 0.35, 0.30), (rippleInner + (outer - rippleInner) * 0.75, 0.18)]
         }
         var rings: [(radius: CGFloat, alpha: CGFloat)] = []
         for i in 0..<rippleCount {
             let local = time - CGFloat(i) * rippleSpacing
             guard local >= 0 else { continue }
             let u = local.truncatingRemainder(dividingBy: ripplePeriod) / ripplePeriod
-            rings.append((rippleInner + (rippleOuter - rippleInner) * u, rippleAlpha * (1 - u) * (1 - u)))
+            rings.append((rippleInner + (outer - rippleInner) * u, rippleAlpha * (1 - u) * (1 - u)))
         }
         return rings
+    }
+
+    /// 涟漪的外半径：不超过 62，也不让最外圈靠近窗口最近的一边不到 8 点；下限 inner + 4（再小就没有涟漪可画了）。
+    /// 非有限的输入按水母的默认半径处理。
+    static func outerRadius(centerX: CGFloat, centerY: CGFloat, width: CGFloat, height: CGFloat) -> CGFloat {
+        let nearest = min(centerX, width - centerX, centerY, height - centerY)
+        guard nearest.isFinite else { return rippleOuter }
+        return max(rippleInner + 4, min(rippleOuter, nearest - 8))
     }
 }
 
@@ -250,10 +263,10 @@ struct JellySwim {
                 vy += tuning.thrustY * scale * (0.85 + 0.15 * random())
             }
         }
-        vy -= (wantsRest ? JellySwim.restSink : JellySwim.sink) * dt
+        vy -= (wantsRest ? JellySwim.restSink : tuning.sink) * dt
         if y > JellySwim.maxLift { vy -= JellySwim.highSink * dt }
-        vx *= exp(-JellySwim.dragX * dt)
-        vy *= exp(-JellySwim.dragY * dt)
+        vx *= exp(-tuning.dragX * dt)
+        vy *= exp(-tuning.dragY * dt)
         x += vx * dt
         y += vy * dt
 

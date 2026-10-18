@@ -74,6 +74,13 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
         case "jelly":
             ok = jelly.setJelly(message["jelly"])
             if ok {
+                // 外观跟着 jelly 命令走：带了就应用，并在回执里告诉 Chrome（它据此知道组件支持外观，协议版本不变）；
+                // 没带就保持上一次（Chrome 读取外观失败时水母不会闪回默认）。负载不合规回默认，不影响水母显示。
+                if let object = message["jelly"] as? [String: Any], object.keys.contains("appearance") {
+                    jelly.setAppearance(object["appearance"])
+                    // species 是实际生效的那一种：设置的动物还画不出来（没有几何数据）时回退成水母，这里如实报告，Chrome 据此不把它说成已应用
+                    extra["appearance"] = ["status": "ok", "species": jelly.speciesName]
+                }
                 // 助手配置跟着 jelly 命令走：没带或明确关闭就注销全局快捷键、收起面板；启用时把注册结果带在回执里，
                 // Chrome 据此在设置页如实显示（被占用 / 不合法 / 失败），不会把“没注册上”说成“已生效”
                 let report = assistant.apply((message["jelly"] as? [String: Any])?["assistant"])
@@ -117,6 +124,12 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
         reply["visible"] = jelly.ringVisible
         reply["onActiveSpace"] = jelly.companion.panel.isOnActiveSpace
         reply["screenCount"] = NSScreen.screens.count
+        // 验收诊断：显示器休眠时 NSScreen 仍列着屏幕，但没有活动显示器——Core Animation 的完成回调不会触发（响铃退场的淡出隐藏停在半途，亮屏才继续），
+        // 所以动画类验收要先看这个数；0 表示屏幕在休眠，需要先唤醒。
+        reply["displaysActive"] = NSScreen.screens.filter { screen in
+            guard let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else { return false }
+            return CGDisplayIsActive(CGDirectDisplayID(number.uint32Value)) != 0
+        }.count
         reply["mouse"] = NSStringFromPoint(NSEvent.mouseLocation)    // 验收诊断：水母按指针所在屏幕选落点，指针被挪动时失败信息里要看得到
         reply["spaceTransitions"] = spaceTransitions
         reply["focusStayed"] = focusStayed
@@ -143,6 +156,14 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
         reply["jellyLines"] = jelly.shownLines
         reply["jellyBubble"] = jelly.bubbleName
         reply["jellyAppearance"] = jelly.appearanceName
+        reply["jellyLook"] = jelly.lookSummary
+        reply["jellySpecies"] = jelly.speciesName
+        reply["jellyPose"] = jelly.poseSummary
+        reply["jellyTuning"] = jelly.tuningSummary
+        reply["jellyTitle"] = jelly.titleSummary
+        reply["jellyLabel"] = jelly.labelSummary
+        reply["jellyPaintA"] = jelly.paintSummary
+        reply["jellyTint"] = jelly.tintSummary
         reply["nudgeId"] = jelly.nudgeID ?? NSNull()
         reply["nudgeBusy"] = jelly.nudgeBusy
         reply["nudgeButtons"] = jelly.nudgeButtonFrames()

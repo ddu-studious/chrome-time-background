@@ -71,6 +71,45 @@ final class JellyController: NSObject, NSMenuDelegate {
         return true
     }
 
+    /// Chrome 下发的外观（已是具体值）：解析成白名单值交给水母；非法字段回默认，永不失败。
+    /// 没带 appearance 的 jelly 命令不会调用这里（Chrome 读取外观失败时水母保持上一次，不闪回默认）。
+    func setAppearance(_ raw: Any?) {
+        companion.setAppearance(JellyAppearance.parse(raw))
+    }
+
+    /// 验收诊断：当前外观（色位/花纹/材质/尺寸/节日）。注意与 ping 里的 jellyAppearance（系统浅/深外观）不是一回事。
+    var lookSummary: String {
+        let a = companion.appearance
+        return "colors=\(a.colors.map(String.init).joined(separator: ",")) look=\(a.look.rawValue) material=\(a.material.rawValue) size=\(a.size.rawValue) season=\(a.season ?? "-")"
+    }
+    /// 实际生效的物种（jelly/hammer/…）：设置的动物还没有几何数据时是 jelly。jelly 命令的回执与 ping 都报告它，Chrome 据此判断是否真的按设置应用。
+    var speciesName: String { companion.effectiveSpecies.rawValue }
+    /// 验收诊断：动物的姿态（朝向 −1…1、俯仰弧度、划水相位 −1…1）与游动速度（点/秒）；水母恒为 1 / 0 / 0。
+    var poseSummary: String {
+        let p = companion.pose
+        return "facing=\(String(format: "%.3f", Double(p.facing))) pitch=\(String(format: "%.3f", Double(p.pitch))) wave=\(String(format: "%.3f", Double(p.wave))) vx=\(String(format: "%.1f", Double(companion.swim.vx))) vy=\(String(format: "%.1f", Double(companion.swim.vy)))"
+    }
+    /// 验收诊断：运行中的游动调参（周期、横/纵冲量、下沉、横/纵阻力、愿意停留的高度）。用来核对“动物按自己的系数游、水母按原来的”
+    /// 确实接到了正在运行的游动上（每次刷新与换物种时都要按实际生效的物种重新取）。
+    var tuningSummary: String {
+        let t = companion.swim.tuning
+        func f(_ value: CGFloat) -> String { String(format: "%.3f", Double(value)) }
+        return "period=\(f(t.period)) thrustX=\(f(t.thrustX)) thrustY=\(f(t.thrustY)) sink=\(f(t.sink)) dragX=\(f(t.dragX)) dragY=\(f(t.dragY)) hover=\(f(t.hover))"
+    }
+    /// 验收诊断：水母窗口的标题与读屏名称（实际生效的物种名，如“桌面小锤头鲨”）。
+    var titleSummary: String { companion.panel.title }
+    var labelSummary: String { companion.view.accessibilityLabel() ?? "" }
+    /// 验收诊断：当前颜料主色（阶段覆盖与换色据此核对）。
+    var paintSummary: String {
+        let t = companion.pose.paint.a
+        return String(format: "%.3f,%.3f,%.3f", Double(t.r), Double(t.g), Double(t.b))
+    }
+    /// 验收诊断：当前 tint（光晕、涟漪、睡觉标记与气泡边框的颜色）。约定它始终等于 paint.a，冒烟据此核对。
+    var tintSummary: String {
+        let t = companion.pose.tint
+        return String(format: "%.3f,%.3f,%.3f", Double(t.r), Double(t.g), Double(t.b))
+    }
+
     /// 校验并接收一条倒计时；NSNull 表示没有可显示的倒计时。返回是否接受。
     func set(timer: Any?) -> Bool {
         if let timer = timer as? [String: Any] {
@@ -639,9 +678,9 @@ final class JellyController: NSObject, NSMenuDelegate {
         }
         if resident {
             newSection()
-            _ = add("收起水母", #selector(collapseJelly))
+            _ = add("收起\(companion.effectiveSpecies.displayName)", #selector(collapseJelly))
         }
-        if menu.items.isEmpty { _ = add("桌面水母", nil, enabled: false) }
+        if menu.items.isEmpty { _ = add(companion.effectiveSpecies.desktopTitle, nil, enabled: false) }
     }
 
     // MARK: 读数（协议回执与验收脚本用）

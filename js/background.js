@@ -1,4 +1,4 @@
-importScripts('jelly-nudge.js', 'jelly-desktop.js', 'quick-capture.js', 'app-video.js', 'youtube-home.js', 'huya-core.js', 'huya-follow.js', 'music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'music-search.js', 'alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'alarm-countdown.js', 'local-ai-client.js', 'background-provider.js', 'hermes-writing-sync.js', 'site-workspace-core.js', '../vendor/pinyin-match/pinyin-match.js', 'assistant-match.js', 'assistant-memory.js', 'assistant-contract.js', 'assistant-context-state.js', 'assistant-todo.js', 'assistant-engine.js', 'assistant-confirmation.js', 'assistant-native.js', 'assistant-music.js', 'assistant-management.js', 'assistant-tools.js', 'assistant-voice-background.js', 'assistant-background.js');
+importScripts('jelly-nudge.js', 'jelly-appearance.js', 'jelly-desktop.js', 'quick-capture.js', 'app-video.js', 'youtube-home.js', 'huya-core.js', 'huya-follow.js', 'music-queue-policy.js', 'music-sleep.js', 'music-intent.js', 'music-search.js', 'alarm-core.js', 'alarm-intent.js', 'alarm-desktop.js', 'alarm-countdown.js', 'local-ai-client.js', 'background-provider.js', 'hermes-writing-sync.js', 'site-workspace-core.js', '../vendor/pinyin-match/pinyin-match.js', 'assistant-match.js', 'assistant-memory.js', 'assistant-contract.js', 'assistant-context-state.js', 'assistant-todo.js', 'assistant-engine.js', 'assistant-confirmation.js', 'assistant-native.js', 'assistant-music.js', 'assistant-management.js', 'assistant-tools.js', 'assistant-voice-background.js', 'assistant-background.js');
 
 (function() {
     let assistantMusicRevision = 0;
@@ -583,11 +583,18 @@ importScripts('jelly-nudge.js', 'jelly-desktop.js', 'quick-capture.js', 'app-vid
 
     // 桌面水母（macOS 原生组件里的水母）：独立于闹钟的桌面伙伴，设置只有“常驻”和“夜晚荧光”，连接与重连在 js/jelly-desktop.js。
     // 倒计时与喝水/起身提醒只是委托方：下面的 summary / act 把提醒模块的“今天的记录”和气泡按钮接进来，onRestored 在重连后重发倒计时。
+    // 桌面水母形象（颜色/花纹…）：设置与解析在 js/jelly-appearance.js，保存后经 jellyDesktop.sync() 重新下发（箭头函数延迟取值，jellyDesktop 在其后声明）
+    const jellyAppearance = JellyAppearance.create({
+        storage: chrome.storage.local,
+        onChange: () => jellyDesktop.sync(),
+    });
     const jellyDesktop = JellyDesktop.create({
         storage: chrome.storage.local, desktop: desktopAlarm,
         summary: () => jellyNudge.summary(),
         act: (id, action) => jellyNudge.act(id, action),
         onRestored: () => alarmCountdown.sync(),
+        appearance: () => jellyAppearance.payload(),
+        speciesNames: JellyAppearance.SPECIES_NAMES, // 桌面上确认是别的动物时，提醒气泡里的“水母”换成它的名字
     });
     // 水母关怀（喝水 / 起身活动）：只用 chrome.alarms 与 chrome.notifications，默认关闭，设置页“水母关怀”里开启。见 js/jelly-nudge.js
     // 到点先请桌面水母接手（3 秒内确认才算），水母不在或没确认时退回系统通知；计数变化后让水母刷新“今天的记录”。
@@ -607,6 +614,14 @@ importScripts('jelly-nudge.js', 'jelly-desktop.js', 'quick-capture.js', 'app-vid
         if (sender.id !== chrome.runtime.id || !sender.url?.startsWith(chrome.runtime.getURL(''))) { respond({ ok: false, error: '仅扩展页面可设置桌面水母' }); return; }
         (message.action === 'jelly_desktop_set' ? jellyDesktop.set(message.settings) : jellyDesktop.get())
             .then(respond).catch(error => respond({ ok: false, error: error.message }));
+        return true;
+    });
+    chrome.runtime.onMessage.addListener((message, sender, respond) => {
+        if (!['jelly_appearance_get', 'jelly_appearance_set', 'jelly_appearance_reroll'].includes(message?.action)) return;
+        if (sender.id !== chrome.runtime.id || !sender.url?.startsWith(chrome.runtime.getURL(''))) { respond({ ok: false, error: '仅扩展页面可设置桌面水母形象' }); return; }
+        (message.action === 'jelly_appearance_set' ? jellyAppearance.set(message.settings) : message.action === 'jelly_appearance_reroll' ? jellyAppearance.rerollNow() : jellyAppearance.get())
+            .then(result => respond(result.ok ? { ...result, component: jellyDesktop.appearanceStatus(), connected: jellyDesktop.status().connected } : result))
+            .catch(error => respond({ ok: false, error: error.message }));
         return true;
     });
     chrome.runtime.onMessage.addListener((message, sender, respond) => {

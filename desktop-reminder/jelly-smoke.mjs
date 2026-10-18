@@ -166,7 +166,7 @@ const ring = (extra = {}) => ({ sessionId: 'ring-1', title: '开会；喝水', t
 const until = async (host, predicate, ms = 4000, label = '条件') => {
   const end = Date.now() + ms; let reply;
   while (Date.now() < end) { reply = await host.request('ping'); if (predicate(reply)) return reply; await delay(80); }
-  throw new Error(`等待超时：${label}（原生端看到的鼠标位置 ${reply?.mouse}，屏幕数 ${reply?.screenCount}）\n${JSON.stringify(reply, null, 1).slice(0, 900)}`);
+  throw new Error(`等待超时：${label}（原生端看到的鼠标位置 ${reply?.mouse}，屏幕数 ${reply?.screenCount}，活动显示器 ${reply?.displaysActive}）\n${JSON.stringify(reply, null, 1).slice(0, 900)}`);
 };
 const scenario = async (name, env, body) => {
   const h = start(env);
@@ -767,6 +767,18 @@ async function ringMousePhase() {
     shot('detail-dark', reply.countdownWindowNumber); await checkBorder(h, 'detail-dark');
   });
   console.log('PASS 阶段 5b：响铃的真实鼠标点击与拖动');
+}
+
+// 屏幕在休眠（没有活动显示器）时，Core Animation 的完成回调不触发：响铃退场的淡出隐藏、气泡淡入淡出等停在半途，整轮结果都不可信
+// （2026-10-18 夜里实测：显示器休眠时退场场景稳定超时，亮屏后通过）。所以先看一眼，休眠就明确退出（退出码 75，稍后重试；不算验收失败）。
+{
+  const probe = start();
+  let asleep = false;
+  try { asleep = (await probe.request('ping')).displaysActive === 0; } finally { await probe.stop(); }
+  if (asleep) {
+    console.error('DISPLAY_ASLEEP：没有活动显示器（屏幕在休眠），动画收尾回调不会触发，本脚本的结果不可信。请先唤醒屏幕（例如另开终端运行 caffeinate -u -t 900）再重跑。这不是验收失败。');
+    process.exit(75);
+  }
 }
 
 if (only === 'nudge-mouse') {
