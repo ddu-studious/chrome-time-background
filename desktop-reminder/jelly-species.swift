@@ -50,7 +50,7 @@ enum SpeciesRole: String { case body, limb, belly, accent, shine }
 enum SpeciesView: String { case side, top }
 
 /// 生成物里的原始数据（未缩放、y 向下）；部件顺序就是绘制顺序。
-struct SpeciesMotionSource { let pivotX: Double; let pivotY: Double; let degrees: Double }
+struct SpeciesMotionSource { let pivotX: Double; let pivotY: Double; let degrees: Double; var squash: Double = 0 }
 struct SpeciesPartSource { let role: SpeciesRole; let u: Double; let path: String; let motion: SpeciesMotionSource? }
 struct SpeciesSource {
     let view: SpeciesView
@@ -59,6 +59,8 @@ struct SpeciesSource {
     let eyeRadius: Double
     let eyes: [[Double]]
     let blush: [[Double]]
+    /// 微笑：一段三次贝塞尔的四个点（起点、两个控制点、终点；未缩放、y 向下）。空表示没有嘴——俯视动物看不见嘴，生成器对没有嘴的动物不写这一项。
+    var mouth: [[Double]] = []
 }
 
 struct PathCommand: Equatable {
@@ -176,8 +178,25 @@ enum SpeciesPath {
     }
 }
 
-/// 绕 pivot 转动的部件（鳍、尾）：maxAngle 是 wave = ±1 时的角度，弧度、CoreGraphics 方向（逆时针为正）。
-struct SpeciesMotion { let pivot: CGPoint; let maxAngle: CGFloat }
+/// 绕 pivot 运动的部件（鳍、尾、俯视蝠鲼的翼）：maxAngle 是 wave = ±1 时的转角，弧度、CoreGraphics 方向（逆时针为正）；
+/// squash 是拍翼幅度：同一个 pivot 上把 y 方向缩放到 1 − squash × wave（wave = 1 最瘦、−1 最胖）；先缩放后转动，wave = 0 时都不起作用。
+struct SpeciesMotion {
+    /// 幅度上限（与 JS 的 MAX_SQUASH 一致）：缩放因子始终在 0.7…1.3 之间，不会把身体压扁或翻面。
+    static let maxSquash: CGFloat = 0.3
+
+    let pivot: CGPoint
+    let maxAngle: CGFloat
+    var squash: CGFloat = 0
+
+    /// 一个点在 wave 相位的位置：与 transform(wave:) 同一个公式。包围盒按它取样，绘制按 transform 变换整条路径，两者因此不会漂移。
+    /// wave 在这里不夹取（包围盒取样的相位本来就在 −1…1 里）。
+    func apply(to point: CGPoint, wave: CGFloat) -> CGPoint {
+        let dx = point.x - pivot.x
+        let dy = (point.y - pivot.y) * (1 - squash * wave)
+        let c = cos(maxAngle * wave), s = sin(maxAngle * wave)
+        return CGPoint(x: pivot.x + dx * c - dy * s, y: pivot.y + dx * s + dy * c)
+    }
+}
 
 struct SpeciesPart {
     let role: SpeciesRole
@@ -197,6 +216,8 @@ struct SpeciesGeometry {
     let eyes: [CGPoint]
     let eyeRadius: CGFloat
     let blush: [(center: CGPoint, rx: CGFloat, ry: CGFloat)]
+    /// 微笑的四个点（起点、两个控制点、终点；缩放后、y 向上，与部件同一坐标）；空表示没有嘴。只有侧视动物有。
+    let mouth: [CGPoint]
     /// 各相位包围盒的并集（不含描边与眼睛）：放置按它算，动画任何一帧都在它里面。
     let union: CGRect
     /// 躯干（role = body）在 wave = 0 的包围盒：渐变与光晕按它定位。
@@ -215,8 +236,9 @@ struct SpeciesGeometry {
             var motion: SpeciesMotion?
             if let m = item.motion {
                 let angle = -CGFloat(m.degrees) * .pi / 180
-                guard angle.isFinite else { return nil }
-                motion = SpeciesMotion(pivot: CGPoint(x: CGFloat(m.pivotX) * k, y: -CGFloat(m.pivotY) * k), maxAngle: angle)
+                let squash = CGFloat(m.squash)
+                guard angle.isFinite, squash.isFinite, squash >= 0, squash <= SpeciesMotion.maxSquash else { return nil }
+                motion = SpeciesMotion(pivot: CGPoint(x: CGFloat(m.pivotX) * k, y: -CGFloat(m.pivotY) * k), maxAngle: angle, squash: squash)
             }
             let u = CGFloat(item.u)
             guard u.isFinite else { return nil }
@@ -232,6 +254,15 @@ struct SpeciesGeometry {
             guard b.count == 4 else { return nil }
             blush.append((CGPoint(x: CGFloat(b[0]) * k, y: -CGFloat(b[1]) * k), CGFloat(b[2]) * k, CGFloat(b[3]) * k))
         }
+        // 嘴：没有就是空；有就必须是侧视动物的四个有限数字的点（俯视动物看不见嘴，写了嘴说明数据有误，整种动物不可用）
+        var mouth: [CGPoint] = []
+        if !source.mouth.isEmpty {
+            guard source.view == .side, source.mouth.count == 4 else { return nil }
+            for m in source.mouth {
+                guard m.count == 2, m[0].isFinite, m[1].isFinite else { return nil }
+                mouth.append(CGPoint(x: CGFloat(m[0]) * k, y: -CGFloat(m[1]) * k))
+            }
+        }
         self.species = species
         self.view = source.view
         self.scale = k
@@ -239,6 +270,7 @@ struct SpeciesGeometry {
         self.eyes = eyes
         self.eyeRadius = CGFloat(source.eyeRadius) * k
         self.blush = blush
+        self.mouth = mouth
         var union: CGRect?
         for wave in SpeciesGeometry.waves {
             guard let box = SpeciesGeometry.box(of: parts, wave: wave, roles: nil) else { return nil }
@@ -249,16 +281,11 @@ struct SpeciesGeometry {
         self.bodyBounds = body
     }
 
-    private static func rotate(_ point: CGPoint, about pivot: CGPoint, by angle: CGFloat) -> CGPoint {
-        let c = cos(angle), s = sin(angle), dx = point.x - pivot.x, dy = point.y - pivot.y
-        return CGPoint(x: pivot.x + dx * c - dy * s, y: pivot.y + dx * s + dy * c)
-    }
-
     private static func box(of parts: [SpeciesPart], wave: CGFloat, roles: Set<SpeciesRole>?) -> CGRect? {
         var minX = CGFloat.infinity, minY = CGFloat.infinity, maxX = -CGFloat.infinity, maxY = -CGFloat.infinity
         for part in parts where roles?.contains(part.role) ?? true {
             for sampled in SpeciesPath.sample(part.commands) {
-                let point = part.motion.map { rotate(sampled, about: $0.pivot, by: $0.maxAngle * wave) } ?? sampled
+                let point = part.motion.map { $0.apply(to: sampled, wave: wave) } ?? sampled
                 minX = min(minX, point.x); maxX = max(maxX, point.x)
                 minY = min(minY, point.y); maxY = max(maxY, point.y)
             }
@@ -274,10 +301,11 @@ struct SpeciesGeometry {
 // MARK: - 动物的绘制路径（CoreGraphics；与包围盒共用同一份几何，所以画出来的和放置、余量用的不会漂移）
 
 extension SpeciesMotion {
-    /// wave（−1…1，非有限当作 0）对应的变换：绕 pivot 转 wave × maxAngle（几何坐标，y 向上，逆时针为正）。
+    /// wave（−1…1，非有限当作 0）对应的变换：先在 pivot 上把 y 缩放到 1 − squash × wave，再绕 pivot 转 wave × maxAngle（几何坐标，y 向上，逆时针为正）。
     func transform(wave: CGFloat) -> CGAffineTransform {
         let w = wave.isFinite ? max(-1, min(1, wave)) : 0
         return CGAffineTransform(translationX: -pivot.x, y: -pivot.y)
+            .concatenating(CGAffineTransform(scaleX: 1, y: 1 - squash * w))
             .concatenating(CGAffineTransform(rotationAngle: maxAngle * w))
             .concatenating(CGAffineTransform(translationX: pivot.x, y: pivot.y))
     }
@@ -357,8 +385,15 @@ extension JellySpecies {
         case .jelly: return SwimProfile()
         // 小锤头鲨：下沉与冲量各减小到约 6 成（垂直起伏减半、平均高度不变），横向阻力 0.7、冲量 0.8（平均速度与水母相当、更平滑）
         case .hammer: return SwimProfile(thrustX: 0.8, thrustY: 0.55, sink: 0.6, dragX: 0.7)
-        // 其余动物接入时（Step B–D）各自标定；在此之前它们不可用，effective 回退水母，用不到这些系数
-        case .manta, .turtle, .whaleshark: return SwimProfile()
+        // 蝠鲼：游得最慢、滑得最远——脉动周期 1.35 倍（拍翼更慢）；水平冲量 0.6 配横向阻力 0.5（每次拍翼后滑得更远，平均速度约水母的 0.8–0.85 倍、比小锤头鲨慢）；
+        // 竖直冲量 0.5 与下沉 0.5（起伏约为水母的一半，种子化模拟里三个阶段的平均高度比愿意停留的高度高 4–10 pt，不贴着泳线）。竖直阻力保持 1（扫描里它几乎不起作用）
+        case .manta: return SwimProfile(period: 1.35, thrustX: 0.6, thrustY: 0.5, sink: 0.5, dragX: 0.5)
+        // 鲸鲨：平稳的大个子——纵向最平（竖直冲量 0.3、下沉 0.4：最大纵向速度只有水母的约 0.3 倍，比蝠鲼与小锤头鲨都小，侧视时上下起伏最容易被看见，所以压得最低），
+        // 水平冲量 0.6 配横向阻力 0.65（平均速度约水母的 0.8–0.9 倍：比小锤头鲨慢、与蝠鲼同样从容）；周期不变——尾鳍按常规节奏摆，不像蝠鲼那样放慢拍翼、加长滑行。
+        // 30 个种子 × 三个阶段的模拟全部满足通用判据；平均高度比愿意停留的高度高约 2–10 pt（不贴着泳线）。
+        case .whaleshark: return SwimProfile(thrustX: 0.6, thrustY: 0.3, sink: 0.4, dragX: 0.65)
+        // 海龟接入时（Step C）标定；在此之前它不可用，effective 回退水母，用不到这些系数
+        case .turtle: return SwimProfile()
         }
     }
 }

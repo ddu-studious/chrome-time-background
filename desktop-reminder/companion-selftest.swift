@@ -942,9 +942,111 @@ do {
             let moved = pt(10, 0).applying(t), pivotMoved = motion.pivot.applying(t)
             check(abs(moved.x - 1.5) < 1e-9 && abs(moved.y + 9.5) < 1e-9 && abs(pivotMoved.x - 1) < 1e-9 && abs(pivotMoved.y + 0.5) < 1e-9, "转动变换：转轴不动，其他点绕它转（\(moved)）")
         } else { check(false, "路径：合成数据应能生成几何") }
+        // 绘制路径逐条还原为 CGPath 元素：M/L/C/Q/Z 各对应一种元素，三次与二次贝塞尔的控制点与终点各就各位（缩放 2、y 翻成向上）。
+        // 当前数据只用到 M/L/C/Z，Q 是解析器与 JS 都支持的命令：不测它，接线写错（比如控制点和终点对调）也没有任何检查会发现；
+        // 变异检查里这一段的控制点序号变异体在纯逻辑层全部存活，只靠离屏渲染检查（它只会走到 C）。
+        let curveSource = SpeciesSource(view: .side, scale: 2, parts: [SpeciesPartSource(role: .body, u: 0.5, path: "M 0 0 L 2 0 C 3 1 4 2 5 0 Q 6 -3 8 0 Z", motion: nil)], eyeRadius: 1, eyes: [], blush: [])
+        if let curves = SpeciesGeometry(species: .whaleshark, source: curveSource), let part = curves.parts.first {
+            var seen: [(String, [CGPoint])] = []
+            part.path(wave: 0).applyWithBlock { element in
+                let e = element.pointee
+                switch e.type {
+                case .moveToPoint: seen.append(("M", [e.points[0]]))
+                case .addLineToPoint: seen.append(("L", [e.points[0]]))
+                case .addCurveToPoint: seen.append(("C", [e.points[0], e.points[1], e.points[2]]))
+                case .addQuadCurveToPoint: seen.append(("Q", [e.points[0], e.points[1]]))
+                case .closeSubpath: seen.append(("Z", []))
+                @unknown default: seen.append(("?", []))
+                }
+            }
+            check(seen.map { $0.0 }.joined() == "MLCQZ", "路径还原：五条命令各对应一种元素（\(seen.map { $0.0 }.joined())）")
+            func sameSeq(_ a: [CGPoint], _ b: [CGPoint]) -> Bool { a.count == b.count && zip(a, b).allSatisfy { abs($0.x - $1.x) < 1e-9 && abs($0.y - $1.y) < 1e-9 } }
+            if seen.count == 5 {
+                check(sameSeq(seen[0].1, [pt(0, 0)]) && sameSeq(seen[1].1, [pt(4, 0)]), "路径还原：M 与 L 的点按缩放换算")
+                check(sameSeq(seen[2].1, [pt(6, -2), pt(8, -4), pt(10, 0)]), "路径还原：C 依次是第一控制点、第二控制点、终点（\(seen[2].1)）")
+                check(sameSeq(seen[3].1, [pt(12, 6), pt(16, 0)]), "路径还原：Q 依次是控制点、终点（\(seen[3].1)）")
+            }
+        } else { check(false, "路径还原：合成数据应能生成几何（侧视）") }
+        // 拍翼（squash）：同一个转轴上把 y 方向缩放到 1 − squash × wave（wave = 1 最瘦、−1 最胖），先缩放后转动；wave = 0 时什么都不做。
+        // 缩放 0.5、转轴 (2, 1)、squash 0.2，方块 20…24 × 0…4 → 换算后 x 10…12、y −2…0、转轴 (1, −0.5)；转轴有意不在方块的中线上（y 方向缩放以它为不动点）
+        let squashSource = SpeciesSource(view: .top, scale: 0.5, parts: [SpeciesPartSource(role: .body, u: 0.5, path: "M 20 0 L 24 0 L 24 4 L 20 4 Z", motion: SpeciesMotionSource(pivotX: 2, pivotY: 1, degrees: 0, squash: 0.2))], eyeRadius: 1, eyes: [], blush: [])
+        if let flap = SpeciesGeometry(species: .hammer, source: squashSource), let part = flap.parts.first, let motion = part.motion {
+            func sameBox(_ box: CGRect, _ x0: CGFloat, _ x1: CGFloat, _ y0: CGFloat, _ y1: CGFloat) -> Bool {
+                abs(box.minX - x0) < 1e-9 && abs(box.maxX - x1) < 1e-9 && abs(box.minY - y0) < 1e-9 && abs(box.maxY - y1) < 1e-9
+            }
+            check(motion.squash == 0.2 && motion.maxAngle == 0 && SpeciesMotion.maxSquash == 0.3, "拍翼：幅度原样带出（0.2），上限 0.3（与 JS 的 MAX_SQUASH 一致）")
+            check(sameBox(flap.bounds(wave: 0), 10, 12, -2, 0), "拍翼：wave = 0 时方块不变（y −2…0）")
+            check(sameBox(flap.bounds(wave: 1), 10, 12, -1.7, -0.1), "拍翼：wave = 1 时 y 方向缩到 0.8 倍，以转轴 y = −0.5 为不动点（−1.7…−0.1），x 不变")
+            check(sameBox(flap.bounds(wave: -1), 10, 12, -2.3, 0.1), "拍翼：wave = −1 时胀到 1.2 倍（−2.3…0.1）")
+            check(sameBox(flap.bounds(wave: 0.5), 10, 12, -1.85, -0.05), "拍翼：wave = 0.5 时 0.9 倍（−1.85…−0.05）")
+            check(sameBox(flap.union, 10, 12, -2.3, 0.1), "拍翼：并集取最胖的相位（−2.3…0.1），任何一帧都不越出")
+            check(sameBox(flap.bodyBounds, 10, 12, -2, 0), "拍翼：躯干包围盒取 wave = 0（渐变与光晕定位不随相位变）")
+            func corners(_ path: CGPath) -> [CGPoint] {
+                var points: [CGPoint] = []
+                path.applyWithBlock { element in
+                    let e = element.pointee
+                    if e.type == .moveToPoint || e.type == .addLineToPoint { points.append(e.points[0]) }
+                }
+                return points
+            }
+            let thin = corners(part.path(wave: 1)), expectedThin = [pt(10, -0.1), pt(12, -0.1), pt(12, -1.7), pt(10, -1.7)]
+            check(thin.count == 4 && zip(thin, expectedThin).allSatisfy { abs($0.x - $1.x) < 1e-9 && abs($0.y - $1.y) < 1e-9 }, "拍翼路径：wave = 1 时四个角按 0.8 倍缩放（\(thin)）")
+            check(corners(part.path(wave: 0)) == [pt(10, 0), pt(12, 0), pt(12, -2), pt(10, -2)], "拍翼路径：wave = 0 时不动")
+            check(part.path(wave: 3).boundingBoxOfPath == part.path(wave: 1).boundingBoxOfPath && part.path(wave: -7).boundingBoxOfPath == part.path(wave: -1).boundingBoxOfPath, "拍翼路径：wave 越界夹到 ±1")
+            check(part.path(wave: .nan).boundingBoxOfPath == part.path(wave: 0).boundingBoxOfPath, "拍翼路径：wave 非有限当作 0")
+            // 变换与包围盒取样是同一个公式（绘制按变换，放置按取样，两者不能漂移）
+            for wave in [CGFloat(-1), -0.5, 0, 0.3, 1] {
+                let viaTransform = pt(11, -1.5).applying(motion.transform(wave: wave)), viaApply = motion.apply(to: pt(11, -1.5), wave: wave)
+                check(abs(viaTransform.x - viaApply.x) < 1e-9 && abs(viaTransform.y - viaApply.y) < 1e-9, "拍翼：wave = \(wave) 时变换与取样公式一致")
+            }
+            // 变换自己也要处理非有限与越界的 wave（路径入口另有一道，但不能只靠它）
+            check(motion.transform(wave: .nan) == motion.transform(wave: 0) && motion.transform(wave: .infinity) == motion.transform(wave: 0) && motion.transform(wave: -.infinity) == motion.transform(wave: 0), "拍翼变换：wave 非有限当作 0")
+            check(motion.transform(wave: 3) == motion.transform(wave: 1) && motion.transform(wave: -7) == motion.transform(wave: -1), "拍翼变换：wave 越界夹到 ±1")
+        } else { check(false, "拍翼：合成数据应能生成几何") }
+        // 先缩放后转动：矩形 4×2、转轴在原点、转 90°（SVG 顺时针，换算后 −π/2）、squash 0.3、wave = 1：
+        // 原生点 (4, 0)(4, −2)(0, −2) → 先缩：(4, 0)(4, −1.4)(0, −1.4) → 再转 −90°，(x, y) → (y, −x)：(0, −4)(−1.4, −4)(−1.4, 0)；顺序反了会是 x −2…0、y −2.8…0
+        let orderSource = SpeciesSource(view: .top, scale: 1, parts: [SpeciesPartSource(role: .body, u: 0.5, path: "M 0 0 L 4 0 L 4 2 L 0 2 Z", motion: SpeciesMotionSource(pivotX: 0, pivotY: 0, degrees: 90, squash: 0.3))], eyeRadius: 1, eyes: [], blush: [])
+        if let order = SpeciesGeometry(species: .hammer, source: orderSource), let motion = order.parts.first?.motion {
+            let box = order.bounds(wave: 1)
+            check(abs(box.minX + 1.4) < 1e-9 && abs(box.maxX) < 1e-9 && abs(box.minY + 4) < 1e-9 && abs(box.maxY) < 1e-9, "先缩后转：包围盒 x −1.4…0、y −4…0（\(box)）")
+            let corner = pt(4, -2).applying(motion.transform(wave: 1))
+            check(abs(corner.x + 1.4) < 1e-9 && abs(corner.y + 4) < 1e-9, "先缩后转：变换作用在 (4, −2) 上得到 (−1.4, −4)（\(corner)）")
+        } else { check(false, "先缩后转：合成数据应能生成几何") }
+        // 不合规的幅度让整种动物不可用：非有限、负数、超过上限；0 与上限本身合规
+        for (name, squash) in [("NaN", Double.nan), ("无穷", Double.infinity), ("负无穷", -Double.infinity), ("负数", -0.01), ("略超上限", 0.3000001), ("远超上限", 1.0)] {
+            let source = SpeciesSource(view: .top, scale: 1, parts: [SpeciesPartSource(role: .body, u: 0.5, path: "M 0 0 L 4 0 L 4 2 Z", motion: SpeciesMotionSource(pivotX: 0, pivotY: 0, degrees: 0, squash: squash))], eyeRadius: 1, eyes: [], blush: [])
+            check(SpeciesGeometry(species: .hammer, source: source) == nil, "拍翼：幅度不合规（\(name)）→ 没有几何")
+        }
+        for squash in [0.0, 0.3, 0.15] {
+            let source = SpeciesSource(view: .top, scale: 1, parts: [SpeciesPartSource(role: .body, u: 0.5, path: "M 0 0 L 4 0 L 4 2 Z", motion: SpeciesMotionSource(pivotX: 0, pivotY: 0, degrees: 0, squash: squash))], eyeRadius: 1, eyes: [], blush: [])
+            check(SpeciesGeometry(species: .hammer, source: source) != nil, "拍翼：幅度 \(squash) 合规")
+        }
+        let defaultSquash = SpeciesMotionSource(pivotX: 0, pivotY: 0, degrees: 5)
+        check(defaultSquash.squash == 0, "拍翼：数据里没写就是 0（旧的三参数写法仍可用）")
+        // 直接构造的运动（不写 squash）默认也是 0：只转动、不缩放。点 (4, 4) 相对转轴 (1, 2) 是 (3, 2)，转 0.5 × 0.7 = 0.35 弧度
+        let plain = SpeciesMotion(pivot: pt(1, 2), maxAngle: 0.5)
+        let plainMoved = plain.apply(to: pt(4, 4), wave: 0.7), c35 = CGFloat(cos(0.35)), s35 = CGFloat(sin(0.35))
+        check(plain.squash == 0 && abs(plainMoved.x - (1 + 3 * c35 - 2 * s35)) < 1e-9 && abs(plainMoved.y - (2 + 3 * s35 + 2 * c35)) < 1e-9, "拍翼：直接构造的运动默认幅度是 0（只转动，\(plainMoved)）")
         // 取色位置夹到 0…1
         let clampSource = SpeciesSource(view: .side, scale: 1, parts: [SpeciesPartSource(role: .body, u: 0.4, path: "M 0 0 L 4 0 L 4 4 Z", motion: nil), SpeciesPartSource(role: .limb, u: -3, path: "M 0 0 L 1 1 Z", motion: nil), SpeciesPartSource(role: .limb, u: 9, path: "M 0 0 L 1 1 Z", motion: nil)], eyeRadius: 1, eyes: [], blush: [])
         check(SpeciesGeometry(species: .hammer, source: clampSource)?.parts.map { $0.u } == [0.4, 0, 1], "几何：取色位置夹到 0…1（−3 → 0、9 → 1）")
+        // 嘴（微笑）：只有侧视动物有；四个点按缩放换算并翻成 y 向上；不参与包围盒与并集（放置不受影响）
+        let mouthPoints: [[Double]] = [[10, 2], [8, 5], [4, 5], [2, 2]]
+        func mouthSource(_ view: SpeciesView, _ mouth: [[Double]]) -> SpeciesSource {
+            SpeciesSource(view: view, scale: 0.5, parts: [SpeciesPartSource(role: .body, u: 0.5, path: "M 0 0 L 8 0 L 8 4 Z", motion: nil)], eyeRadius: 1, eyes: [], blush: [], mouth: mouth)
+        }
+        if let smile = SpeciesGeometry(species: .whaleshark, source: mouthSource(.side, mouthPoints)), let plain = SpeciesGeometry(species: .whaleshark, source: mouthSource(.side, [])) {
+            check(smile.mouth == [pt(5, -1), pt(4, -2.5), pt(2, -2.5), pt(1, -1)], "嘴：四个点按缩放 0.5 换算并翻成 y 向上（\(smile.mouth)）")
+            check(plain.mouth.isEmpty, "嘴：数据里没写就是空")
+            check(smile.union == plain.union && smile.bodyBounds == plain.bodyBounds, "嘴：不参与并集与躯干包围盒（放置不受影响）")
+            check(SpeciesSource(view: .side, scale: 1, parts: [], eyeRadius: 1, eyes: [], blush: []).mouth.isEmpty, "嘴：数据结构里默认没有嘴（旧的写法仍可用）")
+        } else { check(false, "嘴：合成数据应能生成几何") }
+        let badMouths: [(String, SpeciesView, [[Double]])] = [
+            ("俯视动物写了嘴", .top, mouthPoints), ("只有三个点", .side, Array(mouthPoints.prefix(3))), ("有五个点", .side, mouthPoints + [[0, 0]]),
+            ("某点只有一个数", .side, [[10, 2], [8], [4, 5], [2, 2]]), ("某点有三个数", .side, [[10, 2], [8, 5, 1], [4, 5], [2, 2]]),
+            ("NaN", .side, [[10, 2], [8, .nan], [4, 5], [2, 2]]), ("正无穷", .side, [[10, 2], [8, 5], [.infinity, 5], [2, 2]]), ("负无穷", .side, [[10, 2], [8, 5], [4, 5], [2, -.infinity]]),
+        ]
+        for (name, view, mouth) in badMouths { check(SpeciesGeometry(species: .whaleshark, source: mouthSource(view, mouth)) == nil, "嘴：不合规（\(name)）→ 没有几何，整种动物不可用") }
         for species in available {
             let id = species.rawValue
             guard let g = JellySpeciesGeometry.of(species), let source = JellySpeciesData.sources[species] else { check(false, "\(id)：有几何"); continue }
@@ -977,11 +1079,16 @@ do {
             print("SPECUNION \(id) \(f(g.union.minX)) \(f(g.union.maxX)) \(f(g.union.minY)) \(f(g.union.maxY))")
             print("SPECVIEW \(id) \(g.view.rawValue) \(f(g.scale))")
             for (index, part) in g.parts.enumerated() {
-                let motion = part.motion.map { "\(f($0.pivot.x)),\(f($0.pivot.y)),\(f($0.maxAngle))" } ?? "-"
+                let motion = part.motion.map { "\(f($0.pivot.x)),\(f($0.pivot.y)),\(f($0.maxAngle)),\(f($0.squash))" } ?? "-"
                 print("SPECPART \(id) \(index) \(part.role.rawValue) \(f(part.u)) \(motion)")
             }
             print("SPECEYES \(id) \(f(g.eyeRadius)) \(g.eyes.map { "\(f($0.x)),\(f($0.y))" }.joined(separator: " "))")
             print("SPECBLUSH \(id) \(g.blush.map { "\(f($0.center.x)),\(f($0.center.y)),\(f($0.rx)),\(f($0.ry))" }.joined(separator: " "))")
+            // 嘴：俯视动物没有；侧视动物要么没有、要么是四个点，且都在躯干包围盒里（嘴画在身体上）
+            check(g.view == .side || g.mouth.isEmpty, "\(id)：俯视动物没有嘴")
+            check(g.mouth.isEmpty || g.mouth.count == 4, "\(id)：嘴要么没有、要么是四个点")
+            check(g.mouth.allSatisfy { g.bodyBounds.insetBy(dx: -1e-9, dy: -1e-9).contains($0) }, "\(id)：嘴的四个点都在躯干包围盒里")
+            print("SPECMOUTH \(id) \(g.mouth.isEmpty ? "-" : g.mouth.map { "\(f($0.x)),\(f($0.y))" }.joined(separator: " "))")
             // 放置：窗口 170×150（JellyCompanion.size，Node 测试核对源码里的这两个数），并集顶端离底边 91 pt，水平居中，任何姿态不越出
             let width: CGFloat = 170, height: CGFloat = 150, cx = width / 2
             func extent(_ facing: CGFloat, _ pitch: CGFloat) -> CGRect { g.union.applying(SpeciesPlacement.transform(g, centerX: cx, facing: facing, pitch: pitch)) }
@@ -1160,7 +1267,8 @@ do {
                 check(positive && tuning.hover == base.hover, "\(stage)/\(species.rawValue)：系数有限且为正，愿意停留的高度不乘系数")
             }
         }
-        check(S.jelly.swimProfile == SwimProfile() && S.hammer.swimProfile != SwimProfile(), "水母的系数全是 1，小锤头鲨有自己的系数")
+        check(S.jelly.swimProfile == SwimProfile() && S.hammer.swimProfile != SwimProfile() && S.manta.swimProfile != SwimProfile() && S.whaleshark.swimProfile != SwimProfile(), "水母的系数全是 1，小锤头鲨、蝠鲼与鲸鲨各有自己的系数")
+        check(S.turtle.swimProfile == SwimProfile(), "海龟还没有标定（它不可用，回退水母）：系数全是 1")
         // 系数怎么乘：用合成系数逐项核对“六项各乘各的、愿意停留的高度不乘”（真实动物只有几项不是 1，光靠它们分不出某一项被漏乘）
         do {
             let synthetic = SwimProfile(period: 1.1, thrustX: 1.2, thrustY: 1.3, sink: 1.4, dragX: 1.5, dragY: 1.6)
@@ -1176,6 +1284,10 @@ do {
             }
             // 小锤头鲨的系数是用种子化模拟标定的：改它们必须重跑下面逐阶段的纵向分布与平均速度检查，并同步这里与技术文档
             check(S.hammer.swimProfile == SwimProfile(period: 1, thrustX: 0.8, thrustY: 0.55, sink: 0.6, dragX: 0.7, dragY: 1), "小锤头鲨的标定系数：冲量 0.8 / 0.55、下沉 0.6、横向阻力 0.7，其余为 1")
+            // 蝠鲼同样是标定出来的（游得最慢、滑得最远）：改它们必须重跑下面的逐阶段检查（含“比小锤头鲨慢”）并同步这里与技术文档
+            check(S.manta.swimProfile == SwimProfile(period: 1.35, thrustX: 0.6, thrustY: 0.5, sink: 0.5, dragX: 0.5, dragY: 1), "蝠鲼的标定系数：周期 1.35、冲量 0.6 / 0.5、下沉 0.5、横向阻力 0.5，其余为 1")
+            // 鲸鲨同样是标定出来的（纵向最平稳）：改它们必须重跑下面的逐阶段检查（含“比小锤头鲨慢”“起伏比蝠鲼和小锤头鲨都小”与多种子稳健性）并同步这里与技术文档
+            check(S.whaleshark.swimProfile == SwimProfile(period: 1, thrustX: 0.6, thrustY: 0.3, sink: 0.4, dragX: 0.65, dragY: 1), "鲸鲨的标定系数：冲量 0.6 / 0.3、下沉 0.4、横向阻力 0.65，其余为 1")
         }
         // 水母的游动轨迹与改动前逐位一致：用改动前（只有 JellyTuning 的四项）的代码在同一批种子下跑出的值
         let pinned: [(CountdownStage, Int, CGFloat, CGFloat, CGFloat, CGFloat)] = [
@@ -1202,8 +1314,8 @@ do {
             }
         }
         // 逐物种、逐阶段的纵向分布与平均速度（与水母同一套判据；动物的垂直起伏更小、平均速度与水母相当）
-        func simulate(_ stage: CountdownStage, _ species: S) -> (mean: CGFloat, high: Double, ceiling: Double, below: Int, outside: Int, speed: CGFloat, range: CGFloat, vyMax: CGFloat, hover: CGFloat) {
-            var rng = SeededRandom(state: 42)
+        func simulate(_ stage: CountdownStage, _ species: S, seed: UInt64 = 42) -> (mean: CGFloat, high: Double, ceiling: Double, below: Int, outside: Int, speed: CGFloat, range: CGFloat, vyMax: CGFloat, hover: CGFloat) {
+            var rng = SeededRandom(state: seed)
             var swim = JellySwim(); swim.setBounds(lo: 100, hi: 1500); swim.x = 800
             swim.tuning = JellyTuning.forStage(stage, species: species); swim.wantsRest = false; swim.mode = .swim
             var n = 0, high = 0, ceiling = 0, below = 0, outside = 0
@@ -1229,7 +1341,33 @@ do {
                 check(a.range > 150, "\(id)：会水平游动（范围 \(String(format: "%.0f", Double(a.range)))）")
                 check(a.speed >= j.speed * 0.7 && a.speed <= j.speed * 1.4, "\(id)：平均横向速度与水母相当（\(String(format: "%.1f", Double(a.speed))) 对 \(String(format: "%.1f", Double(j.speed)))，要求 0.7–1.4 倍）")
                 check(a.vyMax < j.vyMax, "\(id)：垂直起伏比水母更小（最大纵向速度 \(String(format: "%.1f", Double(a.vyMax))) 对 \(String(format: "%.1f", Double(j.vyMax)))）")
+                check(a.mean > a.hover, "\(id)：平均高度不低于愿意停留的高度，不贴着泳线（\(String(format: "%.1f", Double(a.mean))) 对 \(a.hover)）")
+                if species == .manta {
+                    let h = simulate(stage, .hammer)
+                    check(a.speed < h.speed, "\(id)：蝠鲼游得比小锤头鲨慢（平均横向速度 \(String(format: "%.1f", Double(a.speed))) 对 \(String(format: "%.1f", Double(h.speed)))）")
+                    check(a.speed >= j.speed * 0.75, "\(id)：但不至于慢得像停住（不低于水母的 0.75 倍，留出到 0.7 下限的余量）")
+                }
+                if species == .whaleshark {
+                    let h = simulate(stage, .hammer), m = simulate(stage, .manta)
+                    check(a.speed < h.speed, "\(id)：鲸鲨游得比小锤头鲨慢（平均横向速度 \(String(format: "%.1f", Double(a.speed))) 对 \(String(format: "%.1f", Double(h.speed)))）")
+                    check(a.speed >= j.speed * 0.75, "\(id)：但不至于慢得像停住（不低于水母的 0.75 倍）")
+                    check(a.vyMax < h.vyMax && a.vyMax < m.vyMax, "\(id)：鲸鲨的纵向起伏最小，比小锤头鲨与蝠鲼都平稳（最大纵向速度 \(String(format: "%.1f", Double(a.vyMax))) 对 \(String(format: "%.1f", Double(h.vyMax))) / \(String(format: "%.1f", Double(m.vyMax)))）")
+                    check(a.vyMax < j.vyMax * 0.5, "\(id)：纵向最大速度不到水母的一半（侧视时上下起伏最明显，要明显更平）")
+                }
             }
+        }
+        // 多种子稳健性：系数是按种子 42 标定的，换一批随机数也必须满足同一套通用判据（不沉到泳线以下、不越界、不贴顶、速度与水母相当、起伏更小）
+        for species in S.allCases where species.isAvailable && species != .jelly {
+            var failures: [String] = []
+            for seed in 1...12 {
+                for stage in [CountdownStage.soon, .imminent, .final] {
+                    let a = simulate(stage, species, seed: UInt64(seed)), j = simulate(stage, .jelly, seed: UInt64(seed))
+                    let ok = a.below == 0 && a.outside == 0 && a.high < 0.05 && a.ceiling < 0.02 && a.mean > a.hover && a.mean < a.hover + 18 && a.range > 150
+                        && a.speed >= j.speed * 0.7 && a.speed <= j.speed * 1.4 && a.vyMax < j.vyMax
+                    if !ok { failures.append("种子 \(seed)/\(stage)") }
+                }
+            }
+            check(failures.isEmpty, "\(species.rawValue)：12 个种子 × 三个阶段都满足通用判据（失败：\(failures.prefix(5).joined(separator: "、"))）")
         }
         // 响铃涟漪的外半径：默认 62；离窗口最近一边不足 70 时缩小，最外圈离边缘至少 8 点；下限 inner + 4
         typealias R = JellyRingMotion

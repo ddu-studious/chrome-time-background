@@ -14,7 +14,13 @@
   // 坐标：原点在身体中心，x 向右（朝向），y 向下（SVG 惯例）；单位是“缩放前”的点，scale 把它缩到桌面上的大小（与水母同一量级）。
   // 部件按数组顺序绘制（靠后的盖住靠前的）。role：body 躯干、limb 鳍/尾/肢（按位置 u 取色，0 尾端 → 1 头端）、belly 腹部浅色、
   // accent 斑点、shine 高光。mirror:true 表示沿 x 轴再画一份镜像（y 取反，紧跟在原部件之后）。
+  // 部件的形状有三种写法（有且只有一种）：d 路径串、ellipse [cx, cy, rx, ry, 旋转角]、dots 一串小圆 [[x, y, r], …]（每个圆是同一条路径里的一个子路径）。
   // motion：绕 pivot 旋转，deg 是 wave=±1 时的角度（SVG 方向：顺时针为正），wave 由原生端按游动节奏给出。
+  //   可选 squash（0…MAX_SQUASH，默认 0）：同一个 pivot 上把 y 方向缩放到 1 − squash × wave（俯视蝠鲼的拍翼：整片翼一胖一瘦，不像分块转动那样在接缝处裂开），
+  //   先缩放后转动；wave = 0（静止、减少动态效果）时两者都不起作用，所以静态画面就是这里写的形状。
+  // eyes：眼睛半径与位置（侧视动物只看得见一只眼睛）；blush：腮红椭圆 [x, y, rx, ry]。
+  // mouth（可选，只有侧视动物有）：微笑，一段三次贝塞尔的四个点——起点、两个控制点、终点，坐标同上；俯视动物看不见嘴（设计稿 §6），
+  //   俯视写了嘴、或四个点不全是有限数字，整种动物不可用（和路径不合规一样，由生成器报告）。睡着时不画，被抓时即使睡着也画。
 
   const ROLES = Object.freeze(['body', 'limb', 'belly', 'accent', 'shine']);
   const VIEWS = Object.freeze(['side', 'top']);
@@ -23,6 +29,7 @@
   const MAX_COMMANDS = 800;
   const SAMPLES = 16;                                      // 每段贝塞尔取样点数（包围盒用，原生端同一个值）
   const KAPPA = 0.5522847498307936;                        // 四段三次贝塞尔近似椭圆的控制点系数
+  const MAX_SQUASH = 0.3;                                  // 拍翼幅度上限：wave = ±1 时 y 方向缩放到 1 ∓ squash（0.7…1.3 倍）；Swift 的 SpeciesMotion.maxSquash 取同一个值
 
   const SHAPES = {
     // 小锤头鲨（俯视）：锤头是最好认的特征，侧视看不出来。长度约 80 pt（缩放 0.89），与水母同一量级。
@@ -38,6 +45,52 @@
       ],
       eyes: { r: 2.2, at: [[32, -17], [32, 17]] },
       blush: [[30, -10, 2.6, 1.8], [30, 10, 2.6, 1.8]],
+    },
+    // 蝠鲼（俯视）：整片菱形的翼是躯干（拍翼 = 垂直方向一胖一瘦，不分块转动，所以接缝不会裂开），中央一条浅色的身体带着眼睛，
+    // 前端两只头鳍，后面一根长尾（轻轻左右摆）。长度约 86 pt、翼展约 58 pt（缩放 0.85）；游得最慢、滑行最远（调参见 JellySpecies.swimProfile）。
+    manta: {
+      view: 'top',
+      scale: 0.85,
+      parts: [
+        { role: 'limb', u: 0.05, d: 'M -24 -2.2 C -36 -1.6 -50 -0.8 -61 -0.4 L -61 0.4 C -50 0.8 -36 1.6 -24 2.2 Z', motion: { pivot: [-24, 0], deg: 8 } },
+        { role: 'body', d: 'M 26 -5 C 19 -13 10 -23 -5 -31 C -8 -25 -17 -12 -27 -3 L -27 3 C -17 12 -8 25 -5 31 C 10 23 19 13 26 5 C 29 2 29 -2 26 -5 Z', motion: { pivot: [0, 0], deg: 0, squash: 0.1 } },
+        { role: 'shine', ellipse: [6, -12, 10, 1.8, 40] },
+        { role: 'limb', u: 0.55, ellipse: [6, 0, 20.5, 7.6, 0] },
+        { role: 'limb', u: 0.95, mirror: true, d: 'M 24 -3.2 C 30 -4.5 36 -7 40 -6.5 C 38 -3.8 32 -1.6 26 -0.6 Z' },
+      ],
+      eyes: { r: 2, at: [[18, -3.6], [18, 3.6]] },
+      blush: [[13.5, -5.2, 2.4, 1.5], [13.5, 5.2, 2.4, 1.5]],
+    },
+    // 鲸鲨（侧视）：长身、宽扁的头、背上一排排白斑是最好认的特征，侧视最清楚；游得最平稳（纵向起伏最小，横向比小锤头鲨慢、与蝠鲼相当）。长度约 90 pt、高约 34 pt（含摆动的尾与鳍）。
+    // 斑点是一个 accent 部件里的 60 个小圆（六角晶格排布，避开眼睛、腮红、嘴与腹部）；腹部是浅色的 belly；眼睛只看得见一只，笑着，脸红红的。
+    // 背上的高光整条落在躯干里（背线向尾部是降下去的，所以高光偏向头一侧；曾经中心在 8、ry 1.3，左端越出背线约 0.34 pt，由“高光不越出躯干”的测试守住）。
+    whaleshark: {
+      view: 'side',
+      scale: 0.9,
+      parts: [
+        { role: 'limb', u: 0.05, d: 'M -31 -2.8 C -37 -3.4 -44 -7.6 -50 -14.5 C -49.8 -9.2 -47.5 -4.2 -44 -0.5 C -46.5 2.4 -48 7.2 -48.5 11.5 C -42.5 8.8 -36.5 5.2 -31 2.8 Z', motion: { pivot: [-31, 0], deg: 12 } },
+        { role: 'limb', u: 0.22, d: 'M -17 -6.2 C -20 -9.6 -23.5 -11.4 -27.5 -12 C -27.5 -9 -28.5 -6 -30.5 -2.9 Z' },
+        { role: 'limb', u: 0.55, d: 'M 16 -10.8 C 13 -15.6 9 -18.6 3.5 -19.6 C 3 -15.5 0.5 -11.8 -4.5 -9 Z' },
+        { role: 'body', d: 'M 47.2 -3.2 C 47.2 -8.2 42.5 -10.8 35 -11.2 C 24 -11.8 8 -11.4 -6 -9.2 C -17 -7.4 -27 -5 -34 -2.6 C -35.6 -1.8 -36.2 -0.8 -36.2 0 C -36.2 0.8 -35.6 1.8 -34 2.6 C -26 5.2 -14 9.4 0 11 C 12 12.2 28 12.6 38 10 C 44.5 8.4 47.2 5.8 47.2 1.6 Z' },
+        { role: 'belly', d: 'M 46.6 1.2 C 40 2.6 32 4.6 22 5.4 C 8 6.2 -8 3.6 -22 1.4 C -26 0.8 -30 0.6 -33.6 0.8 L -33.9 1.6 C -27 4.2 -14 8.5 0 10.2 C 12 11.4 28 11.8 38 9.2 C 43.5 7.8 46.4 5.2 46.6 1.2 Z' },
+        { role: 'limb', u: 0.78, d: 'M 25.5 5.2 C 25 9.6 17.5 14.4 6.2 15.8 C 8 11.8 11.4 7.4 16.5 5.4 C 19.5 4.4 23.2 4.2 25.5 5.2 Z', motion: { pivot: [21, 5.4], deg: 8 } },
+        { role: 'accent', dots: [
+        [-4.75, -6.64, 1.32], [-1.45, -6.64, 1.34], [1.85, -6.64, 1.34], [5.15, -6.64, 1.32], [8.45, -6.64, 1.3], [11.75, -6.64, 1.28],
+        [15.05, -6.64, 1.26], [18.35, -6.64, 1.24], [21.65, -6.64, 1.22], [24.95, -6.64, 1.2], [28.25, -6.64, 1.18], [31.55, -6.64, 1.16],
+        [41.45, -6.64, 1.1], [-19.6, -3.78, 1.23], [-16.3, -3.78, 1.25], [-13, -3.78, 1.27], [-9.7, -3.78, 1.29], [-6.4, -3.78, 1.31],
+        [-3.1, -3.78, 1.33], [0.2, -3.78, 1.35], [3.5, -3.78, 1.33], [6.8, -3.78, 1.31], [10.1, -3.78, 1.29], [13.4, -3.78, 1.27],
+        [16.7, -3.78, 1.25], [20, -3.78, 1.23], [23.3, -3.78, 1.21], [26.6, -3.78, 1.19], [29.9, -3.78, 1.17], [43.1, -3.78, 1.09],
+        [-27.85, -0.92, 1.18], [-24.55, -0.92, 1.2], [-21.25, -0.92, 1.22], [-17.95, -0.92, 1.24], [-14.65, -0.92, 1.26], [-11.35, -0.92, 1.28],
+        [-8.05, -0.92, 1.3], [-4.75, -0.92, 1.32], [-1.45, -0.92, 1.34], [1.85, -0.92, 1.34], [5.15, -0.92, 1.32], [8.45, -0.92, 1.3],
+        [11.75, -0.92, 1.28], [15.05, -0.92, 1.26], [18.35, -0.92, 1.24], [21.65, -0.92, 1.22], [24.95, -0.92, 1.2], [28.25, -0.92, 1.18],
+        [31.55, -0.92, 1.16], [41.45, -0.92, 1.1], [-3.1, 1.94, 1.33], [0.2, 1.94, 1.35], [3.5, 1.94, 1.33], [6.8, 1.94, 1.31],
+        [10.1, 1.94, 1.29], [13.4, 1.94, 1.27], [16.7, 1.94, 1.25], [20, 1.94, 1.23], [23.3, 1.94, 1.21], [26.6, 1.94, 1.19],
+        ] },
+        { role: 'shine', ellipse: [11.5, -9.6, 16, 1.2, -3] },
+      ],
+      eyes: { r: 2.2, at: [[37, -3]] },
+      blush: [[33.6, 2.9, 2.8, 1.8]],
+      mouth: [[45, 3.4], [43.6, 6], [40.6, 6], [39.2, 3.6]],
     },
   };
 
@@ -108,21 +161,42 @@
 
   /**
    * 展开一种动物：椭圆变路径、mirror 变成紧跟其后的镜像部件（y 取反，motion 的 pivot 取反、角度反号——镜像把转动方向也翻过来）。
-   * 返回 { view, scale, parts: [{ role, u, d, motion|null }], eyes: { r, at }, blush }；未知物种、或任何部件的路径不合规时返回 null
+   * 返回 { view, scale, parts: [{ role, u, d, motion|null }], eyes: { r, at }, blush, mouth|null }；未知物种、任何部件的写法不是有且只有一种
+   * （d / ellipse / dots）、路径或小圆不合规、转动幅度不合规、或嘴不合规（俯视动物写了嘴、不是四个有限数字的点）时返回 null
    * （数据错误由调用方报告，这里不抛异常）。
    */
   function expand(id) {
     const shape = Object.prototype.hasOwnProperty.call(SHAPES, id) ? SHAPES[id] : null;
     if (!shape) return null;
+    let mouth = null;
+    if (shape.mouth !== undefined && shape.mouth !== null) {
+      const valid = Array.isArray(shape.mouth) && shape.mouth.length === 4 && shape.mouth.every(p => Array.isArray(p) && p.length === 2 && p.every(isFiniteNumber));
+      if (shape.view !== 'side' || !valid) return null;
+      mouth = shape.mouth.map(p => [...p]);
+    }
     const parts = [];
     for (const part of shape.parts) {
-      const d = part.ellipse ? ellipsePath(...part.ellipse) : part.d;
+      // 写法有且只有一种（d、ellipse、dots）：同时写了两种会悄悄只认其中一种，宁可整种动物不可用，由生成器报告
+      if ([part.d, part.ellipse, part.dots].filter(value => value !== undefined).length !== 1) return null;
+      let d;
+      if (part.dots !== undefined) {
+        // 一串小圆（鲸鲨的斑点）：[x, y, r] 的列表，半径必须是正的有限数；每个圆是路径里的一个子路径
+        const valid = Array.isArray(part.dots) && part.dots.length > 0 && part.dots.every(c => Array.isArray(c) && c.length === 3 && c.every(isFiniteNumber) && c[2] > 0);
+        if (!valid) return null;
+        d = part.dots.map(([x, y, r]) => ellipsePath(x, y, r, r)).join(' ');
+      } else d = part.ellipse !== undefined ? ellipsePath(...part.ellipse) : part.d;
       if (!parsePath(d)) return null;
-      const base = { role: part.role, u: part.u === undefined ? 0.5 : part.u, d, motion: part.motion ? { pivot: [...part.motion.pivot], deg: part.motion.deg } : null };
+      let motion = null;
+      if (part.motion) {
+        const squash = part.motion.squash === undefined ? 0 : part.motion.squash;
+        if (!(typeof squash === 'number' && Number.isFinite(squash) && squash >= 0 && squash <= MAX_SQUASH)) return null;
+        motion = { pivot: [...part.motion.pivot], deg: part.motion.deg, squash };
+      }
+      const base = { role: part.role, u: part.u === undefined ? 0.5 : part.u, d, motion };
       parts.push(base);
-      if (part.mirror) parts.push({ ...base, d: mirrorPath(d), motion: base.motion ? { pivot: [base.motion.pivot[0], -base.motion.pivot[1]], deg: -base.motion.deg } : null });
+      if (part.mirror) parts.push({ ...base, d: mirrorPath(d), motion: base.motion ? { pivot: [base.motion.pivot[0], -base.motion.pivot[1]], deg: -base.motion.deg, squash: base.motion.squash } : null });
     }
-    return { view: shape.view, scale: shape.scale, parts, eyes: { r: shape.eyes.r, at: shape.eyes.at.map(p => [...p]) }, blush: shape.blush.map(b => [...b]) };
+    return { view: shape.view, scale: shape.scale, parts, eyes: { r: shape.eyes.r, at: shape.eyes.at.map(p => [...p]) }, blush: shape.blush.map(b => [...b]), mouth };
   }
 
   /** 原生端的坐标：按 scale 缩放、y 翻成向上；转动角度换成 CoreGraphics 的方向（逆时针为正，所以取反）并换成弧度。 */
@@ -134,9 +208,9 @@
       role: part.role,
       u: part.u,
       cmds: parsePath(part.d).map(c => ({ cmd: c.cmd, pts: c.pts.map(p => [p[0] * k, -p[1] * k]) })),
-      motion: part.motion ? { pivot: [part.motion.pivot[0] * k, -part.motion.pivot[1] * k], maxAngle: -part.motion.deg * Math.PI / 180 } : null,
+      motion: part.motion ? { pivot: [part.motion.pivot[0] * k, -part.motion.pivot[1] * k], maxAngle: -part.motion.deg * Math.PI / 180, squash: part.motion.squash } : null,
     }));
-    return { view: shape.view, scale: k, parts, eyes: { r: shape.eyes.r * k, at: shape.eyes.at.map(p => [p[0] * k, -p[1] * k]) }, blush: shape.blush.map(b => [b[0] * k, -b[1] * k, b[2] * k, b[3] * k]) };
+    return { view: shape.view, scale: k, parts, eyes: { r: shape.eyes.r * k, at: shape.eyes.at.map(p => [p[0] * k, -p[1] * k]) }, blush: shape.blush.map(b => [b[0] * k, -b[1] * k, b[2] * k, b[3] * k]), mouth: shape.mouth ? shape.mouth.map(p => [p[0] * k, -p[1] * k]) : null };
   }
 
   /** 取样点（包围盒用）：M/L 的端点原样；每段 C/Q 取 SAMPLES 个点（t = i/SAMPLES，i = 1…SAMPLES）。输入是 parsePath 的结果。 */
@@ -162,6 +236,13 @@
     return [pivot[0] + dx * cos - dy * sin, pivot[1] + dx * sin + dy * cos];
   }
 
+  /** 部件在 wave 相位的位置（原生坐标）：先绕 pivot 把 y 方向缩放到 1 − squash × wave（拍翼：wave = 1 最瘦、−1 最胖），再绕 pivot 转 maxAngle × wave。 */
+  function movePoint(point, motion, wave) {
+    let moved = point;
+    if (motion.squash) moved = [moved[0], motion.pivot[1] + (moved[1] - motion.pivot[1]) * (1 - motion.squash * wave)];
+    return rotateAbout(moved, motion.pivot, motion.maxAngle * wave);
+  }
+
   /** 某个相位（wave ∈ [-1, 1]）下全部路径部件的包围盒（原生坐标：y 向上），不含描边与眼睛。 */
   function bounds(id, wave = 0) {
     const shape = native(id);
@@ -169,7 +250,7 @@
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const part of shape.parts) {
       for (let point of samplePoints(part.cmds)) {
-        if (part.motion) point = rotateAbout(point, part.motion.pivot, part.motion.maxAngle * wave);
+        if (part.motion) point = movePoint(point, part.motion, wave);
         minX = Math.min(minX, point[0]); maxX = Math.max(maxX, point[0]);
         minY = Math.min(minY, point[1]); maxY = Math.max(maxY, point[1]);
       }
@@ -188,5 +269,5 @@
     return out;
   }
 
-  return { SHAPES, AVAILABLE, ROLES, VIEWS, WAVES, MAX_PATH_CHARS, MAX_COMMANDS, SAMPLES, KAPPA, parsePath, ellipsePath, mirrorPath, expand, native, sample: samplePoints, bounds, union, num };
+  return { SHAPES, AVAILABLE, ROLES, VIEWS, WAVES, MAX_PATH_CHARS, MAX_COMMANDS, SAMPLES, KAPPA, MAX_SQUASH, parsePath, ellipsePath, mirrorPath, expand, native, sample: samplePoints, bounds, union, num };
 });

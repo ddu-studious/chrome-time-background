@@ -108,7 +108,7 @@
   /**
    * 某种动物按 paint（paintOf 的结果）画出的静态示意图（朝右、不转身、不划水），返回 SVG 文本；动物不存在、形状数据缺失或 paint 无效返回 null。
    * 取色与原生 SpeciesPainter 一致：躯干纯色/双色用主色自下而上由深到浅，渐变与七彩沿尾→头铺色（再叠一层自下而上的亮度）；
-   * 肢体取 limbTone(u) 的上浅下深小渐变与同色系深描边；腹部主色提亮；斑点与高光是半透明白；眼睛、高光点与腮红按数据里的位置画。
+   * 肢体取 limbTone(u) 的上浅下深小渐变与同色系深描边；腹部主色提亮；斑点（白，透明度 0.72）与高光（白，0.4）是半透明白；眼睛、高光点、腮红与微笑按数据里的位置画。
    * 全部数值来自形状数据（expand 已校验路径只含 M/L/C/Q/Z 与数字）和 toHex 的结果，不拼接任何外部文字，所以不会注入标记。
    */
   function animalPreviewSvg(id, paint) {
@@ -156,7 +156,7 @@
           out.push(`<path d="${d}" fill="none" stroke="${hex(shade(paint.outline, 0, 0.28))}" stroke-opacity=".9" stroke-width="${num(1.1 / k)}"/>`);
           break;
         case 'belly': out.push(`<path d="${d}" fill="${hex(shade(paint.a, 0.72))}" fill-opacity=".92"/>`); break;
-        case 'accent': out.push(`<path d="${d}" fill="#fff" fill-opacity=".55"/>`); break;
+        case 'accent': out.push(`<path d="${d}" fill="#fff" fill-opacity=".72"/>`); break;
         case 'shine': out.push(`<path d="${d}" fill="#fff" fill-opacity=".4"/>`); break;
         default: break;
       }
@@ -167,6 +167,11 @@
       out.push(`<circle cx="${num(x + 0.2 * r)}" cy="${num(y - 0.4 * r)}" r="${num(0.3 * r)}" fill="#fff" fill-opacity=".85"/>`);
     }
     for (const [x, y, rx, ry] of shape.blush) out.push(`<ellipse cx="${num(x)}" cy="${num(y)}" rx="${num(rx)}" ry="${num(ry)}" fill="#ff8c9e" fill-opacity=".34"/>`);
+    // 微笑（只有侧视动物有）：与原生同一条三次贝塞尔、线宽 1.2 pt（组内坐标除以缩放）
+    if (shape.mouth) {
+      const [p0, p1, p2, p3] = shape.mouth.map(([x, y]) => `${num(x)} ${num(y)}`);
+      out.push(`<path d="M ${p0} C ${p1} ${p2} ${p3}" fill="none" stroke="#293a4d" stroke-opacity=".88" stroke-width="${num(1.2 / k)}"/>`);
+    }
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${TILE_W} ${TILE_H}" width="${TILE_W}" height="${TILE_H}"><defs>${defs.join('')}</defs>`
       + `<rect width="${TILE_W}" height="${TILE_H}" rx="12" fill="url(#tile)"/>`
       + `<g transform="translate(${num(tx)} ${num(ty)}) scale(${num(k)})" stroke-linejoin="round" stroke-linecap="round">${out.join('')}</g></svg>`;

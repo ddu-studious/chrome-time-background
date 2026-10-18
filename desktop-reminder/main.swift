@@ -124,6 +124,12 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
         reply["visible"] = jelly.ringVisible
         reply["onActiveSpace"] = jelly.companion.panel.isOnActiveSpace
         reply["screenCount"] = NSScreen.screens.count
+        // 验收诊断：显示器休眠时 NSScreen 仍列着屏幕，但没有活动显示器——Core Animation 的完成回调不会触发（响铃退场的淡出隐藏停在半途，亮屏才继续），
+        // 所以动画类验收要先看这个数；0 表示屏幕在休眠，需要先唤醒。
+        reply["displaysActive"] = NSScreen.screens.filter { screen in
+            guard let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else { return false }
+            return CGDisplayIsActive(CGDirectDisplayID(number.uint32Value)) != 0
+        }.count
         reply["mouse"] = NSStringFromPoint(NSEvent.mouseLocation)    // 验收诊断：水母按指针所在屏幕选落点，指针被挪动时失败信息里要看得到
         reply["spaceTransitions"] = spaceTransitions
         reply["focusStayed"] = focusStayed

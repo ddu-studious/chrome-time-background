@@ -235,7 +235,8 @@ test('原生水母：纯逻辑（阶段、协议解析、显示规则、文案�
     let accepted = 0, rejected = 0;
     parseCases.forEach((input, index) => {
       const js = SpeciesShapes.parsePath(input), swift = swiftParse.get(index), label = `路径用例 ${index}（${String(input).slice(0, 40).replace(/\s+/g, ' ')}）`;
-      if (!js) { rejected++; assert.equal(swift, '-', `${label}：JS 拒绝，Swift 却接受了 ${swift?.slice(0, 60)}`); return; }
+      // 这里不用 assert.equal(swift, '-')：Swift 误接受时 swift 是一整条长路径，作为 actual 附在断言错误上，`node --test` 汇报失败时会在父进程里卡上很久（变异检查里表现为超时）
+      if (!js) { rejected++; assert.ok(swift === '-', `${label}：JS 拒绝，Swift 却接受了 ${swift?.slice(0, 60)}`); return; }
       accepted++;
       assert.notEqual(swift, '-', `${label}：JS 接受，Swift 却拒绝了`);
       const commands = swift.split(';');
@@ -262,6 +263,9 @@ test('原生水母：纯逻辑（阶段、协议解析、显示规则、文案�
     const nums = text => text.split(' ').map(Number);
     for (const id of animals) {
       const js = SpeciesShapes.native(id);
+      // 并集取样的相位表在 JS 与 Swift 各有一份：Swift 打印出来的相位必须与 JS 的 WAVES 逐项一致（只遍历 JS 的表会漏掉两边不一致、或某一边悄悄少了一个相位）
+      const swiftWaves = [...output.matchAll(new RegExp(`^SPEC ${id} (\\S+) `, 'gm'))].map(match => Number(match[1]));
+      assert.deepEqual(swiftWaves, [...SpeciesShapes.WAVES], `${id}：Swift 打印的相位 ${swiftWaves} 与 JS 的 WAVES ${[...SpeciesShapes.WAVES]} 不一致`);
       for (const wave of SpeciesShapes.WAVES) {
         const row = output.match(new RegExp(`^SPEC ${id} ${Number.isInteger(wave) ? wave.toFixed(1) : wave} (\\S+ \\S+ \\S+ \\S+)$`, 'm'))?.[1];
         assert.ok(row, `${id} wave=${wave}：Swift 应打印包围盒`);
@@ -278,9 +282,10 @@ test('原生水母：纯逻辑（阶段、协议解析、显示规则、文案�
         const part = js.parts[Number(index)];
         assert.equal(role, part.role, `${id} 第 ${index} 个部件的角色`); assert.ok(Math.abs(Number(u) - part.u) < 1e-9, `${id} 第 ${index} 个部件的取色位置`);
         if (!part.motion) { assert.equal(motion, '-', `${id} 第 ${index} 个部件不该有转动`); return; }
-        const [px, py, angle] = motion.split(',').map(Number);
+        const [px, py, angle, squash] = motion.split(',').map(Number);
         assert.ok(Math.abs(px - part.motion.pivot[0]) < 1e-6 && Math.abs(py - part.motion.pivot[1]) < 1e-6, `${id} 第 ${index} 个部件的转轴`);
         assert.ok(Math.abs(angle - part.motion.maxAngle) < 1e-6, `${id} 第 ${index} 个部件的最大转角：Swift ${angle} 与 JS ${part.motion.maxAngle}`);
+        assert.ok(Math.abs(squash - part.motion.squash) < 1e-6, `${id} 第 ${index} 个部件的拍翼幅度：Swift ${squash} 与 JS ${part.motion.squash}`);
       });
       const eyes = output.match(new RegExp(`^SPECEYES ${id} (\\S+) (.+)$`, 'm'));
       assert.ok(Math.abs(Number(eyes[1]) - js.eyes.r) < 1e-6, `${id} 眼睛半径`);
@@ -288,6 +293,13 @@ test('原生水母：纯逻辑（阶段、协议解析、显示规则、文案�
       const blush = output.match(new RegExp(`^SPECBLUSH ${id} (.+)$`, 'm'))[1].split(' ');
       assert.equal(blush.length, js.blush.length, `${id} 腮红个数`);
       blush.forEach((text, i) => text.split(',').map(Number).forEach((value, k) => assert.ok(Math.abs(value - js.blush[i][k]) < 1e-6, `${id} 第 ${i} 个腮红第 ${k} 项`)));
+      const mouth = output.match(new RegExp(`^SPECMOUTH ${id} (.+)$`, 'm'))[1];
+      if (!js.mouth) assert.equal(mouth, '-', `${id}：JS 没有嘴，Swift 也不该有`);
+      else {
+        const points = mouth.split(' ');
+        assert.equal(points.length, 4, `${id}：嘴是四个点`); assert.equal(points.length, js.mouth.length, `${id}：嘴的点数`);
+        points.forEach((pair, i) => pair.split(',').map(Number).forEach((value, k) => assert.ok(Math.abs(value - js.mouth[i][k]) < 1e-6, `${id} 嘴的第 ${i} 个点第 ${k} 项：Swift ${value} 与 JS ${js.mouth[i][k]}`)));
+      }
     }
     // 放置用的窗口尺寸：自测里写的 170×150 必须就是水母窗口的真实尺寸（改了窗口而没改自测，放置余量检查就失效）
     assert.match(readFileSync(resolve(root, 'desktop-reminder/jelly-companion.swift'), 'utf8'), /static let size = NSSize\(width: 170, height: 150\)/, '水母窗口 170×150');

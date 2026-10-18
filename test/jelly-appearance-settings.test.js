@@ -52,11 +52,11 @@ test('卡片里没有内联事件处理器与内联脚本（MV3 CSP）', () => {
 });
 
 test('脚本加载：在 settings-page.js 之后、带版本号', () => {
-  assert.ok(html.indexOf('js/settings-page.js?v=10') < html.indexOf('js/settings-jelly-appearance.js?v=2'));
-  assert.match(html, /<script src="js\/settings-jelly-appearance\.js\?v=2"><\/script>/);
+  assert.ok(html.indexOf('js/settings-page.js?v=10') < html.indexOf('js/settings-jelly-appearance.js?v=3'));
+  assert.match(html, /<script src="js\/settings-jelly-appearance\.js\?v=3"><\/script>/);
   // 动物示意图用同一份形状数据：形状脚本必须先于外观脚本加载，且带版本号
-  assert.match(html, /<script src="js\/jelly-species-shapes\.js\?v=1"><\/script>/);
-  assert.ok(html.indexOf('js/jelly-species-shapes.js?v=1') < html.indexOf('js/settings-jelly-appearance.js?v=2'));
+  assert.match(html, /<script src="js\/jelly-species-shapes\.js\?v=3"><\/script>/);
+  assert.ok(html.indexOf('js/jelly-species-shapes.js?v=3') < html.indexOf('js/settings-jelly-appearance.js?v=3'));
 });
 
 test('色板与随机按钮有样式：选中态、键盘焦点环、禁用态', () => {
@@ -716,7 +716,7 @@ test('animalPreviewSvg：水母、未知物种、没有颜料、形状脚本缺�
   const paint = previewPaint(window, { colors: [5], look: 'solid' });
   assert.equal(api.animalPreviewSvg('jelly', paint), null, '水母不是数据驱动的，示意图用页面里的内联 svg');
   assert.equal(api.animalPreviewSvg('dragon', paint), null);
-  assert.equal(api.animalPreviewSvg('manta', paint), null, '数据里还没有的物种');
+  assert.equal(api.animalPreviewSvg('turtle', paint), null, '数据里还没有的物种');
   for (const bad of [undefined, null, 5, {}, [], '', '__proto__', 'constructor', 'toString']) assert.equal(api.animalPreviewSvg(bad, paint), null, `物种 ${String(bad)}`);
   assert.equal(api.animalPreviewSvg('hammer', null), null);
   assert.equal(api.animalPreviewSvg('hammer', undefined), null);
@@ -797,7 +797,7 @@ test('animalPreviewSvg：路径与形状数据逐部件一致，躯干与肢体�
         const path = at();
         assert.equal(path.attrs.d, part.d, `${where}：路径`);
         if (part.role === 'belly') { assert.equal(path.attrs.fill, toHexTest(lighter(paint.a, 0.72))); assert.equal(Number(path.attrs['fill-opacity']), 0.92); }
-        if (part.role === 'accent') { assert.equal(path.attrs.fill, '#fff'); assert.equal(Number(path.attrs['fill-opacity']), 0.55); }
+        if (part.role === 'accent') { assert.equal(path.attrs.fill, '#fff'); assert.equal(Number(path.attrs['fill-opacity']), 0.72); }
         if (part.role === 'shine') { assert.equal(path.attrs.fill, '#fff'); assert.equal(Number(path.attrs['fill-opacity']), 0.4); }
       }
     });
@@ -808,6 +808,15 @@ test('animalPreviewSvg：路径与形状数据逐部件一致，躯干与肢体�
       assert.equal(spark.attrs.cx, Shapes.num(x + 0.2 * shape.eyes.r)); assert.equal(spark.attrs.cy, Shapes.num(y - 0.4 * shape.eyes.r)); assert.equal(spark.attrs.r, Shapes.num(0.3 * shape.eyes.r));
     }
     for (const [x, y, rx, ry] of shape.blush) { const cheek = group.children[cursor++]; assert.equal(cheek.name, 'ellipse'); assert.equal(cheek.attrs.cx, Shapes.num(x)); assert.equal(cheek.attrs.cy, Shapes.num(y)); assert.equal(cheek.attrs.rx, Shapes.num(rx)); assert.equal(cheek.attrs.ry, Shapes.num(ry)); }
+    // 最后是微笑（只有侧视动物有）：同一条三次贝塞尔，不填充，深色描边 1.2 pt、透明度 0.88，与原生 paintFace 一致
+    if (shape.mouth) {
+      const smile = group.children[cursor++];
+      const [p0, p1, p2, p3] = shape.mouth.map(([x, y]) => `${Shapes.num(x)} ${Shapes.num(y)}`);
+      assert.equal(smile.name, 'path', `${label}：微笑是一条路径`);
+      assert.equal(smile.attrs.d, `M ${p0} C ${p1} ${p2} ${p3}`, `${label}：微笑的四个点与形状数据一致`);
+      assert.equal(smile.attrs.fill, 'none'); assert.equal(smile.attrs.stroke, '#293a4d'); assert.equal(Number(smile.attrs['stroke-opacity']), 0.88);
+      assert.ok(Math.abs(Number(smile.attrs['stroke-width']) * k - 1.2) < 0.01, `${label}：微笑线宽按底板像素是 1.2`);
+    }
     assert.equal(cursor, group.children.length, `${label}：除上面列出的，没有多余的图形`);
   }
 });
@@ -1000,10 +1009,10 @@ test('limbTone：沿身体长轴取色——u 夹在 0…1、不是有限数取�
 
 test('示意图取色规则与原生 SpeciesPainter 一致（源码绊线）：Swift 里的取色、透明度与描边常数一改，这里就会失败，提醒同步示意图', () => {
   const rules = [
-    [/case \.limb: paintLimb\(ctx, path, tone: p\.paint\.limbTone\(u: part\.u\)\)/, '肢体取 limbTone(u)'],
-    [/case \.body: paintBody\(ctx, path, bounds: g\.bodyBounds, paint: p\.paint\)/, '躯干渐变沿躯干部件的包围盒铺开'],
+    [/case \.limb: paintLimb\(ctx, path, tone: p\.paint\.limbTone\(u: part\.u\), stroked: show\.strokes\)/, '肢体取 limbTone(u)（描边由检查用的 show.strokes 控制，产品默认全画）'],
+    [/case \.body: paintBody\(ctx, path, bounds: g\.bodyBounds, paint: p\.paint, stroked: show\.strokes\)/, '躯干渐变沿躯干部件的包围盒铺开（描边同样由 show.strokes 控制）'],
     [/case \.belly: paintFlat\(ctx, path, color: p\.paint\.a\.color\(0\.92, lighten: 0\.72\)\)/, '腹部：主色提亮 0.72、透明度 0.92'],
-    [/case \.accent: paintFlat\(ctx, path, color: NSColor\.white\.withAlphaComponent\(0\.55\)\)/, '斑点：白 0.55'],
+    [/case \.accent: paintFlat\(ctx, path, color: NSColor\.white\.withAlphaComponent\(0\.72\)\)/, '斑点：白 0.72'],
     [/case \.shine: paintFlat\(ctx, path, color: NSColor\.white\.withAlphaComponent\(0\.40\)\)/, '高光：白 0.40'],
     [/gradient\(\[tone\.color\(0\.92, darken: 0\.06\), tone\.color\(0\.95, lighten: 0\.34\)\], \[0, 1\]\)/, '肢体渐变：下深上浅'],
     [/stroke\(ctx, path, color: tone\.color\(0\.9, darken: 0\.30\), width: 1\.0\)/, '肢体描边：深 0.30、宽 1.0'],
@@ -1105,13 +1114,13 @@ test('状态文字：选了动物时点名动物；组件没有画出它时如�
   for (const odd of ['dragon', '', 5, null, undefined, '__proto__', 'toString']) assert.equal(d({ component: 'ok', connected: true, settings: { species: odd } }), '外观已应用到桌面水母。', `物种 ${String(odd)} 按水母`);
 });
 
-test('所选动物没有形状数据（后台认、页面画不出，如还没加入的蝠鲼，或形状脚本没加载）：示意图退回水母并如实说明，不抛错', async () => {
-  const manta = load(speciesView('manta'));
+test('所选动物没有形状数据（后台认、页面画不出，如还没加入的海龟，或形状脚本没加载）：示意图退回水母并如实说明，不抛错', async () => {
+  const turtle = load(speciesView('turtle'));
   await tick();
-  assert.equal(manta.els['set-jellyPreview'].attrs['data-art'], 'jelly');
-  assert.equal(manta.els['set-jellyAnimalPreview'].attrs.src, undefined);
-  assert.equal(manta.els['set-jellyPreviewText'].textContent, '暂时显示水母（“蝠鲼”还没有加入），纯色（冰蓝）');
-  assert.equal(manta.els['set-jellyPreviewText'].textContent.includes('undefined'), false);
+  assert.equal(turtle.els['set-jellyPreview'].attrs['data-art'], 'jelly');
+  assert.equal(turtle.els['set-jellyAnimalPreview'].attrs.src, undefined);
+  assert.equal(turtle.els['set-jellyPreviewText'].textContent, '暂时显示水母（“海龟”还没有加入），纯色（冰蓝）');
+  assert.equal(turtle.els['set-jellyPreviewText'].textContent.includes('undefined'), false);
   const bare = load(speciesView('hammer'), { noShapes: true });
   await tick();
   assert.equal(bare.els['set-jellyPreview'].attrs['data-art'], 'jelly');

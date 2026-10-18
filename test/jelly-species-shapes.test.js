@@ -129,12 +129,14 @@ test('形状数据合规：视角、缩放、角色、取色位置、转动、�
     assert.ok(shape.parts.some(p => p.role === 'body'), `${id} 至少有一个躯干部件（渐变与光晕按它定位）`);
     for (const part of shape.parts) {
       assert.ok(S.ROLES.includes(part.role), `${id} 角色 ${part.role}`);
-      assert.equal(Number(!!part.d) + Number(!!part.ellipse), 1, `${id} 每个部件有且只有 d 或 ellipse 之一`);
+      assert.equal(Number(!!part.d) + Number(!!part.ellipse) + Number(!!part.dots), 1, `${id} 每个部件有且只有 d、ellipse、dots 之一`);
       if (part.ellipse) assert.ok(part.ellipse.length === 5 && part.ellipse.every(Number.isFinite) && part.ellipse[2] > 0 && part.ellipse[3] > 0, `${id} 椭圆参数`);
+      if (part.dots) assert.ok(part.dots.length >= 1 && part.dots.every(c => c.length === 3 && c.every(Number.isFinite) && c[2] > 0 && c[2] <= 3), `${id} 小圆参数：[x, y, r]，半径为正且不超过 3`);
       if (part.u !== undefined) { assert.equal(part.role, 'limb', `${id} 只有肢体需要取色位置`); assert.ok(part.u >= 0 && part.u <= 1); }
       if (part.motion) {
         assert.equal(part.motion.pivot.length, 2); assert.ok(part.motion.pivot.every(Number.isFinite));
         assert.ok(Number.isFinite(part.motion.deg) && Math.abs(part.motion.deg) <= 45, `${id} 转动角度不超过 45°`);
+        if (part.motion.squash !== undefined) assert.ok(Number.isFinite(part.motion.squash) && part.motion.squash >= 0 && part.motion.squash <= S.MAX_SQUASH, `${id} 拍翼幅度在 0…${S.MAX_SQUASH}`);
       }
       if (part.mirror !== undefined) assert.equal(part.mirror, true);
     }
@@ -142,6 +144,11 @@ test('形状数据合规：视角、缩放、角色、取色位置、转动、�
     for (const p of shape.eyes.at) assert.ok(p.length === 2 && p.every(Number.isFinite));
     for (const b of shape.blush) assert.ok(b.length === 4 && b.every(Number.isFinite) && b[2] > 0 && b[3] > 0, `${id} 腮红`);
     assert.ok(shape.blush.length <= 2);
+    // 嘴是可选的，只有侧视动物有（俯视动物看不见嘴）：四个点，每个点两个有限数字
+    if (shape.mouth !== undefined) {
+      assert.equal(shape.view, 'side', `${id} 俯视动物不能有嘴`);
+      assert.ok(Array.isArray(shape.mouth) && shape.mouth.length === 4 && shape.mouth.every(p => p.length === 2 && p.every(Number.isFinite)), `${id} 嘴：四个点`);
+    }
   }
 });
 
@@ -193,8 +200,8 @@ test('parsePath：长度上限按字符数卡在边界上（与命令数上限�
 test('expand：mirror 的部件带转动时，镜像的转轴 y 取反、角度反号，路径各点 y 取反（合成形状）', () => withShape({ parts: [{ role: 'limb', u: 0.2, mirror: true, d: 'M 0 0 L 4 1 L 4 3 Z', motion: { pivot: [2, 5], deg: 10 } }] }, id => {
   const out = S.expand(id);
   assert.equal(out.parts.length, 2);
-  assert.deepEqual(out.parts[0].motion, { pivot: [2, 5], deg: 10 });
-  assert.deepEqual(out.parts[1].motion, { pivot: [2, -5], deg: -10 });
+  assert.deepEqual(out.parts[0].motion, { pivot: [2, 5], deg: 10, squash: 0 }, '没写 squash 就是 0');
+  assert.deepEqual(out.parts[1].motion, { pivot: [2, -5], deg: -10, squash: 0 });
   assert.equal(out.parts[1].d, 'M 0 0 L 4 -1 L 4 -3 Z');
   assert.equal(out.parts[1].role, 'limb'); assert.equal(out.parts[1].u, 0.2);
 }));
@@ -272,6 +279,76 @@ test('转动：包围盒按绕转轴旋转后的点计算（合成矩形：转�
   same(at([10, 1], -1), [9, 11, -11, -1], '转轴在 (10, 1)，wave = -1（逆时针 90°）：矩形转到转轴下方');
 });
 
+// ---- squash（拍翼）：motion 里除了转动，还可以带一个“垂直方向缩放”的幅度（俯视的蝠鲼：翼展随拍动一胖一瘦，整片菱形不裂缝） ----
+// 语义：wave 时，部件先在自己的坐标里绕 pivot 把 y 方向缩放到 1 − squash × wave，再绕 pivot 转 maxAngle × wave（先缩后转）。
+
+test('squash：没写就是 0；写了原样保留；镜像出来的部件沿用同一个值（缩放对 y 取反不敏感）', () => {
+  withShape({ parts: [{ role: 'body', d: 'M 0 0 L 8 0 L 8 4 Z', motion: { pivot: [1, 2], deg: 0, squash: 0.2 } }, { role: 'limb', mirror: true, d: 'M 0 0 L 4 1 L 4 3 Z', motion: { pivot: [2, 5], deg: 10, squash: 0.15 } }] }, id => {
+    const out = S.expand(id);
+    assert.deepEqual(out.parts[0].motion, { pivot: [1, 2], deg: 0, squash: 0.2 });
+    assert.deepEqual(out.parts[1].motion, { pivot: [2, 5], deg: 10, squash: 0.15 });
+    assert.deepEqual(out.parts[2].motion, { pivot: [2, -5], deg: -10, squash: 0.15 }, '镜像：转轴 y 取反、角度反号，squash 不变');
+  });
+  assert.equal(S.MAX_SQUASH, 0.3);
+  // 展开不共享引用：改展开结果里的 squash 不影响源数据
+  withShape({ parts: [{ role: 'body', d: 'M 0 0 L 8 0 L 8 4 Z', motion: { pivot: [0, 0], deg: 0, squash: 0.2 } }] }, id => {
+    const before = JSON.stringify(S.SHAPES[id]);
+    S.expand(id).parts[0].motion.squash = 9;
+    assert.equal(JSON.stringify(S.SHAPES[id]), before);
+  });
+});
+
+test('squash：不合规的幅度（非数、负数、超过上限、非有限、不是数字类型）让整种动物不可用，而不是画出变形的身体；0 与上限本身合规', () => {
+  const make = squash => ({ parts: [{ role: 'body', d: 'M 0 0 L 8 0 L 8 4 Z', motion: { pivot: [0, 0], deg: 0, squash } }] });
+  for (const bad of [NaN, Infinity, -Infinity, -0.01, 0.3000001, 1, '0.1', null, {}, [], true]) {
+    withShape(make(bad), id => {
+      assert.equal(S.expand(id), null, `squash=${String(bad)}：expand`); assert.equal(S.native(id), null, 'native'); assert.equal(S.bounds(id, 0), null, 'bounds'); assert.equal(S.union(id), null, 'union');
+    });
+  }
+  for (const good of [0, 0.3, 0.15, undefined]) withShape(make(good), id => assert.ok(S.expand(id), `squash=${String(good)} 合规`));
+});
+
+test('native：squash 原样带出（不乘缩放，也不受 y 翻转影响）', () => withShape({
+  scale: 0.5, parts: [{ role: 'body', d: 'M 0 0 L 8 0 L 8 4 Z', motion: { pivot: [4, 6], deg: 20, squash: 0.2 } }, { role: 'limb', d: 'M 0 0 L 8 0 L 8 4 Z', motion: { pivot: [4, 6], deg: 20 } }, { role: 'limb', d: 'M 0 0 L 8 0 L 8 4 Z' }],
+}, id => {
+  const out = S.native(id);
+  assert.equal(out.parts[0].motion.squash, 0.2);
+  assert.equal(out.parts[1].motion.squash, 0, '没写就是 0');
+  assert.equal(out.parts[2].motion, null);
+}));
+
+test('squash：包围盒按“先把 y 缩放到 1 − squash × wave、再转动”计算（合成矩形：转轴在边上与在中间、正负相位、先缩后转的顺序）', () => {
+  const rect = 'M 0 0 L 10 0 L 10 2 L 0 2 Z';
+  const at = (motion, wave, d = rect) => withShape({ parts: [{ role: 'body', d, motion }] }, id => S.bounds(id, wave));
+  const same = (box, [minX, maxX, minY, maxY], label) => assert.ok(near(box.minX, minX, 1e-9) && near(box.maxX, maxX, 1e-9) && near(box.minY, minY, 1e-9) && near(box.maxY, maxY, 1e-9), `${label}：${JSON.stringify(box)}`);
+  // 转轴在 y = 0（矩形的一条边）：原生坐标里矩形占 y ∈ [−2, 0]；wave = 1 缩到 0.8 倍、wave = −1 胀到 1.2 倍；x 不变
+  const edge = { pivot: [0, 0], deg: 0, squash: 0.2 };
+  same(at(edge, 0), [0, 10, -2, 0], '静止不变');
+  same(at(edge, 1), [0, 10, -1.6, 0], 'wave = 1：y 方向 0.8 倍');
+  same(at(edge, -1), [0, 10, -2.4, 0], 'wave = −1：y 方向 1.2 倍');
+  same(at(edge, 0.5), [0, 10, -1.8, 0], 'wave = 0.5：y 方向 0.9 倍');
+  // 转轴在矩形中间（SVG y = 1，原生 y = −1）：绕那条线缩放，所以向上向下各缩 0.2
+  same(at({ pivot: [0, 1], deg: 0, squash: 0.2 }, 1), [0, 10, -1.8, -0.2], '转轴在中线：上下各收 0.2');
+  same(at({ pivot: [0, 1], deg: 0, squash: 0.2 }, -1), [0, 10, -2.2, 0.2], '转轴在中线：上下各胀 0.2');
+  // 转轴不在原点也不在边上：以 (3, −1) 为中心缩放，x 方向不受影响
+  same(at({ pivot: [3, 5], deg: 0, squash: 0.3 }, 1), [0, 10, -5 + (-2 + 5) * 0.7, -5 + (0 + 5) * 0.7], '转轴 (3, 5)：y 以转轴为不动点');
+  // 0 幅度等于没有：与没写 squash 的同一形状逐值相同
+  for (const wave of [-1, -0.5, 0, 0.5, 1]) assert.deepEqual(at({ pivot: [0, 1], deg: 30, squash: 0 }, wave), at({ pivot: [0, 1], deg: 30 }, wave), `squash = 0 时 wave ${wave} 与不写相同`);
+  // 先缩后转：矩形 4×2，转轴在原点，转 90°（SVG 顺时针，原生 −π/2），squash 0.3，wave = 1。
+  // 原生点 (4, 0)(4, −2)(0, −2) → 先缩：(4, 0)(4, −1.4)(0, −1.4) → 再转 −90°：(x, y) → (y, −x)：(0, −4)(−1.4, −4)(−1.4, 0)。
+  // 若顺序反了（先转后缩）会是 x ∈ [−2, 0]、y ∈ [−2.8, 0]，这里要能分辨。
+  same(at({ pivot: [0, 0], deg: 90, squash: 0.3 }, 1, 'M 0 0 L 4 0 L 4 2 L 0 2 Z'), [-1.4, 0, -4, 0], '先缩后转');
+});
+
+test('squash：并集覆盖最胖的相位（wave = −1），任何一帧都不会越出放置用的并集', () => withShape({ parts: [{ role: 'body', d: 'M 0 -10 L 10 0 L 0 10 L -10 0 Z', motion: { pivot: [0, 0], deg: 0, squash: 0.25 } }] }, id => {
+  const u = S.union(id), fat = S.bounds(id, -1), thin = S.bounds(id, 1), rest = S.bounds(id, 0);
+  assert.ok(near(rest.maxY, 10) && near(rest.minY, -10));
+  assert.ok(near(fat.maxY, 12.5) && near(fat.minY, -12.5), `最胖 ${JSON.stringify(fat)}`);
+  assert.ok(near(thin.maxY, 7.5) && near(thin.minY, -7.5), `最瘦 ${JSON.stringify(thin)}`);
+  assert.ok(near(u.maxY, 12.5) && near(u.minY, -12.5), `并集取最胖 ${JSON.stringify(u)}`);
+  for (const wave of S.WAVES) { const box = S.bounds(id, wave); assert.ok(box.minY >= u.minY - 1e-9 && box.maxY <= u.maxY + 1e-9, `wave ${wave}`); }
+}));
+
 test('放置余量（缩放后的并集包围盒）：身体顶端在窗口底边以上 91 pt 时，宽度与高度都留得出 8 pt 的边距（170×150 的水母窗口）', () => {
   const W = 170, H = 150, TOP = 91, MARGIN = 8;
   for (const id of Object.keys(S.SHAPES)) {
@@ -280,6 +357,236 @@ test('放置余量（缩放后的并集包围盒）：身体顶端在窗口底�
     assert.ok(height <= TOP - MARGIN, `${id} 高 ${height.toFixed(1)} 超过顶端以下可用的 ${TOP - MARGIN}`);
     assert.ok(H - TOP >= MARGIN, '顶端以上的窗口空间够放气泡尾巴之外的边距');
   }
+});
+
+// ---- dots：一个部件写成一串小圆（鲸鲨的白斑）。每个圆是同一条路径里的一个子路径，所以斑点再多也只是一个 accent 部件 ----
+
+test('dots：每个小圆展开成一段独立的闭合子路径，与同半径的椭圆逐字相同；圆心、半径与顺序保持，包围盒覆盖每个圆的四个极点', () => {
+  const dots = [[0, 0, 1], [5, 2, 1.5], [-4, 1, 0.5]];
+  withShape({ parts: [{ role: 'accent', dots }] }, id => {
+    const out = S.expand(id);
+    assert.equal(out.parts.length, 1);
+    assert.equal(out.parts[0].d, dots.map(([x, y, r]) => S.ellipsePath(x, y, r, r)).join(' '), '逐个圆按顺序连成一条路径');
+    const cmds = cmdsOf(out.parts[0].d);
+    assert.equal(cmds.map(c => c.cmd).join(''), 'MCCCCZ'.repeat(dots.length), '每个圆：一个 M、四段 C、一个 Z');
+    dots.forEach(([x, y, r], index) => {
+      assert.deepEqual(cmds[index * 6].pts[0], [x + r, y], `第 ${index} 个圆从右端点出发`);
+      assert.deepEqual(cmds[index * 6 + 4].pts[2], [x + r, y], `第 ${index} 个圆回到起点`);
+    });
+    assert.equal(out.parts[0].motion, null);
+    // svg y 的范围 −1…3.5，原生坐标翻成 −3.5…1；x 为 −4.5…6.5
+    const box = S.bounds(id, 0);
+    assert.ok(near(box.minX, -4.5, 1e-9) && near(box.maxX, 6.5, 1e-9) && near(box.minY, -3.5, 1e-9) && near(box.maxY, 1, 1e-9), `包围盒 ${JSON.stringify(box)}`);
+    // 展开结果不共享源数据
+    out.parts[0].d = 'x';
+    assert.equal(S.expand(id).parts[0].d, dots.map(([x, y, r]) => S.ellipsePath(x, y, r, r)).join(' '));
+  });
+  // 同一部件里的圆可以重叠、可以只有一个——这里只管格式；不重叠是数据质量测试（鲸鲨）的事
+  withShape({ parts: [{ role: 'accent', dots: [[1, 2, 3]] }] }, id => assert.equal(cmdsOf(S.expand(id).parts[0].d).length, 6));
+});
+
+test('dots：不合规（空列表、不是数组、某项不是三个有限数字、半径为 0 或负、数字写成字符串）让整种动物不可用，而不是少画几个圆', () => {
+  const body = { role: 'body', d: 'M 0 0 L 8 0 L 8 4 Z' };
+  const cases = [
+    ['空列表', []], ['不是数组', 'abc'], ['对象', {}], ['null', null],
+    ['某项只有两个数', [[0, 0, 1], [1, 1]]], ['某项有四个数', [[0, 0, 1, 2]]], ['某项不是数组', [[0, 0, 1], 5]],
+    ['半径为 0', [[0, 0, 0]]], ['半径为负', [[0, 0, -1]]], ['半径是 NaN', [[0, 0, NaN]]], ['圆心 x 是 Infinity', [[Infinity, 0, 1]]], ['圆心 y 是 NaN', [[0, NaN, 1]]],
+    ['数字写成字符串', [['0', '0', '1']]], ['半径写成字符串', [[0, 0, '1']]], ['null 项', [null]],
+  ];
+  for (const [name, dots] of cases) {
+    withShape({ parts: [body, { role: 'accent', dots }] }, id => {
+      assert.equal(S.expand(id), null, `${name}：expand`); assert.equal(S.native(id), null, 'native'); assert.equal(S.bounds(id, 0), null, 'bounds'); assert.equal(S.union(id), null, 'union');
+    });
+  }
+  withShape({ parts: [body, { role: 'accent', dots: [[0, 0, 1], [3, 0, 0.5]] }] }, id => assert.ok(S.expand(id), '两个合规的圆可用'));
+});
+
+test('部件写法有且只有一种：d、ellipse、dots 同时写了两种或一种也没写，整种动物不可用（不悄悄只认其中一种）', () => {
+  const d = 'M 0 0 L 8 0 L 8 4 Z', ellipse = [0, 0, 3, 2, 0], dots = [[0, 0, 1]];
+  for (const [name, part] of [['d + ellipse', { d, ellipse }], ['d + dots', { d, dots }], ['ellipse + dots', { ellipse, dots }], ['三种都写', { d, ellipse, dots }], ['一种也没写', {}]]) {
+    withShape({ parts: [{ role: 'body', ...part }] }, id => assert.equal(S.expand(id), null, name));
+  }
+  for (const [name, part] of [['只写 d', { d }], ['只写 ellipse', { ellipse }], ['只写 dots', { dots }]]) {
+    withShape({ parts: [{ role: 'body', ...part }] }, id => assert.ok(S.expand(id), name));
+  }
+});
+
+test('dots：每个部件的命令数与路径长度仍在上限之内（鲸鲨的约 60 个圆是一条 360 命令、一万字符左右的路径，离上限留有余量）', () => {
+  const shape = S.expand('whaleshark'), spots = shape.parts.find(part => part.role === 'accent');
+  const commands = cmdsOf(spots.d).length;
+  assert.ok(commands <= S.MAX_COMMANDS * 0.6, `斑点路径 ${commands} 条命令，上限 ${S.MAX_COMMANDS}`);
+  assert.ok(spots.d.length <= S.MAX_PATH_CHARS * 0.75, `斑点路径 ${spots.d.length} 个字符，上限 ${S.MAX_PATH_CHARS}`);
+  // 上限本身的行为：恰好在命令上限内可以，多一条就不行（一个圆 6 条命令，133 个圆 = 798 条，134 个 = 804 条；用最短的整数圆 [0, 0, 1]，字符数排在命令数之后才到上限）
+  const circles = n => Array.from({ length: n }, () => [0, 0, 1]);
+  const pathChars = n => circles(n).map(([x, y, r]) => S.ellipsePath(x, y, r, r)).join(' ').length;
+  assert.ok(pathChars(134) < S.MAX_PATH_CHARS, `前提：134 个圆的路径 ${pathChars(134)} 个字符，仍在字符上限内，所以下面失败只能来自命令数`);
+  withShape({ parts: [{ role: 'accent', dots: circles(133) }] }, id => assert.ok(S.expand(id), '798 条命令可用'));
+  withShape({ parts: [{ role: 'accent', dots: circles(134) }] }, id => assert.equal(S.expand(id), null, '804 条命令超过上限'));
+  // 字符数先到上限的情形：很长的小数圆（圆心位置各不相同）超过 16000 个字符
+  const spread = n => Array.from({ length: n }, (_, i) => [i * 0.137 + 0.111, i * 0.071 + 0.123, 1.234]);
+  const spreadChars = n => spread(n).map(([x, y, r]) => S.ellipsePath(x, y, r, r)).join(' ').length;
+  let n = 1; while (spreadChars(n) <= S.MAX_PATH_CHARS && n < 133) n++;
+  assert.ok(n < 133 && spreadChars(n) > S.MAX_PATH_CHARS && spreadChars(n - 1) <= S.MAX_PATH_CHARS, '前提：能找到刚好跨过字符上限的圆数');
+  withShape({ parts: [{ role: 'accent', dots: spread(n - 1) }] }, id => assert.ok(S.expand(id), `${n - 1} 个圆（${spreadChars(n - 1)} 个字符）可用`));
+  withShape({ parts: [{ role: 'accent', dots: spread(n) }] }, id => assert.equal(S.expand(id), null, `${n} 个圆（${spreadChars(n)} 个字符）超过字符上限`));
+});
+
+// ---- mouth（微笑）：只有侧视动物有；一段三次贝塞尔的四个点 ----
+
+test('mouth：没写就是 null；写了按值复制（不共享引用）；原生坐标按缩放并把 y 翻成向上', () => {
+  const body = { role: 'body', d: 'M 0 0 L 8 0 L 8 4 Z' };
+  withShape({ scale: 0.5, parts: [body], mouth: [[10, 2], [8, 5], [4, 5], [2, 2]] }, id => {
+    const out = S.expand(id);
+    assert.deepEqual(out.mouth, [[10, 2], [8, 5], [4, 5], [2, 2]]);
+    out.mouth[0][0] = 99; out.mouth[3][1] = 99;
+    assert.deepEqual(S.expand(id).mouth, [[10, 2], [8, 5], [4, 5], [2, 2]], '展开结果不共享源数据');
+    assert.deepEqual(S.native(id).mouth, [[5, -1], [4, -2.5], [2, -2.5], [1, -1]], '原生：乘 scale、y 翻成向上');
+  });
+  withShape({ parts: [body] }, id => { assert.equal(S.expand(id).mouth, null); assert.equal(S.native(id).mouth, null); });
+  withShape({ parts: [body], mouth: null }, id => assert.equal(S.expand(id).mouth, null, '显式写 null 等于没有嘴'));
+  withShape({ parts: [body], mouth: undefined }, id => assert.equal(S.expand(id).mouth, null));
+  assert.equal(S.expand('hammer').mouth, null, '俯视的小锤头鲨没有嘴'); assert.equal(S.expand('manta').mouth, null, '俯视的蝠鲼没有嘴');
+  assert.ok(Array.isArray(S.expand('whaleshark').mouth) && S.expand('whaleshark').mouth.length === 4, '鲸鲨笑着');
+});
+
+test('mouth：俯视动物写了嘴、点数不是 4、某个点不是两个有限数字，整种动物不可用（和路径不合规一样）', () => {
+  const body = { role: 'body', d: 'M 0 0 L 8 0 L 8 4 Z' };
+  const good = [[10, 2], [8, 5], [4, 5], [2, 2]];
+  withShape({ view: 'top', parts: [body], mouth: good }, id => assert.equal(S.expand(id), null, '俯视写了嘴'));
+  const cases = [
+    ['三个点', good.slice(0, 3)], ['五个点', [...good, [0, 0]]], ['空数组', []], ['不是数组', 'smile'], ['对象', {}],
+    ['某点只有一个数', [[10, 2], [8], [4, 5], [2, 2]]], ['某点有三个数', [[10, 2], [8, 5, 1], [4, 5], [2, 2]]], ['某点不是数组', [[10, 2], 8, [4, 5], [2, 2]]],
+    ['NaN', [[10, 2], [8, NaN], [4, 5], [2, 2]]], ['Infinity', [[10, 2], [8, 5], [Infinity, 5], [2, 2]]], ['-Infinity', [[10, 2], [8, 5], [4, 5], [2, -Infinity]]],
+    ['字符串数字', [['10', '2'], [8, 5], [4, 5], [2, 2]]], ['null 点', [null, [8, 5], [4, 5], [2, 2]]],
+  ];
+  for (const [name, mouth] of cases) withShape({ parts: [body], mouth }, id => {
+    assert.equal(S.expand(id), null, `${name}：expand`); assert.equal(S.native(id), null, 'native'); assert.equal(S.bounds(id, 0), null, 'bounds'); assert.equal(S.union(id), null, 'union');
+  });
+  withShape({ parts: [body], mouth: good }, id => assert.ok(S.expand(id), '合规的嘴可用'));
+});
+
+test('mouth：不参与包围盒与并集（嘴画在身体上，不决定放置；放远了也不会改变放置）', () => {
+  const body = { role: 'body', d: 'M 0 0 L 8 0 L 8 4 Z' };
+  const plain = withShape({ parts: [body] }, id => ({ box: S.bounds(id, 0), all: S.union(id) }));
+  const smiling = withShape({ parts: [body], mouth: [[100, 50], [90, 60], [80, 60], [70, 50]] }, id => ({ box: S.bounds(id, 0), all: S.union(id) }));
+  assert.deepEqual(smiling, plain);
+});
+
+// ---- 鲸鲨的数据质量：约 60 个斑点都在身上、互不重叠、避开腹部/胸鳍/脸；脸（眼睛、腮红、微笑）都在身体里 ----
+// 几何用独立的小函数算（射线法判断在多边形内、点到线段距离），多边形取 S.sample 对闭合路径的取样（曲线每段 16 个点，足够密）。
+
+const polygonOf = d => S.sample(cmdsOf(d));
+const insidePolygon = (p, poly) => { let inside = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, yi] = poly[i], [xj, yj] = poly[j]; if ((yi > p[1]) !== (yj > p[1]) && p[0] < (xj - xi) * (p[1] - yi) / (yj - yi) + xi) inside = !inside; } return inside; };
+const segmentDistance = (p, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy; const t = l2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2)) : 0; return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy)); };
+const outlineDistance = (p, poly) => { let best = Infinity; for (let i = 0; i < poly.length; i++) best = Math.min(best, segmentDistance(p, poly[i], poly[(i + 1) % poly.length])); return best; };
+const whale = () => {
+  const raw = S.SHAPES.whaleshark, shape = S.expand('whaleshark');
+  const pick = predicate => shape.parts.find(predicate);
+  return {
+    raw, shape,
+    dots: raw.parts.find(part => part.role === 'accent').dots,
+    body: polygonOf(pick(part => part.role === 'body').d), belly: polygonOf(pick(part => part.role === 'belly').d),
+    pectoral: polygonOf(pick(part => part.role === 'limb' && part.u === 0.78).d),
+    eye: shape.eyes.at[0], eyeRadius: shape.eyes.r, blush: shape.blush[0], mouth: shape.mouth,
+  };
+};
+const curvePoints = ([p0, p1, p2, p3], n = 40) => Array.from({ length: n + 1 }, (_, i) => { const t = i / n, s = 1 - t; return [0, 1].map(k => s * s * s * p0[k] + 3 * s * s * t * p1[k] + 3 * s * t * t * p2[k] + t * t * t * p3[k]); });
+
+test('鲸鲨的斑点：约 60 个（56…64），都在躯干里、离轮廓有余量（描边半宽约 0.6）、不压在腹部与胸鳍上', () => {
+  const { dots, body, belly, pectoral } = whale();
+  assert.ok(dots.length >= 56 && dots.length <= 64, `斑点数 ${dots.length}`);
+  for (const [x, y, r] of dots) {
+    const label = `斑点 (${x}, ${y}, r=${r})`;
+    assert.ok(insidePolygon([x, y], body), `${label} 圆心必须在躯干里`);
+    assert.ok(outlineDistance([x, y], body) - r >= 1.0, `${label} 离躯干轮廓太近：${(outlineDistance([x, y], body) - r).toFixed(2)}（描边半宽约 0.6，要求 ≥ 1.0）`);
+    assert.ok(!insidePolygon([x, y], belly) && outlineDistance([x, y], belly) - r >= 0.4, `${label} 不能压在浅色腹部上（离腹部 ≥ 0.4）`);
+    assert.ok(!insidePolygon([x, y], pectoral) && outlineDistance([x, y], pectoral) - r >= 1.0, `${label} 不能压在胸鳍上`);
+    assert.ok(r >= 1.0 && r <= 1.5, `${label} 半径 1.0…1.5（太小在 2× 屏幕上糊成点，太大互相挤）`);
+  }
+});
+
+test('鲸鲨的斑点：互不重叠（任意两个圆之间至少留 0.4 的缝），也不盖住眼睛、腮红与微笑', () => {
+  const { dots, eye, eyeRadius, blush, mouth } = whale();
+  let tightest = Infinity;
+  for (let i = 0; i < dots.length; i++) for (let j = i + 1; j < dots.length; j++) {
+    const gap = Math.hypot(dots[i][0] - dots[j][0], dots[i][1] - dots[j][1]) - dots[i][2] - dots[j][2];
+    tightest = Math.min(tightest, gap);
+    assert.ok(gap >= 0.4, `斑点 ${i} 与 ${j} 太挤（缝 ${gap.toFixed(2)}）`);
+  }
+  assert.ok(tightest < 1.5, `前提：这是一排排紧凑的斑点而不是稀稀拉拉（最窄的缝 ${tightest.toFixed(2)}）`);
+  const smile = curvePoints(mouth);
+  for (const [x, y, r] of dots) {
+    assert.ok(Math.hypot(x - eye[0], y - eye[1]) - r - eyeRadius >= 1.0, `斑点 (${x}, ${y}) 离眼睛太近`);
+    const dx = (x - blush[0]) / blush[2], dy = (y - blush[1]) / blush[3], rr = Math.hypot(dx, dy) || 1;     // 沿圆心连线方向的椭圆半径
+    const reach = Math.hypot(blush[2] * dx / rr, blush[3] * dy / rr);
+    assert.ok(Math.hypot(x - blush[0], y - blush[1]) - reach - r >= 0.8, `斑点 (${x}, ${y}) 离腮红太近`);
+    assert.ok(Math.min(...smile.map(m => Math.hypot(x - m[0], y - m[1]))) - r >= 2.0, `斑点 (${x}, ${y}) 离微笑太近`);
+  }
+});
+
+test('鲸鲨的脸：眼睛在躯干里且离轮廓有余量；腮红整块在躯干里；微笑整条在躯干里、在眼睛下方、长度适中', () => {
+  const { body, eye, eyeRadius, blush, mouth } = whale();
+  assert.ok(insidePolygon(eye, body) && outlineDistance(eye, body) - eyeRadius >= 3, '眼睛离轮廓 ≥ 3');
+  for (const p of [[blush[0] - blush[2], blush[1]], [blush[0] + blush[2], blush[1]], [blush[0], blush[1] - blush[3]], [blush[0], blush[1] + blush[3]]]) assert.ok(insidePolygon(p, body), `腮红的四个端点都在躯干里：${p}`);
+  const smile = curvePoints(mouth);
+  for (const p of smile) { assert.ok(insidePolygon(p, body), `微笑的每个点都在躯干里：${p}`); assert.ok(outlineDistance(p, body) >= 1.0, `微笑离轮廓 ≥ 1.0（描边宽 1.2/0.9 的一半约 0.67）：${p}`); }
+  let length = 0; for (let i = 1; i < smile.length; i++) length += Math.hypot(smile[i][0] - smile[i - 1][0], smile[i][1] - smile[i - 1][1]);
+  assert.ok(length >= 5 && length <= 10, `微笑长度 ${length.toFixed(2)}`);
+  assert.ok(Math.min(...smile.map(m => Math.hypot(m[0] - eye[0], m[1] - eye[1]))) - eyeRadius >= 2, '微笑离眼睛 ≥ 2');
+  assert.ok(smile.every(p => p[1] > eye[1]), '微笑整条在眼睛下方（svg y 更大）');
+  // 弧形向下弯（两端高、中间低）才是“笑”：起点与终点的 y 都小于中间最低点
+  const lowest = Math.max(...smile.map(p => p[1]));
+  assert.ok(lowest > mouth[0][1] + 1 && lowest > mouth[3][1] + 1, '弧线中间比两端低至少 1，是笑而不是撇嘴');
+  assert.ok(mouth[0][0] > mouth[3][0], '起点在嘴的前端（x 更大，朝向右）');
+  // 笑要有宽度、两端差不多高：否则弧长够了也只是一个钩（变异检查里“终点挪到起点旁边”的变体曾因此存活）
+  assert.ok(mouth[0][0] - mouth[3][0] >= 4, `两端的水平距离（弦宽）${(mouth[0][0] - mouth[3][0]).toFixed(2)} ≥ 4`);
+  assert.ok(Math.abs(mouth[0][1] - mouth[3][1]) <= 1, `两端高度差 ${Math.abs(mouth[0][1] - mouth[3][1]).toFixed(2)} ≤ 1：对称的笑，不是钩`);
+});
+
+test('鲸鲨的整体：侧视、有眼睛腮红微笑；长度 85…95、高度 30…38（含摆动的尾与鳍）；斑点与腹部是各自一个部件', () => {
+  const { shape } = whale();
+  assert.equal(shape.view, 'side');
+  const u = S.union('whaleshark'), width = u.maxX - u.minX, height = u.maxY - u.minY;
+  assert.ok(width >= 85 && width <= 95, `长度 ${width.toFixed(2)}`); assert.ok(height >= 30 && height <= 38, `高度 ${height.toFixed(2)}`);
+  assert.equal(shape.parts.filter(part => part.role === 'accent').length, 1, '斑点只有一个部件（一条路径里的 60 个子路径）');
+  assert.equal(shape.parts.filter(part => part.role === 'belly').length, 1);
+  assert.equal(shape.parts.filter(part => part.role === 'body').length, 1);
+  assert.equal(shape.eyes.at.length, 1, '侧视只看得见一只眼睛'); assert.equal(shape.blush.length, 1);
+  // 部件顺序：鳍与尾在躯干之前（躯干盖住它们的根部）；腹部在躯干之后；胸鳍在腹部之后（盖在腹部上）；斑点在胸鳍之后；高光最后
+  const order = shape.parts.map(part => part.role + (part.role === 'limb' ? `@${part.u}` : ''));
+  assert.deepEqual(order, ['limb@0.05', 'limb@0.22', 'limb@0.55', 'body', 'belly', 'limb@0.78', 'accent', 'shine']);
+  // 尾鳍、胸鳍有拍动（motion），背鳍与腹部没有
+  const moves = shape.parts.map(part => !!part.motion);
+  assert.deepEqual(moves, [true, false, false, false, false, true, false, false]);
+});
+
+test('并集取样的相位表：恰为 −1、−0.5、0、0.5、1（Swift 的 waves 与它逐项对照；少一个相位，并集就盖不住那一帧）', () => {
+  assert.deepEqual([...S.WAVES], [-1, -0.5, 0, 0.5, 1]);
+  assert.ok(Object.isFrozen(S.WAVES));
+});
+
+test('高光整条落在躯干里：每种动物的高光多边形都不越出躯干轮廓（越出的部分会白白盖在描边外沿，像一道毛边）', () => {
+  // 全量变异检查之后的几何排查发现：鲸鲨的高光椭圆在尾侧越出背线约 0.34 pt（仍在 0.55 pt 的描边半宽之内，所以渲染检查与肉眼都看不出），
+  // 小锤头鲨与蝠鲼本来就在里面（余量分别约 0.14 与 7.6 pt）。这里把“不越出躯干”钉成所有动物共同的规则，包括以后要加的海龟。
+  let checked = 0;
+  for (const id of S.AVAILABLE.filter(name => name !== 'jelly')) {
+    const shape = S.expand(id);
+    const bodies = shape.parts.filter(part => part.role === 'body').map(part => polygonOf(part.d));
+    assert.ok(bodies.length >= 1, `${id} 要有躯干`);
+    for (const part of shape.parts.filter(item => item.role === 'shine')) {
+      for (const point of polygonOf(part.d)) {
+        const margin = Math.max(...bodies.map(body => (insidePolygon(point, body) ? 1 : -1) * outlineDistance(point, body)));
+        assert.ok(margin >= 0, `${id} 的高光有一点越出躯干 ${(-margin).toFixed(2)} pt：(${point.map(n => n.toFixed(2)).join(', ')})`);
+      }
+      checked++;
+    }
+  }
+  assert.ok(checked >= 3, `前提：至少三种动物各有一个高光（实际检查了 ${checked} 个）`);
+  // 高光要看得见：鲸鲨的高光至少 24 pt 长、2 pt 厚（没有这一条，把高光缩成一个点也能“不越出”）
+  const poly = polygonOf(S.expand('whaleshark').parts.find(part => part.role === 'shine').d);
+  const xs = poly.map(p => p[0]), ys = poly.map(p => p[1]);
+  const width = Math.max(...xs) - Math.min(...xs), height = Math.max(...ys) - Math.min(...ys);
+  assert.ok(width >= 24 && height >= 2, `鲸鲨高光 ${width.toFixed(2)} × ${height.toFixed(2)}（≥ 24 × 2）`);
 });
 
 test('源码绊线：形状模块无 DOM、网络、存储、动态执行；数据只用相对安全的原语', () => {

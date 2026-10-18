@@ -27,19 +27,21 @@ function sourceFor(id) {
   if (!raw) fail(`${id} 没有形状数据`);
   raw.parts.forEach((part, index) => {
     if (typeof part.d === 'string' && !Shapes.parsePath(part.d)) fail(`${id} 第 ${index} 个部件的路径无法解析`);
-    if (!part.d && !part.ellipse) fail(`${id} 第 ${index} 个部件既没有路径也没有椭圆`);
+    if (part.d === undefined && part.ellipse === undefined && part.dots === undefined) fail(`${id} 第 ${index} 个部件既没有路径、椭圆也没有小圆`);
   });
   const shape = Shapes.expand(id);
-  if (!shape) fail(`${id} 的形状数据不合规（椭圆参数或路径有问题）`);
+  if (!shape) fail(`${id} 的形状数据不合规（部件写法不是有且只有 d / ellipse / dots 之一、路径或小圆有问题、转动幅度有问题，或嘴有问题——俯视动物不能有嘴）`);
   if (!Shapes.VIEWS.includes(shape.view)) fail(`${id} 的视角 ${shape.view} 不合法`);
   if (!(Number.isFinite(shape.scale) && shape.scale > 0)) fail(`${id} 的缩放不合法`);
   const parts = shape.parts.map((part, index) => {
     if (!Shapes.ROLES.includes(part.role)) fail(`${id} 第 ${index} 个部件的角色 ${part.role} 不合法`);
     if (!Shapes.parsePath(part.d)) fail(`${id} 第 ${index} 个部件的路径无法解析`);
     if (!/^[MLCQZ0-9 .\-]+$/.test(part.d)) fail(`${id} 第 ${index} 个部件的路径含有不该出现的字符`);
-    const motion = part.motion ? `SpeciesMotionSource(pivotX: ${swiftNumber(part.motion.pivot[0])}, pivotY: ${swiftNumber(part.motion.pivot[1])}, degrees: ${swiftNumber(part.motion.deg)})` : 'nil';
+    const motion = part.motion ? `SpeciesMotionSource(pivotX: ${swiftNumber(part.motion.pivot[0])}, pivotY: ${swiftNumber(part.motion.pivot[1])}, degrees: ${swiftNumber(part.motion.deg)}, squash: ${swiftNumber(part.motion.squash)})` : 'nil';
     return `                SpeciesPartSource(role: .${part.role}, u: ${swiftNumber(part.u)}, path: "${part.d}", motion: ${motion}),`;
   });
+  // 嘴只有侧视动物有（可选）；没有嘴的动物不写这一项（Swift 里默认空），所以没有嘴的动物生成物与加入这一项之前逐字相同
+  const mouth = shape.mouth ? `, mouth: [${shape.mouth.map(swiftList).join(', ')}]` : '';
   return [
     `        .${id}: SpeciesSource(`,
     `            view: .${shape.view}, scale: ${swiftNumber(shape.scale)},`,
@@ -47,7 +49,7 @@ function sourceFor(id) {
     ...parts,
     '            ],',
     `            eyeRadius: ${swiftNumber(shape.eyes.r)}, eyes: [${shape.eyes.at.map(swiftList).join(', ')}],`,
-    `            blush: [${shape.blush.map(swiftList).join(', ')}]),`,
+    `            blush: [${shape.blush.map(swiftList).join(', ')}]${mouth}),`,
   ].join('\n');
 }
 
