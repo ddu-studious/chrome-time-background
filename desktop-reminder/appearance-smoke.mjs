@@ -70,6 +70,8 @@ const jelly = (extra = {}) => ({ resident: true, night: false, lines: [], linesU
 const appearance = (extra = {}) => ({ color: 5, colors: [5], look: 'solid', material: 'glass', size: 'medium', season: null, ...extra });
 const rgb = text => text.split(',').map(Number);
 const near = (a, b, eps = 0.0015) => a.every((v, i) => Math.abs(v - b[i]) <= eps);
+// 回执里 appearance 的形状：status、实际生效的物种、实际画的是不是写实版（卡通与水母恒为 false；旧组件没有这个字段）
+const ack = (species, realistic = false) => ({ status: 'ok', species, realistic });
 const CALM = [0.40, 0.74, 0.90];
 const PURPLE = [0.66, 0.50, 0.95];
 
@@ -84,7 +86,7 @@ await scenario('没有 appearance：回执不带 appearance（旧 Chrome），�
 
 await scenario('带 appearance：回执 appearance.status=ok，calm 阶段颜色立即到位（不等慢速收敛）', async h => {
   const reply = await h.request('jelly', { jelly: jelly({ appearance: appearance({ color: 6, colors: [6] }) }) });
-  assert.deepEqual(reply.appearance, { status: 'ok', species: 'jelly' });
+  assert.deepEqual(reply.appearance, ack('jelly'));
   const ping = await pinged(h);
   assert.equal(ping.jellyLook, 'colors=6 look=solid material=glass size=medium season=-');
   assert.ok(near(rgb(ping.jellyPaintA), PURPLE), `应换成紫色，实际 ${ping.jellyPaintA}`);
@@ -158,7 +160,7 @@ await scenario('阶段内换色：外观记下来，回到 calm 时生效，不�
 
 await motionScenario('开着动态效果：平静期换色立即到位（回执后的第一次读数就是新颜色，不是慢慢变过去）', async h => {
   const reply = await h.request('jelly', { jelly: jelly({ appearance: appearance({ color: 6, colors: [6] }) }) });
-  assert.deepEqual(reply.appearance, { status: 'ok', species: 'jelly' });
+  assert.deepEqual(reply.appearance, ack('jelly'));
   const ping = await pinged(h);
   assert.ok(near(rgb(ping.jellyPaintA), PURPLE), `平静期换色应立即到位，实际 ${ping.jellyPaintA}`);
 });
@@ -196,7 +198,7 @@ await scenario('物种：逐个下发每种可用的动物，回执与读数报�
   assert.ok(animals.includes('hammer') && animals.includes('manta'), '本步骤应已提供小锤头鲨与蝠鲼');
   for (const species of animals) {
     const reply = await h.request('jelly', { jelly: jelly({ appearance: appearance({ ...hammerLook, species }) }) });
-    assert.equal(reply.ok, true, species); assert.deepEqual(reply.appearance, { status: 'ok', species }, species);
+    assert.equal(reply.ok, true, species); assert.deepEqual(reply.appearance, ack(species), species);
     const ping = await until(h, r => r.jellyVisible === true && r.jellySpecies === species, 3500, `${species} 出现`);
     assert.equal(ping.jellySpecies, species);
     assert.equal(ping.jellyLook, 'colors=6,0 look=duo material=glass size=medium season=-', `${species}：花纹照常`);
@@ -209,20 +211,20 @@ await scenario('物种：原生画不出来的物种与不认识的取值一律�
   for (const species of [...ANIMALS.filter(id => !SHAPES.AVAILABLE.includes(id)), 'dragon', 'jelly', 5, null, '', ['hammer'], { species: 'hammer' }]) {
     const reply = await h.request('jelly', { jelly: jelly({ appearance: appearance({ species }) }) });
     const label = `species=${JSON.stringify(species)}`;
-    assert.equal(reply.ok, true, label); assert.deepEqual(reply.appearance, { status: 'ok', species: 'jelly' }, label);
+    assert.equal(reply.ok, true, label); assert.deepEqual(reply.appearance, ack('jelly'), label);
     const ping = await until(h, r => r.jellyVisible === true, 3500, `${label} 时水母仍在`);
     assert.equal(ping.jellySpecies, 'jelly', label);
   }
   // 没有 species 字段（S1a 的 Chrome）：同样是水母
   const reply = await h.request('jelly', { jelly: jelly({ appearance: appearance() }) });
-  assert.deepEqual(reply.appearance, { status: 'ok', species: 'jelly' });
+  assert.deepEqual(reply.appearance, ack('jelly'));
 });
 
 await scenario('物种：水母 → 动物 → 水母 → 动物，读数每次都跟随；换物种不改颜色花纹', async h => {
   const sequence = ['jelly', 'hammer', 'jelly', 'hammer'];
   for (const species of sequence) {
     const reply = await h.request('jelly', { jelly: jelly({ appearance: appearance({ ...hammerLook, species }) }) });
-    assert.deepEqual(reply.appearance, { status: 'ok', species });
+    assert.deepEqual(reply.appearance, ack(species));
     const ping = await pinged(h);
     assert.equal(ping.jellySpecies, species);
     assert.equal(ping.jellyLook, 'colors=6,0 look=duo material=glass size=medium season=-', `${species}：花纹不因物种改变`);
@@ -508,6 +510,121 @@ for (const species of ['hammer', 'manta', 'turtle', 'whaleshark']) await motionS
   await delay(600);
   const later = parsePairs((await h.request('ping')).jellyPose);
   assert.deepEqual([later.wave, later.pitch, later.facing], [settled.wave, settled.pitch, settled.facing], '停稳后姿态不再变化（动画帧已停）');
+});
+
+// ---------- 写实动物（2026-10-19，marine-rig）：回执与读数如实报告“实际画的是不是写实版” ----------
+// 写实版用与首页水族馆同一份骨架数据（js/marine-rig-data.js → 生成的 marine-rig-data.swift）；与水族馆的像素对齐由 marine-align.mjs 单独核对，这里只核对协议、读数与动画状态。
+
+const REAL_ANIMALS = ANIMALS;     // 四种动物都有写实版
+const RIG_FREQUENCY = { hammer: 0.75, manta: 0.5, turtle: 0.4, whaleshark: 0.4 };     // Hz，与 JellySpecies.rigFrequency 一致（companion-selftest 与 test/marine-rig-parity 对照）
+const rigOf = ping => parsePairs(ping.jellyRig);
+const realLook = { color: 6, colors: [6, 0], look: 'duo' };
+
+await scenario('写实：逐个下发四种动物 realistic:true——回执与读数如实报告写实；颜色花纹照常记录；减少动态效果时骨架静止', async h => {
+  for (const species of REAL_ANIMALS) {
+    const reply = await h.request('jelly', { jelly: jelly({ appearance: appearance({ ...realLook, species, realistic: true }) }) });
+    assert.equal(reply.ok, true, species); assert.deepEqual(reply.appearance, ack(species, true), species);
+    const ping = await until(h, r => r.jellyVisible === true && r.jellySpecies === species && r.jellyRealistic === true, 3500, `${species} 写实版出现`);
+    assert.equal(ping.jellyLook, 'colors=6,0 look=duo material=glass size=medium season=-', `${species}：颜色与花纹照常记录（写实版画自然体色，但设置不丢）`);
+    assert.deepEqual(rigOf(ping), { phase: 0, amp: 0, mix: 0 }, `${species}：减少动态效果时骨架静止、平静期不混入阶段色`);
+    assert.equal(ping.jellyPose, 'facing=1.000 pitch=0.000 wave=0.000 vx=0.0 vy=0.0', `${species}：姿态静止朝右`);
+  }
+});
+
+await scenario('写实：水母没有写实版；realistic 的非布尔取值（1、"true"、null、数组、字典……）一律按卡通——回执与读数都如实写 false', async h => {
+  let reply = await h.request('jelly', { jelly: jelly({ appearance: appearance({ species: 'jelly', realistic: true }) }) });
+  assert.deepEqual(reply.appearance, ack('jelly', false), '水母没有写实版');
+  assert.equal((await pinged(h)).jellyRealistic, false);
+  for (const bad of [1, 0, 'true', 'yes', null, [true], { realistic: true }, undefined]) {
+    const label = `realistic=${JSON.stringify(bad)}`;
+    reply = await h.request('jelly', { jelly: jelly({ appearance: appearance({ ...realLook, species: 'manta', realistic: bad }) }) });
+    assert.deepEqual(reply.appearance, ack('manta', false), label);
+    const ping = await pinged(h);
+    assert.equal(ping.jellyRealistic, false, label); assert.equal(ping.jellySpecies, 'manta', label);
+  }
+});
+
+await scenario('写实：同一种动物写实 ↔ 卡通来回切换，回执与读数每次都跟随；后一次下发没带 appearance 时保持上一次的写实（不闪回卡通）', async h => {
+  for (const realistic of [true, false, true, false, true]) {
+    const reply = await h.request('jelly', { jelly: jelly({ appearance: appearance({ ...realLook, species: 'turtle', realistic }) }) });
+    assert.deepEqual(reply.appearance, ack('turtle', realistic), `realistic=${realistic}`);
+    const ping = await pinged(h);
+    assert.equal(ping.jellySpecies, 'turtle'); assert.equal(ping.jellyRealistic, realistic, `realistic=${realistic}`);
+    assert.equal(ping.jellyLook, 'colors=6,0 look=duo material=glass size=medium season=-', '切换风格不改颜色与花纹');
+  }
+  const reply = await h.request('jelly', { jelly: jelly() });
+  assert.equal('appearance' in reply, false, '没带 appearance 就不回报');
+  const ping = await pinged(h);
+  assert.equal(ping.jellyRealistic, true, '保持上一次的写实'); assert.equal(ping.jellySpecies, 'turtle');
+});
+
+await scenario('写实：写实动物 → 水母 → 另一种写实动物，读数每次都跟随；换物种与换风格不丢外观设置', async h => {
+  const sequence = [['hammer', true], ['jelly', true], ['manta', true], ['manta', false], ['whaleshark', true]];
+  for (const [species, realistic] of sequence) {
+    const reply = await h.request('jelly', { jelly: jelly({ appearance: appearance({ ...realLook, species, realistic }) }) });
+    const expected = species === 'jelly' ? false : realistic;
+    assert.deepEqual(reply.appearance, ack(species, expected), `${species} realistic=${realistic}`);
+    const ping = await pinged(h);
+    assert.equal(ping.jellySpecies, species); assert.equal(ping.jellyRealistic, expected);
+    assert.ok(near(rgb(ping.jellyPaintA), PURPLE), `${species}：主色设置不变`);
+  }
+});
+
+await scenario('写实：阶段色按混入程度叠到自然体色上——临近阶段混入到 1、倒计时结束回到 0；物种与写实始终不变', async h => {
+  await h.request('jelly', { jelly: jelly({ appearance: appearance({ ...realLook, species: 'whaleshark', realistic: true }) }) });
+  assert.equal(rigOf(await pinged(h)).mix, 0, '平静期不混入阶段色');
+  assert.equal((await h.request('countdown', { timer: fireIn(25000) })).ok, true);
+  await delay(1800);
+  const during = await pinged(h);
+  assert.equal(during.countdownStage, 2, `应进入临近阶段（imminent=2），实际 ${during.countdownStage}`);
+  assert.ok(rigOf(during).mix > 0.99, `临近阶段应混入阶段色，实际 mix=${rigOf(during).mix}`);
+  assert.equal(during.jellySpecies, 'whaleshark'); assert.equal(during.jellyRealistic, true, '阶段色不改物种与风格');
+  await h.request('countdown', { timer: null });
+  await delay(1800);
+  const after = await pinged(h);
+  assert.ok(rigOf(after).mix < 0.01, `倒计时结束后回到自然体色，实际 mix=${rigOf(after).mix}`);
+  assert.equal(after.jellyRealistic, true);
+});
+
+await scenario('写实：卡通动物与水母的 jellyRig 读数恒为 0（不读写实字段）', async h => {
+  await h.request('jelly', { jelly: jelly({ appearance: appearance({ ...realLook, species: 'hammer', realistic: false }) }) });
+  await h.request('countdown', { timer: fireIn(25000) });
+  await delay(1800);
+  const cartoon = await pinged(h);
+  assert.equal(cartoon.countdownStage, 2);
+  assert.deepEqual(rigOf(cartoon), { phase: 0, amp: 0, mix: 0 }, '卡通小锤头鲨：阶段色走画颜料的老路，不走混入');
+  await h.request('jelly', { jelly: jelly({ appearance: appearance({ species: 'jelly', realistic: true }) }) });
+  await delay(300);
+  assert.deepEqual(rigOf(await pinged(h)), { phase: 0, amp: 0, mix: 0 }, '水母');
+});
+
+for (const species of REAL_ANIMALS) await motionScenario(`开着动态效果：响铃时写实${SPECIES_NAMES[species]}的骨架相位按 ${RIG_FREQUENCY[species]} Hz 匀速前进、幅度起来；响铃结束停稳后幅度回到 0、相位不再变化`, async h => {
+  await h.request('jelly', { jelly: jelly({ appearance: appearance({ ...realLook, species, realistic: true }) }) });
+  const ringId = `ring-real-${species}`;
+  assert.equal((await h.request('show', ringPayload(ringId))).ok, true);
+  await until(h, r => r.ringPhase === 'shown' && r.ringId === ringId && r.jellyRealistic === true, 8000, '写实动物游到落点并弹出气泡');
+  await delay(1200);        // 包络爬升
+  const samples = [];
+  for (let i = 0; i < 14; i++) { const ping = await h.request('ping'); samples.push({ at: Date.now(), ...rigOf(ping) }); await delay(180); }
+  assert.ok(samples.every(sample => sample.amp > 0.3), `响铃时幅度应起来，读数 ${JSON.stringify(samples.map(sample => sample.amp))}`);
+  let advanced = 0;
+  for (let i = 1; i < samples.length; i++) { let step = samples[i].phase - samples[i - 1].phase; if (step < 0) step += 2 * Math.PI; advanced += step; }
+  const measured = advanced / ((samples.at(-1).at - samples[0].at) / 1000), expected = 2 * Math.PI * RIG_FREQUENCY[species];
+  assert.ok(measured > expected * 0.7 && measured < expected * 1.3, `相位角速度应约为 ${expected.toFixed(2)} rad/s，实测 ${measured.toFixed(2)}`);
+  await h.request('hide', { sessionId: ringId });
+  let still = 0, last;
+  for (const end = Date.now() + 30000; Date.now() < end && still < 2;) {
+    await delay(400);
+    last = await h.request('ping');
+    const pose = parsePairs(last.jellyPose);
+    still = last.ringPhase === 'none' && pose.vx === 0 && pose.vy === 0 ? still + 1 : 0;
+  }
+  assert.ok(still >= 2, `响铃结束后动物应游回原位并停下；最后读数 ringPhase=${last?.ringPhase} pose=${last?.jellyPose}`);
+  await delay(1500);
+  const settled = rigOf(await h.request('ping'));
+  assert.ok(settled.amp < 0.011, `停稳后幅度应落回 0（<0.011），实际 amp=${settled.amp}`);
+  await delay(600);
+  assert.deepEqual(rigOf(await h.request('ping')), settled, '停稳后骨架读数不再变化（动画帧已停）');
 });
 
 if (skipped) console.log(`外观冒烟通过（${skipped} 个动画场景因${[...skipReasons].join('、')}跳过，未验证）`);

@@ -23,6 +23,8 @@
         jellyfishGrow: true,
         pomodoroJelly: true,
         aquariumFish: true,
+        aquariumWater: true,
+        aquariumRealistic: true,
     });
     const VISUAL_EFFECTS = new Set(['none', 'depth', 'weather', 'memory', 'liquid', 'time', 'jellyfish']);
     const COLORS = [[112, 205, 255], [170, 111, 255], [79, 239, 194]];
@@ -62,6 +64,10 @@
             pomodoroJelly: source.pomodoroJelly !== false,
             // 水族馆：在水母皮肤下可以放入、捞出小鱼（js/aquarium*.js）。只有明确 false 才关；关闭后不读写鱼的存储、没有托盘。
             aquariumFish: source.aquariumFish !== false,
+            // 海水层（js/aquarium-water.js）：水面波光、光束、焦散与气泡，只在选了水母（水族馆）皮肤时运行；只有明确 false 才关；与小鱼开关互不影响。
+            aquariumWater: source.aquariumWater !== false,
+            // 写实动物（js/aquarium-real.js）：小锤头鲨、蝠鲼、鲸鲨用接近真实的外形、配色与游动方式；只有明确 false 才回到卡通画法（海龟没有卡通画法，仍是写实）。
+            aquariumRealistic: source.aquariumRealistic !== false,
         };
     }
 
@@ -176,12 +182,26 @@
                 }
                 skin.start();
                 this.syncAquarium(true);
+                this.syncWater(true);
                 return;
             }
             this.cancelGrab();
             this.setGrabHover(false);
             this.syncAquarium(false);
+            this.syncWater(false);
             skin.stop();
+        }
+
+        // 海水层（js/aquarium-water.js）：独立的 WebGL 画布，只在选了水母皮肤、且设置开着时运行；脚本缺席时这些入口都是空操作。
+        water() {
+            return window.AquariumWater || null;
+        }
+
+        syncWater(visualIsJellyfish) {
+            const water = this.water();
+            if (!water) return;
+            if (visualIsJellyfish && this.settings.aquariumWater) { water.start(); return; }
+            water.stop();
         }
 
         // 水族馆（鱼）只在选了水母皮肤、且设置开着时运行；js/aquarium.js 缺席时这些入口都是空操作。
@@ -213,13 +233,18 @@
         }
 
         drawJellyfish(now, dt, amount) {
+            // 海水层有自己的画布（在壁纸与本画布之间），与鱼、水母互不读取；出错只关水体层（控制器内部处理），不影响下面的帧循环。
+            const water = this.water();
+            if (water && water.isActive()) {
+                water.frame({ width: this.width, height: this.height, now, amount, lowPower: this.saveData, night: this.settings.jellyfishNight });
+            }
             // 鱼画在水母后面（先画）；它读水母钟罩的位置避让，水母不读鱼。画法出错只停鱼层，不影响水母。
             const aq = this.aquarium();
             if (aq && aq.isActive()) {
                 const skin = this.skin();
                 aq.frame({
                     ctx: this.ctx, width: this.width, height: this.height, dt, amount,
-                    pointer: this.jellyfishPointer(), lowPower: this.saveData, night: this.settings.jellyfishNight,
+                    pointer: this.jellyfishPointer(), lowPower: this.saveData, night: this.settings.jellyfishNight, realistic: this.settings.aquariumRealistic,
                     bells: skin && typeof skin.bells === 'function' ? skin.bells() : [],
                 });
             }

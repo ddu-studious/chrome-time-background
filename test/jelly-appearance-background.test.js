@@ -22,12 +22,12 @@ function snippet() {
   return background.slice(start, end + endMarker.length);
 }
 
-function harness({ result = { ok: true, settings: { color: 2 }, resolved: { color: 2, colors: [2] } }, fail = null, component = 'unsupported', connected = false } = {}) {
+function harness({ result = { ok: true, settings: { color: 2 }, resolved: { color: 2, colors: [2] } }, fail = null, component = 'unsupported', connected = false, style = { style: 'unknown', species: 'jelly', realistic: false } } = {}) {
   const listeners = [], calls = [];
   const chrome = { runtime: { id: EXTENSION_ID, getURL: file => `chrome-extension://${EXTENSION_ID}/${file}`, onMessage: { addListener: listener => listeners.push(listener) } } };
   const respond = name => async (...args) => { calls.push([name, ...args]); if (fail) throw new Error(fail); return result; };
   const jellyAppearance = { get: respond('get'), set: respond('set'), rerollNow: respond('rerollNow') };
-  const jellyDesktop = { appearanceStatus: () => component, status: () => ({ connected }) };
+  const jellyDesktop = { appearanceStatus: () => component, appearanceStyle: () => style, status: () => ({ connected }) };
   vm.runInNewContext(snippet(), { chrome, jellyAppearance, jellyDesktop });
   assert.equal(listeners.length, 1, '应注册一个监听函数');
   const send = async (message, sender) => {
@@ -83,18 +83,24 @@ test('动作分发：get 只读、set 把 message.settings 原样交给设置、
   }
 });
 
-test('成功回应：带上后台设置的结果，并附组件支持状态与连接状态（取自 JellyDesktop，不是写死值）', async () => {
+test('成功回应：带上后台设置的结果，并附组件支持状态、组件确认的画法与连接状态（取自 JellyDesktop，不是写死值）', async () => {
   const result = { ok: true, settings: { color: 3 }, resolved: { color: 3, colors: [3] } };
-  for (const [component, connected] of [['unsupported', false], ['ok', true], ['unknown', true], ['off', false]]) {
-    const { send } = harness({ result, component, connected });
+  const styles = [
+    { style: 'unknown', species: 'jelly', realistic: false },
+    { style: 'realistic', species: 'whaleshark', realistic: true },
+    { style: 'cartoon', species: 'manta', realistic: false },
+  ];
+  for (const [index, [component, connected]] of [['unsupported', false], ['ok', true], ['unknown', true], ['off', false]].entries()) {
+    const style = styles[index % styles.length];
+    const { send } = harness({ result, component, connected, style });
     for (const action of ACTIONS) {
       const { replies } = await send({ action, settings: { color: 3 } }, goodSender);
-      assert.deepEqual(replies, [{ ...result, component, connected }], `${action} component=${component} connected=${connected}`);
+      assert.deepEqual(replies, [{ ...result, component, style, connected }], `${action} component=${component} style=${style.style} connected=${connected}`);
     }
   }
 });
 
-test('失败的结果原样转发，不附 component/connected（没保存成功就不谈组件状态）', async () => {
+test('失败的结果原样转发，不附 component/style/connected（没保存成功就不谈组件状态）', async () => {
   const failure = { ok: false, error: 'color 的取值无效' };
   const { send } = harness({ result: failure, component: 'ok', connected: true });
   for (const action of ACTIONS) {

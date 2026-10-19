@@ -351,14 +351,23 @@ enum SpeciesPlacement {
 
     /// 并集包围盒中心在视图（y 向上）里的位置；centerX 是窗口水平中心。
     static func center(_ geometry: SpeciesGeometry, centerX: CGFloat) -> CGPoint {
-        CGPoint(x: centerX, y: topAboveWindowBottom - geometry.union.height / 2)
+        center(union: geometry.union, centerX: centerX)
+    }
+
+    /// 同上，直接给并集包围盒（写实动物 marine-rig.swift 的几何没有 SpeciesGeometry，放置规则与卡通动物完全相同）。
+    static func center(union: CGRect, centerX: CGFloat) -> CGPoint {
+        CGPoint(x: centerX, y: topAboveWindowBottom - union.height / 2)
     }
 
     /// 几何坐标（缩放后、y 向上）→ 视图坐标。先把并集中心移到原点，再转俯仰（鼻子朝上为正，先转后翻，所以左右朝向的“抬头”符号一致），
     /// 再按朝向水平翻转（facing = ±1，转身途中是中间值），最后放到 center。
     static func transform(_ geometry: SpeciesGeometry, centerX: CGFloat, facing: CGFloat, pitch: CGFloat) -> CGAffineTransform {
-        let mid = CGPoint(x: geometry.union.midX, y: geometry.union.midY)
-        let target = center(geometry, centerX: centerX)
+        transform(union: geometry.union, centerX: centerX, facing: facing, pitch: pitch)
+    }
+
+    static func transform(union: CGRect, centerX: CGFloat, facing: CGFloat, pitch: CGFloat) -> CGAffineTransform {
+        let mid = CGPoint(x: union.midX, y: union.midY)
+        let target = center(union: union, centerX: centerX)
         return CGAffineTransform(translationX: -mid.x, y: -mid.y)
             .concatenating(CGAffineTransform(rotationAngle: pitch))
             .concatenating(CGAffineTransform(scaleX: facing, y: 1))
@@ -458,6 +467,9 @@ struct SpeciesPose: Equatable {
     var heading: CGFloat = 1
     var pitch: CGFloat = 0
     var envelope: CGFloat = 0
+    /// 写实动物的游动相位（弧度，0…2π）：游动时匀速推进（频率见 JellySpecies.rigFrequency），停下后随包络落回中位而不再推进；
+    /// 卡通动物与水母不读它（不传频率时恒为 0）。
+    var rigPhase: CGFloat = 0
 
     /// 俯仰目标：非有限的速度当作 0；结果夹在 ±pitchLimit。
     static func targetPitch(vx: CGFloat, vy: CGFloat) -> CGFloat {
@@ -475,7 +487,8 @@ struct SpeciesPose: Equatable {
     }
 
     /// 推进一帧。stroking 表示正在游动（想休息或停下时为 false）；dt 不是正的有限数时不动。
-    mutating func step(dt: CGFloat, vx: CGFloat, vy: CGFloat, stroking: Bool, reduceMotion: Bool) {
+    /// rigFrequency（Hz，缺省 0 = 不推进）：写实动物游动时每秒摆几个周期；只有包络还没落回 0 时才推进相位（停下后静止，不再要求动画帧）。
+    mutating func step(dt: CGFloat, vx: CGFloat, vy: CGFloat, stroking: Bool, reduceMotion: Bool, rigFrequency: CGFloat = 0) {
         guard dt.isFinite, dt > 0 else { return }
         heading = SpeciesPose.heading(after: heading, vx: vx)
         if reduceMotion {
@@ -488,6 +501,9 @@ struct SpeciesPose: Equatable {
         pitch += (SpeciesPose.targetPitch(vx: vx, vy: vy) - pitch) * blend
         let rate = min(1, dt * SpeciesPose.envelopeRate)
         envelope += ((stroking ? 1 : 0) - envelope) * rate
+        if rigFrequency.isFinite, rigFrequency > 0, envelope >= SpeciesPose.settledEnvelope {
+            rigPhase = (rigPhase + dt * 2 * .pi * rigFrequency).truncatingRemainder(dividingBy: 2 * .pi)
+        }
     }
 
     /// 划水相位 −1…1：收缩量 0…1（JellySwim.contraction）的 0.5 为中位；停下时包络为 0，尾鳍回到中位。

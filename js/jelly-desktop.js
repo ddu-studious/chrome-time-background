@@ -96,6 +96,16 @@
   }
 
   /**
+   * 桌面上的动物画成哪种风格：appearanceApplied 为真之后才有意义。'jelly'（桌面上是水母，没有风格之分）、
+   * 'realistic'（组件回执 realistic === true：确实画出了写实版）、'cartoon'（物种一致但不是写实版：设置要求卡通，或组件较旧——回执里没有 realistic——，
+   * 或这种动物的写实骨架在组件里不可用）。只认回执里明确的 true，旧组件的回执没有这个字段，一律按卡通算，不把没有确认的风格说成已应用。
+   */
+  function appearanceStyleOf(payload, reported) {
+    if (payload.species === undefined || payload.species === 'jelly') return 'jelly';
+    return reported?.realistic === true ? 'realistic' : 'cartoon';
+  }
+
+  /**
    * storage：chrome.storage.local；desktop：AlarmDesktop（本函数会设置它的 onConnected / onPortLost / onJellySetting / onNudgeAction 回调）。
    * summary：() => Promise<{ lines, validUntil }>，act：(id, action) => Promise<{ ok, text|error }>（均来自 JellyNudge）。
    * onRestored：重连成功后调用（外部据此重新下发倒计时）。setTimer / clearTimer / retryMs 供测试替换。
@@ -111,6 +121,10 @@
     // unsupported（带了外观但回执没有它、status 不是 ok，或回报的物种与下发的不同：旧组件，或组件还画不出这一种动物）、
     // unknown（连接失败或还没有下发）。协议版本不变，靠回执探测能力。
     let appearanceInfo = 'off';
+    // 最近一次下发里动物的画法（见 appearanceStyleOf）：style 是 jelly / realistic / cartoon，没有确认（没带外观、不支持、连接失败）时是 unknown；
+    // species / realistic 记下这次确认针对的是哪份设置，设置页只在它与当前设置一致时才采信（设置刚改完、组件还没回执时，旧确认不能说成新设置的结果）。
+    let appearanceStyle = { style: 'unknown', species: 'jelly', realistic: false };
+    const unknownStyle = () => { appearanceStyle = { style: 'unknown', species: 'jelly', realistic: false }; };
     // 组件确认正在桌面上画的物种（回执与下发一致才算）：提醒气泡据此称呼。没确认过、连接失败或断开时按水母。
     let shownSpecies = 'jelly';
 
@@ -189,6 +203,8 @@
         status.ok = true; status.version = Number(result?.version) || 0; status.error = ''; status.exhausted = false;
         attempt = 0; stopRetry();
         appearanceInfo = appearancePayload ? (appearanceApplied(appearancePayload, result?.appearance) ? 'ok' : 'unsupported') : 'off';
+        if (appearanceInfo === 'ok') appearanceStyle = { style: appearanceStyleOf(appearancePayload, result?.appearance), species: appearancePayload.species === undefined ? 'jelly' : appearancePayload.species, realistic: appearancePayload.realistic === true };
+        else unknownStyle();
         // 本次没带外观（读取失败）时原生保持上一次的外观，所以称呼也保持上一次确认的；带了但组件没有确认同一种，就按水母
         if (appearancePayload) shownSpecies = appearanceInfo === 'ok' && typeof appearancePayload.species === 'string' ? appearancePayload.species : 'jelly';
         if (assistant) {
@@ -205,6 +221,7 @@
         status.ok = false; status.version = 0; status.error = String(error?.message || error).slice(0, 120);
         assistantInfo = { status: 'unknown' };
         appearanceInfo = 'unknown';
+        unknownStyle();
         shownSpecies = 'jelly';
         if (settings.resident) { wasLost = true; scheduleRetry(); }
         return false;
@@ -268,7 +285,7 @@
     // ---- 与 AlarmDesktop 的接线 ----
     desktop.onConnected = () => { void sync().catch(() => {}); };
     desktop.onPortLost = info => {
-      status.ok = false; assistantInfo = { status: 'unknown' }; appearanceInfo = 'unknown'; shownSpecies = 'jelly';
+      status.ok = false; assistantInfo = { status: 'unknown' }; appearanceInfo = 'unknown'; unknownStyle(); shownSpecies = 'jelly';
       if (info?.quit) { void quit().catch(() => {}); return; }
       void serial(async () => {
         const settings = await read();
@@ -316,6 +333,8 @@
       status: snapshot,
       /** 外观是否被组件接受（见 appearanceInfo）；设置页据此提示“需要更新组件”。 */
       appearanceStatus: () => appearanceInfo,
+      /** 桌面上的动物画成哪种风格：{ style: jelly / realistic / cartoon / unknown, species, realistic }（后两项是这次确认针对的设置）；设置页据此如实写“写实”或“卡通”，旧组件不会被说成写实。 */
+      appearanceStyle: () => ({ ...appearanceStyle }),
       /** 交给 JellyNudge 的 presenter：原生确认显示才算 shown，失败抛出由它退回系统通知。 */
       presenter: {
         async present(nudge) {

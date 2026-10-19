@@ -460,7 +460,7 @@ test('设置页状态提示：没常驻、没连上、组件版本过旧、v8 �
   assert.match(settingsJs, /水母差事已开启（组件协议 v/);
 });
 
-test('脚本版本钉子：settings-page.js?v=14，且仍在 chrome-shim 之后加载', () => {
-  assert.ok(settingsHtml.includes('js/settings-page.js?v=14'));
-  assert.ok(settingsHtml.indexOf('js/chrome-shim.js?v=5') < settingsHtml.indexOf('js/settings-page.js?v=14'));
+test('脚本版本钉子：settings-page.js?v=16，且仍在 chrome-shim 之后加载', () => {
+  assert.ok(settingsHtml.includes('js/settings-page.js?v=16'));
+  assert.ok(settingsHtml.indexOf('js/chrome-shim.js?v=5') < settingsHtml.indexOf('js/settings-page.js?v=16'));
 });

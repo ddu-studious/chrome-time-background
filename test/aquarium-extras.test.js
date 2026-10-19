@@ -53,7 +53,7 @@ const goldOf = (id, extras) => {
 };
 
 test('黄金画法：没有 extras（缺省、null、空对象、无变亮无拉尾、非法值）时，8 种鱼 5 个场景的每一笔与改动之前一致', () => {
-    for (const spec of Core.SPECIES) {
+    for (const spec of Core.SPECIES.filter(item => SHAPES[item.id])) {      // 卡通画法的 8 种；海龟只有写实画法
         assert.equal(goldOf(spec.id, undefined), GOLD[spec.id], `${spec.id}：没有 extras`);
         for (const extras of [null, {}, { pull: null, fed: 0 }, { pull: { x: NaN, y: 1 }, fed: NaN }, { pull: { x: 1 }, fed: 'x' }, { fed: -3 }]) {
             assert.equal(goldOf(spec.id, extras), GOLD[spec.id], `${spec.id}：${JSON.stringify(extras)}`);
@@ -83,7 +83,7 @@ test('spineOf：没有 pull 时与原来的公式一致；pull 按站位权重�
 });
 
 test('画拉尾：pull 把尾端拉长（身体与尾鳍的路径变了），其余种类也一样；弹簧回到 0 时与没有拉尾画得一样', () => {
-    for (const spec of Core.SPECIES) {
+    for (const spec of Core.SPECIES.filter(item => SHAPES[item.id])) {
         const plain = JSON.stringify(log(spec.id, {}, {}));
         const pulled = JSON.stringify(log(spec.id, {}, {}, { pull: { x: -8, y: 3 }, fed: 0 }));
         assert.notEqual(pulled, plain, `${spec.id} 的画法没有随 pull 改变`);

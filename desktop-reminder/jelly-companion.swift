@@ -180,6 +180,11 @@ struct JellyPose {
     var facing: CGFloat = 1             // 水平缩放：+1 朝右、−1 朝左，转身途中是中间值
     var pitch: CGFloat = 0              // 俯仰（弧度，鼻子朝上为正）
     var wave: CGFloat = 0               // 划水相位 −1…1（已乘包络），驱动尾鳍与胸鳍
+    // 写实动物（外观 realistic 且该物种有骨架时）：JellyView 改用 MarineRigPainter 画；卡通动物与水母不读下面三项
+    var realistic = false               // 此刻画的是写实版（外观要求写实且骨架可用）
+    var rigPhase: CGFloat = 0           // 游动相位（弧度，SpeciesPose.rigPhase）
+    var rigAmp: CGFloat = 0             // 游动幅度 0…1（SpeciesPose.envelope：停下时为 0，动物回到直线姿态）
+    var stageMix: CGFloat = 0           // 阶段色混入程度 0…1（平静为 0，临近/紧迫/最后 10 秒向 1 收敛）
 }
 
 final class JellyView: NSView {
@@ -352,6 +357,10 @@ final class JellyView: NSView {
             p.paint = p.paint.mixedAll(toward: .nightBlue, 0.05 * night)
         }
         let cx = bodyX ?? bounds.midX
+        if p.species != .jelly, p.realistic, let rigGeometry = MarineRigGeometries.of(p.species) {
+            drawRealAnimal(rigGeometry, cx: cx, night: night, p: p)
+            return
+        }
         if p.species != .jelly, let geometry = JellySpeciesGeometry.of(p.species) {
             drawAnimal(geometry, cx: cx, night: night, p: p)
             return
@@ -416,6 +425,28 @@ final class JellyView: NSView {
         SpeciesPainter.draw(g, pose: p, centerX: cx)
         if p.asleep && !p.grabbed {
             let anchor = SpeciesPainter.sleepAnchor(g, centerX: cx, pose: p)
+            let side: CGFloat = p.facing >= 0 ? 1 : -1
+            let color = p.tint.color(0.95, darken: 0.45).withAlphaComponent(0.55)
+            for (dx, dy, size) in [(2.0, 4.0, 11.0), (10.0, 15.0, 8.0)] as [(CGFloat, CGFloat, CGFloat)] {
+                let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: size, weight: .semibold), .foregroundColor: color]
+                NSString(string: "z").draw(at: NSPoint(x: anchor.x + side * dx, y: anchor.y + dy), withAttributes: attrs)
+            }
+        }
+        drawBubble(cx: cx, p: p)
+    }
+
+    /// 写实动物：布局、光晕、涟漪、“z” 与气泡规则同 drawAnimal（并集中心悬在标准高度），只是动物本身由 MarineRigPainter 画（与水族馆同一份骨架数据）。
+    /// 另写一份而不是改 drawAnimal：卡通动物的像素基线（appearance-snapshot / species-render）因此保持逐字节不变。
+    private func drawRealAnimal(_ g: MarineRigGeometry, cx: CGFloat, night: CGFloat, p: JellyPose) {
+        let center = SpeciesPlacement.center(union: g.union, centerX: cx)
+        if night > 0.01 { drawNightGlow(cx: center.x, cy: center.y, w: g.union.width, night: night, p: p) }
+        if p.ripples {
+            let outer = JellyRingMotion.outerRadius(centerX: center.x, centerY: center.y, width: bounds.width, height: bounds.height)
+            drawRipples(cx: center.x, cy: center.y, p: p, outer: outer)
+        }
+        MarineRigPainter.draw(g, pose: p, centerX: cx)
+        if p.asleep && !p.grabbed {
+            let anchor = MarineRigPainter.sleepAnchor(g, centerX: cx, pose: p)
             let side: CGFloat = p.facing >= 0 ? 1 : -1
             let color = p.tint.color(0.95, darken: 0.45).withAlphaComponent(0.55)
             for (dx, dy, size) in [(2.0, 4.0, 11.0), (10.0, 15.0, 8.0)] as [(CGFloat, CGFloat, CGFloat)] {
@@ -517,6 +548,8 @@ final class JellyCompanion: NSObject {
     private(set) var appearance = JellyAppearance.default
     /// 实际生效的物种：设置的物种有几何数据就是它，否则是水母。面板标题、读屏标签、回执与 ping 都用它，选择画法也只看它。
     var effectiveSpecies: JellySpecies { appearance.species.effective }
+    /// 此刻画的是不是写实版：外观要求写实、实际生效的是动物、且这种动物的骨架可用（骨架编译失败时静默回到卡通版，回执据此如实报告）。
+    var isRealistic: Bool { appearance.realistic && effectiveSpecies != .jelly && effectiveSpecies.hasRealisticRig }
     var onGrabEnd: (() -> Void)?
     /// 用户第一次把水母拖离按下点时（真正“抓起”）：控制器据此放弃响铃中的位置约定。
     var onGrabBegin: (() -> Void)?
@@ -750,6 +783,12 @@ final class JellyCompanion: NSObject {
         } else {
             next.facing = 1; next.pitch = 0; next.wave = 0
         }
+        // 写实动物：相位与幅度来自 SpeciesPose（匀速推进的行波，包络决定幅度）；阶段色按与 paint 相同的节奏混入，卡通与水母不读这些字段
+        next.realistic = isRealistic
+        next.rigPhase = next.realistic ? speciesPose.rigPhase : 0
+        next.rigAmp = next.realistic ? speciesPose.envelope : 0
+        let stageTarget: CGFloat = info.stage == .calm ? 0 : 1
+        next.stageMix = next.realistic ? pose.stageMix + (stageTarget - pose.stageMix) * (reduceMotion ? 1 : 0.12) : 0
         view.reduceMotion = reduceMotion
         next.paint = pose.paint.mixed(toward: JellyPaint.target(stage: info.stage, appearance: appearance), reduceMotion ? 1 : 0.12)
         next.tint = next.paint.a
@@ -794,7 +833,8 @@ final class JellyCompanion: NSObject {
         if effectiveSpecies != .jelly {
             // 响铃时鳍也摆（收缩节奏由 syncPose 覆盖）；被抓着时鳍放松
             let stroking = (swim.mode == .swim && !swim.wantsRest) || info.ripples
-            speciesPose.step(dt: dt, vx: swim.vx, vy: swim.vy, stroking: stroking, reduceMotion: reduceMotion)
+            speciesPose.step(dt: dt, vx: swim.vx, vy: swim.vy, stroking: stroking, reduceMotion: reduceMotion,
+                             rigFrequency: isRealistic ? effectiveSpecies.rigFrequency : 0)
         }
         // 眨眼
         if !(swim.mode == .rest && swim.wantsRest && !info.awake) {

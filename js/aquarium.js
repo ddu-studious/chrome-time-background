@@ -5,11 +5,13 @@
     // 玩法（戳、喂食、拉尾）是可选层：少了或没加载成功只是没有这些玩法，鱼与存储照常
     const playCore = cjs ? require('./aquarium-play-core.js') : root && root.AquariumPlayCore;
     const playUi = cjs ? require('./aquarium-play.js') : root && root.AquariumPlay;
-    const api = factory(core, root, playCore || null, playUi || null);
+    // 写实动物画法（骨架数据 + 求值器）也是可选层：缺席或数据不可用时，已有卡通画法照常；只有海龟没有卡通画法，缺席时不画
+    const real = cjs ? require('./aquarium-real.js') : root && root.AquariumReal;
+    const api = factory(core, root, playCore || null, playUi || null, real || null);
     if (cjs) module.exports = api;
     // 只创建实例，不自动启动：是否运行由背景体验的设置决定（applySettings 里 start/stop）；没选水母皮肤或关了水族馆时没有任何 DOM、监听或存储读取。
     if (root && typeof document !== 'undefined') root.Aquarium = api.create();
-})(typeof window !== 'undefined' ? window : (typeof self !== 'undefined' ? self : null), function (Core, root, DefaultPlayCore, DefaultPlayUi) {
+})(typeof window !== 'undefined' ? window : (typeof self !== 'undefined' ? self : null), function (Core, root, DefaultPlayCore, DefaultPlayUi, Real) {
     'use strict';
 
     // 水族馆控制器：存储（chrome.storage.local 的 aquariumV1）、托盘与居民列表、网兜、抓取状态机、画鱼。
@@ -24,6 +26,8 @@
     const STORAGE_KEY = 'aquariumV1';
     const DRAG_PX = 6;                        // 拖过这么远才算“拖”：之前松手只是点了一下，放回去
     const FLIP_MIN = 0.06;                    // 翻面到正中间时身体最薄的比例
+    let realBroken = false;                   // 写实画法抛过异常：之后整个页面生命周期都不再用它（见 drawFish）
+    let realDrawn = 0;                        // 上一帧用写实画法画出的鱼数：只给验收诊断（state() 报告），业务路径不读
     const FED_GLOW = 0.25;                    // 刚吃到饲料时，鱼的不透明度与光晕额外加亮的比例（乘 0…1 的变亮程度）
     const FALLBACK_PALETTE = Object.freeze([
         [255, 100, 92], [255, 150, 56], [240, 222, 70], [88, 228, 100], [79, 239, 194], [112, 205, 255], [170, 111, 255], [245, 105, 225],
@@ -222,7 +226,9 @@
     function drawFish(ctx, fish, palette, view, extras) {
         const spec = Core.speciesById(fish.species);
         const shape = SHAPES[fish.species];
-        if (!spec || !shape) return;
+        // 写实画法：view.real 为真（设置开着）且该种有可用的骨架数据时用它；没有卡通形状的物种（海龟）不管设置如何都只有写实画法
+        const useReal = !!Real && !realBroken && Real.has(fish.species) && (view.real === true || !shape);
+        if (!spec || (!shape && !useReal)) return;
         // 被网兜捞起时按进度缩小（先慢后快），其余时候 scoopT 不存在或为 0，按原大小
         const scoop = Number.isFinite(fish.scoopT) ? clamp(fish.scoopT, 0, 1) : 0;
         const len = fish.len * (1 - P.SCOOP_SHRINK * scoop * scoop * (3 - 2 * scoop));
@@ -233,12 +239,26 @@
         const A = clamp(fish.alpha * view.amount * lerp(0.5, 1.0, fish.z) * (1 + 0.3 * view.night + FED_GLOW * fed), 0, 1);
         if (A <= 0.003) return;
         const far = fish.z < 0.55 || view.lowPower;       // 远处与省流量：不画渐变、眼睛、鳍的细节
-        const spine = spineOf(fish, shape, len, extras && extras.pull);
-        const half = shape.half;
         // 朝左游时身体翻过来（背鳍始终朝上）：用核心维护的当前面（缓动的 −1…1，换面时身体先收窄再展开，像打了个滚）；
         // 缺失或非法（旧数据）才按朝向取正负。正中间留一条细身体而不缩到 0，免得画布矩阵退化。
         let flip = Number.isFinite(fish.flip) ? clamp(fish.flip, -1, 1) : (Math.cos(fish.ang) < 0 ? -1 : 1);
         if (Math.abs(flip) < FLIP_MIN) flip = flip < 0 ? -FLIP_MIN : FLIP_MIN;
+        if (useReal) {
+            // 速度参照用“该种巡航速度 × 视口缩放”：姿态据此决定摆动幅度（慢了摆得小）
+            try {
+                if (Real.draw(ctx, fish, {
+                    len, flip, fed, far, night: view.night, amount: view.amount, lowPower: view.lowPower,
+                    speed: spec.speed * (view.scale || 1), pull: extras && extras.pull, color: main, alpha: fish.alpha,
+                })) { realDrawn++; return; }
+            } catch (error) {
+                // 写实画法出错（Canvas 拒绝了某个值等）：本页面不再用它，有卡通画法的退回卡通，海龟这类没有的不画；画布状态已由 Real.draw 还原
+                realBroken = true;
+                if (typeof view.onRealError === 'function') view.onRealError(error);
+            }
+            if (!shape) return;                           // 海龟没有卡通画法：写实数据不可用时就不画（居民列表与存储不受影响）
+        }
+        const spine = spineOf(fish, shape, len, extras && extras.pull);
+        const half = shape.half;
 
         ctx.save();
         ctx.translate(fish.x, fish.y);
@@ -969,9 +989,11 @@
                 if (netHold && !session && (netHold.world !== world || world.time >= netHold.until)) hideNet();
                 if (!world.fish.length) { play = null; return true; }
                 const night = options.night === false ? 0 : nightAmount(Number.isFinite(options.nightHour) ? options.nightHour : hourNow());
-                const view = { amount: clamp(Number.isFinite(options.amount) ? options.amount : 0.65, 0, 1), night: clamp(night || 0, 0, 1), lowPower: low, scale: world.scale };
+                const view = { amount: clamp(Number.isFinite(options.amount) ? options.amount : 0.65, 0, 1), night: clamp(night || 0, 0, 1), lowPower: low, scale: world.scale, real: options.realistic !== false,
+                    onRealError: error => warn(`[Aquarium] 写实画法出错，本页面改用卡通画法：${error && error.message ? error.message : error}`) };
                 const colors = palette();
                 const order = world.fish.slice().sort((a, b) => a.z - b.z);       // 先画远的
+                realDrawn = 0;
                 if (play) playGuard(() => PlayUi.drawBack(ctx, play, view));
                 for (const fish of order) drawFish(ctx, fish, colors, view, play ? playGuard(() => PlayCore.extrasOf(play, fish), undefined) : undefined);
                 if (play) playGuard(() => PlayUi.drawFront(ctx, play, view));
@@ -992,7 +1014,8 @@
             isActive: () => started && !failed,
             isGrabbing: () => !!session,
             entries: () => entries.map(item => ({ id: item.id, species: item.species, addedAt: item.addedAt })),
-            state: () => ({ started, failed, loaded, entries: entries.length, fish: world ? world.fish.length : 0, grabbing: !!session, playFailed }),
+            // realDrawn：上一帧用写实画法画出的鱼数；realFailed：写实画法抛过异常、本页面已改用卡通（验收诊断，业务路径不读）
+            state: () => ({ started, failed, loaded, entries: entries.length, fish: world ? world.fish.length : 0, grabbing: !!session, playFailed, realDrawn, realFailed: realBroken }),
             _world: () => world,
             _play: () => play,
         };

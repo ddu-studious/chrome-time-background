@@ -196,3 +196,25 @@ html.reduce-motion .aq-net, html.reduce-motion .aq-toggle, html.reduce-motion .a
 @media (prefers-reduced-motion: reduce) {
     .aq-net, .aq-toggle, .aq-feed { transition: none; }
 }
+
+/* 海水层（js/aquarium-water.js）：水面波光、体积光束、焦散与气泡，一张半分辨率的 WebGL 画布，输出的全是“加光”。
+   它必须放在宿主根容器（.bgx-root，position:fixed + z-index:2，自成堆叠上下文）之外：screen 只会和同一个堆叠上下文里先画的内容混合，
+   放进去就和壁纸无关了（不透明的黑色会盖住壁纸）。所以 z-index:1——在壁纸/视频（0）与 body::before 压暗层之上、根容器（2，含深海色调、鱼与水母）之下。
+   画布由脚本在第一帧画完后加 .is-on 淡入；工作台遮住首页时与宿主根容器一样整个隐藏，不再占用合成。 */
+.aq-water {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    pointer-events: none;
+    mix-blend-mode: screen;
+    opacity: 0;
+    transition: opacity .9s ease;
+}
+.aq-water.is-on { opacity: 1; }
+body.home-background-suspended .aq-water { display: none !important; }
+html.reduce-motion .aq-water { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+    .aq-water { transition: none; }
+}

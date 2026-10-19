@@ -8,7 +8,7 @@ import AppKit
 //   species-render <cases.json> <输出目录>
 //   species-render --palette                   输出产品里的 8 个色位（JSON：[[r,g,b], …]，0…1）
 // cases.json 是数组，每项：
-//   { name, species, colors: [色位…], look, facing, pitch, wave, dark, night, asleep, grabbed, blink, alert, ripples, scale, gaze, direct, show }
+//   { name, species, colors: [色位…], look, facing, pitch, wave, dark, night, asleep, grabbed, blink, alert, ripples, scale, gaze, direct, show, realistic, rigPhase, rigAmp, stageMix }
 // 除 name / species / colors / look 外都可省略（朝右、不俯仰、不划水、浅色外观、白天、醒着、没被抓、不眨眼、不警觉、不画涟漪、2 倍、瞳孔居中、走 JellyView）。
 // direct 为真时不经过 JellyView，直接用 SpeciesPainter.draw 画进位图（动物以外什么都没有：没有光晕、涟漪、“z”、气泡），并可以用 show 只画一部分元素：
 //   show: { parts: [部件下标…], strokes, eyes, blush, mouth }，没写的项照常画（parts 不写 = 全部部件）。
@@ -38,6 +38,11 @@ struct RenderCase: Decodable {
     var gaze: [Double]?
     var direct: Bool?
     var show: ShowCase?
+    // 写实版（marine-rig）：realistic 为真且该物种有骨架时用 MarineRigPainter 画；rigPhase（弧度）、rigAmp（0…1）、stageMix（0…1）对应 JellyPose 的同名字段
+    var realistic: Bool?
+    var rigPhase: Double?
+    var rigAmp: Double?
+    var stageMix: Double?
 }
 
 /// 元素可见性的请求（直接画时用），字段含义见 SpeciesVisibility。
@@ -73,6 +78,7 @@ let viewSize = NSSize(width: 170, height: 150)
 func makeAppearance(_ item: RenderCase) -> JellyAppearance {
     JellyAppearance.parse([
         "colors": item.colors, "look": item.look, "material": "glass", "size": "medium", "species": item.species,
+        "realistic": item.realistic ?? false,
     ] as [String: Any])
 }
 
@@ -89,6 +95,10 @@ func makePose(_ item: RenderCase, _ appearance: JellyAppearance) -> JellyPose {
     pose.pitch = CGFloat(item.pitch ?? 0)
     pose.wave = CGFloat(item.wave ?? 0)
     if let gaze = item.gaze, gaze.count == 2 { pose.look = CGPoint(x: gaze[0], y: gaze[1]) }
+    pose.realistic = appearance.realistic && pose.species != .jelly && pose.species.hasRealisticRig
+    pose.rigPhase = CGFloat(item.rigPhase ?? 0)
+    pose.rigAmp = CGFloat(item.rigAmp ?? 0)
+    pose.stageMix = CGFloat(item.stageMix ?? 0)
     pose.paint = JellyPaint.make(appearance: appearance)
     pose.tint = pose.paint.a
     return pose
@@ -167,7 +177,9 @@ for item in cases {
     // 否则渲染工具忽略 show、每次都画整只时，“只画这一个”的各项检查拿到的是整只图
     let v = item.show?.visibility ?? .all
     let shown: [String: Any] = ["parts": v.parts.map { Array($0).sorted() } ?? NSNull(), "strokes": v.strokes, "eyes": v.eyes, "blush": v.blush, "mouth": v.mouth]
-    manifest.append(["name": item.name, "file": file, "species": species.rawValue, "appearance": appearanceName, "direct": direct, "show": shown,
+    // realistic：实际画的是不是写实版（请求要求写实、物种是动物且有骨架），检查脚本据此确认请求的风格真的生效了
+    let realistic = (item.realistic ?? false) && species != .jelly && species.hasRealisticRig && !direct
+    manifest.append(["name": item.name, "file": file, "species": species.rawValue, "appearance": appearanceName, "direct": direct, "show": shown, "realistic": realistic,
                      "width": rep.pixelsWide, "height": rep.pixelsHigh, "scale": max(1, min(4, item.scale ?? 2))])
 }
 guard let output = try? JSONSerialization.data(withJSONObject: manifest, options: [.sortedKeys]) else { fail("无法编码清单") }

@@ -699,7 +699,7 @@ importScripts('jelly-nudge.js', 'jelly-appearance.js', 'jelly-errands-core.js', 
         if (!['jelly_appearance_get', 'jelly_appearance_set', 'jelly_appearance_reroll'].includes(message?.action)) return;
         if (sender.id !== chrome.runtime.id || !sender.url?.startsWith(chrome.runtime.getURL(''))) { respond({ ok: false, error: '仅扩展页面可设置桌面水母形象' }); return; }
         (message.action === 'jelly_appearance_set' ? jellyAppearance.set(message.settings) : message.action === 'jelly_appearance_reroll' ? jellyAppearance.rerollNow() : jellyAppearance.get())
-            .then(result => respond(result.ok ? { ...result, component: jellyDesktop.appearanceStatus(), connected: jellyDesktop.status().connected } : result))
+            .then(result => respond(result.ok ? { ...result, component: jellyDesktop.appearanceStatus(), style: jellyDesktop.appearanceStyle(), connected: jellyDesktop.status().connected } : result))
             .catch(error => respond({ ok: false, error: error.message }));
         return true;
     });

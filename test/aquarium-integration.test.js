@@ -41,12 +41,22 @@ function makeSpyAquarium(order) {
     };
 }
 
+function makeSpyWater(order) {
+    return {
+        starts: 0, stops: 0, frames: [], active: false,
+        start() { this.starts++; this.active = true; },
+        stop() { this.stops++; this.active = false; },
+        frame(options) { this.frames.push(options); if (order) order.push('water'); return true; },
+        isActive() { return this.active; },
+    };
+}
+
 /**
  * 宿主夹具。aquarium：'spy' 间谍水族馆 / 'real' 真实核心 + 玩法 + 控制器 / 'real-noplay' 没有玩法脚本。
  * skin：'spy' 间谍皮肤 / 'real' 真实 jellyfish-core.js + jellyfish.js / 'none' 皮肤脚本缺席。
  * 间谍皮肤只记录宿主怎么调用它；真实皮肤验证整条链路画在宿主画布上。
  */
-async function hostFixture({ effect = 'jellyfish', settings = {}, reduceMotion = false, saveData = false, skin = 'spy', memos, crumple = false, complete, aquarium = 'spy', localData = {}, order } = {}) {
+async function hostFixture({ effect = 'jellyfish', settings = {}, reduceMotion = false, saveData = false, skin = 'spy', memos, crumple = false, complete, aquarium = 'spy', water = 'none', localData = {}, order } = {}) {
     const listeners = new Map();
     const winListeners = new Map();
     const rootListeners = new Map();
@@ -108,6 +118,8 @@ async function hostFixture({ effect = 'jellyfish', settings = {}, reduceMotion =
     };
     if (skin === 'spy') win.JellyfishSkin = spy;
     if (aquarium === 'spy') win.Aquarium = spyAq;
+    const spyWater = makeSpyWater(order);
+    if (water === 'spy') win.AquariumWater = spyWater;
     const bins = [];
     if (crumple) {
         win.TaskCrumple = { holdBin() { const bin = makeBin(); bins.push(bin); return bin; } };
@@ -161,7 +173,7 @@ async function hostFixture({ effect = 'jellyfish', settings = {}, reduceMotion =
         return event;
     };
     return {
-        win, spy, spyAq, frames, calls, changed, canvasContext, canvasState, documentElement, bins, completions, clock, body,
+        win, spy, spyAq, spyWater, frames, calls, changed, canvasContext, canvasState, documentElement, bins, completions, clock, body,
         root: elements.get('background-experience-root'),
         experience: win.backgroundExperience,
         render(now = 116) { for (const [id, callback] of [...frames]) { frames.delete(id); callback(now); } },
@@ -504,6 +516,123 @@ test('整链路：玩法脚本缺席（加载失败）时鱼层照常工作，�
     assert.equal(aq.state().playFailed, false);
 });
 
+// ---------- 海水层（js/aquarium-water.js）与宿主的接线 ----------
+
+test('海水层：选水母皮肤且设置开着（默认）才启动；关开关、换皮肤、减少动态效果都会停；脚本缺席时宿主照常', async () => {
+    const f = await hostFixture({ water: 'spy' });
+    assert.equal(f.spyWater.starts, 1);
+    assert.equal(f.spyWater.active, true);
+
+    f.experience.settings.aquariumWater = false;
+    f.experience.applySettings();
+    assert.equal(f.spyWater.active, false, '关掉“海水效果”：只停水体，鱼和水母照常');
+    assert.equal(f.spy.active, true);
+    assert.equal(f.spyAq.active, true);
+    f.experience.settings.aquariumWater = true;
+    f.experience.applySettings();
+    assert.equal(f.spyWater.active, true, '重新打开又启动');
+
+    f.experience.settings.visualEffect = 'depth';
+    f.experience.applySettings();
+    assert.equal(f.spyWater.active, false, '换成别的皮肤：海水层跟着停');
+
+    const off = await hostFixture({ water: 'spy', settings: { aquariumWater: false } });
+    assert.equal(off.spyWater.starts, 0, '设置里关着：从一开始就不启动，也就没有画布与 WebGL');
+    const noFish = await hostFixture({ water: 'spy', settings: { aquariumFish: false } });
+    assert.equal(noFish.spyWater.starts, 1, '海水与小鱼开关互不影响');
+    assert.equal(noFish.spyAq.starts, 0);
+    const reduce = await hostFixture({ water: 'spy', reduceMotion: true });
+    assert.equal(reduce.spyWater.starts, 0, '减少动态效果下水母视为没选皮肤，海水层也不出现');
+    const other = await hostFixture({ water: 'spy', effect: 'liquid' });
+    assert.equal(other.spyWater.starts, 0, '没选水母皮肤：不启动');
+
+    const absent = await hostFixture({ water: 'none' });
+    absent.render(116);
+    absent.render(132);
+    assert.equal(absent.spy.frames.length, 2, '海水层脚本缺席：水母照常画');
+    assert.equal(absent.spyAq.frames.length, 2);
+});
+
+test('海水层：每帧先于鱼与水母；拿到页面尺寸、宿主时间戳、强度、省流量与夜晚开关', async () => {
+    const order = [];
+    const f = await hostFixture({ water: 'spy', order });
+    f.render(116);
+    assert.deepEqual(order, ['water', 'fish', 'jelly'], '水体最先（最下面），再是鱼，最后水母');
+    const o = f.spyWater.frames[0];
+    assert.equal(o.width, 1440);
+    assert.equal(o.height, 900);
+    assert.equal(o.now, 116, '用宿主 RAF 的时间戳，节流与着色器时间都基于它');
+    assert.equal(o.amount, f.experience.settings.intensity / 100);
+    assert.equal(o.lowPower, false);
+    assert.equal(o.night, true);
+    assert.equal(o.ctx, undefined, '海水层有自己的画布，不拿宿主的 2D 上下文');
+
+    const lowNight = await hostFixture({ water: 'spy', settings: { jellyfishNight: false }, saveData: true });
+    lowNight.render(116); lowNight.render(132);      // 省流量时宿主隔帧绘制，与鱼层的同类用例一样多画一帧
+    assert.equal(lowNight.spyWater.frames[0].night, false);
+    assert.equal(lowNight.spyWater.frames[0].lowPower, true);
+});
+
+test('海水层：自己停用（失败）后宿主不再调用；页面被隐藏或工作台遮挡时不调用，恢复后继续；水母不受影响', async () => {
+    const f = await hostFixture({ water: 'spy' });
+    f.render(116);
+    f.spyWater.active = false;
+    f.render(132);
+    f.render(148);
+    assert.equal(f.spyWater.frames.length, 1);
+    assert.equal(f.spy.frames.length, 3);
+
+    const g = await hostFixture({ water: 'spy' });
+    g.render(116);
+    g.experience.setSuspended(true);
+    for (let i = 0; i < 10; i++) g.render(200 + i * 16);
+    assert.equal(g.spyWater.frames.length, 1);
+    g.experience.setSuspended(false);
+    g.render(1000);
+    assert.equal(g.spyWater.frames.length, 2);
+});
+
+test('海水层：设置规范化——只有明确 false 才关，缺省与怪值都开', async () => {
+    for (const [value, expected] of [[undefined, true], [true, true], [false, false], [0, true], [null, true], ['false', true]]) {
+        const f = await hostFixture({ water: 'spy', settings: { aquariumWater: value } });
+        assert.equal(f.experience.settings.aquariumWater, expected, String(value));
+        assert.equal(f.spyWater.starts, expected ? 1 : 0, String(value));
+    }
+});
+
+// ---------- 写实动物（js/aquarium-real.js）与宿主的接线 ----------
+
+test('写实动物：宿主把设置传给鱼层——缺省与怪值都开，只有明确 false 才关；每一帧都传', async () => {
+    for (const [value, expected] of [[undefined, true], [true, true], [false, false], [0, true], [null, true], ['false', true], ['', true]]) {
+        const f = await hostFixture({ settings: { aquariumRealistic: value } });
+        f.render(116);
+        f.render(132);
+        assert.equal(f.experience.settings.aquariumRealistic, expected, String(value));
+        assert.ok(f.spyAq.frames.length >= 1, String(value));
+        for (const frame of f.spyAq.frames) assert.equal(frame.realistic, expected, `${String(value)}：每一帧都带着设置`);
+    }
+});
+
+test('写实动物：改设置立即生效（applySettings 之后下一帧带新值），不需要重启鱼层', async () => {
+    const f = await hostFixture();
+    f.render(116);
+    assert.equal(f.spyAq.frames.at(-1).realistic, true);
+    f.experience.settings.aquariumRealistic = false;
+    f.experience.applySettings();
+    f.render(132);
+    assert.equal(f.spyAq.frames.at(-1).realistic, false);
+    assert.equal(f.spyAq.stops, 0, '只是换画法，鱼层没有停过（start 对已运行的鱼层本来就是空操作）');
+    assert.equal(f.spyAq.active, true);
+});
+
+test('写实动物：鱼层脚本里没有 AquariumReal（加载失败）时，真实水族馆照常画卡通鱼，不抛错', async () => {
+    const f = await hostFixture({ skin: 'real', aquarium: 'real', localData: { aquariumV1: { v: 1, fish: [{ id: 'c1', species: 'clown', addedAt: 1 }, { id: 'c2', species: 'hammer', addedAt: 2 }] } } });
+    await tick(); await tick();
+    for (let i = 0; i < 12; i++) f.render(116 + i * 16);
+    assert.equal(f.win.Aquarium.state().failed, false);
+    assert.ok((f.calls.get('fill') || 0) > 0);
+});
+
 // ---------- 静态契约 ----------
 
 test('源码合同：鱼层不自建 RAF/定时器/画布，不 innerHTML/eval/联网，不碰任务/备忘录存储；只写 aquariumV1', () => {
@@ -534,24 +663,54 @@ test('解耦：水母代码不认识水族馆（鱼读水母，水母不读鱼�
     const host = read('js/background-experience.js');
     assert.match(host, /aquariumFish: source\.aquariumFish !== false/);
     assert.match(host, /aquariumFish: true,/);
+    assert.match(host, /aquariumWater: source\.aquariumWater !== false/);
+    assert.match(host, /aquariumWater: true,/);
+    for (const file of ['js/aquarium.js', 'js/aquarium-core.js', 'js/aquarium-play.js', 'js/aquarium-play-core.js']) assert.doesNotMatch(read(file), /AquariumWater|aquarium-water/, `${file}：鱼层不认识海水层，二者只通过宿主各自调用`);
+    for (const file of ['js/aquarium-water.js', 'js/aquarium-water-core.js', 'js/aquarium-water-shader.js']) assert.doesNotMatch(read(file), /window\.Aquarium\b|JellyfishSkin|JellyfishCore\.(?!nightAmount)/, `${file}：海水层只读水母的夜晚曲线，不读鱼和水母的状态`);
 });
 
 test('index.html：脚本顺序与版本钉子（核心、玩法核心、玩法画法先于控制器，都在水母之后宿主之前）、样式已链接', () => {
     const html = read('index.html');
     const idx = s => { const i = html.indexOf(s); assert.ok(i >= 0, s); return i; };
-    assert.ok(idx('js/jellyfish.js?v=6') < idx('js/aquarium-core.js?v=3'));
-    assert.ok(idx('js/aquarium-core.js?v=3') < idx('js/aquarium-play-core.js?v=1'));
+    assert.ok(idx('js/jellyfish.js?v=6') < idx('js/aquarium-core.js?v=4'));
+    assert.ok(idx('js/aquarium-core.js?v=4') < idx('js/aquarium-play-core.js?v=1'));
     assert.ok(idx('js/aquarium-play-core.js?v=1') < idx('js/aquarium-play.js?v=1'));
-    assert.ok(idx('js/aquarium-play.js?v=1') < idx('js/aquarium.js?v=3'));
-    assert.ok(idx('js/aquarium.js?v=3') < idx('js/background-experience.js?v=12'));
-    idx('css/aquarium.css?v=3');
+    assert.ok(idx('js/aquarium-play.js?v=1') < idx('js/aquarium.js?v=4'));
+    assert.ok(idx('js/aquarium.js?v=4') < idx('js/background-experience.js?v=14'));
+    // 写实动物：路径工具 → 骨架求值 → 画笔 → 骨架数据 → 写实画法，全部先于控制器
+    assert.ok(idx('js/jelly-species-shapes.js?v=4') < idx('js/marine-rig.js?v=1'));
+    assert.ok(idx('js/marine-rig.js?v=1') < idx('js/marine-rig-canvas.js?v=1'));
+    assert.ok(idx('js/marine-rig-canvas.js?v=1') < idx('js/marine-rig-data.js?v=1'));
+    assert.ok(idx('js/marine-rig-data.js?v=1') < idx('js/aquarium-real.js?v=1'));
+    assert.ok(idx('js/aquarium-real.js?v=1') < idx('js/aquarium.js?v=4'));
+    assert.ok(idx('js/aquarium-core.js?v=4') < idx('js/aquarium-real.js?v=1'), '写实画法按核心的物种表工作，核心先加载');
+    idx('css/aquarium.css?v=4');
     for (const file of ['css/aquarium.css', 'js/aquarium-play-core.js', 'js/aquarium-play.js']) assert.ok(fs.existsSync(path.join(root, file)), file);
+});
+
+test('设置页：有“写实动物”开关，默认开，保存键 aquariumRealistic，文案如实写明范围；鱼名单里有海龟', () => {
+    const html = read('settings.html');
+    assert.match(html, /id="set-bgAquariumRealistic" checked/);
+    const found = /<span class="sp-field-label">写实动物<\/span><span class="sp-field-hint">([\s\S]*?)<\/span>/.exec(html);
+    assert.ok(found, '开关的标签是“写实动物”');
+    for (const name of ['小锤头鲨', '蝠鲼', '海龟', '鲸鲨']) assert.ok(found[1].includes(name), `说明里要列出 ${name}`);
+    assert.match(found[1], /关掉|关闭/, '说明里写了关掉会怎样');
+    const page = read('js/settings-page.js');
+    assert.match(page, /aquariumRealistic: true,/);
+    assert.match(page, /aquariumRealistic: stored\.aquariumRealistic !== false/);
+    assert.match(page, /\['set-bgAquariumRealistic', 'aquariumRealistic', element => element\.checked\]/);
+    assert.match(page, /aquariumRealistic\.checked = bgExperienceSettings\.aquariumRealistic/);
+    const host = read('js/background-experience.js');
+    assert.match(host, /aquariumRealistic: source\.aquariumRealistic !== false/);
+    assert.match(host, /aquariumRealistic: true,/);
+    assert.match(host, /realistic: this\.settings\.aquariumRealistic/);
+    for (const file of ['js/jellyfish.js', 'js/jellyfish-core.js']) assert.doesNotMatch(read(file), /aquariumRealistic|AquariumReal|MarineRig/, `${file} 不认识写实动物`);
 });
 
 test('设置页：有水族馆开关，默认开，保存键 aquariumFish，脚本版本已更新', () => {
     const html = read('settings.html');
     assert.match(html, /id="set-bgAquariumFish" checked/);
-    assert.ok(html.includes('js/settings-page.js?v=14'));
+    assert.ok(html.includes('js/settings-page.js?v=16'));
     const page = read('js/settings-page.js');
     assert.match(page, /aquariumFish: true,/);
     assert.match(page, /aquariumFish: stored\.aquariumFish !== false/);

@@ -7,6 +7,8 @@ const Aquarium = require('../js/aquarium.js');
 
 const { SHAPES, geometry, drawFish } = Aquarium;
 const SPECIES = Core.SPECIES.map(s => s.id);
+// 卡通画法只覆盖有 SHAPES 的 8 种；海龟没有卡通形状，只有写实画法（见 aquarium-real.test.js）
+const CARTOON = SPECIES.filter(id => Object.prototype.hasOwnProperty.call(SHAPES, id));
 const PALETTE = [[255, 100, 92], [255, 150, 56], [240, 222, 70], [88, 228, 100], [79, 239, 194], [112, 205, 255], [170, 111, 255], [245, 105, 225]];
 
 function recorder() {
@@ -38,7 +40,8 @@ const draw = (species, { extra = {}, lowPower = false, night = 0 } = {}) => {
 };
 
 test('登记表：每种鱼有 5 个站位的正半宽，尾型合法；辨识特征已登记（小丑鱼 3 条白带、河豚有刺和胸鳍、神仙鱼高鳍有条纹和腹鳍丝、蝠鲼有头鳍）', () => {
-    assert.deepEqual(Object.keys(SHAPES).sort(), [...SPECIES].sort());
+    assert.deepEqual(Object.keys(SHAPES).sort(), CARTOON.sort());
+    assert.deepEqual(SPECIES.filter(id => !CARTOON.includes(id)), ['turtle'], '只有海龟没有卡通形状');
     for (const [id, shape] of Object.entries(SHAPES)) {
         assert.equal(shape.half.length, 5, id);
         assert.ok(shape.half.every(v => Number.isFinite(v) && v > 0 && v < 0.5), `${id} 半宽`);
@@ -135,7 +138,7 @@ test('绘制：所有种类 × 远近 × 省流量 × 翻面 × 被捞起，不�
 });
 
 test('绘制成本：远处（z < 0.55）与省流量不做裁剪、不建渐变；近处才有细节，调用数明显更多', () => {
-    for (const species of SPECIES) {
+    for (const species of CARTOON) {
         const far = draw(species, { extra: { z: 0.3 } });
         const low = draw(species, { extra: { z: 1 }, lowPower: true });
         for (const [label, ctx] of [['远处', far], ['省流量', low]]) {
@@ -210,7 +213,7 @@ const isDarkStyle = style => {
 };
 
 test('混合模式：暗色细节（眼睛、白带黑边、深色竖纹）在 source-over 下画，身体与鳍仍在宿主的 screen 下画，画完还原', () => {
-    for (const species of SPECIES) {
+    for (const species of CARTOON) {
         const ctx = tracer('screen');
         drawFish(ctx, fishOf(species), PALETTE, { amount: 0.9, night: 0.4, lowPower: false });
         const dark = ctx._trace.filter(t => isDarkStyle(t.style));
@@ -231,7 +234,7 @@ test('混合模式：暗色细节（眼睛、白带黑边、深色竖纹）在 s
 
 test('几何：bodyOutline 的鼻子是圆的（头部按四分之一椭圆收到近 0），其余按站位平滑过渡；上下对称、沿体长单调、没有明显过冲', () => {
     const len = 100;
-    for (const species of SPECIES) {
+    for (const species of CARTOON) {
         const half = SHAPES[species].half;
         const straight = [0, 0.25, 0.5, 0.75, 1].map(u => ({ x: len * (0.5 - u), y: 0 }));
         const { top, bottom, us } = geometry.bodyOutline(straight, half, len);

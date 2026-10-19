@@ -1,9 +1,9 @@
 import Foundation
 import CoreGraphics
 
-// 纯逻辑自测：countdown-model.swift + jelly-model.swift + jelly-swim.swift + jelly-palette.swift + jelly-appearance.swift + jelly-species.swift + jelly-species-data.swift（生成物）+ jelly-paint.swift + assistant-model.swift（无 AppKit）。
+// 纯逻辑自测：countdown-model.swift + jelly-model.swift + jelly-swim.swift + jelly-palette.swift + jelly-appearance.swift + jelly-species.swift + jelly-species-data.swift（生成物）+ marine-rig.swift + marine-rig-data.swift（生成物，写实骨架）+ jelly-paint.swift + assistant-model.swift（无 AppKit）。
 // 运行：node --test test/desktop-companion-logic.test.mjs，或手工（入口文件须叫 main.swift，所以先复制一份）
-//   cp desktop-reminder/companion-selftest.swift /tmp/main.swift && cd desktop-reminder && xcrun swiftc countdown-model.swift jelly-model.swift jelly-swim.swift jelly-palette.swift jelly-appearance.swift jelly-species.swift jelly-species-data.swift jelly-paint.swift assistant-model.swift /tmp/main.swift -o /tmp/companion-selftest && /tmp/companion-selftest
+//   cp desktop-reminder/companion-selftest.swift /tmp/main.swift && cd desktop-reminder && xcrun swiftc countdown-model.swift jelly-model.swift jelly-swim.swift jelly-palette.swift jelly-appearance.swift jelly-species.swift jelly-species-data.swift marine-rig.swift marine-rig-data.swift jelly-paint.swift assistant-model.swift /tmp/main.swift -o /tmp/companion-selftest && /tmp/companion-selftest
 // 环境变量 HOTKEY_CASES 指向一个 JSON 数组文件时，额外打印每一项的规范化结果（HOTKEY 行）与展示符号（GLYPH 行），供 Node 测试与 JS 实现逐条对照。
 // 环境变量 APPEARANCE_CASES 同理：打印每个外观负载解析后的结果（APPEARANCE 行）与各部位颜色（PAINT 行）。
 // 环境变量 PARSE_CASES 同理：打印每个路径串的解析结果（PARSE 行），供 Node 与 JS 的 parsePath 逐条对照；动物几何（SPEC* 行）每次都打印。
@@ -1842,6 +1842,7 @@ do {
         for (index, value) in cases.enumerated() {
             let a = JellyAppearance.parse(value)
             print("APPEARANCE \(index) \(a.colors.map(String.init).joined(separator: ",")) \(a.look.rawValue) \(a.material.rawValue) \(a.size.rawValue) \(a.season ?? "-") \(a.species.rawValue)")
+            print("REALISTIC \(index) \(a.realistic ? 1 : 0)")
             let paint = JellyPaint.make(appearance: a)
             let tentacles = (0..<5).map { rgb(paint.tentacleTone(index: $0, count: 5)) }.joined(separator: " ")
             print("PAINT \(index) \(paint.kind.rawValue) \(rgb(paint.a)) \(rgb(paint.b)) \(rgb(paint.c)) \(rgb(paint.oralTone)) \(rgb(paint.outlineTone)) \(tentacles)")
@@ -1852,6 +1853,198 @@ do {
     }
     for (index, rgb) in JellyAppearance.palette.enumerated() { print("PALETTEHUE \(index) \(String(format: "%.1f", JellyAppearance.hue(rgb)))") }
     print("STATUSES \(M.Status.allCases.map { $0.rawValue }.sorted().joined(separator: ","))")
+}
+
+// --- 写实海洋动物（见 marine-rig.swift；JS 参考实现是 js/marine-rig.js，test/marine-rig-parity.test.mjs 把两边的求值逐点对拍）---
+do {
+    typealias S = JellySpecies
+    typealias E = MarineRigEvaluator
+    let animals: [S] = [.hammer, .manta, .turtle, .whaleshark]
+    check(animals.allSatisfy { MarineRigGeometries.of($0) != nil && $0.hasRealisticRig }, "写实骨架：四种动物都编译成功")
+    check(MarineRigGeometries.of(.jelly) == nil && !S.jelly.hasRealisticRig && S.jelly.rigBodyLength == nil && S.jelly.rigFrequency == 0, "写实骨架：水母没有骨架、体长与频率为空")
+    check(Set(MarineRigData.sources.keys.map { $0.rawValue }) == Set(animals.map { $0.rawValue }), "写实骨架：数据表里恰好是这四种动物")
+    // 体长与频率（桌面上的大小与摆动快慢）是产品取值，被钉死；改动要同步技术文档与下面的占位检查
+    check(S.hammer.rigBodyLength == 70 && S.manta.rigBodyLength == 74 && S.turtle.rigBodyLength == 64 && S.whaleshark.rigBodyLength == 84, "写实骨架：体长 70 / 74 / 64 / 84 pt")
+    check(S.hammer.rigFrequency == 0.75 && S.manta.rigFrequency == 0.5 && S.turtle.rigFrequency == 0.4 && S.whaleshark.rigFrequency == 0.4, "写实骨架：游动频率 0.75 / 0.5 / 0.4 / 0.4 Hz")
+
+    // 取整：远离零的一侧进位（正负对称），-0 归一为 0（与 JS 的 roundOps 同一组用例）
+    check(E.round4(0.00005) == 0.0001 && E.round4(-0.00005) == -0.0001, "round4：恰好一半时远离零进位，正负对称")
+    check(E.round4(1.23456) == 1.2346 && E.round4(-1.23454) == -1.2345, "round4：取整到 1e-4")
+    check(E.round4(-0.00001) == 0 && E.round4(-0.00001).sign == .plus && E.round4(-0.0).sign == .plus, "round4：-0 归一为 +0")
+    check([0.12345, 3.00005, 17.77775, 0.99995].allSatisfy { E.round4(-$0) == -E.round4($0) }, "round4：负数是正数的镜像")
+
+    // 压平：M/L 端点原样；每段 C/Q 取 8 个点且终点精确；闭合时去掉与起点重合的末点
+    do {
+        func flat(_ d: String) -> [MarinePoly]? { SpeciesPath.parse(d).map { MarineRig.flatten($0) } }
+        let square = flat("M 0 0 L 10 0 L 10 10 L 0 10 Z")
+        check(square?.count == 1 && square?[0].pts == [0, 0, 10, 0, 10, 10, 0, 10] && square?[0].closed == true, "压平：折线端点原样，Z 标记闭合")
+        let curve = flat("M 0 0 C 0 10 10 10 10 0")
+        check(curve?[0].pts.count == 2 * (1 + MarineRigLimits.curveSteps) && curve?[0].pts.suffix(2) == [10, 0] && curve?[0].closed == false, "压平：一段三次曲线 8 个点，终点精确，没写 Z 不闭合")
+        let quad = flat("M 0 0 Q 5 10 10 0")
+        check(quad?[0].pts.count == 2 * (1 + MarineRigLimits.curveSteps) && quad?[0].pts.suffix(2) == [10, 0], "压平：二次曲线同样")
+        check(flat("M 0 0 L 10 0 L 0 0 Z")?[0].pts == [0, 0, 10, 0], "压平：闭合时末点与起点重合就去掉")
+        check(flat("M 0 0 L 10 0 Z M 20 20 L 30 20 L 30 30")?.map { $0.closed } == [true, false], "压平：多个子路径各自记录是否闭合")
+        check(flat("M 0 0 L 10") == nil && flat("L 0 0") == nil && flat("M 0 0 L 1,2") == nil, "压平：坏路径（数字不够、不以 M 开头、含逗号）返回 nil")
+    }
+
+    // 姿态规范化：非有限的数当缺省（phase 0、amp 1、turn 0、lod 2），再夹到合法范围
+    do {
+        let n = MarineRigPose(phase: .nan, amp: .infinity, turn: -.infinity, lod: 9).normalized
+        check(n.phase == 0 && n.amp == 1 && n.turn == 0 && n.lod == 2, "姿态规范化：非有限数用缺省，lod 夹到 2")
+        let m = MarineRigPose(phase: 1.5, amp: 5, turn: 3, lod: -4).normalized
+        check(m.phase == 1.5 && m.amp == 1 && m.turn == 1 && m.lod == 0, "姿态规范化：amp 夹到 1、turn 夹到 1、lod 夹到 0")
+        check(MarineRigPose(phase: 1, amp: -2, turn: -3, lod: 1).normalized == MarineRigPose(phase: 1, amp: 0, turn: -1, lod: 1), "姿态规范化：amp 下限 0、turn 下限 -1")
+    }
+
+    // 数据校验：坏数据让整个骨架不可用（返回 nil），不画半个动物
+    do {
+        func minimal(d: String = "M 0 0 L 10 0 L 10 10 Z", fill: MarineFillSource? = .flat(0.5, 0.5, 0.5), stroke: MarineStrokeSource? = nil, part: String? = nil,
+                     parts: [String: MarineFlapSource] = [:], bend: MarineBendSource = MarineBendSource(ampHead: 0.01, ampTail: 0.05, pow: 2, waves: 1, turn: 0.05),
+                     alpha: Double = 1, lod: Int = 0, tail: Double = -50, snout: Double = 50) -> MarineRigSource {
+            MarineRigSource(view: .side, tail: tail, snout: snout, bend: bend, parts: parts,
+                            layers: [MarineLayerSource(id: "a", part: part, d: d, fill: fill, stroke: stroke, alpha: alpha, evenOdd: false, lod: lod)])
+        }
+        let flap = MarineFlapSource(pivotX: 0, pivotY: 0, deg: 10, lag: 0.3, phase: 0, freq: 1, squash: 0, squashPhase: 0)
+        check(MarineRig(source: minimal()) != nil, "校验：最小的合规骨架可以编译")
+        check(MarineRig(source: minimal(d: "M 0 0 L 10")) == nil, "校验：路径不合规 → nil")
+        check(MarineRig(source: minimal(fill: nil)) == nil, "校验：既没有填充也没有描边 → nil")
+        check(MarineRig(source: minimal(alpha: 1.5)) == nil && MarineRig(source: minimal(alpha: .nan)) == nil, "校验：不透明度越界或非有限 → nil")
+        check(MarineRig(source: minimal(lod: 3)) == nil && MarineRig(source: minimal(lod: -1)) == nil, "校验：lod 只能是 0/1/2")
+        check(MarineRig(source: minimal(part: "ghost")) == nil, "校验：引用没有登记的部件 → nil")
+        check(MarineRig(source: minimal(part: "f", parts: ["f": flap])) != nil, "校验：登记过的部件可以引用")
+        check(MarineRig(source: minimal(part: "f", parts: ["f": MarineFlapSource(pivotX: 0, pivotY: 0, deg: 120, lag: 0, phase: 0, freq: 1, squash: 0, squashPhase: 0)])) == nil, "校验：转动幅度超过 ±90 → nil")
+        check(MarineRig(source: minimal(part: "f", parts: ["f": MarineFlapSource(pivotX: 0, pivotY: 0, deg: 5, lag: 0, phase: 0, freq: 0, squash: 0, squashPhase: 0)])) == nil, "校验：freq 必须为正 → nil")
+        check(MarineRig(source: minimal(part: "f", parts: ["f": MarineFlapSource(pivotX: 0, pivotY: 0, deg: 5, lag: 0, phase: 0, freq: 1, squash: 0.9, squashPhase: 0)])) == nil, "校验：squash 超过 0.6 → nil")
+        check(MarineRig(source: minimal(bend: MarineBendSource(ampHead: 0.3, ampTail: 0.05, pow: 2, waves: 1, turn: 0))) == nil, "校验：脊柱振幅超过 0.2 → nil")
+        check(MarineRig(source: minimal(bend: MarineBendSource(ampHead: 0.01, ampTail: 0.05, pow: 0.2, waves: 1, turn: 0))) == nil && MarineRig(source: minimal(bend: MarineBendSource(ampHead: 0.01, ampTail: 0.05, pow: 2, waves: 5, turn: 0))) == nil, "校验：pow 与 waves 越界 → nil")
+        check(MarineRig(source: minimal(tail: 10, snout: 10)) == nil && MarineRig(source: minimal(tail: .nan)) == nil, "校验：体长范围不合规 → nil")
+        let grad: (Double, [[Double]]) -> MarineRigSource = { _, stops in minimal(fill: .gradient(ax: 0, ay: 0, bx: 10, by: 0, stops: stops)) }
+        check(MarineRig(source: grad(0, [[0, 0, 0, 0, 1], [1, 1, 1, 1, 1]])) != nil, "校验：合规渐变可以编译")
+        check(MarineRig(source: grad(0, [[0, 0, 0, 0, 1]])) == nil, "校验：渐变色标少于 2 个 → nil")
+        check(MarineRig(source: grad(0, [[0.8, 0, 0, 0, 1], [0.2, 1, 1, 1, 1]])) == nil, "校验：渐变色标位置递减 → nil")
+        check(MarineRig(source: grad(0, [[0, 0, 0, 0, 1], [1, 1, 1, 1.5, 1]])) == nil && MarineRig(source: grad(0, [[0, 0, 0, 0, 1], [1, 1, 1]])) == nil, "校验：色标颜色越界或分量个数不对 → nil")
+        check(MarineRig(source: minimal(fill: nil, stroke: MarineStrokeSource(r: 0, g: 0, b: 0, width: 2, alpha: 1, butt: false))) != nil, "校验：只有描边也可以")
+        check(MarineRig(source: minimal(fill: nil, stroke: MarineStrokeSource(r: 0, g: 0, b: 0, width: 9, alpha: 1, butt: false))) == nil && MarineRig(source: minimal(fill: nil, stroke: MarineStrokeSource(r: 0, g: 0, b: 0, width: 0, alpha: 1, butt: false))) == nil, "校验：线宽超出 (0, 8] → nil")
+        let big = "M 0 0 " + (0..<799).map { "L \($0 % 100) \($0 / 100)" }.joined(separator: " ")
+        check(SpeciesPath.parse(big) != nil && MarineRig(source: minimal(d: big)) != nil, "校验：命令数在上限内的路径可以编译")
+    }
+
+    // 逐种动物：求值的结构、站位表与精确公式的偏差、并集包围盒
+    for species in animals {
+        guard let g = MarineRigGeometries.of(species) else { continue }
+        let rig = g.rig
+        let name = species.rawValue
+        let lod0 = E.evaluate(rig, pose: MarineRigPose(phase: 1, amp: 1, turn: 0, lod: 0))
+        let lod2 = E.evaluate(rig, pose: MarineRigPose(phase: 1, amp: 1, turn: 0, lod: 2))
+        check(lod0.ops.count >= 10 && lod0.ops.count < lod2.ops.count, "\(name)：lod 0 有 \(lod0.ops.count) 个绘制步骤（≥10），少于 lod 2 的 \(lod2.ops.count)")
+        check(lod0.ops.allSatisfy { op in lod2.ops.contains { $0.id == op.id && $0.kind == op.kind } }, "\(name)：lod 0 的每个步骤都包含在 lod 2 里")
+        check(E.evaluate(rig, pose: MarineRigPose(phase: 1, amp: 1, turn: 0, lod: 2)).ops == lod2.ops, "\(name)：同一姿态求值两次结果完全相同（确定性）")
+        var finite = true, maxDeviation = 0.0, widest = 0.0, count = 0
+        var overshoot = 0.0
+        for i in 0..<12 {
+            for amp in [0.3, 1.0] {
+                for turn in [-1.0, 0.0, 1.0] {
+                    let pose = MarineRigPose(phase: Double(i) * .pi / 6 + 0.1, amp: amp, turn: turn, lod: 2)
+                    let fast = E.evaluate(rig, pose: pose), exact = E.evaluateExact(rig, pose: pose)
+                    guard fast.ops.count == exact.ops.count else { finite = false; continue }
+                    for (a, b) in zip(fast.ops, exact.ops) {
+                        if a.id != b.id || a.kind != b.kind || a.polys.count != b.polys.count { finite = false; continue }
+                        for (p, q) in zip(a.polys, b.polys) {
+                            if p.pts.count != q.pts.count || p.closed != q.closed { finite = false; continue }
+                            for (x, y) in zip(p.pts, q.pts) {
+                                if !x.isFinite || !y.isFinite { finite = false }
+                                maxDeviation = max(maxDeviation, abs(x - y))
+                                count += 1
+                            }
+                        }
+                    }
+                    if let box = fast.bounds {
+                        widest = max(widest, Double(box.width))
+                        // 并集只采样 12 个相位 × 3 个转弯（lod 0），实际的任一帧（任意相位、lod 2）不能越出太多：越出量按骨架单位（体长 100）量
+                        let u = CGRect(x: g.union.minX / g.unit, y: -g.union.maxY / g.unit, width: g.union.width / g.unit, height: g.union.height / g.unit)
+                        overshoot = max(overshoot, Double(u.minX - box.minX), Double(box.maxX - u.maxX), Double(u.minY - box.minY), Double(box.maxY - u.maxY))
+                    }
+                }
+            }
+        }
+        check(finite && count > 1000, "\(name)：72 个姿态的所有坐标都是有限数，且站位表版与精确公式结构相同（共 \(count) 个坐标）")
+        check(maxDeviation <= 2e-3, "\(name)：站位表与精确公式的最大偏差 \(String(format: "%.5f", maxDeviation)) ≤ 2e-3 个单位（体长 100）")
+        check(overshoot <= 0.6, "\(name)：任一帧越出并集包围盒最多 \(String(format: "%.3f", overshoot)) 个单位（≤ 0.6，约半个点）")
+        check(widest > 20, "\(name)：求出的形状有合理大小（最宽 \(String(format: "%.1f", widest)) 个单位）")
+        // 放置：并集（点）的大小要装进窗口里动物上方 91 pt 的空间，且大小与卡通动物相当（设计稿批准的 76–92 pt 长度）
+        let u = g.union
+        check(u.height <= 88 && u.width <= 100, "\(name)：写实版并集 \(String(format: "%.1f × %.1f", Double(u.width), Double(u.height))) pt 装得进窗口（高 ≤ 88、宽 ≤ 100）")
+        check(max(u.width, u.height) >= 76 && max(u.width, u.height) <= 92, "\(name)：最长的一边 \(String(format: "%.1f", Double(max(u.width, u.height)))) pt 在批准的 76–92 pt 里")
+        let center = SpeciesPlacement.center(union: u, centerX: 85)
+        check(abs(center.y + u.height / 2 - SpeciesPlacement.topAboveWindowBottom) < 1e-9 && center.y - u.height / 2 >= 3, "\(name)：写实动物与卡通动物悬在同一个标准高度（顶端 91 pt），底边离窗口底边至少 3 pt")
+        // 几何的 unit 是体长换算：每个骨架单位 = rigBodyLength / 100
+        check(abs(g.unit - (species.rigBodyLength ?? 0) / CGFloat(rig.span)) < 1e-12, "\(name)：unit = 体长 ÷ 骨架长度")
+        print(String(format: "MARINE %@ %.9g %.9g %.9g %.9g %.9g", name, Double(g.unit), Double(u.minX), Double(u.minY), Double(u.width), Double(u.height)))
+    }
+
+    // SpeciesPlacement 的并集重载与几何版完全一致（重构不改变卡通动物的放置）
+    do {
+        var same = true
+        for species in animals {
+            guard let g = JellySpeciesGeometry.of(species) else { same = false; continue }
+            for (facing, pitch) in [(1.0, 0.0), (-1.0, 0.2), (0.4, -0.3)] as [(CGFloat, CGFloat)] {
+                if SpeciesPlacement.transform(g, centerX: 85, facing: facing, pitch: pitch) != SpeciesPlacement.transform(union: g.union, centerX: 85, facing: facing, pitch: pitch) { same = false }
+            }
+            if SpeciesPlacement.center(g, centerX: 85) != SpeciesPlacement.center(union: g.union, centerX: 85) { same = false }
+        }
+        check(same, "放置：用并集直接放置与用几何放置结果一致（卡通动物的放置没有变）")
+    }
+
+    // 游动相位：只在写实动物游动时推进；停下、静止、减少动态效果时不动；不传频率（卡通与水母）恒为 0
+    do {
+        typealias P = SpeciesPose
+        var cartoon = P()
+        for _ in 0..<60 { cartoon.step(dt: 1.0 / 30, vx: 40, vy: 0, stroking: true, reduceMotion: false) }
+        check(cartoon.rigPhase == 0 && cartoon.envelope > 0.9, "游动相位：不传频率（卡通、水母）时相位恒为 0，其余姿态照常")
+        var pose = P()
+        for _ in 0..<30 { pose.step(dt: 1.0 / 30, vx: 40, vy: 0, stroking: true, reduceMotion: false, rigFrequency: 0.5) }
+        check(pose.rigPhase > 0 && pose.rigPhase < 2 * .pi, "游动相位：游动时推进并落在 0…2π")
+        var wrapped = true, previous: CGFloat = pose.rigPhase, advanced = 0
+        for _ in 0..<600 {
+            pose.step(dt: 1.0 / 30, vx: 40, vy: 0, stroking: true, reduceMotion: false, rigFrequency: 0.75)
+            if pose.rigPhase < 0 || pose.rigPhase >= 2 * .pi { wrapped = false }
+            if pose.rigPhase != previous { advanced += 1 }
+            previous = pose.rigPhase
+        }
+        check(wrapped && advanced >= 590, "游动相位：连续推进 20 秒始终在 0…2π（折回正确），几乎每帧都在变")
+        // 频率：每秒 0.5 个周期 → 30 帧后约 π（从零相位的新姿态量）
+        var timed = P()
+        timed.envelope = 1
+        for _ in 0..<30 { timed.step(dt: 1.0 / 30, vx: 40, vy: 0, stroking: true, reduceMotion: false, rigFrequency: 0.5) }
+        check(abs(timed.rigPhase - .pi) < 1e-5, "游动相位：0.5 Hz 的动物 1 秒转半周（π），实际 \(timed.rigPhase)")
+        // 停下：包络落回 0 之后相位不再推进（不再要求动画帧）
+        var stopping = P()
+        stopping.envelope = 1
+        for _ in 0..<120 { stopping.step(dt: 1.0 / 30, vx: 0, vy: 0, stroking: false, reduceMotion: false, rigFrequency: 0.5) }
+        let frozen = stopping.rigPhase
+        stopping.step(dt: 1.0 / 30, vx: 0, vy: 0, stroking: false, reduceMotion: false, rigFrequency: 0.5)
+        check(stopping.envelope < P.settledEnvelope && stopping.rigPhase == frozen && stopping.settled, "游动相位：包络落回 0 后相位不再推进，姿态进入静止")
+        var still = P()
+        still.step(dt: 1.0 / 30, vx: 40, vy: 0, stroking: true, reduceMotion: true, rigFrequency: 0.5)
+        check(still.rigPhase == 0 && still.envelope == 0, "游动相位：减少动态效果时不推进、不摆动")
+        var bad = P()
+        bad.envelope = 1
+        bad.step(dt: .nan, vx: 40, vy: 0, stroking: true, reduceMotion: false, rigFrequency: 0.5)
+        bad.step(dt: 1.0 / 30, vx: 40, vy: 0, stroking: true, reduceMotion: false, rigFrequency: .nan)
+        bad.step(dt: 1.0 / 30, vx: 40, vy: 0, stroking: true, reduceMotion: false, rigFrequency: -1)
+        check(bad.rigPhase == 0, "游动相位：dt 或频率不是正的有限数时不推进")
+    }
+
+    // 外观的 realistic 字段：只有明确的布尔 true 才写实（数字 1、字符串 "true"、缺省都不算）；默认外观不写实
+    do {
+        typealias A = JellyAppearance
+        check(A.default.realistic == false, "外观：默认不写实（旧 Chrome 不下发这个字段时组件照旧画卡通）")
+        check(A.parse(["realistic": true] as [String: Any]).realistic == true, "外观：realistic 为布尔 true → 写实")
+        check(A.parse(["realistic": false] as [String: Any]).realistic == false && A.parse([:] as [String: Any]).realistic == false, "外观：false 与缺省 → 不写实")
+        check(A.parse(["realistic": 1] as [String: Any]).realistic == false && A.parse(["realistic": "true"] as [String: Any]).realistic == false, "外观：数字 1 与字符串 \"true\" 不算布尔 true")
+        check(A.parse(["realistic": NSNull()] as [String: Any]).realistic == false && A.parse("x").realistic == false && A.parse(nil).realistic == false, "外观：null、非字典、nil → 不写实")
+        check(A.parse(["species": "whaleshark", "realistic": true] as [String: Any]) != A.parse(["species": "whaleshark"] as [String: Any]), "外观：realistic 参与相等判断（换风格会重绘）")
+    }
 }
 
 print(failures == 0 ? "ALL PASS" : "\(failures) FAILED")

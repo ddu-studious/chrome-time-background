@@ -76,7 +76,7 @@
         MIN_DT: 0.0001,
     });
 
-    // 8 种鱼。len 是体长（px，视口缩放 1 时），speed 是巡航速度（px/s），band 是本种活动的纵向带（占屏高的比例，0 在顶），
+    // 9 种动物（8 种鱼 + 海龟）。len 是体长（px，视口缩放 1 时），speed 是巡航速度（px/s），band 是本种活动的纵向带（占屏高的比例，0 在顶），
     // colors 是调色板色位 [主色, 点缀色]（色位编号沿用首页 JellyfishSkin.PALETTE 的色相环顺序：红橙黄绿薄荷冰蓝紫洋红）。
     // 鲨鱼只是性格温和的居民，没有捕食行为。
     const SPECIES = Object.freeze([
@@ -86,6 +86,7 @@
         Object.freeze({ id: 'puffer', name: '河豚', kind: 'solo', group: 1, len: 32, speed: 34, band: Object.freeze([0.35, 0.8]), colors: Object.freeze([2, 4]) }),
         Object.freeze({ id: 'angel', name: '神仙鱼', kind: 'solo', group: 1, len: 34, speed: 40, band: Object.freeze([0.3, 0.8]), colors: Object.freeze([6, 5]) }),
         Object.freeze({ id: 'hammer', name: '小锤头鲨', kind: 'solo', group: 1, len: 56, speed: 58, band: Object.freeze([0.15, 0.65]), colors: Object.freeze([5, 6]) }),
+        Object.freeze({ id: 'turtle', name: '海龟', kind: 'solo', group: 1, len: 70, speed: 30, band: Object.freeze([0.3, 0.8]), colors: Object.freeze([3, 1]) }),
         Object.freeze({ id: 'manta', name: '蝠鲼', kind: 'large', group: 1, len: 96, speed: 36, band: Object.freeze([0.1, 0.5]), colors: Object.freeze([6, 7]) }),
         Object.freeze({ id: 'whaleshark', name: '鲸鲨', kind: 'large', group: 1, len: 130, speed: 28, band: Object.freeze([0.2, 0.6]), colors: Object.freeze([5, 4]) }),
     ]);

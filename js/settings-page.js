@@ -162,6 +162,8 @@
         jellyfishGrow: true,
         pomodoroJelly: true,
         aquariumFish: true,
+        aquariumWater: true,
+        aquariumRealistic: true,
     };
     const BG_VISUAL_EFFECTS = new Set(['none', 'depth', 'weather', 'memory', 'liquid', 'time', 'jellyfish']);
     let bgExperienceSettings = { ...BG_EXPERIENCE_DEFAULTS };
@@ -204,6 +206,8 @@
             jellyfishGrow: stored.jellyfishGrow !== false,
             pomodoroJelly: stored.pomodoroJelly !== false,
             aquariumFish: stored.aquariumFish !== false,
+            aquariumWater: stored.aquariumWater !== false,
+            aquariumRealistic: stored.aquariumRealistic !== false,
         };
     }
 
@@ -250,6 +254,8 @@
         const jellyfishGrow = document.getElementById('set-bgJellyfishGrow');
         const pomodoroJelly = document.getElementById('set-bgPomodoroJelly');
         const aquariumFish = document.getElementById('set-bgAquariumFish');
+        const aquariumWater = document.getElementById('set-bgAquariumWater');
+        const aquariumRealistic = document.getElementById('set-bgAquariumRealistic');
         // 一个下拉框对应两个字段：none（直接切换）/ random（每次随机）/ 某一种风格。选项来自转场模块的注册表，见 renderTransitionOptions。
         if (transition) transition.value = weaveCore ? weaveCore.choiceFromSettings(bgExperienceSettings) : 'random';
         if (clockLiquid) clockLiquid.checked = bgExperienceSettings.clockLiquid;
@@ -260,6 +266,8 @@
         if (jellyfishGrow) jellyfishGrow.checked = bgExperienceSettings.jellyfishGrow;
         if (pomodoroJelly) pomodoroJelly.checked = bgExperienceSettings.pomodoroJelly;
         if (aquariumFish) aquariumFish.checked = bgExperienceSettings.aquariumFish;
+        if (aquariumWater) aquariumWater.checked = bgExperienceSettings.aquariumWater;
+        if (aquariumRealistic) aquariumRealistic.checked = bgExperienceSettings.aquariumRealistic;
     }
 
     function bindBgExperienceEvents() {
@@ -277,6 +285,8 @@
             ['set-bgJellyfishGrow', 'jellyfishGrow', element => element.checked],
             ['set-bgPomodoroJelly', 'pomodoroJelly', element => element.checked],
             ['set-bgAquariumFish', 'aquariumFish', element => element.checked],
+            ['set-bgAquariumWater', 'aquariumWater', element => element.checked],
+            ['set-bgAquariumRealistic', 'aquariumRealistic', element => element.checked],
         ];
         for (const [id, key, read] of bindings) {
             const element = document.getElementById(id);

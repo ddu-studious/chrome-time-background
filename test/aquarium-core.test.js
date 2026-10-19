@@ -27,16 +27,16 @@ const run = (w, seconds, input = {}, stepMs = 50) => {
 const allFinite = w => w.fish.every(f => [f.x, f.y, f.vx, f.vy, f.ang, f.z, f.alpha].every(Number.isFinite));
 const alive = w => w.fish.filter(f => f.state === 'alive' || f.state === 'entering');
 
-test('鱼种表：恰好 8 种、id 唯一、群居/单条/大型分类与色位合法', () => {
+test('物种表：恰好 9 种（8 种鱼 + 海龟）、id 唯一、群居/单条/大型分类与色位合法', () => {
     const ids = Core.SPECIES.map(s => s.id);
-    assert.deepEqual([...ids].sort(), ['angel', 'clown', 'hammer', 'manta', 'neon', 'puffer', 'tang', 'whaleshark']);
+    assert.deepEqual([...ids].sort(), ['angel', 'clown', 'hammer', 'manta', 'neon', 'puffer', 'tang', 'turtle', 'whaleshark']);
     assert.equal(new Set(ids).size, ids.length);
     for (const id of ['neon', 'tang']) {
         const s = Core.speciesById(id);
         assert.equal(s.kind, 'school');
         assert.ok(s.group >= 4, `${id} 群居至少 4 条`);
     }
-    for (const id of ['clown', 'puffer', 'angel', 'hammer']) {
+    for (const id of ['clown', 'puffer', 'angel', 'hammer', 'turtle']) {
         const s = Core.speciesById(id);
         assert.equal(s.kind, 'solo');
         assert.equal(s.group, 1);

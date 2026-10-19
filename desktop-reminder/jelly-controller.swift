@@ -113,10 +113,17 @@ final class JellyController: NSObject, NSMenuDelegate {
     }
     /// 实际生效的物种（jelly/hammer/…）：设置的动物还没有几何数据时是 jelly。jelly 命令的回执与 ping 都报告它，Chrome 据此判断是否真的按设置应用。
     var speciesName: String { companion.effectiveSpecies.rawValue }
+    /// 实际画的是不是写实版（设置要求写实、生效的是动物、骨架可用三者同时成立）。jelly 命令的回执与 ping 都如实报告，Chrome 据此在设置页写“写实/卡通”，不说成已应用。
+    var realisticApplied: Bool { companion.isRealistic }
     /// 验收诊断：动物的姿态（朝向 −1…1、俯仰弧度、划水相位 −1…1）与游动速度（点/秒）；水母恒为 1 / 0 / 0。
     var poseSummary: String {
         let p = companion.pose
         return "facing=\(String(format: "%.3f", Double(p.facing))) pitch=\(String(format: "%.3f", Double(p.pitch))) wave=\(String(format: "%.3f", Double(p.wave))) vx=\(String(format: "%.1f", Double(companion.swim.vx))) vy=\(String(format: "%.1f", Double(companion.swim.vy)))"
+    }
+    /// 验收诊断：写实动物的游动相位（弧度）、幅度 0…1 与阶段色混入程度 0…1；不是写实版时恒为 0（单独一项，不改 poseSummary 的既有格式）。
+    var rigSummary: String {
+        let p = companion.pose
+        return "phase=\(String(format: "%.3f", Double(p.rigPhase))) amp=\(String(format: "%.3f", Double(p.rigAmp))) mix=\(String(format: "%.3f", Double(p.stageMix)))"
     }
     /// 验收诊断：运行中的游动调参（周期、横/纵冲量、下沉、横/纵阻力、愿意停留的高度）。用来核对“动物按自己的系数游、水母按原来的”
     /// 确实接到了正在运行的游动上（每次刷新与换物种时都要按实际生效的物种重新取）。

@@ -119,12 +119,12 @@ const ctxProxy = () => {
 
 const entry = (species, id) => ({ id, species, addedAt: 1000 });
 
-async function make({ stored, lowPower = false, dom = true, random = seeded(), wall, env: extraEnv } = {}) {
+async function make({ stored, lowPower = false, dom = true, random = seeded(), wall, env: extraEnv, mod = Aquarium } = {}) {
     const fc = fakeChrome(stored);
     const d = makeDom();
     let clock = 1700000000000;
     const warns = [];
-    const aq = Aquarium.create(Object.assign({
+    const aq = mod.create(Object.assign({
         chrome: fc.chrome, document: dom ? d.document : null, window: {},
         random, wall: wall || (() => ++clock), warn: m => warns.push(m), now: () => 0,
         palette: [[255, 0, 0], [255, 150, 50], [240, 220, 70], [90, 230, 100], [80, 240, 190], [110, 200, 255], [170, 110, 255], [245, 105, 225]],
@@ -1343,4 +1343,35 @@ test('鱼层出错（画鱼本身）：玩法状态一并丢弃，不留着占�
     assert.equal(t.aq.state().failed, true);
     assert.equal(t.aq.state().playFailed, false, '是鱼层出的错，不是玩法');
     assert.equal(t.aq._play(), null);
+});
+
+// ---------- 写实动物的验收诊断：state().realDrawn / realFailed ----------
+
+// 全新的 aquarium.js 模块实例：realBroken 是模块级状态（“本页面不再用写实画法”），前面有的用例会让画布抛错而把它置位，不能让它影响这里的计数
+function freshAquarium() {
+    const file = require.resolve('../js/aquarium.js');
+    const saved = require.cache[file];
+    delete require.cache[file];
+    const mod = require('../js/aquarium.js');
+    delete require.cache[file];
+    if (saved) require.cache[file] = saved;
+    return mod;
+}
+
+test('state().realDrawn：上一帧用写实画法画出的鱼数——设置开着时写实种类都算，关掉后只剩没有卡通画法的海龟；卡通鱼不算；空世界为 0', async () => {
+    const fish = [entry('hammer', 'h1'), entry('manta', 'm1'), entry('whaleshark', 'w1'), entry('turtle', 't1'), entry('clown', 'c1')];
+    const t = await make({ stored: { v: 1, fish }, mod: freshAquarium() });
+    assert.equal(t.aq.state().realDrawn, 0, '还没有画过任何一帧');
+    t.frame({ realistic: true });
+    assert.equal(t.aq.state().realDrawn, 4, '小锤头鲨、蝠鲼、鲸鲨、海龟走写实；小丑鱼是卡通');
+    t.frame({ realistic: false });
+    assert.equal(t.aq.state().realDrawn, 1, '设置关掉：只有海龟（没有卡通画法）还是写实');
+    t.frame({ realistic: true });
+    assert.equal(t.aq.state().realDrawn, 4, '下一帧重新数，不累加');
+    t.frame();
+    assert.equal(t.aq.state().realDrawn, 4, '没传 realistic 等同开（只有明确 false 才关）');
+    assert.equal(t.aq.state().realFailed, false);
+    const plain = await make({ stored: { v: 1, fish: [entry('neon', 'n1'), entry('clown', 'c2')] }, mod: freshAquarium() });
+    plain.frame({ realistic: true });
+    assert.equal(plain.aq.state().realDrawn, 0, '没有写实种类时为 0');
 });

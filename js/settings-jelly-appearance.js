@@ -177,9 +177,68 @@
       + `<g transform="translate(${num(tx)} ${num(ty)}) scale(${num(k)})" stroke-linejoin="round" stroke-linecap="round">${out.join('')}</g></svg>`;
   }
 
+  /**
+   * 写实动物的静态示意图（朝右、身体微微弯曲、鳍半摆）：用与桌面、水族馆同一份骨架数据（js/marine-rig-data.js）和同一个求值器（MarineRig.evaluate）
+   * 求出一帧，再把每个 op 变成一条 SVG 路径；颜色是动物自己的自然体色（不受颜色与花纹设置影响）。动物没有写实数据或求值失败返回 null。
+   * 全部数值与颜色来自求值结果经 num / toHex 的输出，不拼接任何外部文字，所以不会注入标记。
+   */
+  function realisticPreviewSvg(id) {
+    const Rig = root.MarineRig, Data = root.MarineRigData;
+    if (id === 'jelly' || !Rig || !Data || typeof Rig.evaluate !== 'function' || !Array.isArray(Data.IDS) || !Data.IDS.includes(id)) return null;
+    let evaluation, union;
+    try {
+      const rig = Data.rig(id);
+      evaluation = Rig.evaluate(rig, { phase: 0.9, amp: 0.55, turn: 0, lod: 2 });
+      union = Rig.unionBounds(rig);
+    } catch (_) { return null; }
+    if (!evaluation || !Array.isArray(evaluation.ops) || !evaluation.ops.length || !union) return null;
+    const width = union.maxX - union.minX, height = union.maxY - union.minY;
+    if (!(width > 0 && height > 0)) return null;
+    const k = Math.min(88 / width, 104 / height);       // 俯视动物（蝠鲼、海龟）翼展大于体长，按高度也要装得下
+    const tx = TILE_W / 2 - k * (union.minX + union.maxX) / 2, ty = TILE_H / 2 - k * (union.minY + union.maxY) / 2;
+    const num = value => Math.round(value * 1000) / 1000;
+    const hexOf = (r, g, b) => toHex([r, g, b]);
+    const pathOf = polys => polys.map(poly => {
+      const pts = poly.pts;
+      if (pts.length < 4) return '';
+      let d = `M${num(pts[0])} ${num(pts[1])}`;
+      for (let i = 2; i < pts.length; i += 2) d += `L${num(pts[i])} ${num(pts[i + 1])}`;
+      return poly.closed ? `${d}Z` : d;
+    }).join('');
+    const defs = ['<linearGradient id="tile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#26334f"/><stop offset="1" stop-color="#121a2c"/></linearGradient>'];
+    const out = [];
+    evaluation.ops.forEach((op, index) => {
+      const d = pathOf(op.polys);
+      if (!d) return;
+      if (op.k === 'fill') {
+        const rule = op.rule === 'evenodd' ? ' fill-rule="evenodd"' : '';
+        if (op.paint.rgba) {
+          const [r, g, b, a] = op.paint.rgba;
+          out.push(`<path d="${d}" fill="${hexOf(r, g, b)}" fill-opacity="${num(a)}"${rule}/>`);
+        } else {
+          const g = op.paint.grad;
+          const stops = g.stops.map(([t, r, gg, b, a]) => `<stop offset="${num(t)}" stop-color="${hexOf(r, gg, b)}" stop-opacity="${num(a)}"/>`).join('');
+          defs.push(`<linearGradient id="g${index}" gradientUnits="userSpaceOnUse" x1="${num(g.a[0])}" y1="${num(g.a[1])}" x2="${num(g.b[0])}" y2="${num(g.b[1])}">${stops}</linearGradient>`);
+          out.push(`<path d="${d}" fill="url(#g${index})"${rule}/>`);
+        }
+      } else {
+        const [r, g, b, a] = op.rgba;
+        out.push(`<path d="${d}" fill="none" stroke="${hexOf(r, g, b)}" stroke-opacity="${num(a)}" stroke-width="${num(op.width)}" stroke-linecap="${op.cap === 'butt' ? 'butt' : 'round'}"/>`);
+      }
+    });
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${TILE_W} ${TILE_H}" width="${TILE_W}" height="${TILE_H}"><defs>${defs.join('')}</defs>`
+      + `<rect width="${TILE_W}" height="${TILE_H}" rx="12" fill="url(#tile)"/>`
+      + `<g transform="translate(${num(tx)} ${num(ty)}) scale(${num(k)})" stroke-linejoin="round">${out.join('')}</g></svg>`;
+  }
+
   /** 示意图的 data: 地址（<img> 里的 SVG 不执行脚本、不加载外部资源）；画不出来返回 null。 */
   function animalPreviewUri(id, paint) {
     const svg = animalPreviewSvg(id, paint);
+    return svg ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}` : null;
+  }
+
+  function realisticPreviewUri(id) {
+    const svg = realisticPreviewSvg(id);
     return svg ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}` : null;
   }
 
@@ -200,13 +259,19 @@
     if (!paint) { box.hidden = true; if (text) text.textContent = ''; img?.removeAttribute?.('src'); return; }
     const title = reply.settings?.daily === true ? '今天这只' : '当前形象';
     const species = speciesOf(reply);
-    const uri = species === 'jelly' || !img ? null : animalPreviewUri(species, paint);
+    // 选了写实且这种动物有写实数据：示意图画写实版（自然体色，不受颜色与花纹影响）；否则按卡通的颜色与花纹画
+    const wantsRealistic = species !== 'jelly' && img && reply.settings?.realistic === true;
+    const realisticUri = wantsRealistic ? realisticPreviewUri(species) : null;
+    const uri = realisticUri || (species === 'jelly' || !img ? null : animalPreviewUri(species, paint));
     const prefix = uri ? `${speciesNameOf(species)}，` : species === 'jelly' ? '' : `暂时显示水母（“${speciesNameOf(species)}”还没有加入），`;
-    const description = prefix + previewText(paint, uri ? species : 'jelly');
+    // 要写实却画不出写实示意图（数据脚本没加载或求值失败）：退回卡通示意并如实说明，不把卡通图说成写实
+    const fallback = wantsRealistic && !realisticUri && uri ? '写实示意图暂时画不出来，显示的是卡通示意，' : '';
+    const description = realisticUri ? `${prefix}写实（自然体色，不受颜色与花纹影响）` : prefix + fallback + previewText(paint, uri ? species : 'jelly');
     const set = (name, rgb) => box.style.setProperty(name, toHex(rgb));
     box.setAttribute('data-look', paint.kind);
     box.setAttribute('data-art', uri ? 'animal' : 'jelly');
     box.setAttribute('data-species', uri ? species : 'jelly');
+    box.setAttribute('data-style', realisticUri ? 'realistic' : 'cartoon');
     if (img) { if (uri) img.setAttribute('src', uri); else img.removeAttribute('src'); }
     set('--jp-a', paint.a); set('--jp-b', paint.b); set('--jp-c', paint.c); set('--jp-mid', paint.mid);
     paint.tentacles.forEach((rgb, i) => set(`--jp-t${i}`, rgb));
@@ -217,12 +282,32 @@
     box.hidden = false;
   }
 
+  /**
+   * 桌面组件确认的动物画法：realistic / cartoon / unknown。后台回复里的 style 是 { style, species, realistic }（最近一次下发确认的是哪份设置），
+   * 只有它与当前保存的设置一致才采信——设置刚改完、组件还没回执时，旧确认不能说成新设置的结果。
+   */
+  function confirmedStyle(reply) {
+    const ack = reply?.style, settings = reply?.settings;
+    if (!ack || typeof ack !== 'object' || !settings) return 'unknown';
+    if (ack.species !== settings.species || ack.realistic !== (settings.realistic === true)) return 'unknown';
+    return ack.style === 'realistic' || ack.style === 'cartoon' ? ack.style : 'unknown';
+  }
+
   /** 状态文字：每种组件状态都给出可行动的下一步，没生效就不说已生效。选了动物时点名所选的动物（组件没有画出它时现在显示的是水母）。 */
   function describe(reply) {
     const wanted = reply?.settings?.species;
     const animal = typeof wanted === 'string' && wanted !== 'jelly' && Object.prototype.hasOwnProperty.call(SPECIES_NAMES, wanted) ? SPECIES_NAMES[wanted] : null;
     switch (reply?.component) {
-      case 'ok': return animal ? `外观已应用到桌面：${animal}。` : '外观已应用到桌面水母。';
+      case 'ok': {
+        if (!animal) return '外观已应用到桌面水母。';
+        const style = confirmedStyle(reply);
+        if (reply.settings?.realistic === true) {
+          if (style === 'realistic') return `外观已应用到桌面：${animal}（写实）。`;
+          if (style === 'cartoon') return `外观已应用到桌面：${animal}，但桌面组件还没有写实版（组件版本较旧，或这种动物的写实数据在组件里不可用），现在显示的是卡通版：请更新桌面组件后重载扩展。设置已保存，更新后自动生效。`;
+          return `设置已保存，正在等待桌面组件确认“${animal}”的写实风格…`;
+        }
+        return style === 'cartoon' ? `外观已应用到桌面：${animal}（卡通）。` : `外观已应用到桌面：${animal}。`;
+      }
       case 'unsupported': return animal
         ? `桌面组件没有画出所选的“${animal}”（组件版本较旧，或这种动物还没有加入）：请更新桌面组件后重载扩展。设置已保存，更新后自动生效；现在桌面上显示的是水母。`
         : '桌面组件版本较旧，不支持形象设置：请更新桌面组件后重载扩展。设置已保存，更新后自动生效。';
@@ -239,6 +324,7 @@
   function refreshEnabled() {
     const lock = busy || daily;
     const species = $('set-jellySpecies'); if (species) species.disabled = busy;          // 物种与“每天换一只”无关：日期与随机只换颜色和花纹
+    const style = $('set-jellyStyle'); if (style) style.disabled = busy;                  // 写实/卡通同样与“每天换一只”无关
     const look = $('set-jellyLook'); if (look) look.disabled = lock;
     for (const swatch of swatches()) swatch.disabled = lock;
     const dailyBox = $('set-jellyDaily'); if (dailyBox) dailyBox.disabled = busy;
@@ -250,6 +336,7 @@
     for (const swatch of swatches()) swatch.setAttribute('aria-checked', String(Number(swatch.dataset.color) === settings.color));
     const look = $('set-jellyLook'); if (look) look.value = settings.look;
     const species = $('set-jellySpecies'); if (species) species.value = typeof settings.species === 'string' ? settings.species : 'jelly';
+    const style = $('set-jellyStyle'); if (style) style.value = settings.realistic === false ? 'cartoon' : 'realistic';
     const dailyBox = $('set-jellyDaily'); if (dailyBox) dailyBox.checked = settings.daily === true;
     daily = settings.daily === true;
     renderPreview(reply);
@@ -270,6 +357,7 @@
       swatch.addEventListener('click', () => { void run({ action: 'jelly_appearance_set', settings: { color: Number(swatch.dataset.color) } }, '正在保存…'); });
     }
     $('set-jellySpecies')?.addEventListener('change', event => { void run({ action: 'jelly_appearance_set', settings: { species: event.target.value } }, '正在保存…'); });
+    $('set-jellyStyle')?.addEventListener('change', event => { void run({ action: 'jelly_appearance_set', settings: { realistic: event.target.value !== 'cartoon' } }, '正在保存…'); });
     $('set-jellyLook')?.addEventListener('change', event => { void run({ action: 'jelly_appearance_set', settings: { look: event.target.value } }, '正在保存…'); });
     $('set-jellyDaily')?.addEventListener('change', event => { void run({ action: 'jelly_appearance_set', settings: { daily: event.target.checked } }, '正在保存…'); });
     $('set-jellyReroll')?.addEventListener('click', () => { void run({ action: 'jelly_appearance_reroll' }, '正在换一只…'); });
@@ -282,7 +370,7 @@
       .then(refreshEnabled);
   }
 
-  root.JellyAppearanceSettings = { describe, paintOf, limbTone, animalPreviewSvg, animalPreviewUri, SPECIES_NAMES };
+  root.JellyAppearanceSettings = { describe, paintOf, limbTone, animalPreviewSvg, animalPreviewUri, realisticPreviewSvg, realisticPreviewUri, SPECIES_NAMES };
   if (typeof document !== 'undefined') {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
     else bind();

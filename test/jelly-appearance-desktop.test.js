@@ -152,6 +152,78 @@ test('物种：换物种后重新下发，状态按新一次的回执判断（�
   assert.deepEqual(desktop.calls.map(call => call.appearance.species), ['hammer', 'jelly']);
 });
 
+// ---------- 写实风格：回执里明确的 realistic === true 才是写实；旧组件没有这个字段，一律按卡通算 ----------
+
+test('画法（appearanceStyle）：回执 realistic 为 true 才是写实；没有该字段（旧组件）、非布尔、false 都是卡通；水母没有风格之分', async () => {
+  const hammer = { ...PAYLOAD, species: 'hammer', realistic: true };
+  const cases = [
+    ['组件确认画成了写实', hammer, { appearance: { status: 'ok', species: 'hammer', realistic: true } }, 'ok', { style: 'realistic', species: 'hammer', realistic: true }],
+    ['组件回执 realistic:false（这种动物的写实数据在组件里不可用，画了卡通）', hammer, { appearance: { status: 'ok', species: 'hammer', realistic: false } }, 'ok', { style: 'cartoon', species: 'hammer', realistic: true }],
+    ['旧组件：回执只有 status 与 species，没有 realistic', hammer, { appearance: { status: 'ok', species: 'hammer' } }, 'ok', { style: 'cartoon', species: 'hammer', realistic: true }],
+    ['回执 realistic 是字符串 "true"（不是布尔）不算写实', hammer, { appearance: { status: 'ok', species: 'hammer', realistic: 'true' } }, 'ok', { style: 'cartoon', species: 'hammer', realistic: true }],
+    ['回执 realistic 是 1 不算写实', hammer, { appearance: { status: 'ok', species: 'hammer', realistic: 1 } }, 'ok', { style: 'cartoon', species: 'hammer', realistic: true }],
+    ['设置要求卡通，回执也是卡通', { ...hammer, realistic: false }, { appearance: { status: 'ok', species: 'hammer', realistic: false } }, 'ok', { style: 'cartoon', species: 'hammer', realistic: false }],
+    ['设置要求卡通，回执却说写实（不该发生）：照回执如实记录，设置页比对 realistic 不一致就不采信', { ...hammer, realistic: false }, { appearance: { status: 'ok', species: 'hammer', realistic: true } }, 'ok', { style: 'realistic', species: 'hammer', realistic: false }],
+    ['水母：没有风格之分，回执里有没有 realistic 都是 jelly', { ...PAYLOAD, species: 'jelly', realistic: true }, { appearance: { status: 'ok', species: 'jelly', realistic: true } }, 'ok', { style: 'jelly', species: 'jelly', realistic: true }],
+    ['下发里没有物种（旧调用方）视为水母', PAYLOAD, { appearance: { status: 'ok' } }, 'ok', { style: 'jelly', species: 'jelly', realistic: false }],
+    ['物种与下发的不同（不支持）：风格没有确认', hammer, { appearance: { status: 'ok', species: 'manta', realistic: true } }, 'unsupported', { style: 'unknown', species: 'jelly', realistic: false }],
+    ['回执 status 不是 ok：风格没有确认', hammer, { appearance: { status: 'invalid', species: 'hammer', realistic: true } }, 'unsupported', { style: 'unknown', species: 'jelly', realistic: false }],
+    ['回执里完全没有 appearance（旧组件）：风格没有确认', hammer, {}, 'unsupported', { style: 'unknown', species: 'jelly', realistic: false }],
+  ];
+  for (const [name, payload, reply, status, expected] of cases) {
+    const { jelly, desktop } = make({ appearance: async () => payload, reply });
+    assert.deepEqual(jelly.appearanceStyle(), { style: 'unknown', species: 'jelly', realistic: false }, `${name}：下发之前没有确认`);
+    await jelly.sync();
+    assert.equal(jelly.appearanceStatus(), status, name);
+    assert.deepEqual(jelly.appearanceStyle(), expected, name);
+    assert.equal(desktop.calls[0].appearance.realistic, payload.realistic, `${name}：下发的 realistic 原样带上`);
+  }
+});
+
+test('画法：读到的是副本，外部改它不影响内部状态', async () => {
+  const { jelly } = make({ appearance: async () => ({ ...PAYLOAD, species: 'manta', realistic: true }), reply: { appearance: { status: 'ok', species: 'manta', realistic: true } } });
+  await jelly.sync();
+  const view = jelly.appearanceStyle();
+  view.style = 'cartoon'; view.species = 'jelly';
+  assert.deepEqual(jelly.appearanceStyle(), { style: 'realistic', species: 'manta', realistic: true });
+});
+
+test('画法：换风格后重新下发，按新一次的回执判断；连接失败、断开、没有外观数据时回到未确认', async () => {
+  let current = { ...PAYLOAD, species: 'turtle', realistic: true };
+  const replies = [
+    { appearance: { status: 'ok', species: 'turtle', realistic: true } },
+    { appearance: { status: 'ok', species: 'turtle', realistic: false } },
+    { appearance: { status: 'ok', species: 'turtle', realistic: true } },
+  ];
+  const desktop = desktopStub();
+  let n = 0;
+  desktop.setJelly = async jelly => { desktop.calls.push(jelly); if (desktop.fail) throw new Error(desktop.fail); desktop.port = desktop.port || { fake: true }; return { ok: true, version: 7, ...replies[n++] }; };
+  const jelly = Jelly.create({ storage: area({ desktopJellyV1: { resident: true } }), desktop, appearance: async () => current, setTimer: () => ({}), clearTimer: () => {} });
+  await jelly.sync();
+  assert.equal(jelly.appearanceStyle().style, 'realistic');
+  current = { ...current, realistic: false };
+  await jelly.sync();
+  assert.deepEqual(jelly.appearanceStyle(), { style: 'cartoon', species: 'turtle', realistic: false }, '换成卡通后按新回执');
+  current = { ...current, realistic: true };
+  await jelly.sync();
+  assert.equal(jelly.appearanceStyle().style, 'realistic');
+  desktop.fail = 'boom';
+  await jelly.sync().catch(() => {});
+  assert.equal(jelly.appearanceStatus(), 'unknown');
+  assert.deepEqual(jelly.appearanceStyle(), { style: 'unknown', species: 'jelly', realistic: false }, '连接失败后上一次的确认作废');
+});
+
+test('画法：读取外观失败（没带 appearance）时风格没有确认，不沿用上一次', async () => {
+  let value = { ...PAYLOAD, species: 'whaleshark', realistic: true };
+  const { jelly } = make({ appearance: async () => { if (value === 'fail') throw new Error('storage down'); return value; }, reply: { appearance: { status: 'ok', species: 'whaleshark', realistic: true } } });
+  await jelly.sync();
+  assert.equal(jelly.appearanceStyle().style, 'realistic');
+  value = 'fail';
+  await jelly.sync();
+  assert.equal(jelly.appearanceStatus(), 'off');
+  assert.equal(jelly.appearanceStyle().style, 'unknown');
+});
+
 // ---------- 提醒气泡的称呼：桌面上真是那只动物在说话时，文案里的“水母”换成它的名字 ----------
 
 const JellyAppearance = require('../js/jelly-appearance.js');

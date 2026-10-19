@@ -27,7 +27,9 @@
   const BLEND_OFFSETS = Object.freeze([2]);
   const RAINBOW_STEP = 2;
   const DAILY_MARGIN_MS = 1000;   // 午夜后多等 1 秒再重新下发：保证那时本地日期已经翻过去，同时延迟恒 ≥ 1 秒，不会在午夜前后空转
-  const DEFAULTS = Object.freeze({ color: 5, look: 'solid', material: 'glass', size: 'medium', seasonal: false, daily: false, species: 'jelly' });
+  // realistic：动物画成写实风格（默认开）。写实动物用自己的自然体色，颜色与花纹只管水母与卡通动物；水母没有写实版，这个开关对它无影响。
+  // 原生端的缺省是 false（旧版本的 Chrome 不下发该字段，组件照旧画卡通），所以这里下发的永远是明确的布尔值。
+  const DEFAULTS = Object.freeze({ color: 5, look: 'solid', material: 'glass', size: 'medium', seasonal: false, daily: false, species: 'jelly', realistic: true });
   const VALIDATORS = Object.freeze({
     color: value => Number.isInteger(value) && value >= 0 && value < COLORS,
     look: value => LOOKS.includes(value),
@@ -36,6 +38,7 @@
     seasonal: value => typeof value === 'boolean',
     daily: value => typeof value === 'boolean',
     species: value => typeof value === 'string' && SPECIES.includes(value),
+    realistic: value => typeof value === 'boolean',
   });
 
   const isObject = value => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -78,6 +81,7 @@
    * 设置 → 下发给原生端的具体值。daily 为 true 时颜色与花纹由本地日期决定（同一天不变，忽略存储的 color/look）；
    * 否则第二、第三色由“主色 + 花纹”确定性算出，所以不需要存储它们，重启与重连后外观不会变。
    * season 本轮恒为 null（节日是 S4）。species 原样带上（非法值已被 normalize 改回水母），颜色与花纹的展开与物种无关。
+   * realistic 原样带上（明确的布尔值）：原生组件只有收到 true 才画写实动物，并在回执里报告实际画的是哪一种。
    */
   function resolve(settings, { date = new Date() } = {}) {
     const s = normalize(settings);
@@ -89,7 +93,7 @@
     } else {
       rand = mulberry32(color * 16 + LOOKS.indexOf(look) + 1);
     }
-    return { color, colors: colorsFor(color, look, rand), look, material: s.material, size: s.size, season: null, species: s.species };
+    return { color, colors: colorsFor(color, look, rand), look, material: s.material, size: s.size, season: null, species: s.species, realistic: s.realistic };
   }
 
   /** “随机”：换成**不同**的颜色与随机花纹，并关闭“每天换”（用户明确选了一只）；其余字段保留。 */

@@ -6,6 +6,8 @@ const path = require('node:path');
 const read = file => fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
 const html = read('settings.html');
 const Shapes = require('../js/jelly-species-shapes.js');
+const MarineRig = require('../js/marine-rig.js');
+const MarineRigData = require('../js/marine-rig-data.js');
 const source = read('js/settings-jelly-appearance.js');
 const css = read('css/settings-page.css');
 
@@ -18,7 +20,7 @@ const cardOf = () => {
 
 test('settings.html 有形象卡片，位于“桌面水母”卡片之后、“水母关怀”之前', () => {
   const card = cardOf();
-  for (const id of ['set-jellyColorSwatches', 'set-jellyLook', 'set-jellyDaily', 'set-jellyReroll', 'set-jellyAppearanceStatus']) assert.ok(card.includes(`id="${id}"`), id);
+  for (const id of ['set-jellyColorSwatches', 'set-jellyLook', 'set-jellyDaily', 'set-jellyReroll', 'set-jellyAppearanceStatus', 'set-jellyStyle']) assert.ok(card.includes(`id="${id}"`), id);
   assert.ok(html.indexOf('id="sp-desktop-jelly-card"') < html.indexOf('id="sp-jelly-appearance-card"'));
   assert.ok(html.indexOf('id="sp-jelly-appearance-card"') < html.indexOf('id="sp-jelly-nudge-card"'));
 });
@@ -52,11 +54,18 @@ test('卡片里没有内联事件处理器与内联脚本（MV3 CSP）', () => {
 });
 
 test('脚本加载：在 settings-page.js 之后、带版本号', () => {
-  assert.ok(html.indexOf('js/settings-page.js?v=14') < html.indexOf('js/settings-jelly-appearance.js?v=4'));
-  assert.match(html, /<script src="js\/settings-jelly-appearance\.js\?v=4"><\/script>/);
+  assert.ok(html.indexOf('js/settings-page.js?v=16') < html.indexOf('js/settings-jelly-appearance.js?v=5'));
+  assert.match(html, /<script src="js\/settings-jelly-appearance\.js\?v=5"><\/script>/);
   // 动物示意图用同一份形状数据：形状脚本必须先于外观脚本加载，且带版本号
   assert.match(html, /<script src="js\/jelly-species-shapes\.js\?v=4"><\/script>/);
-  assert.ok(html.indexOf('js/jelly-species-shapes.js?v=4') < html.indexOf('js/settings-jelly-appearance.js?v=4'));
+  assert.ok(html.indexOf('js/jelly-species-shapes.js?v=4') < html.indexOf('js/settings-jelly-appearance.js?v=5'));
+  // 写实示意图用与桌面、水族馆同一份骨架数据与求值器：骨架求值器先于数据（数据依赖它），二者都先于外观脚本，且与首页引用同一个带版本号的地址（共用浏览器缓存）
+  assert.match(html, /<script src="js\/marine-rig\.js\?v=1"><\/script>/);
+  assert.match(html, /<script src="js\/marine-rig-data\.js\?v=1"><\/script>/);
+  assert.ok(html.indexOf('js/marine-rig.js?v=1') < html.indexOf('js/marine-rig-data.js?v=1'));
+  assert.ok(html.indexOf('js/marine-rig-data.js?v=1') < html.indexOf('js/settings-jelly-appearance.js?v=5'));
+  const index = read('index.html');
+  assert.match(index, /js\/marine-rig\.js\?v=1/); assert.match(index, /js\/marine-rig-data\.js\?v=1/);
 });
 
 test('色板与随机按钮有样式：选中态、键盘焦点环、禁用态', () => {
@@ -81,14 +90,14 @@ const TEST_HEX = ['#ff736b', '#ff9e4d', '#f5d152', '#6bd17a', '#5cd6b3', '#66bde
 //   hold：消息不自动回复，进入 pending，由测试调用 answer(响应)；lastError：回调执行期间 chrome.runtime.lastError 的值
 //   timers：替身 setTimeout/clearTimeout；readyState：document.readyState；noDocument：不提供 document（非页面环境）
 //   noShapes：页面里没有形状脚本；shapes：换成这份形状模块（合成的替身，测形状数据异常与真实动物覆盖不到的几何）
-function load(reply, { dom = {}, hold = false, lastError = null, timers = null, readyState = 'complete', noDocument = false, noShapes = false, shapes = null } = {}) {
+function load(reply, { dom = {}, hold = false, lastError = null, timers = null, readyState = 'complete', noDocument = false, noShapes = false, shapes = null, noMarine = false, marine = null } = {}) {
   const els = {}, listeners = {}, domListeners = {}, pending = [];
   const missing = new Set(dom.missing || []);
   const make = id => (els[id] = { id, dataset: {}, disabled: false, hidden: false, value: '', checked: false, textContent: '', attrs: {}, listeners: {}, vars: {},
     style: { setProperty(k, v) { this.owner.vars[k] = v; }, getPropertyValue(k) { return this.owner.vars[k] || ''; } },
     addEventListener(type, fn) { this.listeners[type] = fn; }, setAttribute(k, v) { this.attrs[k] = v; }, getAttribute(k) { return this.attrs[k]; }, removeAttribute(k) { delete this.attrs[k]; } });
   const ids = ['sp-jelly-appearance-card', 'set-jellyLook', 'set-jellyDaily', 'set-jellyReroll', 'set-jellyAppearanceStatus', 'set-jellyColorSwatches', ...(dom.noPreview ? [] : ['set-jellyPreview', 'set-jellyPreviewLabel', 'set-jellyPreviewText']),
-    ...(dom.noSpecies ? [] : ['set-jellySpecies']), ...(dom.noAnimalImg || dom.noPreview ? [] : ['set-jellyAnimalPreview'])];
+    ...(dom.noSpecies ? [] : ['set-jellySpecies']), ...(dom.noStyle ? [] : ['set-jellyStyle']), ...(dom.noAnimalImg || dom.noPreview ? [] : ['set-jellyAnimalPreview'])];
   for (const id of ids) if (!missing.has(id) && !(dom.noCard && id === 'sp-jelly-appearance-card')) make(id);
   for (const el of Object.values(els)) el.style.owner = el;
   const NAMES = ['红', '橙', '黄', '绿', '薄荷', '冰蓝（默认）', '紫', '洋红'];
@@ -114,12 +123,13 @@ function load(reply, { dom = {}, hold = false, lastError = null, timers = null, 
     } },
     storage: { onChanged: { addListener(fn) { listeners.storage = fn; } } },
   };
-  const window = noShapes ? {} : { JellySpeciesShapes: shapes || Shapes };      // 页面里由 js/jelly-species-shapes.js 提供（settings.html 先于本脚本加载）
+  // 页面里由 js/jelly-species-shapes.js 提供形状数据、js/marine-rig*.js 提供写实骨架（settings.html 先于本脚本加载）；noMarine：没有写实脚本，marine：换成这份骨架模块（替身）
+  const window = { ...(noShapes ? {} : { JellySpeciesShapes: shapes || Shapes }), ...(noMarine ? {} : { MarineRig: marine?.Rig || MarineRig, MarineRigData: marine?.Data || MarineRigData }) };
   new Function('window', 'document', 'chrome', 'setTimeout', 'clearTimeout', `${source}`)(window, noDocument ? undefined : document, chrome, timers?.setTimeout || setTimeout, timers?.clearTimeout || clearTimeout);
   return { els, swatches, sent, window, listeners, domListeners, pending };
 }
 const tick = () => new Promise(resolve => setTimeout(resolve, 20));
-const view = (settings, extra = {}) => ({ ok: true, settings: { color: 5, look: 'solid', material: 'glass', size: 'medium', seasonal: false, daily: false, species: 'jelly', ...settings }, resolved: {}, component: 'ok', connected: true, ...extra });
+const view = (settings, extra = {}) => ({ ok: true, settings: { color: 5, look: 'solid', material: 'glass', size: 'medium', seasonal: false, daily: false, species: 'jelly', realistic: false, ...settings }, resolved: {}, component: 'ok', connected: true, ...extra });
 
 test('状态文字：每种组件状态都给出可行动的说明，没生效就不说已生效', () => {
   const { window } = load(view({}));
@@ -646,14 +656,29 @@ test('动物下拉的说明：每天换/随机只换颜色与花纹不换动物�
   assert.match(field, /只换颜色与花纹，不会换动物/);
   assert.match(field, /已更新的桌面组件/); assert.match(field, /仍是水母/);
   assert.match(card, /给桌面水母换动物、颜色和花纹/);
-  // 每种已经画得出来的动物都要在说明里点名，并写对视角（俯视/侧视取自形状数据）；不留“以后会加”的预告（海龟加入之前写过一句“海龟会陆续加入”，加入后必须删掉）
+  // 每种已经画得出来的动物都要在说明里点名；不留“以后会加”的预告（海龟加入之前写过一句“海龟会陆续加入”，加入后必须删掉）。
+  // 视角（俯视/侧视）不再写在这里：写实与卡通的视角不同（例如小锤头鲨卡通俯视、写实侧视），说明放在“动物样式”一项里，免得与实际画法不符
   const names = load(view({})).window.JellyAppearanceSettings.SPECIES_NAMES;
   assert.ok(field.includes(names.jelly), '说明里要点名水母');
-  for (const id of Shapes.AVAILABLE.filter(name => name !== 'jelly')) {
-    const word = Shapes.SHAPES[id].view === 'top' ? '俯视' : '侧视';
-    assert.ok(field.includes(`${names[id]}（${word}`), `说明里要写“${names[id]}（${word}…”`);
-  }
+  for (const id of Shapes.AVAILABLE.filter(name => name !== 'jelly')) assert.ok(field.includes(names[id]), `说明里要点名“${names[id]}”`);
+  assert.doesNotMatch(field, /俯视|侧视/, '视角随样式而不同，不在动物一项里写死');
   assert.doesNotMatch(field, /陆续|即将|敬请期待|还没有|尚未/, '说明里不留“以后会加”的预告');
+});
+
+test('动物样式下拉：写实（默认选中）/卡通；在动物之后、颜色之前；说明写实用自然体色、与水族馆同一份数据、旧组件仍是卡通、水母不受影响', () => {
+  const card = cardOf();
+  const select = card.match(/<select[^>]*id="set-jellyStyle"[^>]*>([\s\S]*?)<\/select>/)?.[1] || '';
+  const options = [...select.matchAll(/<option value="([^"]+)"([^>]*)>([^<]+)<\/option>/g)].map(m => ({ value: m[1], attrs: m[2], label: m[3] }));
+  assert.deepEqual(options.map(o => [o.value, o.label]), [['realistic', '写实'], ['cartoon', '卡通']]);
+  assert.deepEqual(options.filter(o => /\bselected\b/.test(o.attrs)).map(o => o.value), ['realistic'], '默认写实（与后台默认一致）');
+  assert.ok(card.indexOf('id="set-jellySpecies"') < card.indexOf('id="set-jellyStyle"') && card.indexOf('id="set-jellyStyle"') < card.indexOf('id="set-jellyColorSwatches"'), '动物样式在动物之后、颜色之前');
+  const field = card.slice(card.indexOf('<span class="sp-field-label">动物样式</span>'), card.indexOf('id="set-jellyStyle"'));
+  assert.ok(field.length > 100, '应有动物样式的说明');
+  assert.match(field, /写实/); assert.match(field, /卡通/);
+  assert.match(field, /自然体色/); assert.match(field, /颜色与花纹只影响水母和卡通动物/);
+  assert.match(field, /水族馆/); assert.match(field, /同一份数据/);
+  assert.match(field, /选水母时这一项不起作用/);
+  assert.match(field, /已更新的桌面组件/); assert.match(field, /旧组件仍画卡通版/);
 });
 
 test('动物示意图元素：在预览容器里、紧跟水母 svg，对读屏隐藏（说明文字在容器的 aria-label），没有预置地址', () => {
@@ -1181,4 +1206,203 @@ test('动物脚本里没有 innerHTML、网络、直接写存储、eval；形状
   const code = source.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
   assert.match(code, /root\.JellySpeciesShapes/);
   assert.doesNotMatch(code, /innerHTML|outerHTML|insertAdjacentHTML|document\.write|createElementNS|\bfetch\(|XMLHttpRequest|chrome\.storage\.(local|sync)|eval\(|new Function|importScripts|\.src\s*=/);
+});
+
+// ---------- 2026-10-19 写实风格：样式下拉、状态文字、写实示意图 ----------
+// 写实动物用与首页水族馆同一份骨架数据（js/marine-rig-data.js）和同一个求值器（js/marine-rig.js）；设置页示意图也用它们求值一帧，所以与桌面、水族馆是同一只。
+
+const REAL_ANIMALS = [...MarineRigData.IDS];
+const realView = (species, resolved = {}, extra = {}) => view({ species, realistic: true }, { resolved: { color: 5, colors: [5], look: 'solid', species, ...resolved }, ...extra });
+const decodeUri = uri => decodeURIComponent(uri.slice('data:image/svg+xml;charset=utf-8,'.length));
+
+test('样式下拉：打开页面显示已存的样式（缺字段当写实，与后台默认一致）；非写实值显示卡通', async () => {
+  for (const [settings, expected] of [[{ realistic: true }, 'realistic'], [{ realistic: false }, 'cartoon'], [{}, 'cartoon']]) {
+    const { els } = load(view({ species: 'manta', ...settings }, { resolved: { color: 5, colors: [5], look: 'solid', species: 'manta' } }));
+    await tick();
+    assert.equal(els['set-jellyStyle'].value, expected, JSON.stringify(settings));
+  }
+  // 旧回执根本没有 realistic 字段（后台是旧版本）：下拉回到写实（页面默认），不抛错
+  const old = load({ ok: true, settings: { color: 5, look: 'solid', daily: false, species: 'manta' }, resolved: { color: 5, colors: [5], look: 'solid', species: 'manta' }, component: 'ok', connected: true });
+  await tick();
+  assert.equal(old.els['set-jellyStyle'].value, 'realistic');
+});
+
+test('选写实/卡通：发送 set(realistic)，成功后下拉、示意图（data-style）与文字更新；写实示意图是自然体色，不随颜色花纹变', async () => {
+  let current = view({ species: 'whaleshark', realistic: true, color: 2, look: 'duo' }, { resolved: { color: 2, colors: [2, 4], look: 'duo', species: 'whaleshark' } });
+  const { els, sent } = load(message => {
+    if (message.action === 'jelly_appearance_set') current = { ...current, settings: { ...current.settings, ...message.settings } };
+    return current;
+  });
+  await tick();
+  assert.equal(els['set-jellyStyle'].value, 'realistic');
+  assert.equal(els['set-jellyPreview'].attrs['data-style'], 'realistic'); assert.equal(els['set-jellyPreview'].attrs['data-art'], 'animal');
+  assert.equal(els['set-jellyPreviewText'].textContent, '鲸鲨，写实（自然体色，不受颜色与花纹影响）');
+  assert.equal(els['set-jellyPreview'].attrs['aria-label'], '当前形象：鲸鲨，写实（自然体色，不受颜色与花纹影响）');
+  const realistic = decodeUri(els['set-jellyAnimalPreview'].attrs.src);
+  els['set-jellyStyle'].listeners.change({ target: { value: 'cartoon' } }); await tick();
+  assert.deepEqual(sent[1], { action: 'jelly_appearance_set', settings: { realistic: false } });
+  assert.equal(els['set-jellyStyle'].value, 'cartoon');
+  assert.equal(els['set-jellyPreview'].attrs['data-style'], 'cartoon');
+  assert.equal(els['set-jellyPreviewText'].textContent, '鲸鲨，双色（躯干黄，鳍与尾薄荷）', '卡通版按所选颜色与花纹描述');
+  assert.notEqual(decodeUri(els['set-jellyAnimalPreview'].attrs.src), realistic, '卡通与写实是两张不同的示意图');
+  els['set-jellyStyle'].listeners.change({ target: { value: 'realistic' } }); await tick();
+  assert.deepEqual(sent[2], { action: 'jelly_appearance_set', settings: { realistic: true } });
+  assert.equal(decodeUri(els['set-jellyAnimalPreview'].attrs.src), realistic, '再切回写实：示意图与第一次完全相同（确定性）');
+  // 只有明确的 'cartoon' 才存为卡通；别的取值（理论上下拉里不会有）按写实，不会把脏值写进设置
+  els['set-jellyStyle'].listeners.change({ target: { value: 'anything' } }); await tick();
+  assert.deepEqual(sent[3].settings, { realistic: true });
+});
+
+test('写实示意图：颜色与花纹的改变不影响它（自然体色）；换物种才变', async () => {
+  const uriOf = async (species, resolved) => {
+    const { els } = load(realView(species, resolved));
+    await tick();
+    return els['set-jellyAnimalPreview'].attrs.src;
+  };
+  const a = await uriOf('manta', { color: 1, colors: [1], look: 'solid' });
+  const b = await uriOf('manta', { color: 6, colors: [6, 0, 3], look: 'rainbow' });
+  assert.ok(a && a === b, '同一种动物、不同颜色花纹：写实示意图完全相同');
+  const c = await uriOf('turtle', {});
+  assert.ok(c && c !== a, '换物种示意图就变');
+});
+
+test('写实示意图：四种动物都能画；svg 结构合法（严格解析），没有脚本、内联处理器、外链；渐变与路径都有；每个路径点数据都是有限数', () => {
+  const { window } = load(view({}));
+  const api = window.JellyAppearanceSettings;
+  assert.deepEqual([...REAL_ANIMALS].sort(), ['hammer', 'manta', 'turtle', 'whaleshark'], '骨架数据里恰好是这四种动物；下面逐种核对设置页都画得出来');
+  for (const id of REAL_ANIMALS) {
+    const svg = api.realisticPreviewSvg(id);
+    assert.ok(svg && svg.length > 4000, `${id}：应画出写实示意图（长度 ${svg?.length}）`);
+    assert.doesNotMatch(svg, /<script|\son[a-z]+\s*=|href=|xlink:|<image|<foreignObject|url\(\s*['"]?(?!#)/i, `${id}：不许脚本、处理器、外链`);
+    assert.doesNotMatch(svg, /NaN|undefined|Infinity|null/, `${id}：不能出现 NaN / undefined`);
+    const top = parseXml(svg);      // 返回的就是最外层的 svg 元素
+    assert.equal(top.name, 'svg'); assert.equal(top.attrs.viewBox, '0 0 100 136');
+    const defs = top.children.find(node => node.name === 'defs');
+    assert.ok(defs && defs.children.some(node => node.attrs.id === 'tile'), `${id}：有底板渐变`);
+    const group = top.children.find(node => node.name === 'g');
+    assert.ok(group.children.length > 8, `${id}：绘制步骤至少 8 条（实际 ${group.children.length}）`);
+    assert.ok(group.children.every(node => node.name === 'path' && /^M[-\d.]/.test(node.attrs.d)), `${id}：每个绘制步骤是以 M 开头的路径`);
+    const ids = [...svg.matchAll(/\sid="([^"]+)"/g)].map(m => m[1]);
+    assert.equal(new Set(ids).size, ids.length, `${id}：svg 内 id 唯一`);
+    for (const ref of svg.matchAll(/url\(#([^)]+)\)/g)) assert.ok(ids.includes(ref[1]), `${id}：${ref[1]} 要在 svg 内定义`);
+    // 动物居中且在底板里：用数值核对 transform（平移 + 缩放）后的并集落在 100 × 136 的底板内并留出边距
+    const m = /translate\(([-\d.]+) ([-\d.]+)\) scale\(([-\d.]+)\)/.exec(svg);
+    assert.ok(m, `${id}：外层有平移与缩放`);
+    const [tx, ty, k] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    const union = MarineRig.unionBounds(MarineRigData.rig(id));
+    const box = [tx + k * union.minX, ty + k * union.minY, tx + k * union.maxX, ty + k * union.maxY];
+    assert.ok(box[0] >= 5 && box[2] <= 95 && box[1] >= 14 && box[3] <= 122, `${id}：并集在底板里留边距（${box.map(v => v.toFixed(1)).join(',')}）`);
+    assert.ok(Math.abs((box[0] + box[2]) / 2 - 50) < 0.05 && Math.abs((box[1] + box[3]) / 2 - 68) < 0.05, `${id}：并集居中`);
+  }
+});
+
+test('写实示意图：水母与不认识的物种返回 null；骨架数据缺失、求值器缺失、求值抛错或没有绘制步骤时返回 null，不抛错', () => {
+  const full = load(view({})).window.JellyAppearanceSettings;
+  for (const odd of ['jelly', 'dragon', '', 5, null, undefined, '__proto__', 'toString']) assert.equal(full.realisticPreviewSvg(odd), null, String(odd));
+  assert.equal(full.realisticPreviewUri('jelly'), null);
+  assert.match(full.realisticPreviewUri('manta'), /^data:image\/svg\+xml;charset=utf-8,/);
+  const none = load(view({}), { noMarine: true }).window.JellyAppearanceSettings;
+  assert.equal(none.realisticPreviewSvg('manta'), null, '页面里没有写实脚本');
+  assert.equal(none.realisticPreviewUri('manta'), null);
+  const bad = (Rig, Data) => load(view({}), { marine: { Rig, Data } }).window.JellyAppearanceSettings.realisticPreviewSvg('manta');
+  assert.equal(bad({ ...MarineRig, evaluate: () => { throw new Error('boom'); } }, MarineRigData), null, '求值抛错');
+  assert.equal(bad({ ...MarineRig, evaluate: () => ({ ops: [], bounds: null }) }, MarineRigData), null, '没有绘制步骤');
+  assert.equal(bad({ ...MarineRig, evaluate: () => null }, MarineRigData), null, '求值返回空');
+  assert.equal(bad({ ...MarineRig, unionBounds: () => null }, MarineRigData), null, '没有并集');
+  assert.equal(bad({ ...MarineRig, unionBounds: () => ({ minX: 0, minY: 0, maxX: 0, maxY: 5 }) }, MarineRigData), null, '并集宽度为 0');
+  assert.equal(bad({ evaluate: 1 }, MarineRigData), null, '求值器不是函数');
+  assert.equal(bad(MarineRig, { IDS: ['hammer'], rig: MarineRigData.rig }), null, '数据里没有这种动物');
+  assert.equal(bad(MarineRig, { IDS: 'manta', rig: MarineRigData.rig }), null, 'IDS 不是数组');
+  assert.equal(bad(MarineRig, { IDS: ['manta'], rig: () => { throw new Error('nope'); } }), null, '取骨架抛错');
+});
+
+test('要写实却画不出写实示意图：退回卡通示意并如实说明，不把卡通图说成写实，也不抛错', async () => {
+  const { els } = load(realView('manta', { colors: [6, 0], look: 'duo' }), { noMarine: true });
+  await tick();
+  assert.equal(els['set-jellyPreview'].attrs['data-style'], 'cartoon', '容器标记如实写卡通');
+  assert.equal(els['set-jellyPreview'].attrs['data-art'], 'animal');
+  assert.equal(els['set-jellyPreviewText'].textContent, '蝠鲼，写实示意图暂时画不出来，显示的是卡通示意，双色（躯干紫，鳍与尾红）');
+  assert.match(els['set-jellyAnimalPreview'].attrs.src, /^data:image\/svg\+xml;charset=utf-8,/);
+  assert.equal(els['set-jellyPreviewText'].textContent.includes('undefined'), false);
+  // 水母：写实开关没有意义，文字不提写实
+  const jelly = load(view({ species: 'jelly', realistic: true }, { resolved: { color: 5, colors: [5], look: 'solid', species: 'jelly' } }), { noMarine: true });
+  await tick();
+  assert.equal(jelly.els['set-jellyPreviewText'].textContent, '纯色（冰蓝）'); assert.equal(jelly.els['set-jellyPreview'].attrs['data-style'], 'cartoon');
+  // 没有 img 元素时不画动物（旧页面结构）：不能因为要写实而硬画
+  const noImg = load(realView('manta'), { dom: { noAnimalImg: true } });
+  await tick();
+  assert.equal(noImg.els['set-jellyPreview'].attrs['data-art'], 'jelly');
+});
+
+test('状态文字（写实）：只有组件确认的画法与当前设置一致才说“写实”；旧组件画卡通时说明更新办法；确认过期按“等待确认”处理', () => {
+  const d = load(view({})).window.JellyAppearanceSettings.describe;
+  const base = { component: 'ok', connected: true };
+  const asked = species => ({ species, realistic: true });
+  // 写实：组件确认画成了写实
+  assert.equal(d({ ...base, settings: asked('whaleshark'), style: { style: 'realistic', species: 'whaleshark', realistic: true } }), '外观已应用到桌面：鲸鲨（写实）。');
+  // 写实：组件回执说画的是卡通（旧组件没有 realistic 回执，或者这种动物在组件里没有写实数据）
+  const cartoon = d({ ...base, settings: asked('whaleshark'), style: { style: 'cartoon', species: 'whaleshark', realistic: true } });
+  assert.match(cartoon, /还没有写实版/); assert.match(cartoon, /更新桌面组件/); assert.match(cartoon, /现在显示的是卡通版/);
+  assert.doesNotMatch(cartoon, /（写实）|已应用到桌面：鲸鲨。/, '没画成写实就不能说写实');
+  // 写实：还没有回执 / 回执不是这份设置的（物种或写实开关不一致）→ 等待确认，绝不说“写实”
+  for (const style of [undefined, null, {}, { style: 'unknown', species: 'whaleshark', realistic: true }, { style: 'realistic', species: 'manta', realistic: true }, { style: 'realistic', species: 'whaleshark', realistic: false }, { style: 'weird', species: 'whaleshark', realistic: true }, 'realistic', 5]) {
+    const text = d({ ...base, settings: asked('whaleshark'), style });
+    assert.match(text, /正在等待桌面组件确认“鲸鲨”的写实风格/, JSON.stringify(style));
+    assert.doesNotMatch(text, /（写实）|已应用/, JSON.stringify(style));
+  }
+  // 卡通：确认过就写“（卡通）”，没有确认保持原样，过期的确认（上一次是写实）不采信
+  const wantCartoon = { species: 'turtle', realistic: false };
+  assert.equal(d({ ...base, settings: wantCartoon, style: { style: 'cartoon', species: 'turtle', realistic: false } }), '外观已应用到桌面：海龟（卡通）。');
+  assert.equal(d({ ...base, settings: wantCartoon }), '外观已应用到桌面：海龟。');
+  assert.equal(d({ ...base, settings: wantCartoon, style: { style: 'realistic', species: 'turtle', realistic: true } }), '外观已应用到桌面：海龟。', '过期的写实确认不用于卡通设置');
+  // 水母：写实开关没有意义，文字不变
+  assert.equal(d({ ...base, settings: { species: 'jelly', realistic: true }, style: { style: 'realistic', species: 'jelly', realistic: true } }), '外观已应用到桌面水母。');
+  // 其它组件状态不受影响：不支持、没连上、没常驻都不提写实，也不说已应用
+  for (const component of ['unsupported', 'unknown', 'off']) assert.doesNotMatch(d({ component, connected: component === 'off', settings: asked('manta'), style: { style: 'realistic', species: 'manta', realistic: true } }), /已应用|已生效|（写实）/, component);
+});
+
+test('样式下拉：请求进行中禁用（防连点）；“每天换一只”开着时仍可用（日期只换颜色与花纹）', async () => {
+  const daily = load(realView('manta', {}, {}));
+  await tick();
+  assert.equal(daily.els['set-jellyStyle'].disabled, false);
+  const dailyOn = load(view({ species: 'manta', realistic: true, daily: true }, { resolved: { color: 5, colors: [5], look: 'solid', species: 'manta' } }));
+  await tick();
+  assert.equal(dailyOn.els['set-jellyStyle'].disabled, false, '样式与每天换无关');
+  assert.equal(dailyOn.els['set-jellyLook'].disabled, true);
+  const held = load(null, { hold: true });
+  await tick();
+  held.pending[0].answer(realView('manta')); await tick();
+  held.els['set-jellyStyle'].listeners.change({ target: { value: 'cartoon' } }); await tick();
+  assert.equal(held.els['set-jellyStyle'].disabled, true, '保存中禁用');
+  assert.equal(held.els['set-jellyAppearanceStatus'].textContent, '正在保存…');
+  held.pending[1].answer(view({ species: 'manta', realistic: false }, { resolved: { color: 5, colors: [5], look: 'solid', species: 'manta' } })); await tick();
+  assert.equal(held.els['set-jellyStyle'].disabled, false);
+  assert.equal(held.els['set-jellyStyle'].value, 'cartoon');
+});
+
+test('样式保存失败：如实显示原因，下拉回到已保存的值，不说已应用', async () => {
+  let current = realView('manta');
+  const { els } = load(message => (message.action === 'jelly_appearance_set' ? { ok: false, error: 'realistic 的取值无效' } : current));
+  await tick();
+  els['set-jellyStyle'].listeners.change({ target: { value: 'cartoon' } }); await tick();
+  assert.match(els['set-jellyAppearanceStatus'].textContent, /保存失败：realistic 的取值无效/);
+  assert.doesNotMatch(els['set-jellyAppearanceStatus'].textContent, /已应用/);
+  assert.equal(els['set-jellyStyle'].disabled, false);
+});
+
+test('旧页面结构（没有样式下拉）：脚本照常工作，不抛错', async () => {
+  const noStyle = load(realView('manta'), { dom: { noStyle: true } });
+  await tick();
+  assert.match(noStyle.els['set-jellyAppearanceStatus'].textContent, /正在等待桌面组件确认|已应用/);
+  assert.equal(noStyle.els['set-jellyPreview'].attrs['data-style'], 'realistic');
+});
+
+test('写实脚本守卫：骨架数据与求值器只经全局 MarineRig / MarineRigData 读取；示意图拼接的只有求值结果的数字与十六进制颜色', () => {
+  const code = source.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.match(code, /root\.MarineRig\b/); assert.match(code, /root\.MarineRigData\b/);
+  assert.match(code, /Rig\.evaluate\(/); assert.match(code, /Rig\.unionBounds\(/);
+  const body = code.slice(code.indexOf('function realisticPreviewSvg'), code.indexOf('function animalPreviewUri'));
+  assert.ok(body.length > 1500, '应截到写实示意图函数');
+  // 模板字符串里插入的只能是 num(...) / hexOf(...) / 本函数算出的数字与固定片段，不插入任何外部字符串
+  for (const m of body.matchAll(/\$\{([^}]*)\}/g)) assert.match(m[1], /^(num\(|hexOf\(|rule|d\b|index|defs\.join|out\.join|stops|TILE_W|TILE_H|op\.cap|k\b|tx|ty|g\.)/, `模板里插入了没核对过的表达式：${m[1]}`);
 });

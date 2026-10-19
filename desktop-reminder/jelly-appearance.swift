@@ -31,8 +31,11 @@ struct JellyAppearance: Equatable {
     var size: Size
     var season: String?
     var species: JellySpecies = .jelly      // 物种（见 jelly-species.swift）：只改“画谁”，颜色、花纹、材质照常适用
+    /// 动物画成写实风格（marine-rig.swift 的骨架，与水族馆同一份数据）：只对有骨架的动物有效，水母没有；写实动物用自己的自然体色，
+    /// 颜色与花纹只管水母和卡通动物。原生端的缺省是 false（旧版本的 Chrome 不下发这个字段，组件照旧画卡通），只有明确的 true 才写实。
+    var realistic: Bool = false
 
-    static let `default` = JellyAppearance(colors: [defaultColor], look: .solid, material: .glass, size: .medium, season: nil, species: .jelly)
+    static let `default` = JellyAppearance(colors: [defaultColor], look: .solid, material: .glass, size: .medium, season: nil, species: .jelly, realistic: false)
 
     /// JSON 里的布尔会以 NSNumber 到达，直接按数字读会把 true 当成 1；这里先识别出来。
     private static func isBoolean(_ value: Any) -> Bool {
@@ -61,7 +64,8 @@ struct JellyAppearance: Equatable {
         return JellyAppearance(colors: colors, look: look,
                                material: Material(rawValue: object["material"] as? String ?? "") ?? .glass,
                                size: Size(rawValue: object["size"] as? String ?? "") ?? .medium, season: season,
-                               species: JellySpecies.parse(object["species"]))
+                               species: JellySpecies.parse(object["species"]),
+                               realistic: object["realistic"].map { isBoolean($0) && ($0 as? Bool) == true } ?? false)
     }
 
     /// 色相（度，0…360），用来在自测里核对调色板与首页调色板的色相顺序一致。

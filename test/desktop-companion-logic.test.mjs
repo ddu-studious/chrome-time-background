@@ -40,14 +40,16 @@ const HOTKEY_CASES = [
 test('原生水母：构建清单包含所有水母源文件，且 main.swift 在最后', () => {
   const build = readFileSync(resolve(root, 'desktop-reminder/build.mjs'), 'utf8');
   const listed = build.match(/const sources = \[([^\]]*)\]/)?.[1].split(',').map(s => s.trim().replace(/'/g, '')).filter(Boolean) ?? [];
-  assert.deepEqual(listed, ['countdown-model', 'jelly-model', 'jelly-swim', 'jelly-palette', 'jelly-appearance', 'jelly-species', 'jelly-species-data', 'jelly-paint', 'assistant-model', 'glass-view', 'jelly-ring', 'jelly-materials', 'jelly-species-painter', 'jelly-companion', 'jelly-controller', 'confirmation-view', 'assistant-hotkey', 'assistant-panel', 'main'], '构建清单：纯逻辑在前、AppKit 在后、main.swift 最后');
+  assert.deepEqual(listed, ['countdown-model', 'jelly-model', 'jelly-swim', 'jelly-palette', 'jelly-appearance', 'jelly-species', 'jelly-species-data', 'marine-rig', 'marine-rig-data', 'jelly-paint', 'assistant-model', 'glass-view', 'jelly-ring', 'jelly-materials', 'jelly-species-painter', 'marine-rig-painter', 'jelly-companion', 'jelly-controller', 'confirmation-view', 'assistant-hotkey', 'assistant-panel', 'main'], '构建清单：纯逻辑在前、AppKit 在后、main.swift 最后');
   for (const name of listed) assert.ok(existsSync(resolve(root, `desktop-reminder/${name}.swift`)), `${name}.swift 必须存在`);
   assert.match(build, /com\.timekeeper\.desktop\.qa/, '隔离构建使用独立 Bundle ID，避免改写真实组件的窗口记忆');
   const main = readFileSync(resolve(root, 'desktop-reminder/main.swift'), 'utf8');
   assert.doesNotMatch(main, /buildCountdown|layoutCountdown|resizeCountdown/, '旧倒计时实现不应残留在 main.swift');
   // 水母外观：跟着 jelly 命令走，回执带 appearance.status 供 Chrome 探测；协议版本不升（“水母差事”已占 v8）
   assert.match(main, /jelly\.setAppearance\(object\["appearance"\]\)/, 'jelly 命令里的 appearance 交给水母控制器');
-  assert.match(main, /extra\["appearance"\] = \["status": "ok", "species": jelly\.speciesName\]/, '回执带 appearance.status 与实际生效的物种，Chrome 靠它探测组件是否支持、是否真的画出了所选动物');
+  assert.match(main, /extra\["appearance"\] = \["status": "ok", "species": jelly\.speciesName, "realistic": jelly\.realisticApplied\] as \[String: Any\]/, '回执带 appearance.status、实际生效的物种与是否真的画成了写实版，Chrome 靠它探测组件是否支持、是否真的画出了所选动物与风格');
+  assert.match(main, /reply\["jellyRealistic"\] = jelly\.realisticApplied/, 'ping 诊断：实际是不是写实版（单独的字段，不改 jellyPose 的格式）');
+  assert.match(main, /reply\["jellyRig"\] = jelly\.rigSummary/, 'ping 诊断：写实骨架的相位、幅度与阶段混合量');
   assert.match(main, /reply\["jellySpecies"\] = jelly\.speciesName/, 'ping 诊断：实际生效的物种（不是设置里的那个）');
   assert.match(main, /reply\["jellyTuning"\] = jelly\.tuningSummary/, 'ping 诊断：运行中的游动调参（冒烟据此核对物种的系数确实接到了游动上）');
   assert.match(main, /reply\["jellyTitle"\] = jelly\.titleSummary/, 'ping 诊断：窗口标题（实际生效的物种名）');
@@ -126,7 +128,7 @@ test('原生水母：纯逻辑（阶段、协议解析、显示规则、文案�
     // 变异检查用：外部已按（被改动的）源码增量编译好自测时，设置 TIMEKEEPER_SELFTEST_EXE 指向它，这里就跳过编译（常规运行不设置）
     const prebuilt = process.env.TIMEKEEPER_SELFTEST_EXE;
     const exe = prebuilt || join(dir, 'selftest');
-    if (!prebuilt) execFileSync(swiftc, ['swiftc', resolve(root, 'desktop-reminder/countdown-model.swift'), resolve(root, 'desktop-reminder/jelly-model.swift'), resolve(root, 'desktop-reminder/jelly-swim.swift'), resolve(root, 'desktop-reminder/jelly-palette.swift'), resolve(root, 'desktop-reminder/jelly-appearance.swift'), resolve(root, 'desktop-reminder/jelly-species.swift'), resolve(root, 'desktop-reminder/jelly-species-data.swift'), resolve(root, 'desktop-reminder/jelly-paint.swift'), resolve(root, 'desktop-reminder/assistant-model.swift'), join(dir, 'main.swift'), '-module-cache-path', join(dir, 'cache'), '-o', exe], { stdio: 'pipe' });
+    if (!prebuilt) execFileSync(swiftc, ['swiftc', resolve(root, 'desktop-reminder/countdown-model.swift'), resolve(root, 'desktop-reminder/jelly-model.swift'), resolve(root, 'desktop-reminder/jelly-swim.swift'), resolve(root, 'desktop-reminder/jelly-palette.swift'), resolve(root, 'desktop-reminder/jelly-appearance.swift'), resolve(root, 'desktop-reminder/jelly-species.swift'), resolve(root, 'desktop-reminder/jelly-species-data.swift'), resolve(root, 'desktop-reminder/marine-rig.swift'), resolve(root, 'desktop-reminder/marine-rig-data.swift'), resolve(root, 'desktop-reminder/jelly-paint.swift'), resolve(root, 'desktop-reminder/assistant-model.swift'), join(dir, 'main.swift'), '-module-cache-path', join(dir, 'cache'), '-o', exe], { stdio: 'pipe' });
     // 全局快捷键语法在 JS（normalizeHotkey）与 Swift（AssistantModel.parseHotkey）各有一份实现：同一批输入逐条对照
     const cases = HOTKEY_CASES;
     const casesFile = join(dir, 'hotkey-cases.json');
@@ -138,7 +140,8 @@ test('原生水母：纯逻辑（阶段、协议解析、显示规则、文案�
     for (const species of JellyAppearance.SPECIES) appearanceCases.push(JellyAppearance.resolve({ species, color: 2, look: 'duo' }, { date: new Date(2026, 9, 17) }));
     const resolvedCount = appearanceCases.length;
     appearanceCases.push({ color: 3, colors: [9], look: 'duo' }, { colors: [1], look: 'rainbow' }, 'x', null, { colors: [true, 1] }, { season: 'christmas' },
-      { species: 'hammer' }, { species: 'Hammer' }, { species: 3 }, { species: true }, { species: ' hammer', color: 1 });
+      { species: 'hammer' }, { species: 'Hammer' }, { species: 3 }, { species: true }, { species: ' hammer', color: 1 },
+      { species: 'whaleshark', realistic: true }, { species: 'whaleshark', realistic: false }, { realistic: 1 }, { realistic: 'true' }, { realistic: null }, { realistic: [true] });
     const appearanceFile = join(dir, 'appearance-cases.json');
     writeFileSync(appearanceFile, JSON.stringify(appearanceCases));
     // 动物路径解析：共用的合规/不合规用例（含非字符串）交给 Swift 逐项回显
@@ -194,6 +197,17 @@ test('原生水母：纯逻辑（阶段、协议解析、显示规则、文案�
     assert.deepEqual(swiftAppearance.get(resolvedCount + 8), ['5', 'solid', 'glass', 'medium', '-', 'jelly'], '物种不是字符串（数字）：水母');
     assert.deepEqual(swiftAppearance.get(resolvedCount + 9), ['5', 'solid', 'glass', 'medium', '-', 'jelly'], '物种不是字符串（布尔）：水母');
     assert.deepEqual(swiftAppearance.get(resolvedCount + 10), ['1', 'solid', 'glass', 'medium', '-', 'jelly'], '物种带空白不被裁剪：水母，别的字段不受影响');
+    // 写实风格：Chrome 的 resolve 结果（realistic 是布尔）经 Swift 解析后原样回显；只有明确的布尔 true 才算写实，旧 Chrome 不带这个字段时回到卡通
+    const swiftRealistic = new Map([...output.matchAll(/^REALISTIC (\d+) ([01])$/gm)].map(match => [Number(match[1]), match[2]]));
+    assert.equal(swiftRealistic.size, appearanceCases.length, 'Swift 应对每个外观用例各输出一行 REALISTIC');
+    appearanceCases.slice(0, resolvedCount).forEach((expected, index) => {
+      assert.equal(typeof expected.realistic, 'boolean', `外观用例 ${index}：resolve 的 realistic 必须是布尔`);
+      assert.equal(swiftRealistic.get(index), expected.realistic ? '1' : '0', `外观用例 ${index} 写实风格：Chrome 下发的值经 Swift 解析后应原样回显`);
+    });
+    assert.ok(appearanceCases.slice(0, resolvedCount).every(item => item.realistic === true), 'Chrome 侧的默认是写实（原生缺省才是卡通）');
+    const extra = resolvedCount + 11;
+    assert.deepEqual([...Array(6).keys()].map(k => swiftRealistic.get(extra + k)), ['1', '0', '0', '0', '0', '0'], '只有布尔 true 写实：false、数字 1、字符串 "true"、null、数组都不算');
+    assert.equal(swiftRealistic.get(resolvedCount), '0', '没有 realistic 字段（旧 Chrome）：原生回到卡通');
     // 物种列表：Chrome 的 SPECIES 与 Swift 的 JellySpecies.allCases 逐项相同（含顺序）
     assert.equal(output.match(/^SPECIES (\S+)$/m)?.[1], JellyAppearance.SPECIES.join(','), '物种列表 Chrome 与原生一致');
     const hueOf = ([r, g, b]) => { const hi = Math.max(r, g, b), lo = Math.min(r, g, b), d = hi - lo; if (!d) return 0; const h = hi === r ? ((g - b) / d) % 6 : hi === g ? (b - r) / d + 2 : (r - g) / d + 4; return (h * 60 + 360) % 360; };

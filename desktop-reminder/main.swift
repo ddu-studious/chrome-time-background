@@ -109,7 +109,8 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
                 if let object = message["jelly"] as? [String: Any], object.keys.contains("appearance") {
                     jelly.setAppearance(object["appearance"])
                     // species 是实际生效的那一种：设置的动物还画不出来（没有几何数据）时回退成水母，这里如实报告，Chrome 据此不把它说成已应用
-                    extra["appearance"] = ["status": "ok", "species": jelly.speciesName]
+                    // realistic 同理：只有真的画出了写实版才是 true（旧组件的回执里没有这个字段，Chrome 按卡通算）
+                    extra["appearance"] = ["status": "ok", "species": jelly.speciesName, "realistic": jelly.realisticApplied] as [String: Any]
                 }
                 samplePresence()
                 // 助手配置跟着 jelly 命令走：没带或明确关闭就注销全局快捷键、收起面板；启用时把注册结果带在回执里，
@@ -200,6 +201,8 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
         reply["jellyAppearance"] = jelly.appearanceName
         reply["jellyLook"] = jelly.lookSummary
         reply["jellySpecies"] = jelly.speciesName
+        reply["jellyRealistic"] = jelly.realisticApplied      // 验收诊断：此刻画的是不是写实版，以及它的相位/幅度/阶段色混入读数
+        reply["jellyRig"] = jelly.rigSummary
         reply["jellyPose"] = jelly.poseSummary
         reply["jellyTuning"] = jelly.tuningSummary
         reply["jellyTitle"] = jelly.titleSummary
