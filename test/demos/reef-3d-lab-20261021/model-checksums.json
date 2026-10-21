@@ -1,0 +1,27 @@
+[
+  {
+    "path": "assets/barramundi/BarramundiFish.bin",
+    "sha256": "5d6ca35ff4e498d84597956091cf5de8ce0f236cd9b8ebf48e19d372e4187112",
+    "bytes": 128208
+  },
+  {
+    "path": "assets/barramundi/BarramundiFish.gltf",
+    "sha256": "15e2c26d308ef73f227655703ba88c37cf817e60e25229fab5cbfd0bf6888d2e",
+    "bytes": 2554
+  },
+  {
+    "path": "assets/barramundi/BarramundiFish_baseColor.png",
+    "sha256": "c80f0a2b9752fb6fe1eda851afdad071b289982be036c1e6ee621592d64547c6",
+    "bytes": 4985099
+  },
+  {
+    "path": "assets/barramundi/BarramundiFish_normal.png",
+    "sha256": "089f8ff777a1ab63ceb26f5b77bc758ff9db944b59f579dc3aee4143e3bc8f9d",
+    "bytes": 3017384
+  },
+  {
+    "path": "assets/barramundi/BarramundiFish_occlusionRoughnessMetallic.png",
+    "sha256": "4a89d8a0bf9d960e17177411fb846eb9acbb737ab3c6c7716a8d97672e22fafc",
+    "bytes": 4355820
+  }
+]

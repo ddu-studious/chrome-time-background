@@ -25,9 +25,18 @@
         aquariumFish: true,
         aquariumWater: true,
         aquariumRealistic: true,
+        aquariumPredation: true,
+        aquariumFlow: false,
+        aquariumRays: false,
+        aquariumSound: false,
     });
     const VISUAL_EFFECTS = new Set(['none', 'depth', 'weather', 'memory', 'liquid', 'time', 'jellyfish']);
     const COLORS = [[112, 205, 255], [170, 111, 255], [79, 239, 194]];
+    // 失焦休息：窗口失去焦点这么久之后才冻结（切个窗口再回来不该闪）；隐藏这么久之后才释放大块缓冲（短暂切走不拆了重建）。
+    const REST_BLUR_DELAY_MS = 4000;
+    const DEEP_REST_MS = 60000;
+    // 从隐藏回到“可见但仍没有焦点”时先补画这几帧再冻结，免得画布停在被清空的状态。
+    const REST_SETTLE_FRAMES = 3;
 
     function clamp(value, min, max) {
         return Math.max(min, Math.min(max, Number(value) || 0));
@@ -64,10 +73,18 @@
             pomodoroJelly: source.pomodoroJelly !== false,
             // 水族馆：在水母皮肤下可以放入、捞出小鱼（js/aquarium*.js）。只有明确 false 才关；关闭后不读写鱼的存储、没有托盘。
             aquariumFish: source.aquariumFish !== false,
-            // 海水层（js/aquarium-water.js）：水面波光、光束、焦散与气泡，只在选了水母（水族馆）皮肤时运行；只有明确 false 才关；与小鱼开关互不影响。
+            // 海水层（js/aquarium-water.js）：页面底部的一条岸线——海浪涌上沙滩又退去、潮水慢慢涨落，鱼会留在浪能冲到的最高水线之上；只在选了水母（水族馆）皮肤时运行；只有明确 false 才关；与小鱼开关互不影响。
             aquariumWater: source.aquariumWater !== false,
             // 写实动物（js/aquarium-real.js）：小锤头鲨、蝠鲼、鲸鲨用接近真实的外形、配色与游动方式；只有明确 false 才回到卡通画法（海龟没有卡通画法，仍是写实）。
             aquariumRealistic: source.aquariumRealistic !== false,
+            // 大鱼吃小鱼（js/aquarium-predation-core.js）：放了小锤头鲨时它偶尔追一条小鱼并吃掉，被吃的鱼过一会儿游回来（只发生在画面里，不改鱼的存储）；只有明确 false 才关，省流量模式一律不开。
+            aquariumPredation: source.aquariumPredation !== false,
+            // 水流与海洋雪（js/aquarium-flow-core.js）：大鱼游过留下水流尾迹、水里飘着海洋雪；纯视觉、不存储；默认关，只有明确 true 才开，省流量模式一律不开。
+            aquariumFlow: source.aquariumFlow === true,
+            // 水下光束（js/aquarium-light-core.js）：水面斜射下来的淡淡光束，写实动物远处先失去红色；纯视觉、不存储；默认关，只有明确 true 才开（光束在省流量模式下不画）。
+            aquariumRays: source.aquariumRays === true,
+            // 水下环境音（js/aquarium-sound.js）：粉红噪声 + 低频嗡鸣 + 偶尔气泡；默认关，只有明确 true 才开；须用户在本页点一下（浏览器自动播放策略）；页面隐藏时挂起。
+            aquariumSound: source.aquariumSound === true,
         };
     }
 
@@ -91,6 +108,16 @@
             this.dpr = 1;
             this.active = false;
             this.hidden = document.hidden || document.body.classList.contains('home-background-suspended');
+            // 失焦休息（只省 CPU，不隐藏任何东西）与隐藏后的深度释放（回收共享画布与海洋生态各层的缓冲）：见 setResting / releaseResources。
+            this.focused = this.documentHasFocus();
+            this.resting = false;
+            this.restTimer = null;
+            this.restWake = 0;
+            this.restSettle = 0;
+            this.restListeners = new Set();
+            this.deepTimer = null;
+            this.released = false;
+            this.visual = 'none';
             this.frameRequest = null;
             this.initialized = false;
             this.lastFrame = 0;
@@ -160,8 +187,12 @@
             this.applyTimeVisual();
             this.seedWeather();
             this.seedLiquid();
+            this.visual = visual;
+            // 设置在释放期间变化：syncJellyfish 会按新设置把海洋生态重新起来，所以释放标记作废，隐藏中则重新计时。
+            this.released = false;
             this.syncJellyfish(visual);
             this.syncAnimation();
+            if (this.hidden) this.armDeepRest();
         }
 
         // 水母皮肤的画法、待办名单、时钟拍点与抓取状态机都在 js/jellyfish*.js；这里只负责按设置启停、在 drawPassive 里把共享画布借给它，
@@ -212,9 +243,30 @@
         syncAquarium(visualIsJellyfish) {
             const aq = this.aquarium();
             if (!aq) return;
-            if (visualIsJellyfish && this.settings.aquariumFish) { aq.start(); return; }
+            if (visualIsJellyfish && this.settings.aquariumFish) { aq.start(); this.syncAquariumSound(true); return; }
             if (this.grab?.kind === 'fish') this.cancelGrab();
             aq.stop();
+            this.syncAquariumSound(false);
+        }
+
+        // 水下环境音：独立于鱼层，只在水族馆皮肤 + 小鱼开着 + 设置开着时想响；真正响起来还要一次用户手势（见 onPointerDown）。
+        aquariumSound() {
+            return window.AquariumSound || null;
+        }
+
+        syncAquariumSound(visualIsJellyfish) {
+            const Sound = this.aquariumSound();
+            if (!Sound) return;
+            const want = !!(visualIsJellyfish && this.settings.aquariumFish && this.settings.aquariumSound && !this.saveData);
+            if (!want) {
+                if (this._aqSound) { try { this._aqSound.stop(); } catch { /* ignore */ } this._aqSound = null; }
+                return;
+            }
+            if (!this._aqSound) {
+                try { this._aqSound = Sound.create(); } catch { this._aqSound = null; return; }
+            }
+            // 不在这里 start：没有用户手势会被浏览器挡住；等 pointerdown 再启
+            this._aqSound.tick({ amount: Math.max(0, Math.min(1, (this.settings.intensity ?? 65) / 100)), night: this.settings.jellyfishNight ? undefined : 0, hidden: this.hidden });
         }
 
         fishRunning() {
@@ -235,8 +287,11 @@
         drawJellyfish(now, dt, amount) {
             // 海水层有自己的画布（在壁纸与本画布之间），与鱼、水母互不读取；出错只关水体层（控制器内部处理），不影响下面的帧循环。
             const water = this.water();
+            let shore = null;
             if (water && water.isActive()) {
                 water.frame({ width: this.width, height: this.height, now, amount, lowPower: this.saveData, night: this.settings.jellyfishNight });
+                // 岸线（此刻水线能到的最高处，占页面高度的比例、从页面底边往上量）：鱼据此让身体下缘留在岸线之上；水体层没在显示时为 null，鱼不避岸线
+                shore = typeof water.shore === 'function' ? water.shore(now) : null;
             }
             // 鱼画在水母后面（先画）；它读水母钟罩的位置避让，水母不读鱼。画法出错只停鱼层，不影响水母。
             const aq = this.aquarium();
@@ -244,8 +299,8 @@
                 const skin = this.skin();
                 aq.frame({
                     ctx: this.ctx, width: this.width, height: this.height, dt, amount,
-                    pointer: this.jellyfishPointer(), lowPower: this.saveData, night: this.settings.jellyfishNight, realistic: this.settings.aquariumRealistic,
-                    bells: skin && typeof skin.bells === 'function' ? skin.bells() : [],
+                    pointer: this.jellyfishPointer(), lowPower: this.saveData, night: this.settings.jellyfishNight, realistic: this.settings.aquariumRealistic, predation: this.settings.aquariumPredation, flow: this.settings.aquariumFlow, rays: this.settings.aquariumRays,
+                    bells: skin && typeof skin.bells === 'function' ? skin.bells() : [], shore,
                 });
             }
             // 不传 colors：水母用皮肤自己的七彩调色板（每只一种颜色）；宿主的 COLORS 只有几种，传过去会让七彩失效
@@ -254,6 +309,10 @@
                 pointer: this.jellyfishPointer(), lowPower: this.saveData, labels: this.settings.jellyfishTasks, night: this.settings.jellyfishNight,
                 dance: this.settings.jellyfishDance && this.musicPlaying ? 1 : 0, grow: this.settings.jellyfishGrow,
             });
+            if (this._aqSound) {
+                // 夜里曲线不在宿主里再算一份；开着“夜晚荧光”时按满夜音量折减，关着为 0
+                this._aqSound.tick({ amount, night: this.settings.jellyfishNight === false ? 0 : 1, hidden: this.hidden });
+            }
         }
 
         /** 水母是否允许被抓：皮肤在运行、设置开着、页面可见。 */
@@ -328,10 +387,118 @@
             event.stopImmediatePropagation();
         }
 
+        // ---------- 失焦休息与隐藏后的释放 ----------
+        // 目标：只有拿到焦点的首页才持续占用 CPU；没焦点的可见窗口冻结在最后一帧，隐藏很久后再回收大块缓冲。
+        // 都是纯视觉层的暂停/重启：不碰存储、不碰任务，回来后各层从各自原有的 start 重新开始（鱼从存储读回，位置重新散开）。
+        documentHasFocus() {
+            try { return typeof document.hasFocus === 'function' ? document.hasFocus() !== false : true; } catch { return true; }
+        }
+
+        isResting() {
+            return this.resting;
+        }
+
+        /** 订阅休息状态变化（main.js 用它暂停/恢复壁纸视频）；返回取消函数。监听者出错不影响休息本身。 */
+        onRestChange(listener) {
+            if (typeof listener !== 'function') return () => {};
+            this.restListeners.add(listener);
+            return () => this.restListeners.delete(listener);
+        }
+
+        onWindowBlur() {
+            this.focused = false;
+            this.restWake = performance.now();
+            this.armRest(REST_BLUR_DELAY_MS);
+        }
+
+        onWindowFocus() {
+            this.focused = true;
+            this.clearRestTimer();
+            this.setResting(false);
+        }
+
+        /** 没有焦点的窗口里的真实指针活动：悬停就醒来，停下 REST_BLUR_DELAY_MS 之后再次休息。 */
+        noteHover() {
+            this.restWake = performance.now();
+            if (this.resting) this.setResting(false);
+            this.armRest(REST_BLUR_DELAY_MS);
+        }
+
+        armRest(delay) {
+            if (this.restTimer !== null) return;
+            this.restTimer = setTimeout(() => {
+                this.restTimer = null;
+                if (this.focused) return;
+                if (typeof document.hasFocus === 'function' && this.documentHasFocus()) { this.focused = true; return; }    // 漏掉了 focus 事件：以真实状态为准
+                const idle = performance.now() - this.restWake;
+                if (idle < REST_BLUR_DELAY_MS) { this.armRest(REST_BLUR_DELAY_MS - idle); return; }
+                this.setResting(true);
+            }, Math.max(0, delay));
+        }
+
+        clearRestTimer() {
+            if (this.restTimer === null) return;
+            clearTimeout(this.restTimer);
+            this.restTimer = null;
+        }
+
+        setResting(value) {
+            value = !!value;
+            if (this.resting === value) return;
+            this.resting = value;
+            this.restSettle = 0;
+            document.body.classList.toggle('home-resting', value);
+            this.lastFrame = 0;
+            this.syncAnimation();
+            for (const listener of [...this.restListeners]) {
+                try { listener(value); } catch { /* 监听者的问题不能影响背景本身 */ }
+            }
+        }
+
+        armDeepRest() {
+            if (this.deepTimer !== null || this.released) return;
+            this.deepTimer = setTimeout(() => { this.deepTimer = null; this.releaseResources(); }, DEEP_REST_MS);
+        }
+
+        disarmDeepRest() {
+            if (this.deepTimer !== null) { clearTimeout(this.deepTimer); this.deepTimer = null; }
+            if (this.released) this.restoreReleased();
+        }
+
+        /** 隐藏足够久之后：海洋生态三层各自销毁画布/监听（它们已有的 stop 入口），共享画布缩到 1×1 释放后备缓冲。 */
+        releaseResources() {
+            if (this.released || !this.hidden) return;
+            this.released = true;
+            this.cancelPointer();
+            this.setGrabHover(false);
+            if (this.visual === 'jellyfish') {
+                this.syncAquarium(false);
+                this.syncWater(false);
+                this.skin()?.stop();
+            }
+            this.canvas.width = 1;
+            this.canvas.height = 1;
+        }
+
+        restoreReleased() {
+            if (!this.released) return;
+            this.released = false;
+            const resized = this.width !== innerWidth || this.height !== innerHeight;
+            this.resize();
+            if (resized) { this.seedWorld(); this.seedWeather(); this.seedLiquid(); }
+            this.syncJellyfish(this.visual);
+            this.syncAnimation();
+        }
+
         setSuspended(value) {
             this.hidden = !!value;
             this.lastFrame = 0;
             if (this.hidden) this.cancelPointer();
+            if (this.hidden) this.armDeepRest();
+            else this.disarmDeepRest();
+            // 回到可见但窗口仍没有焦点：先补画几帧再冻结（隐藏时画布被清空过）。
+            if (!this.hidden && this.resting) this.restSettle = REST_SETTLE_FRAMES;
+            if (this._aqSound) this._aqSound.tick({ hidden: this.hidden, amount: Math.max(0, Math.min(1, (this.settings.intensity ?? 65) / 100)) });
             this.syncAnimation();
         }
 
@@ -347,6 +514,10 @@
                 if (this.frameRequest !== null) cancelAnimationFrame(this.frameRequest);
                 this.frameRequest = null;
                 this.ctx.clearRect(0, 0, this.width, this.height);
+            } else if (this.resting && this.restSettle <= 0) {
+                // 失焦休息：停掉帧循环，画布保持最后一帧（不清屏、不隐藏），回到焦点或真实悬停时再恢复。
+                if (this.frameRequest !== null) cancelAnimationFrame(this.frameRequest);
+                this.frameRequest = null;
             } else if (this.frameRequest === null) {
                 this.frameRequest = requestAnimationFrame(time => this.frame(time));
             }
@@ -449,6 +620,7 @@
             window.addEventListener('music:playing', event => { this.musicPlaying = event?.detail?.playing === true; });
             this.toggle.addEventListener('click', () => this.setActive(!this.active));
             window.addEventListener('resize', () => {
+                if (this.released) return;          // 释放期间不重新分配大画布，回到页面时由 restoreReleased 统一恢复
                 this.resize();
                 this.seedWorld();
                 this.seedWeather();
@@ -468,7 +640,10 @@
                 this.pointerInside = false;
                 this.setGrabHover(false);
             });
-            window.addEventListener('blur', () => this.cancelPointer());
+            window.addEventListener('blur', () => { this.cancelPointer(); this.onWindowBlur(); });
+            window.addEventListener('focus', () => this.onWindowFocus());
+            if (!this.focused) this.onWindowBlur();          // 页面在没有焦点的窗口里打开
+            if (this.hidden) this.armDeepRest();
             document.addEventListener('keydown', event => {
                 if (event.key === 'Escape' && this.grab) this.cancelGrab();
             }, true);
@@ -574,6 +749,11 @@
         }
 
         onPointerDown(event) {
+            // 水下环境音：用户在本页点一下才真正 start（浏览器自动播放策略）；已经在跑时只是 resume
+            if (this._aqSound && this.settings.aquariumSound && this.settings.aquariumFish && this.settings.visualEffect === 'jellyfish') {
+                const amount = Math.max(0, Math.min(1, (this.settings.intensity ?? 65) / 100));
+                void this._aqSound.start({ amount });
+            }
             if (this.tryGrab(event)) return;           // 按在一只水母上：抓水母优先于背景玩法
             if (!this.active || !this.isBackgroundTarget(event.target)) return;
             event.preventDefault();
@@ -593,6 +773,7 @@
 
         onPointerMove(event) {
             if (this.hidden) return;
+            if (!this.focused) this.noteHover();
             this.setPointer(event);
             if (this.grab) {
                 if (event.pointerId === this.grab.id && event.buttons === 0) this.endGrab(event);    // 在窗口外放开时没收到 pointerup：按放开处理
@@ -870,6 +1051,7 @@
             const dt = Math.min(34, now - this.lastFrame || 16);
             this.lastFrame = now;
             this.frameIndex++;
+            if (this.resting && this.restSettle > 0) this.restSettle--;
             const lowRate = this.reduceMotion || this.saveData;
             if (!this.hidden && (!lowRate || this.frameIndex % 2 === 0)) {
                 this.ctx.clearRect(0, 0, this.width, this.height);

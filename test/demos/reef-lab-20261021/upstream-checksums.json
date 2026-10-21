@@ -1,0 +1,102 @@
+[
+  {
+    "path": "LICENSE",
+    "bytes": 1067,
+    "sha256": "b660528234fa02f2c865e920aff83cf4bfc0f0650e6b7f85de91149dad7e3f78"
+  },
+  {
+    "path": "scenes/reefscape/assets/README.md",
+    "bytes": 837,
+    "sha256": "89d4ce0fa923ba3d1d5fc493a1a93cb7d460772e848640c53860aeb0bd2d102d"
+  },
+  {
+    "path": "scenes/reefscape/assets/aragonite.png",
+    "bytes": 2260822,
+    "sha256": "a7a6fab1c3f99c7870a1a895f6dddd9720dfd22ed724426f4762d44704f95705"
+  },
+  {
+    "path": "scenes/reefscape/assets/live-rock-normal.png",
+    "bytes": 2128841,
+    "sha256": "a8bf6a2d6c73449ab27a3026fb31240a78dc91fd7745d0956f7ee25358e5e577"
+  },
+  {
+    "path": "scenes/reefscape/assets/live-rock-surface.png",
+    "bytes": 1255027,
+    "sha256": "a91f50be34e8d459cb848b52c72f32ee78fe1544ce7677aa3d51479201008139"
+  },
+  {
+    "path": "scenes/reefscape/assets/live-rock.bin",
+    "bytes": 9392764,
+    "sha256": "84f22fb6e2a1a72132fc9229f95ca586838ee3805f3c51788f56cbab49414437"
+  },
+  {
+    "path": "scenes/reefscape/assets/rock-support.bin",
+    "bytes": 297228,
+    "sha256": "d497d29df724a612ea2fc7d22bceaff16de6724436556a5aabba29c744384416"
+  },
+  {
+    "path": "scenes/reefscape/src/anemone-crown.js",
+    "bytes": 4770,
+    "sha256": "8f3506fe593a4dcaf5fc0f2d53efa4d2584be13d63dc9c60c1c9a82327f48717"
+  },
+  {
+    "path": "scenes/reefscape/src/anemone.js",
+    "bytes": 16935,
+    "sha256": "9a9e718d9893561e134768a3285df6a61895a07f7e971f5c5d6f2255e3005155"
+  },
+  {
+    "path": "scenes/reefscape/src/corals.js",
+    "bytes": 18781,
+    "sha256": "56f762b192d48be9b6719c020fedc85337d7d243cd383088bab9985f85727e4f"
+  },
+  {
+    "path": "scenes/reefscape/src/geometry.js",
+    "bytes": 27300,
+    "sha256": "b9fc85b1315017e8ef1accb8b2d8ebd8fdd3b1d9b98f0d03e7aeb6762e2c3c8e"
+  },
+  {
+    "path": "scenes/reefscape/src/layout.js",
+    "bytes": 3134,
+    "sha256": "d0a609833a31da7a788a8108230ed1e5236a38eb538587bb671326aab6e49fce"
+  },
+  {
+    "path": "scenes/reefscape/src/math.js",
+    "bytes": 883,
+    "sha256": "0c713e37719b84b21a7eecd3c0805ed0f68f6c6f468224c1f8c0e5f03cd0898e"
+  },
+  {
+    "path": "scenes/reefscape/src/terrain.js",
+    "bytes": 16771,
+    "sha256": "f5b144bba277d5e20a81f49abecc7ea5024318d920dbb528db262633a2e88450"
+  },
+  {
+    "path": "scenes/reefscape/src/views.js",
+    "bytes": 289,
+    "sha256": "07f56e88fdd1b262fc0a4d478799855ea34e696002d6739cec04e53db376594b"
+  },
+  {
+    "path": "scenes/reefscape/src/water.js",
+    "bytes": 35893,
+    "sha256": "5931795d077d02b49f6574b02cf8a351edc48059424d8f3f492e221021c927f5"
+  },
+  {
+    "path": "vendor/THREE-LICENSE.txt",
+    "bytes": 1081,
+    "sha256": "bfe119ea4fd413f5f7ca3fcd63adb0c4a073ed39daa2fe7d3e6b769e21272601"
+  },
+  {
+    "path": "vendor/three.core.js",
+    "bytes": 1403455,
+    "sha256": "eb077d2417f61d3e6d9264c317cabc4ea35769ed6b0ab533067292a550784c20"
+  },
+  {
+    "path": "vendor/three.module.js",
+    "bytes": 603113,
+    "sha256": "c8211c69345d2e9949dc7a8ac969380497aa0600a5a8ac6a459c8cd02dd9cb8a"
+  },
+  {
+    "path": "scenes/shared/random.js",
+    "bytes": 279,
+    "sha256": "aec52e680e46616438483d9d45f6fe1dff9eedaaa8bf103666a4753e2263d283"
+  }
+]

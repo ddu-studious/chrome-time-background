@@ -204,6 +204,8 @@ test('加载超过 400ms 才显示不拦截点击的“正在载入”提示，�
   const h=hostHarness();h.show();h.fire(400);
   const note=h.skeleton();assert.ok(note,'400ms 后应有提示');
   assert.match(note.style.cssText,/pointer-events:none/);assert.notEqual(note.removed,true);
+  assert.match(note.style.cssText,/bottom:calc\(100% \+ 6px\)/,'提示应位于卡片上方，不遮住已绘制的输入条');
+  assert.doesNotMatch(note.style.cssText,/height:64px|backdrop-filter/,'不再创建白条或第二层模糊表面');
   h.ready();assert.equal(note.removed,true);
 });
 

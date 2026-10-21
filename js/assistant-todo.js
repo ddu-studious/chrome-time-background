@@ -99,6 +99,8 @@
   }
   function install(state, rows, app) {
     const items = definitions(rows);
+    const scopes = new Set(items.map(row => Contract.tools[row.tool].app || row.args.platform).filter(Boolean));
+    if (!app && scopes.size > 1) throw fail('本次包含多个应用的目标，请先选择一个应用；尚未开放跨应用写流程', 'todo-scope');
     if (items.some(row => row.source >= state.sources.length) || state.sources.some((_, index) => !items.some(row => row.source === index)) ||
       items.some((row, index) => index && row.source < items[index - 1].source)) throw fail('Todo 必须按顺序覆盖每项原始要求，不能遗漏或重排', 'todo-order');
     for (const row of items) {
@@ -144,6 +146,10 @@
       args: Object.fromEntries(Object.entries(step.args).filter(([key]) => !['ref', 'expectedRevision', 'projectRef'].includes(key))) })) };
   }
   function prepare(task, plan) {
+    if (plan.answer) {
+      if (task.todoTips?.items.length || !Contract.canAnswer(task.input)) throw fail('当前需求需要真实工具或补充信息，不能用纯回答替代执行', 'plan-phase');
+      return;
+    }
     if (plan.todoTips && !task.todoTips) task.todoTips = create(task.input);
     const state = task.todoTips;
     if (!state) return; // Legacy snapshots acquire Todo through Tools.plan on their next planning pass.
@@ -154,7 +160,7 @@
     if (plan.question) return;
     if (!state.items.length) throw fail('必须先建立完整 Todo，再执行工具', 'todo-missing');
     const active = current(state);
-    if (plan.done && active) throw fail(`Todo 尚未完成：${active.text}。请继续当前事项，不能结束整个任务`, 'todo-incomplete');
+    if (plan.done && active) throw fail(`Todo 尚未完成：${active.text}。缺少该目标的真实成功回执，历史回执不能验收新目标。${active.tool.startsWith('music.queue.') ? '缺少当前队列状态时先调用 music.state，再按真实 revision 继续；状态查询不代表播放或修改完成。' : '请继续当前事项，不能结束整个任务。'}`, 'todo-incomplete');
     if (plan.steps.length && !active) throw fail('Todo 已全部完成，不能追加原计划之外的动作');
     if (plan.todoId && plan.todoId !== active?.id) throw fail(`必须按 Todo 顺序执行当前事项 ${active?.id}`, 'todo-order');
     if (plan.steps.length > 1 && task.usedModel) throw fail('Todo 模式每轮只执行一个工具，再依据真实回执继续');

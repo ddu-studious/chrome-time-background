@@ -10,7 +10,6 @@
         showDate: true,
         showHolidays: true,
         theme: 'auto',
-        language: 'zh',
         weatherCity: '',
         tickerRefreshInterval: 20,
         enableTicker: true,
@@ -37,6 +36,7 @@
             try {
                 const stored = await chrome.storage.sync.get('settings');
                 settings = { ...defaults, ...(stored.settings || {}) };
+                delete settings.language;
             } catch { /* fallback to defaults */ }
         }
         applyToUI();
@@ -164,6 +164,10 @@
         aquariumFish: true,
         aquariumWater: true,
         aquariumRealistic: true,
+        aquariumPredation: true,
+        aquariumFlow: false,
+        aquariumRays: false,
+        aquariumSound: false,
     };
     const BG_VISUAL_EFFECTS = new Set(['none', 'depth', 'weather', 'memory', 'liquid', 'time', 'jellyfish']);
     let bgExperienceSettings = { ...BG_EXPERIENCE_DEFAULTS };
@@ -208,6 +212,10 @@
             aquariumFish: stored.aquariumFish !== false,
             aquariumWater: stored.aquariumWater !== false,
             aquariumRealistic: stored.aquariumRealistic !== false,
+            aquariumPredation: stored.aquariumPredation !== false,
+            aquariumFlow: stored.aquariumFlow === true,
+            aquariumRays: stored.aquariumRays === true,
+            aquariumSound: stored.aquariumSound === true,
         };
     }
 
@@ -256,6 +264,10 @@
         const aquariumFish = document.getElementById('set-bgAquariumFish');
         const aquariumWater = document.getElementById('set-bgAquariumWater');
         const aquariumRealistic = document.getElementById('set-bgAquariumRealistic');
+        const aquariumPredation = document.getElementById('set-bgAquariumPredation');
+        const aquariumFlow = document.getElementById('set-bgAquariumFlow');
+        const aquariumRays = document.getElementById('set-bgAquariumRays');
+        const aquariumSound = document.getElementById('set-bgAquariumSound');
         // 一个下拉框对应两个字段：none（直接切换）/ random（每次随机）/ 某一种风格。选项来自转场模块的注册表，见 renderTransitionOptions。
         if (transition) transition.value = weaveCore ? weaveCore.choiceFromSettings(bgExperienceSettings) : 'random';
         if (clockLiquid) clockLiquid.checked = bgExperienceSettings.clockLiquid;
@@ -268,6 +280,10 @@
         if (aquariumFish) aquariumFish.checked = bgExperienceSettings.aquariumFish;
         if (aquariumWater) aquariumWater.checked = bgExperienceSettings.aquariumWater;
         if (aquariumRealistic) aquariumRealistic.checked = bgExperienceSettings.aquariumRealistic;
+        if (aquariumPredation) aquariumPredation.checked = bgExperienceSettings.aquariumPredation;
+        if (aquariumFlow) aquariumFlow.checked = bgExperienceSettings.aquariumFlow;
+        if (aquariumRays) aquariumRays.checked = bgExperienceSettings.aquariumRays;
+        if (aquariumSound) aquariumSound.checked = bgExperienceSettings.aquariumSound;
     }
 
     function bindBgExperienceEvents() {
@@ -287,6 +303,10 @@
             ['set-bgAquariumFish', 'aquariumFish', element => element.checked],
             ['set-bgAquariumWater', 'aquariumWater', element => element.checked],
             ['set-bgAquariumRealistic', 'aquariumRealistic', element => element.checked],
+            ['set-bgAquariumPredation', 'aquariumPredation', element => element.checked],
+            ['set-bgAquariumFlow', 'aquariumFlow', element => element.checked],
+            ['set-bgAquariumRays', 'aquariumRays', element => element.checked],
+            ['set-bgAquariumSound', 'aquariumSound', element => element.checked],
         ];
         for (const [id, key, read] of bindings) {
             const element = document.getElementById(id);
@@ -410,7 +430,7 @@
     // ====== 水母差事（让常驻的桌面水母主动开口）======
     // 配置与当天状态由后台（js/jelly-errands.js）拥有；这里只经扩展消息读写，页面不直接写存储，也不自己建闹钟。
     // 状态提示要看桌面水母是否常驻、组件是否连上、协议版本是否 ≥ 8，所以同时读 jelly_desktop_get（只读）。
-    const ERRANDS_IDS = ['set-errandsEnabled', 'set-errandsLevel', 'set-errandsTask', 'set-errandsWorklog', 'set-errandsSong', 'set-errandsTidbit', 'set-errandsTitles', 'set-errandsFrom', 'set-errandsTo', 'set-errandsWeekdays', 'set-errandsPatrol'];
+    const ERRANDS_IDS = ['set-errandsEnabled', 'set-errandsLevel', 'set-errandsTask', 'set-errandsWorklog', 'set-errandsLark', 'set-errandsTabs', 'set-errandsWatch', 'set-errandsBookmark', 'set-errandsSong', 'set-errandsTidbit', 'set-errandsTitles', 'set-errandsFrom', 'set-errandsTo', 'set-errandsWeekdays', 'set-errandsPatrol'];
     const ERRANDS_LEVEL_TEXT = { quiet: 2, mid: 4, busy: 8 };
     let errandsChain = Promise.resolve();
 
@@ -424,7 +444,16 @@
         return {
             enabled: !!value('set-errandsEnabled')?.checked,
             level: value('set-errandsLevel')?.value || 'mid',
-            kinds: { task: !!value('set-errandsTask')?.checked, worklog: !!value('set-errandsWorklog')?.checked, song: !!value('set-errandsSong')?.checked, tidbit: !!value('set-errandsTidbit')?.checked },
+            kinds: {
+                task: !!value('set-errandsTask')?.checked,
+                worklog: !!value('set-errandsWorklog')?.checked,
+                lark: !!value('set-errandsLark')?.checked,
+                tabs: !!value('set-errandsTabs')?.checked,
+                watch: !!value('set-errandsWatch')?.checked,
+                bookmark: !!value('set-errandsBookmark')?.checked,
+                song: !!value('set-errandsSong')?.checked,
+                tidbit: !!value('set-errandsTidbit')?.checked,
+            },
             showTitles: !!value('set-errandsTitles')?.checked,
             from: value('set-errandsFrom')?.value || '',
             to: value('set-errandsTo')?.value || '',
@@ -439,6 +468,10 @@
         if (value('set-errandsLevel')) value('set-errandsLevel').value = config.level;
         if (value('set-errandsTask')) value('set-errandsTask').checked = config.kinds.task !== false;
         if (value('set-errandsWorklog')) value('set-errandsWorklog').checked = config.kinds.worklog !== false;
+        if (value('set-errandsLark')) value('set-errandsLark').checked = config.kinds.lark !== false;
+        if (value('set-errandsTabs')) value('set-errandsTabs').checked = config.kinds.tabs !== false;
+        if (value('set-errandsWatch')) value('set-errandsWatch').checked = config.kinds.watch !== false;
+        if (value('set-errandsBookmark')) value('set-errandsBookmark').checked = config.kinds.bookmark !== false;
         if (value('set-errandsSong')) value('set-errandsSong').checked = config.kinds.song !== false;
         if (value('set-errandsTidbit')) value('set-errandsTidbit').checked = config.kinds.tidbit !== false;
         if (value('set-errandsTitles')) value('set-errandsTitles').checked = config.showTitles === true;

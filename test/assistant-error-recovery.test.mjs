@@ -14,7 +14,7 @@ function fixture(responses, deps = {}, options = {}) {
   const values = {}, inputs = [], events = [], control = createControlStore();
   if (options.policy) control.update({ ...control.snapshot().policy, ...options.policy }, 1);
   const storage = { async get() { return structuredClone(values); }, async set(v) { Object.assign(values, structuredClone(v)); }, async remove(k) { delete values[k]; } };
-  const gateway = createGateway({ control, provider: { model: 'fixture', async generateObject(request) {
+  const gateway = createGateway({ control, provider: { planningContext: async () => ({ contextLength: 40960, contextSource: 'fixture' }), model: 'fixture', async generateObject(request) {
     if (request.input.planningPhase === 'outline') {
       const text = request.input.text;
       const tool = /不要/.test(text) ? 'music.state' : /清空/.test(text) ? 'music.queue.clear' : /随机播放/.test(text) ? 'music.queue.play' : /队列曲目/.test(text) ? 'music.queue.list' : 'music.state';

@@ -153,7 +153,13 @@
     // They never echo a key or value the model wrote: that text is untrusted.
     if (Array.isArray(raw)) throw new Error('助手计划必须是 JSON 对象，不能是数组；写成 {"steps":[{"tool":"工具名","args":{}}]}，需要依据结果继续规划时加 "continue":true');
     if (!raw || typeof raw !== 'object') throw new Error('助手计划必须是 JSON 对象，例如 {"steps":[{"tool":"工具名","args":{}}]}');
-    if (Object.keys(raw).some(k => !['steps', 'question', 'continue', 'done', 'todoTips', 'todoId'].includes(k))) throw new Error('助手计划格式无效：顶层只能使用 steps、question、continue、done、todoTips、todoId');
+    if (Object.keys(raw).some(k => !['steps', 'question', 'continue', 'done', 'todoTips', 'todoId', 'answer'].includes(k))) throw new Error('助手计划格式无效：顶层只能使用 steps、question、continue、done、todoTips、todoId、answer');
+    if (raw.answer != null) {
+      if (Object.keys(raw).some(key => key !== 'answer' && !(key === 'steps' && Array.isArray(raw.steps) && !raw.steps.length)) || typeof raw.answer !== 'string' || !raw.answer.trim() || raw.answer.length > 1500)
+        throw planFailure('纯回答只能返回 answer（1至1500字），不能混入动作或完成标记', 'plan-phase');
+      if (/已(?:经)?(?:为你|帮你)?(?:播放|保存|发送|删除|清空|创建|打开|修改|设置|提交|执行)/.test(raw.answer)) throw planFailure('纯回答不能声称已经执行外部动作，请通过实际工具取得回执', 'plan-phase');
+      return { answer: raw.answer.trim(), steps: [] };
+    }
     const todo = {};
     if (raw.todoTips != null) {
       const Todo = typeof module === 'object' && module.exports ? require('./assistant-todo.js') : globalThis.AssistantTodo;
@@ -269,6 +275,7 @@
     && !/提醒我|提醒一下|叫我|喊我|通知我|设置|设个|设一个|定个|定一个|创建|新增|添加|新建|帮我.{0,6}(?:设|定|建)/.test(text);
   function localPlan(raw) {
     const value = input(raw), { app, skill, text } = value;
+    if (canAnswer(value)) return null;
     const memoryCommand = Memory?.command(text);
     if (memoryCommand && (memoryCommand.operation !== 'preference' || !app || app === 'music')) return validatePlan({ steps: [{ tool: 'memory.manage', args: { text } }] }, app);
     if (Memory?.recallQuestion(text)) return validatePlan({ steps: [{ tool: 'memory.recall', args: { text } }] }, app);
@@ -325,7 +332,7 @@
   }
   // A live candidate list means a bare "随机播放" may refer to those results, so
   // only full planning can resolve it. Engine tasks and snapshots share these fields.
-  const hasCandidates = task => Boolean(task?.choices?.length || task?.candidateSet?.choices?.length);
+  const hasCandidates = task => [...(task?.choices || []), ...(task?.candidateSet?.choices || [])].some(row => row.action !== 'assistant.desktop.commit');
   function routeRequest(raw, current) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('需求输入无效');
     if (raw.newConversation != null && typeof raw.newConversation !== 'boolean') throw new Error('新需求标记无效');
@@ -333,7 +340,7 @@
     const parsed = input({ ...raw, ...(raw.inheritedScope ? { app:null, skill:null } : {}) }), aiSpecified = Object.hasOwn(raw, 'ai'), selectedAI = aiSelection(raw.ai);
     const text = parsed.text.replace(/^(?:(?:请|麻烦|帮我)\s*)+/, ''), scope = current?.scope;
     const reference = Boolean(ordinal(text)) || /这个|那个|这些|那些|这首|那首|这张|那张|刚才|刚刚|上次|上面|上一轮|他的|她的|它的|该歌手|第\s*[\d一二两三四五六七八九十]+/.test(text)
-      || /^(?:继续|换一个|换一首|改成|改为|改到|换成|再来|重试|重新试|下一页|翻页|下一首|上一首|暂停|恢复播放|停止播放|取消定时)/.test(text)
+      || /^(?:继续|换一个|换一首|改成|改为|改到|换成|再来|再看看|好听吗|重试|重新试|下一页|翻页|下一首|上一首|暂停|恢复播放|停止播放|取消定时)/.test(text)
       || (scope === 'music' && /(?:分钟|小时).*?(?:停止|暂停|关闭)(?:播放|音乐)?/.test(text))
       || (scope === 'music' && /^(?:直接)?(?:播放|放|听)(?:热门歌曲|热门歌)(?:吧|一下)?$/.test(text));
     const correction = /(?:输错|说错|打错|写错|不是这个|重新搜|重新搜索|改搜)/.test(text);
@@ -342,7 +349,9 @@
       && !/(?:怎么样|好听吗|好听么|可以吗|行吗|是谁|是什么|为什么|为何|吗|么|呢|吧|呀)$/.test(text);
     const queueEdit = /清除|清空|移除|删除|删掉|去掉/.test(text) && /队列|播放列表|队里|队中/.test(text);
     const queuePlay = Boolean(Music?.queuePlayRequest(text, { bare: !hasCandidates(current) }));
-    let inferred = /(?:YouTube|油管)/i.test(text) ? 'youtube' : /B站|哔哩哔哩/i.test(text) ? 'bilibili'
+    let inferred = canAnswer(parsed) ? null : /(?:YouTube|油管)/i.test(text) ? 'youtube' : /B站|哔哩哔哩/i.test(text) ? 'bilibili'
+      : /(?:添加|新增|新建|创建).{0,8}(?:任务|待办)/.test(text) ? 'task'
+      : /(?:记录|添加|新增|写).{0,8}(?:工作日志|工时)/.test(text) ? 'worklog'
       : /提醒我|提醒一下|闹钟|(?:创建|设置|新增|查看|看看|列出).{0,20}提醒/.test(text) ? 'alarm'
       : queueEdit || queuePlay || /音乐|歌手|歌曲|专辑|歌单|下一首|上一首|(?:分钟|小时).*?(?:停止|暂停)播放/.test(text) || /^(?:暂停|继续播放|恢复播放|停止播放)(?:音乐|一下|吧)?$/.test(text) ? 'music' : null;
     const independentSearch = (queueEdit || queuePlay || /^(?:搜索|查找|搜|找|播放|听|查看|看看|列出)\s*\S/.test(text) || Boolean(Music?.artistRequest(text)) || Boolean(Memory?.command(text))) && !reference;
@@ -354,10 +363,17 @@
     // search context. References and answers to a clarification still continue.
     const replaceSearch = !raw.newConversation && !changedScope && scope === 'music' && current?.musicView?.kind === 'search'
       && (correction || (!reference && bareSearchTerm));
-    const fresh = raw.newConversation === true || !current || changedScope || Boolean(inferred && inferred !== scope) || (!reference && (standaloneSkill || independentSearch || /提醒我|提醒一下|(?:创建|设置|新增).{0,20}(?:提醒|闹钟)/.test(text)));
-    const app = parsed.app || inferred || (!fresh ? scope : null) || null;
+    const fresh = raw.newConversation === true || !current || changedScope || Boolean(inferred && inferred !== scope) || (!reference && (standaloneSkill || independentSearch || canAnswer(parsed) || /提醒我|提醒一下|(?:创建|设置|新增).{0,20}(?:提醒|闹钟)/.test(text) || (!hasCandidates(current) && current.status !== 'clarify')));
+    const app = parsed.app || inferred || (!fresh || replaceSearch ? scope : null) || null;
     const mode = replaceSearch ? 'replace' : fresh ? 'new' : 'continue';
-    return { mode, input:{ ...parsed, app, ...(aiSpecified ? { ai:selectedAI } : {}) }, reason:raw.newConversation ? '快捷键新需求' : !current ? '首次需求' : changedScope ? '切换应用' : replaceSearch ? (correction ? '纠正上次搜索' : '替换搜索关键词') : fresh ? '独立需求' : reference ? '引用当前会话' : '保留上下文' };
+    return { mode, scopeSource: parsed.app ? 'explicit' : inferred ? 'inferred' : !fresh && scope ? 'continuation' : 'general', input:{ ...parsed, app, ...(aiSpecified ? { ai:selectedAI } : {}) }, reason:raw.newConversation ? '快捷键新需求' : !current ? '首次需求' : changedScope ? '切换应用' : replaceSearch ? (correction ? '纠正上次搜索' : '替换搜索关键词') : fresh ? '独立需求' : reference ? '引用当前会话' : '保留上下文' };
   }
-  return Object.freeze({ apps, skills, tools, toolGroups, limits, allows, input, appId, inputHint, aiSelection, planIssue, planFailure, validatePlan, localPlan, ordinal, hasCandidates, routeRequest });
+  // Positive eligibility, not a universal classifier: uncertain/action/current-data
+  // requests stay in outline/tool planning. No app/window scan or extra model call.
+  function canAnswer(input) {
+    const text = input.text || '';
+    return !input.skill && /^(?:(?:请|帮我|请帮我)\s*)?(?:解释|讲解|介绍|科普|什么是|为什么|如何理解|怎么理解|分析|比较|翻译|改写|润色|总结(?:以下|这段)|你好|谢谢)/.test(text)
+      && !/(?:我的|当前|实时|最新|今天的|最近的).*(?:文件|目录|屏幕|队列|播放|任务|提醒|天气|新闻|价格|股价)|读取|联网|搜索|查找|发送|发消息|删除|清空|随机播放|提醒我|创建|添加|保存|打开|执行(?:代码|命令)|修改(?:任务|文件|设置)/.test(text);
+  }
+  return Object.freeze({ apps, skills, tools, toolGroups, limits, allows, input, appId, inputHint, aiSelection, planIssue, planFailure, validatePlan, localPlan, ordinal, hasCandidates, routeRequest, canAnswer });
 });

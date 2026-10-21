@@ -1,0 +1,238 @@
+{
+  "tag": "before",
+  "browser": "151.0.7922.34",
+  "config": "isolated empty profile; language=en; default modules; network blocked",
+  "probe": {
+    "started": 45.89999997615814,
+    "init": [
+      {
+        "name": "settingsManager",
+        "start": 706.3999999761581,
+        "end": 720.2000000476837
+      },
+      {
+        "name": "i18nManager",
+        "start": 720.2999999523163,
+        "end": 720.3999999761581
+      },
+      {
+        "name": "clockManager",
+        "start": 720.3999999761581,
+        "end": 720.6000000238419
+      },
+      {
+        "name": "holidayManager",
+        "start": 720.6000000238419,
+        "end": 720.7000000476837
+      },
+      {
+        "name": "weatherManager",
+        "start": 720.7000000476837,
+        "end": 735.7999999523163
+      },
+      {
+        "name": "memoManager",
+        "start": 735.7999999523163,
+        "end": 770.1000000238419
+      },
+      {
+        "name": "knowledgeWall",
+        "start": 736,
+        "end": 752.7000000476837
+      },
+      {
+        "name": "techTicker",
+        "start": 736.2000000476837,
+        "end": 778.2999999523163
+      },
+      {
+        "name": "musicController",
+        "start": 736.2999999523163,
+        "end": 790.2000000476837
+      },
+      {
+        "name": "bilibiliController",
+        "start": 736.3999999761581,
+        "end": 793.5
+      },
+      {
+        "name": "youtubeController",
+        "start": 751.2000000476837,
+        "end": 786.5
+      },
+      {
+        "name": "huyaController",
+        "start": 786.5,
+        "end": 790
+      },
+      {
+        "name": "scheduleManager",
+        "start": 790,
+        "end": 792.2000000476837
+      },
+      {
+        "name": "alarmCenter",
+        "start": 792.2000000476837,
+        "end": 804.7999999523163
+      },
+      {
+        "name": "workLogManager",
+        "start": 804.8999999761581,
+        "end": 819.7000000476837
+      },
+      {
+        "name": "blogManager",
+        "start": 819.7000000476837,
+        "end": 821.6000000238419
+      }
+    ],
+    "timers": [
+      {
+        "delay": 3600000,
+        "at": 647.2999999523163
+      },
+      {
+        "delay": 1000,
+        "at": 657.2999999523163
+      },
+      {
+        "delay": 60000,
+        "at": 718
+      },
+      {
+        "delay": 1000,
+        "at": 720.6000000238419
+      },
+      {
+        "delay": 60000,
+        "at": 720.7000000476837
+      },
+      {
+        "delay": 1800000,
+        "at": 729.7000000476837
+      },
+      {
+        "delay": 1800000,
+        "at": 735.7999999523163
+      },
+      {
+        "delay": 1200000,
+        "at": 778.2999999523163
+      },
+      {
+        "delay": 2000,
+        "at": 780.6000000238419
+      },
+      {
+        "delay": 3000,
+        "at": 787
+      },
+      {
+        "delay": 300000,
+        "at": 822.2999999523163
+      },
+      {
+        "delay": 6000,
+        "at": 2285
+      }
+    ],
+    "longTasks": [],
+    "backgroundAt": 715.7000000476837,
+    "appReady": 1897.3999999761581,
+    "now": 15718.899999976158,
+    "navigation": [
+      {
+        "dcl": 706.3999999761581,
+        "load": 708.5
+      }
+    ],
+    "paint": [
+      {
+        "name": "first-paint",
+        "time": 668
+      },
+      {
+        "name": "first-contentful-paint",
+        "time": 668
+      }
+    ],
+    "date": "Wednesday, October 21, 2026",
+    "htmlScripts": 110,
+    "mermaidLoaded": true
+  },
+  "cpuByFile": [
+    [
+      "(idle)",
+      14587.901000000254
+    ],
+    [
+      "(program)",
+      939.436999999999
+    ],
+    [
+      "/js/clock.js",
+      26.56600000000001
+    ],
+    [
+      "/js/bilibili-controller.js",
+      13.916
+    ],
+    [
+      "/js/clock-liquid.js",
+      10.252
+    ],
+    [
+      "/js/lunar-lib.js",
+      8.901
+    ],
+    [
+      "/js/music-controller.js",
+      8.876
+    ],
+    [
+      "/vendor/mermaid.tiny.min.js",
+      7.482
+    ],
+    [
+      "/js/ticker.js",
+      7.462999999999999
+    ],
+    [
+      "requestAnimationFrame",
+      6.327
+    ],
+    [
+      "/vendor/highlight.min.js",
+      5.142
+    ],
+    [
+      "/js/memo.js",
+      3.9050000000000002
+    ],
+    [
+      "(garbage collector)",
+      3.79
+    ],
+    [
+      "/js/main.js",
+      2.562
+    ],
+    [
+      "/js/dock-manager.js",
+      2.542
+    ],
+    [
+      "/vendor/marked.min.js",
+      2.53
+    ],
+    [
+      "/js/youtube-controller.js",
+      2.427
+    ],
+    [
+      "/js/product-shell-v5.js",
+      2.423
+    ]
+  ],
+  "errors": []
+}

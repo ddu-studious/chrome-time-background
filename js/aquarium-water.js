@@ -10,12 +10,16 @@
 })(typeof window !== 'undefined' ? window : (typeof self !== 'undefined' ? self : null), function (Core, Shader, root) {
     'use strict';
 
-    // 水体层控制器：一张独立的 WebGL 画布（半分辨率），画水面波光、体积光束、焦散网、悬浮颗粒与气泡；纯“加光”，
-    // 由 CSS 的 mix-blend-mode: screen 叠在壁纸上。尺寸、帧率与 uniform 取值的规则在 aquarium-water-core.js，着色器在 aquarium-water-shader.js。
+    // 水体层控制器：一张独立的 WebGL 画布（半分辨率），只铺在页面底部的一条带子上（高度 = 页面高度 × Core.PARAMS.BAND，样式里是同一个百分比），
+    // 画一道“岸线冲刷”——海浪一波波冲上沙滩又退下去、潮水慢慢涨落：干沙、湿沙与薄水膜、水线上的浪花、浅水里的光斑，以及正从海里推过来的下一道浪。
+    // 画布输出的是预乘 alpha 的颜色（alpha:true，不用任何混合模式）：带子之外没有这张画布的任何像素，带子里水线以上是很薄的半透明青色并向上渐隐，壁纸始终透得过来。
+    // 2026-10-19 之前是“不透明画布 + mix-blend-mode: screen”，那个设计在真实 Chrome 里不成立：首页壁纸是 body 的背景，被传播到了画布上，
+    // 而 body 是 position: fixed（自成堆叠上下文），里面的 screen 看不到壁纸，画布就把壁纸整个盖住了。
+    // 尺寸、帧率、潮汐与 uniform 取值的规则在 aquarium-water-core.js，着色器在 aquarium-water-shader.js。
     // 它不自建 RAF 或定时器：调度、页面隐藏即停、被工作台遮挡即停、省流量降帧都沿用宿主 background-experience.js 每帧调用 frame()；
     // 宿主不再调用时画布保持最后一帧（页面不可见时没人看见），工作台遮挡时由样式把它整个隐藏（见 css/aquarium.css）。
-    // 画布放在宿主根容器（.bgx-root，自成堆叠上下文）之外、壁纸与它之间：只有这样 screen 才是和壁纸混合，而不是和根容器内的空白混合；
-    // 根容器里的深海色调、水族馆的鱼和水母都画在它上面。
+    // 画布放在宿主根容器（.bgx-root，自成堆叠上下文）之外、壁纸与它之间；根容器里的深海色调、水族馆的鱼和水母都画在它上面。
+    // shore(now) 把岸线（此刻水线能到的最高处，占页面高度的比例，从页面底边往上量）告诉鱼：只有画布真的在显示时才返回数字，否则返回 null（没有岸线就不用躲）。
     // 任何失败（没有 WebGL 或只有软件渲染、着色器编译失败、绘制异常、上下文丢失后无法恢复、页面帧率持续过低）都只关闭水体层并留一条警告，
     // 不影响鱼、水母与宿主的帧循环；没有任何后备画法。读取与写入存储、任务数据：一律没有。
     // 软件渲染的拦截有两道：failIfMajorPerformanceCaveat（部分环境有效）和渲染器名称检查（SwiftShader、llvmpipe 等；实测在 ANGLE + SwiftShader 里前者不拒绝，
@@ -25,7 +29,7 @@
     const CANVAS_CLASS = 'aq-water';
     const ROOT_ID = 'background-experience-root';
     const CONTEXT_OPTIONS = Object.freeze({
-        alpha: false, antialias: false, depth: false, stencil: false,
+        alpha: true, premultipliedAlpha: true, antialias: false, depth: false, stencil: false,
         preserveDrawingBuffer: false, powerPreference: 'low-power',
         failIfMajorPerformanceCaveat: true,       // 只有软件渲染时宁可不画：全屏着色器放在 CPU 上会拖慢整个页面
     });
@@ -231,7 +235,7 @@
             const level = governor.observe(now);
             if (level >= 2) return fail('页面帧率过低', new Error('海水层开启后帧率持续过低'));
             const lowPower = !!options.lowPower || level >= 1;
-            const size = Core.renderSize({ width: options.width, height: options.height, lowPower });
+            const size = Core.bandSize({ width: options.width, height: options.height, lowPower });
             if (!size) return false;
             try {
                 if (!canvas && !build(size)) return false;
@@ -245,13 +249,17 @@
                     height = size.h;
                 }
                 const night = options.night === false ? 0 : nightAmount(Number.isFinite(options.nightHour) ? options.nightHour : hourNow());
-                const u = Core.uniformsFor({ now, amount: options.amount, night, lowPower });
+                const u = Core.uniformsFor({ now, amount: options.amount, night, lowPower, width: options.width, height: options.height });
                 gl.uniform2f(locations.uRes, width, height);
+                gl.uniform1f(locations.uBand, u.band);
+                gl.uniform1f(locations.uAspect, u.aspect);
                 gl.uniform1f(locations.uTime, u.time);
                 gl.uniform1f(locations.uNight, u.night);
                 gl.uniform1f(locations.uAmount, u.amount);
                 gl.uniform1f(locations.uQuality, u.quality);
-                gl.uniform1f(locations.uSunX, u.sunX);
+                gl.uniform1f(locations.uTop, u.top);
+                gl.uniform1f(locations.uReach, u.reach);
+                gl.uniform1f(locations.uTideV, u.tideV);
                 gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
                 last = now;
                 frames++;
@@ -262,8 +270,18 @@
             }
         }
 
+        /**
+         * 此刻岸线能到的最高处（占页面高度的比例，从页面底边往上量；见 Core.shoreTopAt）。水体层没在运行、还没画出第一帧或已关闭时返回 null。
+         * now 取宿主传给 frame 的同一个时间戳，鱼看到的岸线和画面上的岸线才是同一条。
+         */
+        function shore(now) {
+            if (!started || failed || !canvas || frames < 1) return null;
+            const at = Number.isFinite(now) ? now : nowMs();
+            return Core.shoreTopAt(Core.shaderTime(at));
+        }
+
         return {
-            start, stop, frame,
+            start, stop, frame, shore,
             isActive: () => started && !failed,
             state: () => ({ started, failed, reason, lost, frames, width, height, hasCanvas: !!canvas, level: governor.level(), armed: governor.armed() }),
             _canvas: () => canvas,

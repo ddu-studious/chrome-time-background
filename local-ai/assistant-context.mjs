@@ -24,7 +24,9 @@ function compactData(value, key = '') {
   return value;
 }
 
-export function prepareContext({ instructions, input, contextLength = COLD_CONTEXT_LENGTH, contextSource = 'cold-load-default', maxOutputTokens = 4096 }) {
+export const contextInputTokens = budget => budget.measuredInputTokens ?? budget.estimatedInputTokens;
+
+export function prepareContext({ instructions, input, contextLength = COLD_CONTEXT_LENGTH, contextSource = 'cold-load-default', maxOutputTokens = 4096, enforceBudget = true, compactPresentation = 'auto' }) {
   const window = Math.min(contextLength, MAX_PLANNING_WINDOW);
   const safety = 512;
   const inputBudget = Math.max(0, window - maxOutputTokens - safety);
@@ -34,11 +36,11 @@ export function prepareContext({ instructions, input, contextLength = COLD_CONTE
   const currentTurn = (modelInput.turns || []).findLastIndex(row => row.role === 'user' && row.content === input.text);
   // Remove exact duplicates only; never silently discard a user's earlier
   // constraints or an observation that may prove a mutation already happened.
-  modelInput.turns = (modelInput.turns || []).filter((row, index) => index !== currentTurn && !(row.role === 'assistant' && receiptMessages.has(row.content)));
+  if (typeof modelInput !== 'string') modelInput.turns = (modelInput.turns || []).filter((row, index) => index !== currentTurn && !(row.role === 'assistant' && receiptMessages.has(row.content)));
   const before = estimateTokens(instructions) + estimateTokens(input);
   let compacted = false;
   const cost = () => estimateTokens(instructions) + estimateTokens(modelInput);
-  if (cost() > inputBudget) {
+  if (typeof modelInput !== 'string' && (compactPresentation === true || (compactPresentation === 'auto' && cost() > inputBudget))) {
     modelInput.observations = (modelInput.observations || []).map(row => ({ ...row, data: compactData(row.data) }));
     compacted = JSON.stringify(modelInput.observations) !== JSON.stringify(input.observations || []);
     if (compacted) modelInput.contextNotice = '部分展示文本已省略；执行回执、对象引用、版本、数量和分页状态完整保留。';
@@ -46,7 +48,37 @@ export function prepareContext({ instructions, input, contextLength = COLD_CONTE
   const budget = { contextLength, contextSource, planningWindow: window, inputBudget, outputBudget: maxOutputTokens, safetyMargin: safety,
     estimatedInputTokens: cost(), originalEstimatedInputTokens: before, instructionsEstimate: estimateTokens(instructions),
     inputEstimate: estimateTokens(modelInput), observationCount: modelInput.observations?.length || 0,
-    completedStepCount: modelInput.completedSteps?.length || 0, duplicateTurnsRemoved: originalTurns - modelInput.turns.length, compacted };
-  if (budget.estimatedInputTokens > inputBudget) throw Object.assign(new Error(`规划上下文预计需要 ${budget.estimatedInputTokens} tokens，当前输入预算为 ${inputBudget}（模型上下文 ${contextLength}，已预留输出和安全空间）。已压缩展示信息并保留执行记录，请增大模型加载上下文或将剩余需求分开处理。`), { code: 'ASSISTANT_CONTEXT_BUDGET_EXCEEDED', contextBudget: budget });
+    completedStepCount: modelInput.completedSteps?.length || 0, duplicateTurnsRemoved: originalTurns - (modelInput.turns?.length || 0), compacted };
+  if (enforceBudget) assertContextFits(budget);
   return { modelInput, budget };
+}
+
+function assertContextFits(budget) {
+  if (contextInputTokens(budget) > budget.inputBudget) throw Object.assign(new Error(`规划上下文${budget.measuredInputTokens == null ? '预计' : '分词计数'}需要 ${contextInputTokens(budget)} tokens，当前输入预算为 ${budget.inputBudget}（模型上下文 ${budget.contextLength}，已预留输出和安全空间）。已保留用户要求与执行记录，请增大模型加载上下文或将剩余需求分开处理。`), { code: 'ASSISTANT_CONTEXT_BUDGET_EXCEEDED', contextBudget: budget });
+}
+
+// Keep the synchronous conservative API for providers without a tokenizer.
+// Production uses the official model tokenizer before deciding to trim or stop;
+// a tokenizer failure propagates instead of silently reverting to an estimate.
+export async function prepareModelContext(options, provider) {
+  if (!provider.countContextTokens) return prepareContext(options);
+  let prepared = prepareContext({ ...options, enforceBudget: false, compactPresentation: false });
+  const measure = async () => {
+    const counted = await provider.countContextTokens({ instructions: options.instructions, input: prepared.modelInput,
+      contextLength: prepared.budget.contextLength, contextSource: prepared.budget.contextSource });
+    if (counted == null) { prepared.budget.tokenCountSource = 'cold-model-estimate'; return; }
+    if (!Number.isSafeInteger(counted.inputTokens) || counted.inputTokens < 0 || !Number.isSafeInteger(counted.contextLength) || counted.contextLength < 1) throw Object.assign(new Error('模型分词计数无效，本次未发送生成请求'), { code: 'MODEL_TOKENIZATION_FAILED' });
+    const window = Math.min(counted.contextLength, MAX_PLANNING_WINDOW);
+    Object.assign(prepared.budget, { contextLength: counted.contextLength, contextSource: 'loaded-model', planningWindow: window,
+      inputBudget: Math.max(0, window - prepared.budget.outputBudget - prepared.budget.safetyMargin),
+      measuredInputTokens: counted.inputTokens, tokenCountSource: 'lmstudio-sdk', tokenCountMs: counted.elapsedMs,
+      ...(counted.fingerprint ? { tokenCountFingerprint: counted.fingerprint } : {}) });
+  };
+  await measure();
+  if (contextInputTokens(prepared.budget) > prepared.budget.inputBudget && typeof options.input !== 'string') {
+    const trimmed = prepareContext({ ...options, contextLength: prepared.budget.contextLength, enforceBudget: false, compactPresentation: true });
+    if (trimmed.budget.compacted) { prepared = trimmed; await measure(); }
+  }
+  assertContextFits(prepared.budget);
+  return prepared;
 }

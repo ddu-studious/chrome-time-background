@@ -142,7 +142,7 @@
         });
       return clone({ id, version, status, input, message, log, updatedAt, result, scope, musicView, playback, operation, choices, todoTips: Todo.view(current), interaction: interaction(current), historyWarning: current.historyWarning, memoryNotice: current.memoryNotice, contextNotice: current.contextNotice, contextSummary: current.contextState ? { count: current.contextState.count, checkpoint: current.contextState.checkpoint ? { sdk: current.contextState.checkpoint.sdk, beforeEstimatedTokens: current.contextState.checkpoint.beforeEstimatedTokens, afterEstimatedTokens: current.contextState.checkpoint.afterEstimatedTokens } : null } : null,
         conversationId: current.conversationId || id, turnId: current.turnId || id, startedAt: current.runStartedAt || current.startedAt, endedAt: current.endedAt,
-        conversationTitle: current.conversationTitle || input.text, startMode: current.startMode, routeReason: current.routeReason,
+        conversationTitle: current.conversationTitle || input.text, startMode: current.startMode, routeReason: current.routeReason, scopeSource: current.scopeSource,
         messages: current.messages || [], trace: current.trace || [], traceRevision: current.traceRevision || 0,
         traceTruncated: current.traceTruncated, messagesTruncated: current.messagesTruncated, modelCalls: current.modelCalls || [], recoveryCount: current.recovery?.count || 0,
         memorySummary: { candidateCount: (current.candidateSet?.choices || []).filter(c => !c.secondary && !['navigation', 'collection-action'].includes(c.kind)).length, expiresAt: current.candidateSet?.expiresAt } });
@@ -206,6 +206,11 @@
         Context.state(t);
         t.turns.push({ role: 'assistant', content: t.message.slice(0, 500) }); t.turns = t.turns.slice(-16);
         const waiting = ['waiting', 'review', 'clarify'].includes(outcome.status);
+        if (!waiting && outcome.executedStep) {
+          step = outcome.executedStep;
+          Object.assign(t.log.at(-1), { tool: step.tool, args: clone(step.args), todoId: Todo.current(t.todoTips)?.id });
+        }
+        if (!waiting && outcome.executedChoice) choice = outcome.executedChoice;
         t.log.at(-1).status = waiting ? 'waiting' : 'done';
         t.log.at(-1).message = t.message;
         // Successful read-only calls since the last write, choice or recovery. Anything
@@ -297,10 +302,19 @@
       }
       await lock(async () => {
         guard(t, version); t.jobId = null;
+        if (planned.answer) {
+          t.message = planned.answer; t.result = { kind: 'answer' }; t.status = 'completed';
+          t.turns.push({ role: 'assistant', content: planned.answer.slice(0, 500) });
+          Context.append(t, 'assistant', planned.answer); await save(); return;
+        }
         if (planned.done && Context.state(t).uncertain) planned = { question: '已有操作的结果尚未确认。请核对实际状态后再继续，助手不会自动重做可能已生效的操作。', steps: [] };
         if (planned.done && (!t.observations?.some(row => row.status === 'done') || ['failed', 'unknown'].includes(t.observations.at(-1)?.status))) throw new Error('尚无成功恢复回执，不能声称完成');
         if (planned.question) { t.status = 'clarify'; t.message = planned.question; t.turns.push({ role: 'assistant', content: planned.question }); Context.append(t, 'assistant', planned.question); }
         else if (planned.todoTips && !planned.steps.length) {
+          if (!t.input.app) {
+            const scopes = [...new Set(planned.todoTips.map(row => Contract.tools[row.tool].app || row.args.platform).filter(Boolean))];
+            if (scopes.length === 1) { t.input.app = scopes[0]; t.scope = scopes[0]; t.scopeSource = 'inferred'; }
+          }
           t.plan = []; t.index = 0; t.adaptive = true; t.status = 'planning';
           t.message = `已分析完整计划，共${t.todoTips.items.length}项，准备逐项执行。`;
         }
@@ -434,16 +448,23 @@
           const replacing = Boolean(current) && route.mode === 'replace';
           if (raw.taskId && raw.taskId !== current?.id) throw new Error('会话已变化，请刷新后重试');
           if (raw.version != null && raw.version !== current?.version) throw new Error('会话已变化，请刷新后重试');
+          const background = raw.newConversation === true ? null : current;
           const previous = continuing || replacing ? current : null;
-          if (current && !continuing && !replacing) await record(current, 'status', '已开始下一项需求，本次会话结束；已有播放和已保存提醒继续生效。', `closed:${current.version}`);
           const sameScope = previous && (!input.app || input.app === previous.scope);
-          const inheritedAI = Object.hasOwn(input, 'ai') ? input.ai : previous?.input?.ai || null;
+          const inheritedAI = Object.hasOwn(input, 'ai') ? input.ai : background?.input?.ai || null;
           const { ai: _requestedAI, ...taskInput } = input;
-          const task = { id: id(), version: 1, status: 'planning', input: { ...taskInput, app: input.app || previous?.scope || null, ...(inheritedAI ? { ai:clone(inheritedAI) } : {}) },
+          const task = { id: id(), version: 1, status: 'planning', input: { ...taskInput, ...(continuing && previous?.input?.origin === 'desktop' ? { origin: 'desktop' } : {}), app: input.app || previous?.scope || null, ...(inheritedAI ? { ai:clone(inheritedAI) } : {}) },
             scope: input.app || previous?.scope || null, plan: [], index: 0, choices: [], log: [], memory: continuing ? clone(previous?.memory || {}) : {}, observations: continuing ? clone(previous?.observations || []) : [],
             remainingSteps: continuing && sameScope && ['waiting', 'review', 'clarify'].includes(previous.status) ? previous.plan?.slice(previous.index + 1) || previous.remainingSteps || [] : [],
-            turns: [...(previous?.turns || []), { role: 'user', content: utterance }].slice(-16), message: '正在理解需求…', startedAt: now(), jobId: null };
-          if (continuing && previous) task.contextState = clone(Context.state(previous));
+            turns: [...(background?.turns || []), { role: 'user', content: utterance }].slice(-16), message: '正在理解需求…', startedAt: now(), jobId: null };
+          task.goalId = continuing && previous ? previous.goalId || previous.id : task.id;
+          if (background) task.contextState = clone(Context.state(background));
+          // A new conversation cannot erase an unresolved write. Keep only its
+          // uncertainty evidence when the user explicitly drops the background.
+          else if (current && Context.state(current).uncertain) {
+            task.contextState = { ...clone(Context.state(current)), events: [], artifacts: {}, checkpoint: null,
+              receipts: clone(Context.state(current).receipts.filter(row => row.status === 'unknown')) };
+          }
           if (continuing && sameScope && (Todo.current(previous?.todoTips) || Todo.awaitingAnswer(previous))) task.todoTips = clone(previous.todoTips);
           // Migrate the surviving legacy window once; no claim of recovering
           // already discarded history. New contexts store inputs before slicing.
@@ -451,7 +472,7 @@
           else Context.append(task, 'user', utterance);
           task.turnId = task.id;
           task.conversationTitle = previous?.conversationTitle || previous?.input?.text || utterance;
-          task.startMode = route.mode; task.routeReason = route.reason;
+          task.startMode = route.mode; task.routeReason = route.reason; task.scopeSource = route.scopeSource || previous?.scopeSource || 'general';
           Object.assign(task, { messages: clone(previous?.messages || []), trace: clone(previous?.trace || []), modelCalls: clone(previous?.modelCalls || []), traceRevision: previous?.traceRevision || 0, traceTruncated: previous?.traceTruncated, messagesTruncated: previous?.messagesTruncated });
           if (sameScope && continuing) {
             task.candidateSet = clone(previous.candidateSet || null);
@@ -460,8 +481,8 @@
           }
           // Stable object references survive turns; authority is still checked on use.
           for (const record of Object.values(task.memory.musicRefs || {})) record.taskId = task.id;
-          task.conversationId = previous?.conversationId || previous?.id || task.id;
-          task.conversationStartedAt = previous?.conversationStartedAt || previous?.startedAt || task.startedAt;
+          task.conversationId = background?.conversationId || background?.id || task.id;
+          task.conversationStartedAt = background?.conversationStartedAt || background?.startedAt || task.startedAt;
           current = task; await record(task, 'user', utterance); await save(); launch(task); return view();
         });
       },
@@ -500,6 +521,7 @@
             current.plan = [clone(current.choiceStep)]; current.index = 0; current.adaptive = false;
             current.log = [{ tool: current.choiceStep.tool, title: Contract.tools[current.choiceStep.tool].title, status: 'running' }];
           }
+          current.selectionStatus = current.status;
           current.selectionView = clone({ choices: current.choices, musicView: current.musicView || null, message: current.message, result: current.result || null });
           current.status = 'running'; current.version++; current.runStartedAt = now(); current.usedModel = false;
           current.turnId = id(); current.endedAt = null;

@@ -7,11 +7,17 @@
     const playUi = cjs ? require('./aquarium-play.js') : root && root.AquariumPlay;
     // 写实动物画法（骨架数据 + 求值器）也是可选层：缺席或数据不可用时，已有卡通画法照常；只有海龟没有卡通画法，缺席时不画
     const real = cjs ? require('./aquarium-real.js') : root && root.AquariumReal;
-    const api = factory(core, root, playCore || null, playUi || null, real || null);
+    // 捕食（大鱼吃小鱼）同样是可选层：少了或没加载成功只是没有捕食，鱼、玩法与存储照常
+    const predationCore = cjs ? require('./aquarium-predation-core.js') : root && root.AquariumPredationCore;
+    // 水流/海洋雪与光束是可选的氛围层：缺席或没加载成功只是没有这些效果，鱼、玩法、捕食与存储照常
+    const flowCore = cjs ? require('./aquarium-flow-core.js') : root && root.AquariumFlowCore;
+    const lightCore = cjs ? require('./aquarium-light-core.js') : root && root.AquariumLightCore;
+    const ambient = cjs ? require('./aquarium-ambient.js') : root && root.AquariumAmbient;
+    const api = factory(core, root, playCore || null, playUi || null, real || null, predationCore || null, flowCore || null, lightCore || null, ambient || null);
     if (cjs) module.exports = api;
     // 只创建实例，不自动启动：是否运行由背景体验的设置决定（applySettings 里 start/stop）；没选水母皮肤或关了水族馆时没有任何 DOM、监听或存储读取。
     if (root && typeof document !== 'undefined') root.Aquarium = api.create();
-})(typeof window !== 'undefined' ? window : (typeof self !== 'undefined' ? self : null), function (Core, root, DefaultPlayCore, DefaultPlayUi, Real) {
+})(typeof window !== 'undefined' ? window : (typeof self !== 'undefined' ? self : null), function (Core, root, DefaultPlayCore, DefaultPlayUi, Real, DefaultPredCore, DefaultFlowCore, DefaultLightCore, DefaultAmbient) {
     'use strict';
 
     // 水族馆控制器：存储（chrome.storage.local 的 aquariumV1）、托盘与居民列表、网兜、抓取状态机、画鱼。
@@ -19,6 +25,8 @@
     // 不自建 RAF 与画布：调度、隐藏即停、被工作台遮挡即停、省流量降帧都沿用宿主 background-experience.js。
     // 水母（主线）与任务完全无关于鱼：本文件不读也不写任务数据；唯一写入的是 aquariumV1，且只在用户放入或捞出时。
     // 玩法（戳、喂食、拉尾）：规则在 aquarium-play-core.js，画法与喂食按钮在 aquarium-play.js，本文件只接线；玩法状态只在内存里、从不存储。
+    // 捕食（小锤头鲨偶尔吃一条小鱼，被吃的鱼过一会儿游回来）：规则在 aquarium-predation-core.js，本文件只接线；被吃只发生在世界里，条目名单与 aquariumV1 一字不动，刷新即恢复。
+    // 水流与海洋雪（大鱼游过留下尾迹、随流飘的海洋雪）与光束（水面斜射下来的光 + 写实画法的按通道吸收）：规则在 aquarium-flow-core.js / aquarium-light-core.js，画法在 aquarium-ambient.js，本文件只接线；都是纯视觉层，从不存储，设置默认关（见 docs/technical/aquarium-ambient-20261020.md）。
     // 设计与取舍见 docs/superpowers/specs/2026-10-17-aquarium-design.md 与 2026-10-17-aquarium-interaction-design.md。
 
     const P = Core.PARAMS;
@@ -28,6 +36,7 @@
     const FLIP_MIN = 0.06;                    // 翻面到正中间时身体最薄的比例
     let realBroken = false;                   // 写实画法抛过异常：之后整个页面生命周期都不再用它（见 drawFish）
     let realDrawn = 0;                        // 上一帧用写实画法画出的鱼数：只给验收诊断（state() 报告），业务路径不读
+    const FLOW_DYE_ALPHA = 0.48;              // 染色尾迹最亮处的不透明度上限（screen 合成，初值，待真实浏览器里看画面校准）
     const FED_GLOW = 0.25;                    // 刚吃到饲料时，鱼的不透明度与光晕额外加亮的比例（乘 0…1 的变亮程度）
     const FALLBACK_PALETTE = Object.freeze([
         [255, 100, 92], [255, 150, 56], [240, 222, 70], [88, 228, 100], [79, 239, 194], [112, 205, 255], [170, 111, 255], [245, 105, 225],
@@ -229,9 +238,9 @@
         // 写实画法：view.real 为真（设置开着）且该种有可用的骨架数据时用它；没有卡通形状的物种（海龟）不管设置如何都只有写实画法
         const useReal = !!Real && !realBroken && Real.has(fish.species) && (view.real === true || !shape);
         if (!spec || (!shape && !useReal)) return;
-        // 被网兜捞起时按进度缩小（先慢后快），其余时候 scoopT 不存在或为 0，按原大小
+        // 被网兜捞起或被吞下时按进度缩小（先慢后快；被吞缩得更多），其余时候 scoopT 不存在或为 0，按原大小
         const scoop = Number.isFinite(fish.scoopT) ? clamp(fish.scoopT, 0, 1) : 0;
-        const len = fish.len * (1 - P.SCOOP_SHRINK * scoop * scoop * (3 - 2 * scoop));
+        const len = fish.len * (1 - (fish.eaten === true ? P.EAT_SHRINK : P.SCOOP_SHRINK) * scoop * scoop * (3 - 2 * scoop));
         const main = palette[spec.colors[0] % palette.length] || FALLBACK_PALETTE[0];
         const accent = palette[spec.colors[1] % palette.length] || FALLBACK_PALETTE[1];
         // 主次：鱼比水母淡，越远越淡；夜里略亮
@@ -248,7 +257,7 @@
             try {
                 if (Real.draw(ctx, fish, {
                     len, flip, fed, far, night: view.night, amount: view.amount, lowPower: view.lowPower,
-                    speed: spec.speed * (view.scale || 1), pull: extras && extras.pull, color: main, alpha: fish.alpha,
+                    speed: spec.speed * (view.scale || 1), pull: extras && extras.pull, color: main, alpha: fish.alpha, absorb: view.absorb === true,
                 })) { realDrawn++; return; }
             } catch (error) {
                 // 写实画法出错（Canvas 拒绝了某个值等）：本页面不再用它，有卡通画法的退回卡通，海龟这类没有的不画；画布状态已由 Real.draw 还原
@@ -262,6 +271,7 @@
 
         ctx.save();
         ctx.translate(fish.x, fish.y);
+        if (Number.isFinite(fish.xs) && fish.xs < 1) ctx.scale(Math.max(fish.xs, 0.04), 1);       // 侧视大个子转身时沿屏幕横向缩短（核心的 xs）
         ctx.rotate(fish.ang);
         ctx.scale(1, flip);
 
@@ -510,6 +520,16 @@
         // 玩法层可注入（测试里传 null 即关闭）；缺了就没有戳、喂食和拉尾，其余照常
         const PlayCore = env.playCore !== undefined ? env.playCore : DefaultPlayCore;
         const PlayUi = env.play !== undefined ? env.play : DefaultPlayUi;
+        const PredCore = env.predationCore !== undefined ? env.predationCore : DefaultPredCore;       // 捕食层可注入（测试里传 null 即关闭）
+        const FlowCore = env.flowCore !== undefined ? env.flowCore : DefaultFlowCore;                // 水流与海洋雪可注入（测试里传 null 即关闭）
+        const LightCore = env.lightCore !== undefined ? env.lightCore : DefaultLightCore;            // 光束可注入
+        const Ambient = env.ambient !== undefined ? env.ambient : DefaultAmbient;                    // 氛围层画法可注入
+        const makeCanvas = typeof env.makeCanvas === 'function' ? env.makeCanvas : (w, h) => {       // 离屏纹理画布：缺席（没有 document）返回 null，氛围层就只是没有
+            if (!doc || typeof doc.createElement !== 'function') return null;
+            const canvas = doc.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            return canvas;
+        };
         const win = env.window !== undefined ? env.window : root;
 
         let started = false;
@@ -526,6 +546,14 @@
         let counter = 0;
         let play = null;               // 玩法状态（涟漪、饲料、泡、拉尾弹簧）：首次用到才建，与 world 同生命周期，换 world、停止、出错时丢弃；从不存储
         let playFailed = false;        // 玩法出过错：本次会话停用玩法（鱼与存储照常），下次 start 再试
+        let pred = null;               // 捕食状态（饥饿、追击、独立随机流）：开着时才建，与 world 同生命周期，换 world、停止、关掉、出错时丢弃；从不存储
+        let predFailed = false;        // 捕食出过错：本次会话停用捕食（鱼、玩法与存储照常），下次 start 再试
+        let flow = null;               // 水流与海洋雪状态：开着时才建，随画布尺寸重建，无鱼、关掉、省流量、出错、停止时丢弃；从不存储
+        let flowPad = null;            // 染色纹理（尺寸 = 流场网格）
+        let flowFailed = false;        // 水流与海洋雪出过错：本次会话停用它（其余照常），下次 start 再试
+        let light = null;              // 光束状态
+        let lightPad = null;           // 光束纹理
+        let lightFailed = false;       // 光束出过错：本次会话停用它（写实画法的按通道吸收是画鱼的一部分，不在此列）
 
         // ----- 存储 -----
 
@@ -644,9 +672,72 @@
             try { return fn(); } catch (error) { disablePlay(error); return fallback; }
         }
 
+        // ----- 捕食接线：任何一步出错都只停捕食（鱼、玩法与存储照常），追击中的目标点清掉、等着补回的空缺立刻补回 -----
+
+        function disablePred(error) {
+            if (predFailed) return;
+            predFailed = true;
+            warn(`[Aquarium] 捕食出错，本次会话停用大鱼吃小鱼：${error && error.message ? error.message : error}`);
+            try { if (PredCore && world) PredCore.release(pred, world); } catch { /* 清理本身出错也不能再往外抛 */ }
+            pred = null;
+        }
+
+        /** 捕食里的任何调用都走这里：抛错就只停捕食，并返回 fallback。 */
+        function predGuard(fn, fallback) {
+            try { return fn(); } catch (error) { disablePred(error); return fallback; }
+        }
+
+        // ----- 水流、海洋雪与光束接线：纯视觉的氛围层，任何一步出错都只停它自己（鱼、玩法、捕食与存储照常） -----
+
+        function disableFlow(error) {
+            if (flowFailed) return;
+            flowFailed = true;
+            flow = null;
+            flowPad = null;
+            warn(`[Aquarium] 水流与海洋雪出错，本次会话停用：${error && error.message ? error.message : error}`);
+        }
+
+        function flowGuard(fn, fallback) {
+            try { return fn(); } catch (error) { disableFlow(error); return fallback; }
+        }
+
+        function disableLight(error) {
+            if (lightFailed) return;
+            lightFailed = true;
+            light = null;
+            lightPad = null;
+            warn(`[Aquarium] 光束出错，本次会话停用：${error && error.message ? error.message : error}`);
+        }
+
+        function lightGuard(fn, fallback) {
+            try { return fn(); } catch (error) { disableLight(error); return fallback; }
+        }
+
+        /** 从世界的随机源取一次种子建立独立随机流；之后氛围层不再碰世界的随机源（开关不改变鱼的随机序列）。 */
+        function ambientRandom() {
+            return Ambient.seeded(Math.floor(Number(world.random()) * 4294967296));
+        }
+
+        /** 水流的一步：建/重建/推进。options.flow 明确为 true 才开，省流量一律关；关着或没有可用模块时丢弃状态。 */
+        function stepFlow(options, width, height, low, dt) {
+            const wanted = !!(FlowCore && Ambient && options.flow === true && !low && !flowFailed);
+            if (!wanted) { flow = null; flowPad = null; return; }
+            flowGuard(() => {
+                if (!flow) {
+                    flow = FlowCore.create({ width, height, random: ambientRandom() });
+                    flowPad = null;
+                } else if (flow.w !== width || flow.h !== height) {
+                    FlowCore.resize(flow, width, height);
+                    flowPad = null;
+                }
+                if (flow) FlowCore.step(flow, dt / 1000, { fish: world.fish, floorY: world.shoreY, scale: world.scale });
+            });
+        }
+
         function pokeFish(fish, at) {
             if (!playOn()) return;
-            playGuard(() => PlayCore.poke(ensurePlay(), world, fish, at));
+            const result = playGuard(() => PlayCore.poke(ensurePlay(), world, fish, at));
+            if (result && result.ok && pred && PredCore && !predFailed) predGuard(() => PredCore.disturb(pred, world, fish));       // 戳了正在冲刺的捕食者：冲刺中止
         }
 
         /** 收起拉尾记录。quiet：没有回弹、冲刺与泡（没拖就松手、被捞起）；否则尾巴弹回、鱼向前冲一下。调用前鱼应已 Core.release。 */
@@ -935,6 +1026,12 @@
             started = true;
             failed = false;
             playFailed = false;
+            predFailed = false;
+            pred = null;
+            flowFailed = false;
+            lightFailed = false;
+            flow = null; flowPad = null;
+            light = null; lightPad = null;
             loaded = false;
             generation++;
             world = null;
@@ -956,6 +1053,9 @@
             destroyUi();
             world = null;
             play = null;
+            pred = null;
+            flow = null; flowPad = null;
+            light = null; lightPad = null;
             entries = [];
             loaded = false;
         }
@@ -973,6 +1073,8 @@
                 if (!world || world.lowPower !== low) {
                     world = Core.createWorld({ width, height, random, lowPower: low });
                     play = null;
+                    pred = null;
+                    flow = null; flowPad = null;
                     Core.reconcile(world, entries, { instant: true });
                     refreshUi();
                 } else if (world.width !== width || world.height !== height) {
@@ -983,26 +1085,63 @@
                 }
                 const point = pointer && Number.isFinite(pointer.x) && Number.isFinite(pointer.y) ? { x: pointer.x, y: pointer.y } : null;
                 const attractors = play && playOn() ? playGuard(() => PlayCore.attractors(play, world), undefined) : undefined;
-                Core.step(world, dt, { pointer: point, bells: options.bells, attractors });
+                // options.shore：岸线（海水层此刻水线能到的最高处），占画布高度的比例、从画布底边往上量（没有海水层或不是有限数时为 null，鱼不避岸线）；核心要的是从顶往下的像素
+                const shore = Number.isFinite(options.shore) ? (1 - options.shore) * height : null;
+                Core.step(world, dt, { pointer: point, bells: options.bells, attractors, shore });
                 if (play) playGuard(() => PlayCore.step(play, world, dt));
+                if (PredCore && !predFailed) predGuard(() => {
+                    // options.predation：设置里的“大鱼吃小鱼”。只有明确为 true 才开（宿主的设置默认开；没传的调用方与没有这一层时逐位一致），省流量模式一律关
+                    if (options.predation === true && !low) {
+                        if (!pred) pred = PredCore.create(world);
+                        PredCore.step(pred, world, dt, { enabled: true, bubbles: (x, y, count) => {
+                            if (playOn()) playGuard(() => PlayCore.addBubbles(ensurePlay(), world, x, y, count));
+                            if (flow && FlowCore) flowGuard(() => FlowCore.burst(flow, x, y, 1));       // 张口一吸、鱼群受惊：水里炸开一团（只是视觉）
+                        } });
+                    } else if (pred) {
+                        PredCore.step(pred, world, dt, { enabled: false });       // 关掉：清掉追击的目标点，等着补回的空缺立刻到期
+                        pred = null;
+                    }
+                });
+                stepFlow(options, width, height, low, dt);
                 tick(point);
                 if (netHold && !session && (netHold.world !== world || world.time >= netHold.until)) hideNet();
-                if (!world.fish.length) { play = null; return true; }
+                if (!world.fish.length) { play = null; pred = null; flow = null; flowPad = null; return true; }
                 const night = options.night === false ? 0 : nightAmount(Number.isFinite(options.nightHour) ? options.nightHour : hourNow());
                 const view = { amount: clamp(Number.isFinite(options.amount) ? options.amount : 0.65, 0, 1), night: clamp(night || 0, 0, 1), lowPower: low, scale: world.scale, real: options.realistic !== false,
+                    // options.rays：设置里的“水下光束”。明确为 true 时，写实画法也按通道（红先于绿先于蓝）随深度被水吸收；没传时与此前逐位一致
+                    absorb: options.rays === true,
                     onRealError: error => warn(`[Aquarium] 写实画法出错，本页面改用卡通画法：${error && error.message ? error.message : error}`) };
+                const raysWanted = !!(LightCore && Ambient && options.rays === true && !low && !lightFailed);
+                if (!raysWanted) { light = null; lightPad = null; }
                 const colors = palette();
                 const order = world.fish.slice().sort((a, b) => a.z - b.z);       // 先画远的
                 realDrawn = 0;
+                // 由后往前：光束 → 染色尾迹与远处的海洋雪 → 玩法的后层 → 鱼 → 玩法的前层 → 最近一层的海洋雪；氛围层都是 screen 合成，只加光，不盖壁纸
+                if (raysWanted) lightGuard(() => {
+                    if (!light) light = LightCore.create({ random: ambientRandom() });
+                    if (!lightPad) lightPad = Ambient.makePad(makeCanvas, LightCore.PARAMS.TEX_W, LightCore.PARAMS.TEX_H);
+                    if (!lightPad) throw new Error('离屏画布不可用');
+                    Ambient.drawRays(ctx, LightCore, light, lightPad, { width, height, dt: dt / 1000, night: view.night });
+                });
+                if (flow) flowGuard(() => {
+                    if (!flowPad) flowPad = Ambient.makePad(makeCanvas, flow.gw, flow.gh);
+                    if (!flowPad) throw new Error('离屏画布不可用');
+                    Ambient.drawDye(ctx, FlowCore, flow, flowPad, { alpha: FLOW_DYE_ALPHA });
+                    Ambient.drawSnow(ctx, FlowCore, flow, view, 'back');
+                });
                 if (play) playGuard(() => PlayUi.drawBack(ctx, play, view));
                 for (const fish of order) drawFish(ctx, fish, colors, view, play ? playGuard(() => PlayCore.extrasOf(play, fish), undefined) : undefined);
                 if (play) playGuard(() => PlayUi.drawFront(ctx, play, view));
+                if (flow) flowGuard(() => Ambient.drawSnow(ctx, FlowCore, flow, view, 'front'));
                 return true;
             } catch (error) {
                 failed = true;
                 session = null;
                 world = null;
                 play = null;
+                pred = null;
+                flow = null; flowPad = null;
+                light = null; lightPad = null;
                 destroyUi();
                 warn(`[Aquarium] 绘制出错，本次会话停用水族馆：${error && error.message ? error.message : error}`);
                 return false;
@@ -1015,9 +1154,12 @@
             isGrabbing: () => !!session,
             entries: () => entries.map(item => ({ id: item.id, species: item.species, addedAt: item.addedAt })),
             // realDrawn：上一帧用写实画法画出的鱼数；realFailed：写实画法抛过异常、本页面已改用卡通（验收诊断，业务路径不读）
-            state: () => ({ started, failed, loaded, entries: entries.length, fish: world ? world.fish.length : 0, grabbing: !!session, playFailed, realDrawn, realFailed: realBroken }),
+            state: () => ({ started, failed, loaded, entries: entries.length, fish: world ? world.fish.length : 0, grabbing: !!session, playFailed, realDrawn, realFailed: realBroken, predationFailed: predFailed, flowFailed, lightFailed, flowLive: !!flow, raysLive: !!light }),
             _world: () => world,
             _play: () => play,
+            _pred: () => pred,
+            _flow: () => flow,
+            _light: () => light,
         };
     }
 

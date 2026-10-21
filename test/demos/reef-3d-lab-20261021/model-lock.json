@@ -1,0 +1,37 @@
+{
+  "repository": "KhronosGroup/glTF-Sample-Assets",
+  "commit": "15cd02d304e54cb42a4db4eefe719f76190f4b68",
+  "license": "CC0-1.0; Microsoft",
+  "files": [
+    {
+      "path": "Models/BarramundiFish/glTF/BarramundiFish.bin",
+      "size": 128208,
+      "gitBlobSha1": "cb31be86b7c7f12e071c09689240075e5fc2d229",
+      "target": "assets/barramundi/BarramundiFish.bin"
+    },
+    {
+      "path": "Models/BarramundiFish/glTF/BarramundiFish.gltf",
+      "size": 2554,
+      "gitBlobSha1": "1fd5708f0dba3b7f29c62de7e8cd656efba14be6",
+      "target": "assets/barramundi/BarramundiFish.gltf"
+    },
+    {
+      "path": "Models/BarramundiFish/glTF/BarramundiFish_baseColor.png",
+      "size": 4985099,
+      "gitBlobSha1": "ef8fb6479090e97fe11de288b55d1403dd5093bc",
+      "target": "assets/barramundi/BarramundiFish_baseColor.png"
+    },
+    {
+      "path": "Models/BarramundiFish/glTF/BarramundiFish_normal.png",
+      "size": 3017384,
+      "gitBlobSha1": "0a26c087c0ff9ab65ff5e023ec46201add0a6fef",
+      "target": "assets/barramundi/BarramundiFish_normal.png"
+    },
+    {
+      "path": "Models/BarramundiFish/glTF/BarramundiFish_occlusionRoughnessMetallic.png",
+      "size": 4355820,
+      "gitBlobSha1": "4504f4db32b6abfe3e69c2f5b7f3165c81c2ef1b",
+      "target": "assets/barramundi/BarramundiFish_occlusionRoughnessMetallic.png"
+    }
+  ]
+}

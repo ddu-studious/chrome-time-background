@@ -66,6 +66,7 @@ async function fixture({ hidden = false, panels = [], effect = 'liquid' } = {}) 
     performance: { now: () => 100 },
     requestAnimationFrame(callback) { frames.set(++frameId, callback); return frameId; },
     cancelAnimationFrame(id) { frames.delete(id); },
+    setTimeout() { return 0; }, clearTimeout() {}, // 失焦休息的计时器在这里只需存在，不真正计时
     setInterval(callback) { intervals.push(callback); return intervals.length; }, clearInterval() {},
     MutationObserver: class {
       constructor(callback) { this.callback = callback; }

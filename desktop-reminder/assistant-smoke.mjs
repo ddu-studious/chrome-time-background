@@ -28,7 +28,7 @@ if (!app) throw new Error('必须用 --app 指向隔离构建，避免改写真�
 const shots = arg('shots');
 const only = arg('only')?.split(',').filter(Boolean) || null;      // 可写成 --only=focus,hooks-off
 const withKeys = !process.argv.includes('--no-keyboard');
-const SCENARIOS = ['config', 'conflict', 'presets', 'protocol', 'no-ack', 'focus', 'hooks-off', 'lifecycle', 'menu', 'keyboard', 'placement', 'shots'];
+const SCENARIOS = ['config', 'conflict', 'presets', 'protocol', 'catalog', 'no-ack', 'focus', 'hooks-off', 'lifecycle', 'menu', 'keyboard', 'placement', 'shots'];
 for (const name of only || []) {
   if (!SCENARIOS.includes(name)) throw new Error(`--only 目前只支持 ${SCENARIOS.join('、')}`);
   if (['keyboard', 'placement'].includes(name) && !withKeys) throw new Error(`--only=${name} 需要真实键盘或鼠标，不能带 --no-keyboard`);
@@ -221,6 +221,31 @@ await scenario('presets', {}, async h => {
     await applyConfig(h);                                                      // 马上注销，不让测试进程长期占着用户的热键
     assert.equal((await ping(h)).assistantHotkeyStatus, 'off');
   }
+});
+
+// 目录补全用真实 AppKit 编辑器与同一键盘委托，不触发任何业务操作。
+await scenario('catalog', {}, async h => {
+  await enable(h); await hook(h, 'show');
+  await until(h, x => x.assistantVisible && x.assistantKey, 3000, '面板可编辑');
+  const catalog = createRequire(import.meta.url)('../js/assistant-native.js').catalog();
+  assert.equal((await h.request('assistantCatalog', { catalog })).ok, true);
+  await hook(h, 'type', { text: '@音' });
+  await hook(h, 'completion-key', { text: 'tab' });
+  assert.equal((await ping(h)).assistantInput, '@music ');
+  await h.noEvent('assistantAction', 'Tab只补全，不发送');
+  await hook(h, 'type', { text: '@music /暂' });
+  await hook(h, 'completion-key', { text: 'enter' });
+  assert.equal((await ping(h)).assistantInput, '@music /pause ');
+  await h.noEvent('assistantAction', 'Enter第一次只补全');
+  await hook(h, 'type', { text: '@不存在' }); await hook(h, 'completion-key', { text: 'enter' });
+  assert.equal((await ping(h)).assistantInput, '@不存在'); await h.noEvent('assistantAction', '无候选不发送');
+  await hook(h, 'completion-key', { text: 'escape' }); assert.equal((await ping(h)).assistantVisible, true);
+  await hook(h, 'type', { text: '解释缓存' }); await hook(h, 'new'); await hook(h, 'submit');
+  const event = await h.waitEvent('assistantAction'); assert.equal(event.newConversation, true); assert.equal(event.text, '解释缓存');
+  await h.request('assistantResult', { actionId: event.actionId, ok: true });
+  await hook(h, 'type', { text: '@音' });
+  assert.equal((await h.request('assistantCatalog', { catalog: { ...catalog, revision: catalog.revision - 1 } })).ok, false);
+  assert.equal((await ping(h)).assistantInput, '@音', '过期目录不改写文字');
 });
 
 // ---------- 面板协议：提交 / 停止 / 回执 / 状态渲染 / 非法负载（不依赖键盘） ----------

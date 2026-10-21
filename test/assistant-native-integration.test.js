@@ -85,7 +85,7 @@ test('联调：原生提交 → 同一个 Engine 执行（任务输入带桌面�
     assert.ok(states.length >= 1);
     const last = states.at(-1);
     assert.deepEqual([last.taskId, last.status, last.input, last.message], [task.id, 'completed', '林俊杰', '已为你找到林俊杰的歌曲']);
-    assert.equal(Object.keys(last).sort().join(), 'at,input,message,status,taskId,version');
+    assert.equal(Object.keys(last).sort().join(), 'at,input,message,scopeLabel,status,taskId,version');
     assert.ok(states.every(state => state.taskId === task.id), '没有串到别的任务');
     // 重复事件（回执丢失后重发）不会再提交一次
     f.host.emit({ type: 'assistantAction', actionId: 'a1', action: 'submit', text: '  林俊杰  ' });

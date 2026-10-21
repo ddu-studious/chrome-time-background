@@ -5,6 +5,8 @@
   let todoCollapsed = false;
   try { todoCollapsed = sessionStorage.getItem(TODO_COLLAPSED) === 'true'; } catch {}
   const input = $('request');
+  const embedded = new URLSearchParams(location.search);
+  let draftReady = false, draftEdited = Boolean(input.value), snapshotReady = false, modelOptionsData = null;
   const timeline = window.AssistantTimeline.create();
   let scopeExplicit = false, newConversationOnSubmit = false;
   const newRequestKey = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘ Enter' : 'Ctrl Enter';
@@ -179,6 +181,7 @@
     reasoningAvailable = Boolean(allowed.length); select.disabled = busy() || !reasoningAvailable;
   }
   function renderModelOptions(data) {
+    modelOptionsData = data;
     defaultModel = typeof data.model === 'string' ? data.model : '';
     defaultReasoning = Object.hasOwn(reasoningLabels, data.defaultReasoning) ? data.defaultReasoning : 'off';
     modelCatalog = Array.isArray(data.models) ? data.models.filter(model => model && typeof model.id === 'string' && !model.id.includes('://') && /^[a-zA-Z0-9_./:-]{1,160}$/.test(model.id)) : [];
@@ -209,13 +212,16 @@
       : 'Laya 是本机 Jev 类模型；仅为已选 @ 应用预加载工具组，失败自动降级。';
     note.textContent += ' 切换会取消正在处理的本机 AI 请求。';
   }
-  async function loadLayaControl() {
-    if (layaSaving) return;
-    try { renderLayaControl(await send('ai_control_get')); }
-    catch { renderLayaControl(null); }
+  let layaPending = null;
+  function loadLayaControl() {
+    if (layaSaving) return Promise.resolve();
+    if (layaPending) return layaPending;
+    layaPending = send('ai_control_get').then(renderLayaControl, () => renderLayaControl(null))
+      .finally(() => { layaPending = null; });
+    return layaPending;
   }
   function error(value) { $('error').hidden = !value; $('error').textContent = value || ''; }
-  function persistDraft() { clearTimeout(draftTimer); draftTimer = setTimeout(() => { void chrome.storage.local.set({ [DRAFT]: { text: input.value, app, skill, scopeExplicit, aiModel, aiReasoning } }).catch(() => {}); }, 120); }
+  function persistDraft() { draftEdited = true; clearTimeout(draftTimer); draftTimer = setTimeout(() => { void chrome.storage.local.set({ [DRAFT]: { text: input.value, app, skill, scopeExplicit, aiModel, aiReasoning } }).catch(() => {}); }, 120); }
   function activeToken() { const before = input.value.slice(0, input.selectionStart ?? input.value.length); const m = before.match(/(?:^|\s)([@/])([^\s]*)$/); return m ? { symbol: m[1], query: m[2].toLowerCase(), start: before.length - m[0].length, end: before.length } : null; }
   function button(text, className, action) { const el = document.createElement('button'); el.type = 'button'; el.className = className; el.textContent = text; el.addEventListener('click', action); return el; }
   function renderTokens() {
@@ -317,10 +323,12 @@
       const mode = input.value.trim() ? C.routeRequest({text:input.value,app,skill,inheritedScope:!scopeExplicit},task).mode : null;
       $('submit-mode').textContent = mode === 'new' ? '新需求' : mode === 'replace' ? '替换搜索' : mode ? '接着上次' : '';
     } catch { $('submit-mode').textContent = ''; }
+    if (!snapshotReady) $('submit-mode').textContent = '读取任务中，可先输入';
     renderPlayback();
     if ($('compact-context')) { $('compact-context').hidden = !task; $('compact-context').disabled = busy(); }
     $('edit-task').hidden = !task; $('edit-task').disabled = busy();
-    $('submit').disabled = busy(); input.disabled = busy(); $('new-task').disabled = busy(); $('apps').disabled = $('skills').disabled = busy();
+    $('submit').disabled = busy() || !snapshotReady; input.disabled = busy(); $('new-task').disabled = busy() || !snapshotReady; $('apps').disabled = $('skills').disabled = busy();
+    $('submit').title = snapshotReady ? '执行需求' : '正在读取当前任务，可先输入';
     $('cancel').hidden = !['planning', 'running'].includes(task?.status); $('cancel').disabled = sending;
     $('assistant-model').disabled = busy() || !capabilitiesReady || !modelCatalog.length;
     $('assistant-reasoning').disabled = busy() || !reasoningAvailable;
@@ -356,6 +364,7 @@
   for (const [id, value] of [['apps', 'apps'], ['skills', 'skills']]) $(id).addEventListener('click', () => { menu = menu === value ? null : value; selected = 0; renderMenu(); input.focus(); });
   $('compose').addEventListener('submit', async event => {
     event.preventDefault(); if (busy()) return; error('');
+    if (!snapshotReady) { error('正在读取当前任务，可以先输入，稍后再执行。'); return; }
     const chosenAI = requestAI();
     const request = { text:input.value, app, skill, inheritedScope:!scopeExplicit, newConversation:newConversationOnSubmit, ai:chosenAI };
     let normalized; try { normalized = C.routeRequest(request, task).input; } catch (e) { error(e.message); return; }
@@ -374,7 +383,12 @@
     input.value = task.input.text; app = task.input.app; skill = task.input.skill; scopeExplicit = true; menu = null;
     renderTokens(); renderMenu(); renderTask(); persistDraft(); input.focus();
   });
-  const hide = () => { stopVoice(); clearTimeout(draftTimer); void chrome.storage.local.set({ [DRAFT]: { text: input.value, app, skill, scopeExplicit, aiModel, aiReasoning } }).then(() => send('assistant_hide')).catch(e => error(e.message)); };
+  const hide = () => {
+    stopVoice(); clearTimeout(draftTimer);
+    // Closing before a delayed read returns must not erase the existing draft.
+    const saved = draftReady || draftEdited ? chrome.storage.local.set({ [DRAFT]: { text: input.value, app, skill, scopeExplicit, aiModel, aiReasoning } }) : Promise.resolve();
+    void saved.then(() => send('assistant_hide')).catch(e => error(e.message));
+  };
   $('hide').addEventListener('click', hide);
   document.addEventListener('keydown', event => { if (event.key !== 'Escape' || event.isComposing) return; event.preventDefault(); if (menu) { menu = null; renderMenu(); } else if (!todoCollapsed && $('todo-tips').contains(document.activeElement)) { setTodoCollapsed(true); $('todo-toggle').focus(); } else hide(); });
   $('shortcut-settings').addEventListener('click', () => send('assistant_shortcuts').catch(e => error(e.message)));
@@ -396,21 +410,36 @@
     finally { layaSaving = false; renderLayaControl(layaControl); }
   });
   window.addEventListener('focus', () => { void loadLayaControl(); });
-  async function refresh() { try { const wasBusy = busy(); const data = await send('assistant_snapshot'); task = data.task; $('shortcut').textContent = data.shortcut ? '唤出：' + data.shortcut : '首次使用：请绑定“快捷助手”的快捷键'; renderTask(); renderMenu(); if (wasBusy && !busy() && document.activeElement === document.body) focusInput(); } catch (e) { error(e.message); } }
+  let snapshotPending = null;
+  function refresh() {
+    if (snapshotPending) return snapshotPending;
+    snapshotPending = (async () => {
+      try { const wasBusy = busy(); const data = await send('assistant_snapshot'); task = data.task; snapshotReady = true; $('shortcut').textContent = data.shortcut ? '唤出：' + data.shortcut : '首次使用：请绑定“快捷助手”的快捷键'; renderTask(); renderMenu(); if (wasBusy && !busy() && document.activeElement === document.body) focusInput(); }
+      catch (e) { error(e.message); }
+    })().finally(() => { snapshotPending = null; });
+    return snapshotPending;
+  }
   let snapshotTimer;
   chrome.storage.onChanged.addListener((changes, area) => { if (area === 'local' && changes.quickAssistantTaskV1) { clearTimeout(snapshotTimer); snapshotTimer = setTimeout(refresh, 25); } });
-  (async () => {
-    try { const saved = (await chrome.storage.local.get(DRAFT))[DRAFT]; if (saved) { input.value = typeof saved.text === 'string' ? saved.text.slice(0, 500) : ''; app = C.apps.some(a => a.id === saved.app) ? saved.app : null; skill = C.skills.some(s => s.id === saved.skill && (!app || s.apps.includes(app))) ? saved.skill : null; scopeExplicit = saved.scopeExplicit === true; aiModel = typeof saved.aiModel === 'string' ? saved.aiModel : ''; aiReasoning = typeof saved.aiReasoning === 'string' ? saved.aiReasoning : ''; if (input.value || app) menu = null; } } catch {}
-    renderTokens(); renderMenu();
-    // “就绪”只表示输入条已经存活、完成首屏并能接收焦点；任务快照、模型列表与本机策略稍后补齐。
-    // 宿主只给就绪信号 4 秒，超时会撤下浮层并让后台改开独立小窗。以前这里要等下面三项都返回，
-    // Service Worker 冷启动恢复上次任务、本机服务不应答（各自最长 7 秒）时就会掉进小窗。
-    // The host focuses the iframe before requesting input focus across origins.
-    if (embedded.get('embedded') === '1') parent.postMessage({ type: 'assistant_ready', nonce: embedded.get('nonce') }, embedded.get('hostOrigin'));
-    else focusInput();
-    await Promise.all([refresh(),loadAICapabilities(),loadLayaControl()]); renderTokens(); renderMenu();
-  })();
-  const embedded = new URLSearchParams(location.search);
+  async function restoreDraft() {
+    try {
+      const saved = (await chrome.storage.local.get(DRAFT))[DRAFT];
+      // The editor is already live. A late draft must never replace new typing,
+      // application/model selection, or an explicit clear.
+      if (!saved || draftEdited || input.value) return;
+      input.value = typeof saved.text === 'string' ? saved.text.slice(0, 500) : '';
+      app = C.apps.some(a => a.id === saved.app) ? saved.app : null;
+      skill = C.skills.some(s => s.id === saved.skill && (!app || s.apps.includes(app))) ? saved.skill : null;
+      scopeExplicit = saved.scopeExplicit === true;
+      aiModel = typeof saved.aiModel === 'string' ? saved.aiModel : '';
+      aiReasoning = typeof saved.aiReasoning === 'string' ? saved.aiReasoning : '';
+      if (input.value || app) menu = null;
+      if (modelOptionsData) renderModelOptions(modelOptionsData);
+      renderTokens(); renderMenu(); renderTask();
+      if (document.activeElement === input) focusInput();
+    } catch { /* Draft recovery is optional; current typing stays usable. */ }
+    finally { draftReady = true; }
+  }
   if (embedded.get('embedded') === '1') {
     document.body.classList.add('embedded');
     const resizeResults = (height, panelHeight) => {
@@ -451,4 +480,14 @@
   $('examples').addEventListener('click', () => { menu = menu === 'examples' ? null : 'examples'; selected = 0; renderMenu(); input.focus(); });
   const heartbeat = setInterval(refresh, 15000);
   window.addEventListener('pagehide', () => clearInterval(heartbeat), { once: true });
+  // All handlers and the embedded message bridge exist before announcing the
+  // editable shell. Storage and backend latency must not hold the editor open.
+  function initialize() {
+    renderTokens(); renderMenu(); renderTask();
+    if (embedded.get('embedded') === '1') parent.postMessage({ type: 'assistant_ready', nonce: embedded.get('nonce') }, embedded.get('hostOrigin'));
+    else focusInput();
+    void restoreDraft();
+    void Promise.all([refresh(), loadAICapabilities(), loadLayaControl()]);
+  }
+  initialize();
 })();

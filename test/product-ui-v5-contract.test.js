@@ -13,7 +13,7 @@ test('v5 状态层先于产品外壳和音乐工作台加载', () => {
   assert.ok(stateIndex >= 0);
   assert.ok(stateIndex < html.indexOf('js/music-view.js?v=7'));
   assert.ok(stateIndex < html.indexOf('js/product-shell-v5.js'));
-  assert.ok(html.includes('css/product-ui-v5.css?v=52'));
+  assert.ok(html.includes('css/product-ui-v5.css?v=53'));
 });
 
 test('首页浮岛按钮统一为毛玻璃材质', () => {

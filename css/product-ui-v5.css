@@ -1252,6 +1252,9 @@ body.v5-focus-open > :not(#v5-focus-workspace):not(#background-video) { pointer-
 .bili-live-pulse { width: 5px; height: 5px; margin-left: 1px; border-radius: 50%; background: #ff5277; box-shadow: 0 0 0 3px rgba(255,82,119,.12); animation: bili-live-pulse 1.8s ease-out infinite; }
 @keyframes bili-live-pulse { 0%,35% { box-shadow: 0 0 0 0 rgba(255,82,119,.38); } 75%,100% { box-shadow: 0 0 0 6px rgba(255,82,119,0); } }
 @media(prefers-reduced-motion:reduce) { .bili-live-pulse { animation: none; } }
+/* 哔哩哔哩面板没打开时不跑无限脉冲（隐藏面板里的 box-shadow 动画会让首页持续产生帧）。 */
+body:not(.bili-panel-open) .bili-live-pulse,
+body:not(.bili-panel-open) .bili-live-summary>span i { animation: none; }
 
 .bili-live-toolbar { position: sticky; z-index: 4; top: 0; margin: -9px -9px 7px; padding: 12px 10px 9px; border-bottom: 1px solid rgba(255,255,255,.07); background: rgba(12,18,29,.94); backdrop-filter: blur(14px); }
 .bili-live-summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 3px 9px; }

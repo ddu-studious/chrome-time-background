@@ -71,7 +71,7 @@ test('未加载错误提供具体工具和有效加载计划；禁用入口及�
 
 test('真实Engine预加载最终目标，缺失的前置工具仍收到加载建议并计入原预算', async () => {
   let calls = 0, plays = 0;
-  const gateway = createGateway({ provider: { async generateObject({ input }) {
+  const gateway = createGateway({ provider: { planningContext: async () => ({ contextLength: 40960, contextSource: 'fixture' }), async generateObject({ input }) {
     if (input.planningPhase === 'outline') return { todoTips: [{ text: '核对并播放队列', source: 0, tool: 'music.queue.play' }] };
     switch (calls++) {
       case 0: return step('music.queue.list');

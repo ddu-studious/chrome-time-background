@@ -498,7 +498,9 @@ test('家一直不换也不转圈：把“家”钉住 60 秒，鱼到家附近�
             assert.ok(r.vspin < 0.05, `${species} 种子 ${seed}：钉住家后速度方向转圈占比 ${pct(r.vspin)}`);
             assert.ok(r.idle < 0.2, `${species} 种子 ${seed}：钉住家后几乎不动的时间占 ${pct(r.idle)}`);
             assert.ok(r.maxHome > 8, `${species} 种子 ${seed}：离家最远只有 ${r.maxHome.toFixed(1)} px，鱼停在家里没有漫游`);
-            assert.ok(r.maxHome < P.HOME_NEAR * w.scale * 1.6, `${species} 种子 ${seed}：离家最远 ${r.maxHome.toFixed(0)} px，仍应在家附近`);
+            // 小鱼绕着家 HOME_NEAR 附近转；大个子（2026-10-19 起按真实体长）转弯半径与体长成正比，冲过家再绕回来：容许它离家五个体长（实测最多 4.5 个，鲨 / 鳐 / 鲸鲨）
+            const reach = Math.max(P.HOME_NEAR * w.scale * 1.6, 5 * w.fish[0].len);
+            assert.ok(r.maxHome < reach, `${species} 种子 ${seed}：离家最远 ${r.maxHome.toFixed(0)} px，应在家附近（${reach.toFixed(0)} px 以内）`);
         }
     }
 });
@@ -729,9 +731,10 @@ test('捞起：同一个种子、同样的落点，轨迹确定', () => {
 // 改动之前先钉住现状：没有玩法输入时，游动必须与改动之前一致（黄金数字取自改动之前的核心）。
 
 const GOLDEN_SPECIES = ['neon', 'tang', 'clown', 'puffer', 'angel', 'hammer', 'manta', 'whaleshark'];
-function goldenSwim(input = {}) {
+const SMALL_SPECIES = GOLDEN_SPECIES.slice(0, 5);          // 体长 ≤ AGILE_LEN 的五种：游动与 2026-10-19 之前逐位一致
+function goldenSwim(input = {}, species = GOLDEN_SPECIES) {
     const w = world({ random: seeded(11) });
-    Core.reconcile(w, GOLDEN_SPECIES.map((species, i) => ({ id: `g${i}`, species, addedAt: 1 })), { instant: true });
+    Core.reconcile(w, species.map((id, i) => ({ id: `g${i}`, species: id, addedAt: 1 })), { instant: true });
     const bells = [{ x: 640, y: 360, r: 70 }];
     for (let i = 0; i < 400; i++) {
         const t = i * 0.05;
@@ -743,31 +746,82 @@ function goldenSwim(input = {}) {
 const snapshot = w => JSON.stringify(w.fish.map(f => [f.x, f.y, f.vx, f.vy, f.ang, f.flip]));
 const near = (actual, expected, label) => assert.ok(Math.abs(actual - expected) < 1e-6, `${label}: ${actual} ≠ ${expected}`);
 
-test('黄金轨迹：没有吸引点时，8 种鱼 20 秒后的位置、速度、朝向与改动之前一致（互动子项目不得改变现有游动）', () => {
-    const w = goldenSwim();
-    assert.equal(w.fish.length, 16);
+test('黄金轨迹：没有吸引点时，5 种小鱼 20 秒后的位置、速度、朝向与改动之前一致（互动子项目与 2026-10-19 的大个子改动都不得改变小鱼的游动）', () => {
+    const w = goldenSwim({}, SMALL_SPECIES);
+    assert.equal(w.fish.length, 13);
+    // 黄金数字取自 2026-10-19 之前的核心（/tmp 里留的原版副本跑出来的），新核心逐位相同。
     const gold = {
-        g0: [705.344486133521, 588.2347657994214, 65.14135651571006, 19.42880201542292, -5.980011358017851],
-        g2: [345.43035968153856, 489.02791584275315, 28.180906534799124, -24.612685108283955, 11.8368789206577],
-        g5: [224.88224393111503, 402.22460528978957, 48.7691695714345, -9.270831817105435, 12.325458801927024],
-        g7: [230.27177569410733, 397.94394729097576, 9.20894274624747, -18.955318066811326, 5.151750429387654],
+        g0: [732.2793996356681, 541.6586452905864, 68.01090955255216, 2.9983721470858993, -6.234199042401301],
+        g1: [715.3671190743704, 351.33904735549817, -26.563798683320115, -30.070108247014613, 10.22650231936563],
+        g2: [343.7768100118214, 538.2937583021637, 32.994551940139154, -17.47766661910279, 12.06979528784924],
+        g3: [831.0877775650632, 426.0309728094421, -25.41048058730175, -4.12904012308035, 3.3421469304817903],
+        g4: [600.4922312914125, 282.12213200710056, 13.010982039455934, 21.68474051007074, -5.160891686523531],
     };
     for (const [entryId, expected] of Object.entries(gold)) {
         const f = w.fish.find(item => item.entry === entryId);
         ['x', 'y', 'vx', 'vy', 'ang'].forEach((key, i) => near(f[key], expected[i], `${entryId}.${key}`));
     }
-    near(w.fish.reduce((a, f) => a + f.x + f.y + f.vx + f.vy + f.ang, 0), 17469.65719267365, '全部鱼的总和');
+    near(w.fish.reduce((a, f) => a + f.x + f.y + f.vx + f.vy + f.ang, 0), 14813.673876530025, '全部鱼的总和');
 });
 
-test('黄金轨迹：普通抓取（不是拉尾）时，被抓着的鱼的位置、速度与朝向与改动之前一致', () => {
+test('黄金轨迹（2026-10-19 起）：8 种鱼（含按真实体长放大的大个子）20 秒后的位置、速度、朝向钉在现在的模型上，改动游动模型要有意识地重钉', () => {
+    // 与上一条不同：这里的数字取自新核心，不是“与改动之前一致”，只是回归钉子。大个子与小鱼共用一个随机数序列，所以小鱼在这个世界里的轨迹也与上一条不同。
+    const w = goldenSwim();
+    assert.equal(w.fish.length, 16);
+    const gold = {
+        g5: [792.8055682377529, 295.3023879733416, -39.76800740907396, 5.902566891609859, 3.0369898311997403],
+        g6: [526.8244280747273, 456.04385076258274, 36.94266079103181, 4.66558604348916, 0.17529410483293462],
+        g7: [35.470969679878664, 266.91639476186026, -29.965715669547258, -2.5064118978221273, 3.21393916184166],
+    };
+    for (const [entryId, expected] of Object.entries(gold)) {
+        const f = w.fish.find(item => item.entry === entryId);
+        ['x', 'y', 'vx', 'vy', 'ang'].forEach((key, i) => near(f[key], expected[i], `${entryId}.${key}`));
+    }
+    near(w.fish.reduce((a, f) => a + f.x + f.y + f.vx + f.vy + f.ang, 0), 15690.063329243258, '全部鱼的总和');
+});
+
+test('黄金轨迹（贴边）：5 种小鱼被放在四边与四角附近（没有海水层）游 20 秒，与 2026-10-19 之前的核心逐位一致——软边界、纵向带与水面避让对小鱼的影响为零', () => {
+    // 上面的黄金轨迹里小鱼都在屏幕中间游，边界回推、纵向带上下沿这些分支几乎不会被走到（系统性变异检查里这些常数的变异大量存活）。
+    // 这里把鱼放进边角，数字取自 2026-10-19 之前的核心（HEAD 副本）与现在的核心，两者逐位相同。
+    const SMALL = ['neon', 'tang', 'clown', 'puffer', 'angel'];
+    const gold = [[1280, 720, 21, 13653.284477116415], [1920, 1080, 22, 15846.03700238243], [800, 600, 23, 10254.913017005798]];
+    for (const [width, height, seed, expected] of gold) {
+        const w = Core.createWorld({ width, height, random: seeded(seed), lowPower: false });
+        Core.reconcile(w, SMALL.map((id, i) => ({ id: `e${i}`, species: id, addedAt: 1 })), { instant: true });
+        const spots = [[4, 3], [width - 4, 3], [4, height - 3], [width - 4, height - 3], [width / 2, 2], [width / 2, height - 2], [3, height / 2], [width - 3, height / 2]];
+        w.fish.forEach((f, i) => {
+            const [x, y] = spots[i % spots.length];
+            f.x = x; f.y = y; f.vx = (i % 2 ? -1 : 1) * 30; f.vy = (i % 3 - 1) * 25;
+        });
+        for (let i = 0; i < 400; i++) Core.step(w, 50, {});
+        near(w.fish.reduce((a, f) => a + f.x + f.y + f.vx + f.vy + f.ang, 0), expected, `${width}×${height} 种子 ${seed} 全部鱼的总和`);
+    }
+});
+
+test('普通抓取（不是拉尾）：被抓着的鱼是“被拴着的游泳者”，抓点始终跟着指针，每帧位移有上限，朝向不超过俯仰限制（不再是纸片逐位贴着指针）', () => {
     const w = world({ random: seeded(5) });
     Core.reconcile(w, [entry('hammer', { id: 'h0' })], { instant: true });
     const f = w.fish[0];
     f.x = 400; f.y = 300; f.vx = 0; f.vy = 0; f.ang = 0.3; f.alpha = 1; f.state = 'alive';
     assert.equal(Core.grab(w, f, 400, 300), true);
-    for (let i = 0; i < 40; i++) Core.step(w, 50, { pointer: { x: 400 + i * 12, y: 300 - i * 4 }, bells: [] });
-    [['x', 862.8571428571429], ['y', 145.71428571428572], ['vx', 239.99999999999955], ['vy', -80.00000000000011], ['ang', -0.3217505530114353], ['flip', 1]]
-        .forEach(([key, expected]) => near(f[key], expected, key));
+    let last = { x: f.x, y: f.y };
+    let worst = 0;
+    for (let i = 0; i < 40; i++) {
+        const pointer = { x: 400 + i * 12, y: 300 - i * 4 };
+        Core.step(w, 50, { pointer, bells: [] });
+        assert.equal(f.state, 'held');
+        const h = f.held;
+        const c = Math.cos(f.ang);
+        const s = Math.sin(f.ang);
+        worst = Math.max(worst, Math.hypot(f.x + h.gx * c - h.gy * s - pointer.x, f.y + h.gx * s + h.gy * c - pointer.y));
+        assert.ok(Math.hypot(f.x - last.x, f.y - last.y) <= P.HOLD_MAX_SPEED * 0.05 + 1e-9, '每帧位移有上限');
+        assert.ok(Math.abs(f.ang) <= P.HOLD_PITCH_MAX + 1e-9, `侧视动物朝向不超过俯仰限制：${f.ang}`);
+        last = { x: f.x, y: f.y };
+    }
+    assert.ok(worst < 12, `抓点离指针最多 ${worst.toFixed(1)} px（绳子有一点松，但始终拴在指针上）`);
+    // 回归钉子（新模型）：匀速拖动时鱼头顺着运动方向，位置略领先于指针（抓住瞬间的偏差只保留 80%，然后被拉着走）
+    [['x', 875.1287523966712], ['y', 141.6237492011096], ['ang', -0.3217507830181303]].forEach(([key, expected]) => near(f[key], expected, key));
+    near(f.flip, 1, 'flip');
 });
 
 test('cruiseSpeed：种类速度 × 视口缩放 × 深度系数；未知种类为 0', () => {
@@ -877,8 +931,8 @@ test('吸引点只拉游着的鱼：离开中的鱼不受影响，被抓着的�
 });
 
 // 拉尾几何：鱼在 (600, 300) 朝东，抓它后半身（尾巴在西侧）的一点（本地 y 偏移 ly 个体长），再沿 axis 方向、按 dir 的正负拖约 200 px/s，最后让指针停住一会儿。
-function dragTail(options, dir, { seed = 4, ly = 0, axis = 'x', still = 20 } = {}) {
-    const { w, f } = lone('hammer', seed);
+function dragTail(options, dir, { seed = 4, ly = 0, axis = 'x', still = 20, species = 'hammer' } = {}) {
+    const { w, f } = lone(species, seed);
     f.x = 600; f.y = 300; f.vx = 0; f.vy = 0; f.ang = 0; f.flip = 1; f.flipTo = 1;
     const gx0 = f.x - f.len * 0.3;
     const gy0 = 300 + f.len * ly;
@@ -921,15 +975,218 @@ test('拉尾：向东拖（朝着鱼头的方向）时，鱼绕被抓的点转�
     assert.ok(gap(heldPoint(f), pointer) < 3, `被抓的点离指针 ${gap(heldPoint(f), pointer)} px`);
 });
 
-test('拉尾：抓的点不在鱼的中线上、拖的方向是竖直的，也一样——鱼头朝与指针运动相反的方向，被抓的点始终在指针下', () => {
+test('拉尾：抓的点不在鱼的中线上、拖的方向是竖直的，也一样——鱼头朝与指针运动相反的方向，被抓的点始终在指针下（俯视的蝠鲼可以头朝正上正下）', () => {
     const east = dragTail({ tail: true }, 1, { ly: 0.2 });
     assert.ok(gap(heldPoint(east.f), east.pointer) < 3, `向东拖：离指针 ${gap(heldPoint(east.f), east.pointer)} px`);
-    const south = dragTail({ tail: true }, 1, { axis: 'y' });
+    const south = dragTail({ tail: true }, 1, { axis: 'y', species: 'manta' });
     assert.ok(Math.sin(south.f.ang) < -0.95, `向南拖鱼头应朝北，朝向 ${south.f.ang}`);
     assert.ok(gap(heldPoint(south.f), south.pointer) < 3, `向南拖：离指针 ${gap(heldPoint(south.f), south.pointer)} px`);
-    const north = dragTail({ tail: true }, -1, { axis: 'y', ly: -0.15 });
+    const north = dragTail({ tail: true }, -1, { axis: 'y', ly: -0.15, species: 'manta' });
     assert.ok(Math.sin(north.f.ang) > 0.95, `向北拖鱼头应朝南，朝向 ${north.f.ang}`);
     assert.ok(gap(heldPoint(north.f), north.pointer) < 3, `向北拖：离指针 ${gap(heldPoint(north.f), north.pointer)} px`);
+});
+
+test('拉尾：侧视动物（背鳍朝上）被竖直拖时朝向被限制在俯仰上限内，不会头朝天倒立着被拖，被抓的点仍在指针下', () => {
+    const pitchOf = ang => Math.min(Math.abs(Core.angleDiff(0, ang)), Math.abs(Core.angleDiff(Math.PI, ang)));      // 朝向离水平线的角度
+    // 上限本身（HOLD_PITCH_MAX）就是被测对象，下面“不超过它”的断言改大它时会跟着放宽；所以另给一条不引用它的绝对线（约 75°，离竖直还差 15°），
+    // 把它改到接近竖直（头朝天倒立着被拖）时这里要报错（变异检查里 HOLD_PITCH_MAX → 3.0 曾经全部通过）。
+    const PITCH_CEILING = 1.3;
+    assert.ok(P.HOLD_PITCH_MAX > 0 && P.HOLD_PITCH_MAX <= PITCH_CEILING, `俯仰上限 ${P.HOLD_PITCH_MAX} 必须小于竖直（${(Math.PI / 2).toFixed(2)}）并留出余量`);
+    for (const species of ['hammer', 'whaleshark']) {
+        assert.ok(!Core.speciesById(species).top, `${species} 是侧视动物`);
+        const south = dragTail({ tail: true }, 1, { axis: 'y', species });
+        const north = dragTail({ tail: true }, -1, { axis: 'y', species });
+        assert.ok(pitchOf(south.f.ang) <= P.HOLD_PITCH_MAX + 1e-3, `${species} 向南拖：朝向离水平线 ${pitchOf(south.f.ang)} 超过上限 ${P.HOLD_PITCH_MAX}`);
+        assert.ok(pitchOf(north.f.ang) <= P.HOLD_PITCH_MAX + 1e-3, `${species} 向北拖：朝向离水平线 ${pitchOf(north.f.ang)} 超过上限 ${P.HOLD_PITCH_MAX}`);
+        assert.ok(pitchOf(south.f.ang) <= PITCH_CEILING && pitchOf(north.f.ang) <= PITCH_CEILING, `${species} 竖直拖时朝向离水平线 ${pitchOf(south.f.ang).toFixed(2)} / ${pitchOf(north.f.ang).toFixed(2)}，不能接近竖直`);
+        assert.ok(Math.sin(south.f.ang) < -0.8, `${species} 向南拖鱼头仍朝上方：${south.f.ang}`);
+        assert.ok(Math.sin(north.f.ang) > 0.8, `${species} 向北拖鱼头仍朝下方：${north.f.ang}`);
+        // 朝向被限制后鱼身不能完全顺着指针，绳子会有一点点松（实测：锤头鲨 ≈ 7 px，鲸鲨 ≈ 26 px，约体长的 6%），但抓点始终拴在指针附近
+        const slack = Math.max(12, 0.1 * south.f.len);
+        assert.ok(gap(heldPoint(south.f), south.pointer) < slack, `${species} 向南拖：离指针 ${gap(heldPoint(south.f), south.pointer)} px`);
+        assert.ok(gap(heldPoint(north.f), north.pointer) < slack, `${species} 向北拖：离指针 ${gap(heldPoint(north.f), north.pointer)} px`);
+    }
+});
+
+test('抓着：小型侧视鱼（小丑鱼、倒吊、天使、河豚）被竖直拖的过程中也不会头朝天倒立——朝向离水平线不超过俯仰上限，鱼头朝着拖动的那一侧', () => {
+    // 变异检查：小鱼走的是 limitPitch（大个子走另一条路径），之前只有大个子的竖直拖动被测过，limitPitch 的每一处都能被改坏而测试全绿。
+    const pitchOf = ang => Math.min(Math.abs(Core.angleDiff(0, ang)), Math.abs(Core.angleDiff(Math.PI, ang)));
+    const PITCH_CEILING = 1.3;                                               // 与上一条同一条绝对线，不随 HOLD_PITCH_MAX 放宽
+    for (const species of ['clown', 'tang', 'angel', 'puffer']) {
+        assert.ok(!Core.speciesById(species).top, `${species} 是侧视动物`);
+        for (const [dir, sign] of [[1, 1], [-1, -1]]) {
+            const { f, pointer } = dragTail(undefined, dir, { axis: 'y', species, still: 0 });
+            const label = `${species} 向${dir > 0 ? '南' : '北'}拖`;
+            assert.ok(pitchOf(f.ang) <= P.HOLD_PITCH_MAX + 1e-3 && pitchOf(f.ang) <= PITCH_CEILING, `${label}：朝向离水平线 ${pitchOf(f.ang).toFixed(3)}，上限 ${P.HOLD_PITCH_MAX}`);
+            assert.ok(pitchOf(f.ang) > P.HOLD_PITCH_MAX - 0.05, `${label}：已转到俯仰上限附近 ${pitchOf(f.ang).toFixed(3)}（竖直拖动没有让鱼头往水平方向回摆）`);
+            assert.ok(Math.sin(f.ang) * sign > 0.8, `${label}：鱼头朝着拖动的方向（sin = ${Math.sin(f.ang).toFixed(3)}）`);
+            assert.ok(gap(heldPoint(f), pointer) < Math.max(12, 0.5 * f.len), `${label}：被抓的点离指针 ${gap(heldPoint(f), pointer).toFixed(1)} px`);
+        }
+    }
+});
+
+/** 普通抓取一条朝 face（±1）的鱼（从 (600, 300) 起），指针沿单位方向 (ux, uy) 以 speed px/s 匀速走 frames 帧（每帧 50 ms）。 */
+function dragAlong(species, face, ux, uy, { seed = 4, frames = 40, speed = 200 } = {}) {
+    const { w, f } = lone(species, seed);
+    Object.assign(f, { x: 600, y: 300, vx: 0, vy: 0, ang: face > 0 ? 0 : Math.PI, flip: face, flipTo: face });
+    assert.equal(Core.grab(w, f, f.x, f.y), true);
+    const start = { x: f.x, y: f.y };
+    let pointer = start;
+    for (let i = 0; i < frames; i++) {
+        pointer = { x: start.x + ux * speed * i * 0.05, y: start.y + uy * speed * i * 0.05 };
+        Core.step(w, 50, { pointer });
+    }
+    return { w, f, pointer };
+}
+
+test('抓着：小型侧视鱼被陡峭地斜拖（75°）、几乎竖直地拖（离竖直 4°）或正竖直地拖时，鱼头朝着拖动的水平方向那一侧、俯仰被夹在上限上；正竖直时保持原来的一侧', () => {
+    // 变异检查：limitPitch 里“选哪一侧”的几处（阈值 0.05、符号、竖直时的保持）此前只被“正竖直、朝东”的一种情形碰到。
+    const pitchOf = ang => Math.min(Math.abs(Core.angleDiff(0, ang)), Math.abs(Core.angleDiff(Math.PI, ang)));
+    const cases = [
+        // [原来朝向, 拖动方向 [水平, 竖直（向下为正）], 期望鱼头所在的水平一侧]
+        [1, [0.26, 0.966], 1], [-1, [0.26, 0.966], 1], [1, [-0.26, 0.966], -1], [-1, [-0.26, 0.966], -1],
+        [1, [0.26, -0.966], 1], [-1, [0.26, -0.966], 1], [1, [-0.26, -0.966], -1], [-1, [-0.26, -0.966], -1],
+        [1, [-0.07, 0.9975], -1], [-1, [0.07, 0.9975], 1], [1, [-0.07, -0.9975], -1], [-1, [0.07, -0.9975], 1],
+        [1, [0, 1], 1], [-1, [0, 1], -1], [1, [0, -1], 1], [-1, [0, -1], -1],
+    ];
+    for (const species of ['clown', 'angel']) {
+        for (const [face, [ux, uy], side] of cases) {
+            const { f } = dragAlong(species, face, ux, uy);
+            const label = `${species} 原朝${face > 0 ? '东' : '西'}，指针向 (${ux}, ${uy}) 拖`;
+            assert.ok(Math.cos(f.ang) * side > 0.2, `${label}：鱼头水平分量 ${Math.cos(f.ang).toFixed(3)}，应在${side > 0 ? '东' : '西'}侧`);
+            assert.ok(pitchOf(f.ang) > P.HOLD_PITCH_MAX - 0.05 && pitchOf(f.ang) <= P.HOLD_PITCH_MAX + 1e-3, `${label}：俯仰 ${pitchOf(f.ang).toFixed(3)} 应在上限 ${P.HOLD_PITCH_MAX} 上`);
+            assert.ok(Math.sin(f.ang) * Math.sign(uy) > 0.8, `${label}：鱼头竖直方向上朝着拖动的方向（sin = ${Math.sin(f.ang).toFixed(3)}）`);
+        }
+    }
+});
+
+test('抓着：指针消失后，鱼朝自己此刻的速度方向游（不是朝最后一次指针运动的方向）', () => {
+    for (const species of ['clown', 'manta']) {
+        const { w, f } = lone(species, 4);
+        Object.assign(f, { x: 600, y: 400, vx: 0, vy: 0, ang: 0, flip: 1, flipTo: 1 });
+        assert.equal(Core.grab(w, f, f.x, f.y), true);
+        for (let i = 0; i < 30; i++) Core.step(w, 50, { pointer: { x: 600 + i * 10, y: 400 } });       // 向东拖：鱼头朝东
+        assert.ok(Math.cos(f.ang) > 0.9, `${species}：拖着时朝东，朝向 ${f.ang.toFixed(2)}`);
+        f.vx = 0; f.vy = -240;                                                                         // 外界把它的速度改成向北
+        for (let i = 0; i < 30; i++) Core.step(w, 50, { pointer: null });
+        assert.ok(Math.sin(f.ang) < -0.8, `${species}：松绳后顺着自己的速度朝北游，朝向 ${f.ang.toFixed(2)}`);
+    }
+});
+
+test('抓着：朝向的摆动——指针不动时围着游向以 HOLD_WANDER 的幅度、约 2.9 rad/s 摆；指针慢慢走时摆幅按速度收小，到 4 × HOLD_STILL 以上完全不摆；指针慢于 HOLD_STILL 时不改变游向', () => {
+    const still = P.HOLD_STILL * world().scale;
+    const swing = (species, k, ux = 1, uy = 0, frames = 600) => {
+        const { w, f } = lone(species, 4);
+        Object.assign(f, { x: 400, y: 360, vx: 0, vy: 0, ang: 0, flip: 1, flipTo: 1 });
+        assert.equal(Core.grab(w, f, f.x, f.y), true);
+        const [x0, y0] = [f.x, f.y];
+        let amp = 0; let cross = 0; let prev = 0;
+        for (let i = 0; i < frames; i++) {
+            const d = k * still * i / 60;
+            Core.step(w, FRAME_MS, { pointer: { x: x0 + ux * d, y: y0 + uy * d } });
+            if (i > 120) {
+                const dev = Core.angleDiff(0, f.ang);
+                amp = Math.max(amp, Math.abs(dev));
+                const s = Math.sign(dev);
+                if (Math.abs(dev) > 1e-6) { if (prev !== 0 && s !== prev) cross++; prev = s; }
+            }
+        }
+        return { amp, cross, f };
+    };
+    for (const species of ['clown', 'hammer']) {
+        for (const k of [0, 0.5, 1.2, 2, 3]) {
+            const { amp } = swing(species, k);
+            const expected = P.HOLD_WANDER * (1 - k / 4);                       // 摆幅 = HOLD_WANDER × (1 − 指针速度 ÷ (4 × HOLD_STILL))
+            assert.ok(Math.abs(amp - expected) < 0.025, `${species}：指针速度 ${k} × HOLD_STILL 时朝向摆幅 ${amp.toFixed(3)}，应约 ${expected.toFixed(3)}`);
+        }
+        for (const k of [4.5, 8]) assert.ok(swing(species, k).amp < 0.005, `${species}：指针速度 ${k} × HOLD_STILL 时不摆`);
+        const still0 = swing(species, 0);
+        assert.ok(still0.cross >= 6 && still0.cross <= 8, `${species}：指针不动时 8 秒里朝向过零 ${still0.cross} 次（2.9 rad/s ≈ 每 2.17 秒一个来回，应 6–8 次）`);
+    }
+    // 指针向北走：快于 HOLD_STILL 时鱼头转向北，慢于它时游向不变（仍只是围着朝东摆）
+    assert.ok(Math.sin(swing('clown', 1.2, 0, -1, 240).f.ang) < -0.5, '1.2 × HOLD_STILL 向北走：鱼头转向北');
+    assert.ok(Math.abs(Core.angleDiff(0, swing('clown', 0.8, 0, -1, 240).f.ang)) < 0.6, '0.8 × HOLD_STILL 向北走：游向不变，只在朝东附近摆');
+});
+
+/** 多阶段“抓着拖”的轨迹摘要：东拖、停住、向西北拖、掉头向东南、指针消失、指针在 400 px 外重新出现（传送）、慢走、松手、滑行。 */
+function holdDragSummary(species, seed, hz = 60) {
+    const dtMs = 1000 / hz;
+    const k = hz / 60;
+    const w = Core.createWorld({ width: 1280, height: 720, random: seeded(seed), lowPower: false });
+    Core.reconcile(w, [entry(species)], { instant: true });
+    const f = w.fish[0];
+    Object.assign(f, { x: 560, y: 380, vx: 0, vy: 0, ang: 0, flip: 1, flipTo: 1, alpha: 1, state: 'alive' });
+    assert.equal(Core.grab(w, f, f.x + f.len * 0.2, f.y + f.len * 0.05), true);
+    let px = f.x + f.len * 0.2;
+    let py = f.y + f.len * 0.05;
+    let acc = 0;
+    let frame = 0;
+    const run = (frames, velocity, input) => {
+        for (let i = 0, n = Math.round(frames * k); i < n; i++) {
+            if (velocity) { px += velocity[0] / hz; py += velocity[1] / hz; }
+            Core.step(w, dtMs, input === 'none' ? { pointer: null } : { pointer: { x: px, y: py } });
+            if (++frame % 10 === 0) acc += f.x + f.y + 50 * f.ang + f.vx + f.vy;
+        }
+    };
+    run(90, [250, 0]);               // 向东 1.5 秒
+    run(60, null);                   // 指针停住 1 秒
+    run(90, [-141, -141]);           // 向西北 200 px/s
+    run(60, [247, 247]);             // 掉头向东南 350 px/s
+    run(30, null, 'none');           // 指针消失 0.5 秒
+    px += 400; py -= 100;            // 指针在很远的地方重新出现
+    run(30, null);
+    run(60, [15, 0]);                // 慢慢走
+    Core.release(w, f, { vx: -150, vy: 40 });
+    run(180, null, 'none');          // 松手后滑行
+    return acc;
+}
+
+test('黄金轨迹（抓着拖）：多阶段拖动（东拖、停住、向西北拖、掉头、指针消失、传送、慢走、松手滑行）的轨迹摘要——钉住被拴着的游泳者每一个分支，调手感时必须有意更新这些数字', () => {
+    // 这些数字是 2026-10-19 当前实现（手感经属性测试与真实浏览器目检）的摘要，不是外部真值：作用是让“顺手改一个系数”变成一次有意识的更新。
+    const gold = {
+        clown: 88433.18736464638, tang: 87870.08463348623, hammer: 91228.94996755032,
+        manta: 77884.77449594678, whaleshark: 95966.78298559554, turtle: 88439.93907886853,
+    };
+    for (const [species, expected] of Object.entries(gold)) near(holdDragSummary(species, 41), expected, `${species} 多阶段拖动摘要`);
+    // 144 Hz 刷新率（单帧 6.9 ms，短于被拴着的游泳者的 10 ms 子步）：子步数下限也要钉住
+    const gold144 = { clown: 186731.45131177356, hammer: 219869.1113471353, manta: 187660.5933158761 };
+    for (const [species, expected] of Object.entries(gold144)) near(holdDragSummary(species, 41, 144), expected, `${species} 144 Hz 多阶段拖动摘要`);
+});
+
+test('抓着：指针突然反向（两个转向方向）时，朝向转速不超过 速度 ÷ (HOLD_TURN_R × 体长) 夹在 [下限, HOLD_YAW_MAX] 的上限，鱼身弯曲量 turn 恰好顶在 ±1.4', () => {
+    // 变异检查：转速上限的体长项、turn 的夹取范围在各种“平稳”的拖动里都碰不到，只有掉头时才起作用。
+    for (const species of ['clown', 'tang', 'manta', 'turtle']) {
+        for (const sign of [1, -1]) {
+            const { w, f } = lone(species, 4);
+            Object.assign(f, { x: 640, y: 360, vx: 0, vy: 0, ang: 0, flip: 1, flipTo: 1 });
+            assert.equal(Core.grab(w, f, f.x, f.y), true);
+            let pointer = { x: f.x, y: f.y };
+            for (let i = 0; i < 90; i++) { pointer = { x: pointer.x + 5, y: pointer.y }; Core.step(w, FRAME_MS, { pointer }); }      // 向东 300 px/s 一秒半
+            const label = `${species} ${sign > 0 ? '顺' : '逆'}时针掉头`;
+            const capHistory = [];
+            let last = f.ang;
+            let worstOver = -Infinity;
+            let peakRatio = 0;
+            let peakTurn = 0;
+            for (let i = 0; i < 40; i++) {
+                const before = Math.hypot(f.vx, f.vy);
+                pointer = { x: pointer.x - Math.cos(0.2) * 5, y: pointer.y + sign * Math.sin(0.2) * 5 };                            // 几乎正西，偏 0.2 rad
+                Core.step(w, FRAME_MS, { pointer });
+                const speed = Math.max(before, Math.hypot(f.vx, f.vy));
+                const yawMin = P.HOLD_YAW_MIN * Core.clamp(P.HOLD_YAW_LARGE * w.scale / Math.max(1, f.len), 0.3, 1);
+                capHistory.push(Core.clamp(speed / (P.HOLD_TURN_R * Math.max(1, f.len)), yawMin, P.HOLD_YAW_MAX));
+                const cap = Math.max(...capHistory.slice(-6));                          // 速度在变，角速度跟着有约 70 ms 的惯性，所以取最近 6 帧里最宽的上限
+                const omega = Math.abs(Core.angleDiff(last, f.ang)) / (FRAME_MS / 1000);
+                last = f.ang;
+                worstOver = Math.max(worstOver, omega - (cap * 1.05 + 0.05));
+                peakRatio = Math.max(peakRatio, omega / cap);
+                peakTurn = Math.max(peakTurn, Math.abs(f.turn));
+            }
+            assert.ok(worstOver <= 0, `${label}：朝向转速超出上限 ${worstOver.toFixed(3)} rad/s`);
+            assert.ok(peakRatio > 0.6, `${label}：掉头时转速确实顶到了上限附近（峰值 ${peakRatio.toFixed(2)} 倍）`);
+            assert.ok(Math.abs(peakTurn - 1.4) < 1e-9, `${label}：turn 最大 ${peakTurn}`);
+        }
+    }
 });
 
 test('拉尾：转身过程中鱼心每帧的位移不超过抓取的速度上限，坐标始终有限；普通抓取向东拖，鱼头朝东', () => {

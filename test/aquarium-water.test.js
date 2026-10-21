@@ -1,6 +1,6 @@
 // 水体层控制器（js/aquarium-water.js）+ 着色器源码合同 + 样式 / index.html / 设置页的静态契约。
 // 控制器用假 document / 假 WebGL 上下文跑：只证明“怎么建、怎么画、怎么失败、怎么清理”，不证明着色器能在真实 GPU 上编译链接与好看——
-// 那一层由真实 Chromium 的页面验证承担（见 docs/technical/aquarium-water-20261019.md）。
+// 那一层由真实 Chromium 的页面验证承担（见 docs/technical/aquarium-water-20261019.md 与 aquarium-shore-20261020.md）。
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -123,7 +123,7 @@ test('start() 没有任何副作用：不建画布、不取上下文；frame() �
     assert.equal(f.events.created.length, 0, '重复 start 无副作用');
 });
 
-test('第一帧：建画布（类名、aria-hidden、半分辨率）、取 WebGL1 上下文（固定参数）、插到根容器之前、画一次、淡入类在画完之后才加', () => {
+test('第一帧：建画布（类名、aria-hidden、半分辨率、只有页面底部一条带子的高度）、取 WebGL1 上下文（固定参数）、插到根容器之前、画一次、淡入类在画完之后才加', () => {
     const f = make();
     f.water.start();
     assert.equal(f.water.frame(FRAME), true);
@@ -132,17 +132,17 @@ test('第一帧：建画布（类名、aria-hidden、半分辨率）、取 WebGL
     assert.equal(canvas.className, 'aq-water');
     assert.equal(canvas.attrs['aria-hidden'], 'true');
     assert.equal(canvas.width, 720);
-    assert.equal(canvas.height, 450);
+    assert.equal(canvas.height, 153, '1440×900 的页面：带子高 900 × 0.34 = 306，半分辨率 153');
     assert.deepEqual(f.events.contextArgs, [['webgl', Water.CONTEXT_OPTIONS]]);
     assert.deepEqual({ ...Water.CONTEXT_OPTIONS }, {
-        alpha: false, antialias: false, depth: false, stencil: false, preserveDrawingBuffer: false,
+        alpha: true, premultipliedAlpha: true, antialias: false, depth: false, stencil: false, preserveDrawingBuffer: false,
         powerPreference: 'low-power', failIfMajorPerformanceCaveat: true,
     });
     assert.ok(Object.isFrozen(Water.CONTEXT_OPTIONS));
-    assert.deepEqual(f.body.children.map(node => node.id || node.className), ['aq-water', 'background-experience-root'], '画布在宿主根容器之前（screen 才是和壁纸混合）');
+    assert.deepEqual(f.body.children.map(node => node.id || node.className), ['aq-water', 'background-experience-root'], '画布在宿主根容器之前（壁纸之上、鱼与水母之下）');
     assert.equal(draws(f.gl), 1);
     assert.deepEqual(f.gl.log.find(entry => entry[0] === 'bufferData')[1], [-1, -1, 1, -1, -1, 1, 1, 1]);
-    assert.ok(f.gl.log.some(entry => entry[0] === 'viewport' && entry[3] === 720 && entry[4] === 450));
+    assert.ok(f.gl.log.some(entry => entry[0] === 'viewport' && entry[3] === 720 && entry[4] === 153));
     assert.equal(canvas.classList.contains('is-on'), true, '第一帧画完后淡入');
     assert.equal(f.water.state().frames, 1);
     assert.equal(f.water.state().hasCanvas, true);
@@ -217,13 +217,14 @@ test('窗口尺寸变化：只在到点的帧里改画布大小并更新视口',
     assert.equal(canvas.width, 720, '被节流的帧不动画布');
     f.water.frame({ width: 1000, height: 600, now: 1100 });
     assert.equal(canvas.width, 500);
-    assert.equal(canvas.height, 300);
-    assert.deepEqual(f.gl.log.filter(entry => entry[0] === 'viewport').at(-1), ['viewport', 0, 0, 500, 300]);
-    assert.deepEqual(uniformCalls(f.gl, 'uRes').at(-1), ['uniform2f', 'uRes', 500, 300]);
+    assert.equal(canvas.height, 102, '600 × 0.34 × 0.5');
+    assert.deepEqual(f.gl.log.filter(entry => entry[0] === 'viewport').at(-1), ['viewport', 0, 0, 500, 102]);
+    assert.deepEqual(uniformCalls(f.gl, 'uRes').at(-1), ['uniform2f', 'uRes', 500, 102]);
     assert.equal(f.water.state().width, 500);
+    assert.equal(f.water.state().height, 102);
 });
 
-test('uniform：时间/强度/夜晚/质量/太阳位置按核心规则写入；night:false 表示白天；nightHour 可覆盖本机时间', () => {
+test('uniform：时间/强度/夜晚/质量/带子比例/宽高比/水线与浪按核心规则写入；night:false 表示白天；nightHour 可覆盖本机时间', () => {
     const f = make({ hour: () => 22 });
     f.water.start();
     f.water.frame({ ...FRAME, now: 2500, amount: 0.5 });
@@ -232,7 +233,12 @@ test('uniform：时间/强度/夜晚/质量/太阳位置按核心规则写入；
     assert.ok(Math.abs(last('uAmount') - (P.AMOUNT_BASE + P.AMOUNT_SPAN * 0.5)) < 1e-12);
     assert.equal(last('uNight'), 1, '本机 22 点');
     assert.equal(last('uQuality'), 1);
-    assert.equal(last('uSunX'), P.SUN_X);
+    assert.equal(last('uBand'), P.BAND);
+    assert.equal(last('uAspect'), 1.6, '页面 1440×900');
+    const tide = Core.tideOf(2.5);
+    assert.equal(last('uTop'), tide.top);
+    assert.equal(last('uReach'), tide.reach);
+    assert.equal(last('uTideV'), tide.tideV);
 
     f.water.frame({ ...FRAME, now: 3000, night: false });
     assert.equal(last('uNight'), 0, '夜晚效果被设置关掉时按白天算');
@@ -242,6 +248,8 @@ test('uniform：时间/强度/夜晚/质量/太阳位置按核心规则写入；
     assert.equal(last('uNight'), 1);
     f.water.frame({ ...FRAME, now: 3300, lowPower: true });
     assert.equal(last('uQuality'), 0);
+    f.water.frame({ width: 2560, height: 1080, now: 3500 });
+    assert.equal(last('uAspect'), 2560 / 1080, '窗口形状变了，宽高比跟着变（横向起伏的空间频率与鱼看到的是同一份）');
 });
 
 test('没有宿主传 now 时用自己的时钟；夜晚曲线缺席时按白天', () => {
@@ -569,18 +577,82 @@ test('着色器源码合同：声明的 uniform 与登记名单一致且都用�
     assert.ok(loops.length >= 2);
     for (const header of loops) assert.match(header, /^int \w+ = -?\d+;\s*\w+ <=? -?\d+;\s*\w+\+\+$/, `循环必须是常量上界（WebGL1 要求）：${header}`);
     assert.equal((fragment.match(/gl_FragColor\s*=/g) || []).length, 1);
-    assert.match(fragment, /gl_FragColor = vec4\(clamp\(col, 0\.0, 1\.0\), 1\.0\)/, '不透明输出：黑色即什么都不加（配合 screen）');
+    assert.match(fragment, /gl_FragColor = vec4\(clamp\(pre, 0\.0, 1\.0\), clamp\(a, 0\.0, 1\.0\)\)/, '预乘 alpha 输出：水面以上 alpha 为 0，壁纸原样透过来');
+    assert.match(fragment, /a = max\(a, max\(pre\.r, max\(pre\.g, pre\.b\)\)\);/, '预乘值必须合法（颜色分量不超过 alpha），否则合成结果取决于实现');
     assert.match(fragment, /#ifdef GL_FRAGMENT_PRECISION_HIGH[\s\S]*precision highp float;[\s\S]*#else[\s\S]*precision mediump float;/, '片元精度有 mediump 后备');
     assert.match(Shader.VERTEX, /attribute vec2 aPos;/);
     assert.match(Shader.VERTEX, /gl_Position = vec4\(aPos, 0\.0, 1\.0\)/);
 });
 
-test('着色器源码：省流量分支存在（少一层焦散，没有颗粒与气泡），夜晚与强度由 uniform 驱动', () => {
+test('着色器源码：省流量分支存在（没有水下光斑与水面碎光），夜晚与强度由 uniform 驱动', () => {
     const fragment = Shader.FRAGMENT;
-    assert.match(fragment, /if \(quality < 0\.5\) return /);
-    assert.match(fragment, /if \(uQuality > 0\.5\)/);
-    assert.match(fragment, /col \*= uAmount;/);
+    const gated = [...fragment.matchAll(/if \(uQuality > 0\.5 && ([^)]*)\) \{/g)].map(match => match[1]);
+    assert.equal(gated.length, 2, '水下光斑与水面碎光两处都受省流量开关控制');
+    assert.match(fragment, /add \*= uAmount;/, '强度缩放“加上去的光”');
+    assert.match(fragment, /float k = mix\(0\.62, 1\.0, uAmount\);\s*pre \*= k;\s*a \*= k;/, '强度同时缩放沙与水的不透明度');
     assert.match(fragment, /mix\([^;]*night\)/);
+});
+
+test('着色器与核心共用同一条水线：常数、浪的大小与一生、相位、横向起伏的公式都与核心逐项一致；水舌噪声有上界', () => {
+    const fragment = Shader.FRAGMENT;
+    const constant = name => { const found = new RegExp(`const float ${name} = ([\\d.]+);`).exec(fragment); assert.ok(found, `着色器里有 ${name}`); return Number(found[1]); };
+    for (const name of ['WAVE_PERIOD', 'RISE', 'SHEAR', 'APPROACH', 'APPROACH_DIST', 'AMP_WOBBLE', 'LAT_A', 'LAT_B', 'LAT_PERIOD_A', 'LAT_PERIOD_B', 'RILL']) {
+        assert.equal(constant(name), P[name], `${name} 与核心相同（改一边必须改另一边）`);
+    }
+    const amps = /float setAmp\(float k\) \{\s*return k < 0\.5 \? ([\d.]+) : \(k < 1\.5 \? ([\d.]+) : \(k < 2\.5 \? ([\d.]+) : ([\d.]+)\)\);\s*\}/.exec(fragment);
+    assert.ok(amps, '一组浪的大小：四档');
+    assert.deepEqual(amps.slice(1).map(Number), [...P.SET_AMPS], '与核心 SET_AMPS 相同');
+    assert.equal(P.SET_AMPS.length, 4, '着色器里写死了四档');
+    // 浪的一生：冲上去 1 - (1 - u)²，退下来 1 - v^1.6；速度是它的导数
+    assert.match(fragment, /if \(phi < RISE\) \{ float u = phi \/ RISE; return 1\.0 - \(1\.0 - u\) \* \(1\.0 - u\); \}\s*float v = \(phi - RISE\) \/ \(1\.0 - RISE\);\s*return 1\.0 - pow\(v, 1\.6\);/);
+    assert.match(fragment, /if \(phi < RISE\) \{ float u = phi \/ RISE; return 2\.0 \* \(1\.0 - u\) \/ RISE; \}\s*float v = \(phi - RISE\) \/ \(1\.0 - RISE\);\s*return -1\.6 \* pow\(max\(v, 0\.0001\), 0\.6\) \/ \(1\.0 - RISE\);/);
+    // 水线本身：相位（斜着来）、浪的大小（带横向强弱）、横向起伏、水线 = 最高处 - 深度 × 大小 × 一生 + 起伏 + 水舌
+    assert.match(fragment, /float h = uv\.y \* uBand;\s*float xp = uv\.x \* uAspect;/, '高度以页面高度为 1、从页面底边往上量；横向位置乘宽高比');
+    assert.match(fragment, /float ph = t \/ WAVE_PERIOD - SHEAR \* uv\.x;\s*float n = floor\(ph\);\s*float phi = ph - n;\s*float k4 = mod\(n, 4\.0\);/);
+    assert.match(fragment, /float amp = setAmp\(k4\) \* \(1\.0 \+ AMP_WOBBLE \* sin\(xp \* 3\.1 \+ k4 \* 1\.9\)\);/);
+    assert.match(fragment, /float lat = LAT_A \* sin\(xp \* 2\.3 \+ PI2 \/ LAT_PERIOD_A \* t\) \+ LAT_B \* sin\(xp \* 5\.9 - PI2 \/ LAT_PERIOD_B \* t \+ 1\.7\);/);
+    assert.match(fragment, /float rill = \(fbm2\(vec2\(xp \* 11\.0 \+ k4 \* 5\.3, 1\.7 \+ k4\)\) - 0\.5\) \* RILL \* \(0\.3 \+ r\);/, '水舌：噪声减 0.5（上界 +0.5）× RILL × (0.3 + r)，核心的岸线最高处按这个上界留余量');
+    assert.match(fragment, /float hF = uTop - uReach \* amp \* r \+ lat \+ rill;/);
+    assert.match(fragment, /float fbm2\(vec2 p\) \{ return 0\.55 \* vnoise2\(p\) \+ 0\.30 \* vnoise2\(p \* 2\.07 \+ 3\.1\) \+ 0\.15 \* vnoise2\(p \* 4\.3 \+ 7\.7\); \}/, '噪声的权重之和是 1，所以 fbm 取值在 [0, 1)');
+    // 水的渐隐范围必须落在带子里：水线最高处之上 0.12（水的不透明度在 0.06…0.12 之间渐隐为 0），带子顶上再留渐隐
+    assert.match(fragment, /\(1\.0 - smoothstep\(0\.06, 0\.12, dd\)\)/);
+    assert.ok(Core.shoreTopMax() + 0.12 < P.BAND, '水在带子顶上之前就已经透明了');
+    assert.match(fragment, /float fadeTop = 1\.0 - smoothstep\(uBand \* 0\.80, uBand, h\);/, '带子上沿渐隐：不能有硬边');
+    assert.match(fragment, /pre \*= fadeTop;\s*a \*= fadeTop;/);
+    // 不遮壁纸的静态底线：沙的不透明度有上界（水线以上的水更薄）；沙只在水线之下
+    const sand = /float sandA = mix\(([\d.]+), ([\d.]+), wet\) \* sandVis;/.exec(fragment);
+    assert.ok(sand && Number(sand[1]) <= Number(sand[2]) && Number(sand[2]) <= 0.7, `沙的不透明度 ${sand && sand.slice(1, 3)} 不超过 0.7（壁纸细节至少留 30%）`);
+    const water = /float waterA = sea \* \(([\d.]+) \+ ([\d.]+) \* smoothstep\(0\.0, 0\.05, dd\)\)/.exec(fragment);
+    assert.ok(water && Number(water[1]) + Number(water[2]) <= 0.35, '水线之上的水体不透明度不超过 0.35：壁纸清楚地透过来');
+});
+
+test('shore(now)：只有水体层真的在显示时才给出岸线位置（此刻水线能到的最高处，占页面高度的比例，从页面底边往上量），其余一律 null；与核心同一份数字', () => {
+    const f = make();
+    assert.equal(f.water.shore(1000), null, '没启动');
+    f.water.start();
+    assert.equal(f.water.shore(1000), null, '启动了但还没画出第一帧（画布还不存在）');
+    f.water.frame({ ...FRAME, now: 1000 });
+    const expected = at => Core.shoreTopAt(Core.shaderTime(at));
+    assert.equal(f.water.shore(1000), expected(1000));
+    assert.equal(f.water.shore(31400), expected(31400), '取调用者给的时间，不是上一帧的时间（鱼比水线的重画更勤）');
+    assert.notEqual(f.water.shore(1000), f.water.shore(42900), '岸线确实随潮汐在变');
+    // 画了不止一帧之后仍然给出岸线（只在第一帧之后才有岸线这个判断不能写成“只有恰好一帧”）
+    for (const now of [1200, 1400, 1600]) f.water.frame({ ...FRAME, now });
+    assert.ok(f.water.state().frames >= 3, `至少画了 3 帧，实际 ${f.water.state().frames}`);
+    assert.equal(f.water.shore(1600), expected(1600), '画了好几帧之后仍然有岸线');
+    const clockless = make({ now: () => 7000 });
+    clockless.water.start();
+    clockless.water.frame({ width: 1440, height: 900 });
+    assert.equal(clockless.water.shore(NaN), expected(7000), '没给有效时间就用控制器自己的时钟');
+    assert.equal(f.water.surface, undefined, '旧的水面接口已经去掉（宿主与鱼只认岸线）');
+    f.water.stop();
+    assert.equal(f.water.shore(1000), null, '停了就没有岸线');
+
+    const broken = make({}, { gl: makeGl({ failCompile: 2 }) });
+    broken.water.start();
+    broken.water.frame(FRAME);
+    assert.equal(broken.water.state().failed, true);
+    assert.equal(broken.water.shore(1000), null, '失败关闭后没有岸线，鱼不用躲');
 });
 
 // ---------- 样式 / 页面 / 设置的静态契约 ----------
@@ -591,13 +663,19 @@ function cssBlock(css, selector) {
     return css.slice(start, css.indexOf('}', start));
 }
 
-test('样式：海水画布固定铺满、不接收事件、screen 混合；层级在壁纸之上、宿主根容器之下；遮挡时隐藏；减少动态效果无过渡', () => {
+test('样式：海水画布固定在页面底部、高度等于核心的 BAND、不接收事件、用普通混合（不能用 screen：壁纸是 body 的背景，screen 看不到它）；层级在壁纸之上、宿主根容器之下；遮挡时隐藏；减少动态效果无过渡', () => {
     const css = read('css/aquarium.css');
     const rule = cssBlock(css, '.aq-water');
     assert.match(rule, /position: fixed/);
-    assert.match(rule, /inset: 0/);
+    assert.match(rule, /left: 0;/);
+    assert.match(rule, /right: 0;/);
+    assert.match(rule, /bottom: 0;/);
+    assert.doesNotMatch(rule, /inset: 0|top:/, '不再铺满整页：画布只有底部一条带子，带子之外没有这张画布的任何像素（壁纸不会被遮）');
+    const height = /height: ([\d.]+)%;/.exec(rule);
+    assert.ok(height, '高度是百分比');
+    assert.ok(Math.abs(Number(height[1]) / 100 - P.BAND) < 1e-9, `样式高度 ${height[1]}% 必须等于核心的 BAND ${P.BAND}（着色器按这个比例换算位置，不一致水线就错位）`);
     assert.match(rule, /pointer-events: none/);
-    assert.match(rule, /mix-blend-mode: screen/);
+    assert.doesNotMatch(rule, /mix-blend-mode/, '普通混合：画布输出的是预乘 alpha，水线以上渐隐为透明；screen 在 body 自成堆叠上下文时看不到壁纸，旧版因此把壁纸整个盖住');
     assert.match(rule, /opacity: 0/);
     assert.match(css, /\.aq-water\.is-on \{ opacity: 1; \}/);
     const waterZ = Number(/z-index: (\d+)/.exec(rule)[1]);
@@ -607,17 +685,17 @@ test('样式：海水画布固定铺满、不接收事件、screen 混合；层�
     assert.match(css, /body\.home-background-suspended \.aq-water \{ display: none !important; \}/);
     assert.match(css, /html\.reduce-motion \.aq-water \{ transition: none; \}/);
     assert.match(css, /prefers-reduced-motion: reduce\) \{\s*\.aq-water \{ transition: none; \}/);
-    assert.doesNotMatch(rule, /backdrop-filter|filter:/, '全屏画布不叠滤镜');
+    assert.doesNotMatch(rule, /backdrop-filter|filter:/, '画布不叠滤镜');
 });
 
 test('index.html：三个水体脚本先于宿主、核心先于着色器先于控制器；样式钉子已更新', () => {
     const html = read('index.html');
     const idx = s => { const i = html.indexOf(s); assert.ok(i >= 0, s); return i; };
-    assert.ok(idx('js/aquarium.js?v=4') < idx('js/aquarium-water-core.js?v=1'));
-    assert.ok(idx('js/aquarium-water-core.js?v=1') < idx('js/aquarium-water-shader.js?v=1'));
-    assert.ok(idx('js/aquarium-water-shader.js?v=1') < idx('js/aquarium-water.js?v=1'));
-    assert.ok(idx('js/aquarium-water.js?v=1') < idx('js/background-experience.js?v=14'));
-    idx('css/aquarium.css?v=4');
+    assert.ok(idx('js/aquarium.js?v=8') < idx('js/aquarium-water-core.js?v=3'));
+    assert.ok(idx('js/aquarium-water-core.js?v=3') < idx('js/aquarium-water-shader.js?v=3'));
+    assert.ok(idx('js/aquarium-water-shader.js?v=3') < idx('js/aquarium-water.js?v=3'));
+    assert.ok(idx('js/aquarium-water.js?v=3') < idx('js/background-experience.js?v=20'));
+    idx('css/aquarium.css?v=6');
     for (const file of ['js/aquarium-water-core.js', 'js/aquarium-water-shader.js', 'js/aquarium-water.js']) assert.ok(fs.existsSync(path.join(root, file)), file);
 });
 
@@ -628,6 +706,11 @@ test('设置页：有海水效果开关，默认开，保存键 aquariumWater；
     assert.ok(found, '开关的标签是“海水效果”');
     const hint = found[1];
     assert.match(hint, /选了“水族馆”时/);
+    assert.match(hint, /沙滩岸线/);                           // 2026-10-20：画面是页面底部的岸线，海浪冲上沙滩再退下去
+    assert.match(hint, /潮水约一分钟一涨一落/);
+    assert.match(hint, /壁纸其余部分原样/);                    // 如实说明：水只占底部一条，其余不遮壁纸
+    assert.match(hint, /不会游进沙滩/);
+    assert.match(hint, /用手拖着鱼时不受此限/);                // 如实说明：拖着鱼可以拖出水线以下（用户 2026-10-20 选择保持）
     assert.match(hint, /WebGL/);
     assert.match(hint, /不读也不写任何数据/);
     assert.match(hint, /软件渲染/);

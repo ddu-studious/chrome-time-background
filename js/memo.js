@@ -7,7 +7,6 @@
 
 // 使用全局变量
 // import settingsManager from './settings.js';
-// import i18nManager from './i18n.js';
 
 class MemoManager {
     constructor() {
@@ -157,14 +156,6 @@ class MemoManager {
                 console.log('键盘快捷键初始化完成');
             } catch (e) {
                 console.warn('键盘快捷键初始化失败:', e);
-            }
-            
-            // 更新排序选项的名称
-            try {
-                this.updateSortOptionNames();
-                console.log('排序选项名称更新完成');
-            } catch (e) {
-                console.warn('排序选项名称更新失败:', e);
             }
             
             console.log('备忘录管理器初始化完成');
@@ -9245,9 +9236,9 @@ class MemoManager {
      * @returns {string} 分类名称
      */
     getCategoryName(categoryId) {
-        if (!categoryId) return window.i18nManager.getText('noCategory');
+        if (!categoryId) return "无分类";
         const category = this.categories.find(c => c.id === categoryId);
-        return category ? category.name : window.i18nManager.getText('noCategory');
+        return category ? category.name : "无分类";
     }
     
     /**
@@ -9598,7 +9589,7 @@ class MemoManager {
             const dueTimeInput = document.getElementById('memo-due-time');
             
             if (!titleInput || !titleInput.value.trim()) {
-                alert(window.i18nManager.getText('titleRequired') || '请输入任务标题');
+                alert('请输入任务标题');
                 return;
             }
             
@@ -9647,7 +9638,7 @@ class MemoManager {
             console.log('备忘录保存成功');
         } catch (error) {
             console.error('保存备忘录时发生错误:', error);
-            alert(window.i18nManager.getText('saveFailed') || '保存失败');
+            alert('保存失败');
         }
     }
 
@@ -9749,7 +9740,7 @@ class MemoManager {
             // 填充分类选项
             const noCategoryOption = document.createElement('option');
             noCategoryOption.value = '';
-            noCategoryOption.textContent = window.i18nManager.getText('noCategory');
+            noCategoryOption.textContent = "无分类";
             categorySelect.appendChild(noCategoryOption);
             
             this.categories.forEach(category => {
@@ -9767,7 +9758,7 @@ class MemoManager {
                 manageCategoriesBtn = document.createElement('button');
                 manageCategoriesBtn.id = 'manage-categories-tags-btn';
                 manageCategoriesBtn.className = 'manage-categories-tags-btn';
-                manageCategoriesBtn.textContent = window.i18nManager.getText('manageCategoriesAndTags');
+                manageCategoriesBtn.textContent = "管理分类和标签";
                 manageCategoriesBtn.addEventListener('click', () => {
                     this.showCategoryTagManager();
                 });
@@ -9790,7 +9781,7 @@ class MemoManager {
                 tagsContainer.className = 'tags-select-container';
                 
                 const tagsLabel = document.createElement('label');
-                tagsLabel.textContent = window.i18nManager.getText('selectTags');
+                tagsLabel.textContent = "选择标签";
                 tagsContainer.appendChild(tagsLabel);
                 
                 const tagsList = document.createElement('div');
@@ -9850,7 +9841,7 @@ class MemoManager {
                 
                 const noPriorityOption = document.createElement('option');
                 noPriorityOption.value = 'none';
-                noPriorityOption.textContent = window.i18nManager.getText('noPriority');
+                noPriorityOption.textContent = "无优先级";
                 prioritySelect.appendChild(noPriorityOption);
                 
                 this.priorities.forEach(priority => {
@@ -9908,7 +9899,7 @@ class MemoManager {
             console.log('备忘录表单显示完成');
         } catch (error) {
             console.error('显示备忘录表单时发生错误:', error);
-            alert(window.i18nManager.getText('errorOccurred'));
+            alert("发生错误，请重试");
         }
     }
 
@@ -10317,15 +10308,15 @@ class MemoManager {
         
         if (diffDays < 0) {
             status = 'overdue';
-            statusText = `${window.i18nManager.getText('overdue')} (${Math.abs(diffDays)}${window.i18nManager.getText('daysLeft')})`;
+            statusText = `已逾期 ${Math.abs(diffDays)} 天`;
         } else if (diffDays === 0) {
             status = 'today';
-            statusText = window.i18nManager.getText('dueToday');
+            statusText = "今日到期";
         } else if (diffDays === 1) {
             status = 'tomorrow';
-            statusText = window.i18nManager.getText('dueTomorrow');
+            statusText = "明日到期";
         } else {
-            statusText = `${diffDays} ${window.i18nManager.getText('daysLeft')}`;
+            statusText = `剩余 ${diffDays} 天`;
         }
         
         return { status, daysLeft: diffDays, statusText };
@@ -10536,7 +10527,7 @@ class MemoManager {
             // 创建标题
             const panelTitle = document.createElement('div');
             panelTitle.className = 'panel-title';
-            panelTitle.textContent = window.i18nManager.getText('memoTitle');
+            panelTitle.textContent = "备忘录";
             
             // 创建控制按钮容器
             const panelControls = document.createElement('div');
@@ -10597,7 +10588,7 @@ class MemoManager {
             searchInput.type = 'text';
             searchInput.className = 'search-input';
             searchInput.id = 'panel-search-input';
-            searchInput.placeholder = window.i18nManager?.getText('searchTasks') || '搜索任务...';
+            searchInput.placeholder = '搜索任务...';
             searchInput.addEventListener('input', () => this.renderPanelTaskList());
             
             // 创建新增任务按钮
@@ -10631,7 +10622,7 @@ class MemoManager {
             options.forEach(opt => {
                 const option = document.createElement('option');
                 option.value = opt.value;
-                option.textContent = window.i18nManager?.getText(opt.value + 'Tasks') || opt.text;
+                option.textContent = opt.text;
                 statusFilter.appendChild(option);
             });
             
@@ -11349,10 +11340,10 @@ class MemoManager {
             
             // 定义快捷键映射
             this.shortcuts = [
-                { key: 'n', ctrlKey: true, action: this.showTaskFormModal.bind(this), description: 'shortcutAdd' },
-                { key: 'h', ctrlKey: true, action: this.toggleMinimize.bind(this), description: 'shortcutTogglePanel' },
-                { key: 'k', ctrlKey: true, action: this.toggleSpotlightSearch.bind(this), description: 'shortcutBookmarkSearch' },
-                { key: '?', ctrlKey: true, action: this.showShortcutsHelp.bind(this), description: 'shortcutHelp' }
+                { key: 'n', ctrlKey: true, action: this.showTaskFormModal.bind(this), description: "添加新任务" },
+                { key: 'h', ctrlKey: true, action: this.toggleMinimize.bind(this), description: "显示/隐藏面板" },
+                { key: 'k', ctrlKey: true, action: this.toggleSpotlightSearch.bind(this), description: "搜索书签" },
+                { key: '?', ctrlKey: true, action: this.showShortcutsHelp.bind(this), description: "显示快捷键帮助" }
             ];
             
             // 添加全局快捷键监听
@@ -11409,7 +11400,7 @@ class MemoManager {
                 } else if (event.key === 'Delete' || event.key === 'Backspace') {
                     console.log('按下Delete/Backspace键，删除任务');
                     event.preventDefault();
-                    if (confirm(window.i18nManager.getText('confirmDelete'))) {
+                    if (confirm("确定要删除这条备忘录吗？")) {
                         this.deleteMemo(this.selectedTaskId);
                     }
                     return;
@@ -11440,13 +11431,14 @@ class MemoManager {
      * 显示快捷键帮助
      */
     showShortcutsHelp() {
+        if (window.ShortcutHelp) { window.ShortcutHelp.open(); return; }
         // 创建帮助对话框
         const helpDialog = document.createElement('div');
         helpDialog.className = 'shortcuts-help-dialog';
         
         // 创建对话框标题
         const dialogTitle = document.createElement('h3');
-        dialogTitle.textContent = window.i18nManager.getText('shortcuts');
+        dialogTitle.textContent = "快捷键";
         
         // 创建快捷键列表
         const shortcutsList = document.createElement('ul');
@@ -11460,7 +11452,7 @@ class MemoManager {
             keyCombo.textContent = `${shortcut.ctrlKey ? 'Ctrl+' : ''}${shortcut.key.toUpperCase()}`;
             
             const description = document.createElement('span');
-            description.textContent = window.i18nManager.getText(shortcut.description);
+            description.textContent = shortcut.description;
             
             shortcutItem.appendChild(keyCombo);
             shortcutItem.appendChild(description);
@@ -11469,12 +11461,12 @@ class MemoManager {
         
         // 添加任务项快捷键
         const taskShortcuts = [
-            { key: 'Space', description: 'shortcutComplete' },
-            { key: 'E', description: 'shortcutEdit' },
-            { key: 'Delete', description: 'shortcutDelete' },
-            { key: '↑/↓', description: 'Navigate between tasks' },
-            { key: 'Esc', description: 'shortcutCancel' },
-            { key: 'Ctrl+Enter', description: 'shortcutSave' }
+            { key: 'Space', description: "完成/取消完成任务" },
+            { key: 'E', description: "编辑任务" },
+            { key: 'Delete', description: "删除任务" },
+            { key: '↑/↓', description: '选择上 / 下一条任务' },
+            { key: 'Esc', description: "取消" },
+            { key: 'Ctrl+Enter', description: "保存" }
         ];
         
         taskShortcuts.forEach(shortcut => {
@@ -11484,7 +11476,7 @@ class MemoManager {
             keyCombo.textContent = shortcut.key;
             
             const description = document.createElement('span');
-            description.textContent = window.i18nManager.getText(shortcut.description) || shortcut.description;
+            description.textContent = shortcut.description;
             
             shortcutItem.appendChild(keyCombo);
             shortcutItem.appendChild(description);
@@ -11494,7 +11486,7 @@ class MemoManager {
         // 创建关闭按钮
         const closeButton = document.createElement('button');
         closeButton.className = 'close-dialog-btn';
-        closeButton.textContent = 'OK';
+        closeButton.textContent = '知道了';
         closeButton.addEventListener('click', () => {
             document.body.removeChild(helpDialog);
         });
@@ -11626,7 +11618,7 @@ class MemoManager {
         
         // 标题
         const title = document.createElement('h3');
-        title.textContent = window.i18nManager.getText('manageCategoriesAndTags');
+        title.textContent = "管理分类和标签";
         dialogContent.appendChild(title);
         
         // 创建标签页
@@ -11635,12 +11627,12 @@ class MemoManager {
         
         const categoryTab = document.createElement('div');
         categoryTab.className = 'category-tag-tab active';
-        categoryTab.textContent = window.i18nManager.getText('categories');
+        categoryTab.textContent = "分类";
         categoryTab.dataset.tab = 'categories';
         
         const tagTab = document.createElement('div');
         tagTab.className = 'category-tag-tab';
-        tagTab.textContent = window.i18nManager.getText('tags');
+        tagTab.textContent = "标签";
         tagTab.dataset.tab = 'tags';
         
         tabs.appendChild(categoryTab);
@@ -11670,7 +11662,7 @@ class MemoManager {
         footer.className = 'dialog-footer';
         
         const closeButton = document.createElement('button');
-        closeButton.textContent = window.i18nManager.getText('close');
+        closeButton.textContent = "关闭";
         closeButton.addEventListener('click', () => {
             dialog.style.display = 'none';
         });
@@ -11717,7 +11709,7 @@ class MemoManager {
         if (this.categories.length === 0) {
             const emptyMessage = document.createElement('div');
             emptyMessage.className = 'empty-message';
-            emptyMessage.textContent = window.i18nManager.getText('noCategories');
+            emptyMessage.textContent = "暂无分类，点击\"添加分类\"按钮创建一个新分类。";
             categoryList.appendChild(emptyMessage);
         } else {
             // 添加分类项
@@ -11743,16 +11735,16 @@ class MemoManager {
                 
                 const editButton = document.createElement('button');
                 editButton.innerHTML = '<i class="fas fa-edit"></i>';
-                editButton.title = window.i18nManager.getText('edit');
+                editButton.title = "编辑";
                 editButton.addEventListener('click', () => {
                     this.showCategoryForm(category);
                 });
                 
                 const deleteButton = document.createElement('button');
                 deleteButton.innerHTML = '<i class="fas fa-trash"></i>';
-                deleteButton.title = window.i18nManager.getText('delete');
+                deleteButton.title = "删除";
                 deleteButton.addEventListener('click', () => {
-                    if (confirm(window.i18nManager.getText('confirmDeleteCategory'))) {
+                    if (confirm("确定要删除这个分类吗？所有使用此分类的任务将不再属于任何分类。")) {
                         this.deleteCategory(category.id);
                         this.renderCategoryList(container);
                     }
@@ -11773,7 +11765,7 @@ class MemoManager {
         // 添加按钮
         const addButton = document.createElement('button');
         addButton.className = 'manage-categories-tags-btn';
-        addButton.textContent = window.i18nManager.getText('addCategory');
+        addButton.textContent = "添加分类";
         addButton.addEventListener('click', () => {
             this.showCategoryForm();
         });
@@ -11795,7 +11787,7 @@ class MemoManager {
         if (this.tags.length === 0) {
             const emptyMessage = document.createElement('div');
             emptyMessage.className = 'empty-message';
-            emptyMessage.textContent = window.i18nManager.getText('noTags');
+            emptyMessage.textContent = "暂无标签，点击\"添加标签\"按钮创建一个新标签。";
             tagList.appendChild(emptyMessage);
         } else {
             // 添加标签项
@@ -11821,16 +11813,16 @@ class MemoManager {
                 
                 const editButton = document.createElement('button');
                 editButton.innerHTML = '<i class="fas fa-edit"></i>';
-                editButton.title = window.i18nManager.getText('edit');
+                editButton.title = "编辑";
                 editButton.addEventListener('click', () => {
                     this.showTagForm(tag);
                 });
                 
                 const deleteButton = document.createElement('button');
                 deleteButton.innerHTML = '<i class="fas fa-trash"></i>';
-                deleteButton.title = window.i18nManager.getText('delete');
+                deleteButton.title = "删除";
                 deleteButton.addEventListener('click', () => {
-                    if (confirm(window.i18nManager.getText('confirmDeleteTag'))) {
+                    if (confirm("确定要删除这个标签吗？所有使用此标签的任务将不再包含此标签。")) {
                         this.deleteTag(tag.id);
                         this.renderTagList(container);
                     }
@@ -11851,7 +11843,7 @@ class MemoManager {
         // 添加按钮
         const addButton = document.createElement('button');
         addButton.className = 'manage-categories-tags-btn';
-        addButton.textContent = window.i18nManager.getText('addTag');
+        addButton.textContent = "添加标签";
         addButton.addEventListener('click', () => {
             this.showTagForm();
         });
@@ -11880,7 +11872,7 @@ class MemoManager {
         
         // 表单标题
         const formTitle = document.createElement('h4');
-        formTitle.textContent = category ? window.i18nManager.getText('editCategory') : window.i18nManager.getText('addCategory');
+        formTitle.textContent = category ? "编辑分类" : "添加分类";
         form.appendChild(formTitle);
         
         // 名称输入
@@ -11888,7 +11880,7 @@ class MemoManager {
         nameGroup.className = 'category-tag-form-group';
         
         const nameLabel = document.createElement('label');
-        nameLabel.textContent = window.i18nManager.getText('categoryName');
+        nameLabel.textContent = "分类名称";
         
         const nameInput = document.createElement('input');
         nameInput.type = 'text';
@@ -11904,7 +11896,7 @@ class MemoManager {
         colorGroup.className = 'category-tag-form-group';
         
         const colorLabel = document.createElement('label');
-        colorLabel.textContent = window.i18nManager.getText('color');
+        colorLabel.textContent = "颜色";
         
         const colorInput = document.createElement('input');
         colorInput.type = 'color';
@@ -11921,20 +11913,20 @@ class MemoManager {
         
         const cancelButton = document.createElement('button');
         cancelButton.className = 'cancel-btn';
-        cancelButton.textContent = window.i18nManager.getText('cancel');
+        cancelButton.textContent = "取消";
         cancelButton.addEventListener('click', () => {
             form.remove();
         });
         
         const saveButton = document.createElement('button');
         saveButton.className = 'save-btn';
-        saveButton.textContent = window.i18nManager.getText('save');
+        saveButton.textContent = "保存";
         saveButton.addEventListener('click', () => {
             const name = nameInput.value.trim();
             const color = colorInput.value;
             
             if (!name) {
-                alert(window.i18nManager.getText('categoryNameRequired'));
+                alert("请输入分类名称");
                 return;
             }
             
@@ -11982,7 +11974,7 @@ class MemoManager {
         
         // 表单标题
         const formTitle = document.createElement('h4');
-        formTitle.textContent = tag ? window.i18nManager.getText('editTag') : window.i18nManager.getText('addTag');
+        formTitle.textContent = tag ? "编辑标签" : "添加标签";
         form.appendChild(formTitle);
         
         // 名称输入
@@ -11990,7 +11982,7 @@ class MemoManager {
         nameGroup.className = 'category-tag-form-group';
         
         const nameLabel = document.createElement('label');
-        nameLabel.textContent = window.i18nManager.getText('tagName');
+        nameLabel.textContent = "标签名称";
         
         const nameInput = document.createElement('input');
         nameInput.type = 'text';
@@ -12006,7 +11998,7 @@ class MemoManager {
         colorGroup.className = 'category-tag-form-group';
         
         const colorLabel = document.createElement('label');
-        colorLabel.textContent = window.i18nManager.getText('color');
+        colorLabel.textContent = "颜色";
         
         const colorInput = document.createElement('input');
         colorInput.type = 'color';
@@ -12023,20 +12015,20 @@ class MemoManager {
         
         const cancelButton = document.createElement('button');
         cancelButton.className = 'cancel-btn';
-        cancelButton.textContent = window.i18nManager.getText('cancel');
+        cancelButton.textContent = "取消";
         cancelButton.addEventListener('click', () => {
             form.remove();
         });
         
         const saveButton = document.createElement('button');
         saveButton.className = 'save-btn';
-        saveButton.textContent = window.i18nManager.getText('save');
+        saveButton.textContent = "保存";
         saveButton.addEventListener('click', () => {
             const name = nameInput.value.trim();
             const color = colorInput.value;
             
             if (!name) {
-                alert(window.i18nManager.getText('tagNameRequired'));
+                alert("请输入标签名称");
                 return;
             }
             
@@ -12063,33 +12055,6 @@ class MemoManager {
         nameInput.focus();
     }
 
-    /**
-     * 更新排序选项的名称，使用 i18n 翻译
-     */
-    updateSortOptionNames() {
-        if (window.i18nManager) {
-            this.sortOptions.forEach(option => {
-                switch (option.id) {
-                    case 'newest':
-                        option.name = window.i18nManager.getText('newest') || '最新的在前';
-                        break;
-                    case 'oldest':
-                        option.name = window.i18nManager.getText('oldest') || '最早的在前';
-                        break;
-                    case 'dueDate':
-                        option.name = window.i18nManager.getText('dueDate') || '按截止日期';
-                        break;
-                    case 'priority':
-                        option.name = window.i18nManager.getText('priority') || '按优先级';
-                        break;
-                    case 'alphabetical':
-                        option.name = window.i18nManager.getText('alphabetical') || '按字母顺序';
-                        break;
-                }
-            });
-        }
-    }
-    
     /**
      * 处理鼠标移动事件
      * @param {MouseEvent} e 鼠标事件

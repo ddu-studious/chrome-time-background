@@ -43,7 +43,8 @@ function makeSpyAquarium(order) {
 
 function makeSpyWater(order) {
     return {
-        starts: 0, stops: 0, frames: [], active: false,
+        starts: 0, stops: 0, frames: [], active: false, shoreValue: null, shoreCalls: [],
+        shore(now) { this.shoreCalls.push(now); return this.shoreValue; },
         start() { this.starts++; this.active = true; },
         stop() { this.stops++; this.active = false; },
         frame(options) { this.frames.push(options); if (order) order.push('water'); return true; },
@@ -52,7 +53,7 @@ function makeSpyWater(order) {
 }
 
 /**
- * 宿主夹具。aquarium：'spy' 间谍水族馆 / 'real' 真实核心 + 玩法 + 控制器 / 'real-noplay' 没有玩法脚本。
+ * 宿主夹具。aquarium：'spy' 间谍水族馆 / 'real' 真实核心 + 玩法 + 捕食 + 控制器 / 'real-noplay' 没有玩法脚本 / 'real-nopred' 没有捕食脚本。
  * skin：'spy' 间谍皮肤 / 'real' 真实 jellyfish-core.js + jellyfish.js / 'none' 皮肤脚本缺席。
  * 间谍皮肤只记录宿主怎么调用它；真实皮肤验证整条链路画在宿主画布上。
  */
@@ -135,6 +136,7 @@ async function hostFixture({ effect = 'jellyfish', settings = {}, reduceMotion =
         performance: { now: () => clock.now },
         requestAnimationFrame(callback) { frames.set(++frameId, callback); return frameId; },
         cancelAnimationFrame(id) { frames.delete(id); },
+        setTimeout() { return 0; }, clearTimeout() {}, // 失焦休息的计时器在这里只需存在，不真正计时
         setInterval() { return 1; }, clearInterval() {},
         MutationObserver: class { constructor(callback) { this.callback = callback; } observe() {} disconnect() {} },
         chrome: {
@@ -153,12 +155,13 @@ async function hostFixture({ effect = 'jellyfish', settings = {}, reduceMotion =
         vm.runInContext(read('js/jellyfish-core.js'), context, { filename: 'jellyfish-core.js' });
         vm.runInContext(read('js/jellyfish.js'), context, { filename: 'jellyfish.js' });
     }
-    if (aquarium === 'real' || aquarium === 'real-noplay') {
+    if (aquarium === 'real' || aquarium === 'real-noplay' || aquarium === 'real-nopred') {
         vm.runInContext(read('js/aquarium-core.js'), context, { filename: 'aquarium-core.js' });
-        if (aquarium === 'real') {          // real-noplay：玩法脚本缺席（加载失败）时鱼层照常工作
+        if (aquarium !== 'real-noplay') {   // real-noplay：玩法脚本缺席（加载失败）时鱼层照常工作
             vm.runInContext(read('js/aquarium-play-core.js'), context, { filename: 'aquarium-play-core.js' });
             vm.runInContext(read('js/aquarium-play.js'), context, { filename: 'aquarium-play.js' });
         }
+        if (aquarium === 'real') vm.runInContext(read('js/aquarium-predation-core.js'), context, { filename: 'aquarium-predation-core.js' });       // real-nopred：捕食脚本缺席时鱼层照常工作
         vm.runInContext(read('js/aquarium.js'), context, { filename: 'aquarium.js' });
     }
     vm.runInContext(read('js/background-experience.js'), context, { filename: 'background-experience.js' });
@@ -259,6 +262,19 @@ test('每帧先画鱼再画水母；鱼拿到宿主的画布、尺寸、时间�
     night.render(116); night.render(132);
     assert.equal(night.spyAq.frames[0].night, false);
     assert.equal(night.spyAq.frames[0].lowPower, true);
+});
+
+test('皮肤没有 bells 方法（旧皮肤、替身）时宿主照常画鱼：钟罩是空数组，不抛错、不影响水母', async () => {
+    // 变异检查：把守卫写成“皮肤存在就调用 bells()”时，没有 bells 的皮肤会让每一帧抛 TypeError，旧测试的间谍皮肤总带 bells，没人发现。
+    const f = await hostFixture();
+    delete f.spy.bells;
+    assert.doesNotThrow(() => f.render(116));
+    const isEmptyArray = value => Array.isArray(value) && value.length === 0;       // 宿主在 vm 里创建的数组与测试的 Array 不同源，deepEqual 会比原型
+    assert.ok(isEmptyArray(f.spyAq.frames[0].bells), '没有钟罩可读时给空数组');
+    assert.equal(f.spy.frames.length, 1, '水母照常画');
+    f.spy.bells = 'not a function';
+    assert.doesNotThrow(() => f.render(132));
+    assert.ok(isEmptyArray(f.spyAq.frames[1].bells), 'bells 不是函数时同样给空数组');
 });
 
 test('水族馆自己停用（画法出错）后宿主不再调用它，水母不受影响', async () => {
@@ -478,7 +494,10 @@ test('整链路：点一下真实的鱼 = 戳（涟漪画在宿主画布上、�
     assert.equal(drag.fish.held, null, '没有落点：原样放回');
     drag.f.dispatch('pointerup', { clientX: 760, clientY: 440, buttons: 0 });
     assert.equal(drag.f.win.Aquarium._play(), null, '拖过不是戳，按在前半身也没有拉尾记录');
-    assert.equal(Math.hypot(drag.fish.vx, drag.fish.vy), 0, '没有被戳');
+    const Core = require('../js/aquarium-core.js');
+    // 鱼是被拴着游的，不是纸片：放回时带着自己的速度（不是 0），上限是巡航速度的 GLIDE_MULT 倍；没有被戳由上一行“没有玩法状态”证明
+    const glide = Core.cruiseSpeed(drag.f.win.Aquarium._world(), drag.fish) * Core.PARAMS.GLIDE_MULT;
+    assert.ok(Math.hypot(drag.fish.vx, drag.fish.vy) <= glide + 1e-6, `放回时速度 ${Math.hypot(drag.fish.vx, drag.fish.vy)} 不超过滑行上限 ${glide}`);
 });
 
 test('整链路：按在后半身 = 拉尾抓取接通宿主指针；没有落点时拖过 6 px 就原样放回，不留拉尾状态', async () => {
@@ -573,6 +592,29 @@ test('海水层：每帧先于鱼与水母；拿到页面尺寸、宿主时间�
     assert.equal(lowNight.spyWater.frames[0].lowPower, true);
 });
 
+test('海水层：把此刻的岸线（水线能到的最高处，占页面高度的比例、从页面底边往上量）交给鱼层的 shore 选项；水体没在显示、没有 shore 方法或返回 null 时为 null，鱼不避岸线', async () => {
+    const f = await hostFixture({ water: 'spy' });
+    f.spyWater.shoreValue = 0.21;
+    f.render(116);
+    assert.equal(f.spyWater.shoreCalls.at(-1), 116, '用宿主 RAF 的时间戳问岸线');
+    assert.equal(f.spyAq.frames.at(-1).shore, 0.21);
+    assert.equal('surface' in f.spyAq.frames.at(-1), false, '旧的 surface 选项已经去掉');
+    f.spyWater.shoreValue = null;
+    f.render(132);
+    assert.equal(f.spyAq.frames.at(-1).shore, null, '水体还没画出来：null');
+    f.spyWater.shoreValue = 0.3;
+    f.spyWater.active = false;
+    f.render(148);
+    assert.equal(f.spyAq.frames.at(-1).shore, null, '水体停用后不再问岸线，鱼不避岸线');
+    const noMethod = await hostFixture({ water: 'spy' });
+    delete noMethod.spyWater.shore;
+    noMethod.render(116);
+    assert.equal(noMethod.spyAq.frames.at(-1).shore, null, '旧版海水层没有 shore 方法：不抛错');
+    const none = await hostFixture({ water: 'none' });
+    none.render(116);
+    assert.equal(none.spyAq.frames.at(-1).shore, null, '海水层脚本缺席：null');
+});
+
 test('海水层：自己停用（失败）后宿主不再调用；页面被隐藏或工作台遮挡时不调用，恢复后继续；水母不受影响', async () => {
     const f = await hostFixture({ water: 'spy' });
     f.render(116);
@@ -633,6 +675,64 @@ test('写实动物：鱼层脚本里没有 AquariumReal（加载失败）时，�
     assert.ok((f.calls.get('fill') || 0) > 0);
 });
 
+// ---------- 大鱼吃小鱼（js/aquarium-predation-core.js）与宿主的接线 ----------
+
+test('大鱼吃小鱼：宿主把设置传给鱼层——缺省与怪值都开，只有明确 false 才关；每一帧都传', async () => {
+    for (const [value, expected] of [[undefined, true], [true, true], [false, false], [0, true], [null, true], ['false', true], ['', true]]) {
+        const f = await hostFixture({ settings: { aquariumPredation: value } });
+        f.render(116);
+        f.render(132);
+        assert.equal(f.experience.settings.aquariumPredation, expected, String(value));
+        assert.ok(f.spyAq.frames.length >= 1, String(value));
+        for (const frame of f.spyAq.frames) assert.equal(frame.predation, expected, `${String(value)}：每一帧都带着设置`);
+    }
+});
+
+test('大鱼吃小鱼：改设置立即生效（applySettings 之后下一帧带新值），不需要重启鱼层', async () => {
+    const f = await hostFixture();
+    f.render(116);
+    assert.equal(f.spyAq.frames.at(-1).predation, true);
+    f.experience.settings.aquariumPredation = false;
+    f.experience.applySettings();
+    f.render(132);
+    assert.equal(f.spyAq.frames.at(-1).predation, false);
+    assert.equal(f.spyAq.stops, 0, '只是开关捕食，鱼层没有停过');
+    assert.equal(f.spyAq.active, true);
+});
+
+test('大鱼吃小鱼：真实整链路——默认开（有捕食状态，鲨鱼已登记为捕食者）；设置里关掉后状态丢弃；省流量模式不开；捕食脚本缺席时照常画', async () => {
+    const stored = { aquariumV1: { v: 1, fish: [{ id: 'h1', species: 'hammer', addedAt: 1 }, { id: 'c1', species: 'clown', addedAt: 2 }, { id: 'n1', species: 'neon', addedAt: 3 }] } };
+    const on = await hostFixture({ skin: 'real', aquarium: 'real', localData: stored });
+    await tick(); await tick();
+    for (let i = 0; i < 40; i++) on.render(116 + i * 16);
+    assert.ok(on.win.Aquarium._pred(), '默认开：有捕食状态');
+    assert.equal(on.win.Aquarium._pred().hunters.size, 1, '小锤头鲨登记为捕食者（小丑鱼与霓虹灯鱼不是）');
+    assert.equal(on.win.Aquarium.state().predationFailed, false);
+    on.experience.settings.aquariumPredation = false;
+    on.experience.applySettings();
+    on.render(116 + 41 * 16);
+    assert.equal(on.win.Aquarium._pred(), null, '关掉：状态丢弃');
+
+    const off = await hostFixture({ skin: 'real', aquarium: 'real', settings: { aquariumPredation: false }, localData: stored });
+    await tick(); await tick();
+    for (let i = 0; i < 40; i++) off.render(116 + i * 16);
+    assert.equal(off.win.Aquarium._pred(), null, '设置关着：从来没有捕食状态');
+
+    const saving = await hostFixture({ skin: 'real', aquarium: 'real', saveData: true, localData: stored });
+    await tick(); await tick();
+    for (let i = 0; i < 40; i++) saving.render(116 + i * 16);
+    assert.equal(saving.win.Aquarium._pred(), null, '省流量模式不捕食');
+    assert.equal(saving.win.Aquarium.state().predationFailed, false);
+
+    const missing = await hostFixture({ skin: 'real', aquarium: 'real-nopred', localData: stored });
+    await tick(); await tick();
+    for (let i = 0; i < 40; i++) missing.render(116 + i * 16);
+    assert.equal(missing.win.Aquarium.state().failed, false);
+    assert.equal(missing.win.Aquarium.state().predationFailed, false);
+    assert.equal(missing.win.Aquarium._pred(), null, '没有捕食脚本：只是没有捕食');
+    assert.ok((missing.calls.get('fill') || 0) > 0, '鱼照常画');
+});
+
 // ---------- 静态契约 ----------
 
 test('源码合同：鱼层不自建 RAF/定时器/画布，不 innerHTML/eval/联网，不碰任务/备忘录存储；只写 aquariumV1', () => {
@@ -640,7 +740,8 @@ test('源码合同：鱼层不自建 RAF/定时器/画布，不 innerHTML/eval/�
     const core = read('js/aquarium-core.js');
     const playCore = read('js/aquarium-play-core.js');
     const playUi = read('js/aquarium-play.js');
-    for (const [name, text] of [['aquarium.js', aq], ['aquarium-core.js', core], ['aquarium-play-core.js', playCore], ['aquarium-play.js', playUi]]) {
+    const predCore = read('js/aquarium-predation-core.js');
+    for (const [name, text] of [['aquarium.js', aq], ['aquarium-core.js', core], ['aquarium-play-core.js', playCore], ['aquarium-play.js', playUi], ['aquarium-predation-core.js', predCore]]) {
         assert.doesNotMatch(text, /requestAnimationFrame|setInterval|innerHTML|insertAdjacentHTML|\beval\(|new Function|fetch\(|XMLHttpRequest|sendMessage|chrome\.storage\.sync|document\.createElement\(.canvas/, name);
         assert.doesNotMatch(text, /\bmemos\b|completeTaskById|memoManager|TaskCrumple/, `${name} 不读写任务数据、不碰纸篓`);
     }
@@ -650,6 +751,8 @@ test('源码合同：鱼层不自建 RAF/定时器/画布，不 innerHTML/eval/�
     assert.match(code, /random = Math\.random/);
     const playCode = playCore.replace(/\/\/.*$/gm, '').replace(/^\(function \(root, factory\)[\s\S]*?\}\)\(typeof window[^\n]*\n/, '');
     assert.doesNotMatch(playCode, /\bdocument\b|\bwindow\b|\bDate\b|chrome\.|Math\.random/, '玩法核心同样是纯逻辑：不碰 DOM、时钟、chrome，随机数全部走 world.random');
+    const predCode = predCore.replace(/\/\/.*$/gm, '').replace(/^\(function \(root, factory\)[\s\S]*?\}\)\(typeof window[^\n]*\n/, '');
+    assert.doesNotMatch(predCode, /\bdocument\b|\bwindow\b|\bDate\b|chrome\.|Math\.random/, '捕食核心同样是纯逻辑：不碰 DOM、时钟、chrome，随机数来自 create 时从 world.random 取的种子');
     assert.doesNotMatch(playUi, /chrome\.|localStorage|sessionStorage|indexedDB|Math\.random/, '玩法的画法与按钮不碰任何存储；饲料位置等随机量来自玩法核心');
     assert.equal((aq.match(/area\.set\(/g) || []).length, 1, '只有一处写存储');
     assert.doesNotMatch(aq, /area\.(remove|clear)\(/, '不删除、不清空存储');
@@ -665,27 +768,39 @@ test('解耦：水母代码不认识水族馆（鱼读水母，水母不读鱼�
     assert.match(host, /aquariumFish: true,/);
     assert.match(host, /aquariumWater: source\.aquariumWater !== false/);
     assert.match(host, /aquariumWater: true,/);
-    for (const file of ['js/aquarium.js', 'js/aquarium-core.js', 'js/aquarium-play.js', 'js/aquarium-play-core.js']) assert.doesNotMatch(read(file), /AquariumWater|aquarium-water/, `${file}：鱼层不认识海水层，二者只通过宿主各自调用`);
+    for (const file of ['js/aquarium.js', 'js/aquarium-core.js', 'js/aquarium-play.js', 'js/aquarium-play-core.js', 'js/aquarium-predation-core.js']) assert.doesNotMatch(read(file), /AquariumWater|aquarium-water/, `${file}：鱼层不认识海水层，二者只通过宿主各自调用`);
     for (const file of ['js/aquarium-water.js', 'js/aquarium-water-core.js', 'js/aquarium-water-shader.js']) assert.doesNotMatch(read(file), /window\.Aquarium\b|JellyfishSkin|JellyfishCore\.(?!nightAmount)/, `${file}：海水层只读水母的夜晚曲线，不读鱼和水母的状态`);
 });
 
 test('index.html：脚本顺序与版本钉子（核心、玩法核心、玩法画法先于控制器，都在水母之后宿主之前）、样式已链接', () => {
     const html = read('index.html');
     const idx = s => { const i = html.indexOf(s); assert.ok(i >= 0, s); return i; };
-    assert.ok(idx('js/jellyfish.js?v=6') < idx('js/aquarium-core.js?v=4'));
-    assert.ok(idx('js/aquarium-core.js?v=4') < idx('js/aquarium-play-core.js?v=1'));
-    assert.ok(idx('js/aquarium-play-core.js?v=1') < idx('js/aquarium-play.js?v=1'));
-    assert.ok(idx('js/aquarium-play.js?v=1') < idx('js/aquarium.js?v=4'));
-    assert.ok(idx('js/aquarium.js?v=4') < idx('js/background-experience.js?v=14'));
+    assert.ok(idx('js/jellyfish.js?v=6') < idx('js/aquarium-core.js?v=7'));
+    assert.ok(idx('js/aquarium-core.js?v=7') < idx('js/aquarium-play-core.js?v=3'));
+    assert.ok(idx('js/aquarium-play-core.js?v=3') < idx('js/aquarium-play.js?v=1'));
+    assert.ok(idx('js/aquarium-play.js?v=1') < idx('js/aquarium.js?v=8'));
+    // 捕食核心依赖核心与玩法核心（用它的嘴位置与泡），先于控制器
+    assert.ok(idx('js/aquarium-play-core.js?v=3') < idx('js/aquarium-predation-core.js?v=1'));
+    assert.ok(idx('js/aquarium-predation-core.js?v=1') < idx('js/aquarium.js?v=8'));
+    // 水流/海洋雪与光束：纯逻辑先于画法，画法先于控制器；都在捕食之后、写实之前
+    assert.ok(idx('js/aquarium-predation-core.js?v=1') < idx('js/aquarium-flow-core.js?v=1'));
+    assert.ok(idx('js/aquarium-flow-core.js?v=1') < idx('js/aquarium-light-core.js?v=1'));
+    assert.ok(idx('js/aquarium-light-core.js?v=1') < idx('js/aquarium-ambient.js?v=1'));
+    assert.ok(idx('js/aquarium-ambient.js?v=1') < idx('js/aquarium.js?v=8'));
+    assert.ok(idx('js/aquarium-ambient.js?v=1') < idx('js/aquarium-sound-core.js?v=1'));
+    assert.ok(idx('js/aquarium-sound-core.js?v=1') < idx('js/aquarium-sound.js?v=1'));
+    assert.ok(idx('js/aquarium-sound.js?v=1') < idx('js/background-experience.js?v=20'));
+    assert.ok(idx('js/aquarium.js?v=8') < idx('js/background-experience.js?v=20'));
     // 写实动物：路径工具 → 骨架求值 → 画笔 → 骨架数据 → 写实画法，全部先于控制器
     assert.ok(idx('js/jelly-species-shapes.js?v=4') < idx('js/marine-rig.js?v=1'));
-    assert.ok(idx('js/marine-rig.js?v=1') < idx('js/marine-rig-canvas.js?v=1'));
-    assert.ok(idx('js/marine-rig-canvas.js?v=1') < idx('js/marine-rig-data.js?v=1'));
-    assert.ok(idx('js/marine-rig-data.js?v=1') < idx('js/aquarium-real.js?v=1'));
-    assert.ok(idx('js/aquarium-real.js?v=1') < idx('js/aquarium.js?v=4'));
-    assert.ok(idx('js/aquarium-core.js?v=4') < idx('js/aquarium-real.js?v=1'), '写实画法按核心的物种表工作，核心先加载');
-    idx('css/aquarium.css?v=4');
-    for (const file of ['css/aquarium.css', 'js/aquarium-play-core.js', 'js/aquarium-play.js']) assert.ok(fs.existsSync(path.join(root, file)), file);
+    assert.ok(idx('js/marine-rig.js?v=1') < idx('js/marine-rig-canvas.js?v=2'));
+    assert.ok(idx('js/marine-rig-canvas.js?v=2') < idx('js/marine-rig-data.js?v=1'));
+    assert.ok(idx('js/marine-rig-data.js?v=1') < idx('js/aquarium-real.js?v=4'));
+    assert.ok(idx('js/aquarium-yaw.js?v=1') < idx('js/aquarium-real.js?v=4'), '侧视转身的伪 3D 投影是纯几何、没有依赖，先于写实画法');
+    assert.ok(idx('js/aquarium-real.js?v=4') < idx('js/aquarium.js?v=8'));
+    assert.ok(idx('js/aquarium-core.js?v=7') < idx('js/aquarium-real.js?v=4'), '写实画法按核心的物种表工作，核心先加载');
+    idx('css/aquarium.css?v=6');
+    for (const file of ['css/aquarium.css', 'js/aquarium-play-core.js', 'js/aquarium-play.js', 'js/aquarium-predation-core.js', 'js/aquarium-yaw.js', 'js/aquarium-flow-core.js', 'js/aquarium-light-core.js', 'js/aquarium-ambient.js']) assert.ok(fs.existsSync(path.join(root, file)), file);
 });
 
 test('设置页：有“写实动物”开关，默认开，保存键 aquariumRealistic，文案如实写明范围；鱼名单里有海龟', () => {
@@ -707,10 +822,91 @@ test('设置页：有“写实动物”开关，默认开，保存键 aquariumRe
     for (const file of ['js/jellyfish.js', 'js/jellyfish-core.js']) assert.doesNotMatch(read(file), /aquariumRealistic|AquariumReal|MarineRig/, `${file} 不认识写实动物`);
 });
 
+test('设置页：有“大鱼吃小鱼”开关，默认开，保存键 aquariumPredation，文案如实写明谁吃谁、多久一次、怎么补回、什么不参与；宿主三处与设置页四处都接上', () => {
+    const html = read('settings.html');
+    assert.match(html, /id="set-bgAquariumPredation" checked/);
+    const found = /<span class="sp-field-label">大鱼吃小鱼<\/span><span class="sp-field-hint">([\s\S]*?)<\/span>/.exec(html);
+    assert.ok(found, '开关的标签是“大鱼吃小鱼”');
+    const hint = found[1];
+    for (const name of ['小锤头鲨', '霓虹灯鱼', '蓝吊', '小丑鱼', '神仙鱼']) assert.ok(hint.includes(name), `说明里要列出 ${name}`);
+    for (const name of ['河豚', '海龟', '蝠鲼', '鲸鲨']) assert.ok(hint.includes(name), `说明里要写明 ${name} 不参与`);
+    assert.match(hint, /水母永远不会被吃/);
+    assert.match(hint, /省流量模式下不会捕食/);
+    assert.match(hint, /两三分钟/);
+    assert.match(hint, /25 秒/);
+    assert.match(hint, /75 秒/);
+    assert.match(hint, /刷新页面也会全部恢复/);
+    assert.match(hint, /不读也不写任何数据/);
+    const page = read('js/settings-page.js');
+    assert.match(page, /aquariumPredation: true,/);
+    assert.match(page, /aquariumPredation: stored\.aquariumPredation !== false/);
+    assert.match(page, /\['set-bgAquariumPredation', 'aquariumPredation', element => element\.checked\]/);
+    assert.match(page, /aquariumPredation\.checked = bgExperienceSettings\.aquariumPredation/);
+    const host = read('js/background-experience.js');
+    assert.match(host, /aquariumPredation: source\.aquariumPredation !== false/);
+    assert.match(host, /aquariumPredation: true,/);
+    assert.match(host, /predation: this\.settings\.aquariumPredation/);
+    for (const file of ['js/jellyfish.js', 'js/jellyfish-core.js']) assert.doesNotMatch(read(file), /aquariumPredation|AquariumPredation|predation/i, `${file} 不认识捕食`);
+});
+
+test('设置页：有“水流与海洋雪”“水下光束”开关，默认关，只有明确 true 才开；宿主与设置页四处都接上', () => {
+    const html = read('settings.html');
+    assert.match(html, /id="set-bgAquariumFlow"/);
+    assert.doesNotMatch(html, /id="set-bgAquariumFlow" checked/, '默认关');
+    assert.match(html, /id="set-bgAquariumRays"/);
+    assert.doesNotMatch(html, /id="set-bgAquariumRays" checked/, '默认关');
+    const flowHint = /<span class="sp-field-label">水流与海洋雪<\/span><span class="sp-field-hint">([\s\S]*?)<\/span>/.exec(html);
+    const raysHint = /<span class="sp-field-label">水下光束<\/span><span class="sp-field-hint">([\s\S]*?)<\/span>/.exec(html);
+    assert.ok(flowHint && raysHint);
+    assert.match(flowHint[1], /不遮住壁纸/);
+    assert.match(flowHint[1], /省流量模式下不显示/);
+    assert.match(flowHint[1], /默认关闭/);
+    assert.match(raysHint[1], /先失去红色/);
+    assert.match(raysHint[1], /默认关闭/);
+    const page = read('js/settings-page.js');
+    assert.match(page, /aquariumFlow: false,/);
+    assert.match(page, /aquariumRays: false,/);
+    assert.match(page, /aquariumFlow: stored\.aquariumFlow === true/);
+    assert.match(page, /aquariumRays: stored\.aquariumRays === true/);
+    assert.match(page, /\['set-bgAquariumFlow', 'aquariumFlow', element => element\.checked\]/);
+    assert.match(page, /\['set-bgAquariumRays', 'aquariumRays', element => element\.checked\]/);
+    const host = read('js/background-experience.js');
+    assert.match(host, /aquariumFlow: source\.aquariumFlow === true/);
+    assert.match(host, /aquariumRays: source\.aquariumRays === true/);
+    assert.match(host, /aquariumFlow: false,/);
+    assert.match(host, /aquariumRays: false,/);
+    assert.match(host, /flow: this\.settings\.aquariumFlow/);
+    assert.match(host, /rays: this\.settings\.aquariumRays/);
+    for (const file of ['js/jellyfish.js', 'js/jellyfish-core.js']) assert.doesNotMatch(read(file), /aquariumFlow|aquariumRays|AquariumFlow|AquariumLight|AquariumAmbient/, `${file} 不认识氛围层`);
+});
+
+test('设置页：有“水下环境音”开关，默认关；宿主接上；须用户手势；脚本已挂', () => {
+    const html = read('settings.html');
+    assert.match(html, /id="set-bgAquariumSound"/);
+    assert.doesNotMatch(html, /id="set-bgAquariumSound" checked/, '默认关');
+    const hint = /<span class="sp-field-label">水下环境音<\/span><span class="sp-field-hint">([\s\S]*?)<\/span>/.exec(html);
+    assert.ok(hint);
+    assert.match(hint[1], /点一下才会响/);
+    assert.match(hint[1], /省流量模式下不响/);
+    const page = read('js/settings-page.js');
+    assert.match(page, /aquariumSound: false,/);
+    assert.match(page, /aquariumSound: stored\.aquariumSound === true/);
+    assert.match(page, /\['set-bgAquariumSound', 'aquariumSound', element => element\.checked\]/);
+    const host = read('js/background-experience.js');
+    assert.match(host, /aquariumSound: source\.aquariumSound === true/);
+    assert.match(host, /aquariumSound: false,/);
+    assert.match(host, /syncAquariumSound/);
+    const idx = read('index.html');
+    assert.ok(idx.includes('js/aquarium-sound-core.js?v=1'));
+    assert.ok(idx.includes('js/aquarium-sound.js?v=1'));
+    assert.ok(idx.indexOf('js/aquarium-sound-core.js?v=1') < idx.indexOf('js/aquarium-sound.js?v=1'));
+    assert.ok(idx.indexOf('js/aquarium-sound.js?v=1') < idx.indexOf('js/background-experience.js?v=20'));
+});
+
 test('设置页：有水族馆开关，默认开，保存键 aquariumFish，脚本版本已更新', () => {
     const html = read('settings.html');
     assert.match(html, /id="set-bgAquariumFish" checked/);
-    assert.ok(html.includes('js/settings-page.js?v=16'));
+    assert.ok(html.includes('js/settings-page.js?v=19'));
     const page = read('js/settings-page.js');
     assert.match(page, /aquariumFish: true,/);
     assert.match(page, /aquariumFish: stored\.aquariumFish !== false/);

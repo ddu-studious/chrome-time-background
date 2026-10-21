@@ -8,15 +8,26 @@
 //   散开程度 = 同一条目内、≥4 条的鱼组里，鱼与鱼两两距离的平均（所有组的所有鱼对一起平均）；
 //   比值     = 喂食后最后 3 秒的散开程度 ÷ 喂食前 0.45 秒的基线；
 //   通过线   = 喂食组的中位数在 0.8–1.25，且超出 0.5–1.5 的比例，比不喂食的对照组多不超过 10 个百分点。
-// 10 个百分点是判断值，不是由数据推出来的；校准时（400 个种子）的实测是中位数 1.01、多 5.8 个百分点。
-// 已知并接受：约 6% 的喂食会让同组的鱼追不同的饲料后分成两拨，十几秒内没有聚拢（核心鱼群模型本来的特性被吸引点触发）。
+// 10 个百分点是判断值，不是由数据推出来的。
+// 已知并接受：喂食会让一小部分同组的鱼追不同的饲料后分成两拨，十几秒内没有聚拢（核心鱼群模型本来的特性被吸引点触发）。
 //
-// 这条线是一把粗尺子：反向对照里“饲料吃不掉、不下沉、600 秒才过期”只超出线 1.8 个百分点（11.8% 对 10%），
+// 校准史（样本量为什么是 1200）：
+//   · 最初（400 个种子，大个子还是小尺寸）：中位数 1.01、多 5.8 个百分点；反向对照 11.8%。
+//   · 2026-10-19 大个子改成真实体长、笨重转身（核心的 yaw 转身模型）：它们转得慢、更晚吃到饲料，饲料平均存在 5.7 → 6.4 秒
+//     （300 个种子均值，大个子吃到饲料的次数 814 → 675），成群小鱼暴露在“追不同饲料”的时间变长。
+//     真实比例随之从约 5% 升到约 7.5%（2000 个种子：喂食 7.5%，反向对照 12.4%，对照 0.05%）。
+//   · 同一批固定种子在 400 个一段的窗口里波动很大：喂食 10.5 / 7.5 / 7.2 / 5.8 / 6.5%，反向对照 10.2 / 13.8 / 12.5 / 13.5 / 12.0%；
+//     种子 1–400 恰好是最差的一段（喂食 10.5%、反向对照 10.2%，连两者都分不开），所以 400 个种子不再有足够的功效。
+//     样本改为 1200 个：喂食 8.4%、反向对照 12.2%，10 个百分点的线落在两者中间（离喂食 1.6、离反向对照 2.2 个百分点）。
+//     这是提高尺子的分辨率，不是挪线；喂食行为本身没有改（拖尾比以前略大，是大个子更真实的代价，见技术文档
+//     docs/technical/aquarium-tide-size-drag-20261019.md）。
+//
+// 这条线是一把粗尺子：反向对照里“饲料吃不掉、不下沉、600 秒才过期”只比线高 2 个百分点左右，
 // 而“吸引范围与力度过大”（2.0%）、“吃到的距离过大”（0%）都抓不到（一次性的 /tmp 实验，数字在技术文档 §6.3）。
 // 所以它只管“之后是否聚拢”，不要当作喂食行为的总体守卫。反向对照的测试若哪天变红（反向对照居然通过了线），
 // 先判断是这条线失去了灵敏度，还是核心鱼群变了，再决定改哪边；不要为了让测试变绿而不加判断地收紧或放宽线。
 //
-// 加大样本：AQ_SCHOOL_SEEDS=2000 node --test test/aquarium-school-regroup.test.js（默认与下限都是 400 个，约 15–20 秒）。
+// 加大样本：AQ_SCHOOL_SEEDS=2000 node --test test/aquarium-school-regroup.test.js（默认与下限都是 1200 个，约 45–60 秒）。
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -27,12 +38,12 @@ const Play = require('../js/aquarium-play-core.js');
 
 const SEEDS = (() => {
     const raw = process.env.AQ_SCHOOL_SEEDS;
-    if (raw === undefined || raw === '') return 400;
+    if (raw === undefined || raw === '') return 1200;
     const n = Number(raw);
-    if (!Number.isInteger(n) || n < 400 || n > 5000) throw new Error(`AQ_SCHOOL_SEEDS 必须是 400–5000 的整数（线是在 400 个种子上校准的，再少功效不够），收到 ${raw}`);
+    if (!Number.isInteger(n) || n < 1200 || n > 5000) throw new Error(`AQ_SCHOOL_SEEDS 必须是 1200–5000 的整数（线是在 1200 个种子上校准的，再少功效不够：400 个一段的窗口里喂食 5.8–10.5%、反向对照 10.2–13.8%），收到 ${raw}`);
     return n;
 })();
-const MUTANT_SEEDS = 400;
+const MUTANT_SEEDS = 1200;
 
 const GATE = Object.freeze({ MEDIAN: Object.freeze([0.8, 1.25]), BAND: Object.freeze([0.5, 1.5]), MAX_EXTRA_PP: 10 });
 
@@ -166,7 +177,7 @@ function runs() {
 
 const synthetic = (n, outOfBand, inside = 1.0, outside = 2.0) => summarize([...Array(n - outOfBand).fill(inside), ...Array(outOfBand).fill(outside)]);
 
-test('通过线：中位数与超出比例都在线内就通过（校准时的实测：中位数 1.01、多 5.8 个百分点）', () => {
+test('通过线：中位数与超出比例都在线内就通过（合成数据，用最初校准的数字：中位数 1.01、多 5.8 个百分点）', () => {
     const v = verdict(synthetic(400, 0), synthetic(400, 23));
     assert.equal(v.ok, true, v.problems.join('；'));
     assert.ok(Math.abs(v.extraPp - 5.75) < 1e-9);
@@ -244,7 +255,7 @@ test(`喂食之后成群小鱼的回聚（${SEEDS} 个种子）：中位数在 $
 });
 
 test(`通过线抓得到回聚失败的一种（反向对照，${MUTANT_SEEDS} 个种子）：饲料吃不掉、不下沉、600 秒才过期时必须不通过`, t => {
-    const mutantPlay = loadPlayCoreWith({ PELLET_SINK: 0, PELLET_LIFE_S: 600, EAT_R_LEN: 0, EAT_R_PAD: 0 });
+    const mutantPlay = loadPlayCoreWith({ PELLET_SINK: 0, PELLET_LIFE_S: 600, EAT_R_LEN: 0, EAT_R_MOUTH: 0, EAT_R_PAD: 0 });
     const { control } = runs();
     const mutant = seedsFrom(MUTANT_SEEDS, true, mutantPlay);
     for (const r of mutant) {

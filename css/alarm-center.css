@@ -312,6 +312,9 @@
   border: 1px solid rgba(251, 146, 60, .28);
   border-radius: 50%;
   box-shadow: 0 0 100px rgba(251, 146, 60, .16), inset 0 0 80px rgba(251, 146, 60, .08);
+}
+/* 只在响铃层打开时才呼吸：关闭状态下无限动画仍会让页面持续产生帧（空闲 CPU）。 */
+.alarm-ringing-overlay.open .alarm-ringing-glow {
   animation: alarm-breathe 2.4s ease-in-out infinite;
 }
 
@@ -389,5 +392,6 @@
   .alarm-item,
   .alarm-switch span::after,
   .alarm-toast { transition: none; }
-  .alarm-ringing-glow { animation: none; opacity: .8; }
+  .alarm-ringing-overlay.open .alarm-ringing-glow { animation: none; opacity: .8; }
+  .alarm-ringing-glow { opacity: .8; }
 }

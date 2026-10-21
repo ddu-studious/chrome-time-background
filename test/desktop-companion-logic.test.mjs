@@ -17,6 +17,7 @@ const JellyfishSkin = createRequire(import.meta.url)('../js/jellyfish.js');
 const SpeciesShapes = createRequire(import.meta.url)('../js/jelly-species-shapes.js');
 const SpeciesPathCases = createRequire(import.meta.url)('./fixtures/species-path-cases.js');
 const AssistantNative = createRequire(import.meta.url)('../js/assistant-native.js');
+const AssistantMatch = createRequire(import.meta.url)('../js/assistant-match.js');
 const JellyErrandsCore = createRequire(import.meta.url)('../js/jelly-errands-core.js');
 const swiftc = '/usr/bin/xcrun';
 const canCompile = process.platform === 'darwin' && existsSync(swiftc);
@@ -40,7 +41,7 @@ const HOTKEY_CASES = [
 test('原生水母：构建清单包含所有水母源文件，且 main.swift 在最后', () => {
   const build = readFileSync(resolve(root, 'desktop-reminder/build.mjs'), 'utf8');
   const listed = build.match(/const sources = \[([^\]]*)\]/)?.[1].split(',').map(s => s.trim().replace(/'/g, '')).filter(Boolean) ?? [];
-  assert.deepEqual(listed, ['countdown-model', 'jelly-model', 'jelly-swim', 'jelly-palette', 'jelly-appearance', 'jelly-species', 'jelly-species-data', 'marine-rig', 'marine-rig-data', 'jelly-paint', 'assistant-model', 'glass-view', 'jelly-ring', 'jelly-materials', 'jelly-species-painter', 'marine-rig-painter', 'jelly-companion', 'jelly-controller', 'confirmation-view', 'assistant-hotkey', 'assistant-panel', 'main'], '构建清单：纯逻辑在前、AppKit 在后、main.swift 最后');
+  assert.deepEqual(listed, ['countdown-model', 'jelly-model', 'jelly-swim', 'jelly-palette', 'jelly-appearance', 'jelly-species', 'jelly-species-data', 'marine-rig', 'marine-rig-data', 'jelly-paint', 'assistant-model', 'assistant-matcher', 'glass-view', 'jelly-ring', 'jelly-materials', 'jelly-species-painter', 'marine-rig-painter', 'jelly-companion', 'jelly-controller', 'confirmation-view', 'assistant-hotkey', 'assistant-panel', 'main'], '构建清单：纯逻辑在前、AppKit 在后、main.swift 最后');
   for (const name of listed) assert.ok(existsSync(resolve(root, `desktop-reminder/${name}.swift`)), `${name}.swift 必须存在`);
   assert.match(build, /com\.timekeeper\.desktop\.qa/, '隔离构建使用独立 Bundle ID，避免改写真实组件的窗口记忆');
   const main = readFileSync(resolve(root, 'desktop-reminder/main.swift'), 'utf8');
@@ -111,6 +112,10 @@ test('原生水母：构建清单包含所有水母源文件，且 main.swift �
   assert.match(main, /case "assistantResult": assistant\.result\(message\)/, 'assistantResult 路由到面板（只认未决动作的 actionId）');
   assert.match(main, /case "assistantHook":\s*\n(?:\s*\/\/[^\n]*\n)*\s*ok = ProcessInfo\.processInfo\.environment\["TIMEKEEPER_TEST_HOOKS"\] == "1" && assistant\.hook/, '助手测试钩子只在 TIMEKEEPER_TEST_HOOKS=1 时可用');
   assert.match(main, /jelly\.onAskAssistant = \{ \[weak self\] in self\?\.assistant\.show\(\) \}/, '水母右键菜单“问 AI…”唤出面板');
+  assert.match(main, /jelly\.onFeedAssistant = \{ \[weak self\] prompt in self\?\.assistant\.prefillAndShow\(prompt\) \?\? false \}/, '拖拽投喂经 onFeedAssistant 预填桌面 AI 助手输入框');
+  assert.match(main, /jelly\.noteMeeting\(meeting\)/, '每次采样把会议占用态交给水母');
+  assert.match(main, /case "mediaBusy":\s*\n(?:\s*\/\/[^\n]*\n)*\s*ok = ProcessInfo\.processInfo\.environment\["TIMEKEEPER_TEST_HOOKS"\] == "1"/, '会议占用模拟钩子只在 TIMEKEEPER_TEST_HOOKS=1 时可用');
+  assert.match(main, /case "dropHook":\s*\n(?:\s*\/\/[^\n]*\n)*\s*if ProcessInfo\.processInfo\.environment\["TIMEKEEPER_TEST_HOOKS"\] == "1"/, '拖拽投喂模拟钩子只在 TIMEKEEPER_TEST_HOOKS=1 时可用');
   assert.match(main, /assistant\.send = \{ \[weak self\] message in self\?\.send\(message\) \}/, '助手事件经与确认卡相同的 Native Messaging 写出');
   const panel = readFileSync(resolve(root, 'desktop-reminder/assistant-panel.swift'), 'utf8');
   const hotkey = readFileSync(resolve(root, 'desktop-reminder/assistant-hotkey.swift'), 'utf8');
@@ -125,11 +130,20 @@ test('原生水母：纯逻辑（阶段、协议解析、显示规则、文案�
   try {
     // 顶层代码要求入口文件名为 main.swift，复制到临时目录，不改动仓库文件。
     copyFileSync(resolve(root, 'desktop-reminder/companion-selftest.swift'), join(dir, 'main.swift'));
+    copyFileSync(resolve(root, 'vendor/pinyin-match/pinyin-match.js'), join(dir, 'pinyin-match.js'));
+    copyFileSync(resolve(root, 'js/assistant-match.js'), join(dir, 'assistant-match.js'));
     // 变异检查用：外部已按（被改动的）源码增量编译好自测时，设置 TIMEKEEPER_SELFTEST_EXE 指向它，这里就跳过编译（常规运行不设置）
     const prebuilt = process.env.TIMEKEEPER_SELFTEST_EXE;
     const exe = prebuilt || join(dir, 'selftest');
-    if (!prebuilt) execFileSync(swiftc, ['swiftc', resolve(root, 'desktop-reminder/countdown-model.swift'), resolve(root, 'desktop-reminder/jelly-model.swift'), resolve(root, 'desktop-reminder/jelly-swim.swift'), resolve(root, 'desktop-reminder/jelly-palette.swift'), resolve(root, 'desktop-reminder/jelly-appearance.swift'), resolve(root, 'desktop-reminder/jelly-species.swift'), resolve(root, 'desktop-reminder/jelly-species-data.swift'), resolve(root, 'desktop-reminder/marine-rig.swift'), resolve(root, 'desktop-reminder/marine-rig-data.swift'), resolve(root, 'desktop-reminder/jelly-paint.swift'), resolve(root, 'desktop-reminder/assistant-model.swift'), join(dir, 'main.swift'), '-module-cache-path', join(dir, 'cache'), '-o', exe], { stdio: 'pipe' });
+    if (!prebuilt) execFileSync(swiftc, ['swiftc', resolve(root, 'desktop-reminder/countdown-model.swift'), resolve(root, 'desktop-reminder/jelly-model.swift'), resolve(root, 'desktop-reminder/jelly-swim.swift'), resolve(root, 'desktop-reminder/jelly-palette.swift'), resolve(root, 'desktop-reminder/jelly-appearance.swift'), resolve(root, 'desktop-reminder/jelly-species.swift'), resolve(root, 'desktop-reminder/jelly-species-data.swift'), resolve(root, 'desktop-reminder/marine-rig.swift'), resolve(root, 'desktop-reminder/marine-rig-data.swift'), resolve(root, 'desktop-reminder/jelly-paint.swift'), resolve(root, 'desktop-reminder/assistant-model.swift'), resolve(root, 'desktop-reminder/assistant-matcher.swift'), join(dir, 'main.swift'), '-module-cache-path', join(dir, 'cache'), '-o', exe], { stdio: 'pipe' });
     // 全局快捷键语法在 JS（normalizeHotkey）与 Swift（AssistantModel.parseHotkey）各有一份实现：同一批输入逐条对照
+    const catalog = AssistantNative.catalog();
+    const matchCases = [
+      ...['', 'yin', 'yinyue', 'yiny', 'yy', 'wy', 'wy云', '音乐', 'YIN', 'nz', 'naozh', 'tx', 'gzrz', 'gongzuorizhi', '工作rz', 'rw', 'renwu', '哔li', 'bili', 'yt', '不存在', '\";throw1;//'].map(query => ({ text: '@' + query, expected: AssistantMatch.rank(catalog.apps, query).map(row => row.id) })),
+      ...['', 'bf', 'bofang', 'zan', 'zt', 'xiay', 'dings', 'sou', '搜索yy', 'pause'].map(query => ({ text: '@music /' + query, expected: AssistantMatch.rank(catalog.actions.filter(row => row.apps.includes('music')), query, row => [row.name, row.id]).map(row => row.id) }))
+    ];
+    const matchFile = join(dir, 'assistant-match-cases.json');
+    writeFileSync(matchFile, JSON.stringify({ catalog, cases: matchCases }));
     const cases = HOTKEY_CASES;
     const casesFile = join(dir, 'hotkey-cases.json');
     writeFileSync(casesFile, JSON.stringify(cases));
@@ -148,9 +162,14 @@ test('原生水母：纯逻辑（阶段、协议解析、显示规则、文案�
     const parseCases = [...SpeciesPathCases.VALID, ...SpeciesPathCases.BAD.map(([, input]) => input)];
     const parseFile = join(dir, 'parse-cases.json');
     writeFileSync(parseFile, JSON.stringify(parseCases));
-    const output = execFileSync(exe, [], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, env: { ...process.env, HOTKEY_CASES: casesFile, APPEARANCE_CASES: appearanceFile, PARSE_CASES: parseFile } });
+    let output;
+    try { output = execFileSync(exe, [], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, env: { ...process.env, HOTKEY_CASES: casesFile, ASSISTANT_MATCH_CASES: matchFile, APPEARANCE_CASES: appearanceFile, PARSE_CASES: parseFile } }); }
+    catch (error) { throw new Error(String(error.stdout || error.message).split('\n').filter(line => /FAIL|MATCH/.test(line)).join('\n')); }
     assert.doesNotMatch(output, /^FAIL/m, output);
     assert.match(output, /ALL PASS/);
+    const nativeMatches = [...output.matchAll(/^MATCH (\d+) (.*)$/gm)];
+    assert.equal(nativeMatches.length, matchCases.length);
+    for (const [, index, ids] of nativeMatches) assert.deepEqual(JSON.parse(ids), matchCases[Number(index)].expected, matchCases[Number(index)].text);
     // 夜晚荧光曲线：Swift 与首页水母的 JS 曲线逐点一致（同一套产品行为，两边各有一份实现）
     const rows = [...output.matchAll(/^NIGHT ([\d.]+) ([\d.]+)$/gm)];
     assert.ok(rows.length >= 10, '自测应打印夜晚曲线采样点');

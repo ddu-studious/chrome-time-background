@@ -1,0 +1,8 @@
+{
+  "esbuild": "0.28.1",
+  "upstreamCommit": "335d6c1aeb59b338b1cc59d734dc6eb87a596a88",
+  "threeRevision": "180",
+  "bundleBytes": 566893,
+  "bundleSha256": "5267a815bbb7eafdcadc528f042e683a64845765088cc7acf6d4de94890541da",
+  "assetBaseAdaptation": "Three fixed upstream terrain import.meta.url bases rebound at build time; original source unchanged."
+}

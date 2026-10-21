@@ -12,12 +12,18 @@
     const clamp = (value, lo, hi) => (value < lo ? lo : (value > hi ? hi : value));
     const channel = value => Math.round(clamp(value, 0, 1) * 255);
 
-    /** rgba（各分量 0…1）→ CSS 颜色串；scale 乘到不透明度上；tint 是 { rgb:[0…1 ×3], amount:0…1 }，把颜色向水色混合（景深/夜晚的雾）。 */
+    /**
+     * rgba（各分量 0…1）→ CSS 颜色串；scale 乘到不透明度上；tint 是 { rgb:[0…1 ×3], amount:0…1, amounts?:[0…1 ×3] }，把颜色向水色混合（景深/夜晚的雾）。
+     * amounts（可选，红绿蓝各一个）给出时三个通道各按自己的比例混合——水吸收红光最快、蓝光最慢，远处的东西先失去红色；没有 amounts 时三个通道都按 amount（与此前逐位一致）。
+     */
     function css(rgba, scale, tint) {
         let r = rgba[0], g = rgba[1], b = rgba[2];
         if (tint && tint.amount > 0) {
+            const ks = Array.isArray(tint.amounts) && tint.amounts.length === 3 && tint.amounts.every(Number.isFinite) ? tint.amounts : null;
             const k = clamp(tint.amount, 0, 1);
-            r += (tint.rgb[0] - r) * k; g += (tint.rgb[1] - g) * k; b += (tint.rgb[2] - b) * k;
+            r += (tint.rgb[0] - r) * (ks ? clamp(ks[0], 0, 1) : k);
+            g += (tint.rgb[1] - g) * (ks ? clamp(ks[1], 0, 1) : k);
+            b += (tint.rgb[2] - b) * (ks ? clamp(ks[2], 0, 1) : k);
         }
         return `rgba(${channel(r)}, ${channel(g)}, ${channel(b)}, ${clamp(rgba[3] * scale, 0, 1).toFixed(3)})`;
     }

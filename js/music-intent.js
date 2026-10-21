@@ -58,7 +58,7 @@
       shuffleReverse: new RegExp(`^${prefix}(?:${strong}|${weak}|${weakBare})随机播放${suffix}$`),
       playForward: new RegExp(`^${prefix}(?:播放|听)(?:一下)?(?:${strong}|${weak})${suffix}$`),
       playReverse: new RegExp(`^${prefix}(?:${strong}|${weak})播放${suffix}$`),
-      bareShuffle: new RegExp(`^${prefix}随机播放${suffix}$`)
+      bareShuffle: new RegExp(`^${prefix}随机播放(?:音乐|歌曲|歌)?${suffix}$`)
     });
   })();
   // A bare "随机播放" names no object. Callers allow it only when nothing else

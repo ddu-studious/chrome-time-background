@@ -38,7 +38,7 @@
   const BRIEF_FROM_HOUR = 6, BRIEF_TO_HOUR = 11; // 晨间概览只在 6:00–11:59 内出现
   const FALLBACK_KINDS = Object.freeze(['task', 'worklog']);   // 有对应系统通知的两类：没被水母接手时调用方可以退回通知
   const OFFERABLE = Object.freeze(['brief', 'task', 'worklog', 'tidbit']);   // 五个系统通知发送器能先问水母的类别（歌曲没有对应的系统通知）
-  const ID_PATTERN = /^jelly-errand-(brief|task|worklog|song|tidbit)-\d+$/;
+  const ID_PATTERN = /^jelly-errand-(brief|task|worklog|lark|song|tidbit|tabs|watch|bookmark)-\d+$/;
   const UNKNOWN_PLAY_TEXT = '已交给播放器，还没确认开始播放，请在播放器里看看';      // 适配器明确说已经发给播放器、但没等到确认
   const LOST_PLAY_TEXT = '播放器没有及时回应，请在播放器里看看有没有开始播放';       // 抛错、超时或结果说不清：不知道发出去没有，不能说“已交给”
   const UNAVAILABLE_TEXT = '这首歌暂不可播放，点“换一首”试试';
@@ -54,9 +54,12 @@
   }
 
   function create({ syncStorage, localStorage, alarms, presenter = null, readMemos = async () => [], readWorklog = async () => [], tips = () => [],
+    readLark = null, readTabs = null, readStaleTabs = null, readWatch = null, readBookmarks = null, readBookmark = null,
     openPage = async () => {}, now = () => new Date(), random = Math.random, presentTimeoutMs = PRESENT_TIMEOUT_MS, isBusy = () => false, isAvailable = () => true,
     songs = null, isPlaying = null, playSong = null, onChange = null,
     songFetchMs = SONG_FETCH_MS, playingCheckMs = PLAYING_CHECK_MS, playMs = PLAY_MS, log = null }) {
+    const tabsReader = readTabs || readStaleTabs;
+    const bookmarksReader = readBookmarks || readBookmark;
     let queue = Promise.resolve();
     const serial = fn => { const result = queue.then(fn); queue = result.catch(() => {}); return result; };
     const note = (action, detail) => { try { log?.('jelly-errands', action, detail); } catch (_) { /* 日志失败不影响业务 */ } };
@@ -67,15 +70,17 @@
     const pickRandom = list => list[Math.min(list.length - 1, Math.floor(random() * list.length))];
 
     // 内存里的瞬时状态（Service Worker 重启即丢，丢了只是少记一次拒绝、点旧气泡的“播放”按已失效处理，不影响业务）
-    const presence = { state: 'unknown', since: 0 };
+    const presence = { state: 'unknown', since: 0, meeting: false };
     const acted = new Set();      // 已经点过按钮的气泡 id：之后它自行消失不再算拒绝
     const manualIds = new Set();  // 用户从右键菜单主动要的气泡 id：按钮与自行消失都不计入拒绝
     const offers = new Map();     // 歌曲气泡 id → { song, status: idle | playing | done | unknown | failed, text }
+    const targets = new Map();    // 继续看/深海拾贝气泡 id → 打开目标
     const songCache = { at: 0, list: [], failedAt: 0 };
     let requestBusy = false;
     let lastIdNumber = 0;
 
     const remember = (id, song) => { offers.set(id, { song, status: 'idle', text: '' }); if (offers.size > OFFER_MAX) offers.delete(offers.keys().next().value); };
+    const rememberTarget = (id, target) => { if (!target) return; targets.set(id, target); if (targets.size > OFFER_MAX) targets.delete(targets.keys().next().value); };
     const markManual = id => { manualIds.add(id); if (manualIds.size > MANUAL_MAX) manualIds.delete(manualIds.values().next().value); };
     const notifyChange = () => { try { Promise.resolve(onChange?.()).catch(() => {}); } catch (_) { /* 外部回调失败不影响设置 */ } };
 
@@ -148,6 +153,17 @@
         const text = Core.copy.worklog(gap);
         if (text) list.push({ kind: 'worklog', fp: `worklog:${day}:${gap.hour}`, urgency: Core.KINDS.worklog.urgency, payload: text });
       }
+      if (config.kinds.lark && want('lark') && typeof readLark === 'function' && (only || !list.some(item => item.urgency > Core.KINDS.lark.urgency))) {
+        if (await available(Core.KINDS.lark.since)) {
+          let meta = null;
+          try { meta = await bounded(Promise.resolve(readLark({ manual })), songFetchMs); } catch (_) { meta = null; }
+          if (meta && meta.ok === true && Number(meta.count) > 0) {
+            const payload = Core.copy.lark(meta);
+            const fp = `lark:${day}:${Number(meta.newestAt) || meta.count}`;
+            if (payload && !state.seen.includes(fp)) list.push({ kind: 'lark', fp, urgency: Core.KINDS.lark.urgency, payload, target: { kind: 'lark' } });
+          }
+        }
+      }
       // 歌曲排在小乐子之前（同级时第一天先听歌，之后按最久没展示轮换）；已经有严格更高优先级的候选就不为歌曲联网取数
       if (config.kinds.song && want('song') && (only || !list.some(item => item.urgency > Core.KINDS.song.urgency))) {
         const candidate = await songCandidate(state, date.getTime(), { manual });
@@ -156,6 +172,36 @@
       if (config.kinds.tidbit && want('tidbit')) {
         const fresh = tidbits(state);
         if (fresh.length) list.push(pickRandom(fresh));
+      }
+      if (config.kinds.tabs && want('tabs') && typeof tabsReader === 'function') {
+        if (await available(Core.KINDS.tabs.since)) {
+          let stats = null;
+          try { stats = Core.staleTabStats(await tabsReader(), date.getTime()); } catch (_) { stats = null; }
+          const payload = Core.copy.tabs(stats);
+          const fp = `tabs:${day}:${hour < 14 ? 'am' : 'pm'}`;
+          if (payload && !state.seen.includes(fp)) list.push({ kind: 'tabs', fp, urgency: Core.KINDS.tabs.urgency, payload, target: { kind: 'tabs' } });
+        }
+      }
+      if (config.kinds.watch && want('watch') && typeof readWatch === 'function') {
+        if (await available(Core.KINDS.watch.since)) {
+          let items = [];
+          try { items = Core.watchCandidates(await readWatch(), date.getTime()); } catch (_) { items = []; }
+          const fresh = items.find(item => !state.seen.includes(`watch:${item.id}`));
+          const payload = fresh ? Core.copy.watch(fresh) : null;
+          if (payload) list.push({ kind: 'watch', fp: `watch:${fresh.id}`, urgency: Core.KINDS.watch.urgency, payload, target: fresh.target });
+        }
+      }
+      if (config.kinds.bookmark && want('bookmark') && typeof bookmarksReader === 'function') {
+        if (await available(Core.KINDS.bookmark.since)) {
+          let due = [];
+          try { due = Core.dueBookmarks(await bookmarksReader(), date.getTime()); } catch (_) { due = []; }
+          const fresh = due.filter(item => !state.seen.includes(`bookmark:${item.id}`));
+          if (fresh.length) {
+            const picked = fresh[0];
+            const payload = Core.copy.bookmark(picked, due.length);
+            if (payload) list.push({ kind: 'bookmark', fp: `bookmark:${picked.id}`, urgency: Core.KINDS.bookmark.urgency, payload, target: { url: picked.url, id: picked.id, title: picked.title } });
+          }
+        }
       }
       return list;
     }
@@ -191,6 +237,7 @@
         if (!accepted) { try { await presenter.cancel?.(id); } catch (_) { /* 撤销失败不影响结果 */ } }
       }
       if (accepted && candidate.kind === 'song') remember(id, candidate.song);
+      if (accepted && candidate.target) rememberTarget(id, candidate.target);
       return { accepted, id };
     }
 
@@ -207,7 +254,7 @@
       let state;
       try { state = await readState(date); } catch (_) { return { sent: false, reason: 'storage' }; }
       if (!manual) {
-        const verdict = Core.gate(config, state, { presence: presence.state === 'away' ? 'away' : 'active', activeSince: presence.since, busy: !!isBusy() }, nowMs);
+        const verdict = Core.gate(config, state, { presence: presence.state === 'away' ? 'away' : 'active', meeting: presence.meeting, activeSince: presence.since, busy: !!isBusy() }, nowMs);
         if (!verdict.ok) return { sent: false, reason: verdict.reason };
       }
       let list = await candidates(config, date, state, { only, manual });
@@ -293,15 +340,56 @@
         const fresh = tidbits(state);
         return fresh.length ? { candidate: pickRandom(fresh) } : { text: '今天的小乐子都说完啦' };
       }
+      if (kind === 'lark') {
+        if (typeof readLark !== 'function') return { error: '飞书哨兵尚未配置' };
+        let meta = null;
+        try { meta = await bounded(Promise.resolve(readLark({ manual: true })), songFetchMs); } catch (_) { return { error: '飞书哨兵暂时不可用' }; }
+        if (!meta || meta.ok !== true) {
+          if (meta?.status === 'not_installed') return { error: '未检测到 lark-cli，请先安装' };
+          if (meta?.status === 'not_logged_in') return { error: '飞书 CLI 尚未登录，请先执行 lark-cli auth login' };
+          return { error: Core.clean(meta?.error, 40) || '飞书状态读取失败，请稍后再试' };
+        }
+        if (!(Number(meta.count) > 0)) return { text: '最近没有新的飞书 @你 消息' };
+        const payload = Core.copy.lark(meta);
+        return payload ? { candidate: { kind, fp: `lark:${day}:manual:${Number(meta.newestAt) || meta.count}`, urgency, payload, target: { kind: 'lark' } } } : { text: '最近没有新的飞书 @你 消息' };
+      }
+      if (kind === 'tabs') {
+        if (typeof tabsReader !== 'function') return { error: '标签页读取不可用' };
+        let tabs;
+        try { tabs = await tabsReader(); } catch (_) { return { error: '读不到标签页，请稍后再试' }; }
+        const stats = Core.staleTabStats(tabs, date.getTime(), { minCount: 1 });
+        if (!stats) return { text: '标签页很清爽，没有超过 2 天未访问的闲置页面' };
+        const payload = Core.copy.tabs(stats);
+        return payload ? { candidate: { kind, fp: `tabs:${day}:manual`, urgency, payload, target: { kind: 'tabs' } } } : { text: '标签页很清爽' };
+      }
+      if (kind === 'watch') {
+        if (typeof readWatch !== 'function') return { error: '观看进度读取不可用' };
+        let items;
+        try { items = Core.watchCandidates(await readWatch(), date.getTime()); } catch (_) { return { error: '读不到观看进度，请稍后再试' }; }
+        const picked = items.find(item => !state.seen.includes(`watch:${item.id}`)) || items[0];
+        if (!picked) return { text: '最近 7 天没有未看完的视频或课程' };
+        const payload = Core.copy.watch(picked);
+        return payload ? { candidate: { kind, fp: `watch:${picked.id}`, urgency, payload, target: picked.target } } : { text: '最近 7 天没有未看完的视频或课程' };
+      }
+      if (kind === 'bookmark') {
+        if (typeof bookmarksReader !== 'function') return { error: '书签复习读取不可用' };
+        let due;
+        try { due = Core.dueBookmarks(await bookmarksReader(), date.getTime()); } catch (_) { return { error: '读不到书签复习队列，请稍后再试' }; }
+        const picked = due.find(item => !state.seen.includes(`bookmark:${item.id}`)) || due[0];
+        if (!picked) return { text: '今天没有到期的复习书签' };
+        const payload = Core.copy.bookmark(picked, due.length);
+        return payload ? { candidate: { kind, fp: `bookmark:${picked.id}`, urgency, payload, target: { url: picked.url, id: picked.id, title: picked.title } } } : { text: '今天没有到期的复习书签' };
+      }
       const candidate = await songCandidate(state, date.getTime(), { manual: true });
       return candidate ? { candidate } : { text: '这会儿没找到可推荐的歌，稍后再试' };
     }
 
-    /** 处理一次菜单请求（在串行队列里）。不占间隔与条数；歌曲与小乐子只记内容指纹。 */
+    /** 处理一次菜单请求（在串行队列里）。不占间隔与条数；歌曲、小乐子、继续看与书签只记内容指纹。 */
     async function handleRequest(kind) {
       const config = await readConfig();
       if (!config.enabled) return { ok: false, error: '水母差事没有开启' };
-      if (!(await available(Core.REQUEST_SINCE))) return { ok: false, error: '桌面组件还不能处理这个请求' };
+      const minVer = Math.max(Core.REQUEST_SINCE, Core.KINDS[kind]?.since || Core.REQUEST_SINCE);
+      if (!(await available(minVer))) return { ok: false, error: '桌面组件还不能处理这个请求' };
       if (isBusy()) return { ok: false, error: '水母正忙着响铃，等一下再叫它' };
       const date = now();
       const nowMs = date.getTime();
@@ -313,7 +401,7 @@
       const { accepted, id } = await deliver(built.candidate, nowMs);
       if (!accepted) { note('declined', { ok: false, context: kind }); return { ok: false, error: '水母这会儿没法开口，稍后再试' }; }
       markManual(id);
-      if (kind === 'song' || kind === 'tidbit') await writeState(Core.recordSeen(state, built.candidate.fp));
+      if (kind === 'song' || kind === 'tidbit' || kind === 'watch' || kind === 'bookmark') await writeState(Core.recordSeen(state, built.candidate.fp));
       note('request', { ok: true, context: kind });
       return { ok: true };
     }
@@ -361,7 +449,8 @@
             return { ok: false, error: action === 'more' ? '这会儿没法再来一条' : '这会儿没法再换一首' };
           }
           if (action === 'open') {
-            try { await openPage(kind); } catch (_) { return { ok: false, error: '没能打开页面，请在浏览器里处理' }; }
+            const target = targets.get(id);
+            try { await (target !== undefined ? openPage(kind, target) : openPage(kind)); } catch (_) { return { ok: false, error: '没能打开页面，请在浏览器里处理' }; }
           }
           acted.add(id);
           const text = action === 'open' ? '好，帮你打开了' : action === 'later' ? '好，晚点再说' : '好的，少说点';
@@ -400,12 +489,15 @@
           await writeState(Core.recordOutcome(state, kind, false));
         }).catch(() => {});
       },
-      /** 原生上报的两态：只认 active / away；从 away 回到 active 开始计“刚回来”，首次报告不算。 */
-      onPresence: next => {
-        if (next !== 'active' && next !== 'away') return;
-        if (next === 'active' && presence.state === 'away') presence.since = now().getTime();
-        if (next === 'away') presence.since = 0;
-        presence.state = next;
+      /** 原生上报的状态：只认 active / away（或 { state, meeting }）；从 away 回到 active 开始计“刚回来”，首次报告不算。 */
+      onPresence: (next, extra) => {
+        const state = typeof next === 'object' && next !== null ? next.state : next;
+        const meeting = typeof next === 'object' && next !== null ? next.meeting : extra?.meeting;
+        if (typeof meeting === 'boolean') presence.meeting = meeting;
+        if (state !== 'active' && state !== 'away') return;
+        if (state === 'active' && presence.state === 'away') presence.since = now().getTime();
+        if (state === 'away') presence.since = 0;
+        presence.state = state;
       },
       /**
        * 已有的系统通知发送器（每日摘要、过期任务、工作日志、温情提示）到点后先问水母：差事总开关开着且该类开着、该类今天没被静默、
@@ -422,6 +514,7 @@
           if (Core.SWITCHABLE.includes(kind) && !config.kinds[kind]) return { handled: false, reason: 'off' };
           if (!(await available())) return { handled: false, reason: 'unavailable' };
           if (presence.state === 'away') return { handled: false, reason: 'away' };
+          if (presence.meeting === true) return { handled: false, reason: 'meeting' };
           if (isBusy()) return { handled: false, reason: 'busy' };
           const date = now();
           const nowMs = date.getTime();

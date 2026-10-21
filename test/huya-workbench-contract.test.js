@@ -61,8 +61,8 @@ test('工作台接入应用注册表、Dock、启动流程、设置和省电状�
   assert.ok(position('js/huya-core.js') >= 0 && position('js/huya-core.js') < position('js/huya-controller.js'));
   assert.ok(position('js/huya-controller.js') < position('js/main.js'));
   assert.ok(main.includes("getSetting('enableHuya')"));
-  assert.ok(main.includes('window.huyaController.init()'));
-  assert.ok(main.includes("document.getElementById('huya-dock-btn')"));
+  assert.ok(main.includes('createLazyWorkbench(() => window.huyaController'), '虎牙工作台懒初始化');
+  assert.ok(main.includes("bindLazyDock('huya-dock-btn'"));
   assert.ok(/_isBackgroundSuspended\(\)[\s\S]{0,260}huya-workbench-open/.test(main), '虎牙工作台打开时暂停首页背景绘制');
   assert.ok(read('js/settings.js').includes('enableHuya: true'));
   assert.ok(read('js/settings-page.js').includes('enableHuya: true'));

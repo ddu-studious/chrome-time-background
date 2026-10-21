@@ -7,24 +7,24 @@ class HolidayManager {
     constructor() {
         this.holidays = {
             // 固定节日 - 格式: 'MM-DD': { name: '节日名称', type: '节日类型' }
-            '01-01': { name: '元旦', nameEn: 'New Year\'s Day', type: 'national' },
-            '02-14': { name: '情人节', nameEn: 'Valentine\'s Day', type: 'international' },
-            '03-08': { name: '妇女节', nameEn: 'Women\'s Day', type: 'international' },
-            '03-12': { name: '植树节', nameEn: 'Arbor Day', type: 'national' },
-            '04-01': { name: '愚人节', nameEn: 'April Fools\' Day', type: 'international' },
-            '04-22': { name: '地球日', nameEn: 'Earth Day', type: 'international' },
-            '05-01': { name: '劳动节', nameEn: 'Labor Day', type: 'national' },
-            '05-04': { name: '青年节', nameEn: 'Youth Day', type: 'national' },
-            '06-01': { name: '儿童节', nameEn: 'Children\'s Day', type: 'national' },
-            '07-01': { name: '建党节', nameEn: 'CPC Founding Day', type: 'national' },
-            '08-01': { name: '建军节', nameEn: 'Army Day', type: 'national' },
-            '09-10': { name: '教师节', nameEn: 'Teachers\' Day', type: 'national' },
-            '10-01': { name: '国庆节', nameEn: 'National Day', type: 'national' },
-            '10-31': { name: '万圣节', nameEn: 'Halloween', type: 'international' },
-            '11-11': { name: '光棍节', nameEn: 'Singles\' Day', type: 'modern' },
-            '12-24': { name: '平安夜', nameEn: 'Christmas Eve', type: 'international' },
-            '12-25': { name: '圣诞节', nameEn: 'Christmas Day', type: 'international' },
-            '12-31': { name: '除夕', nameEn: 'New Year\'s Eve', type: 'international' }
+            '01-01': { name: '元旦', type: 'national' },
+            '02-14': { name: '情人节', type: 'international' },
+            '03-08': { name: '妇女节', type: 'international' },
+            '03-12': { name: '植树节', type: 'national' },
+            '04-01': { name: '愚人节', type: 'international' },
+            '04-22': { name: '地球日', type: 'international' },
+            '05-01': { name: '劳动节', type: 'national' },
+            '05-04': { name: '青年节', type: 'national' },
+            '06-01': { name: '儿童节', type: 'national' },
+            '07-01': { name: '建党节', type: 'national' },
+            '08-01': { name: '建军节', type: 'national' },
+            '09-10': { name: '教师节', type: 'national' },
+            '10-01': { name: '国庆节', type: 'national' },
+            '10-31': { name: '万圣节', type: 'international' },
+            '11-11': { name: '光棍节', type: 'modern' },
+            '12-24': { name: '平安夜', type: 'international' },
+            '12-25': { name: '圣诞节', type: 'international' },
+            '12-31': { name: '除夕', type: 'international' }
         };
         
         // 农历节日数据将在初始化时加载
@@ -73,12 +73,12 @@ class HolidayManager {
     loadLunarHolidays() {
         // 农历节日 - 这些日期需要通过农历计算
         this.lunarHolidays = {
-            '正月初一': { name: '春节', nameEn: 'Spring Festival', type: 'lunar' },
-            '正月十五': { name: '元宵节', nameEn: 'Lantern Festival', type: 'lunar' },
-            '五月初五': { name: '端午节', nameEn: 'Dragon Boat Festival', type: 'lunar' },
-            '七月初七': { name: '七夕节', nameEn: 'Qixi Festival', type: 'lunar' },
-            '八月十五': { name: '中秋节', nameEn: 'Mid-Autumn Festival', type: 'lunar' },
-            '九月初九': { name: '重阳节', nameEn: 'Double Ninth Festival', type: 'lunar' }
+            '正月初一': { name: '春节', type: 'lunar' },
+            '正月十五': { name: '元宵节', type: 'lunar' },
+            '五月初五': { name: '端午节', type: 'lunar' },
+            '七月初七': { name: '七夕节', type: 'lunar' },
+            '八月十五': { name: '中秋节', type: 'lunar' },
+            '九月初九': { name: '重阳节', type: 'lunar' }
         };
     }
 
@@ -144,8 +144,7 @@ class HolidayManager {
         const holiday = this.getTodayHoliday();
         
         if (holiday) {
-            // 根据语言设置显示节日名称
-            const holidayName = settings.language === 'zh' ? holiday.name : holiday.nameEn;
+            const holidayName = holiday.name;
             
             // 设置节日显示内容
             this.holidayElement.textContent = holidayName;

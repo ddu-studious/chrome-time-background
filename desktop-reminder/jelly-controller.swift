@@ -11,6 +11,7 @@ final class JellyController: NSObject, NSMenuDelegate {
     /// 桌面 AI 助手启用时右键菜单第一项的标题（nil：没有这一项）与点选后的回调；助手本身在 assistant-panel.swift，这里只放入口。
     var assistantMenuTitle: String?
     var onAskAssistant: (() -> Void)?
+    var onFeedAssistant: ((String) -> Bool)?
 
     let companion = JellyCompanion()
     let menu = NSMenu()
@@ -46,6 +47,7 @@ final class JellyController: NSObject, NSMenuDelegate {
     // 睡与不睡、什么时候游都由 JellyBehavior 的纯逻辑决定，这里只是状态机。全是水母自己的动作：不产生业务数据，也不向 Chrome 回报。
     private var lively = false                          // jelly 命令 errands.enabled 与 errands.patrol 都严格为 true
     private var idleSeconds: Double?                    // main.swift 每 15 秒交来的系统空闲秒数；nil 表示不知道（当作在电脑前）
+    private(set) var meeting = false                    // main.swift 交来的摄像头/麦克风占用态（开会中安静，不巡游不小跳）
     private var menuOpenSince: Date?                    // 右键菜单打开中（menuWillOpen 起）；JellyBehavior.menuBlocks 只让路 180 秒，超过当作遗漏的 menuDidClose
     private var patrolTimer: Timer?                     // 等待出发 / 巡游时长，同一时刻只有一个
     private var fidgetTimer: Timer?                     // 清醒静止时下一次小动作
@@ -82,7 +84,20 @@ final class JellyController: NSObject, NSMenuDelegate {
         companion.onButton = { [weak self] id in self?.bubbleButton(id) }
         companion.onGrabBegin = { [weak self] in self?.grabBegan() }
         companion.onGrabEnd = { [weak self] in self?.grabEnded() }
+        companion.onDrop = { [weak self] item in _ = self?.receiveDrop(item) }
         menu.delegate = self
+    }
+
+    /// 拖拽投喂：把解析好的提示词交给桌面 AI 助手输入框并弹出面板（不自动提交）。
+    @discardableResult
+    func receiveDrop(_ item: JellyModel.DropItem) -> Bool {
+        if onFeedAssistant?(item.prompt) == true {
+            if !reduceMotion && ring == nil && !ringExiting && nudge == nil { companion.jump() }
+            setFeedback(item.label, bad: false, seconds: 3.5)
+            return true
+        }
+        setFeedback("请先在设置页开启“桌面 AI 助手”", bad: true, seconds: 4)
+        return false
     }
 
     // MARK: 数据入口（来自 Chrome）
@@ -314,8 +329,19 @@ final class JellyController: NSObject, NSMenuDelegate {
         let now = Date()
         let before = (isSleeping(now), behaviorEligible(now, stage: currentStage()))
         idleSeconds = seconds
+        if seconds == nil { meeting = false }
         guard companion.isVisible else { return }
         let after = (isSleeping(now), behaviorEligible(now, stage: currentStage()))
+        if before != after { refresh() }
+    }
+
+    /// main.swift 交来摄像头/麦克风是否被占用（开会中）。只影响巡游与小动作资格。
+    func noteMeeting(_ active: Bool) {
+        let now = Date()
+        let before = behaviorEligible(now, stage: currentStage())
+        meeting = active
+        guard companion.isVisible else { return }
+        let after = behaviorEligible(now, stage: currentStage())
         if before != after { refresh() }
     }
 
@@ -349,7 +375,7 @@ final class JellyController: NSObject, NSMenuDelegate {
 
     private func patrolContext(_ now: Date, stage: CountdownStage, includePointer: Bool = true) -> JellyBehavior.PatrolContext {
         JellyBehavior.PatrolContext(lively: lively, resident: resident, reduceMotion: reduceMotion, stage: stage, busy: behaviorBusy(now, includePointer: includePointer),
-                                    nightAmount: sleepNightAmount(now), idleSeconds: idleSeconds)
+                                    nightAmount: sleepNightAmount(now), idleSeconds: idleSeconds, meeting: meeting)
     }
 
     /// 现在能不能做“自己的动作”（巡游或小动作）：水母在屏幕上，且 JellyBehavior.canPatrol 为真。

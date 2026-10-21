@@ -22,14 +22,14 @@ test('队列播放语法覆盖真实说法，并区分随机与顺序播放', ()
 test('含歌手、条件、复合、指代或多余对象的说法一律不命中', () => {
   for (const text of ['随机播放添加到队列里的歌曲', '随机播放周杰伦的歌曲', '如果队列有歌就随机播放', '随机播放歌单', '随机播放歌单里的歌', '播放列表', '听列表',
     '播放当前列表', '播放我的收藏列表', '随机播放队列里的周杰伦', '清空队列后随机播放', '随机播放队列然后30分钟后停止', '播放队列里的下一首',
-    '随机播放歌曲', '播放歌曲', '随机播放这些歌曲', '随机播放我的队列', '', '随机', '队列']) {
+    '随机播放爵士音乐', '播放歌曲', '随机播放这些歌曲', '随机播放我的队列', '', '随机', '队列']) {
     assert.equal(Music.queuePlayRequest(text), null, text);
     assert.equal(Music.queuePlayRequest(text, { bare: true }), null, `${text}（允许裸随机播放时）`);
   }
 });
 
 test('裸“随机播放”只在调用方允许时命中，且不误伤带对象的说法', () => {
-  for (const text of ['随机播放', '随机播放。', '请随机播放', '帮我随机播放一下', '随机播放吧']) {
+  for (const text of ['随机播放音乐', '随机播放歌曲', '随机播放', '随机播放。', '请随机播放', '帮我随机播放一下', '随机播放吧']) {
     assert.equal(Music.queuePlayRequest(text), null, text);
     assert.deepEqual(Music.queuePlayRequest(text, { bare: true }), shuffle, text);
   }

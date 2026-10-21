@@ -629,14 +629,14 @@
     // ======================== 内置兜底图片 ========================
 
     const FALLBACK_BACKGROUNDS = [
-        { url: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=1920&q=80', location: 'Swiss Alps', description: 'Mountain sunrise', photographer: 'Unsplash', source: 'fallback' },
-        { url: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1920&q=80', location: 'Green Valley', description: 'Foggy forest valley', photographer: 'Unsplash', source: 'fallback' },
-        { url: 'https://images.unsplash.com/photo-1547981609-4b6bfe67ca0b?auto=format&fit=crop&w=1920&q=80', location: 'Great Wall', description: 'Great Wall of China', photographer: 'Unsplash', source: 'fallback' },
-        { url: 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1920&q=80', location: 'Lake', description: 'Mountain lake reflection', photographer: 'Unsplash', source: 'fallback' },
-        { url: 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=1920&q=80', location: 'Yosemite', description: 'Sunlit valley', photographer: 'Unsplash', source: 'fallback' },
-        { url: 'https://images.unsplash.com/photo-1433086966358-54859d0ed716?auto=format&fit=crop&w=1920&q=80', location: 'Waterfall', description: 'Tropical waterfall', photographer: 'Unsplash', source: 'fallback' },
-        { url: 'https://images.unsplash.com/photo-1520252729650-ddced2015543?auto=format&fit=crop&w=1920&q=80', location: 'West Lake', description: 'West Lake, Hangzhou', photographer: 'Unsplash', source: 'fallback' },
-        { url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1920&q=80', location: 'Beach', description: 'Tropical beach', photographer: 'Unsplash', source: 'fallback' },
+        { url: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=1920&q=80', location: '阿尔卑斯山', description: '山间日出', photographer: 'Unsplash', source: 'fallback' },
+        { url: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1920&q=80', location: '青翠山谷', description: '晨雾中的林谷', photographer: 'Unsplash', source: 'fallback' },
+        { url: 'https://images.unsplash.com/photo-1547981609-4b6bfe67ca0b?auto=format&fit=crop&w=1920&q=80', location: '长城', description: '中国长城', photographer: 'Unsplash', source: 'fallback' },
+        { url: 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1920&q=80', location: '山间湖泊', description: '山间湖泊倒影', photographer: 'Unsplash', source: 'fallback' },
+        { url: 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=1920&q=80', location: '优胜美地', description: '阳光下的山谷', photographer: 'Unsplash', source: 'fallback' },
+        { url: 'https://images.unsplash.com/photo-1433086966358-54859d0ed716?auto=format&fit=crop&w=1920&q=80', location: '瀑布', description: '热带瀑布', photographer: 'Unsplash', source: 'fallback' },
+        { url: 'https://images.unsplash.com/photo-1520252729650-ddced2015543?auto=format&fit=crop&w=1920&q=80', location: '西湖', description: '杭州西湖', photographer: 'Unsplash', source: 'fallback' },
+        { url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1920&q=80', location: '海滩', description: '热带海滩', photographer: 'Unsplash', source: 'fallback' },
     ].map(f => makeItem(f));
 
     // ======================== Provider Manager ========================
@@ -755,7 +755,8 @@
     const MERGED_REFRESH_MS = 30 * 60_000;
     const MERGED_STALE_MAX_MS = 7 * 24 * 3600_000;
     const MERGED_RETRY_MS = 5 * 60_000;
-    const MERGED_WAIT_MS = 10_000;
+    // 空缓存不能把首页背景挂在串行远程 API 上数秒；慢源在后台完成，下一次打开再用。
+    const MERGED_WAIT_MS = 1_200;
     const MERGED_BUILD_MAX_MS = 60_000;
     const mergedBuilds = new Map();
     let lastBackgroundRefreshAt = 0;

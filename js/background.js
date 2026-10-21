@@ -662,9 +662,31 @@ importScripts('jelly-nudge.js', 'jelly-appearance.js', 'jelly-errands-core.js', 
             return (await chrome.storage.local.get('worklogEntries')).worklogEntries || [];
         },
         tips: () => WARM_QUOTES,
-        openPage: async kind => {
-            // 与点系统通知同样的去处：日志打开新标签页并展开日志面板，其余只开新标签页；先写标记再开页，免得新页面先读不到
+        readLark: ({ manual } = {}) => LocalAIBridge.request({ action: 'lark_sentinel_check', manual }),
+        readTabs: () => chrome.tabs.query({}),
+        readWatch: () => chrome.storage.local.get(['biliWatchMemory', 'youtubeWatchHistory', 'youtubeWatchProgress', 'mashibingStudyTrackerV1']),
+        readBookmarks: async () => (await chrome.storage.local.get('bookmarkCache')).bookmarkCache,
+        openPage: async (kind, target) => {
+            // 与点系统通知同样的去处：日志打开新标签页并展开日志面板，继续看/拾贝/飞书打开对应目标，其余只开新标签页；先写标记再开页，免得新页面先读不到
             if (kind === 'worklog') await chrome.storage.local.set({ pendingAction: 'openWorklogPanel' });
+            if (kind === 'watch' && (target?.platform === 'bilibili' || target?.platform === 'youtube') && typeof AppVideo?.buildURL === 'function') {
+                await chrome.tabs.create({ url: AppVideo.buildURL(target, chrome.runtime.getURL('index.html')) });
+                return;
+            }
+            if ((kind === 'watch' || kind === 'bookmark') && typeof target?.url === 'string' && /^https?:\/\//i.test(target.url)) {
+                await chrome.tabs.create({ url: target.url });
+                return;
+            }
+            if (kind === 'lark') {
+                const tabs = await chrome.tabs.query({ url: ['https://*.feishu.cn/*', 'https://*.larksuite.com/*'] }).catch(() => []);
+                if (tabs?.[0]?.id != null) {
+                    await chrome.tabs.update(tabs[0].id, { active: true });
+                    if (tabs[0].windowId != null && chrome.windows?.update) await chrome.windows.update(tabs[0].windowId, { focused: true }).catch(() => {});
+                    return;
+                }
+                await chrome.tabs.create({ url: 'https://www.feishu.cn/messenger/' });
+                return;
+            }
             await chrome.tabs.create({ url: 'chrome://newtab/' });
         },
         isBusy: () => !!(desktopAlarm.sessionId || desktopAlarm.confirmationId),
@@ -680,7 +702,7 @@ importScripts('jelly-nudge.js', 'jelly-appearance.js', 'jelly-errands-core.js', 
     // “活动行为”（协议 v10）同样直接读配置：缺省为开，只有明确关掉才为 false；只在上面的总开关打开时才会被问
     jellyDesktop.errandsPatrol = async () => JellyErrandsCore.normalize((await chrome.storage.sync.get(JellyErrands.CONFIG_KEY))[JellyErrands.CONFIG_KEY]).patrol === true;
     desktopAlarm.onNudgeHidden = id => { void jellyErrands.onHidden(id); };
-    desktopAlarm.onPresence = state => jellyErrands.onPresence(state);
+    desktopAlarm.onPresence = (state, extra) => jellyErrands.onPresence(state, extra);
     chrome.alarms.onAlarm.addListener(alarm => { void jellyErrands.fire(alarm.name).catch(error => console.warn('[JellyErrands]', error.message)); });
     void jellyErrands.restore().catch(error => console.warn('[JellyErrands]', error.message));
     chrome.alarms.onAlarm.addListener(alarm => { void jellyNudge.fire(alarm.name).catch(error => console.warn('[JellyNudge]', error.message)); });

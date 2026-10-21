@@ -179,6 +179,15 @@ final class ConfirmationPanelController: NSObject {
         for button in [confirm!, cancel!, reply!, workspace!] + choiceButtons { button.isEnabled = enabled }
         input.isEnabled = enabled
     }
+    // Explicit foregrounding only. This never confirms an action or creates a
+    // card; it focuses the existing Chrome-owned, unexpired task/version.
+    func focus(for state: AssistantModel.State) -> Bool {
+        guard AssistantModel.canFocusInteraction(card, state: state, now: Date().timeIntervalSince1970 * 1000) else { return false }
+        NSApp.activate(ignoringOtherApps: true)
+        panel.makeKeyAndOrderFront(nil)
+        if !input.isHidden { panel.makeFirstResponder(input) }
+        return true
+    }
     @objc func hide() {
         guard let id = card?["id"] as? String else { return }
         panel.saveFrame(usingName: "AssistantInteractionV2"); _ = set(NSNull())

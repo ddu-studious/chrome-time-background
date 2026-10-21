@@ -1,0 +1,26 @@
+{
+  "size": [
+    1832,
+    947
+  ],
+  "comparisonRegion": [
+    340,
+    0,
+    1562,
+    625
+  ],
+  "changedPixels": 3011,
+  "regionPixels": 763750,
+  "note": "Paused and explicitly rendered both states. Central upper area excludes sidebars. Same world time and camera.",
+  "backgroundSample": {
+    "region": [
+      340,
+      0,
+      1562,
+      300
+    ],
+    "changedPixels": 0,
+    "pixels": 366600
+  },
+  "interpretation": "Upper background sample is unchanged. The wider region is not pixel-identical (fish receive reef-dependent lighting/shadows); this is not a whole-screen equality claim."
+}

@@ -8,7 +8,7 @@
   actions.add('ai_approval_evaluate');
   // Only the worker-owned assistant voice bridge may submit text for synthesis.
   // Likewise only the worker-owned assistant tool may submit code for the read-only compute sandbox; pages cannot.
-  const internalActions = new Set(['speech_ai_synthesize', 'ai_compute_submit']);
+  const internalActions = new Set(['speech_ai_synthesize', 'ai_compute_submit', 'lark_sentinel_check']);
   function selection(value) {
     if (value == null) return null;
     if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !['model', 'reasoning'].includes(key))) throw new Error('AI 选择无效');
@@ -26,6 +26,16 @@
         const data = await response.json();
         if (!response.ok || !data.ok) throw new Error(data.error || '确认策略服务不可用，请更新本机服务');
         return data;
+      }
+      if (message.action === 'lark_sentinel_check') {
+        if (!config.token) return { ok: false, status: 'unavailable', error: '本地 AI 连接未配置' };
+        const since = Number.isFinite(Number(message.since)) && Number(message.since) > 0 ? Math.floor(Number(message.since)) : 0;
+        const manual = message.manual === true ? '1' : '0';
+        const response = await fetch(`${BASE}/v1/sentinel/lark?since=${since}&manual=${manual}`, {
+          method: 'GET', redirect: 'error', signal: AbortSignal.timeout(12000),
+          headers: { Authorization: `Bearer ${config.token}` }
+        });
+        return response.json();
       }
       if (message.action === 'ai_memory_get' || message.action === 'ai_memory_write') {
         if (!config.token) throw new Error('请先配置本机连接后使用长期记忆');

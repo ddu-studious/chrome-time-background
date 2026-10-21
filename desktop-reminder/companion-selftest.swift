@@ -148,7 +148,11 @@ do {
         for (key, value) in patch { if let value = value { base[key] = value } else { base.removeValue(forKey: key) } }
         return base
     }
-    let accepted: [(String, [String])] = [("brief", ["open", "later"]), ("task", ["open", "later"]), ("worklog", ["open", "later"]), ("song", ["play", "another", "dismiss"]), ("tidbit", ["more", "dismiss"])]
+    let accepted: [(String, [String])] = [
+        ("brief", ["open", "later"]), ("task", ["open", "later"]), ("worklog", ["open", "later"]), ("lark", ["open", "later"]),
+        ("song", ["play", "another", "dismiss"]), ("tidbit", ["more", "dismiss"]),
+        ("tabs", ["open", "later"]), ("watch", ["open", "dismiss"]), ("bookmark", ["open", "later"])
+    ]
     for (kind, ids) in accepted {
         let parsed = JellyModel.parseNudge(errand(kind, ids))
         check(parsed != nil && parsed!.kind == kind && parsed!.buttons.map { $0.id } == ids, "差事类别 \(kind) 带合规按钮被接受")
@@ -161,7 +165,8 @@ do {
     let everyButton = ["done", "snooze", "open", "later", "more", "dismiss", "play", "another"]
     let expectedButtons: [String: Set<String>] = [
         "water": ["done", "snooze"], "stretch": ["done", "snooze"], "brief": ["open", "later"], "task": ["open", "later"],
-        "worklog": ["open", "later"], "song": ["play", "another", "dismiss"], "tidbit": ["more", "dismiss"],
+        "worklog": ["open", "later"], "lark": ["open", "later"], "song": ["play", "another", "dismiss"], "tidbit": ["more", "dismiss"],
+        "tabs": ["open", "later"], "watch": ["open", "dismiss"], "bookmark": ["open", "later"],
     ]
     check(Set(JellyModel.nudgeButtonRules.keys) == Set(expectedButtons.keys), "规则表的类别与期望一致")
     for (kind, owned) in expectedButtons {
@@ -182,24 +187,25 @@ do {
     check(JellyModel.parseNudge(errand("song", ["open", "later"])) == nil && JellyModel.parseNudge(errand("song", ["more"])) == nil && JellyModel.parseNudge(errand("song", ["done", "snooze"])) == nil, "歌曲气泡不能带别类的按钮")
     check(JellyModel.parseNudge(errand("tidbit", ["more", "dismiss", "another"])) == nil && JellyModel.parseNudge(errand("water", ["done", "snooze", "play"])) == nil, "只有歌曲能带 3 个按钮，play / another 不能落在别的类别上")
     check(JellyModel.maxNudgeButtons("song") == 3, "歌曲最多 3 个按钮")
-    check(["water", "stretch", "brief", "task", "worklog", "tidbit", "unknown", ""].allSatisfy { JellyModel.maxNudgeButtons($0) == 2 }, "其余类别（含未知）最多 2 个按钮")
+    check(["water", "stretch", "brief", "task", "worklog", "lark", "tidbit", "tabs", "watch", "bookmark", "unknown", ""].allSatisfy { JellyModel.maxNudgeButtons($0) == 2 }, "其余类别（含未知）最多 2 个按钮")
     check(["Task", "TASK", "task ", "tasks", "errand", ""].allSatisfy { JellyModel.parseNudge(errand($0, ["open", "later"])) == nil }, "差事类别的近似写法也拒绝")
     check(["Open", "OPEN", "open ", "delete", "play"].allSatisfy { JellyModel.parseNudge(errand("task", [$0])) == nil }, "差事按钮的近似写法与未知动作也拒绝")
     check(JellyModel.parseNudge(errand("task", ["open", "later"], ["title": String(repeating: "题", count: 40)]))?.title.count == 24, "差事标题同样截到 24 字符")
     check(JellyModel.parseNudge(errand("task", ["open", "later"], ["text": String(repeating: "文", count: 300)]))?.text.count == 120, "差事正文同样截到 120 字符")
-    check(JellyModel.isErrandKind("task") && JellyModel.isErrandKind("tidbit") && JellyModel.isErrandKind("song") && !JellyModel.isErrandKind("water") && !JellyModel.isErrandKind("stretch") && !JellyModel.isErrandKind("radio"), "差事类别判定")
+    check(JellyModel.isErrandKind("task") && JellyModel.isErrandKind("tidbit") && JellyModel.isErrandKind("song") && JellyModel.isErrandKind("lark") && JellyModel.isErrandKind("tabs") && JellyModel.isErrandKind("watch") && JellyModel.isErrandKind("bookmark") && !JellyModel.isErrandKind("water") && !JellyModel.isErrandKind("stretch") && !JellyModel.isErrandKind("radio"), "差事类别判定")
     check(JellyModel.isPrimaryNudgeButton(kind: "water", id: "done") && !JellyModel.isPrimaryNudgeButton(kind: "water", id: "snooze"), "喝水的主按钮是“喝了”")
     check(JellyModel.isPrimaryNudgeButton(kind: "task", id: "open") && !JellyModel.isPrimaryNudgeButton(kind: "task", id: "later"), "过期任务的主按钮是“去处理”")
     check(JellyModel.isPrimaryNudgeButton(kind: "tidbit", id: "more") && !JellyModel.isPrimaryNudgeButton(kind: "tidbit", id: "dismiss"), "小乐子的主按钮是“再来一条”")
     check(JellyModel.isPrimaryNudgeButton(kind: "song", id: "play") && !JellyModel.isPrimaryNudgeButton(kind: "song", id: "another") && !JellyModel.isPrimaryNudgeButton(kind: "song", id: "dismiss"), "歌曲的主按钮是“播放”")
+    check(JellyModel.isPrimaryNudgeButton(kind: "lark", id: "open") && JellyModel.isPrimaryNudgeButton(kind: "tabs", id: "open") && JellyModel.isPrimaryNudgeButton(kind: "watch", id: "open") && JellyModel.isPrimaryNudgeButton(kind: "bookmark", id: "open"), "飞书、整理标签页、接着看、深海拾贝的主按钮都是 open")
     check(!JellyModel.isPrimaryNudgeButton(kind: "task", id: "done") && !JellyModel.isPrimaryNudgeButton(kind: "unknown", id: "open"), "不属于该类别的按钮不是主按钮")
     for (kind, _) in accepted { print("ERRAND \(kind) \(JellyModel.primaryNudgeButton[kind] ?? "-") \((JellyModel.nudgeButtonRules[kind] ?? []).sorted().joined(separator: ","))") }
-    // 右键菜单“水母，给我…”的四项（协议 v9）：期望写成独立字面量；kind 必须与 JS 的 REQUEST_KINDS 一致（由 Node 侧对照）
-    check(JellyModel.errandRequestItems.map { $0.kind } == ["brief", "song", "tidbit", "worklog"], "菜单请求的类别与顺序")
-    check(JellyModel.errandRequestItems.map { $0.title } == ["今日概览", "来首歌", "来点乐子", "工作日志"], "菜单项的文字")
-    check(Set(JellyModel.errandRequestItems.map { $0.kind }).count == 4 && Set(JellyModel.errandRequestItems.map { $0.title }).count == 4, "菜单项的类别与文字互不重复")
+    // 右键菜单“水母，给我…”的八项：期望写成独立字面量；kind 必须与 JS 的 REQUEST_KINDS 一致（由 Node 侧对照）
+    check(JellyModel.errandRequestItems.map { $0.kind } == ["brief", "lark", "song", "tidbit", "worklog", "tabs", "watch", "bookmark"], "菜单请求的类别与顺序")
+    check(JellyModel.errandRequestItems.map { $0.title } == ["今日概览", "飞书 @我", "来首歌", "来点乐子", "工作日志", "整理标签页", "接着看", "深海拾贝"], "菜单项的文字")
+    check(Set(JellyModel.errandRequestItems.map { $0.kind }).count == 8 && Set(JellyModel.errandRequestItems.map { $0.title }).count == 8, "菜单项的类别与文字互不重复")
     check(JellyModel.errandRequestItems.allSatisfy { JellyModel.isErrandKind($0.kind) }, "菜单请求的类别都是差事类别")
-    check(JellyModel.isErrandRequestKind("song") && JellyModel.isErrandRequestKind("brief") && !JellyModel.isErrandRequestKind("task") && !JellyModel.isErrandRequestKind("water") && !JellyModel.isErrandRequestKind("Song") && !JellyModel.isErrandRequestKind(""), "菜单请求的类别判定（任务提醒不在其中，它只由到期情况触发）")
+    check(JellyModel.isErrandRequestKind("song") && JellyModel.isErrandRequestKind("brief") && JellyModel.isErrandRequestKind("lark") && JellyModel.isErrandRequestKind("tabs") && JellyModel.isErrandRequestKind("watch") && JellyModel.isErrandRequestKind("bookmark") && !JellyModel.isErrandRequestKind("task") && !JellyModel.isErrandRequestKind("water") && !JellyModel.isErrandRequestKind("Song") && !JellyModel.isErrandRequestKind(""), "菜单请求的类别判定（任务提醒不在其中，它只由到期情况触发）")
     for item in JellyModel.errandRequestItems { print("ERRAND_REQUEST \(item.kind)") }
 }
 
@@ -212,6 +218,22 @@ do {
 }
 
 // --- 水母协议 v10：jelly 命令的 errands.patrol（活动行为开关）---
+do {
+    // 拖拽投喂（parseDrop）：网页链接 > 本地白名单文件 > 纯文本；非法协议与路径穿越拒绝
+    let urlDrop = JellyModel.parseDrop(url: "https://example.com/article?id=1")
+    check(urlDrop?.kind == "url" && urlDrop?.prompt == "帮我看看这个链接：https://example.com/article?id=1", "拖拽 https 链接被接受并生成提示词")
+    check(JellyModel.parseDrop(url: "javascript:alert(1)") == nil && JellyModel.parseDrop(url: "file:///etc/passwd") == nil, "非 http/https 链接被拒绝")
+    let fileDrop = JellyModel.parseDrop(fileURL: "file:///Users/demo/notes/summary.md")
+    check(fileDrop?.kind == "file" && fileDrop?.prompt == "帮我处理文件「summary.md」：", "白名单后缀本地文件被接受，且只保留文件名")
+    check(JellyModel.parseDrop(fileURL: "/Users/demo/../etc/notes.md") == nil, "包含 .. 的路径被拒绝")
+    check(JellyModel.parseDrop(fileURL: "file:///Users/demo/secret.key") == nil, "非白名单后缀的文件被拒绝")
+    let textDrop = JellyModel.parseDrop(text: "帮我记一下明天下午三点开周会")
+    check(textDrop?.kind == "text" && textDrop?.prompt == "帮我处理这段内容：帮我记一下明天下午三点开周会", "纯文本被接受")
+    let textAsUrl = JellyModel.parseDrop(text: "https://developer.chrome.com/docs/extensions")
+    check(textAsUrl?.kind == "url", "纯文本本身是 http(s) 网址时按链接处理")
+    check(JellyModel.parseDrop(url: nil, fileURL: nil, text: "   \n\t ") == nil, "全空白拖拽被拒绝")
+}
+
 do {
     let plain = JellyModel.parseState([String: Any]())!
     check(plain.patrol == false, "缺省：没有活动行为（老样子，休息就睡）")
@@ -253,6 +275,7 @@ do {
     check(!can { $0.reduceMotion = true }, "减少动态效果：不巡游")
     for stage in [CountdownStage.soon, .imminent, .final, .due] { check(!can { $0.stage = stage }, "倒计时已进入 \(stage)：水母自己在游，不巡游") }
     check(!can { $0.busy = true }, "忙（气泡、响铃、被抓、菜单、鼠标在身上）：不巡游")
+    check(!can { $0.meeting = true }, "开会中（摄像头或麦克风被占用）：不巡游")
     check(can { $0.nightAmount = 0.49 } && !can { $0.nightAmount = 0.5 } && !can { $0.nightAmount = 1 }, "夜里不巡游（曲线 0.5 起）")
     check(can { $0.idleSeconds = 299.9 } && !can { $0.idleSeconds = 300 } && !can { $0.idleSeconds = 601 }, "离开电脑（presence 为 away，300 秒起）不巡游")
     check(can { $0.idleSeconds = nil } && can { $0.idleSeconds = -2 } && can { $0.idleSeconds = Double.nan }, "读不出空闲时间：当作在电脑前，可以巡游")
@@ -2045,6 +2068,57 @@ do {
         check(A.parse(["realistic": NSNull()] as [String: Any]).realistic == false && A.parse("x").realistic == false && A.parse(nil).realistic == false, "外观：null、非字典、nil → 不写实")
         check(A.parse(["species": "whaleshark", "realistic": true] as [String: Any]) != A.parse(["species": "whaleshark"] as [String: Any]), "外观：realistic 参与相等判断（换风格会重绘）")
     }
+}
+
+// 桌面目录补全：只读数据、前置语法、精确优先、稳定排序与范围过滤。
+do {
+    typealias A = AssistantModel
+    let raw: [String: Any] = ["version": 1, "revision": 1,
+        "apps": [["id": "music", "name": "音乐", "aliases": ["网易云", "music"], "description": "播放音乐"], ["id": "alarm", "name": "闹钟", "aliases": ["提醒"], "description": "提醒"]],
+        "actions": [["id": "play", "name": "播放", "apps": ["music"], "description": "播放"], ["id": "alarms", "name": "查看提醒", "apps": ["alarm"], "description": "查看"]]]
+    let catalog = A.parseCatalog(raw)
+    check(catalog?.apps.count == 2, "目录：有效有界载荷")
+    for text in ["@", "@音", "@mus", "@网易"] {
+        check(A.completion(text, caret: text.utf16.count, catalog: catalog)?.items.first?.id == "music", "目录：本地匹配 \(text)")
+    }
+    check(A.completion("@音乐 /", caret: 5, catalog: catalog)?.items.map { $0.id } == ["play"], "目录：动作按应用过滤")
+    check(A.completion("@未知", caret: 3, catalog: catalog)?.items.isEmpty == true, "目录：无匹配不猜测")
+    for text in ["联系 a@music.com", "https://example.test/a", "正文 @音乐", "@音乐 /play 正文@"] {
+        check(A.completion(text, caret: text.utf16.count, catalog: catalog) == nil, "目录：正文邮箱URL不补全 \(text)")
+    }
+    check(A.completion("@音 后面保留", caret: 2, catalog: catalog)?.range == NSRange(location: 0, length: 2), "目录：替换范围不包含正文")
+    check(A.completion("@", caret: 1, catalog: nil)?.items.isEmpty == true, "目录：未同步仍保留编辑入口")
+    var invalid = raw; invalid["revision"] = -1
+    check(A.parseCatalog(invalid) == nil, "目录：非法版本拒绝")
+    invalid = raw; invalid["apps"] = Array(repeating: raw["apps"] as! [[String: Any]], count: 20).flatMap { $0 }
+    check(A.parseCatalog(invalid) == nil, "目录：超限拒绝")
+}
+
+// 与浏览器同一批查询逐项核对拼音、缩写、混输、排序；仅自测入口读取夹具。
+if let path = ProcessInfo.processInfo.environment["ASSISTANT_MATCH_CASES"],
+   let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
+   let raw = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+   let catalog = AssistantModel.parseCatalog(raw["catalog"]), let cases = raw["cases"] as? [[String: Any]] {
+    let matchingStarted = Date()
+    for (index, row) in cases.enumerated() {
+        guard let text = row["text"] as? String else { continue }
+        let result = AssistantModel.completion(text, caret: text.utf16.count, catalog: catalog)
+        check(result == nil || result?.matchingUnavailable == false, "拼音匹配器可用 \(index)")
+        let ids = result?.items.map { $0.id } ?? []
+        let encoded = try! JSONSerialization.data(withJSONObject: ids)
+        print("MATCH \(index) \(String(decoding: encoded, as: UTF8.self))")
+    }
+    print("MATCH_MS \(Date().timeIntervalSince(matchingStarted) * 1000)")
+}
+
+do {
+    let state = AssistantModel.State(taskId: "review-task", version: 2, status: .review, input: "播放", message: "确认", at: 1)
+    let card: [String: Any] = ["taskId": "review-task", "version": 2, "status": "review", "expiresAt": 2000.0]
+    check(AssistantModel.canFocusInteraction(card, state: state, now: 1000), "确认卡可发现：同任务、版本、状态且未过期")
+    for patch in [["taskId": "other"], ["version": 1], ["status": "completed"], ["expiresAt": 1000.0]] as [[String: Any]] {
+        check(!AssistantModel.canFocusInteraction(card.merging(patch) { _, new in new }, state: state, now: 1000), "不聚焦过期或不匹配的确认卡")
+    }
+    check(!AssistantModel.canFocusInteraction(nil, state: state, now: 1000), "不存在的交互卡不伪造")
 }
 
 print(failures == 0 ? "ALL PASS" : "\(failures) FAILED")

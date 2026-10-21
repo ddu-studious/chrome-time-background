@@ -360,6 +360,83 @@ test('吃：两条鱼同样近时只有先出现的那条吃到；更近的那�
     }
 });
 
+test('吃（大个子）：按嘴吃——饲料离嘴不到 体长 × EAT_R_MOUTH + EAT_R_PAD 才算吃到，离鱼心再近、离嘴远也不吃；小鱼仍按离鱼心的距离', () => {
+    for (const species of ['hammer', 'manta', 'whaleshark']) {
+        const { w, play, fish } = tank(species);
+        assert.ok(Core.agileOf(w, fish) < 1, `${species} 是大个子`);
+        const mouth = { x: fish.x + fish.len * 0.45, y: fish.y };
+        const eatR = P.EAT_R_MOUTH * fish.len + P.EAT_R_PAD;
+        const pellet = (id, x, y) => play.pellets.push({ id, x, y, t: 0, ph: 0, sink: 0, life: 14 });
+        pellet(1, fish.x, fish.y);                                   // 就在鱼心上：离嘴 0.45 个体长，吃不到
+        pellet(2, mouth.x + eatR + 5, mouth.y);                       // 嘴前面一点：吃不到
+        pellet(3, mouth.x + eatR - 3, mouth.y);                       // 嘴边：吃到
+        Play.step(play, w, 50);
+        assert.deepEqual(play.pellets.map(p => p.id).sort(), [1, 2], `${species}：只有嘴边的被吃`);
+        assert.ok(play.fed.has(fish.id));
+    }
+    // 小鱼：鱼心上的饲料就能吃到（原来的规则，数值不变）
+    const small = tank('clown');
+    small.play.pellets.push({ id: 1, x: small.fish.x, y: small.fish.y, t: 0, ph: 0, sink: 0, life: 14 });
+    Play.step(small.play, small.w, 50);
+    assert.equal(small.play.pellets.length, 0);
+});
+
+test('吃（大个子）：转身时（xs < 1）身体沿屏幕横向缩短，嘴跟着收回来——饲料在缩短后的嘴边才算吃到', () => {
+    for (const species of ['hammer', 'whaleshark']) {
+        const { w, play, fish } = tank(species);
+        fish.xs = 0.2;
+        const eatR = P.EAT_R_MOUTH * fish.len + P.EAT_R_PAD;
+        const shortMouth = fish.x + fish.len * 0.45 * 0.2;
+        const fullMouth = fish.x + fish.len * 0.45;
+        play.pellets.push({ id: 1, x: fullMouth, y: fish.y, t: 0, ph: 0, sink: 0, life: 14 });         // 没缩短时的嘴位置：现在已经离嘴很远
+        play.pellets.push({ id: 2, x: shortMouth + eatR - 3, y: fish.y, t: 0, ph: 0, sink: 0, life: 14 });
+        Play.step(play, w, 50);
+        assert.deepEqual(play.pellets.map(p => p.id), [1], `${species}：嘴随身体缩短`);
+        assert.ok(play.bubbles.length >= P.EAT_BUBBLES);
+        const mouthBubble = play.bubbles[0];
+        assert.ok(Math.abs(mouthBubble.x - shortMouth) < 10 * w.scale, `${species}：泡冒在缩短后的嘴边 ${mouthBubble.x.toFixed(1)} / ${shortMouth.toFixed(1)}`);
+    }
+});
+
+test('吃（大个子）：鱼朝着竖直、朝西时（俯视的蝠鲼可以头朝正上正下），嘴在鱼心的上方、下方、西侧 0.45 个体长处——只有那里的饲料算吃到；转身缩短（xs）只缩横向，竖直的嘴不动', () => {
+    // 变异检查：只测了朝东时，嘴的 y 分量（sin）与 x 分量（cos）互换、或 y 也被 xs 缩短，都没有测试发现。
+    for (const [ang, dx, dy] of [[Math.PI / 2, 0, 1], [-Math.PI / 2, 0, -1], [Math.PI, -1, 0]]) {
+        for (const xs of [1, 0.2]) {
+            const { w, play, fish } = tank('manta');
+            Object.assign(fish, { ang, xs });
+            const eatR = P.EAT_R_MOUTH * fish.len + P.EAT_R_PAD;
+            const reach = fish.len * 0.45;
+            const pellet = (id, x, y) => play.pellets.push({ id, x, y, t: 0, ph: 0, sink: 0, life: 14 });
+            const mx = fish.x + dx * reach * (dx ? xs : 1);                           // 只有横向分量随 xs 缩短
+            const my = fish.y + dy * reach;
+            pellet(1, mx + dx * (eatR - 3), my + dy * (eatR - 3));                    // 嘴边（朝头的方向再出去一点）：吃到
+            pellet(2, fish.x + reach, fish.y);                                        // 朝东时嘴的位置：现在不是嘴（竖直时离嘴 0.64 个体长；朝西时在尾巴那头）
+            pellet(3, fish.x - dx * reach, fish.y - dy * reach);                      // 鱼的另一头：不是嘴
+            Play.step(play, w, 50);
+            const label = `朝向 ${ang.toFixed(2)}、xs ${xs}`;
+            assert.deepEqual(play.pellets.map(p => p.id).sort(), [2, 3], `${label}：只有头那一端的嘴边被吃`);
+            assert.ok(play.bubbles.length >= P.EAT_BUBBLES, `${label}：吃到后冒泡`);
+            const bubble = play.bubbles[0];
+            assert.ok(Math.abs(bubble.x - mx) < 10 * w.scale && Math.abs(bubble.y - my) < 10 * w.scale, `${label}：泡冒在嘴边 (${bubble.x.toFixed(1)}, ${bubble.y.toFixed(1)}) / (${mx.toFixed(1)}, ${my.toFixed(1)})`);
+        }
+    }
+});
+
+test('戳（大个子）：被戳只是游快一点——冲刺倍数按笨重系数缩小，不会像小鱼那样窜出去；小鱼仍是 POKE_DASH 倍', () => {
+    for (const species of ['hammer', 'manta', 'whaleshark']) {
+        const { w, play, fish } = tank(species);
+        const agile = Core.agileOf(w, fish);
+        assert.ok(agile < 1);
+        assert.equal(Play.poke(play, w, fish, { x: fish.x - 20, y: fish.y }).ok, true);
+        const mult = Math.hypot(fish.vx, fish.vy) / cruise(w, fish);
+        assert.ok(Math.abs(mult - (1 + (P.POKE_DASH - 1) * agile)) < 1e-9, `${species}：冲刺 ${mult.toFixed(3)} 倍`);
+        assert.ok(mult > 1 && mult < P.POKE_DASH, `${species}：比巡航快、比小鱼慢`);
+    }
+    const { w, play, fish } = tank('clown');
+    assert.equal(Play.poke(play, w, fish, { x: fish.x - 20, y: fish.y }).ok, true);
+    assert.ok(Math.abs(Math.hypot(fish.vx, fish.vy) / cruise(w, fish) - P.POKE_DASH) < 1e-9);
+});
+
 test('变亮：吃到后 FED_IN_S 内亮起、保持，最后 FED_OUT_S 内渐渐暗下，到 20 秒记录清掉；再吃一粒从头续满 20 秒', () => {
     const { w, play, fish } = tank('clown');
     play.pellets.push({ id: 1, x: fish.x, y: fish.y, t: 0, ph: 0, sink: 0, life: 14 });
@@ -534,12 +611,18 @@ test('拉伸方向：指针速度折算到鱼本地坐标——鱼头朝南、�
     assert.ok(Math.abs(pullOf(t).x - (-100 / sp) * mag) < 0.2 && Math.abs(pullOf(t).y - (200 / sp) * mag) < 0.2, `拉伸 ${pullOf(t).x}, ${pullOf(t).y}`);
 });
 
-test('拉伸方向：垂直方向拖时弹簧永远有限，突然改向也一样', () => {
-    const t = holdTail('hammer');
+test('拉伸方向：垂直方向拖时弹簧永远有限，突然改向也一样（俯视的蝠鲼鱼头可以正对北，侧视的锤头鲨受俯仰限制、拉伸带一点本地 y 分量）', () => {
+    const t = holdTail('manta');
     drive(t, 0, 300, 1.5);                                                     // 向南拖：鱼头转向北，本地 −x 指向南，所以仍是 −x
     assert.ok(pullOf(t).x < -1 && Math.abs(pullOf(t).y) < 0.5, `拉伸 ${pullOf(t).x}, ${pullOf(t).y}`);
     drive(t, 150, 0, 0.3);                                                     // 突然改向东拖：转身过程中会有横向分量
     assert.ok([pullOf(t).x, pullOf(t).y, pullOf(t).vx, pullOf(t).vy].every(Number.isFinite));
+    const side = holdTail('hammer');
+    drive(side, 0, 300, 1.5);                                                  // 侧视：鱼头最多抬到 HOLD_PITCH_MAX，指针运动方向在鱼本地坐标里不再正好是 −x
+    assert.ok(side.fish.held && Math.abs(side.fish.ang) <= Core.PARAMS.HOLD_PITCH_MAX + 1e-3, `朝向 ${side.fish.ang}`);
+    assert.ok(pullOf(side).x < -1 && Math.abs(pullOf(side).y) < Math.abs(pullOf(side).x), `拉伸 ${pullOf(side).x}, ${pullOf(side).y}`);
+    drive(side, 150, 0, 0.3);
+    assert.ok([pullOf(side).x, pullOf(side).y, pullOf(side).vx, pullOf(side).vy].every(Number.isFinite));
 });
 
 test('松手：鱼朝鱼头方向冲一下（RELEASE_DASH × 巡航速度）、冒 2 个泡；尾巴回弹一次（过零、反向幅度小于第一次的 25%）后在 2 秒内停稳并清掉记录', () => {

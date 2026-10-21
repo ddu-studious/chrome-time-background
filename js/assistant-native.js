@@ -4,6 +4,9 @@
   else root.AssistantNative = api;
 })(globalThis, function () {
   'use strict';
+  const Contract = typeof module === 'object' && module.exports ? require('./assistant-contract.js') : globalThis.AssistantContract;
+  const catalog = () => ({ version: 1, revision: 2026102101, apps: Contract.apps.map(({ id, name, aliases, description }) => ({ id, name, aliases, description })),
+    actions: Contract.skills.map(({ id, name, apps, description }) => ({ id, name, apps, description })) });
 
   // 桌面 AI 助手（macOS 原生面板）在 Chrome 一侧的薄适配层：
   //  · 原生面板 → Chrome：提交文字、停止当前任务、在工作台查看。三者都经 AlarmDesktop.handleAssistantAction（绑定当前连接、
@@ -41,6 +44,7 @@
       input: oneLine(task.input?.text, MAX_SHOWN_INPUT),
       message: multiline(task.message, MAX_SHOWN_MESSAGE),
       at: Number.isFinite(task.updatedAt) && task.updatedAt > 0 ? Math.floor(task.updatedAt) : 0,
+      ...(task.scopeSource ? { scopeLabel: task.scope ? `${Contract.apps.find(app => app.id === task.scope)?.name || '应用'} · ${task.scopeSource === 'explicit' ? '已指定' : task.scopeSource === 'continuation' ? '继续当前事项' : '自动识别'}` : '通用' } : {}),
     };
   }
   // 去重只看内容：updatedAt 变化不算新状态
@@ -52,7 +56,7 @@
    * log：(category, action, detail) => void，只收固定类别。
    */
   function create({ desktop, engine, jelly, openWorkspace, log = () => {} }) {
-    let latest = null, sentSignature, chain = Promise.resolve(), submitting = false;
+    let latest = null, sentSignature, catalogSent = false, chain = Promise.resolve(), submitting = false;
     const enabled = async () => { try { return (await jelly.assistantEnabled()) === true; } catch (_) { return false; } };
     const record = (context, ok, error) => { try { log('system', 'assistant-native', { ok, context, ...(error ? { error } : {}) }); } catch (_) { /* 日志不能影响助手 */ } };
     const fail = (context, category, text) => { record(context, false, category); return { ok: false, error: text }; };
@@ -63,7 +67,13 @@
         if (signature === sentSignature) return false;
         if (!desktop.port) return false;                 // 不为了推送状态去启动组件
         if (!(await enabled())) return false;
-        try { await desktop.setAssistantState(value); sentSignature = signature; return true; }
+        try {
+          const result = await desktop.setAssistantState(value); sentSignature = signature;
+          if (!catalogSent && result?.assistantCatalog === 1 && desktop.setAssistantCatalog) {
+            await desktop.setAssistantCatalog(catalog()); catalogSent = true;
+          }
+          return true;
+        }
         catch (_) { record('state', false, 'unavailable'); return false; }
       });
       chain = run.catch(() => {});
@@ -72,10 +82,11 @@
     /** Engine 每次变化都调用；返回的 Promise 在本次下发结束后兑现（失败不抛出）。 */
     function sync(task) { latest = project(task); return flush(); }
     // 新连接（原生进程是新的）或设置刚生效：内容没变也要重发；以 Engine 当前任务为准，不用旧缓存
-    const resend = () => { sentSignature = undefined; void engine.snapshot().then(task => sync(task)).catch(() => {}); };
+    const resend = () => { sentSignature = undefined; catalogSent = false; void engine.snapshot().then(task => sync(task)).catch(() => {}); };
 
     async function submit(message) {
       const raw = message.text;
+      if (message.newConversation != null && typeof message.newConversation !== 'boolean') return fail('submit', 'invalid', '新需求标记无效');
       if (typeof raw !== 'string') return fail('submit', 'invalid', '请输入需求');
       const text = raw.trim();
       if (!text || [...text].length > MAX_INPUT) return fail('submit', 'invalid', `请输入 1 至 ${MAX_INPUT} 字的内容`);
@@ -85,7 +96,7 @@
         // 与浏览器工作台一致：带上面板所见的任务与版本，让“第 2 个”之类的引用与过期检查走原有路径；半截绑定不传。
         const bound = validId(message.taskId) && Number.isSafeInteger(message.version);
         // 原生只能提交文字：应用、动作、候选、来源都不接受调用方给的
-        const view = await engine.submit({ text, origin: 'desktop', ...(bound ? { taskId: message.taskId, version: message.version } : {}) });
+        const view = await engine.submit({ text, origin: 'desktop', ...(message.newConversation === true ? { newConversation: true } : {}), ...(bound ? { taskId: message.taskId, version: message.version } : {}) });
         record('submit', true);
         return { ok: true, ...(view ? { taskId: view.id, version: view.version } : {}) };
       } finally { submitting = false; }
@@ -128,5 +139,5 @@
     };
   }
 
-  return { create, project, STATUSES: [...STATUSES], MAX_INPUT };
+  return { create, project, catalog, STATUSES: [...STATUSES], MAX_INPUT };
 });

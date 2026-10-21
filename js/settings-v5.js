@@ -192,6 +192,7 @@
           <div class="settings-v5-inline-status">Chrome 不允许扩展直接改写快捷键，修改必须由你在浏览器设置页确认。</div>
         </article>
         <div class="settings-v5-shortcuts">
+          <article><kbd>?</kbd><div><strong>查看全部快捷键</strong><span>首页和设置页均可使用，输入时不触发。</span><button type="button" id="settings-v5-open-shortcut-help">打开快捷键面板</button></div></article>
           <article><kbd>⌘ / Ctrl</kbd><b>+</b><kbd>K</kbd><div><strong>上下文搜索</strong><span>音乐面板、任务面板和知识区使用当前上下文搜索。</span></div></article>
           <article><kbd>Esc</kbd><div><strong>关闭顶层浮层</strong><span>优先关闭菜单、抽屉、启动台或当前应用面板。</span></div></article>
           <article><kbd>Space</kbd><div><strong>专注模式控制</strong><span>焦点不在输入框时切换专注计时的运行状态。</span></div></article>
@@ -237,6 +238,7 @@
   }
 
   function bindCommandShortcuts() {
+    document.querySelector('#settings-v5-open-shortcut-help')?.addEventListener('click', () => globalThis.ShortcutHelp?.open());
     document.querySelector('#settings-v5-open-command-settings')?.addEventListener('click', async () => {
       try {
         await globalThis.chrome?.tabs?.create?.({ url: 'chrome://extensions/shortcuts' });

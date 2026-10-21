@@ -100,6 +100,7 @@ test('网关只用所选模型能力和全局预算，失败准备仍有所选�
 test('模型在准备后换成更小上下文时重新检查，不能把超限请求发给模型', async () => {
   const provider = new LMStudioProvider();
   provider.models = async () => [{ id: provider.model, loaded: true, loadedContextLength: 4096, reasoningOptions: ['low'] }];
+  provider.countContextTokens = async () => ({ inputTokens: 100, contextLength: 4096 });
   provider.request = async () => { assert.fail('不应请求生成'); };
   await assert.rejects(provider.generateObject({ instructions: 'system', input, reasoning: 'low', maxOutputTokens: 4096, contextBudget: { contextLength: 40960 } }), { code: 'ASSISTANT_CONTEXT_BUDGET_EXCEEDED' });
   assert.equal(provider.busy, false);

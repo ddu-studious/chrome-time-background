@@ -46,9 +46,12 @@ const GOLD = {
     neon: 'fd86f6176ce43467', tang: 'fdee4ce17b56cdd8', clown: '4c91781322140894', puffer: '11801381e87978eb',
     angel: '3eff4f2328fc7e66', hammer: 'c24a88631760c450', manta: '286862276db6ab51', whaleshark: '1914a4943a106bff',
 };
+// 黄金哈希是用当时的体长（种类体长 × 3）算出来的。2026-10-19 起大型动物的体长改按真实比例（见 aquarium-core.js 的 PX_PER_M），
+// 所以这里把画法的输入体长钉在当时的数字上：钉住的是“同样的输入画出同样的每一笔”，与鱼现在长多大无关。
+const GOLD_LEN = { neon: 16, tang: 22, clown: 30, puffer: 32, angel: 34, hammer: 56, manta: 96, whaleshark: 130 };
 const goldOf = (id, extras) => {
     const h = crypto.createHash('sha1');
-    for (const [fishExtra, view] of GOLD_SCENARIOS) h.update(JSON.stringify(log(id, fishExtra, view, extras)));
+    for (const [fishExtra, view] of GOLD_SCENARIOS) h.update(JSON.stringify(log(id, Object.assign({ len: GOLD_LEN[id] * 3 }, fishExtra), view, extras)));
     return h.digest('hex').slice(0, 16);
 };
 

@@ -1,0 +1,25 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>真三维海洋 · 尺度与追逃实验</title><link rel="stylesheet" href="/css/background-experience.css"><link rel="stylesheet" href="/css/task-crumple.css"><link rel="stylesheet" href="app.css"></head><body>
+<div id="wallpaper" aria-hidden="true"></div><canvas id="ocean-canvas" aria-hidden="true"></canvas>
+<div id="background-experience-root" class="bgx-root" aria-hidden="true"><div class="bgx-tone" id="background-experience-tone"></div><div class="bgx-detail" id="background-experience-detail"></div><div class="bgx-time" id="background-experience-time"></div><canvas id="background-experience-canvas"></canvas></div>
+<header><div><span>OCEAN FIELD NOTES / 02</span><h1>看见体积，感受尺度。</h1></div><b>隔离实验 · 真 3D 鱼与礁石</b></header>
+<div class="time-wrapper"><div class="time-container"><time id="clock">--:--</time><p>同一片水域，每一条都不同。</p></div></div>
+<aside id="panel"><div class="panel-heading"><h2>海洋实验</h2><button id="collapse">收起</button></div><div id="panel-body">
+<label class="field"><span>观察方式</span><select id="view-mode"><option value="natural">自然游动</option><option value="scale">同深度尺标</option><option value="turntable">转身观察</option><option value="depth">遮挡检查（测试石）</option></select></label>
+<div id="angles" hidden><button data-angle="0" aria-pressed="true">侧面</button><button data-angle="-45">3/4</button><button data-angle="-90">正面</button><button data-angle="180">另一侧</button><button data-angle="top">俯视</button></div>
+<div id="depth-controls" hidden><button data-depth="front">石前</button><button data-depth="back">石后</button><button data-depth="partial">局部遮挡</button></div>
+<label class="field range"><span>观察距离</span><input id="zoom" aria-label="观察距离" type="range" min="1" max="2.4" value="1.6" step="0.1"></label>
+<label class="switch"><span>显示固定礁景<small>默认关闭 · 同步控制遮挡与碰撞</small></span><input id="reef" type="checkbox"></label>
+<label class="field range"><span>造景范围 <output id="coverage-value">32%</output></span><input id="coverage" type="range" min="20" max="42" value="32" aria-label="造景范围"></label>
+<label class="field"><span>背景示例</span><select id="background"><option value="dusk">暮色海湾</option><option value="blue">晴空蓝</option><option value="grid">透明检查格</option></select></label>
+<div class="actions"><button id="feed">喂食</button><button id="add-fish">加入小丑鱼</button></div>
+<label class="switch"><span>启用追逃测试<small>尖吻鲈与小鱼的行为样板，非自然共栖复原</small></span><input id="predation" type="checkbox"></label>
+<label class="field"><span>捕食者总长</span><select id="pred-size"><option value="0.45">45 cm</option><option value="0.18">18 cm</option></select></label>
+<div class="actions"><button id="pause" aria-pressed="false">暂停</button><button id="reset">重置演示</button></div>
+<p id="status" role="status">载入三维实验…</p><p id="counts"></p>
+<details><summary>居民与验证信息</summary><p>总长以米为单位。小、中、大体型不等同已确认年龄；当前没有加速成长。</p><ul id="fish-list"></ul><label><input id="guide" type="checkbox"> 显示可抓取位置</label><output id="diagnostics"></output><output id="interaction-log"></output><pre id="event-log"></pre><p>鱼与礁石是真三维；任务水母仍沿用原交互层。碰撞使用保守身体代理与 BVH 查询，非流体动力学。</p></details>
+</div></aside>
+<aside id="tasks-panel"><h2>任务水母</h2><p>抓住水母，拖入纸篓。</p><ul id="tasks"></ul><output id="task-result">3 项演示任务 · 与正式数据隔离</output></aside>
+<div id="scale-labels"></div><div id="guides"></div><div id="fish-net" hidden>拖到这里捞出</div>
+<footer>DESKWORLDS · THREE.JS · YUKA · BVH <a href="http://127.0.0.1:18765/" target="_blank" rel="noopener">旧版对照 ↗</a></footer>
+<div id="background-experience-hud" hidden><b id="background-experience-energy"></b><span id="background-experience-energy-fill"></span><p id="background-experience-status"></p></div><button id="background-experience-toggle" hidden>背景玩法</button>
+<script type="module" src="bootstrap.mjs"></script></body></html>

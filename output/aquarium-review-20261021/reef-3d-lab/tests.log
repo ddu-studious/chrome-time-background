@@ -1,0 +1,27 @@
+
+> isolated-reef-3d-lab@0.1.0 test
+> node --test test/*.test.mjs
+
+✔ pinned upstream source and glTF assets match original git blobs (19.57425ms)
+✔ source and npm Three builds are identical; model references only frozen local resources (1.502084ms)
+✔ actual upstream vertices preserve total-length scale and fit the centred conservative capsule (40.751541ms)
+✔ natural pursuit generates both captures and escapes without invoking capture directly (154.963625ms)
+✔ rotation sweep catches a wall even when both endpoint orientations are clear (1.618125ms)
+✔ real source rock BVH rejects invalid poses and world never commits a penetrating move (143.71175ms)
+✔ local refuge requires reachable space, body clearance and loss of predator sight (0.19175ms)
+✔ held predator and removed target end active hunts; fish budget stays bounded (0.268875ms)
+✔ six stable individual total lengths and reload reproducibility (12.252416ms)
+✔ individual predator size and body depth gate eligibility; tasks are never candidates (0.291375ms)
+✔ feed is bounded and has distinct ingestion receipts (0.268042ms)
+✔ capture requires 3D mouth contact and happens only once; refills preserve resident traits (0.229125ms)
+✔ occluded or held prey cannot be captured; hunting eventually gives up (0.162959ms)
+✔ BVH blocks a swept capsule through thin wall and rejects inside-solid spawns (2.587667ms)
+✔ same aperture admits small body and rejects larger body (0.417334ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 15
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 433.376417

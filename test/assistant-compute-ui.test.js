@@ -157,5 +157,5 @@ test('时间线渲染使用专用详情，并随脚本版本更新', () => {
   const timeline = read('js/assistant-timeline.js'), html = read('assistant.html');
   assert.match(timeline, /const compute = computeDetails\(row\)/);
   assert.match(timeline, /root\.AssistantTimeline = \{ create, offOrigin, computeDetails \}/);
-  assert.match(html, /js\/assistant-timeline\.js\?v=20261012-compute/);
+  assert.match(html, /js\/assistant-workbench\.bundle\.js\?v=20261020-startup/);
 });

@@ -1,0 +1,27 @@
+[
+  {
+    "path": "/",
+    "method": "GET",
+    "status": 200
+  },
+  {
+    "path": "/research.html",
+    "method": "GET",
+    "status": 200
+  },
+  {
+    "path": "/.git/config",
+    "method": "GET",
+    "status": 404
+  },
+  {
+    "path": "/local-ai/.local/token",
+    "method": "GET",
+    "status": 404
+  },
+  {
+    "path": "/",
+    "method": "POST",
+    "status": 405
+  }
+]

@@ -218,6 +218,14 @@ function mainFixture({ hidden = false, saveData = false, stored = [], warm = War
 
 const LIST = [item('a'), item('b'), item('c')];
 
+test('首页使用提前预取的同一个合法候选，不重新随机选图', () => {
+    const f = mainFixture();
+    f.setList(LIST);
+    f.context.initBackgrounds({ item: LIST[2], warm: false });
+    assert.equal(f.shown(), `url(${LIST[2].url})`);
+    assert.deepEqual(f.calls.consume, []);
+});
+
 test('首页优先展示已预热的壁纸并把它从预热记录里取走', () => {
     const f = mainFixture({ stored: [{ url: item('b').url, ts: Date.now() - 1000 }] });
     f.setList(LIST);

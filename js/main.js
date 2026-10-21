@@ -41,15 +41,21 @@ function _isBackgroundSuspended() {
         || document.body.classList.contains('huya-workbench-open');
 }
 
+// 失焦休息（js/background-experience.js）：窗口失去焦点约 4 秒后背景只保留最后一帧，
+// 视频壁纸与自动轮换同样停下；重新获得焦点（或鼠标移回页面）后恢复。
+function _isBackgroundResting() {
+    return window.backgroundExperience?.isResting?.() === true;
+}
+
 function _playBackgroundVideo(video, onError = video.onerror) {
     const attempt = ++_bgPlayAttempt;
-    if (_isBackgroundSuspended()) {
+    if (_isBackgroundSuspended() || _isBackgroundResting()) {
         video.pause();
         return;
     }
     video.play().catch(error => {
         // pause()/切换来源会中断旧 play；迟到的失败不能覆盖当前背景。
-        if (attempt !== _bgPlayAttempt || error?.name === 'AbortError' || _isBackgroundSuspended()) return;
+        if (attempt !== _bgPlayAttempt || error?.name === 'AbortError' || _isBackgroundSuspended() || _isBackgroundResting()) return;
         onError?.();
     });
 }
@@ -76,14 +82,31 @@ function _syncBackgroundActivity() {
 new MutationObserver(_syncBackgroundActivity).observe(document.body, { attributes: true, attributeFilter: ['class'] });
 document.addEventListener('visibilitychange', _syncBackgroundActivity);
 _syncBackgroundActivity();
-
-chrome.runtime.sendMessage({ action: 'getBackgrounds' }, function(response) {
-    if (response && response.backgrounds) {
-        backgroundImages = response.backgrounds;
-        initBackgrounds();
-        setupBackgroundAutoSwitch();
+// 失焦休息只暂停视频壁纸（画面不隐藏）；恢复时只有在没被工作台遮住时才继续播放。
+window.backgroundExperience?.onRestChange?.(resting => {
+    const video = document.getElementById('background-video');
+    if (!video) return;
+    if (resting) {
+        ++_bgPlayAttempt;
+        video.pause();
+    } else if (!_isBackgroundSuspended() && video.getAttribute('src')) {
+        _playBackgroundVideo(video);
     }
 });
+
+function receiveHomeBackgrounds(response, choice) {
+    if (response && response.backgrounds) {
+        backgroundImages = response.backgrounds;
+        initBackgrounds(choice);
+        setupBackgroundAutoSwitch();
+    }
+}
+if (window.HomeBackground?.ready) {
+    window.HomeBackground.ready.then(({ response, choice }) => receiveHomeBackgrounds(response, choice));
+} else {
+    // HTTP previews without extension APIs at head time keep the existing message path.
+    chrome.runtime.sendMessage({ action: 'getBackgrounds' }, receiveHomeBackgrounds);
+}
 
 function _getVideoElement() {
     let el = document.getElementById('background-video');
@@ -199,8 +222,10 @@ function _scheduleBackgroundWarm() {
     })().catch(() => { /* 预热失败只是少一次加速，不影响显示 */ });
 }
 
-function initBackgrounds() {
-    const background = _pickBackground();
+function initBackgrounds(initialChoice) {
+    const accepted = initialChoice?.item && backgroundImages.includes(initialChoice.item) ? initialChoice : null;
+    const background = accepted ? accepted.item : _pickBackground();
+    if (accepted?.warm) window.BackgroundWarm?.consume(localStorage, background.url);
     if (background) {
         _applyBackground(background);
         _scheduleBackgroundWarm();
@@ -222,7 +247,7 @@ function _transitionToBackground(background, done) {
                 reduceMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true,
                 saveData: navigator.connection?.saveData === true,
                 hidden: document.hidden,
-                suspended: _isBackgroundSuspended(),
+                suspended: _isBackgroundSuspended() || _isBackgroundResting(),
             });
         } catch { verdict = { ok: false }; }
     }
@@ -257,7 +282,7 @@ function setupBackgroundAutoSwitch() {
     chrome.storage.sync.get('settings', ({ settings }) => {
         const minutes = Number(settings?.backgroundInterval) || 30;
         _bgAutoSwitchTimer = setInterval(() => {
-            if (!_isBackgroundSuspended() && backgroundImages.length > 1) changeBackground();
+            if (!_isBackgroundSuspended() && !_isBackgroundResting() && backgroundImages.length > 1) changeBackground();
         }, minutes * 60 * 1000);
     });
 }
@@ -292,6 +317,61 @@ function showAppVideoError(message) {
 }
 
 // 初始化应用
+// 媒体工作台懒初始化：B 站、YouTube、虎牙的面板 DOM、监听与网络请求只在第一次需要时创建。
+// 首页空闲时它们不占用内存也不发请求；悬停 200 ms、键盘聚焦或触摸 Dock 图标会提前预热，点击时多半已就绪。
+function createLazyWorkbench(getController, label) {
+    let pending = null;
+    let settled = false;
+    return {
+        isStarted: () => pending !== null,
+        isReady: () => settled,
+        // init 同步调用（B 站面板 DOM 在 init 的同步段注入），失败状态保留，不重复注入面板。
+        ensure(options) {
+            if (pending) return pending;
+            const controller = getController();
+            if (!controller || typeof controller.init !== 'function') {
+                return Promise.reject(new Error(`${label}模块尚未加载`));
+            }
+            try {
+                pending = Promise.resolve(options === undefined ? controller.init() : controller.init(options));
+            } catch (error) {
+                pending = Promise.reject(error);
+            }
+            pending.then(() => { settled = true; }, () => { settled = true; });
+            return pending;
+        },
+    };
+}
+
+function bindLazyDock(buttonId, workbench, getController, { name, openImmediately = false } = {}) {
+    const button = document.getElementById(buttonId);
+    if (!button) return;
+    const report = error => console.error(`${name}工作台初始化失败:`, error);
+    let hoverTimer = 0;
+    let waiting = false;
+    const warm = () => { workbench.ensure().catch(report); };
+    button.addEventListener('pointerenter', () => {
+        if (workbench.isStarted()) return;
+        clearTimeout(hoverTimer);
+        hoverTimer = setTimeout(warm, 200);
+    });
+    button.addEventListener('pointerleave', () => clearTimeout(hoverTimer));
+    button.addEventListener('focus', warm, { once: true });
+    button.addEventListener('touchstart', warm, { once: true, passive: true });
+    button.addEventListener('click', () => {
+        clearTimeout(hoverTimer);
+        if (waiting) return;
+        if (openImmediately || workbench.isReady()) {
+            workbench.ensure().catch(report);
+            getController()?.toggle();
+            return;
+        }
+        // 仍需读存储/账号状态的面板，等初始化完成后再打开，避免先渲染空数据。
+        waiting = true;
+        workbench.ensure().catch(report).then(() => getController()?.toggle()).finally(() => { waiting = false; });
+    });
+}
+
 async function initApp() {
     if (window.__chromeTimeAppInitialized) return;
     window.__chromeTimeAppInitialized = true;
@@ -322,13 +402,6 @@ async function initApp() {
     }
 
     try {
-        window.i18nManager.init();
-        console.log('国际化模块初始化完成');
-    } catch (error) {
-        console.error('国际化模块初始化失败:', error);
-    }
-
-    try {
         clockManager.init();
         console.log('时钟模块初始化完成');
     } catch (error) {
@@ -343,8 +416,10 @@ async function initApp() {
     }
 
     try {
-        await weatherManager.init();
-        console.log('天气模块初始化完成');
+        // 定位和天气网络请求独立进行，不能挡住任务、音乐和闹钟入口。
+        void Promise.resolve(weatherManager.init()).then(() => {
+            console.log('天气模块初始化完成');
+        }).catch(error => console.error('天气模块初始化失败:', error));
     } catch (error) {
         console.error('天气模块初始化失败:', error);
     }
@@ -430,29 +505,20 @@ async function initApp() {
     }
 
 
-    // v3.6.0: 初始化哔哩哔哩控制器
+    // v3.6.0: 哔哩哔哩控制器（懒初始化：深链、悬停预热或点击 Dock 时才创建面板与请求）
     if (sm.getSetting('enableBilibili') !== false) {
         try {
-            if (window.bilibiliController && typeof window.bilibiliController.init === 'function') {
-                const initialized = window.bilibiliController.init();
-                void Promise.resolve(initialized).then(async () => {
-                    if (appVideoRequest?.platform === 'bilibili') {
-                        await window.bilibiliController.openVideo(appVideoRequest);
-                    }
+            const biliWorkbench = createLazyWorkbench(() => window.bilibiliController, '哔哩哔哩');
+            if (appVideoRequest?.platform === 'bilibili') {
+                void biliWorkbench.ensure().then(async () => {
+                    await window.bilibiliController.openVideo(appVideoRequest);
                 }).catch(error => {
                     console.error('哔哩哔哩工作台打开失败:', error);
-                    if (appVideoRequest?.platform === 'bilibili') showAppVideoError(`B 站视频未能在 App 中打开：${error.message || '初始化失败'}`);
-                });
-            } else if (appVideoRequest?.platform === 'bilibili') {
-                throw new Error('哔哩哔哩模块尚未加载');
-            }
-            const biliDockBtn = document.getElementById('bili-dock-btn');
-            if (biliDockBtn) {
-                biliDockBtn.addEventListener('click', () => {
-                    if (window.bilibiliController) window.bilibiliController.toggle();
+                    showAppVideoError(`B 站视频未能在 App 中打开：${error.message || '初始化失败'}`);
                 });
             }
-            console.log('哔哩哔哩控制器初始化完成');
+            // B 站面板的数据在打开后陆续渲染，所以点击时不必等待初始化完成。
+            bindLazyDock('bili-dock-btn', biliWorkbench, () => window.bilibiliController, { name: '哔哩哔哩', openImmediately: true });
         } catch (error) {
             console.error('哔哩哔哩控制器初始化失败:', error);
             if (appVideoRequest?.platform === 'bilibili') showAppVideoError(`B 站视频未能在 App 中打开：${error.message || '初始化失败'}`);
@@ -463,23 +529,16 @@ async function initApp() {
         document.getElementById('bili-dock-btn')?.classList.add('hidden');
     }
 
-    // YouTube 官方集成：访客可粘贴链接播放；账号数据只走 OAuth/Data API
+    // YouTube 官方集成：访客可粘贴链接播放；账号数据只走 OAuth/Data API（懒初始化）
     if (sm.getSetting('enableYouTube') !== false) {
         try {
-            if (window.youtubeController && typeof window.youtubeController.init === 'function') {
-                await window.youtubeController.init({ skipInitialView: appVideoRequest?.platform === 'youtube' });
-                if (appVideoRequest?.platform === 'youtube') {
-                    if (appVideoRequest.id) await window.youtubeController.openVideo(appVideoRequest);
-                    else await window.youtubeController.openSearch(appVideoRequest.query);
-                }
-            } else if (appVideoRequest?.platform === 'youtube') {
-                throw new Error('YouTube 模块尚未加载');
+            const youtubeWorkbench = createLazyWorkbench(() => window.youtubeController, 'YouTube');
+            if (appVideoRequest?.platform === 'youtube') {
+                await youtubeWorkbench.ensure({ skipInitialView: true });
+                if (appVideoRequest.id) await window.youtubeController.openVideo(appVideoRequest);
+                else await window.youtubeController.openSearch(appVideoRequest.query);
             }
-            const youtubeDockBtn = document.getElementById('youtube-dock-btn');
-            if (youtubeDockBtn) {
-                youtubeDockBtn.addEventListener('click', () => window.youtubeController?.toggle());
-            }
-            console.log('YouTube 工作台初始化完成');
+            bindLazyDock('youtube-dock-btn', youtubeWorkbench, () => window.youtubeController, { name: 'YouTube' });
         } catch (error) {
             console.error('YouTube 工作台初始化失败:', error);
             if (appVideoRequest?.platform === 'youtube') showAppVideoError(`YouTube 视频未能在 App 中打开：${error.message || '初始化失败'}`);
@@ -490,17 +549,11 @@ async function initApp() {
         document.getElementById('youtube-dock-btn')?.classList.add('hidden');
     }
 
-    // 虎牙直播：关注列表经后台标签页读取，推荐与官方嵌入播放器只在本页面内完成
+    // 虎牙直播：关注列表经后台标签页读取，推荐与官方嵌入播放器只在本页面内完成（懒初始化）
     if (sm.getSetting('enableHuya') !== false) {
         try {
-            if (window.huyaController && typeof window.huyaController.init === 'function') {
-                await window.huyaController.init();
-            }
-            const huyaDockBtn = document.getElementById('huya-dock-btn');
-            if (huyaDockBtn) {
-                huyaDockBtn.addEventListener('click', () => window.huyaController?.toggle());
-            }
-            console.log('虎牙工作台初始化完成');
+            const huyaWorkbench = createLazyWorkbench(() => window.huyaController, '虎牙');
+            bindLazyDock('huya-dock-btn', huyaWorkbench, () => window.huyaController, { name: '虎牙' });
         } catch (error) {
             console.error('虎牙工作台初始化失败:', error);
         }

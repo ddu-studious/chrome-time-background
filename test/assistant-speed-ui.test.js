@@ -30,7 +30,7 @@ test('时间线与历史详情把自适应起步和超时恢复分开展示', ()
   assert.match(timeline, /清单分析已用关闭思考完成，本执行轮后续规划沿用关闭思考/);
   assert.match(timeline, /' → 关闭（沿用清单分析）'/);
   assert.match(history, /startReason: row\.startReason/);
-  assert.match(read('assistant.html'), /js\/assistant-timeline\.js\?v=20261012-compute/);
+  assert.match(read('assistant.html'), /js\/assistant-workbench\.bundle\.js\?v=20261020-startup/);
 });
 
 test('时间线沿来源链判断沿用的关闭思考来自清单分析还是真实超时恢复', () => {

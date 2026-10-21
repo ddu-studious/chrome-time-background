@@ -555,6 +555,7 @@ final class JellyCompanion: NSObject {
     var onGrabBegin: (() -> Void)?
     var onPoke: (() -> Void)?
     var onButton: ((String) -> Void)?
+    var onDrop: ((JellyModel.DropItem) -> Void)?
     /// 下一次 show() 从泳线最右端出现（响铃时水母本来不在屏幕上，从右边游进来）；用过即清。
     var startAtRightEdgeOnce = false
     private var dashCompletion: (() -> Void)?
@@ -604,6 +605,7 @@ final class JellyCompanion: NSObject {
         view.onUp = { [weak self] event in self?.mouseUp(event) }
         view.onMove = { [weak self] event in self?.mouseMoved(event) }
         view.onButton = { [weak self] id in self?.onButton?(id) }
+        view.installDrop { [weak self] item in self?.onDrop?(item) }
         observer = NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
             guard let self = self, self.panel.isVisible else { return }
             self.refreshLane(for: self.panel.screen ?? NSScreen.main)
@@ -918,5 +920,52 @@ final class JellyCompanion: NSObject {
         guard timer == nil else { return }
         pose.look = lookVector()
         syncPose()
+    }
+}
+
+private final class JellyDropBox: NSObject {
+    let handler: (JellyModel.DropItem) -> Void
+    init(_ handler: @escaping (JellyModel.DropItem) -> Void) { self.handler = handler }
+}
+
+extension JellyView {
+    private static var dropBoxes = NSMapTable<JellyView, JellyDropBox>.weakToStrongObjects()
+
+    fileprivate func installDrop(_ handler: @escaping (JellyModel.DropItem) -> Void) {
+        registerForDraggedTypes([.fileURL, .URL, .string])
+        JellyView.dropBoxes.setObject(JellyDropBox(handler), forKey: self)
+    }
+
+    private func parsePasteboard(_ pb: NSPasteboard) -> JellyModel.DropItem? {
+        var urlText: String?
+        var fileText: String?
+        if let urls = pb.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] {
+            for item in urls {
+                if item.isFileURL {
+                    if fileText == nil { fileText = item.path }
+                } else if let s = item.scheme?.lowercased(), s == "http" || s == "https" {
+                    if urlText == nil { urlText = item.absoluteString }
+                }
+            }
+        }
+        if urlText == nil, let raw = pb.string(forType: .URL) { urlText = raw }
+        if fileText == nil, let raw = pb.string(forType: .fileURL) { fileText = raw }
+        let plainText = pb.string(forType: .string)
+        return JellyModel.parseDrop(url: urlText, fileURL: fileText, text: plainText)
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        parsePasteboard(sender.draggingPasteboard) != nil ? .copy : []
+    }
+
+    override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        parsePasteboard(sender.draggingPasteboard) != nil
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        guard let item = parsePasteboard(sender.draggingPasteboard),
+              let box = JellyView.dropBoxes.object(forKey: self) else { return false }
+        box.handler(item)
+        return true
     }
 }

@@ -84,7 +84,7 @@ test('闹钟界面、启动台与重要提醒窗口完整接入', () => {
   const html = read('index.html');
   const registrySource = read('js/app-registry.js');
   const center = read('js/alarm-center.js');
-  assert.ok(html.includes('css/alarm-center.css?v=1'));
+  assert.ok(html.includes('css/alarm-center.css?v=2'));
   assert.ok(html.includes('id="alarm-dock-btn"'));
   assert.ok(html.indexOf('js/alarm-core.js?v=1') < html.indexOf('js/alarm-center.js?v=8'));
   assert.match(registrySource, /id: 'alarm'.*defaultInDock: true/);

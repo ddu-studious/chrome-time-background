@@ -14,8 +14,9 @@ import { createControlStore } from './control-store.mjs';
 import { createHistoryStore } from './history-store.mjs';
 import { createMemoryStore } from './memory-store.mjs';
 import { evaluateApproval } from './assistant-approval.mjs';
+import { LarkSentinel } from './lark-sentinel.mjs';
 
-export function createServer({ token, provider = new LMStudioProvider(), allowedOrigins = [], modelEnabled = true, disabledScenes = [], controlFile, speechProvider = new WhisperProvider(), synthesisProvider = new StepAudioProvider(), computeProvider = new ComputeProvider(), layaProvider = new LayaPrefetchProvider(), usageFile, historyFile, memoryFile, jobRetentionMs = 300000, speechRetentionMs = 60000 }) {
+export function createServer({ token, provider = new LMStudioProvider(), allowedOrigins = [], modelEnabled = true, disabledScenes = [], controlFile, speechProvider = new WhisperProvider(), synthesisProvider = new StepAudioProvider(), computeProvider = new ComputeProvider(), layaProvider = new LayaPrefetchProvider(), larkSentinel = new LarkSentinel(), usageFile, historyFile, memoryFile, jobRetentionMs = 300000, speechRetentionMs = 60000 }) {
   if (typeof token !== 'string' || token.length < 32) throw new Error('本地入口令牌至少需要 32 字符');
   const jobs = new Map();
   const admission = createAdmission({file:usageFile});
@@ -77,6 +78,12 @@ export function createServer({ token, provider = new LMStudioProvider(), allowed
         return send(200, { ok: true, status: 'cancelled' });
       }
       if (req.method === 'GET' && req.url === '/v1/control') return send(200, { ok: true, ...describe() });
+      if (req.method === 'GET' && (req.url === '/v1/sentinel/lark' || req.url?.startsWith('/v1/sentinel/lark?'))) {
+        const query = new URL(req.url, 'http://127.0.0.1').searchParams;
+        const since = Number(query.get('since') || 0);
+        const manual = query.get('manual') === '1';
+        return send(200, await larkSentinel.check({ since, manual }));
+      }
       if (req.method === 'GET' && req.url === '/v1/history') return send(200, { ok: true, ...history.snapshot() });
       if (req.method === 'GET' && req.url === '/v1/memory') return send(200, { ok: true, ...requireMemory().snapshot() });
       if (req.method === 'GET' && /^\/v1\/(?:alarms|ai)\/jobs\/[a-f0-9]{32}$/.test(req.url)) {

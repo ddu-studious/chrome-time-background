@@ -88,8 +88,9 @@ test('大工具结果外置后仍可回读中间命中，引用和版本不丢�
 });
 
 test('检查点不覆盖用户原文和回执，重复压缩可回读，来源变化拒绝提交', async () => {
-  const t = task(); for (const row of entries()) Context.append(t, row.role, row.content);
+  const t = task(); for (const row of entries()) Context.append(t, row.role, row.content.repeat(2));
   Context.observe(t, { tool: 'music.queue.clear', status: 'done', message: '已清空', data: { revision: 'v2' } });
+  Context.append(t, 'assistant', '检索过程信息'.repeat(200));
   const before = Context.envelope(t);
   for (let i = 0; i < 5; i++) {
     const req = Context.batch(t, true), result = await compactHistory(req, provider());
@@ -103,6 +104,56 @@ test('检查点不覆盖用户原文和回执，重复压缩可回读，来源�
   Context.append(t, 'user', '改成别的歌手');
   assert.throws(() => Context.commit(t, req, result.data), { code: 'COMPACTION_STALE' });
   assert.equal(Context.state(t).count, 5);
+});
+
+test('近期短音乐流程：强制整理仍跳过摘要推理，不把无收益当失败', async () => {
+  let calls = 0;
+  for (const content of ['清空队列，增加一些能让人心静的歌曲。随机播放。', '添加能让人心静的歌曲加入到队里，随机播放。']) {
+    const result = await compactHistory({ revision: 5, force: true, entries: [
+      { seq: 1, role: 'user', content },
+      { seq: 2, role: 'assistant', content: 'music.state [done] 当前队列255首，未在播放。' },
+      { seq: 3, role: 'user', content: '选择：清空本地队列' },
+      { seq: 4, role: 'assistant', content: 'music.queue.clear [done] 已清空，剩余0首。' },
+      { seq: 5, role: 'assistant', content: 'music.collection.get [done] 已读取43首。' }
+    ] }, provider({ generateText: async () => { calls++; assert.fail('短记录不应推理'); } }));
+    assert.equal(result.data.changed, false); assert.equal(result.data.reason, 'short_source');
+  }
+  assert.equal(calls, 0);
+});
+
+test('有效但不收缩的摘要不提交检查点；仍有容量时继续且只重试规划一次', async () => {
+  const t = task();
+  t.observations = [{ tool: 'music.state', status: 'done', message: '已读状态', data: { count: 0 } }];
+  for (let i = 0; i < 8; i++) Context.append(t, i ? 'assistant' : 'user', '只读查询记录'.repeat(100));
+  const before = structuredClone(t.contextState);
+  const p = provider({ generateText: async () => ({ text: '扩展摘要'.repeat(500) }) });
+  let plans = 0, summaries = 0;
+  const handlers = Tools.create({ ai: async message => {
+    if (message.scene === 'assistant.compact') { summaries++; return { ok: true, ...await compactHistory(message.input, p) }; }
+    plans++;
+    if (plans === 1) return { ok: true, status: 'needs_compaction', reason: 'threshold' };
+    assert.equal(message.input.context.compactionAttempted, true);
+    return { ok: true, data: { question: '请继续选择候选' } };
+  } });
+  const result = await handlers.plan({ text: '继续查询', app: 'music' }, { task: t, guard() {}, async saveContext() {} });
+  assert.equal(result.question, '请继续选择候选'); assert.equal(plans, 2); assert.equal(summaries, 1);
+  assert.deepEqual(t.contextState, before); assert.match(t.contextNotice, /保留原记录/);
+});
+
+test('无收益整理后仍真实超限则停止，不绕过容量、不无限压缩', async () => {
+  const t = task(); for (const row of entries()) Context.append(t, row.role, row.content);
+  t.observations = [{ tool: 'music.state', status: 'done', message: '已读状态', data: { count: 0 } }];
+  let counts = 0, summaries = 0;
+  const gateway = createGateway({ provider: provider({
+    planningContext: async () => ({ contextLength: 12288, contextSource: 'loaded-model' }),
+    countContextTokens: async ({ input }) => { counts++; return { inputTokens: typeof input === 'string' ? 1000 : 12000, contextLength: 12288 }; },
+    generateText: async () => { summaries++; return { text: '扩展摘要'.repeat(1250) }; },
+    generateObject: async () => assert.fail('真实超限不能生成')
+  }) });
+  const handlers = Tools.create({ ai: async message => ({ ok: true, ...await gateway.run(message.scene, message.input) }) });
+  await assert.rejects(handlers.plan({ text: '继续查询', app: 'music' }, { task: t, guard() {}, async saveContext() {} }), { code: 'ASSISTANT_CONTEXT_BUDGET_EXCEEDED' });
+  assert.equal(summaries, 1); assert.equal(counts, 3);
+  assert.equal(t.contextState.checkpoint, null);
 });
 
 test('较早同文用户要求不会因当前输入去重而丢失', () => {
@@ -160,7 +211,7 @@ test('重启时未完成副作用保留 unknown 回执，续接不得自动重�
   const result = await engine.settled(); assert.equal(result.status, 'failed'); assert.match(result.message, /结果未确认/); assert.equal(effects, 0);
 });
 
-test('真实 SDK 压缩后的溢出恢复仅重试规划，清空/追加/播放各一次', async () => {
+test('短历史溢出恢复跳过无收益摘要，仅重试规划，清空/追加/播放各一次', async () => {
   let calls = 0, summaries = 0, overflow = false;
   const step = (tool, args = {}) => ({ steps: [{ tool, args }], continue: true });
   const result = await runContextScenario({ provider: provider({ generateText: async () => { summaries++; return { text: '用户要求清空队列后找杨和苏热门歌曲，追加并随机播放；清空已完成，不要重复清空。' }; }, generateObject: async ({ input: sent }) => {
@@ -175,14 +226,14 @@ test('真实 SDK 压缩后的溢出恢复仅重试规划，清空/追加/播放�
       case 0: return step('music.state');
       case 1: return step('music.queue.clear', { expectedRevision: revision });
       case 2: return step('music.search', { kind: 'artist', query: '杨和苏' });
-      case 3: assert.ok(sent.context.summary); return step('music.collection.get', { ref: obs.at(-1).data.selectedRef });
+      case 3: assert.equal(sent.context.summary, ''); assert.equal(sent.context.compactionAttempted, true); return step('music.collection.get', { ref: obs.at(-1).data.selectedRef });
       case 4: return step('music.queue.apply', { ref: obs.at(-1).data.ref, mode: 'append', startPlayback: false, expectedRevision: revision });
       case 5: return step('music.queue.play', { mode: 'shuffle', expectedRevision: revision });
       case 6: return { done: true };
       default: assert.fail('重复规划');
     }
   } }) });
-  assert.equal(result.passed, true, result.task.message); assert.equal(summaries, 1);
+  assert.equal(result.passed, true, result.task.message); assert.equal(summaries, 0);
   assert.deepEqual(result.effects, { clears: 1, applies: 1, plays: 1, searches: 1 });
 });
 

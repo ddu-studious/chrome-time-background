@@ -1,0 +1,89 @@
+{
+  "browser": "151.0.7922.34",
+  "scenarios": [
+    {
+      "variant": "before",
+      "early": {
+        "readyState": "loading",
+        "boundAt": null
+      },
+      "late": {
+        "hasButton": false,
+        "text": "按 Ctrl/⌘ + Shift + B 切换背景",
+        "boundAt": 2759.3000000715256,
+        "dcl": 2763.3000000715256,
+        "paint": [
+          {
+            "name": "first-paint",
+            "time": 280
+          },
+          {
+            "name": "first-contentful-paint",
+            "time": 280
+          }
+        ],
+        "slowest": [
+          {
+            "file": "marked.min.js",
+            "duration": 2569
+          },
+          {
+            "file": "main.js",
+            "duration": 92
+          },
+          {
+            "file": "task-crumple.js",
+            "duration": 92
+          },
+          {
+            "file": "task-crumple-core.js",
+            "duration": 91
+          }
+        ]
+      },
+      "errors": []
+    },
+    {
+      "variant": "after",
+      "early": {
+        "readyState": "loading",
+        "boundAt": 240.10000002384186
+      },
+      "late": {
+        "hasButton": true,
+        "text": "按 Ctrl/⌘ + Shift + B 切换背景?快捷键",
+        "boundAt": 240.10000002384186,
+        "dcl": 2799.3000000715256,
+        "paint": [
+          {
+            "name": "first-paint",
+            "time": 284
+          },
+          {
+            "name": "first-contentful-paint",
+            "time": 284
+          }
+        ],
+        "slowest": [
+          {
+            "file": "marked.min.js",
+            "duration": 2603
+          },
+          {
+            "file": "main.js",
+            "duration": 144
+          },
+          {
+            "file": "task-crumple.js",
+            "duration": 143
+          },
+          {
+            "file": "task-crumple-core.js",
+            "duration": 143
+          }
+        ]
+      },
+      "errors": []
+    }
+  ]
+}

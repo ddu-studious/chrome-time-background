@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="css/settings-page.css">
     <link rel="stylesheet" href="css/product-ui-v4.css">
     <link rel="stylesheet" href="css/settings-v5.css?v=7">
+    <link rel="stylesheet" href="css/shortcut-help.css?v=3">
     <link rel="stylesheet" href="css/huya-icon.css?v=1">
     <link rel="stylesheet" href="css/ai-control.css?v=4">
 </head>
@@ -201,8 +202,24 @@
                         <label class="sp-toggle"><input type="checkbox" id="set-bgAquariumRealistic" checked><span class="sp-toggle-slider"></span></label>
                     </div>
                     <div class="sp-field">
-                        <div class="sp-field-info"><span class="sp-field-label">海水效果</span><span class="sp-field-hint">选了“水族馆”时：在壁纸之上加一层海水的光——顶上起伏的水面波光、从水面射下来的光束、底部晃动的焦散光网、漂浮的微粒和缓缓上升的气泡；夜里（晚 8 点到早 6 点，需开着“夜晚荧光”）变成冷蓝的月光。只是画面效果：用一张半分辨率的 WebGL 画布，约 30 帧/秒，省流量模式更低；不读也不写任何数据，没有 WebGL 或只有软件渲染时自动不显示（鱼和水母不受影响）。强度跟随上面的“效果强度”</span></div>
+                        <div class="sp-field-info"><span class="sp-field-label">海水效果</span><span class="sp-field-hint">选了“水族馆”时：页面底部出现一条沙滩岸线——海浪一波一波涌来（约 9 秒一个，四个一组、大小不一、斜着推过来），冲上沙滩再退下去，水线上有一圈浪花，退水在湿沙上留下泡沫纹，下一道浪已经在海里推过来；潮水约一分钟一涨一落（快涨慢落），涨潮时浪冲得更深。水只占页面底部约三分之一的一条（壁纸其余部分原样，那一条里的水也很薄，能透出壁纸）；鱼的身体会留在浪能冲到的最高水线之上，不会游进沙滩（用手拖着鱼时不受此限，松手后慢慢游回水里）；夜里（晚 8 点到早 6 点，需开着“夜晚荧光”）变成冷蓝的月光。只是画面效果：用一张半分辨率的 WebGL 画布，约 30 帧/秒，省流量模式更低；不读也不写任何数据，没有 WebGL 或只有软件渲染时自动不显示（鱼和水母不受影响）。强度跟随上面的“效果强度”</span></div>
                         <label class="sp-toggle"><input type="checkbox" id="set-bgAquariumWater" checked><span class="sp-toggle-slider"></span></label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info"><span class="sp-field-label">大鱼吃小鱼</span><span class="sp-field-hint">选了“水族馆”时：放了小锤头鲨以后，它偶尔会真的追一条小鱼并吃掉——只吃霓虹灯鱼、蓝吊、小丑鱼和神仙鱼，每条鲨鱼大约两三分钟吃一条；追的时候先慢慢逼近、再猛地冲刺，鲨鱼转不过身、够不着的时候追不到是正常的。被吃的鱼会自己游回来（成群的约 25 秒、单条的约 75 秒），刷新页面也会全部恢复，你放进去的鱼的名单和数量一直不变（捕食只发生在画面里，不读也不写任何数据）。河豚、海龟、蝠鲼、鲸鲨不参与，水母永远不会被吃；你正抓着的鱼、刚松手的鱼、刚放进去的鱼都不会被吃；省流量模式下不会捕食</span></div>
+                        <label class="sp-toggle"><input type="checkbox" id="set-bgAquariumPredation" checked><span class="sp-toggle-slider"></span></label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info"><span class="sp-field-label">水流与海洋雪</span><span class="sp-field-hint">选了“水族馆”时：大个子（小锤头鲨、蝠鲼、海龟、鲸鲨）游过会在水里留下一道淡淡的水流尾迹，捕食时水里会炸开一小团；背景里还有缓缓下沉、一闪一闪的海洋雪（水里的细小碎屑），近的大而亮、远的小而暗，会被水流带得微微晃动。都很淡，只加亮、不遮住壁纸。只是画面效果：在页面里用一小块低分辨率的流场计算，不读也不写任何数据；省流量模式下不显示。默认关闭</span></div>
+                        <label class="sp-toggle"><input type="checkbox" id="set-bgAquariumFlow"><span class="sp-toggle-slider"></span></label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info"><span class="sp-field-label">水下光束</span><span class="sp-field-hint">选了“水族馆”时：从水面斜着照下来几道很淡的光束，越深越淡、缓缓摇动，夜里几乎看不见；同时写实动物按水下的光学规律“随距离先失去红色”，离得越远越偏青蓝。只加亮、不遮住壁纸。只是画面效果：不读也不写任何数据；省流量模式下不画光束。默认关闭</span></div>
+                        <label class="sp-toggle"><input type="checkbox" id="set-bgAquariumRays"><span class="sp-toggle-slider"></span></label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info"><span class="sp-field-label">水下环境音</span><span class="sp-field-hint">选了“水族馆”时：轻柔的水下嗡鸣与偶尔的气泡声（程序合成，不联网、不读本地文件）。默认关闭；打开后须在本页点一下才会响（浏览器的自动播放策略），页面切到后台或被工作台遮住时会挂起。音量跟随上面的“效果强度”，夜里略轻。省流量模式下不响</span></div>
+                        <label class="sp-toggle"><input type="checkbox" id="set-bgAquariumSound"><span class="sp-toggle-slider"></span></label>
                     </div>
                     <div class="sp-field">
                         <div class="sp-field-info"><span class="sp-field-label">番茄钟陪伴水母</span><span class="sp-field-hint">打开番茄钟面板时，面板里有一只小水母陪着你：专注计时中它放慢动作、像深呼吸一样安静地漂；休息计时中它活泼起来；一个专注自然走完时它放一串庆祝气泡（点“跳过”不算）。与是否选了“水族馆”背景无关；减少动态效果时不显示</span></div>
@@ -325,6 +342,22 @@
                     <div class="sp-field">
                         <div class="sp-field-info"><span class="sp-field-label">工作日志</span><span class="sp-field-hint">到 12 点 / 15 点 / 17 点记录的工时明显不够时提醒</span></div>
                         <label class="sp-toggle"><input type="checkbox" id="set-errandsWorklog" checked><span class="sp-toggle-slider"></span></label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info"><span class="sp-field-label">飞书 @我</span><span class="sp-field-hint">经本机已登录的 lark-cli 检查最近是否有新的 @我 消息（只读群名与发送人数量，不存消息正文）</span></div>
+                        <label class="sp-toggle"><input type="checkbox" id="set-errandsLark" checked><span class="sp-toggle-slider"></span></label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info"><span class="sp-field-label">陈旧标签页</span><span class="sp-field-hint">当有 5 个及以上超过 48 小时未访问的普通网页标签时提醒整理（绝不自动关闭标签页）</span></div>
+                        <label class="sp-toggle"><input type="checkbox" id="set-errandsTabs" checked><span class="sp-toggle-slider"></span></label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info"><span class="sp-field-label">上次没看完</span><span class="sp-field-hint">提醒最近 7 天内进度停在半途（5%–90%）的 B 站、YouTube 视频或马士兵课程</span></div>
+                        <label class="sp-toggle"><input type="checkbox" id="set-errandsWatch" checked><span class="sp-toggle-slider"></span></label>
+                    </div>
+                    <div class="sp-field">
+                        <div class="sp-field-info"><span class="sp-field-label">深海拾贝（到期书签）</span><span class="sp-field-hint">从书签间隔复习（SRS）里捞一条到期未归档的收藏出来回顾</span></div>
+                        <label class="sp-toggle"><input type="checkbox" id="set-errandsBookmark" checked><span class="sp-toggle-slider"></span></label>
                     </div>
                     <div class="sp-field">
                         <div class="sp-field-info"><span class="sp-field-label">推荐歌曲</span><span class="sp-field-hint">偶尔推荐一首歌，可以点“播放”“换一首”或“不听”；正在放歌时不推荐</span></div>
@@ -623,15 +656,6 @@
                             <option value="auto">自动</option>
                             <option value="light">浅色</option>
                             <option value="dark">深色</option>
-                        </select>
-                    </div>
-                    <div class="sp-field">
-                        <div class="sp-field-info">
-                            <span class="sp-field-label">语言</span>
-                        </div>
-                        <select name="language" class="sp-select" id="set-language">
-                            <option value="zh">中文</option>
-                            <option value="en">English</option>
                         </select>
                     </div>
                 </div>
@@ -1064,12 +1088,13 @@
     <script src="js/product-pages-v5.js?v=1"></script>
     <script src="js/product-ui-v5.js?v=2"></script>
     <script src="js/wallpaper-weave-core.js?v=1"></script>
-    <script src="js/settings-page.js?v=16"></script>
+    <script src="js/settings-page.js?v=19"></script>
     <script src="js/jelly-species-shapes.js?v=4"></script>
     <script src="js/marine-rig.js?v=1"></script>
     <script src="js/marine-rig-data.js?v=1"></script>
     <script src="js/settings-jelly-appearance.js?v=5"></script>
     <script src="js/settings-v5.js?v=7"></script>
+    <script src="js/shortcut-help.js?v=3"></script>
     <script src="js/ai-control.js?v=6"></script>
     <script src="js/ai-history.js?v=3"></script>
 </body>

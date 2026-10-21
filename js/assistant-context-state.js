@@ -41,7 +41,7 @@
     // Store the receipt before any potentially failing large-result operation.
     if (observation.status === 'done') {
       s.receipts.push({ id: `${task.turnId || task.id}:${s.revision + 1}`, turnId: task.turnId || task.id,
-        tool: observation.tool, status: 'done', message: observation.message, ...(action?.key ? { key: action.key } : {}) });
+        goalId: task.goalId || task.id, tool: observation.tool, status: 'done', message: observation.message, ...(action?.key ? { key: action.key } : {}) });
     }
     const raw = clean(observation.data), ref = `context:${s.revision + 1}`;
     if (bytes(s) + bytes(raw) > LIMIT) throw error('工具结果超过本次任务存储上限，执行回执已保留，请缩小查询范围');
@@ -59,7 +59,7 @@
       s.artifacts[ref] = { seq, data: raw };
       data = data && typeof data === 'object' && !Array.isArray(data) ? { ...data, contextRef: ref } : { items: data, contextRef: ref };
     }
-    return { ...observation, data };
+    return { ...observation, data, turnId: task.turnId || task.id, goalId: task.goalId || task.id };
   }
   function pending(task) { const s = state(task); return s.events.filter(row => row.seq > (s.checkpoint?.throughSeq || 0)); }
   function batch(task, force = false) {
@@ -85,8 +85,9 @@
     const s = state(task);
     const current = s.events.findLastIndex(row => row.role === 'user' && row.content === task.input.text);
     const constraints = s.events.filter((row, index) => row.role === 'user' && index !== current).map(row => ({ seq: row.seq, text: row.content }));
-    const receipts = s.receipts.map(({ id, turnId, tool, message, status }) => ({ id, turnId, tool, message, status: status || 'done' }));
-    const value = { version: 1, revision: s.revision, summary: s.checkpoint?.summary || '', constraints, receipts };
+    const goalId = task.goalId || task.id;
+    const receipts = s.receipts.map(({ id, turnId, goalId: sourceGoal, tool, message, status }) => ({ id, turnId, tool, message, status: status || 'done', evidence: sourceGoal && sourceGoal === goalId ? 'current-goal' : 'historical' }));
+    const value = { version: 1, revision: s.revision, currentTurnId: task.turnId || task.id, goalId, summary: s.checkpoint?.summary || '', constraints, receipts };
     if (constraints.length > 96 || receipts.length > 96 || bytes(value) > 42000) throw error('必须保留的要求和回执已达到容量上限，进度已保存，请新建需求', 'CONTEXT_IRREDUCIBLE');
     return value;
   }

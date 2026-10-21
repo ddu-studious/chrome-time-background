@@ -9,7 +9,6 @@ class SettingsManager {
             showDate: true,
             showHolidays: true, // 显示节假日
             theme: 'auto', // 'light', 'dark', or 'auto'
-            language: 'zh', // 'zh' or 'en'
             weatherCity: '', // 手动设置的城市名称（为空则自动定位）
             memos: [], // 备忘录数据
             memoCategories: ['工作', '生活', '学习', '其他'], // 备忘录分类
@@ -55,6 +54,7 @@ class SettingsManager {
                 });
             });
             this.settings = { ...this.defaults, ...stored };
+            delete this.settings.language;
             this.notifyListeners();
         } catch (error) {
             console.error('Failed to load settings:', error);
@@ -91,6 +91,7 @@ class SettingsManager {
                 const newSettings = changes.settings.newValue;
                 if (newSettings) {
                     this.settings = { ...this.defaults, ...newSettings };
+                    delete this.settings.language;
                     this.notifyListeners();
                 }
             }

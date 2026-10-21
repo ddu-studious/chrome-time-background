@@ -36,6 +36,12 @@ body.home-background-suspended .ticker-mini-track,
 body.home-background-suspended .task-ticker-track {
     animation-play-state: paused !important;
 }
+/* 窗口失去焦点（js/background-experience.js 的失焦休息）：画面仍然可见，所以只暂停无限循环的 CSS 动画，不隐藏任何图层。 */
+body.home-resting .bgx-root *,
+body.home-resting .ticker-mini-track,
+body.home-resting .task-ticker-track {
+    animation-play-state: paused !important;
+}
 
 .bgx-tone,
 .bgx-detail,

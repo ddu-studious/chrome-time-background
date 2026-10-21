@@ -14,7 +14,7 @@ const deferred = () => {
 };
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
-function mainFixture(request, { disabled = false, initialization = Promise.resolve() } = {}) {
+function mainFixture(request, { disabled = false, initialization = Promise.resolve(), weather = Promise.resolve() } = {}) {
   const calls = [];
   const elements = [];
   const createElement = tag => ({
@@ -34,12 +34,11 @@ function mainFixture(request, { disabled = false, initialization = Promise.resol
     },
     history: { replaceState: (_state, _title, href) => { location.href = href; } },
     setupKeyboardShortcuts: () => calls.push(['shortcuts', location.href]),
-    clockManager: { init() {} }, holidayManager: { init() {} }, weatherManager: { async init() {} },
+    clockManager: { init() {} }, holidayManager: { init() {} }, weatherManager: { init: () => weather },
     zenMode: { async init() {} },
     window: {
       AppVideo, location,
       settingsManager: { async init() {}, getSetting: key => !disabled && key === (request.platform === 'bilibili' ? 'enableBilibili' : 'enableYouTube') },
-      i18nManager: { init() {} },
       bilibiliController: {
         init: () => { calls.push(['bili-init']); return initialization; },
         openVideo: async value => calls.push(['bili-video', value]),
@@ -55,6 +54,18 @@ function mainFixture(request, { disabled = false, initialization = Promise.resol
   vm.runInNewContext(source.slice(source.indexOf('function showAppVideoError('), source.indexOf('// ===================== v3.0.0: 系统监控')), context);
   return { context, calls, location, elements };
 }
+
+test('天气持续等待时首页其他入口仍完成初始化', async () => {
+  const weather = deferred();
+  const fixture = mainFixture({ platform: 'youtube', query: '爵士乐' }, { weather: weather.promise });
+  let ready = false;
+  const initialized = fixture.context.initApp().then(() => { ready = true; });
+  await flush();
+  assert.equal(ready, true, '天气不能阻塞首页初始化');
+  assert.equal(fixture.calls.some(([action]) => action === 'youtube-search'), true);
+  weather.resolve();
+  await initialized;
+});
 
 test('B 站深链等待自身初始化，主页不被阻塞，清参后刷新不会重放', async () => {
   const initialization = deferred();
@@ -102,7 +113,7 @@ test('视频模块禁用或深链无效时不会阻断主页或开启播放器',
   fixture.location.href = 'chrome-extension://test/index.html?videoPlatform=youtube&videoId=invalid';
   await fixture.context.initApp();
   assert.equal(fixture.calls.some(([action]) => action === 'youtube-video'), false);
-  assert.equal(fixture.calls.find(([action]) => action === 'youtube-init')[1].skipInitialView, false);
+  assert.equal(fixture.calls.some(([action]) => action === 'youtube-init'), false, '无效深链不需要启动时初始化（懒初始化）');
   assert.match(fixture.elements[0].children[0].textContent, /参数无效/);
 });
 

@@ -429,6 +429,32 @@ test('stop：移除全部 DOM 与监听；之后 frame 什么都不画；可以�
     assert.equal(t.frame(), true);
 });
 
+test('岸线：frame 的 shore 选项（占画布高度的比例、从底边往上量）折算成从顶往下的像素交给核心；非有限或缺失时鱼不避岸线；稳定后鱼体下缘留在岸线之上（小鱼）', async () => {
+    const t = await make({ stored: { v: 1, fish: [entry('clown', 'c1'), entry('neon', 'n1')] } });
+    t.frame({ shore: 0.2 });
+    const world = t.aq._world();
+    assert.equal(world.shoreY, 0.8 * 720, '比例从底边往上量：距底 20% 就是距顶 80%');
+    t.frame({ shore: 0 });
+    assert.equal(world.shoreY, 720, '0 = 底边');
+    t.frame({ shore: 0.9 });
+    assert.equal(world.shoreY, 0.5 * 720, '核心把岸线夹在屏高的一半以下');
+    for (const bad of [NaN, Infinity, 'x', null, undefined]) {
+        t.frame({ shore: 0.2 });
+        t.frame({ shore: bad });
+        assert.equal(world.shoreY, null, `坏岸线 ${String(bad)} 当作没有`);
+    }
+    t.frame();
+    assert.equal(world.shoreY, null, '没传 shore：鱼不避岸线');
+    t.frame({ surface: 0.25 });
+    assert.equal(world.shoreY, null, '旧的 surface 选项已经去掉，传了也不起作用');
+    for (let i = 0; i < 700; i++) t.frame({ shore: 0.2 });
+    assert.equal(world.shoreY, 0.8 * 720);
+    for (const f of world.fish) {
+        const spec = Core.speciesById(f.species);
+        assert.ok(f.y + f.len * spec.half <= 0.8 * 720 + 1, `${f.species}：身体下缘 ${(f.y + f.len * spec.half).toFixed(1)} 在岸线 ${0.8 * 720} 以上`);
+    }
+});
+
 test('没有 document（无界面环境）：照常工作，不抛错', async () => {
     const t = await make({ stored: { v: 1, fish: [entry('clown', 'c1')] }, dom: false });
     assert.equal(t.frame(), true);
@@ -453,13 +479,16 @@ test('抓取：只有命中鱼才开始；没拖过就松手 = 放回、不写�
     assert.equal(t.aq.hoverAt(5, 5), false);
     assert.equal(t.aq.grabAt(5, 5), false);
     assert.equal(t.aq.isGrabbing(), false);
+    assert.equal(t.aq.state().grabbing, false, '验收诊断 state().grabbing 与 isGrabbing 一致：没抓');
     assert.equal(t.aq.grabAt(500, 300), true);
     assert.equal(t.aq.isGrabbing(), true);
+    assert.equal(t.aq.state().grabbing, true, '抓着');
     assert.equal(t.aq.hoverAt(500, 300), false, '抓取期间不提示可抓');
     assert.equal(t.aq.grabAt(500, 300), false, '同时只抓一次');
     t.frame({ pointer: { x: 503, y: 301 } });      // 没拖过 6 px
     assert.equal(t.aq.drop(503, 301), false);
     assert.equal(t.aq.isGrabbing(), false);
+    assert.equal(t.aq.state().grabbing, false, '松手后');
     assert.equal(fish.state, 'alive');
     assert.equal(t.fc.state.sets.length, 0);
 });
@@ -761,6 +790,31 @@ test('绘制：垂直方向的缩放用鱼的当前翻面（缓动的 −1…1�
     assert.deepEqual(draw(), [[1, 1]], '超出范围的值夹回 −1…1');
 });
 
+test('绘制：侧视大个子转身时整只鱼沿屏幕横向缩短（核心的 xs），最窄保留 0.04；xs 为 1、缺失、非有限或大于 1 时不缩放', async () => {
+    // 变异检查：xs 的守卫与下限只在大个子转身的瞬间起作用，旧测试都没有碰（把 0.04 改成 0.08、把非有限判断改成“或”都全绿）。
+    const t = await make({ stored: { v: 1, fish: [entry('clown', 'c1')] } });
+    t.frame();
+    const f = t.aq._world().fish[0];
+    f.alpha = 1; f.state = 'alive'; f.z = 0.9; f.ang = 0; f.flip = 1;
+    const scales = [];
+    const capture = () => new Proxy({}, {
+        get(target, key) {
+            if (key in target) return target[key];
+            return (...args) => { if (key === 'scale') scales.push(args); return /^create(Linear|Radial)Gradient$/.test(String(key)) ? { addColorStop() {} } : undefined; };
+        },
+        set(target, key, value) { target[key] = value; return true; },
+    });
+    const draw = () => { scales.length = 0; assert.equal(t.frame({ ctx: capture(), dt: 0 }), true); return scales.slice(); };
+    for (const [xs, expected] of [[0.5, [[0.5, 1], [1, 1]]], [0.2, [[0.2, 1], [1, 1]]], [0.04, [[0.04, 1], [1, 1]]], [0.01, [[0.04, 1], [1, 1]]], [0, [[0.04, 1], [1, 1]]]]) {
+        f.xs = xs;
+        assert.deepEqual(draw(), expected, `xs = ${xs}：先按横向投影缩短，最窄 0.04，再按翻面缩放`);
+    }
+    for (const xs of [1, 1.5, undefined, NaN, Infinity, -Infinity]) {
+        f.xs = xs;
+        assert.deepEqual(draw(), [[1, 1]], `xs = ${xs}：不缩放（只剩翻面）`);
+    }
+});
+
 // ---------- 捞起动画与网兜（控制器） ----------
 
 test('网兜：拖进去松手，鱼被带向网兜中心；用列表里的“捞出”按钮则仍是原地淡出', async () => {
@@ -878,6 +932,7 @@ const frames = (t, n, extra = {}) => { for (let i = 0; i < n; i++) t.frame(extra
 async function playFish(extra = {}) {
     const f = await withFish(extra);
     f.fish.ang = 0;
+    Object.assign(f.fish, { face: 1, yaw: 0, xs: 1 });          // 朝东：侧视大个子的“面向”是独立状态，不跟着 ang 改，要一起摆正
     return f;
 }
 
@@ -910,8 +965,9 @@ test('戳：拖过 6 px 就不是戳；玩法层关闭（playCore: null）时点
     assert.equal(b.t.aq.drop(521, 300), false);
     assert.equal(b.t.aq._play(), null);
     assert.deepEqual(b.t.warns, [], '没有玩法层不是错误');
-    assert.equal(b.fish.vx, 0);
-    assert.equal(b.fish.vy, 0);
+    // 鱼是被拴着游的，不是纸片：放开时带着自己的速度（很小，因为只被拉了 1 px），没有戳的冲量
+    const unpoked = Core.cruiseSpeed(b.t.aq._world(), b.fish) * 0.5;
+    assert.ok(Math.hypot(b.fish.vx, b.fish.vy) < unpoked, `没戳：速度 ${Math.hypot(b.fish.vx, b.fish.vy)} 应远低于戳的冲刺（巡航的 ${unpoked * 2} 附近以上）`);
     assert.equal(b.t.d.findAll(n => n.classes.has('aq-feed')).length, 0, '没有玩法层就没有喂食按钮');
     assert.equal(b.t.aq.grabAt(480, 300), true);
     assert.ok(!b.fish.held.tail, '没有玩法层就没有拉尾');
@@ -921,7 +977,7 @@ test('戳：拖过 6 px 就不是戳；玩法层关闭（playCore: null）时点
     assert.equal(c.t.aq.drop(520, 300), false);
     assert.equal(c.t.aq._play(), null, '没有画法模块：不戳（否则画不出来也停不下来）');
     assert.deepEqual(c.t.warns, []);
-    assert.equal(c.fish.vx, 0);
+    assert.ok(Math.hypot(c.fish.vx, c.fish.vy) < Core.cruiseSpeed(c.t.aq._world(), c.fish) * 0.5, '没有画法模块：没有戳的冲量');
     assert.equal(c.t.d.findAll(n => n.classes.has('aq-feed')).length, 0);
     assert.equal(c.t.aq.grabAt(480, 300), true);
     assert.ok(!c.fish.held.tail, '没有画法模块：不拉尾');
@@ -1374,4 +1430,351 @@ test('state().realDrawn：上一帧用写实画法画出的鱼数——设置开
     const plain = await make({ stored: { v: 1, fish: [entry('neon', 'n1'), entry('clown', 'c2')] }, mod: freshAquarium() });
     plain.frame({ realistic: true });
     assert.equal(plain.aq.state().realDrawn, 0, '没有写实种类时为 0');
+});
+
+// ---------- 捕食接线（js/aquarium-predation-core.js） ----------
+// 规则、状态机与统计在 aquarium-predation-core.test.js，世界层原语在 aquarium-core-predation.test.js；这里只守住控制器的接线：
+// 只有明确 true 才开、出错只停捕食、被吃是世界里的瞬态（条目名单与存储一字不动）、关闭与省流量时清理干净、不认识这一层时一切照常。
+
+const PredCore = require('../js/aquarium-predation-core.js');
+
+const huntStore = (extra = {}) => Object.assign({ stored: { v: 1, fish: [entry('hammer', 'h1'), entry('clown', 'c1')] } }, extra);
+const sharkOf = t => t.aq._world().fish.find(f => f.species === 'hammer');
+const clownOf = t => t.aq._world().fish.find(f => f.species === 'clown' && f.state !== 'leaving');
+/**
+ * 把小丑鱼钉在鲨鱼嘴前 12 px、让鲨鱼一直饿着，推进 seconds 秒（每帧 50 毫秒）；吃到了就停，返回有没有吃到。
+ * 只在 predation 开着时有意义：关着时同样钉，用来证明关着不会吃。
+ */
+function bait(t, seconds, extra = {}) {
+    const world = t.aq._world();
+    const shark = sharkOf(t);
+    for (let i = 0; i < seconds * 20; i++) {
+        const pred = t.aq._pred();
+        const h = pred && pred.hunters.get(shark.id);
+        if (h) h.hunger = 1;
+        const prey = clownOf(t);
+        if (prey && !prey.eaten) {
+            const m = PlayCore.mouthOf(shark);
+            prey.x = m.x + Math.cos(shark.ang) * 12; prey.y = m.y + Math.sin(shark.ang) * 12; prey.vx = 0; prey.vy = 0;
+        }
+        t.frame(Object.assign({ predation: true, dt: 50 }, extra));
+        if (world.fish.some(f => f.eaten)) return true;
+    }
+    return false;
+}
+
+test('捕食接线：只有明确 true 才开——没传、false、null、1、"true" 都没有捕食状态，鱼一条不少，不写存储', async () => {
+    for (const value of ['(没传)', false, null, 1, 'true', 0]) {
+        const t = await make(huntStore());
+        t.frame();
+        const eaten = bait(t, 40, { predation: value === '(没传)' ? undefined : value });
+        assert.equal(eaten, false, `predation=${String(value)}：没有捕食`);
+        assert.equal(t.aq._pred(), null);
+        assert.equal(t.aq._world().vacancies.length, 0);
+        assert.equal(t.aq.state().predationFailed, false);
+        assert.ok(!t.aq._world().fish.some(f => f.goal), '没有目标点');
+        assert.equal(t.fc.state.sets.length, 0);
+    }
+});
+
+test('捕食接线：开着时小锤头鲨吃掉嘴前的小鱼——世界里登记空缺、嘴边冒泡，条目名单与存储一字不动，约 75 秒后小丑鱼从屏幕边缘游回来', async () => {
+    const t = await make(huntStore());
+    t.frame({ predation: true });
+    const world = t.aq._world();
+    assert.ok(t.aq._pred(), '开着：有捕食状态');
+    assert.equal(bait(t, 90), true, '90 秒里吃到了');
+    const eaten = world.fish.find(f => f.eaten);
+    assert.equal(eaten.species, 'clown');
+    assert.equal(world.vacancies.length, 1);
+    assert.equal(world.vacancies[0].species, 'clown');
+    assert.deepEqual(t.aq.entries().map(e => e.id), ['h1', 'c1'], '条目名单没动');
+    assert.equal(t.fc.state.sets.length, 0, '被吃不写存储');
+    assert.deepEqual(t.fc.state.data[KEY].fish.map(e => e.id), ['h1', 'c1']);
+    assert.ok(PlayCore.counts(t.aq._play()).bubbles >= PredCore.PARAMS.BUBBLES, '嘴边冒泡');
+    assert.equal(t.aq.state().predationFailed, false);
+    for (let i = 0; i < 20 * 80; i++) t.frame({ predation: true, dt: 50 });          // 之后不再喂：等补回
+    assert.equal(world.vacancies.length, 0);
+    const back = clownOf(t);
+    assert.ok(back && back.id !== eaten.id, '补回的是一条新的鱼');
+    assert.equal(back.entry, 'c1');
+    assert.equal(t.fc.state.sets.length, 0);
+    assert.equal(t.aq.entries().length, 2);
+});
+
+test('捕食接线：吃掉的只会是猎物——鲨鱼嘴前的海龟、河豚与另一条鲨鱼都不动；水母的钟罩数据原样不变', async () => {
+    const t = await make({ stored: { v: 1, fish: [entry('hammer', 'h1'), entry('turtle', 't1'), entry('puffer', 'p1')] } });
+    t.frame({ predation: true });
+    const world = t.aq._world();
+    const shark = sharkOf(t);
+    const bells = [{ x: 400, y: 300, r: 70 }];
+    const before = JSON.stringify(bells);
+    for (let i = 0; i < 20 * 120; i++) {
+        const pred = t.aq._pred();
+        const h = pred && pred.hunters.get(shark.id);
+        if (h) h.hunger = 1;
+        for (const f of world.fish) if (f !== shark && f.state === 'alive') { const m = PlayCore.mouthOf(shark); f.x = m.x + Math.cos(shark.ang) * 12; f.y = m.y + Math.sin(shark.ang) * 12; f.vx = 0; f.vy = 0; }
+        t.frame({ predation: true, dt: 50, bells });
+    }
+    assert.ok(!world.fish.some(f => f.eaten), '没有可吃的');
+    assert.equal(predStats(t).hunts, 0);
+    assert.equal(JSON.stringify(bells), before);
+});
+function predStats(t) { return PredCore.summary(t.aq._pred()).stats; }
+
+test('捕食接线：中途关掉——目标点清掉、状态丢弃，等着补回的空缺立刻补回；重新打开又从头开始', async () => {
+    const t = await make(huntStore());
+    t.frame({ predation: true });
+    const world = t.aq._world();
+    assert.equal(bait(t, 90), true);
+    const shark = sharkOf(t);
+    shark.goal = { x: 100, y: 100, w: 2, boost: 1 };
+    t.frame({ predation: false });
+    assert.equal(t.aq._pred(), null);
+    assert.equal(shark.goal, null);
+    t.frame({ predation: false });
+    t.frame({ predation: false });
+    assert.equal(world.vacancies.length, 0, '空缺立刻到期并补回');
+    assert.ok(clownOf(t), '小丑鱼回来了');
+    t.frame({ predation: true });
+    assert.ok(t.aq._pred(), '重新打开：新的捕食状态');
+    assert.equal(PredCore.summary(t.aq._pred()).stats.captures, 0, '统计从头开始');
+});
+
+test('捕食接线：省流量不捕食（世界重建，状态丢弃）；退出省流量后可以再开', async () => {
+    const t = await make(huntStore());
+    t.frame({ predation: true });
+    assert.ok(t.aq._pred());
+    t.frame({ predation: true, lowPower: true });
+    assert.equal(t.aq._pred(), null, '省流量：没有捕食');
+    assert.equal(t.aq._world().lowPower, true);
+    assert.equal(bait(t, 40, { lowPower: true }), false);
+    assert.equal(t.aq._pred(), null);
+    t.frame({ predation: true, lowPower: false });
+    assert.ok(t.aq._pred(), '退出省流量后重新建立');
+    assert.equal(t.aq.state().predationFailed, false);
+});
+
+test('捕食接线：窗口大小改变时捕食状态与空缺保留，追击不中断也不抛错', async () => {
+    const t = await make(huntStore());
+    t.frame({ predation: true });
+    assert.equal(bait(t, 90), true);
+    const pred = t.aq._pred();
+    const vacancies = t.aq._world().vacancies.map(v => Object.assign({}, v));
+    t.frame({ predation: true, width: 1600, height: 900 });
+    t.frame({ predation: true, width: 900, height: 600 });
+    assert.equal(t.aq._pred(), pred, '同一份捕食状态');
+    assert.deepEqual(t.aq._world().vacancies, vacancies);
+    assert.equal(t.aq.state().predationFailed, false);
+    assert.deepEqual(t.warns, []);
+});
+
+test('捕食出错只停捕食：create / step / release / disturb 任何一处抛错——鱼、玩法、存储与帧循环照常，留一条警告，目标点与空缺清理掉，下次 start 重新可用', async () => {
+    for (const name of ['create', 'step']) {
+        const calls = { n: 0 };
+        const broken = Object.assign({}, PredCore, { [name]: (...args) => { calls.n++; if (calls.n >= (name === 'step' ? 3 : 1)) throw new Error(`坏了：${name}`); return PredCore[name](...args); } });
+        const t = await make(huntStore({ env: { predationCore: broken } }));
+        t.frame();                                                                   // 先把世界建起来（还没开捕食），再埋好待清理的目标点与空缺
+        const shark = sharkOf(t);
+        shark.goal = { x: 1, y: 2, w: 1, boost: 1 };
+        t.aq._world().vacancies.push({ entry: 'c1', species: 'clown', due: t.aq._world().time + 60 });
+        assert.equal(t.frame({ predation: true }), true, `${name}：帧循环照常`);
+        assert.equal(t.frame({ predation: true }), true);
+        assert.equal(t.frame({ predation: true }), true);
+        assert.equal(t.aq.state().predationFailed, true, name);
+        assert.equal(t.aq.state().failed, false, '鱼层没停');
+        assert.ok(t.warns.some(m => /捕食出错/.test(m) && m.includes(`坏了：${name}`)), t.warns.join('|'));
+        assert.equal(t.aq._pred(), null);
+        assert.equal(shark.goal, null, '目标点清掉');
+        assert.ok(t.aq._world().vacancies.every(v => v.due <= t.aq._world().time), '空缺立刻到期');
+        const n = calls.n;
+        t.frame({ predation: true });
+        assert.equal(calls.n, n, '之后不再调用捕食');
+        assert.equal(t.warns.filter(m => /捕食出错/.test(m)).length, 1, '只警告一次');
+        assert.equal(t.fc.state.sets.length, 0);
+        assert.deepEqual(t.aq.entries().map(e => e.id), ['h1', 'c1']);
+        t.aq.stop();
+        t.aq.start();
+        await settle();
+        assert.equal(t.aq.state().predationFailed, false, '下次 start 重新可用');
+    }
+    const releaseBroken = Object.assign({}, PredCore, { step: () => { throw new Error('坏了：step'); }, release: () => { throw new Error('坏了：release'); } });
+    const r = await make(huntStore({ env: { predationCore: releaseBroken } }));
+    r.frame({ predation: true });
+    assert.equal(r.frame({ predation: true }), true, '清理本身出错也不往外抛');
+    assert.equal(r.aq.state().predationFailed, true);
+    assert.equal(r.aq.state().failed, false);
+
+    const disturbBroken = await make(huntStore({ env: { predationCore: Object.assign({}, PredCore, { disturb: () => { throw new Error('坏了：disturb'); } }) } }));
+    disturbBroken.frame({ predation: true });
+    const shark = sharkOf(disturbBroken);
+    Object.assign(shark, { x: 600, y: 300, vx: 0, vy: 0, alpha: 1, state: 'alive' });
+    assert.equal(disturbBroken.aq.grabAt(600, 300), true);
+    disturbBroken.frame({ predation: true, pointer: { x: 601, y: 300 } });
+    assert.equal(disturbBroken.aq.drop(601, 300), false, '点一下 = 戳');
+    assert.equal(PlayCore.counts(disturbBroken.aq._play()).ripples, 1, '戳本身照常');
+    assert.equal(disturbBroken.aq.state().predationFailed, true);
+    assert.equal(disturbBroken.aq.state().playFailed, false);
+});
+
+test('捕食接线：戳一下鲨鱼（点一下没拖）把它当前的冲刺中止；戳别的鱼不影响', async () => {
+    const calls = [];
+    const spy = Object.assign({}, PredCore, { disturb: (pred, world, fish) => { calls.push(fish.species); return PredCore.disturb(pred, world, fish); } });
+    const t = await make({ stored: { v: 1, fish: [entry('hammer', 'h1'), entry('clown', 'c1')] }, env: { predationCore: spy } });
+    t.frame({ predation: true });
+    const [shark, clown] = [sharkOf(t), clownOf(t)];
+    Object.assign(shark, { x: 600, y: 300, vx: 0, vy: 0, alpha: 1, state: 'alive' });
+    Object.assign(clown, { x: 200, y: 560, vx: 0, vy: 0, alpha: 1, state: 'alive' });
+    assert.equal(t.aq.grabAt(200, 560), true);
+    t.frame({ predation: true, pointer: { x: 201, y: 560 } });
+    t.aq.drop(201, 560);
+    assert.deepEqual(calls, ['clown'], '每次成功的戳都问一下捕食层（猎物没有追击记录，什么都不改）');
+    assert.equal(t.aq.grabAt(600, 300), true);
+    t.frame({ predation: true, pointer: { x: 601, y: 300 } });
+    t.aq.drop(601, 300);
+    assert.deepEqual(calls, ['clown', 'hammer']);
+    assert.equal(t.aq.state().predationFailed, false);
+});
+
+test('捕食接线：没有捕食这一层（predationCore: null）、或者没有玩法层（泡冒不出来）都照常工作，不是错误', async () => {
+    const none = await make(huntStore({ env: { predationCore: null } }));
+    for (let i = 0; i < 200; i++) assert.equal(none.frame({ predation: true }), true);
+    assert.equal(none.aq._pred(), null);
+    assert.equal(none.aq.state().predationFailed, false);
+    assert.deepEqual(none.warns, []);
+
+    const noPlay = await make(huntStore({ env: { playCore: null } }));
+    noPlay.frame({ predation: true });
+    assert.equal(bait(noPlay, 90), true, '没有玩法层也吃得到，只是没有泡');
+    assert.equal(noPlay.aq._play(), null);
+    assert.equal(noPlay.aq.state().predationFailed, false);
+    assert.deepEqual(noPlay.warns, []);
+});
+
+test('绘制：被吃的鱼（eaten）缩得比被网兜捞起的更多——宽度按 1 − EAT_SHRINK 缩', async () => {
+    const t = await make({ stored: { v: 1, fish: [entry('angel', 'a1')] } });
+    t.frame();
+    const f = t.aq._world().fish[0];
+    f.alpha = 1; f.state = 'alive'; f.z = 0.95; f.ang = 0; f.flip = 1;
+    const widths = [];
+    const capture = () => new Proxy({}, {
+        get(target, key) {
+            if (key in target) return target[key];
+            return (...args) => {
+                if (key === 'createLinearGradient') widths.push(args[3]);
+                return /^create(Linear|Radial)Gradient$/.test(String(key)) ? { addColorStop() {} } : undefined;
+            };
+        },
+        set(target, key, value) { target[key] = value; return true; },
+    });
+    const bodyWidth = () => { widths.length = 0; assert.equal(t.frame({ ctx: capture(), dt: 0 }), true); return widths[0]; };
+    f.scoopT = undefined;
+    const full = bodyWidth();
+    f.scoopT = 1;
+    const scooped = bodyWidth();
+    assert.ok(Math.abs(scooped / full - (1 - P.SCOOP_SHRINK)) < 0.02);
+    f.eaten = true;
+    const swallowed = bodyWidth();
+    assert.ok(Math.abs(swallowed / full - (1 - P.EAT_SHRINK)) < 0.02, `被吃的缩到 ${(swallowed / full).toFixed(3)}，应为 ${(1 - P.EAT_SHRINK).toFixed(2)}`);
+    assert.ok(swallowed < scooped, '被吃的缩得更小');
+    f.eaten = 'yes';
+    assert.ok(Math.abs(bodyWidth() - scooped) < 1e-9, '只有 eaten === true 才按被吃算');
+});
+
+
+// ---------- 变异检查补强（2026-10-20）：缩小曲线的形状、戳的条件、关着时不碰空缺、状态里的鱼数 ----------
+
+test('绘制：缩小的进度曲线是 smoothstep——scoopT 为 0.25 / 0.5 / 0.75 时宽度按 1 − SHRINK × t²(3 − 2t) 缩（被捞起与被吃各用各的系数）', async () => {
+    const t = await make({ stored: { v: 1, fish: [entry('angel', 'a1')] } });
+    t.frame();
+    const f = t.aq._world().fish[0];
+    f.alpha = 1; f.state = 'alive'; f.z = 0.95; f.ang = 0; f.flip = 1;
+    const widths = [];
+    const capture = () => new Proxy({}, {
+        get(target, key) {
+            if (key in target) return target[key];
+            return (...args) => {
+                if (key === 'createLinearGradient') widths.push(args[3]);
+                return /^create(Linear|Radial)Gradient$/.test(String(key)) ? { addColorStop() {} } : undefined;
+            };
+        },
+        set(target, key, value) { target[key] = value; return true; },
+    });
+    const bodyWidth = () => { widths.length = 0; assert.equal(t.frame({ ctx: capture(), dt: 0 }), true); return widths[0]; };
+    f.scoopT = undefined;
+    const full = bodyWidth();
+    const smooth = x => x * x * (3 - 2 * x);
+    for (const [eaten, shrink] of [[false, P.SCOOP_SHRINK], [true, P.EAT_SHRINK]]) {
+        f.eaten = eaten;
+        for (const x of [0.25, 0.5, 0.75]) {
+            f.scoopT = x;
+            const ratio = bodyWidth() / full;
+            const expected = 1 - shrink * smooth(x);
+            assert.ok(Math.abs(ratio - expected) < 0.01, `${eaten ? '被吃' : '被捞起'} scoopT = ${x}：缩到 ${ratio.toFixed(3)}，应为 ${expected.toFixed(3)}`);
+        }
+    }
+});
+
+test('捕食接线：戳只在这次戳成功（没被冷却拒绝）且捕食层正在运行时才通知捕食层；捕食没开时戳鱼不会把捕食层弄坏', async () => {
+    const calls = [];
+    const spy = Object.assign({}, PredCore, { disturb: (pred, world, fish) => { calls.push(fish.species); return PredCore.disturb(pred, world, fish); } });
+    const poke = (t, x, y) => {
+        assert.equal(t.aq.grabAt(x, y), true);
+        t.frame({ pointer: { x: x + 1, y }, predation: t.predation });
+        return t.aq.drop(x + 1, y);
+    };
+    // 捕食从没开过（pred 为 null）：戳了也不调用，不报错、不标记失败
+    const off = await make({ stored: { v: 1, fish: [entry('clown', 'c1')] }, env: { predationCore: spy } });
+    off.frame();
+    const clown = off.aq._world().fish[0];
+    Object.assign(clown, { x: 200, y: 560, vx: 0, vy: 0, alpha: 1, state: 'alive' });
+    assert.equal(off.aq._pred(), null);
+    poke(off, 200, 560);
+    assert.equal(PlayCore.counts(off.aq._play()).ripples, 1, '戳本身照常');
+    assert.deepEqual(calls, [], '捕食没在运行：不通知');
+    assert.equal(off.aq.state().predationFailed, false);
+    assert.deepEqual(off.warns, []);
+
+    // 捕食在运行：第一次戳通知；冷却期内的第二次被玩法层拒绝，不通知
+    const on = await make({ stored: { v: 1, fish: [entry('hammer', 'h1'), entry('clown', 'c1')] }, env: { predationCore: spy } });
+    on.predation = true;
+    on.frame({ predation: true });
+    const prey = on.aq._world().fish.find(f => f.species === 'clown');
+    Object.assign(prey, { x: 200, y: 560, vx: 0, vy: 0, alpha: 1, state: 'alive' });
+    poke(on, 200, 560);
+    assert.deepEqual(calls, ['clown'], '成功的戳通知一次');
+    Object.assign(prey, { x: 200, y: 560, vx: 0, vy: 0, alpha: 1, state: 'alive' });
+    poke(on, 200, 560);
+    assert.equal(PlayCore.counts(on.aq._play()).ripples, 1, '第二次被冷却拒绝：没有第二圈涟漪');
+    assert.deepEqual(calls, ['clown'], '冷却期内被拒绝的戳不再通知捕食层');
+    assert.equal(on.aq.state().predationFailed, false);
+});
+
+test('捕食接线：捕食关着（没传 predation、或从没开过）时世界里的空缺一个字节都不碰；只有从开着转为关着的那一帧才清理', async () => {
+    const t = await make({ stored: { v: 1, fish: [entry('clown', 'c1')] } });
+    t.frame();
+    const world = t.aq._world();
+    world.vacancies.push({ entry: 'c1', species: 'clown', due: Infinity });
+    for (let i = 0; i < 5; i++) t.frame();
+    assert.equal(world.vacancies.length, 1, '关着：空缺保持原样');
+    assert.equal(world.vacancies[0].due, Infinity, '到期时间没被改成现在');
+    assert.equal(t.aq._pred(), null);
+
+    const on = await make({ stored: { v: 1, fish: [entry('hammer', 'h1'), entry('clown', 'c1')] } });
+    on.frame({ predation: true });
+    assert.ok(on.aq._pred(), '开着：有捕食状态');
+    on.aq._world().vacancies.push({ entry: 'c1', species: 'clown', due: Infinity });
+    on.frame({ predation: false });
+    assert.equal(on.aq._pred(), null, '关掉：丢弃捕食状态');
+    assert.ok(on.aq._world().vacancies.every(v => v.due !== Infinity), '关掉的那一帧：空缺立刻到期');
+});
+
+test('状态：fish 是世界里现有的鱼数——还没画第一帧时是 0，之后与 _world().fish.length 一致', async () => {
+    const t = await make({ stored: { v: 1, fish: [entry('neon', 'n1'), entry('clown', 'c1')] } });
+    assert.equal(t.aq.state().fish, 0, '世界还没建');
+    t.frame();
+    assert.equal(t.aq._world().fish.length, 6);
+    assert.equal(t.aq.state().fish, 6);
+    const empty = await make({});
+    empty.frame();
+    assert.equal(empty.aq.state().fish, 0);
 });

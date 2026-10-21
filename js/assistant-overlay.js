@@ -29,8 +29,10 @@
     if (!host?.isConnected || notice) return;
     notice = document.createElement('div');
     notice.textContent = '快捷助手正在载入…';
-    notice.style.cssText = 'position:absolute;top:0;left:0;right:0;height:64px;box-sizing:border-box;display:flex;align-items:center;padding:0 24px;border-radius:20px;background:rgba(246,248,255,.78);-webkit-backdrop-filter:blur(28px) saturate(135%);backdrop-filter:blur(28px) saturate(135%);box-shadow:0 10px 32px #141d3d38;color:#42506f;font:600 14px/1 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;pointer-events:none;';
-    notice.animate?.([{ opacity: .6 }, { opacity: 1 }], { duration: 900, iterations: Infinity, direction: 'alternate' });
+    notice.role = 'status';
+    // Keep feedback above the card instead of painting an opaque strip over an
+    // already rendered editor. No perpetual animation or second blur surface.
+    notice.style.cssText = 'position:absolute;bottom:calc(100% + 6px);left:12px;max-width:calc(100% - 24px);box-sizing:border-box;display:flex;align-items:center;min-height:24px;padding:5px 10px;border-radius:8px;background:rgba(24,31,49,.86);color:#edf0ff;font:500 12px/1.2 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;pointer-events:none;';
     shadow.append(notice);
   }
   function hide(restore = true, dismissed = true, reason, diag) {

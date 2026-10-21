@@ -1,0 +1,64 @@
+{
+  "date": "2026-10-21",
+  "scope": "Design and research only; no production implementation changed",
+  "preview": {
+    "url": "http://127.0.0.1:18764/index.html",
+    "viewport": "1280x720",
+    "realExtensionVerified": false,
+    "externalNetworkBlocked": true,
+    "flow": true,
+    "rays": true,
+    "sound": false,
+    "seededEntries": 7,
+    "checks": [
+      {
+        "action": "open resident tray",
+        "result": "7/12 entries, 0/2 large"
+      },
+      {
+        "action": "add whale shark",
+        "result": "8/12 entries, 1/2 large, 已放入鲸鲨"
+      },
+      {
+        "action": "feed",
+        "result": "落下了 6 粒饲料"
+      }
+    ],
+    "screenshots": [
+      "current-preview-fed.jpg",
+      "reference-aqua-clock.jpg"
+    ]
+  },
+  "upstream": {
+    "three": {
+      "version": "0.186.1",
+      "release": "r186",
+      "releaseUrl": "https://github.com/mrdoob/three.js/releases/tag/r186"
+    },
+    "deskworlds": {
+      "sha": "335d6c1aeb59b338b1cc59d734dc6eb87a596a88",
+      "url": "https://github.com/chaseleantj/deskworlds",
+      "license": "MIT",
+      "filesRead": [
+        "README.md",
+        "LICENSE",
+        "scenes/reefscape/src/main.js",
+        "scenes/reefscape/src/water.js",
+        "scenes/reefscape/src/simulation.js",
+        "scenes/reefscape/index.html",
+        "scenes/reefscape/assets/README.md"
+      ]
+    }
+  },
+  "image": {
+    "mode": "built-in image_gen",
+    "file": "../imagegen/ocean-habitat-20261021/reef-concept-v1.png",
+    "prompt": "../imagegen/ocean-habitat-20261021/prompt.txt",
+    "deployed": false
+  },
+  "skills": {
+    "personalCLIModel": "gpt-image-1.5",
+    "systemCLIModel": "gpt-image-2",
+    "globalFilesModified": false
+  }
+}

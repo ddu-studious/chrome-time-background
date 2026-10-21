@@ -1,0 +1,24 @@
+{
+  "at": "2026-10-20T09:05:31.893Z",
+  "boundary": "真实隔离浏览器；草稿读取人为延迟3000ms、后台响应7000ms；无模型生成及真实业务动作",
+  "before": {
+    "readyMs": 3019.3,
+    "scriptRequestsWithFixture": 12,
+    "focusedAt500ms": false,
+    "restoredText": "原来的草稿",
+    "controlReadsBefore3500ms": 3
+  },
+  "after": {
+    "readyMs": 22.6,
+    "scriptRequestsWithFixture": 2,
+    "focusedAt500ms": true,
+    "restoredText": "新输入，不应被旧草稿覆盖",
+    "controlReadsBefore3500ms": 1,
+    "submitEnabledAfterSnapshot": true
+  },
+  "cache": {
+    "postReloadSince": "2026-10-20T15:45:00",
+    "newGenerationRequests": 0,
+    "previousIsolatedRunWarmCachedPercent": 53.8
+  }
+}

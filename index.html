@@ -6,17 +6,20 @@
     <title>新标签页 - 中国风景时钟</title>
     <!-- 快捷助手宿主：必须排在所有样式表和后面 70 多个同步脚本之前注册。后台只给首页 750ms 回应状态探测，
          放在末尾时页面稍慢（或样式表迟迟不回来）就会被判定为不可用，直接改开独立小窗。脚本自包含、约 5KB。 -->
-    <script src="js/assistant-overlay.js?v=10" data-assistant-home="true"></script>
+    <script src="js/assistant-overlay.js?v=11" data-assistant-home="true"></script>
+    <script src="js/background-warm.js?v=1"></script>
+    <script src="js/home-background-start.js?v=1"></script>
     <style>
         html { overflow: hidden; height: 100%; }
         body { position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; overflow: hidden; margin: 0; padding: 0; background-size: cover; background-position: center; background-repeat: no-repeat; }
     </style>
     <link rel="stylesheet" href="css/style.css?v=15">
-    <link rel="stylesheet" href="css/background-experience.css?v=6">
-    <link rel="stylesheet" href="css/aquarium.css?v=4">
+    <link rel="stylesheet" href="css/shortcut-help.css?v=3">
+    <link rel="stylesheet" href="css/background-experience.css?v=7">
+    <link rel="stylesheet" href="css/aquarium.css?v=6">
     <link rel="stylesheet" href="css/touch-feel.css?v=1">
     <link rel="stylesheet" href="css/schedule.css">
-    <link rel="stylesheet" href="css/alarm-center.css?v=1">
+    <link rel="stylesheet" href="css/alarm-center.css?v=2">
     <link rel="stylesheet" href="css/smart-alarm.css?v=5">
     <link rel="stylesheet" href="css/weekview.css">
     <link rel="stylesheet" href="css/blog.css?v=3">
@@ -277,7 +280,9 @@
     <div class="background-credit" id="background-credit">
         长城 - 慕田峪长城
     </div>
-    <div class="keyboard-hint">按 Ctrl/⌘ + Shift + B 切换背景</div>
+    <div class="keyboard-hint shortcut-hints"><span class="shortcut-hint-background">Ctrl/⌘ + Shift + B 切换背景</span><button type="button" id="shortcut-help-trigger" aria-haspopup="dialog" aria-controls="shortcut-help" aria-expanded="false" title="查看全部快捷键（? / Shift + /）"><kbd>?</kbd><span>快捷键</span></button></div>
+    <!-- 提示栏一出现就绑定，不等待后面的编辑器、游戏和首页异步初始化。 -->
+    <script src="js/shortcut-help.js?v=3"></script>
     
     <!-- 极简模式退出提示 -->
     <div class="zen-exit-hint" id="zen-exit-hint">按 Ctrl/⌘ + Shift + . 或双击退出极简模式</div>
@@ -431,13 +436,11 @@
     <script src="vendor/marked.min.js"></script>
     <script src="vendor/purify.min.js"></script>
     <script src="vendor/highlight.min.js"></script>
-    <script src="vendor/mermaid.tiny.min.js"></script>
     <script src="vendor/fuse.browser.min.js"></script>
     <link rel="stylesheet" href="vendor/highlight-theme.css">
     <script src="js/markdown-renderer.js"></script>
     <script src="js/chrome-shim.js?v=5"></script>
     <script src="js/settings.js"></script>
-    <script src="js/i18n.js"></script>
     <script src="js/lunar-lib.js"></script>
     <script src="js/lunar.js"></script>
     <script src="js/clock.js"></script>
@@ -487,7 +490,7 @@
     <script src="js/alarm-center.js?v=8"></script>
     <script src="js/weekview.js"></script>
     <link rel="stylesheet" href="css/product-ui-v4.css?v=7">
-    <link rel="stylesheet" href="css/product-ui-v5.css?v=52">
+    <link rel="stylesheet" href="css/product-ui-v5.css?v=53">
     <link rel="stylesheet" href="css/spring-feel.css?v=1">
     <link rel="stylesheet" href="css/task-crumple.css?v=1">
     <link rel="stylesheet" href="css/jelly-game.css?v=1">
@@ -513,27 +516,33 @@
     <script src="js/quick-nav.js?v=13"></script>
     <script src="js/jellyfish-core.js?v=6"></script>
     <script src="js/jellyfish.js?v=6"></script>
-    <script src="js/aquarium-core.js?v=4"></script>
-    <script src="js/aquarium-play-core.js?v=1"></script>
+    <script src="js/aquarium-core.js?v=7"></script>
+    <script src="js/aquarium-play-core.js?v=3"></script>
     <script src="js/aquarium-play.js?v=1"></script>
+    <script src="js/aquarium-predation-core.js?v=1"></script>
+    <script src="js/aquarium-flow-core.js?v=1"></script>
+    <script src="js/aquarium-light-core.js?v=1"></script>
+    <script src="js/aquarium-ambient.js?v=1"></script>
+    <script src="js/aquarium-sound-core.js?v=1"></script>
+    <script src="js/aquarium-sound.js?v=1"></script>
     <script src="js/jelly-species-shapes.js?v=4"></script>
     <script src="js/marine-rig.js?v=1"></script>
-    <script src="js/marine-rig-canvas.js?v=1"></script>
+    <script src="js/marine-rig-canvas.js?v=2"></script>
     <script src="js/marine-rig-data.js?v=1"></script>
-    <script src="js/aquarium-real.js?v=1"></script>
-    <script src="js/aquarium.js?v=4"></script>
-    <script src="js/aquarium-water-core.js?v=1"></script>
-    <script src="js/aquarium-water-shader.js?v=1"></script>
-    <script src="js/aquarium-water.js?v=1"></script>
+    <script src="js/aquarium-yaw.js?v=1"></script>
+    <script src="js/aquarium-real.js?v=4"></script>
+    <script src="js/aquarium.js?v=8"></script>
+    <script src="js/aquarium-water-core.js?v=3"></script>
+    <script src="js/aquarium-water-shader.js?v=3"></script>
+    <script src="js/aquarium-water.js?v=3"></script>
     <script src="js/pomodoro-jelly.js?v=2"></script>
-    <script src="js/background-experience.js?v=14"></script>
-    <script src="js/background-warm.js?v=1"></script>
+    <script src="js/background-experience.js?v=20"></script>
     <script src="js/wallpaper-weave-core.js?v=1"></script>
     <script src="js/wallpaper-weave.js?v=1"></script>
     <script src="js/clock-liquid-core.js?v=1"></script>
     <script src="js/clock-liquid.js?v=1"></script>
     <script src="js/task-crumple-core.js?v=2"></script>
     <script src="js/task-crumple.js?v=2"></script>
-    <script src="js/main.js?v=16"></script>
+    <script src="js/main.js?v=17"></script>
   </body>
 </html>

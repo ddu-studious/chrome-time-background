@@ -61,7 +61,7 @@ test('工具加载缺少继续标记时自动补正，严格合同仍拒绝原�
 test('混合加载计划只执行加载，真实回执触发重新规划，不执行旧计划的播放', async () => {
   const { createGateway } = await import('../local-ai/gateway.mjs');
   let round = 0, reads = 0;
-  const gateway = createGateway({ provider: { async generateObject({ input }) {
+  const gateway = createGateway({ provider: { planningContext: async () => ({ contextLength: 40960, contextSource: 'fixture' }), async generateObject({ input }) {
     if (input.planningPhase === 'outline') return { todoTips: [{ text: '查看队列', source: 0, tool: 'music.state' }] };
     if (round++ === 0) return { steps: [
       { tool: 'tools.load', args: { group: 'music.queue' } },
@@ -107,7 +107,7 @@ test('有队列：真实观察驱动加载→随机模式→播放→定时，�
   const { createGateway } = await import('../local-ai/gateway.mjs');
   let state = { status: 'ready', revision: 'v1', count: 2, mode: 'sequence', isPlaying: false, songs: [{ songId: '9', url: 'secret' }] };
   const operations = []; let round = 0;
-  const gateway = createGateway({ provider: { generateObject: async ({ input }) => {
+  const gateway = createGateway({ provider: { planningContext: async () => ({ contextLength: 40960, contextSource: 'fixture' }), generateObject: async ({ input }) => {
     const last = input.observations.at(-1);
     if (input.planningPhase === 'outline') return { todoTips: [{ text: '随机播放队列', source: 0, tool: 'music.queue.play', args: { mode: 'shuffle' } }, { text: '设置30分钟后暂停', source: 0, tool: 'music.sleep', args: { minutes: 30 } }] };
     const plans = [step('music.state'), step('tools.load', { group: 'music.playback' }), step('music.playback.setMode', { mode: 'shuffle', expectedRevision: 'v1' }), step('music.queue.play', { expectedRevision: 'v2', mode: 'shuffle' }), step('music.sleep', { minutes: 30 }, false)];
@@ -132,7 +132,7 @@ test('有队列：真实观察驱动加载→随机模式→播放→定时，�
 test('空队列：暂停选择真实歌单，读取后仅追加；不会自动播放或重复应用', async () => {
   const { createGateway } = await import('../local-ai/gateway.mjs');
   let round = 0, selected, loaded, writes = 0;
-  const gateway = createGateway({ provider: { generateObject: async ({ input }) => {
+  const gateway = createGateway({ provider: { planningContext: async () => ({ contextLength: 40960, contextSource: 'fixture' }), generateObject: async ({ input }) => {
     const last = input.observations.at(-1);
     if (input.planningPhase === 'outline') return { todoTips: [{ text: '追加张杰歌单', source: 0, tool: 'music.queue.apply', args: { mode: 'append', startPlayback: false } }] };
     switch (round++) {

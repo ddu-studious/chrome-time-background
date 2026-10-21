@@ -13,17 +13,18 @@ enum JellyModel {
     // 气泡类别：water / stretch 是喝水、起身提醒；brief / task / worklog / song / tidbit 是水母差事（协议 v8 起复用同一个气泡管线，song 自 v9 起）。
     // 每个类别只允许自己那几个按钮（nudgeButtonRules）：水母只转发这些白名单里的动作，其余一律当作非法负载。
     // 类别、按钮与主按钮在 JS（js/jelly-errands-core.js 的 KINDS）里有同一份，test/desktop-companion-logic.test.mjs 逐类逐按钮对照，改一边必须改另一边。
-    static let errandKinds: Set<String> = ["brief", "task", "worklog", "song", "tidbit"]
+    static let errandKinds: Set<String> = ["brief", "task", "worklog", "lark", "song", "tidbit", "tabs", "watch", "bookmark"]
     static let nudgeKinds: Set<String> = Set(["water", "stretch"]).union(errandKinds)
     static let nudgeButtonRules: [String: Set<String>] = [
         "water": ["done", "snooze"], "stretch": ["done", "snooze"],
-        "brief": ["open", "later"], "task": ["open", "later"], "worklog": ["open", "later"],
+        "brief": ["open", "later"], "task": ["open", "later"], "worklog": ["open", "later"], "lark": ["open", "later"],
         "song": ["play", "another", "dismiss"],
         "tidbit": ["more", "dismiss"],
+        "tabs": ["open", "later"], "watch": ["open", "dismiss"], "bookmark": ["open", "later"],
     ]
     /// 每个类别的主按钮（实心高亮的那个）。
     static let primaryNudgeButton: [String: String] = [
-        "water": "done", "stretch": "done", "brief": "open", "task": "open", "worklog": "open", "song": "play", "tidbit": "more",
+        "water": "done", "stretch": "done", "brief": "open", "task": "open", "worklog": "open", "lark": "open", "song": "play", "tidbit": "more", "tabs": "open", "watch": "open", "bookmark": "open",
     ]
     static func isErrandKind(_ kind: String) -> Bool { errandKinds.contains(kind) }
     static func isPrimaryNudgeButton(kind: String, id: String) -> Bool { primaryNudgeButton[kind] == id }
@@ -32,7 +33,16 @@ enum JellyModel {
 
     // 右键菜单“水母，给我…”（协议 v9）：用户主动要一条差事。类别必须与 JS（JellyErrandsCore.REQUEST_KINDS）一致，由 Node 侧对照；
     // 任务提醒（task）不在其中——它只由真正到期的任务触发。点选后只把请求发给 Chrome，内容由 Chrome 决定并经 nudge 命令回来。
-    static let errandRequestItems: [(kind: String, title: String)] = [("brief", "今日概览"), ("song", "来首歌"), ("tidbit", "来点乐子"), ("worklog", "工作日志")]
+    static let errandRequestItems: [(kind: String, title: String)] = [
+        ("brief", "今日概览"),
+        ("lark", "飞书 @我"),
+        ("song", "来首歌"),
+        ("tidbit", "来点乐子"),
+        ("worklog", "工作日志"),
+        ("tabs", "整理标签页"),
+        ("watch", "接着看"),
+        ("bookmark", "深海拾贝"),
+    ]
     static func isErrandRequestKind(_ kind: String) -> Bool { errandRequestItems.contains { $0.kind == kind } }
     static let ttlRange: ClosedRange<Double> = 10...180
     static let defaultTTL = 90.0
@@ -270,6 +280,62 @@ enum JellyModel {
 
     /// 刷新间隔：有倒计时或提醒气泡时每秒一次；否则（常驻休息）30 秒一次，只为夜晚荧光与记录过期。
     static func tickInterval(active: Bool) -> TimeInterval { active ? 1 : 30 }
+
+    // MARK: 拖拽投喂（拖网址、文字或文件到水母身上，预填桌面 AI 助手输入框）
+
+    static let maxDropPromptChars = 400
+    static let maxDropTextChars = 320
+    static let maxDropURLChars = 300
+    static let allowedDropExtensions: Set<String> = [
+        "md", "txt", "json", "csv", "log", "pdf", "swift", "js", "mjs", "ts", "py", "html", "css", "yml", "yaml"
+    ]
+
+    struct DropItem: Equatable {
+        var kind: String       // "url" | "file" | "text"
+        var label: String      // 水母气泡反馈用的简短标签
+        var prompt: String     // 预填到桌面 AI 助手输入框的文字（≤400 字符）
+    }
+
+    /// 解析拖拽到水母身上的内容（优先级：网页链接 > 本地文件 > 纯文本）。
+    /// 只认 http/https 网址、白名单后缀且无路径穿越的本地文件、清洗后非空的文字；其余返回 nil（拒绝拖拽）。
+    static func parseDrop(url: String? = nil, fileURL: String? = nil, text: String? = nil) -> DropItem? {
+        if let rawURL = clean(url, max: maxDropURLChars),
+           let parsed = URL(string: rawURL),
+           let scheme = parsed.scheme?.lowercased(), (scheme == "http" || scheme == "https"),
+           let host = parsed.host, !host.isEmpty {
+            let prompt = String("帮我看看这个链接：\(rawURL)".prefix(maxDropPromptChars))
+            return DropItem(kind: "url", label: "已收下链接，按回车发送", prompt: prompt)
+        }
+        if let rawFile = clean(fileURL, max: maxDropURLChars) {
+            let path: String
+            if rawFile.lowercased().hasPrefix("file://"), let parsed = URL(string: rawFile), parsed.isFileURL {
+                path = parsed.path
+            } else {
+                path = rawFile
+            }
+            let parts = path.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
+            if !parts.isEmpty, !parts.contains(".."), !parts.contains("."),
+               let fileName = parts.last, let dot = fileName.lastIndex(of: "."), dot > fileName.startIndex {
+                let ext = String(fileName[fileName.index(after: dot)...]).lowercased()
+                if allowedDropExtensions.contains(ext), let safeName = clean(fileName, max: 80) {
+                    let prompt = String("帮我处理文件「\(safeName)」：".prefix(maxDropPromptChars))
+                    return DropItem(kind: "file", label: "已收下文件，补充需求后发送", prompt: prompt)
+                }
+            }
+        }
+        if let rawText = clean(text, max: maxDropTextChars) {
+            if !rawText.contains(where: { $0.isWhitespace }),
+               let parsed = URL(string: rawText),
+               let scheme = parsed.scheme?.lowercased(), (scheme == "http" || scheme == "https"),
+               let host = parsed.host, !host.isEmpty {
+                let clipped = String(rawText.prefix(maxDropURLChars))
+                return DropItem(kind: "url", label: "已收下链接，按回车发送", prompt: String("帮我看看这个链接：\(clipped)".prefix(maxDropPromptChars)))
+            }
+            let prompt = String("帮我处理这段内容：\(rawText)".prefix(maxDropPromptChars))
+            return DropItem(kind: "text", label: "已收下文字，按回车发送", prompt: prompt)
+        }
+        return nil
+    }
 }
 
 /// 水母的“活动行为”（协议 v10）：差事开着时白天保持清醒、每隔几分钟自己在桌面上巡游一圈，只在夜里、你离开电脑太久或这项能力关闭时才睡。
@@ -310,12 +376,13 @@ enum JellyBehavior {
         var busy: Bool                // 响铃及收尾、差事/提醒气泡及其到位、详情与反馈气泡、被抓着、右键菜单打开、鼠标正停在水母上
         var nightAmount: Double
         var idleSeconds: Double?
+        var meeting: Bool = false     // 摄像头或麦克风被占用（开会中）时不巡游、不小跳
     }
 
-    /// 能不能巡游：活动行为开、常驻、没有减少动态效果、倒计时不在临近阶段（临近时水母自己就在游）、不忙、没睡着、presence 为 active。
+    /// 能不能巡游：活动行为开、常驻、没有减少动态效果、倒计时不在临近阶段（临近时水母自己就在游）、不忙、没在开会、没睡着、presence 为 active。
     /// 时钟读数气泡不算忙（有闹钟时它一直在，算忙的话有闹钟的人永远等不到巡游）。
     static func canPatrol(_ context: PatrolContext) -> Bool {
-        guard context.lively, context.resident, !context.reduceMotion, context.stage == .calm, !context.busy else { return false }
+        guard context.lively, context.resident, !context.reduceMotion, context.stage == .calm, !context.busy, !context.meeting else { return false }
         if isAsleep(lively: true, nightAmount: context.nightAmount, idleSeconds: context.idleSeconds) { return false }
         return JellyModel.presenceState(idleSeconds: context.idleSeconds) == "active"
     }

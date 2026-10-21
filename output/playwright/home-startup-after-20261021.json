@@ -1,0 +1,229 @@
+{
+  "tag": "after",
+  "browser": "151.0.7922.34",
+  "config": "isolated empty profile; language=en; default modules; network blocked",
+  "probe": {
+    "started": 51.60000002384186,
+    "init": [
+      {
+        "name": "settingsManager",
+        "start": 718.8999999761581,
+        "end": 734.5
+      },
+      {
+        "name": "clockManager",
+        "start": 734.6000000238419,
+        "end": 734.6000000238419
+      },
+      {
+        "name": "holidayManager",
+        "start": 734.6000000238419,
+        "end": 734.7000000476837
+      },
+      {
+        "name": "weatherManager",
+        "start": 734.7000000476837,
+        "end": 770.6000000238419
+      },
+      {
+        "name": "memoManager",
+        "start": 735.6000000238419,
+        "end": 774.1000000238419
+      },
+      {
+        "name": "knowledgeWall",
+        "start": 735.7999999523163,
+        "end": 763
+      },
+      {
+        "name": "techTicker",
+        "start": 736,
+        "end": 792.6000000238419
+      },
+      {
+        "name": "musicController",
+        "start": 736.2000000476837,
+        "end": 800.2999999523163
+      },
+      {
+        "name": "bilibiliController",
+        "start": 736.2999999523163,
+        "end": 812.2999999523163
+      },
+      {
+        "name": "youtubeController",
+        "start": 751.2999999523163,
+        "end": 794.3999999761581
+      },
+      {
+        "name": "huyaController",
+        "start": 794.5,
+        "end": 798.1000000238419
+      },
+      {
+        "name": "scheduleManager",
+        "start": 798.2000000476837,
+        "end": 809.8999999761581
+      },
+      {
+        "name": "alarmCenter",
+        "start": 809.8999999761581,
+        "end": 830.8999999761581
+      },
+      {
+        "name": "workLogManager",
+        "start": 831,
+        "end": 833.7999999523163
+      },
+      {
+        "name": "blogManager",
+        "start": 833.8999999761581,
+        "end": 835.1000000238419
+      }
+    ],
+    "timers": [
+      {
+        "delay": 3600000,
+        "at": 649.1000000238419
+      },
+      {
+        "delay": 1000,
+        "at": 659.2999999523163
+      },
+      {
+        "delay": 1800000,
+        "at": 722.1000000238419
+      },
+      {
+        "delay": 60000,
+        "at": 731.6000000238419
+      },
+      {
+        "delay": 60000,
+        "at": 734.7000000476837
+      },
+      {
+        "delay": 1800000,
+        "at": 770.6000000238419
+      },
+      {
+        "delay": 1200000,
+        "at": 792.6000000238419
+      },
+      {
+        "delay": 2000,
+        "at": 797.8999999761581
+      },
+      {
+        "delay": 3000,
+        "at": 798.7999999523163
+      },
+      {
+        "delay": 300000,
+        "at": 836.1000000238419
+      },
+      {
+        "delay": 6000,
+        "at": 2300.399999976158
+      }
+    ],
+    "longTasks": [],
+    "backgroundAt": 698.6000000238419,
+    "appReady": 1977.8999999761581,
+    "now": 15737.5,
+    "navigation": [
+      {
+        "dcl": 719,
+        "load": 792.7000000476837
+      }
+    ],
+    "paint": [
+      {
+        "name": "first-paint",
+        "time": 688
+      },
+      {
+        "name": "first-contentful-paint",
+        "time": 688
+      }
+    ],
+    "date": "2026年10月21日星期三",
+    "htmlScripts": 108,
+    "mermaidLoaded": false
+  },
+  "cpuByFile": [
+    [
+      "(idle)",
+      14232.220000000147
+    ],
+    [
+      "(program)",
+      1295.9659999999976
+    ],
+    [
+      "(garbage collector)",
+      16.925
+    ],
+    [
+      "/js/clock-liquid.js",
+      16.413999999999998
+    ],
+    [
+      "/js/bilibili-controller.js",
+      14.937
+    ],
+    [
+      "/js/ticker.js",
+      12.634
+    ],
+    [
+      "/js/clock.js",
+      12.380999999999998
+    ],
+    [
+      "/js/lunar-lib.js",
+      7.519
+    ],
+    [
+      "/js/music-controller.js",
+      5.184
+    ],
+    [
+      "/vendor/highlight.min.js",
+      4.981
+    ],
+    [
+      "/js/dock-manager.js",
+      3.867
+    ],
+    [
+      "requestAnimationFrame",
+      3.6819999999999995
+    ],
+    [
+      "/js/main.js",
+      3.6550000000000002
+    ],
+    [
+      "/js/background-experience.js",
+      2.553
+    ],
+    [
+      "/vendor/marked.min.js",
+      2.543
+    ],
+    [
+      "/js/weather.js",
+      2.538
+    ],
+    [
+      "/js/music-assistant.js",
+      2.527
+    ],
+    [
+      "/js/memo.js",
+      2.5220000000000002
+    ]
+  ],
+  "errors": []
+}

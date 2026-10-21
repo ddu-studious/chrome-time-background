@@ -1,4 +1,8 @@
-import { COLD_CONTEXT_LENGTH, contextWindow, prepareContext } from './assistant-context.mjs';
+import { createHash } from 'node:crypto';
+import { COLD_CONTEXT_LENGTH, contextWindow, prepareModelContext } from './assistant-context.mjs';
+import { ModelTokenCounter } from './model-token-counter.mjs';
+
+const fingerprint = (instructions, input, model, reasoning, contextLength) => createHash('sha256').update(JSON.stringify([instructions, input, model, reasoning, contextLength])).digest('hex');
 
 export class LMStudioProvider {
   constructor({ baseUrl = 'http://127.0.0.1:1234', token = '', model = 'qwen/qwen3.8-27b', reasoning = 'off', timeoutMs = 90000 } = {}) {
@@ -48,6 +52,15 @@ export class LMStudioProvider {
     if (!selected) throw Object.assign(new Error('规划所选模型未找到，请检查 LM Studio 模型列表'), { code: 'MODEL_NOT_FOUND' });
     return contextWindow(selected);
   }
+  async countContextTokens({ instructions, input, contextSource, model = this.model, reasoning = this.reasoning, signal, timeoutMs }) {
+    // Tokenizer RPCs require an already loaded model. Cold requests retain the
+    // explicit conservative budget and the existing native JIT load behavior.
+    signal?.throwIfAborted();
+    if (contextSource === 'cold-load-default') return null;
+    this.tokenCounter ||= new ModelTokenCounter({ baseUrl: this.baseUrl, token: this.token });
+    const result = await this.tokenCounter.count({ instructions, input, model, signal, timeoutMs });
+    return { ...result, fingerprint: fingerprint(instructions, input, model, reasoning, result.contextLength) };
+  }
   async embed({ texts, purpose, model, signal }) {
     if (this.busy) throw Object.assign(new Error('本地模型繁忙'), { statusCode: 429 });
     this.busy = true;
@@ -77,17 +90,21 @@ export class LMStudioProvider {
       if (remaining <= 0) throw Object.assign(new Error('本地模型响应超时，请稍后重试或关闭思考'), { code: 'MODEL_RESPONSE_TIMEOUT' });
       // Recheck if the user reloaded the model between preparation and generation.
       const capacity = contextWindow(selected);
-      if (contextBudget && capacity.contextLength !== contextBudget.contextLength) {
+      if (contextBudget && (capacity.contextLength !== contextBudget.contextLength ||
+        (contextBudget.tokenCountFingerprint && contextBudget.tokenCountFingerprint !== fingerprint(instructions, input, model, reasoning, capacity.contextLength)))) {
         if (format === 'text') throw Object.assign(new Error('模型容量在整理期间变化，请重新整理'), { code: 'COMPACTION_STALE' });
-        const prepared = prepareContext({ instructions, input, ...capacity, maxOutputTokens });
+        const prepared = await prepareModelContext({ instructions, input, ...capacity, maxOutputTokens }, {
+          countContextTokens: options => this.countContextTokens({ ...options, model, reasoning, signal, timeoutMs: Math.min(5000, Math.max(1, deadline - Date.now())) }) });
         input = prepared.modelInput;
         contextBudget = prepared.budget;
       }
+      signal?.throwIfAborted();
+      if (deadline <= Date.now()) throw Object.assign(new Error('本地模型响应超时，请稍后重试'), { code: 'MODEL_RESPONSE_TIMEOUT' });
       onMetadata?.({ ...capacity, ...(contextBudget ? { contextBudget } : {}) });
       const response = await this.request('/api/v1/chat', {
         model, input: format === 'text' ? input : JSON.stringify(input), system_prompt: instructions,
         reasoning, temperature: 0, max_output_tokens: Math.min(maxOutputTokens, 4096), ...(selected.loaded ? {} : { context_length: COLD_CONTEXT_LENGTH }), store: false
-      }, remaining, signal);
+      }, Math.max(1, deadline - Date.now()), signal);
       // Native API controls reasoning explicitly on MLX. JSON is validated again by the domain resolver.
       const stats = response.stats || {}, usage = response.usage || {};
       const measured = Object.fromEntries(Object.entries({ inputTokens: stats.input_tokens ?? usage.prompt_tokens, outputTokens: stats.total_output_tokens ?? usage.completion_tokens, reasoningTokens: stats.reasoning_output_tokens ?? usage.completion_tokens_details?.reasoning_tokens }).filter(([, value]) => Number.isSafeInteger(value) && value >= 0));

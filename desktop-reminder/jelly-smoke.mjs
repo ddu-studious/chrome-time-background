@@ -1037,8 +1037,11 @@ if (!only || only === 'errand') {
   });
 
   // ---- 协议 v9：右键菜单“水母，给我…” ----
-  const MENU = [['今日概览', 'brief'], ['来首歌', 'song'], ['来点乐子', 'tidbit'], ['工作日志', 'worklog']];
-  await errandScenario('右键菜单“水母，给我…”：不带 errands 字段没有；带了才有；四项各发自己的 errandRequest，等回执时全部禁用', {}, async h => {
+  const MENU = [
+    ['今日概览', 'brief'], ['飞书 @我', 'lark'], ['来首歌', 'song'], ['来点乐子', 'tidbit'],
+    ['工作日志', 'worklog'], ['整理标签页', 'tabs'], ['接着看', 'watch'], ['深海拾贝', 'bookmark'],
+  ];
+  await errandScenario('右键菜单“水母，给我…”：不带 errands 字段没有；带了才有；八项各发自己的 errandRequest，等回执时全部禁用', {}, async h => {
     let reply = await h.request('jelly', { jelly: jelly() });
     assert.equal(reply.errandsMenu, false, '默认没有差事菜单'); assert.equal(reply.countdownMenu.includes('水母，给我…'), false);
     for (const [title] of MENU) assert.equal((await h.request('menuItem', { title })).ok, false, `${title}：没开差事菜单时不可点`);
@@ -1080,6 +1083,32 @@ if (!only || only === 'errand') {
     const third = await h.waitEvent('errandRequest', 1500);
     reply = await h.request('errandRequestResult', { errandId: third.errandId, ok: false });
     assert.equal(reply.feedback, '没能完成，请重试', '失败没给原因也要有交代，不声称成功');
+  });
+
+  await errandScenario('会议安静门禁与拖拽投喂：mediaBusy 触发 presence(meeting:true)，dropHook 预填桌面 AI 助手输入框且不自动提交', {}, async h => {
+    await h.request('jelly', { jelly: jelly() });
+    await h.waitEvent('presence', 2000);
+    // 没开桌面 AI 助手时拖入链接：提示开启桌面 AI 助手
+    let dropReply = await h.request('dropHook', { url: 'https://example.com/doc' });
+    assert.equal(dropReply.ok, false);
+    assert.equal(dropReply.feedback, '请先在设置页开启“桌面 AI 助手”');
+    // 开启桌面 AI 助手后拖入链接：面板显示并填入提示词，但不发出 assistantAction
+    await h.request('jelly', { jelly: jelly({ assistant: { enabled: true, hotkey: 'ctrl+shift+b' } }) });
+    dropReply = await h.request('dropHook', { url: 'https://example.com/doc' });
+    assert.equal(dropReply.ok, true);
+    assert.equal(dropReply.assistantVisible, true);
+    assert.equal(dropReply.assistantInput, '帮我看看这个链接：https://example.com/doc');
+    h.noEvent('assistantAction', '拖拽投喂只预填输入框，绝不自动提交');
+    // 会议占用态切换：上报 presence(meeting:true) 与恢复后的 presence
+    const busyReply = await h.request('mediaBusy', { busy: true });
+    assert.equal(busyReply.ok, true);
+    assert.equal(busyReply.jellyMeeting, true);
+    const meetingEvt = await h.waitEvent('presence', 1500);
+    assert.equal(meetingEvt.meeting, true);
+    const clearReply = await h.request('mediaBusy', { busy: false });
+    assert.equal(clearReply.jellyMeeting, false);
+    const clearEvt = await h.waitEvent('presence', 1500);
+    assert.equal('meeting' in clearEvt, false, '会议结束后的 presence 不带 meeting:true');
   });
 
   await errandScenario('菜单请求 15 秒没有回执：提示 Chrome 没有回应，菜单恢复可点；迟到的旧回执不影响新请求', {}, async h => {
@@ -1394,6 +1423,23 @@ if (!only || only === 'patrol') {
     assert.equal((await h.request('ping')).patrolCount, 1);
     await h.request('menuTracking', { open: false });
     await until(h, r => r.patrolling === true && r.patrolCount === 2, 4000, '菜单关闭后重新等待并再次出发');
+  });
+
+  await patrolScenario('开会期间（摄像头或麦克风被占用）不出发、巡游中开始开会立刻结束；散会后重新等待再出发', { TIMEKEEPER_PATROL_SECONDS: '1,30,600' }, async h => {
+    await h.request('jelly', { jelly: lively() });
+    assert.equal((await h.request('mediaBusy', { busy: true })).ok, true);
+    await delay(2500);
+    let reply = await h.request('ping');
+    assert.equal(reply.jellyMeeting, true);
+    assert.equal(reply.patrolCount, 0, '开会中：不出发');
+    await h.request('mediaBusy', { busy: false });
+    await until(h, r => r.patrolling === true, 4000, '散会后出发');
+    reply = await h.request('mediaBusy', { busy: true });
+    assert.equal(reply.patrolling, false, '巡游中开始开会：立刻结束');
+    await delay(2200);
+    assert.equal((await h.request('ping')).patrolCount, 1);
+    await h.request('mediaBusy', { busy: false });
+    await until(h, r => r.patrolling === true && r.patrolCount === 2, 4000, '散会后重新等待并再次出发');
   });
 
   await patrolScenario('差事菜单请求在等回执（反馈气泡）时不出发；回执失败显示完、气泡收起后才重新等待再出发', { TIMEKEEPER_PATROL_SECONDS: '1,30,600' }, async h => {

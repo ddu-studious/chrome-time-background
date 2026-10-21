@@ -6,9 +6,13 @@ class Clock {
         this.timeElement = document.getElementById('time');
         this.dateElement = document.getElementById('date');
         this.updateInterval = null;
+        this._initialized = false;
+        this.dateFormatter = new Intl.DateTimeFormat('zh-CN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     }
 
     init() {
+        if (this._initialized) { this.updateDisplay(); return; }
+        this._initialized = true;
         if (window.settingsManager) {
             window.settingsManager.addChangeListener(settings => {
                 this.updateDisplay();
@@ -43,7 +47,7 @@ class Clock {
             if (settings.showSeconds) {
                 timeString += `:${seconds.toString().padStart(2, '0')}`;
             }
-            timeString += hours >= 12 ? ' PM' : ' AM';
+            timeString = (hours >= 12 ? '下午 ' : '上午 ') + timeString;
         } else {
             timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
             if (settings.showSeconds) {
@@ -60,14 +64,7 @@ class Clock {
             return '';
         }
 
-        const options = {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-        };
-
-        return date.toLocaleDateString(settings.language === 'zh' ? 'zh-CN' : 'en-US', options);
+        return this.dateFormatter.format(date);
     }
 
     updateDisplay() {
@@ -104,6 +101,7 @@ class Clock {
     cleanup() {
         if (this.updateInterval) {
             clearInterval(this.updateInterval);
+            this.updateInterval = null;
         }
     }
 }

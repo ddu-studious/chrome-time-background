@@ -123,6 +123,17 @@ export function createGateway({ provider, speechProvider, synthesisProvider, com
           // (below); a mid-task change of the switch is caught there and by the policy revision check.
           computeEnabled: sceneId === 'assistant.plan' && state.policy.modelEnabled && state.policy.computeEnabled === true && !state.policy.disabledScenes.includes('assistant.compute') && computeProvider?.describe?.().configured === true,
           compactionEnabled: state.policy.contextCompaction === 'hybrid' && (sceneId === 'assistant.compact' || !state.policy.disabledScenes.includes('assistant.compact')),
+          ...(provider.countContextTokens ? { countContextTokens: async options => {
+            signal?.throwIfAborted();
+            if (!state.policy.modelEnabled || state.policy.disabledScenes.includes(sceneId)) throw fail('此场景的模型调用已关闭，仍可使用简单指令或手动设置', 403);
+            if (control.snapshot().revision !== state.revision) throw fail('控制策略已更新，请重新提交请求', 409);
+            const counted = await provider.countContextTokens({ ...options, model: selected.model,
+              reasoning: sceneId === 'assistant.compact' ? 'off' : planningReasoning, signal,
+              timeoutMs: Math.min(5000, state.policy.timeoutMs) });
+            signal?.throwIfAborted();
+            if (control.snapshot().revision !== state.revision) throw fail('控制策略已更新，请重新提交请求', 409);
+            return counted;
+          } } : {}),
           async prefetchToolGroups({ text, app, groups }) {
             const mode = state.policy.layaMode;
             if (mode === 'off' || !state.policy.modelEnabled || !layaProvider) {

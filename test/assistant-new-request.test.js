@@ -55,14 +55,14 @@ function fixture(overrides={}) {
     execute:async()=>({message:'完成',memory:{lastObject:'old-artist'}}),...overrides});
   return {engine,values,events,contexts};
 }
-test('自动新开使用独立会话与空上下文，旧会话留存事件不删除，也不提交停止播放动作', async () => {
+test('新目标保留会话背景、清除执行状态，不提交停止播放动作', async () => {
   const f=fixture(); await f.engine.submit({app:'music',text:'张杰'});const old=await f.engine.settled();
   const userCount=f.events.filter(e=>e.role==='user').length;
   await f.engine.submit({...inherited('明天九点提醒我开会'),taskId:old.id,version:old.version});const next=await f.engine.settled();
-  assert.notEqual(next.conversationId,old.conversationId);assert.equal(next.scope,'alarm');assert.equal(next.startMode,'new');
+  assert.equal(next.conversationId,old.conversationId);assert.equal(next.scope,'alarm');assert.equal(next.startMode,'new');
   assert.deepEqual(f.contexts[1].memory,{});assert.deepEqual(f.contexts[1].observations,[]);assert.deepEqual(f.contexts[1].remainingSteps,[]);
-  assert.deepEqual(f.contexts[1].turns,[{role:'user',content:'明天九点提醒我开会'}]);
-  assert.ok(f.events.some(e=>e.role==='status'&&e.conversationId===old.conversationId));
+  assert.equal(f.contexts[1].turns.at(-1).content,'明天九点提醒我开会');assert.ok(f.contexts[1].turns.some(row=>row.content==='张杰'));
+  assert.ok(f.events.some(e=>e.role==='user'&&e.conversationId===old.conversationId));
   assert.equal(f.events.filter(e=>e.role==='user').length,userCount+1);
 });
 test('含糊追问沿用同一会话，强制新需求才清除该上下文且不重复发送', async () => {

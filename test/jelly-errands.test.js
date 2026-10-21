@@ -46,7 +46,11 @@ function env(options = {}) {
     readMemos: options.readMemos || (async () => overdueMemos),
     readWorklog: options.readWorklog || (async () => []),
     tips: options.tips || (() => tips),
-    openPage: async kind => { if (options.openError) throw new Error('no tab'); opened.push(kind); },
+    readLark: options.readLark,
+    readTabs: options.readTabs,
+    readWatch: options.readWatch,
+    readBookmarks: options.readBookmarks,
+    openPage: async (kind, target) => { if (options.openError) throw new Error('no tab'); opened.push(target !== undefined ? [kind, target] : kind); },
     now: () => clock.date,
     random: () => { seq += 1; return options.random ? options.random(seq) : 0; },
     presentTimeoutMs: options.presentTimeoutMs,
@@ -517,7 +521,10 @@ const songSource = (list = songList) => {
   const source = { calls: 0, suggest: async () => { source.calls += 1; if (list instanceof Error) throw list; return list.map(item => ({ ...item })); } };
   return source;
 };
-const kindsOnly = kinds => ({ enabled: true, kinds: { task: false, worklog: false, song: false, tidbit: false, ...kinds } });
+const kindsOnly = kinds => ({
+  enabled: true,
+  kinds: { task: false, worklog: false, lark: false, song: false, tidbit: false, tabs: false, watch: false, bookmark: false, ...kinds },
+});
 const notPlaying = async () => false;
 /** 只开歌曲：其余分项关、没有任务，别的类别不会抢先。 */
 const songEnv = (options = {}) => env({ readMemos: async () => [], config: kindsOnly({ song: true }), songs: songSource(), isPlaying: notPlaying, ...options });
@@ -962,4 +969,72 @@ test('set：保存并对齐闹钟之后调用 onChange 一次；onChange 同步�
     assert.equal((await bad.errands.set({ enabled: true })).ok, true);
     await tick();
   }
+});
+
+// ---------- 新能力：会议静默、飞书 @我、陈旧标签页、继续看、深海拾贝 ----------
+
+test('presence meeting：开会/通话中定时评估返回 meeting，offer 返回 meeting，不发气泡；手动 request 仍可用', async () => {
+  const e = env();
+  e.errands.onPresence({ state: 'active', meeting: true });
+  assert.deepEqual(await e.errands.fire(Errands.ALARM), { sent: false, reason: 'meeting' });
+  assert.deepEqual(await e.errands.offer('task'), { handled: false, reason: 'meeting' });
+  assert.equal((await e.errands.request('brief')).ok, true);
+  e.errands.onPresence('active', { meeting: false });
+  assert.equal((await e.errands.fire(Errands.ALARM)).sent, true);
+});
+
+test('飞书 @我（lark）：有新 @我 时发送气泡，点“去看看”将 target 传给 openPage；右键手动查询支持未安装/未登录提示', async () => {
+  const e = env({
+    readMemos: async () => [],
+    config: kindsOnly({ lark: true }),
+    readLark: async () => ({ ok: true, count: 2, newestAt: 1760850000000, chats: [{ name: '架构群' }], senders: ['王工'] }),
+  });
+  const fired = await e.errands.fire(Errands.ALARM);
+  assert.equal(fired.sent, true);
+  assert.equal(fired.kind, 'lark');
+  assert.match(e.presented[0].text, /2 条新 @我（来自「架构群」 · 王工）/);
+  await e.errands.act(e.presented[0].id, 'open');
+  assert.deepEqual(e.opened, [['lark', { kind: 'lark' }]]);
+
+  const notLogged = env({
+    config: kindsOnly({ lark: true }),
+    readLark: async () => ({ ok: false, status: 'not_logged_in' }),
+  });
+  assert.deepEqual(await notLogged.errands.request('lark'), { ok: false, error: '飞书 CLI 尚未登录，请先执行 lark-cli auth login' });
+});
+
+test('陈旧标签页（tabs）、继续看（watch）、深海拾贝（bookmark）：定时评估与手动请求、点击打开目标', async () => {
+  const nowMs = at(15, 10, 0).getTime();
+  const old = nowMs - 72 * 3600000;
+  const e = env({
+    readMemos: async () => [],
+    config: kindsOnly({ tabs: true, watch: true, bookmark: true }),
+    readTabs: async () => Array.from({ length: 5 }, (_, i) => ({ url: `https://github.com/p${i}`, lastAccessed: old })),
+    readWatch: async () => ({
+      biliWatchMemory: { BV1xx411c7mD: { title: 'Rust 异步', page: 1, time: 300, duration: 600, ts: nowMs - 3600000 } },
+    }),
+    readBookmarks: async () => ({
+      items: [{ id: 'bm1', status: 'active', title: 'V8 垃圾回收', url: 'https://v8.dev/gc', dateAdded: nowMs - 20 * 86400000, srs: { nextReview: nowMs - 1000 } }],
+    }),
+  });
+
+  // 第一次：tabs
+  let res = await e.errands.fire(Errands.ALARM);
+  assert.equal(res.kind, 'tabs');
+  await e.errands.act(e.presented[0].id, 'open');
+  assert.deepEqual(e.opened.at(-1), ['tabs', { kind: 'tabs' }]);
+
+  // 16 分钟后：watch
+  advance(e, 16);
+  res = await e.errands.fire(Errands.ALARM);
+  assert.equal(res.kind, 'watch');
+  await e.errands.act(e.presented[1].id, 'open');
+  assert.deepEqual(e.opened.at(-1), ['watch', { platform: 'bilibili', id: 'BV1xx411c7mD', seconds: 300, page: 1, title: 'Rust 异步' }]);
+
+  // 再 16 分钟后：bookmark
+  advance(e, 16);
+  res = await e.errands.fire(Errands.ALARM);
+  assert.equal(res.kind, 'bookmark');
+  await e.errands.act(e.presented[2].id, 'open');
+  assert.deepEqual(e.opened.at(-1), ['bookmark', { url: 'https://v8.dev/gc', id: 'bm1', title: 'V8 垃圾回收' }]);
 });

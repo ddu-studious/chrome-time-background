@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>快捷键面板 · 隔离预览</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <link rel="stylesheet" href="../../css/product-ui-v5.css">
+  <link rel="stylesheet" href="../../css/shortcut-help.css">
+  <style>
+    body { margin: 0; height: 100vh; overflow: hidden; color: white; font: 14px system-ui; background: radial-gradient(ellipse at 75% 30%, #56636b, #1d3741 48%, #101d2d); }
+    main { position: relative; z-index: 1; padding: 30px; } h1 { margin: 18vh 0 0; text-align: center; font-size: 90px; font-weight: 300; }
+    .fixture-note { color: #c7d9de; font-size: 12px; } .fixture-controls { display: flex; gap: 8px; flex-wrap: wrap; }
+    .fixture-controls input, .fixture-controls [contenteditable] { padding: 8px; color: white; background: #142b36; border: 1px solid #9fb7c6; }
+    .fixture-controls [contenteditable] { min-width: 180px; }
+  </style>
+</head>
+<body>
+  <main><p class="fixture-note">隔离预览 · 快捷键和桌面状态为替身，不操作真实提醒、音乐或设置</p><div class="fixture-controls"><input aria-label="页面输入框" placeholder="输入问号不打开面板"><div contenteditable="true" role="textbox" aria-label="富文本输入框">富文本输入区</div></div><h1>21:08</h1></main>
+  <div class="keyboard-hint shortcut-hints"><span class="shortcut-hint-background">Ctrl/⌘ + Shift + B 切换背景</span><button type="button" id="shortcut-help-trigger" aria-haspopup="dialog" aria-controls="shortcut-help" aria-expanded="false"><kbd>?</kbd><span>快捷键</span></button></div>
+  <script>
+    window.shortcutFixture = { mode: 'ok', binding: 'Ctrl+Shift+K', calls: [], backgroundKeys: 0 };
+    window.chrome = {
+      commands: { getAll: async () => {
+        if (shortcutFixture.mode === 'fail') throw new Error('fixture');
+        if (shortcutFixture.mode === 'pending') return new Promise(resolve => { shortcutFixture.release = resolve; });
+        return [
+          { name: 'toggle-quick-assistant', description: '唤出或收起快捷助手：@ 应用 / 动作', shortcut: shortcutFixture.binding },
+          { name: 'music-toggle-playback', description: '网易云音乐：播放或暂停', shortcut: 'MediaPlayPause' },
+          { name: 'music-previous-track', description: '网易云音乐：上一首', shortcut: '' },
+          { name: 'open-site-workspace', description: '打开或关闭网站工作区侧边栏', shortcut: 'Ctrl+Shift+U' },
+        ];
+      } },
+      runtime: { sendMessage: async message => {
+        shortcutFixture.calls.push(message);
+        if (shortcutFixture.mode === 'fail') throw new Error('fixture');
+        return { ok: true, assistant: { enabled: false, hotkey: 'ctrl+option+space', hotkeyStatus: 'off' } };
+      } },
+      tabs: { create: async options => { shortcutFixture.calls.push(options); } },
+    };
+    document.addEventListener('keydown', () => shortcutFixture.backgroundKeys++);
+  </script>
+  <script src="../../js/shortcut-help.js"></script>
+</body>
+</html>

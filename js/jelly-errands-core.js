@@ -31,17 +31,24 @@
     brief: Object.freeze({ since: 8, urgency: 2, buttons: Object.freeze([Object.freeze({ id: 'open', title: '看看' }), Object.freeze({ id: 'later', title: '知道了' })]) }),
     task: Object.freeze({ since: 8, urgency: 4, buttons: Object.freeze([Object.freeze({ id: 'open', title: '去处理' }), Object.freeze({ id: 'later', title: '明天再说' })]) }),
     worklog: Object.freeze({ since: 8, urgency: 3, buttons: Object.freeze([Object.freeze({ id: 'open', title: '记一条' }), Object.freeze({ id: 'later', title: '晚点再说' })]) }),
+    lark: Object.freeze({ since: 10, urgency: 3, buttons: Object.freeze([Object.freeze({ id: 'open', title: '去看看' }), Object.freeze({ id: 'later', title: '稍后' })]) }),
     // 点“播放”才放；“换一首”只换候选；“不听”记一次拒绝
     song: Object.freeze({ since: 9, urgency: 1, buttons: Object.freeze([Object.freeze({ id: 'play', title: '播放' }), Object.freeze({ id: 'another', title: '换一首' }), Object.freeze({ id: 'dismiss', title: '不听' })]) }),
     tidbit: Object.freeze({ since: 8, urgency: 1, buttons: Object.freeze([Object.freeze({ id: 'more', title: '再来一条' }), Object.freeze({ id: 'dismiss', title: '够了' })]) }),
+    tabs: Object.freeze({ since: 10, urgency: 1, buttons: Object.freeze([Object.freeze({ id: 'open', title: '去整理' }), Object.freeze({ id: 'later', title: '稍后' })]) }),
+    watch: Object.freeze({ since: 10, urgency: 1, buttons: Object.freeze([Object.freeze({ id: 'open', title: '继续看' }), Object.freeze({ id: 'dismiss', title: '先不看' })]) }),
+    bookmark: Object.freeze({ since: 10, urgency: 1, buttons: Object.freeze([Object.freeze({ id: 'open', title: '打开看看' }), Object.freeze({ id: 'later', title: '改天' })]) }),
   });
   const KIND_IDS = Object.freeze(Object.keys(KINDS));
-  // 设置里能单独开关的四类（晨间概览跟“任务”走）
-  const SWITCHABLE = Object.freeze(['task', 'worklog', 'song', 'tidbit']);
-  // 水母右键菜单“水母，给我…”能主动要的四类（过期任务不在里面）；组件协议 v9 起才有这个菜单。Swift 一侧有同一份（JellyModel.errandRequestItems）。
-  const REQUEST_KINDS = Object.freeze(['brief', 'song', 'tidbit', 'worklog']);
+  // 设置里能单独开关的八类（晨间概览跟“任务”走）
+  const SWITCHABLE = Object.freeze(['task', 'worklog', 'lark', 'song', 'tidbit', 'tabs', 'watch', 'bookmark']);
+  // 水母右键菜单“水母，给我…”能主动要的八类（过期任务不在里面）；组件协议 v9 起才有这个菜单。Swift 一侧有同一份（JellyModel.errandRequestItems）。
+  const REQUEST_KINDS = Object.freeze(['brief', 'lark', 'song', 'tidbit', 'worklog', 'tabs', 'watch', 'bookmark']);
   const MIN_VERSION = 8;
   const REQUEST_SINCE = 9;
+  const STALE_TAB_MIN_COUNT = 5;
+  const STALE_TAB_AGE_MS = 48 * 3600000;
+  const RECENT_WATCH_MS = 7 * 24 * 3600000;
 
   // 日志缺口的检查点与现有系统通知（js/background.js 的 checkWorklogProgress）一致：12 点 ≥1 小时、15 点 ≥3 小时、17 点 ≥6 小时
   const CHECKPOINTS = Object.freeze([
@@ -71,7 +78,16 @@
     return {
       enabled: source.enabled === true,
       level: Object.prototype.hasOwnProperty.call(LEVELS, source.level) ? source.level : DEFAULTS.level,
-      kinds: { task: kinds.task !== false, worklog: kinds.worklog !== false, song: kinds.song !== false, tidbit: kinds.tidbit !== false },
+      kinds: {
+        task: kinds.task !== false,
+        worklog: kinds.worklog !== false,
+        lark: kinds.lark !== false,
+        song: kinds.song !== false,
+        tidbit: kinds.tidbit !== false,
+        tabs: kinds.tabs !== false,
+        watch: kinds.watch !== false,
+        bookmark: kinds.bookmark !== false,
+      },
       showTitles: source.showTitles === true,
       from: valid ? source.from : DEFAULTS.from,
       to: valid ? source.to : DEFAULTS.to,
@@ -163,17 +179,134 @@
     return logged >= current.expect ? null : { label: current.label, logged, expect: current.expect, hour: current.hour };
   }
 
+  /**
+   * 陈旧标签页统计（只读）：排除已固定、有声、当前激活或非 http(s) 的标签页；统计距今超过 48 小时的标签数量与前两个域名。
+   * 不足 minCount（默认 5 个）时返回 null（手动查询可传 minCount = 1）。
+   */
+  function staleTabStats(tabs, nowMs, { minCount = STALE_TAB_MIN_COUNT, minAgeMs = STALE_TAB_AGE_MS } = {}) {
+    if (!Array.isArray(tabs) || !finite(nowMs)) return null;
+    let count = 0;
+    let minAccessed = Infinity;
+    const domainCounts = new Map();
+    for (const tab of tabs) {
+      if (!isObject(tab) || tab.pinned === true || tab.audible === true || tab.active === true) continue;
+      const url = typeof tab.url === 'string' ? tab.url : '';
+      const hostMatch = /^https?:\/\/([^/:?#]+)/i.exec(url);
+      if (!hostMatch) continue;
+      if (!finite(tab.lastAccessed) || tab.lastAccessed <= 0 || nowMs - tab.lastAccessed < minAgeMs) continue;
+      count += 1;
+      if (tab.lastAccessed < minAccessed) minAccessed = tab.lastAccessed;
+      const host = clean(hostMatch[1].toLowerCase().replace(/^www\./, ''), 24);
+      if (host) domainCounts.set(host, (domainCounts.get(host) || 0) + 1);
+    }
+    if (count < minCount) return null;
+    const oldestDays = Math.max(2, Math.floor((nowMs - minAccessed) / (24 * 3600000)));
+    const domains = [...domainCounts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 2)
+      .map(entry => entry[0]);
+    return { count, oldestDays, domains };
+  }
+
+  /**
+   * 未看完视频/课程候选（只读）：从 B 站观看记忆、YouTube 本地观看历史与进度、马士兵学习进度中筛出最近 7 天内进度在 5%～90% 的条目，按最近观看时间降序。
+   */
+  function watchCandidates(raw, nowMs) {
+    if (!isObject(raw) || !finite(nowMs)) return [];
+    const items = [];
+    const bili = isObject(raw.biliWatchMemory) ? raw.biliWatchMemory : {};
+    for (const [bvid, entry] of Object.entries(bili)) {
+      if (!/^BV[A-Za-z0-9]{10}$/.test(bvid) || !isObject(entry)) continue;
+      const time = Number(entry.time), dur = Number(entry.duration), ts = Number(entry.ts);
+      if (!finite(ts) || ts <= 0 || nowMs - ts > RECENT_WATCH_MS || ts > nowMs + 60000) continue;
+      if (!finite(time) || time < 30 || !finite(dur) || dur <= 0) continue;
+      const ratio = time / dur;
+      if (ratio < 0.05 || ratio > 0.90) continue;
+      const title = clean(typeof entry.title === 'string' && entry.title.trim() ? entry.title : bvid, 24);
+      const page = Number.isInteger(entry.page) && entry.page > 0 ? entry.page : 1;
+      items.push({
+        id: `bili:${bvid}`, platform: 'bilibili', platformLabel: 'B 站', title,
+        percent: Math.round(ratio * 100), updatedAt: ts,
+        target: { platform: 'bilibili', id: bvid, seconds: Math.floor(time), page, title },
+      });
+    }
+    const ytHistory = Array.isArray(raw.youtubeWatchHistory) ? raw.youtubeWatchHistory : [];
+    const ytProgress = isObject(raw.youtubeWatchProgress) ? raw.youtubeWatchProgress : {};
+    for (const video of ytHistory) {
+      if (!isObject(video) || typeof video.id !== 'string' || !/^[A-Za-z0-9_-]{11}$/.test(video.id)) continue;
+      const prog = ytProgress[video.id];
+      if (!isObject(prog)) continue;
+      const time = Number(prog.time), dur = Number(prog.duration);
+      const ts = finite(prog.updatedAt) ? prog.updatedAt : Date.parse(video.watchedAt);
+      if (!finite(ts) || ts <= 0 || nowMs - ts > RECENT_WATCH_MS || ts > nowMs + 60000) continue;
+      if (!finite(time) || time < 30 || !finite(dur) || dur <= 0) continue;
+      const ratio = time / dur;
+      if (ratio < 0.05 || ratio > 0.90) continue;
+      const title = clean(typeof video.title === 'string' && video.title.trim() ? video.title : video.id, 24);
+      items.push({
+        id: `yt:${video.id}`, platform: 'youtube', platformLabel: 'YouTube', title,
+        percent: Math.round(ratio * 100), updatedAt: ts,
+        target: { platform: 'youtube', id: video.id, seconds: Math.floor(time), title },
+      });
+    }
+    const msbSource = raw.mashibingStudyTrackerV1 ?? raw.studyProgress;
+    const msbList = Array.isArray(msbSource) ? msbSource : isObject(msbSource) ? [msbSource] : [];
+    for (const course of msbList) {
+      if (!isObject(course)) continue;
+      const pct = Number(course.progress);
+      const ts = Number(course.updatedAt ?? course.ts);
+      const url = typeof course.url === 'string' ? course.url : '';
+      const title = clean(course.sectionName || course.courseName || '', 24);
+      if (!title || !/^https?:\/\//i.test(url)) continue;
+      if (!finite(ts) || ts <= 0 || nowMs - ts > RECENT_WATCH_MS || ts > nowMs + 60000) continue;
+      if (!finite(pct) || pct < 5 || pct > 90) continue;
+      const key = clean(`${course.courseNo || ''}:${course.sectionNo || title}`, 40);
+      items.push({
+        id: `msb:${key}`, platform: 'mashibing', platformLabel: '课程', title,
+        percent: Math.round(pct), updatedAt: ts,
+        target: { platform: 'mashibing', url, title },
+      });
+    }
+    items.sort((a, b) => b.updatedAt - a.updatedAt);
+    return items;
+  }
+
+  /**
+   * 到期书签复习候选（“深海拾贝”，只读）：筛出 status === 'active'、含未归档 srs 且 nextReview <= nowMs 的 http(s) 书签，按逾期最久优先排序。
+   */
+  function dueBookmarks(raw, nowMs) {
+    if (!finite(nowMs)) return [];
+    const list = Array.isArray(raw) ? raw : (isObject(raw) && Array.isArray(raw.items) ? raw.items : []);
+    const out = [];
+    for (const bm of list) {
+      if (!isObject(bm) || bm.status !== 'active' || !isObject(bm.srs) || bm.srs.status === 'archived') continue;
+      if (!finite(bm.srs.nextReview) || bm.srs.nextReview > nowMs) continue;
+      const url = typeof bm.url === 'string' ? bm.url : '';
+      if (!/^https?:\/\//i.test(url)) continue;
+      const title = clean(bm.title || url, 24);
+      if (!title) continue;
+      const id = clean(String(bm.id || url), 80);
+      const daysSaved = finite(bm.dateAdded) && bm.dateAdded > 0 && nowMs > bm.dateAdded
+        ? Math.max(1, Math.floor((nowMs - bm.dateAdded) / (24 * 3600000)))
+        : 0;
+      out.push({ id, title, url, daysSaved, overdueMs: nowMs - bm.srs.nextReview });
+    }
+    out.sort((a, b) => b.overdueMs - a.overdueMs);
+    return out;
+  }
+
   // ---------- 放行与挑选 ----------
 
   /**
-   * 此刻能不能开口。依次判断：总开关 → 活动时段 → 用户是否离开 → 刚回来 → 有别的气泡/响铃 → 与上一条的间隔 → 本小时条数。
-   * ctx = { presence:'active'|'away', activeSince, busy }：presence 或 activeSince 未知按“已活跃”处理（旧组件不上报）。
+   * 此刻能不能开口。依次判断：总开关 → 活动时段 → 用户是否离开 → 是否正在开会/通话 → 刚回来 → 有别的气泡/响铃 → 与上一条的间隔 → 本小时条数。
+   * ctx = { presence:'active'|'away'|'meeting', meeting?:boolean, activeSince, busy }：presence 或 activeSince 未知按“已活跃”处理（旧组件不上报）。
    */
   function gate(config, state, ctx, nowMs) {
     if (!config || config.enabled !== true) return { ok: false, reason: 'off' };
     if (!inWindow(config, new Date(nowMs))) return { ok: false, reason: 'window' };
     const context = isObject(ctx) ? ctx : {};
     if (context.presence === 'away') return { ok: false, reason: 'away' };
+    if (context.presence === 'meeting' || context.meeting === true) return { ok: false, reason: 'meeting' };
     if (finite(context.activeSince) && context.activeSince > 0 && nowMs - context.activeSince < AWAY_RETURN_MS) return { ok: false, reason: 'returning' };
     if (context.busy === true) return { ok: false, reason: 'busy' };
     if (state.lastAt > 0 && nowMs - state.lastAt < MIN_GAP_MS) return { ok: false, reason: 'gap' };
@@ -299,11 +432,54 @@
       const author = clean(tip.author, 30);
       return make('水母想说', author ? `「${body}」—— ${author}` : body);
     },
+    /** 飞书 @我 元信息提醒：只展示群名、发送者与条数，绝不含消息正文。 */
+    lark(meta) {
+      if (!isObject(meta) || !Number.isInteger(meta.count) || meta.count <= 0) return null;
+      const chats = Array.isArray(meta.chats)
+        ? meta.chats.map(item => short(isObject(item) ? item.name : item, 14)).filter(Boolean).slice(0, 2)
+        : [];
+      const senders = Array.isArray(meta.senders)
+        ? meta.senders.map(name => short(name, 10)).filter(Boolean).slice(0, 2)
+        : [];
+      const chatText = chats.length ? `来自「${chats.join('」「')}」` : '';
+      const senderText = senders.length ? `${chatText ? ' · ' : '来自 '}${senders.join('、')}` : '';
+      const detail = chatText || senderText ? `（${chatText}${senderText}）` : '';
+      return make('飞书有人 @你', `${meta.count} 条新 @我${detail}`);
+    },
+    /** 陈旧标签页守卫：只提示数量与域名，不自动关闭任何标签页。 */
+    tabs(stats) {
+      if (!isObject(stats) || !Number.isInteger(stats.count) || stats.count <= 0) return null;
+      const days = Number.isInteger(stats.oldestDays) && stats.oldestDays >= 2 ? stats.oldestDays : 2;
+      const domains = Array.isArray(stats.domains)
+        ? stats.domains.map(host => short(host, 18)).filter(Boolean).slice(0, 2)
+        : [];
+      const detail = domains.length ? `（${domains.join('、')} 等）` : '';
+      return make('标签页有点挤', `有 ${stats.count} 个标签页超过 ${days} 天没打开了${detail}，去整理一下？`);
+    },
+    /** 继续看：未看完的视频或课程进度提醒。 */
+    watch(item) {
+      if (!isObject(item)) return null;
+      const name = short(item.title, 20);
+      if (!name) return null;
+      const label = clean(item.platformLabel || '视频', 10) || '视频';
+      const pct = finite(item.percent) && item.percent > 0 ? `看到 ${Math.round(item.percent)}%` : '还没看完';
+      return make('上次没看完', `${label}《${name}》${pct}，接着看吗？`);
+    },
+    /** 深海拾贝：到期的间隔复习书签。 */
+    bookmark(bm, totalDue = 1) {
+      if (!isObject(bm)) return null;
+      const name = short(bm.title, 20);
+      if (!name) return null;
+      const days = Number.isInteger(bm.daysSaved) && bm.daysSaved > 0 ? `收藏 ${bm.daysSaved} 天了` : '到复习时间了';
+      const more = Number.isInteger(totalDue) && totalDue > 1 ? `（共 ${totalDue} 条到期）` : '';
+      return make('深海拾贝', `「${name}」${days}${more}，打捞起来看看？`);
+    },
   };
 
   return {
     KINDS, KIND_IDS, SWITCHABLE, REQUEST_KINDS, MIN_VERSION, REQUEST_SINCE, LEVELS, CHECKPOINTS, DEFAULTS, MIN_GAP_MS, AWAY_RETURN_MS, STRIKE_LIMIT, SEEN_MAX,
-    normalize, inWindow, emptyState, sanitizeState, rollover, taskStats, loggedToday, worklogGap,
+    STALE_TAB_MIN_COUNT, STALE_TAB_AGE_MS, RECENT_WATCH_MS,
+    normalize, inWindow, emptyState, sanitizeState, rollover, taskStats, loggedToday, worklogGap, staleTabStats, watchCandidates, dueBookmarks,
     gate, pick, recordShown, recordSeen, recordExternal, recordOutcome, copy, clean,
   };
 });

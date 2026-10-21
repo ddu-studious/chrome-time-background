@@ -3,6 +3,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const id = process.argv.find(a => a.startsWith('--extension-id='))?.split('=')[1];
 if (!id || !/^[a-p]{32}$/.test(id)) throw new Error('请传入 --extension-id=真实Chrome扩展ID');
@@ -26,8 +27,16 @@ const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <key>AllowedExtensionOrigins</key><array><string>chrome-extension://${id}/</string></array>
 </dict></plist>`;
 writeFileSync(resolve(app, 'Contents/Info.plist'), plist);
+// Reuse exactly the existing browser dependency and public matcher. No separate
+// pinyin dictionary/algorithm or remotely loaded executable content in Swift.
+const pinyin = readFileSync(resolve(root, 'vendor/pinyin-match/pinyin-match.js'));
+if (createHash('sha256').update(pinyin).digest('hex') !== '11fbf02727f6eb90d842a3e9c29eda191b38e293bf01202756e7d7be94867ee7') throw new Error('拼音依赖指纹已变化，须先审核并同步版本记录');
+const resources = resolve(app, 'Contents/Resources'); mkdirSync(resources, { recursive: true });
+copyFileSync(resolve(root, 'vendor/pinyin-match/pinyin-match.js'), resolve(resources, 'pinyin-match.js'));
+copyFileSync(resolve(root, 'vendor/pinyin-match/LICENSE'), resolve(resources, 'pinyin-match-LICENSE'));
+copyFileSync(resolve(root, 'js/assistant-match.js'), resolve(resources, 'assistant-match.js'));
 // 编译清单：纯逻辑（可单独自测）在前，AppKit 在后，main.swift 最后；新增源文件须同步这里与 test/desktop-companion-logic.test.mjs。
-const sources = ['countdown-model', 'jelly-model', 'jelly-swim', 'jelly-palette', 'jelly-appearance', 'jelly-species', 'jelly-species-data', 'marine-rig', 'marine-rig-data', 'jelly-paint', 'assistant-model', 'glass-view', 'jelly-ring', 'jelly-materials', 'jelly-species-painter', 'marine-rig-painter', 'jelly-companion', 'jelly-controller', 'confirmation-view', 'assistant-hotkey', 'assistant-panel', 'main'];
+const sources = ['countdown-model', 'jelly-model', 'jelly-swim', 'jelly-palette', 'jelly-appearance', 'jelly-species', 'jelly-species-data', 'marine-rig', 'marine-rig-data', 'jelly-paint', 'assistant-model', 'assistant-matcher', 'glass-view', 'jelly-ring', 'jelly-materials', 'jelly-species-painter', 'marine-rig-painter', 'jelly-companion', 'jelly-controller', 'confirmation-view', 'assistant-hotkey', 'assistant-panel', 'main'];
 execFileSync('/usr/bin/xcrun', ['swiftc', ...sources.map(name => resolve(root, `desktop-reminder/${name}.swift`)), '-framework', 'AppKit', '-module-cache-path', resolve(root, 'local-ai/.local/swift-cache'), '-o', executable], { stdio: 'inherit' });
 execFileSync('/usr/bin/codesign', ['--force', '--sign', '-', app], { stdio: 'inherit' });
 console.log(`组件已构建：${app}`);

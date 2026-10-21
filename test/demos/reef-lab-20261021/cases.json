@@ -1,0 +1,161 @@
+{
+  "date": "2026-10-21",
+  "scope": "继续调研；单个隔离浅礁 demo；无正式接入",
+  "cases": [
+    {
+      "group": "Blender",
+      "name": "Infinigen / CoralFactory",
+      "url": "https://github.com/princeton-vl/infinigen",
+      "extra": "https://github.com/princeton-vl/infinigen/blob/main/docs/source/GeneratingIndividualAssets.md",
+      "what": "程序化自然资产与珊瑚生成，可输出 .blend 并烘焙到外部格式。",
+      "use": "适合离线生成不同礁石、珊瑚与地形，再做低模和贴图；不把 Blender 搬进扩展。",
+      "evidence": "官方 README 与资产生成文档已读；未安装运行。"
+    },
+    {
+      "group": "Blender",
+      "name": "Private Beach / FLIP Fluids",
+      "url": "https://x.com/Lark_movie/status/1495291857462603777",
+      "extra": "https://github.com/rlguy/Blender-FLIP-Fluids",
+      "what": "LARK 的桌上微缩海滩；作者原帖标明 Blender 与 FLIP Fluids，另有制作访谈。",
+      "use": "参考浪涌、湿沙和微缩构图。FLIP 引擎与插件、付费示例采用不同许可，不能一概当 MIT 素材。",
+      "evidence": "X 作者原帖、V2 与访谈帖已读；FLIP 官方 README 已读。"
+    },
+    {
+      "group": "2D / 生成艺术",
+      "name": "p5.js Flocking",
+      "url": "https://p5js.org/examples/Classes-And-Objects-Flocking/",
+      "what": "可交互的群集行为教学示例，基于 Reynolds 的 boids。",
+      "use": "用于解释群游参数。项目已有鱼群核心，无需再引入一套；示例页面标 CC BY-NC-SA 4.0，与库本体许可不同。",
+      "evidence": "官方示例正文和代码已读；本轮未运行。"
+    },
+    {
+      "group": "2D / 生成艺术",
+      "name": "PixiJS Fish Pond",
+      "url": "https://pixijs.com/8.x/tutorials",
+      "extra": "https://github.com/pixijs/pixijs.com",
+      "what": "官方分步鱼塘教程；适合研究精灵、交互和水面位移的组织方式。",
+      "use": "如果以后探索 2D 贴图鱼，这是优先学习路径；本轮不替换已有 Canvas 动物。",
+      "evidence": "官方教程目录已核对；没有把教程截图当本机运行结果。"
+    },
+    {
+      "group": "2D / 生成艺术",
+      "name": "OGL Mouse Flowmap",
+      "url": "https://github.com/oframe/ogl/blob/master/examples/mouse-flowmap.html",
+      "extra": "https://oframe.github.io/ogl/examples/?src=mouse-flowmap.html",
+      "what": "鼠标速度写入流图，流图再扭曲水纹理坐标。",
+      "use": "适合比较指针扰动与柔和尾迹；若采用优先调用 Flowmap 导出 API，素材另核许可。",
+      "evidence": "官方示例源码已读。"
+    },
+    {
+      "group": "2D / 生成艺术",
+      "name": "OGL Fluid Distortion",
+      "url": "https://github.com/oframe/ogl/blob/master/examples/post-fluid-distortion.html",
+      "extra": "https://oframe.github.io/ogl/examples/?src=post-fluid-distortion.html",
+      "what": "压力、散度、涡量和缓冲交换组合成流体扭曲。",
+      "use": "只宜作为可开关的局部效果，整屏折射会改变用户背景；本轮未加入。",
+      "evidence": "官方示例源码已读；未测当前扩展性能。"
+    },
+    {
+      "group": "3D / 空间体验",
+      "name": "Deskworlds Reefscape",
+      "url": "https://github.com/chaseleantj/deskworlds",
+      "what": "MIT 珊瑚、海葵、地形、水流和焦散模块。",
+      "use": "本 demo 已实际复用，保留上游固定提交及配套 Three.js r180；固定遮挡默认关。",
+      "evidence": "20 个上游文件验证 Git blob 哈希；真实 Chrome 隔离页已渲染。"
+    },
+    {
+      "group": "3D / 空间体验",
+      "name": "Babylon.js Fluid Rendering Demos",
+      "url": "https://doc.babylonjs.com/features/featuresDeepDive/particles/fluid_renderer/fluid_demos",
+      "what": "粒子液面、预计算粒子、盒体/球体与高度图碰撞演示。",
+      "use": "学习液体渲染与物理模拟的区别；官方明确部分演示只负责渲染，不能当完整流体引擎。",
+      "evidence": "官方说明已读；未安装 Babylon 或测 GPU。"
+    },
+    {
+      "group": "3D / 空间体验",
+      "name": "Spline + Framer Underwater",
+      "url": "https://www.reddit.com/r/Spline3D/comments/1b9k86j/underwater_3d_scrolling_website_made_with_spline/",
+      "extra": "https://underwater.framer.website/",
+      "what": "社区展示 Ilya Kostin 的水下滚动网站，并附 Live / Remix 入口。",
+      "use": "参考镜头推进与信息层级；不把滚动宣传场景当能直接接居民与任务的 SDK。",
+      "evidence": "Reddit 原帖与入口已核对；在线站本轮未加载成功，未验证运行效果或素材许可。"
+    },
+    {
+      "group": "3D / 空间体验",
+      "name": "Gaussian Splashing",
+      "url": "https://github.com/BGU-CS-VIL/gaussianSplashing",
+      "what": "作者实现将水下衰减与背散射纳入高斯重建。",
+      "use": "适合未来扫描礁石环境的离线研究；其 CUDA 训练/渲染结果不能等同浏览器性能。",
+      "evidence": "作者 README 已读；未训练、下载数据或运行。许可需按原始 3DGS 条款另核。"
+    },
+    {
+      "group": "3D / 空间体验",
+      "name": "Spark 动态泼溅与按需渲染",
+      "url": "https://sparkjs.dev/examples/",
+      "extra": "https://github.com/sparkjsdev/spark",
+      "what": "官方列出 Dynamic Lighting、Particle Animation、Raycasting、LoD 与 On-demand Rendering。",
+      "use": "Spark 并非只能静态显示，但动态效果不自动提供鱼类拓扑、碰撞或现有交互。可继续做独立研究，不直接接本原型。",
+      "evidence": "官方 README 和案例目录已读；未运行新样张。WASM 与资产加载仍须独立验证。"
+    },
+    {
+      "group": "视觉 / 流体 / 声音",
+      "name": "TypeGPU：3D Fish、焦散、Stable Fluids",
+      "url": "https://docs.swmansion.com/TypeGPU/examples/",
+      "extra": "https://docs.swmansion.com/TypeGPU/blog/typegpu-012/",
+      "what": "官方案例库同时覆盖鱼、焦散、流体、粒子雪和群集；0.12 说明了实验性 WebGL 回退。",
+      "use": "优先关注焦散与薄计算适配；不能把某个 WebGL 回退示例外推为所有 WebGPU 功能可回退。",
+      "evidence": "官方目录与版本说明已读；浏览器页面未获得可确认的案例画面，本轮不记为运行通过。"
+    },
+    {
+      "group": "视觉 / 流体 / 声音",
+      "name": "TouchDesigner / touchFluid",
+      "url": "https://github.com/kamindustries/touchFluid",
+      "what": "MIT 的二维半拉格朗日流体，含涡量、温度、浮力和障碍，提供 .toe / .tox 与 GLSL。",
+      "use": "适合离线调尾迹和流动观感；TouchDesigner 工程不能原样加载到扩展。",
+      "evidence": "作者 README 已读；本轮未运行 TouchDesigner。"
+    },
+    {
+      "group": "视觉 / 流体 / 声音",
+      "name": "Audio Reactive Ocean",
+      "url": "https://www.reddit.com/r/TouchDesigner/comments/1ufueou/audio_reactive_ocean/",
+      "what": "作者以 GLSL TOP 和 MIDI 驱动海面参数，参考 Seascape shader。",
+      "use": "值得借鉴缓变的声音响应；作者表示不公开工程，不能当可复用源码。",
+      "evidence": "Reddit 作者正文与回复已读；未获取工程。"
+    },
+    {
+      "group": "视觉 / 流体 / 声音",
+      "name": "Hydra 音频响应与反馈",
+      "url": "https://github.com/hydra-synth/hydra",
+      "extra": "https://github.com/hydra-synth/hydra-synth",
+      "what": "音频频带可驱动颜色、形状、反馈；引擎提供关闭自动循环和音频检测的选项。",
+      "use": "适合离线生成抽象流动纹理。当前 MV3 的动态执行边界仍存在，本轮不接入或申请麦克风。",
+      "evidence": "官方 README / API 说明已读；未运行。"
+    },
+    {
+      "group": "视觉 / 流体 / 声音",
+      "name": "WebGL Fluid Simulation",
+      "url": "https://github.com/PavelDoGreat/WebGL-Fluid-Simulation",
+      "extra": "https://paveldogreat.github.io/WebGL-Fluid-Simulation/",
+      "what": "可交互彩色流体的经典 WebGL 开源样例，作者 README 标 MIT。",
+      "use": "对比尾迹消散与涡旋；优先考虑有界局部区域，避免覆盖整幅壁纸。",
+      "evidence": "作者 README 已读；本轮未做性能探针。"
+    },
+    {
+      "group": "视觉 / 流体 / 声音",
+      "name": "ThreeJS-caustics",
+      "url": "https://github.com/martinRenou/threejs-caustics",
+      "extra": "https://martinrenou.github.io/threejs-caustics",
+      "what": "Martin Renou 的实时水下焦散示例，附实时入口与技术文章。",
+      "use": "作为焦散观察参考；本 demo 已复用 Deskworlds 焦散，不叠加另一套求解。",
+      "evidence": "作者 README 与入口已核对；本轮未运行，文章正文未复核。"
+    },
+    {
+      "group": "视觉 / 流体 / 声音",
+      "name": "Deep Sea Geometry",
+      "url": "https://www.reddit.com/r/creativecoding/comments/1tud21g/deep_sea_geometry_2_hours_of_generative/",
+      "what": "作者用 Processing P3D、程序几何、噪声运动和分层雾制作抽象深海，声音用 SuperCollider。",
+      "use": "适合独立艺术模式；与默认保留背景的陪伴模式分开。",
+      "evidence": "Reddit 作者说明已读；没有获取或运行工程。"
+    }
+  ]
+}

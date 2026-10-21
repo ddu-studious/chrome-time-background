@@ -1,0 +1,36 @@
+{
+  "browser": "151.0.7922.34",
+  "profile": "isolated-empty-profile",
+  "network": "disabled-by-local-proxy",
+  "openMs": 37,
+  "listedCommands": 8,
+  "metrics": {
+    "boundAt": 672.0999999046326,
+    "domReady": 794.0999999046326,
+    "paint": [
+      {
+        "name": "first-paint",
+        "time": 720
+      },
+      {
+        "name": "first-contentful-paint",
+        "time": 720
+      }
+    ],
+    "slowScripts": [],
+    "buttonStillVisible": true
+  },
+  "reloads": [
+    {
+      "round": 1,
+      "buttonStillVisible": true,
+      "clickOpenMs": 53
+    },
+    {
+      "round": 2,
+      "buttonStillVisible": true,
+      "clickOpenMs": 47
+    }
+  ],
+  "errors": []
+}

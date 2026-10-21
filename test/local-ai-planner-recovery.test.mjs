@@ -15,6 +15,7 @@ const answer = value => ({ output: [{ type: 'message', content: JSON.stringify(v
 const reasoningOnly = { output: [{ type: 'reasoning', content: 'private reasoning must never be saved' }], stats: { input_tokens: 2132, total_output_tokens: 1199, reasoning_output_tokens: 1199 } };
 function fixture(responses, policy = {}) {
   const sent = [], provider = new LMStudioProvider();
+  provider.countContextTokens = async () => null; // Generation/transport fixture; tokenizer has its own contract tests.
   provider.models = async () => [{ id: provider.model, loaded: true, loadedContextLength: 40960, reasoningOptions: ['off', 'medium', 'low'] }];
   provider.request = async (path, body, timeoutMs) => {
     sent.push({ ...body, timeoutMs });

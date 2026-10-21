@@ -1,4 +1,6 @@
 import AppKit
+import CoreAudio
+import CoreMediaIO
 
 final class ReminderPanel: NSPanel {
     override var canBecomeKey: Bool { true }
@@ -29,9 +31,11 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
         jelly.onFocusCheck = { [weak self] stayed in self?.focusStayed = stayed }
         confirmation = ConfirmationPanelController { [weak self] message in self?.send(message) }
         assistant = AssistantController()
+        assistant.onShowInteraction = { [weak self] state in self?.confirmation.focus(for: state) ?? false }
         assistant.send = { [weak self] message in self?.send(message) }
         assistant.onMenuTitle = { [weak self] title in self?.jelly.assistantMenuTitle = title }
         jelly.onAskAssistant = { [weak self] in self?.assistant.show() }
+        jelly.onFeedAssistant = { [weak self] prompt in self?.assistant.prefillAndShow(prompt) ?? false }
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main) { [weak self] _ in self?.spaceTransitions += 1 }
         // presence（协议 v8）：水母常驻时每 15 秒读一次系统空闲秒数，只在 active / away 变化时告诉 Chrome（不上报具体秒数）
         if !demo {
@@ -57,6 +61,8 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
 
     static let presenceInterval: TimeInterval = 15
     private var lastPresence: String?
+    private var lastMeeting: Bool?
+    private var fakeMediaBusy: Bool?
 
     /// 系统自上一次键盘/鼠标/触控板事件以来的秒数（`CGEventSource`，只读时间，不读按了什么，不需要辅助功能或输入监控权限）。
     /// 仅隔离验收：TIMEKEEPER_TEST_HOOKS=1 时环境变量 TIMEKEEPER_IDLE_SECONDS 可替代真实读数，正式使用时恒读系统。
@@ -67,15 +73,85 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
         return CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: anyInput)
     }
 
+    /// 零权限读取系统默认麦克风或任一摄像头是否正在被某个进程使用（CoreAudio / CoreMediaIO 的 IsRunningSomewhere 属性，不采集音视频、不弹系统授权窗）。
+    func hardwareMediaBusy() -> Bool {
+        var defaultInput = AudioDeviceID(0)
+        var inSize = UInt32(MemoryLayout<AudioDeviceID>.size)
+        var inAddr = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultInputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        if AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &inAddr, 0, nil, &inSize, &defaultInput) == noErr,
+           defaultInput != kAudioObjectUnknown {
+            var running: UInt32 = 0
+            var runSize = UInt32(MemoryLayout<UInt32>.size)
+            var runAddr = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyDeviceIsRunningSomewhere,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            if AudioObjectGetPropertyData(defaultInput, &runAddr, 0, nil, &runSize, &running) == noErr, running != 0 {
+                return true
+            }
+        }
+        var camAddr = CMIOObjectPropertyAddress(
+            mSelector: CMIOObjectPropertySelector(kCMIOHardwarePropertyDevices),
+            mScope: CMIOObjectPropertyScope(kCMIOObjectPropertyScopeGlobal),
+            mElement: CMIOObjectPropertyElement(kCMIOObjectPropertyElementMain)
+        )
+        var dataSize: UInt32 = 0
+        if CMIOObjectGetPropertyDataSize(CMIOObjectID(kCMIOObjectSystemObject), &camAddr, 0, nil, &dataSize) == OSStatus(kCMIOHardwareNoError),
+           dataSize > 0 {
+            let count = Int(dataSize) / MemoryLayout<CMIODeviceID>.size
+            var devices = [CMIODeviceID](repeating: 0, count: count)
+            var used: UInt32 = 0
+            if CMIOObjectGetPropertyData(CMIOObjectID(kCMIOObjectSystemObject), &camAddr, 0, nil, dataSize, &used, &devices) == OSStatus(kCMIOHardwareNoError) {
+                var runAddr = CMIOObjectPropertyAddress(
+                    mSelector: CMIOObjectPropertySelector(kCMIODevicePropertyDeviceIsRunningSomewhere),
+                    mScope: CMIOObjectPropertyScope(kCMIOObjectPropertyScopeWildcard),
+                    mElement: CMIOObjectPropertyElement(kCMIOObjectPropertyElementWildcard)
+                )
+                for device in devices {
+                    var running: UInt32 = 0
+                    var runUsed: UInt32 = 0
+                    let runSize = UInt32(MemoryLayout<UInt32>.size)
+                    if CMIOObjectGetPropertyData(device, &runAddr, 0, nil, runSize, &runUsed, &running) == OSStatus(kCMIOHardwareNoError), running != 0 {
+                        return true
+                    }
+                }
+            }
+        }
+        return false
+    }
+
+    func systemMediaBusy() -> Bool {
+        let env = ProcessInfo.processInfo.environment
+        if env["TIMEKEEPER_TEST_HOOKS"] == "1" {
+            if let override = fakeMediaBusy { return override }
+            if let flag = env["TIMEKEEPER_MEDIA_BUSY"] {
+                if flag == "hardware" { return hardwareMediaBusy() }
+                return flag == "1"
+            }
+            return false
+        }
+        return hardwareMediaBusy()
+    }
+
     /// 只在水母常驻时采样；不常驻就忘掉上一次的结果，下次常驻后的第一次采样一定会上报一次，Chrome 以此得到初始状态。
     func samplePresence() {
         guard jelly.resident else { lastPresence = nil; jelly.noteIdle(nil); return }
         let idle = systemIdleSeconds()
         jelly.noteIdle(idle)        // 协议 v10：水母自己的睡觉与巡游也看这个读数（只在资格变化时才刷新），不管 presence 有没有变化
+        let meeting = systemMediaBusy()
+        jelly.noteMeeting(meeting)
         let state = JellyModel.presenceState(idleSeconds: idle)
-        guard state != lastPresence else { return }
+        guard state != lastPresence || meeting != lastMeeting else { return }
         lastPresence = state
-        send(["type": "presence", "state": state])
+        lastMeeting = meeting
+        var event: [String: Any] = ["type": "presence", "state": state]
+        if meeting { event["meeting"] = true }
+        send(event)
     }
 
     /// 状态栏“显示当前提醒”：响铃进行中让水母重新游到落点并重播气泡；没有响铃时只是刷新水母的可见性。
@@ -122,7 +198,8 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
                     extra["assistant"] = item
                 }
             }
-        case "assistantState": ok = assistant.update(state: message["state"])
+        case "assistantState": ok = assistant.update(state: message["state"]); extra["assistantCatalog"] = 1
+        case "assistantCatalog": ok = assistant.updateCatalog(message["catalog"])
         case "assistantResult": assistant.result(message)
         case "countdown": ok = jelly.set(timer: message["timer"])
         case "countdownActionResult": jelly.actionResult(message)
@@ -154,6 +231,21 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
             // 仅隔离验收：TIMEKEEPER_TEST_HOOKS=1 时才可用，走与用户操作相同的面板入口（显示、输入、发送、停止……），
             // 让测试不依赖键盘时序；返回 ok 表示操作真的被面板接受。正式使用时恒为 false。
             ok = ProcessInfo.processInfo.environment["TIMEKEEPER_TEST_HOOKS"] == "1" && assistant.hook(message["op"] as? String, text: message["text"] as? String)
+        case "mediaBusy":
+            // 仅隔离验收：TIMEKEEPER_TEST_HOOKS=1 时模拟摄像头/麦克风被占用（开会中），并立即采样一次 presence。
+            ok = ProcessInfo.processInfo.environment["TIMEKEEPER_TEST_HOOKS"] == "1"
+            if ok {
+                fakeMediaBusy = message["busy"] as? Bool
+                samplePresence()
+            }
+        case "dropHook":
+            // 仅隔离验收：TIMEKEEPER_TEST_HOOKS=1 时模拟向水母拖拽链接/文件/文字，走与真实拖拽相同的 parseDrop + receiveDrop。
+            if ProcessInfo.processInfo.environment["TIMEKEEPER_TEST_HOOKS"] == "1",
+               let item = JellyModel.parseDrop(url: message["url"] as? String, fileURL: message["fileURL"] as? String, text: message["text"] as? String) {
+                ok = jelly.receiveDrop(item)
+            } else {
+                ok = false
+            }
         default: ok = false
         }
         respond(message, ok: ok, extra: extra)
@@ -216,6 +308,7 @@ final class DesktopReminder: NSObject, NSApplicationDelegate {
         reply["feedback"] = jelly.feedbackText
         reply["jellyLively"] = jelly.livelyOn                 // 验收诊断（协议 v10 的活动行为）：开关、此刻是否睡着、巡游与小动作的次数、时段性格
         reply["jellyAsleep"] = jelly.asleepNow
+        reply["jellyMeeting"] = jelly.meeting
         reply["patrolling"] = jelly.patrolling
         reply["patrolCount"] = jelly.patrolCount
         reply["fidgetCount"] = jelly.fidgetCount

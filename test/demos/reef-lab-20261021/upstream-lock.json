@@ -1,0 +1,106 @@
+{
+  "repository": "https://github.com/chaseleantj/deskworlds",
+  "commit": "335d6c1aeb59b338b1cc59d734dc6eb87a596a88",
+  "files": [
+    {
+      "path": "LICENSE",
+      "size": 1067,
+      "gitBlobSha1": "72376d8d10f66d4f61feed9c1cc78038c521fee0"
+    },
+    {
+      "path": "scenes/reefscape/assets/README.md",
+      "size": 837,
+      "gitBlobSha1": "de02c6e54e4515df6748f7c220a23dd7331f7d51"
+    },
+    {
+      "path": "scenes/reefscape/assets/aragonite.png",
+      "size": 2260822,
+      "gitBlobSha1": "9da7dfca86c4ef71339eee941e8b01d23dbce94c"
+    },
+    {
+      "path": "scenes/reefscape/assets/live-rock-normal.png",
+      "size": 2128841,
+      "gitBlobSha1": "4fd50650cb85693783dc5e14705fc03410fca480"
+    },
+    {
+      "path": "scenes/reefscape/assets/live-rock-surface.png",
+      "size": 1255027,
+      "gitBlobSha1": "a577d83f68507ca117f89172aeb538c79ccb6424"
+    },
+    {
+      "path": "scenes/reefscape/assets/live-rock.bin",
+      "size": 9392764,
+      "gitBlobSha1": "2e7d292112008e1d2180263ba0f52b139f13af99"
+    },
+    {
+      "path": "scenes/reefscape/assets/rock-support.bin",
+      "size": 297228,
+      "gitBlobSha1": "276086d384d129b355d3a5282995eac95ad11989"
+    },
+    {
+      "path": "scenes/reefscape/src/anemone-crown.js",
+      "size": 4770,
+      "gitBlobSha1": "2c7b51c304da0849a25d8ac0ea1e6b13ea6c4ad4"
+    },
+    {
+      "path": "scenes/reefscape/src/anemone.js",
+      "size": 16935,
+      "gitBlobSha1": "190676f8917b8393a2a3caff195a0d15aa457157"
+    },
+    {
+      "path": "scenes/reefscape/src/corals.js",
+      "size": 18781,
+      "gitBlobSha1": "8a915d53c3727310473898da1c5bc244d48258b2"
+    },
+    {
+      "path": "scenes/reefscape/src/geometry.js",
+      "size": 27300,
+      "gitBlobSha1": "146a7adfbcbfd662fea3a93385cb6d98d73ec003"
+    },
+    {
+      "path": "scenes/reefscape/src/layout.js",
+      "size": 3134,
+      "gitBlobSha1": "a8b005fbe11f50876bce348bddab8d82c05ccffd"
+    },
+    {
+      "path": "scenes/reefscape/src/math.js",
+      "size": 883,
+      "gitBlobSha1": "3ea9f3862fb105456b4621b9a60d99de09a86f8a"
+    },
+    {
+      "path": "scenes/reefscape/src/terrain.js",
+      "size": 16771,
+      "gitBlobSha1": "8fda84b1bbc740e6c00b7963b0dbeef4d8e8a1f7"
+    },
+    {
+      "path": "scenes/reefscape/src/views.js",
+      "size": 289,
+      "gitBlobSha1": "ccd341ffda822ac51552553dd0ea4881302c1db3"
+    },
+    {
+      "path": "scenes/reefscape/src/water.js",
+      "size": 35893,
+      "gitBlobSha1": "51c539ae8b76d8704bc4843e529de52a704ce711"
+    },
+    {
+      "path": "vendor/THREE-LICENSE.txt",
+      "size": 1081,
+      "gitBlobSha1": "cf781430404b0ae0ba7d8dea3457a3515dd7c9b9"
+    },
+    {
+      "path": "vendor/three.core.js",
+      "size": 1403455,
+      "gitBlobSha1": "7dcd0fbcbc04b8d9a20ecb96c1ce344cb55150d5"
+    },
+    {
+      "path": "vendor/three.module.js",
+      "size": 603113,
+      "gitBlobSha1": "477ca4dafa7af919a2b9818e01b5ae25198d4aa4"
+    },
+    {
+      "path": "scenes/shared/random.js",
+      "size": 279,
+      "gitBlobSha1": "49c707767abcade1183c53d47de480c235abeef0"
+    }
+  ]
+}

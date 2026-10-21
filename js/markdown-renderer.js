@@ -8,6 +8,32 @@
  */
 class MarkdownRenderer {
     static _configured = false;
+    static _mermaidLoad = null;
+    static _mermaidURL = new URL('../vendor/mermaid.tiny.min.js', document.currentScript?.src || new URL('js/markdown-renderer.js', document.baseURI)).href;
+
+    static loadMermaid() {
+        if (globalThis.mermaid?.render) return Promise.resolve(globalThis.mermaid);
+        if (this._mermaidLoad) return this._mermaidLoad;
+        this._mermaidLoad = new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            let settled = false;
+            const finish = error => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                script.onload = script.onerror = null;
+                if (error) { script.remove(); this._mermaidLoad = null; reject(error); }
+                else resolve(globalThis.mermaid);
+            };
+            const timer = setTimeout(() => finish(new Error('图表组件加载超时，请重新打开内容')), 10000);
+            script.src = this._mermaidURL;
+            script.async = true;
+            script.onload = () => finish(globalThis.mermaid?.render ? null : new Error('图表组件不可用'));
+            script.onerror = () => finish(new Error('图表组件加载失败，请重新打开内容'));
+            document.head.appendChild(script);
+        });
+        return this._mermaidLoad;
+    }
 
     static configure() {
         if (this._configured || typeof marked === 'undefined') return;
@@ -34,7 +60,7 @@ class MarkdownRenderer {
                     code({ text, lang }) {
                         if (lang === 'mermaid') {
                             const id = 'mermaid-' + Math.random().toString(36).slice(2, 10);
-                            return `<div class="kw-mermaid-block" data-mermaid-id="${id}"><pre class="mermaid">${text}</pre></div>`;
+                            return `<div class="kw-mermaid-block" data-mermaid-id="${id}"><pre class="mermaid">${MarkdownRenderer.escapeHtml(text)}</pre></div>`;
                         }
                         const langLabel = lang ? `<span class="kw-code-lang">${lang}</span>` : '';
                         const copyBtn = `<button class="kw-code-copy-btn" aria-label="复制代码" title="复制代码"><i class="fas fa-copy"></i></button>`;
@@ -145,13 +171,17 @@ class MarkdownRenderer {
         });
     }
 
-    static renderMermaid(containerEl) {
-        if (typeof mermaid === 'undefined' || !containerEl) return;
-        const blocks = containerEl.querySelectorAll('.kw-mermaid-block[data-mermaid-id]');
+    static async renderMermaid(containerEl) {
+        if (!containerEl) return;
+        const blocks = [...containerEl.querySelectorAll('.kw-mermaid-block[data-mermaid-id]')]
+            .filter(block => block.querySelector('pre.mermaid') && !block.dataset.mermaidPending);
         if (blocks.length === 0) return;
+        blocks.forEach(block => { block.dataset.mermaidPending = 'true'; });
         try {
+            const mermaid = await this.loadMermaid();
             mermaid.initialize({
                 startOnLoad: false,
+                securityLevel: 'strict',
                 theme: 'dark',
                 themeVariables: {
                     darkMode: true,
@@ -166,21 +196,38 @@ class MarkdownRenderer {
                 flowchart: { htmlLabels: true, curve: 'basis' },
                 sequence: { showSequenceNumbers: true },
             });
-            blocks.forEach(async (block) => {
+            await Promise.all(blocks.map(async (block) => {
+                if (!containerEl.contains(block)) return;
                 const id = block.dataset.mermaidId;
                 const preEl = block.querySelector('pre.mermaid');
                 if (!preEl) return;
                 const definition = preEl.textContent;
                 try {
                     const { svg } = await mermaid.render(id, definition);
-                    block.innerHTML = svg;
+                    if (!containerEl.contains(block)) return;
+                    block.innerHTML = DOMPurify.sanitize(svg, {
+                        ADD_TAGS: ['foreignObject'],
+                        HTML_INTEGRATION_POINTS: { foreignobject: true },
+                    });
                     block.classList.add('kw-mermaid-rendered');
                 } catch (err) {
-                    block.innerHTML = `<pre class="kw-mermaid-error"><code>Mermaid 渲染失败: ${err.message}\n\n${definition}</code></pre>`;
+                    const error = document.createElement('pre');
+                    error.className = 'kw-mermaid-error';
+                    error.textContent = `图表渲染失败：${err.message}\n\n${definition}`;
+                    block.replaceChildren(error);
                 }
-            });
+            }));
         } catch (e) {
-            console.warn('[MarkdownRenderer] Mermaid 初始化失败:', e);
+            for (const block of blocks) {
+                if (!containerEl.contains(block)) continue;
+                const error = document.createElement('p');
+                error.className = 'kw-mermaid-error';
+                error.textContent = e.message;
+                block.querySelector('.kw-mermaid-error')?.remove();
+                block.prepend(error);
+            }
+        } finally {
+            blocks.forEach(block => { delete block.dataset.mermaidPending; });
         }
     }
 

@@ -18,7 +18,7 @@ test('正式首页加载独立背景体验层并保持在业务内容之下', ()
   ]) {
     assert.ok(html.includes(`id="${id}"`), id);
   }
-  assert.ok(html.includes('css/background-experience.css?v=6'));
+  assert.ok(html.includes('css/background-experience.css?v=7'));
   assert.match(html, /class="bgx-tooltip" aria-hidden="true">背景玩法<\/span>/);
   assert.match(html, /id="v5-right-floating-rail"[\s\S]*?id="background-experience-hud"[\s\S]*?id="background-experience-toggle"/);
   assert.match(css, /\.bgx-toggle \.bgx-tooltip[\s\S]*?right: calc\(100% \+ 8px\)/);
@@ -69,8 +69,8 @@ test('背景切换同步视觉层，设置中心完整持久化体验配置', ()
   }
   assert.ok(settingsSource.includes("chrome.storage.sync.get('backgroundExperienceSettings')"));
   assert.ok(settingsSource.includes('backgroundExperienceSettings: bgExperienceSettings'));
-  assert.ok(settingsHtml.includes('js/settings-page.js?v=16'));
-  assert.ok(settingsHtml.indexOf('js/chrome-shim.js?v=5') < settingsHtml.indexOf('js/settings-page.js?v=16'));
+  assert.ok(settingsHtml.includes('js/settings-page.js?v=19'));
+  assert.ok(settingsHtml.indexOf('js/chrome-shim.js?v=5') < settingsHtml.indexOf('js/settings-page.js?v=19'));
   assert.ok(read('js/settings-v5.js').includes("'backgroundExperienceSettings'"));
   assert.ok(read('js/settings-v5.js').includes("targets: ['time', 'background-experience', 'weather', 'appearance']"));
 });

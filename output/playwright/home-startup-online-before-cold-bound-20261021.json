@@ -1,0 +1,231 @@
+{
+  "tag": "online",
+  "browser": "151.0.7922.34",
+  "config": "isolated empty profile; language=en; default modules; public network enabled",
+  "probe": {
+    "started": 36.5,
+    "init": [
+      {
+        "name": "settingsManager",
+        "start": 388.7000000476837,
+        "end": 398.90000009536743
+      },
+      {
+        "name": "clockManager",
+        "start": 398.90000009536743,
+        "end": 398.90000009536743
+      },
+      {
+        "name": "holidayManager",
+        "start": 399,
+        "end": 399.10000002384186
+      },
+      {
+        "name": "weatherManager",
+        "start": 399.10000002384186,
+        "end": 422.60000002384186
+      },
+      {
+        "name": "memoManager",
+        "start": 399.90000009536743,
+        "end": 424.40000009536743
+      },
+      {
+        "name": "knowledgeWall",
+        "start": 400.2000000476837,
+        "end": 416.5
+      },
+      {
+        "name": "techTicker",
+        "start": 400.3000000715256,
+        "end": 438.90000009536743
+      },
+      {
+        "name": "musicController",
+        "start": 400.5,
+        "end": 447.2000000476837
+      },
+      {
+        "name": "bilibiliController",
+        "start": 400.60000002384186,
+        "end": 1582.1000000238419
+      },
+      {
+        "name": "youtubeController",
+        "start": 411.2000000476837,
+        "end": 439.60000002384186
+      },
+      {
+        "name": "huyaController",
+        "start": 439.7000000476837,
+        "end": 447.10000002384186
+      },
+      {
+        "name": "scheduleManager",
+        "start": 447.10000002384186,
+        "end": 455
+      },
+      {
+        "name": "alarmCenter",
+        "start": 455,
+        "end": 469.90000009536743
+      },
+      {
+        "name": "workLogManager",
+        "start": 470,
+        "end": 472.40000009536743
+      },
+      {
+        "name": "blogManager",
+        "start": 472.40000009536743,
+        "end": 472.90000009536743
+      }
+    ],
+    "timers": [
+      {
+        "delay": 3600000,
+        "at": 343.8000000715256
+      },
+      {
+        "delay": 1000,
+        "at": 350.40000009536743
+      },
+      {
+        "delay": 60000,
+        "at": 397.3000000715256
+      },
+      {
+        "delay": 60000,
+        "at": 399.10000002384186
+      },
+      {
+        "delay": 1800000,
+        "at": 422.60000002384186
+      },
+      {
+        "delay": 1200000,
+        "at": 438.8000000715256
+      },
+      {
+        "delay": 2000,
+        "at": 440.40000009536743
+      },
+      {
+        "delay": 3000,
+        "at": 446.10000002384186
+      },
+      {
+        "delay": 300000,
+        "at": 473.2000000476837
+      },
+      {
+        "delay": 6000,
+        "at": 3491.5
+      },
+      {
+        "delay": 1800000,
+        "at": 4918.600000023842
+      }
+    ],
+    "longTasks": [],
+    "backgroundAt": 4917.100000023842,
+    "appReady": 1500.1000000238419,
+    "imageRequested": 4918.300000071526,
+    "imageReady": 6598,
+    "now": 15424.800000071526,
+    "navigation": [
+      {
+        "dcl": 388.8000000715256,
+        "load": 390.3000000715256
+      }
+    ],
+    "paint": [
+      {
+        "name": "first-paint",
+        "time": 368
+      },
+      {
+        "name": "first-contentful-paint",
+        "time": 368
+      }
+    ],
+    "date": "2026年10月21日星期三",
+    "htmlScripts": 109,
+    "mermaidLoaded": false
+  },
+  "cpuByFile": [
+    [
+      "(idle)",
+      14372.610000000122
+    ],
+    [
+      "(program)",
+      903.5549999999978
+    ],
+    [
+      "(garbage collector)",
+      15.159999999999998
+    ],
+    [
+      "/js/bilibili-controller.js",
+      13.876000000000001
+    ],
+    [
+      "/js/clock-liquid.js",
+      7.585999999999999
+    ],
+    [
+      "/js/clock.js",
+      7.543
+    ],
+    [
+      "/js/lunar-lib.js",
+      7.519
+    ],
+    [
+      "/vendor/highlight.min.js",
+      6.086
+    ],
+    [
+      "requestAnimationFrame",
+      4.795999999999999
+    ],
+    [
+      "/js/ticker.js",
+      3.7649999999999997
+    ],
+    [
+      "/js/main.js",
+      3.755
+    ],
+    [
+      "/js/dock-manager.js",
+      3.558
+    ],
+    [
+      "/js/adaptive-overlay.js",
+      3.5279999999999996
+    ],
+    [
+      "/vendor/marked.min.js",
+      2.525
+    ],
+    [
+      "/js/music-controller.js",
+      2.5229999999999997
+    ],
+    [
+      "/js/memo.js",
+      2.513
+    ],
+    [
+      "/js/weather.js",
+      2.5069999999999997
+    ],
+    [
+      "fetch",
+      2.29
+    ]
+  ],
+  "errors": []
+}

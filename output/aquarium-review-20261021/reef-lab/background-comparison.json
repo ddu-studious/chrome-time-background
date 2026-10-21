@@ -1,0 +1,28 @@
+{
+  "size": [
+    1832,
+    947
+  ],
+  "comparisonRegion": [
+    421,
+    75,
+    1410,
+    160
+  ],
+  "uncoveredRegionMeanDifference": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "uncoveredRegionMaxDifference": [
+    0,
+    0,
+    0
+  ],
+  "fullFrameDifferenceBounds": [
+    0,
+    255,
+    1832,
+    947
+  ]
+}

@@ -51,6 +51,7 @@
         ATTRACT_BOOST: 1.5,       // 靠近饲料时的速度倍数
         EAT_R_LEN: 0.45,          // 吃到的距离 = 体长 × 这个 + EAT_R_PAD
         EAT_R_PAD: 4,
+        EAT_R_MOUTH: 0.18,        // 大个子（笨重系数 < 1，见 Core.agileOf）按嘴吃：饲料离嘴不到 体长 × 这个 + EAT_R_PAD 才算吃到（小鱼仍按离鱼心的距离，数值不变）
         FED_S: 20,                // 吃到后变亮的时间
         FED_IN_S: 0.25,
         FED_OUT_S: 3,
@@ -120,7 +121,8 @@
 
     /** 鱼嘴的位置（鼻尖稍靠里一点）。 */
     function mouthOf(fish) {
-        return { x: fish.x + Math.cos(fish.ang) * fish.len * 0.45, y: fish.y + Math.sin(fish.ang) * fish.len * 0.45 };
+        const xs = Number.isFinite(fish.xs) ? fish.xs : 1;                  // 侧视大个子转身时身体沿屏幕横向缩短，嘴跟着收
+        return { x: fish.x + Math.cos(fish.ang) * fish.len * 0.45 * xs, y: fish.y + Math.sin(fish.ang) * fish.len * 0.45 };
     }
 
     function ageEffects(play, world, dt) {
@@ -154,7 +156,8 @@
         const dy = fish.y - at.y;
         const d = Math.hypot(dx, dy);
         const away = d >= PARAMS.POKE_CENTER * fish.len ? { x: dx / d, y: dy / d } : { x: Math.cos(fish.ang), y: Math.sin(fish.ang) };
-        const dash = Core.cruiseSpeed(world, fish) * PARAMS.POKE_DASH;
+        const agile = Core.agileOf(world, fish);
+        const dash = Core.cruiseSpeed(world, fish) * (agile < 1 ? 1 + (PARAMS.POKE_DASH - 1) * agile : PARAMS.POKE_DASH);        // 大个子被戳只是游快一点，不会窜出去
         fish.vx = away.x * dash;
         fish.vy = away.y * dash;
         const mouth = mouthOf(fish);
@@ -227,6 +230,12 @@
         let bestD = Infinity;
         for (const f of world.fish) {
             if (f.state !== 'alive') continue;
+            if (Core.agileOf(world, f) < 1) {
+                const mouth = mouthOf(f);
+                const dm = Math.hypot(mouth.x - pellet.x, mouth.y - pellet.y);
+                if (dm < PARAMS.EAT_R_MOUTH * f.len + PARAMS.EAT_R_PAD && dm < bestD) { best = f; bestD = dm; }
+                continue;
+            }
             const d = Math.hypot(f.x - pellet.x, f.y - pellet.y);
             if (d < PARAMS.EAT_R_LEN * f.len + PARAMS.EAT_R_PAD && d < bestD) { best = f; bestD = d; }
         }
@@ -361,5 +370,5 @@
         for (const [id, until] of play.fed) if (until <= play.time) play.fed.delete(id);
     }
 
-    return { PARAMS, create, resize, counts, poke, sprinkle, attractors, extrasOf, isTailZone, beginHold, endHold, step };
+    return { PARAMS, create, resize, counts, poke, sprinkle, attractors, extrasOf, isTailZone, beginHold, endHold, step, mouthOf, addBubbles };
 });

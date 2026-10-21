@@ -41,7 +41,11 @@ test('后台：差事控制器接上水母的 presenter、可用性判断（带�
   assert.match(block, /desktopAlarm\.onErrandAction = message => jellyErrands\.act\(message\?\.id, message\?\.action\)/);
   assert.match(block, /desktopAlarm\.onErrandRequest = message => jellyErrands\.request\(message\?\.kind\)/);
   assert.match(block, /desktopAlarm\.onNudgeHidden = id => \{ void jellyErrands\.onHidden\(id\); \}/);
-  assert.match(block, /desktopAlarm\.onPresence = state => jellyErrands\.onPresence\(state\)/);
+  assert.match(block, /desktopAlarm\.onPresence = \(state, extra\) => jellyErrands\.onPresence\(state, extra\)/);
+  assert.match(block, /readLark: .*lark_sentinel_check/);
+  assert.match(block, /readTabs: \(\) => chrome\.tabs\.query/);
+  assert.match(block, /readWatch: \(\) => chrome\.storage\.local\.get/);
+  assert.match(block, /readBookmarks: async \(\) =>/);
   assert.match(block, /chrome\.alarms\.onAlarm\.addListener\(alarm => \{ void jellyErrands\.fire\(alarm\.name\)/);
   assert.match(block, /void jellyErrands\.restore\(\)\.catch\(/);
   assert.ok(start > background.indexOf('const jellyDesktop = JellyDesktop.create('), '先有水母再有差事');
@@ -191,12 +195,16 @@ test('后台：喝水/起身发出后让差事让出间隔（onSent → noteExte
   assert.match(block, /onSent: at => jellyErrands\.noteExternal\(at\)/);
 });
 
-test('后台：差事的打开页面与系统通知同一去处；日志先写标记再开页；任务/概览只开新标签页', () => {
-  const start = background.indexOf('openPage: async kind =>');
-  const block = background.slice(start, start + 600);
+test('后台：差事的打开页面与系统通知同一去处；日志先写标记再开页；继续看/拾贝/飞书跳对应目标；任务/概览只开新标签页', () => {
+  const start = background.indexOf('openPage: async (kind, target) =>');
+  const block = background.slice(start, start + 1800);
   assert.ok(block.indexOf("pendingAction: 'openWorklogPanel'") > 0);
   assert.ok(block.indexOf("pendingAction: 'openWorklogPanel'") < block.indexOf("chrome.tabs.create({ url: 'chrome://newtab/' })"));
   assert.match(block, /kind === 'worklog'/);
+  assert.match(block, /kind === 'watch'/);
+  assert.match(block, /AppVideo\.buildURL/);
+  assert.match(block, /kind === 'bookmark'/);
+  assert.match(block, /kind === 'lark'/);
 });
 
 test('后台：差事设置消息只接受本扩展页面，只处理 get/set，设置只来自 message.config', () => {
@@ -380,7 +388,7 @@ test('差事总开关关闭或水母不可用时 offer 返回 handled:false → 
 // ---------- 设置页 ----------
 
 test('设置页：差事卡片的控件都存在，脚本绑定同一组 id，且只经 jelly_errands_get/set 读写（页面不直接写存储）', () => {
-  const ids = ['set-errandsEnabled', 'set-errandsLevel', 'set-errandsTask', 'set-errandsWorklog', 'set-errandsSong', 'set-errandsTidbit', 'set-errandsTitles', 'set-errandsFrom', 'set-errandsTo', 'set-errandsWeekdays', 'set-errandsPatrol', 'set-errandsStatus'];
+  const ids = ['set-errandsEnabled', 'set-errandsLevel', 'set-errandsTask', 'set-errandsWorklog', 'set-errandsLark', 'set-errandsTabs', 'set-errandsWatch', 'set-errandsBookmark', 'set-errandsSong', 'set-errandsTidbit', 'set-errandsTitles', 'set-errandsFrom', 'set-errandsTo', 'set-errandsWeekdays', 'set-errandsPatrol', 'set-errandsStatus'];
   for (const id of ids) {
     assert.ok(settingsHtml.includes(`id="${id}"`), `settings.html 缺少 ${id}`);
     assert.ok(settingsJs.includes(`'${id}'`), `settings-page.js 没有引用 ${id}`);
@@ -460,7 +468,7 @@ test('设置页状态提示：没常驻、没连上、组件版本过旧、v8 �
   assert.match(settingsJs, /水母差事已开启（组件协议 v/);
 });
 
-test('脚本版本钉子：settings-page.js?v=16，且仍在 chrome-shim 之后加载', () => {
-  assert.ok(settingsHtml.includes('js/settings-page.js?v=16'));
-  assert.ok(settingsHtml.indexOf('js/chrome-shim.js?v=5') < settingsHtml.indexOf('js/settings-page.js?v=16'));
+test('脚本版本钉子：settings-page.js?v=17，且仍在 chrome-shim 之后加载', () => {
+  assert.ok(settingsHtml.includes('js/settings-page.js?v=19'));
+  assert.ok(settingsHtml.indexOf('js/chrome-shim.js?v=5') < settingsHtml.indexOf('js/settings-page.js?v=19'));
 });

@@ -48,7 +48,7 @@
         if (message.type === 'nudgeAction') void this.handleNudgeAction(port, message);
         if (message.type === 'errandRequest') void this.handleErrandRequest(port, message);
         if (message.type === 'nudgeHidden' && this.nudgeId && message.id === this.nudgeId) { this.clearNudgeState(); this.emit('onNudgeHidden', message.id); this.releaseWhenIdle(); }
-        if (port === this.port && message.type === 'presence' && (message.state === 'active' || message.state === 'away')) this.emit('onPresence', message.state);
+        if (port === this.port && message.type === 'presence' && (message.state === 'active' || message.state === 'away')) this.emit('onPresence', message.state, { meeting: message.meeting === true });
         // 水母菜单只能“收起”，不能由原生打开常驻；其余取值一律忽略
         if (message.type === 'jellySetting' && message.resident === false) this.emit('onJellySetting', { resident: false });
         if (message.type === 'componentQuit') this.quitPort = port;
@@ -174,6 +174,10 @@
         if (!(Number(result.version) >= 7)) throw new Error('请更新桌面组件以启用桌面 AI 助手');
         return result;
       } finally { this.releaseWhenIdle(); }
+    }
+    async setAssistantCatalog(catalog) {
+      if (!this.port) throw new Error('桌面组件未连接');
+      return this.request('assistantCatalog', { catalog });
     }
     async setConfirmation(card) {
       clearTimeout(this.idleTimer);

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>浅海珊瑚礁 · 隔离体验</title>
+  <link rel="stylesheet" href="/css/background-experience.css">
+  <link rel="stylesheet" href="/css/aquarium.css">
+  <link rel="stylesheet" href="/css/task-crumple.css">
+  <link rel="stylesheet" href="lab.css">
+</head>
+<body>
+  <div id="wallpaper" aria-hidden="true"></div>
+  <canvas id="reef-canvas" aria-hidden="true" hidden></canvas>
+  <div id="background-experience-root" class="bgx-root" aria-hidden="true">
+    <div id="background-experience-tone" class="bgx-tone"></div>
+    <div id="background-experience-detail" class="bgx-detail"></div>
+    <div id="background-experience-time" class="bgx-time"></div>
+    <canvas id="background-experience-canvas"></canvas>
+  </div>
+  <header><div><span class="eyebrow">OCEAN FIELD NOTES / 01</span><h1>浅海实验室</h1></div><span class="badge">隔离 Demo · 演示数据</span></header>
+  <div class="time-wrapper"><div class="time-container"><time id="clock">--:--</time><p>让背景，继续呼吸。</p></div></div>
+  <aside id="controls" aria-label="原型设置">
+    <div class="panel-title"><h2>你的背景优先</h2><button id="collapse" type="button" aria-expanded="true">收起</button></div>
+    <div id="control-body">
+      <p class="intro">海洋居民自由游动。固定造景由你决定是否出现。</p>
+      <label class="switch"><span><strong>显示珊瑚礁造景</strong><small>仅占底部局部，默认关闭</small></span><input id="reef-toggle" type="checkbox"></label>
+      <label class="range-label" for="coverage">造景区域 <output id="coverage-value">32%</output></label>
+      <input id="coverage" type="range" min="20" max="42" value="32" step="1">
+      <div class="field"><label for="background-select">示例背景</label><select id="background-select"><option value="dusk">暮色海湾</option><option value="blue">晴空蓝</option><option value="warm">暖色晨光</option><option value="grid">透明检查格</option></select></div>
+      <label class="file-button">换成我的背景<input id="background-file" type="file" accept="image/png,image/jpeg,image/webp"></label>
+      <p class="hint">图片只在此页显示，不上传、不保存。</p>
+      <div class="actions"><button id="pause" type="button" aria-pressed="false">暂停观察</button><button id="reset" type="button">重置演示</button></div>
+      <div class="notice" id="reef-status" role="status">造景未开启 · 背景完整显示</div>
+      <details><summary>体验方式与边界</summary><p>右下角小鱼按钮可以放入、喂食和捞出。抓住鱼可拖动；抓住带任务文字的水母，拖入出现的纸篓可完成演示任务。</p><button id="guide" type="button" aria-pressed="false">显示拖拽引导</button><p>当前为真实 3D 造景 + 原有 2D 动物。尚未实现鱼与 3D 礁石的遮挡、碰撞或栖息行为。</p><p>固定造景来自 Deskworlds。当前背景是可更换的示例，不读取正式扩展的壁纸或数据。</p><output id="diagnostics">载入中</output></details>
+    </div>
+  </aside>
+  <aside id="task-panel" aria-label="演示任务"><h2>任务水母</h2><p>拖入纸篓，完成这一次小探索。</p><ul id="demo-tasks"></ul><output id="task-result" role="status">3 项演示任务 · 与正式任务隔离</output></aside>
+  <footer>DESKWORLDS × THREE.JS <span>·</span> 原有水族馆交互 <a href="research.html">案例索引 ↗</a></footer>
+  <div id="background-experience-hud" hidden><b id="background-experience-energy"></b><span id="background-experience-energy-fill"></span><p id="background-experience-status"></p></div>
+  <button id="background-experience-toggle" type="button" hidden>背景玩法</button>
+  <script type="module" src="bootstrap.mjs"></script>
+</body>
+</html>

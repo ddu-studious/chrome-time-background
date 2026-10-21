@@ -19,11 +19,36 @@
   function create(deps) {
     const labels = { netease: '请求网易云音乐', bilibili: '请求哔哩哔哩', youtube: '请求 YouTube', controlMusic: '控制播放器', playMusic: '准备并播放单曲', playQueue: '替换队列并播放', enqueueMusic: '追加音乐队列', sleepMusic: '设置音乐停止时间', listAlarms: '读取提醒列表', saveAlarm: '保存提醒', mutateAlarm: '修改提醒', openVideo: '打开 App 内视频', readMusicState: '读取播放器状态', reconcileMusicQueue: '核对过期队列', setMusicMode: '设置播放模式', playCurrentQueue: '播放当前队列', applyMusicQueue: '应用音乐队列', editMusicQueue: '编辑音乐队列', seekMusic: '调整播放进度', connectionStatus: '检查应用连接' };
     const writes = new Set(['controlMusic', 'playMusic', 'playQueue', 'enqueueMusic', 'sleepMusic', 'saveAlarm', 'mutateAlarm', 'openVideo', 'reconcileMusicQueue', 'setMusicMode', 'playCurrentQueue', 'applyMusicQueue', 'editMusicQueue', 'seekMusic']);
+    const copy = value => JSON.parse(JSON.stringify(value));
+    const canonical = value => JSON.stringify(value, (_, item) => item && typeof item === 'object' && !Array.isArray(item)
+      ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item);
+    const fingerprint = async value => {
+      const bytes = new TextEncoder().encode(canonical(value));
+      if (bytes.length > 4 * 1024 * 1024) throw new Error('待确认数据过大，请缩小本次操作范围');
+      return Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2, '0')).join('');
+    };
+    const describe = object => {
+      const labels = { title: '名称', description: '内容', text: '内容', date: '日期', dueDate: '截止日期', duration: '分钟', durationMinutes: '分钟', minutes: '分钟', priority: '优先级', mode: '播放模式', action: '操作', enabled: '启用', seconds: '秒', value: '数值', startPlayback: '开始播放' };
+      const values = { shuffle: '随机', sequence: '顺序', loop: '列表循环', single: '单曲循环', append: '追加', replace: '替换', pause: '暂停', resume: '继续', next: '下一首', previous: '上一首', volume: '音量', low: '低', medium: '中', high: '高', none: '无', true: '是', false: '否' };
+      return Object.entries(object || {}).filter(([key, value]) => labels[key] && ['string', 'boolean', 'number'].includes(typeof value)).map(([key, value]) => `${labels[key]}：${['mode', 'action', 'priority', 'enabled', 'startPlayback'].includes(key) ? values[value] || String(value).slice(0, 300) : String(value).slice(0, 300)}`).join('；').slice(0, 1100);
+    };
     function runtime(ctx, safety) {
-      const scoped = { ...deps };
-      const beforeWrite = async () => { ctx.guard(); safety.started = true; await ctx.effectStarted?.(); ctx.guard(); };
+      const scoped = { ...deps, captureNow: () => safety.preparedAt };
+      const beforeWrite = async (name, args) => {
+        ctx.guard();
+        if (ctx.task.input?.origin === 'desktop' && !safety.reviewed) {
+          const values = args.filter(arg => !(arg && typeof arg.guard === 'function'));
+          const digest = await fingerprint({ name, args: values }); ctx.guard();
+          if (safety.digest !== digest) {
+            if (safety.digest) throw Object.assign(new Error('确认后参数或资源版本已变化，请重新发起；本次未提交该操作'), { code: 'ASSISTANT_USER_INPUT_REQUIRED' });
+            const saved = name === 'storage.set' ? values[0]?.memos?.[0] || values[0]?.worklogEntries?.[0] : null;
+            throw Object.assign(new Error('桌面操作等待确认'), { desktopPreparation: { digest, name, preview: saved ? describe(saved) : '' } });
+          }
+        }
+        safety.started = true; await ctx.effectStarted?.(); ctx.guard();
+      };
       for (const [name, title] of Object.entries(labels)) if (typeof deps[name] === 'function') scoped[name] = async (...args) => {
-        if (writes.has(name)) await beforeWrite();
+        if (writes.has(name)) await beforeWrite(name, args);
         if (!ctx.trace) return deps[name](...args);
         const path = name === 'netease' ? String(args[0]) : '';
         const requestTitle = /artist\/top\/song|\/api\/v1\/artist$/.test(path) ? '读取歌手热门歌曲' : /search/.test(path) ? `搜索${({ 1: '歌曲', 100: '歌手', 10: '专辑', 1000: '歌单' })[args[1]?.type] || '音乐'}` : /playlist\/detail/.test(path) ? '读取歌单曲目' : /song\/detail/.test(path) ? '补全歌曲详情' : /\/album\//.test(path) ? '读取专辑曲目' : title;
@@ -35,18 +60,46 @@
       if (deps.storage) {
         scoped.storage = {};
         for (const method of ['get', 'set', 'remove']) if (deps.storage[method]) scoped.storage[method] = async (...args) => {
-          if (method !== 'get') await beforeWrite();
+          // The existing bounded search index is a read cache, not a business
+          // mutation. Its sole fixed key cannot carry authorization or settings.
+          const cacheOnly = method === 'set' && args[0] && Object.keys(args[0]).length === 1 && Array.isArray(args[0].quickAssistantMusicIndexV1) && args[0].quickAssistantMusicIndexV1.length <= 200;
+          if (method !== 'get' && !cacheOnly) await beforeWrite(`storage.${method}`, args);
           return ctx.trace ? ctx.trace(`storage.${method}`, ({ get: '读取本地资料', set: '保存本地资料', remove: '移除本地资料' })[method], args, () => deps.storage[method](...args), 'operation') : deps.storage[method](...args);
         };
       }
-      if (deps.memory) scoped.memory = async (action, ...args) => { if (action !== 'get') await beforeWrite(); return deps.memory(action, ...args); };
+      if (deps.memory) scoped.memory = async (action, ...args) => { if (action !== 'get') await beforeWrite('memory', [action, ...args]); return deps.memory(action, ...args); };
       return createRuntime(scoped);
     }
     return { ...Object.fromEntries(['plan', 'execute', 'choose'].map(method => [method, async (input, ctx) => {
-      const safety = { started: false };
+      const preparedAt = (deps.now || Date.now)();
+      const safety = { started: false, preparedAt };
+      let operation = { method, input };
       try {
+        if (method === 'choose' && input.action === 'assistant.desktop.commit') {
+          const pending = ctx.task.memory?.desktopPending;
+          if (!pending || pending.taskId !== ctx.task.id || pending.version + 1 !== ctx.task.version || pending.choiceId !== input.id || pending.expiresAt < preparedAt || Context.state(ctx.task).uncertain)
+            throw Object.assign(new Error('桌面确认已失效，请重新发起'), { code: 'ASSISTANT_USER_INPUT_REQUIRED' });
+          operation = pending.operation; safety.digest = pending.digest; safety.preparedAt = pending.preparedAt;
+          delete ctx.task.memory.desktopPending;
+        } else if (method === 'choose' && ctx.task.selectionStatus === 'review' && ctx.task.selectionView?.choices?.some(row => row.id === input.id && canonical(row) === canonical(input))) safety.reviewed = true;
         const handler = runtime(ctx, safety);
-        const outcome = await handler[method](input, ctx);
+        let outcome;
+        try { outcome = await handler[operation.method](operation.input, ctx); }
+        catch (error) {
+          if (!error.desktopPreparation || safety.started || operation.method === 'plan') throw error;
+          const { digest, name, preview } = error.desktopPreparation;
+          const choiceId = `desktop-confirm-${ctx.task.version}`;
+          const title = operation.method === 'execute' ? Contract.tools[operation.input.tool]?.title : operation.input.title;
+          // Only project registered arguments/user-visible labels. Never expose
+          // the full storage write, transport credentials or generated code.
+          const details = preview || (operation.method === 'execute' ? describe(operation.input.args) : operation.input.subtitle || '');
+          ctx.task.memory ||= {};
+          ctx.task.memory.desktopPending = { digest, operation: copy(operation), taskId: ctx.task.id, version: ctx.task.version, choiceId, preparedAt, expiresAt: preparedAt + 600000 };
+          return { status: 'review', message: `确认${title || labels[name] || '执行此操作'}？${details ? `\n${details}` : ''}`,
+            choices: [{ id: choiceId, title: title || labels[name] || '执行操作', label: '确认执行', action: 'assistant.desktop.commit', data: {} }],
+            observation: { approval: { decision: 'confirm', policy: 'desktop-origin' } } };
+        }
+        if (safety.digest) outcome = { ...outcome, ...(operation.method === 'execute' ? { executedStep: operation.input } : { executedChoice: operation.input }) };
         if (method !== 'execute' || outcome?.status !== 'review' || outcome.choices?.length !== 1) return outcome;
         const choice = outcome.choices[0];
         if (!['alarm.create', 'alarm.commit'].includes(choice.action) || choice.data?.action === 'delete') return outcome;
@@ -222,12 +275,15 @@
       // Stop/replacement makes guard fail before any persistent pointer changes.
       const previous = structuredClone(ctx.task.contextState), previousNotice = ctx.task.contextNotice;
       const changed = Context.commit(ctx.task, request, response.data);
+      if (!changed && ['short_source', 'no_gain'].includes(response.data?.reason)) ctx.task.contextNotice = response.data.reason === 'short_source'
+        ? '历史记录较短，已保留原记录；继续前仍会检查完整请求容量。'
+        : '摘要没有缩短记录，已保留原记录；继续前仍会检查完整请求容量。';
       try { await ctx.saveContext?.(); }
       catch (error) { ctx.task.contextState = previous; ctx.task.contextNotice = previousNotice; throw error; }
       return changed;
     }
     function quickQueuePlayPlan(input, ctx) {
-      const request = input.app === 'music' && !input.skill && Music.queuePlayRequest(input.text, { bare: !Contract.hasCandidates(ctx.task) });
+      const request = input.app === 'music' && !input.skill && Music.queuePlayRequest(input.text, { bare: !Contract.hasCandidates(ctx.task) || ctx.task.todoTips?.items.length === 1 && ctx.task.todoTips.items[0].tool === 'music.queue.play' });
       const todo = ctx.task.todoTips;
       if (!request || !todo || todo.goal !== input.text || todo.sources.length !== 1 || ctx.task.remainingSteps?.length) return null;
       const context = Context.state(ctx.task);
@@ -315,7 +371,7 @@
           throw error;
         }
         if (response.status !== 'needs_compaction') {
-          if (!ctx.task.todoTips.items.length && !response.data?.question && !response.data?.todoTips) throw Object.assign(new Error('规划未返回完整 Todo，请检查本机 AI 服务版本并重新规划'), { code: 'ASSISTANT_PLAN_INVALID' });
+          if (!ctx.task.todoTips.items.length && !response.data?.question && !response.data?.todoTips && !response.data?.answer) throw Object.assign(new Error('规划未返回完整 Todo，请检查本机 AI 服务版本并重新规划'), { code: 'ASSISTANT_PLAN_INVALID' });
           return response.data;
         }
         if (attempt) throw new Error('整理后仍无法容纳上下文，进度已保存');
@@ -523,7 +579,7 @@
       }
       if (step.tool === 'task.create') {
         const captureId = Todo.current(ctx.task.todoTips)?.id || ctx.task.index;
-        const value = QuickCapture.task({ ...step.args, id: `memo_ai_${ctx.task.id}_${ctx.task.version}_${captureId}` }, now());
+        const value = QuickCapture.task({ ...step.args, id: `memo_ai_${ctx.task.id}_${captureId}` }, deps.captureNow?.() || now());
         const saved = await QuickCapture.append(storage, 'memos', value, ctx.guard);
         return { message: `${saved.duplicate ? '已有这条任务' : '已添加任务'}：${saved.value.title}${saved.value.dueDate ? `，截止 ${saved.value.dueDate}` : ''}。`,
           observation: { created: !saved.duplicate, id: saved.value.id, title: saved.value.title, dueDate: saved.value.dueDate } };
@@ -552,8 +608,8 @@
           projectId = ref.id;
         }
         const captureId = Todo.current(ctx.task.todoTips)?.id || ctx.task.index;
-        const value = QuickCapture.entry({ id: `te_ai_${ctx.task.id}_${ctx.task.version}_${captureId}`,
-          description: step.args.description, duration: step.args.durationMinutes, date: step.args.date, projectId }, now());
+        const value = QuickCapture.entry({ id: `te_ai_${ctx.task.id}_${captureId}`,
+          description: step.args.description, duration: step.args.durationMinutes, date: step.args.date, projectId }, deps.captureNow?.() || now());
         const saved = await QuickCapture.append(storage, 'worklogEntries', value, ctx.guard);
         return { message: `${saved.duplicate ? '已有这条工作日志' : '已记录工作日志'}：${saved.value.date} · ${saved.value.description} · ${saved.value.duration} 分钟。`,
           observation: { created: !saved.duplicate, id: saved.value.id, date: saved.value.date, durationMinutes: saved.value.duration, projectId } };

@@ -150,6 +150,7 @@ enum AssistantModel {
         var input: String       // 用户上一次的需求，单行，≤120 字符
         var message: String     // 助手原文，保留换行，≤1200 字符
         var at: Double          // Chrome 记录的更新时间（毫秒时间戳），0 表示不详
+        var scopeLabel: String = ""
     }
 
     enum StateUpdate: Equatable {
@@ -182,7 +183,7 @@ enum AssistantModel {
         var at = 0.0
         if let value = JellyModel.number(object["at"]), value.isFinite, value > 0, value < 8_640_000_000_000_000 { at = value.rounded(.down) }
         return .task(State(taskId: taskId, version: Int(version), status: status,
-                           input: oneLine(object["input"], max: maxInputShown), message: multiline(object["message"], max: maxMessageShown), at: at))
+                           input: oneLine(object["input"], max: maxInputShown), message: multiline(object["message"], max: maxMessageShown), at: at, scopeLabel: oneLine(object["scopeLabel"], max: 60)))
     }
 
     // MARK: 文字清洗（与 js/assistant-native.js 的 oneLine / multiline 同一套；Chrome 已清洗过，这里再防一道）
@@ -370,5 +371,67 @@ enum AssistantModel {
     static func resized(frame: CGRect, height: CGFloat, visible: CGRect) -> CGRect {
         let top = frame.maxY
         return CGRect(x: clamp(frame.minX, visible.minX, visible.maxX - frame.width), y: clamp(top - height, visible.minY, visible.maxY - height), width: frame.width, height: height)
+    }
+}
+
+// 展示目录来自 Chrome；原生只做有界解析、前置命令筛选，不执行或登记工具。
+extension AssistantModel {
+    static func canFocusInteraction(_ card: [String: Any]?, state: State, now: Double) -> Bool {
+        guard [.review, .waiting, .clarify].contains(state.status), let card = card,
+              card["taskId"] as? String == state.taskId, card["version"] as? Int == state.version,
+              card["status"] as? String == state.status.rawValue,
+              let expires = card["expiresAt"] as? Double, expires.isFinite, expires > now else { return false }
+        return true
+    }
+    struct CatalogItem: Equatable {
+        var id: String
+        var name: String
+        var aliases: [String]
+        var apps: [String]
+        var description: String
+    }
+    struct Catalog: Equatable { var revision: Int; var apps: [CatalogItem]; var actions: [CatalogItem] }
+    struct Completion: Equatable { var range: NSRange; var marker: String; var items: [CatalogItem]; var matchingUnavailable = false }
+    static func parseCatalog(_ raw: Any?) -> Catalog? {
+        guard let data = raw as? [String: Any], JellyModel.number(data["version"]) == 1,
+              let revision = JellyModel.number(data["revision"]), revision > 0, revision <= 9_007_199_254_740_991, revision.rounded(.down) == revision,
+              let apps = data["apps"] as? [[String: Any]], !apps.isEmpty, apps.count <= 16,
+              let actions = data["actions"] as? [[String: Any]], actions.count <= 64 else { return nil }
+        func parse(_ rows: [[String: Any]], action: Bool) -> [CatalogItem]? {
+            var result: [CatalogItem] = [], seen = Set<String>()
+            for row in rows {
+                guard let id = row["id"] as? String, id.range(of: "^[a-z][a-z0-9-]{0,39}$", options: .regularExpression) != nil, seen.insert(id).inserted,
+                      let name = row["name"] as? String, !name.isEmpty, name.utf16.count <= 40,
+                      let description = row["description"] as? String, description.utf16.count <= 160 else { return nil }
+                let aliases = row["aliases"] as? [String] ?? [], scopes = row["apps"] as? [String] ?? []
+                guard aliases.count <= 12, aliases.allSatisfy({ !$0.isEmpty && $0.utf16.count <= 40 }), scopes.count <= 16,
+                      !action || (!scopes.isEmpty && scopes.allSatisfy({ scope in apps.contains { $0["id"] as? String == scope } })) else { return nil }
+                result.append(CatalogItem(id: id, name: oneLine(name, max: 40), aliases: aliases.map { oneLine($0, max: 40) }, apps: scopes, description: oneLine(description, max: 160)))
+            }
+            return result
+        }
+        guard let appRows = parse(apps, action: false), let actionRows = parse(actions, action: true) else { return nil }
+        return Catalog(revision: Int(revision), apps: appRows, actions: actionRows)
+    }
+    static func completion(_ text: String, caret: Int, catalog: Catalog?) -> Completion? {
+        let value = text as NSString
+        guard value.length <= 1000, caret >= 0, caret <= value.length else { return nil }
+        let token = try! NSRegularExpression(pattern: "\\G\\s*([@/])([^\\s]*)")
+        var position = 0, app: String?
+        for _ in 0..<2 {
+            guard let match = token.firstMatch(in: text, range: NSRange(location: position, length: value.length - position)), match.range.location == position else { return nil }
+            let marker = value.substring(with: match.range(at: 1)), part = match.range(at: 2)
+            if caret >= part.location && caret <= NSMaxRange(part) {
+                let query = value.substring(with: NSRange(location: part.location, length: caret - part.location)).lowercased()
+                let rows = marker == "@" ? catalog?.apps ?? [] : (catalog?.actions ?? []).filter { app == nil || $0.apps.contains(app!) }
+                let sorted = AssistantMatcher.shared.rank(rows, query: query, actions: marker == "/")
+                return Completion(range: NSRange(location: match.range(at: 1).location, length: NSMaxRange(part) - match.range(at: 1).location), marker: marker, items: sorted ?? [], matchingUnavailable: sorted == nil)
+            }
+            let name = value.substring(with: part).lowercased()
+            if marker == "@" { app = catalog?.apps.first { ([$0.id, $0.name] + $0.aliases).contains { $0.lowercased() == name } }?.id }
+            position = NSMaxRange(match.range)
+            if position >= value.length { return nil }
+        }
+        return nil
     }
 }

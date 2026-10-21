@@ -1,0 +1,37 @@
+[
+  {
+    "path": "/",
+    "method": "GET",
+    "host": null,
+    "status": 200,
+    "csp": "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
+  },
+  {
+    "path": "/js/background.js",
+    "method": "GET",
+    "host": null,
+    "status": 404,
+    "csp": null
+  },
+  {
+    "path": "/../../../local-ai/.local/control.json",
+    "method": "GET",
+    "host": null,
+    "status": 404,
+    "csp": null
+  },
+  {
+    "path": "/",
+    "method": "POST",
+    "host": null,
+    "status": 405,
+    "csp": null
+  },
+  {
+    "path": "/",
+    "method": "GET",
+    "host": "untrusted.test",
+    "status": 403,
+    "csp": null
+  }
+]

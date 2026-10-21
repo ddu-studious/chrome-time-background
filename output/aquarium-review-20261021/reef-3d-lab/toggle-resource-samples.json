@@ -1,0 +1,8 @@
+{
+  "note": "Paused; FPS is not a performance measure in this sample. Geometry/texture counts remain bounded; resources are cached while scene is off.",
+  "samples": [
+    "Three r180 · 三角形 1510050 · 几何 39 · 纹理 8 · 帧率 0.3 · CPU 提交 1.3 ms（不含 GPU） · 帧 12 · 世界 0.3 s · 错误 0",
+    "Three r180 · 三角形 30552 · 几何 39 · 纹理 8 · 帧率 0.3 · CPU 提交 0.7 ms（不含 GPU） · 帧 13 · 世界 0.3 s · 错误 0",
+    "Three r180 · 三角形 1510050 · 几何 39 · 纹理 8 · 帧率 0.4 · CPU 提交 0.8 ms（不含 GPU） · 帧 16 · 世界 0.3 s · 错误 0"
+  ]
+}

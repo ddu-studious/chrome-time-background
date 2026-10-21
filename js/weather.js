@@ -54,7 +54,7 @@ class WeatherService {
         try {
             this.bindChartEvents();
             await this.updateWeather();
-            this._updateIntervalId = setInterval(() => this.updateWeather(), this.updateInterval);
+            if (!this._updateIntervalId) this._updateIntervalId = setInterval(() => this.updateWeather(), this.updateInterval);
         } catch (error) {
             console.error('Weather initialization failed:', error);
             this.showError('');

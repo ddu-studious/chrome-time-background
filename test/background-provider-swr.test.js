@@ -264,18 +264,18 @@ test('首次同时打开多个首页只重建一次', async () => {
     assert.deepEqual(w.urls(results[0]), w.urls(results[2]));
 });
 
-test('没有旧结果且网络卡住：页面最多等 10 秒后拿到兜底图，重建继续并在完成后写入缓存', async () => {
+test('没有旧结果且网络卡住：页面最多等 1.2 秒后拿到兜底图，重建继续并在完成后写入缓存', async () => {
     const w = world();
     w.net.hold = deferred();
     const pending = w.get();
     let settled = false;
     pending.then(() => { settled = true; });
     await flush();
-    w.advance(9_000);
+    w.advance(1_000);
     await flush();
-    assert.equal(settled, false, '10 秒内仍在等待真实结果');
+    assert.equal(settled, false, '1.2 秒预算内仍在等待真实结果');
 
-    w.advance(1_500);
+    w.advance(250);
     const result = await pending;
     assert.equal(result.source, 'fallback');
     assert.equal(result.mediaMode, 'image');

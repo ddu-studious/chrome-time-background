@@ -30,7 +30,8 @@ test('工作台接入 Dock、启动流程、设置和 v5 页面注册表', () =>
   assert.ok(index.includes('css/youtube-workbench.css?v=6'));
   assert.ok(index.includes('js/youtube-controller.js?v=17'));
   assert.ok(main.includes("getSetting('enableYouTube')"));
-  assert.ok(main.includes('await window.youtubeController.init({ skipInitialView:'));
+  assert.ok(main.includes('youtubeWorkbench.ensure({ skipInitialView: true })'), '深链才在启动时初始化');
+  assert.ok(main.includes("bindLazyDock('youtube-dock-btn'"), 'Dock 点击或悬停时懒初始化');
   assert.ok(settings.includes('enableYouTube: true'));
   assert.ok(settingsPage.includes('enableYouTube: true'));
   assert.ok(settingsHtml.includes('id="set-enableYouTube"'));

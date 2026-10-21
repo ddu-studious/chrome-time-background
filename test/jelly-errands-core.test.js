@@ -13,9 +13,9 @@ const ready = { presence: 'active', activeSince: 0, busy: false };
 
 // ---------- normalize ----------
 
-test('normalize：默认关闭、适中、三类全开、不显示任务名、09:00–18:00、仅工作日', () => {
+test('normalize：默认关闭、适中、八类全开、不显示任务名、09:00–18:00、仅工作日', () => {
   assert.deepEqual(Core.normalize(undefined), {
-    enabled: false, level: 'mid', kinds: { task: true, worklog: true, song: true, tidbit: true },
+    enabled: false, level: 'mid', kinds: { task: true, worklog: true, lark: true, song: true, tidbit: true, tabs: true, watch: true, bookmark: true },
     showTitles: false, from: '09:00', to: '18:00', weekdaysOnly: true, patrol: true,
   });
   assert.deepEqual(Core.normalize({}), Core.normalize(null));
@@ -23,10 +23,10 @@ test('normalize：默认关闭、适中、三类全开、不显示任务名、09
 });
 
 test('normalize：enabled 与 showTitles 只认明确的 true；分项只有明确 false 才关；未知键丢弃', () => {
-  const config = Core.normalize({ enabled: 1, showTitles: 'yes', kinds: { task: false, worklog: 0, tidbit: undefined, song: false }, extra: 1 });
+  const config = Core.normalize({ enabled: 1, showTitles: 'yes', kinds: { task: false, worklog: 0, tidbit: undefined, song: false, lark: false }, extra: 1 });
   assert.equal(config.enabled, false);
   assert.equal(config.showTitles, false);
-  assert.deepEqual(config.kinds, { task: false, worklog: true, song: false, tidbit: true });
+  assert.deepEqual(config.kinds, { task: false, worklog: true, lark: false, song: false, tidbit: true, tabs: true, watch: true, bookmark: true });
   assert.equal('extra' in config, false);
   assert.equal(Core.normalize({ enabled: true, showTitles: true }).showTitles, true);
 });
@@ -249,33 +249,46 @@ test('copy.worklog 与 copy.tidbit：沿用现有系统通知的措辞；文字�
   assert.equal(Core.copy.tidbit(null), null);
   const long = Core.copy.tidbit({ text: '长'.repeat(300) });
   assert.ok([...long.text].length <= 120);
-  for (const kind of ['brief', 'task', 'worklog', 'song', 'tidbit']) {
+  for (const kind of Core.KIND_IDS) {
     for (const button of Core.KINDS[kind].buttons) assert.ok([...button.title].length <= 12, `${kind}:${button.id}`);
   }
 });
 
 test('KINDS：按钮 id 只来自白名单；每类至少一个主按钮在第一位', () => {
-  const allowed = { brief: ['open', 'later'], task: ['open', 'later'], worklog: ['open', 'later'], song: ['play', 'another', 'dismiss'], tidbit: ['more', 'dismiss'] };
+  const allowed = {
+    brief: ['open', 'later'],
+    task: ['open', 'later'],
+    worklog: ['open', 'later'],
+    lark: ['open', 'later'],
+    song: ['play', 'another', 'dismiss'],
+    tidbit: ['more', 'dismiss'],
+    tabs: ['open', 'later'],
+    watch: ['open', 'dismiss'],
+    bookmark: ['open', 'later'],
+  };
   assert.deepEqual(Object.keys(Core.KINDS).sort(), Object.keys(allowed).sort());
   for (const [kind, ids] of Object.entries(allowed)) assert.deepEqual(Core.KINDS[kind].buttons.map(b => b.id), ids);
   assert.ok(Core.KINDS.task.urgency > Core.KINDS.worklog.urgency);
+  assert.equal(Core.KINDS.lark.urgency, Core.KINDS.worklog.urgency);
   assert.ok(Core.KINDS.worklog.urgency > Core.KINDS.brief.urgency);
   assert.ok(Core.KINDS.brief.urgency > Core.KINDS.tidbit.urgency);
+  for (const kind of ['tabs', 'watch', 'bookmark']) assert.equal(Core.KINDS[kind].urgency, Core.KINDS.tidbit.urgency);
 });
 
 // ---------- 第二期：推荐歌曲与手动请求 ----------
 
-test('KINDS.song：按钮 播放/换一首/不听、紧急度与小乐子同级（交替轮换）且低于概览；组件版本门槛 song 9、其余 8', () => {
+test('KINDS.song：按钮 播放/换一首/不听、紧急度与小乐子同级（交替轮换）且低于概览；组件版本门槛 song 9、一期四类 8、后续新能力 10', () => {
   assert.deepEqual(Core.KINDS.song.buttons, [{ id: 'play', title: '播放' }, { id: 'another', title: '换一首' }, { id: 'dismiss', title: '不听' }]);
   assert.equal(Core.KINDS.song.urgency, Core.KINDS.tidbit.urgency);
   assert.ok(Core.KINDS.song.urgency < Core.KINDS.brief.urgency);
   assert.equal(Core.KINDS.song.since, 9);
   for (const kind of ['brief', 'task', 'worklog', 'tidbit']) assert.equal(Core.KINDS[kind].since, 8, kind);
-  assert.deepEqual(Core.KIND_IDS.slice().sort(), ['brief', 'song', 'task', 'tidbit', 'worklog']);
-  assert.deepEqual(Core.SWITCHABLE.slice().sort(), ['song', 'task', 'tidbit', 'worklog']);
+  for (const kind of ['lark', 'tabs', 'watch', 'bookmark']) assert.equal(Core.KINDS[kind].since, 10, kind);
+  assert.deepEqual(Core.KIND_IDS.slice().sort(), ['bookmark', 'brief', 'lark', 'song', 'tabs', 'task', 'tidbit', 'watch', 'worklog']);
+  assert.deepEqual(Core.SWITCHABLE.slice().sort(), ['bookmark', 'lark', 'song', 'tabs', 'task', 'tidbit', 'watch', 'worklog']);
   assert.equal(Core.MIN_VERSION, 8);
   assert.equal(Core.REQUEST_SINCE, 9);
-  assert.deepEqual(Core.REQUEST_KINDS, ['brief', 'song', 'tidbit', 'worklog']);
+  assert.deepEqual(Core.REQUEST_KINDS, ['brief', 'lark', 'song', 'tidbit', 'worklog', 'tabs', 'watch', 'bookmark']);
   assert.equal(Core.REQUEST_KINDS.includes('task'), false);
 });
 
@@ -336,4 +349,101 @@ test('state：sanitizeState 保留 song 的连续拒绝与静默；recordOutcome
   state = Core.recordOutcome(state, 'song', false);
   assert.equal(state.muted.song, true);
   assert.deepEqual(Core.recordOutcome(Core.recordOutcome(Core.emptyState('d'), 'song', false), 'song', true).strikes, {});
+});
+
+// ---------- 新能力：会议静默闸门、飞书 @我、陈旧标签页、继续看、深海拾贝 ----------
+
+test('gate：开会/通话中（meeting:true 或 presence:meeting）不开口，给出 reason:meeting', () => {
+  const state = Core.emptyState('2026-10-15');
+  const now = ms(15, 10, 0);
+  assert.deepEqual(Core.gate(on(), state, { ...ready, meeting: true }, now), { ok: false, reason: 'meeting' });
+  assert.deepEqual(Core.gate(on(), state, { ...ready, presence: 'meeting' }, now), { ok: false, reason: 'meeting' });
+  assert.deepEqual(Core.gate(on(), state, { ...ready, meeting: false }, now), { ok: true });
+});
+
+test('staleTabStats：排除已固定、有声、当前激活、非 http(s) 与不足 48 小时的标签页；达到门槛返回数量、最久天数与前两个域名', () => {
+  const now = ms(15, 10, 0);
+  const old3d = now - 75 * 3600000;
+  const old2d = now - 50 * 3600000;
+  const tabs = [
+    { url: 'https://www.github.com/a', lastAccessed: old3d },
+    { url: 'https://github.com/b', lastAccessed: old2d },
+    { url: 'https://developer.mozilla.org/x', lastAccessed: old2d },
+    { url: 'https://developer.mozilla.org/y', lastAccessed: old2d },
+    { url: 'https://news.ycombinator.com/item', lastAccessed: old2d },
+    { url: 'https://github.com/pinned', lastAccessed: old3d, pinned: true },
+    { url: 'https://github.com/audible', lastAccessed: old3d, audible: true },
+    { url: 'https://github.com/active', lastAccessed: old3d, active: true },
+    { url: 'chrome://extensions/', lastAccessed: old3d },
+    { url: 'https://github.com/fresh', lastAccessed: now - 10 * 3600000 },
+  ];
+  assert.deepEqual(Core.staleTabStats(tabs, now), {
+    count: 5,
+    oldestDays: 3,
+    domains: ['developer.mozilla.org', 'github.com'],
+  });
+  assert.equal(Core.staleTabStats(tabs.slice(0, 4), now), null, '默认不足 5 个不触发');
+  assert.equal(Core.staleTabStats(tabs.slice(0, 1), now, { minCount: 1 }).count, 1, '手动查询 minCount:1 可返回');
+  assert.equal(Core.staleTabStats(null, now), null);
+});
+
+test('watchCandidates：筛出最近 7 天内进度在 5%～90% 的 B 站、YouTube 与马士兵条目，按最近观看降序', () => {
+  const now = ms(15, 10, 0);
+  const raw = {
+    biliWatchMemory: {
+      BV1xx411c7mD: { title: 'Rust 异步编程', page: 2, time: 600, duration: 1000, ts: now - 3600000 },
+      BV1yy411c7mE: { title: '几乎看完的', page: 1, time: 960, duration: 1000, ts: now - 1000 },
+      BV1zz411c7mF: { title: '太久以前的', page: 1, time: 500, duration: 1000, ts: now - 9 * 24 * 3600000 },
+    },
+    youtubeWatchHistory: [
+      { id: 'dQw4w9WgXcQ', title: 'System Design Interview', watchedAt: new Date(now - 7200000).toISOString() },
+    ],
+    youtubeWatchProgress: {
+      dQw4w9WgXcQ: { time: 450, duration: 1000, updatedAt: now - 1800000 },
+    },
+    mashibingStudyTrackerV1: {
+      courseNo: '2699', sectionNo: '107', courseName: '架构师', sectionName: '分布式锁实战',
+      url: 'https://www.mashibing.com/study?courseNo=2699', progress: 35, updatedAt: now - 600000,
+    },
+  };
+  const list = Core.watchCandidates(raw, now);
+  assert.deepEqual(list.map(item => [item.platform, item.percent, item.title]), [
+    ['mashibing', 35, '分布式锁实战'],
+    ['youtube', 45, 'System Design Interview'],
+    ['bilibili', 60, 'Rust 异步编程'],
+  ]);
+  assert.deepEqual(list[2].target, { platform: 'bilibili', id: 'BV1xx411c7mD', seconds: 600, page: 2, title: 'Rust 异步编程' });
+});
+
+test('dueBookmarks：筛出 active、未归档且 nextReview <= nowMs 的 http(s) 书签，按逾期最久排序', () => {
+  const now = ms(15, 10, 0);
+  const items = [
+    { id: 'bm1', status: 'active', title: 'WebGPU 规范', url: 'https://gpuweb.github.io/', dateAdded: now - 10 * 24 * 3600000, srs: { nextReview: now - 1000 } },
+    { id: 'bm2', status: 'active', title: 'V8 垃圾回收', url: 'https://v8.dev/blog/trash-talk', dateAdded: now - 30 * 24 * 3600000, srs: { nextReview: now - 50000 } },
+    { id: 'bm3', status: 'active', title: '已归档', url: 'https://example.com/a', srs: { status: 'archived', nextReview: now - 99999 } },
+    { id: 'bm4', status: 'active', title: '未到期', url: 'https://example.com/b', srs: { nextReview: now + 60000 } },
+    { id: 'bm5', status: 'dead', title: '失效链接', url: 'https://example.com/c', srs: { nextReview: now - 99999 } },
+  ];
+  const due = Core.dueBookmarks({ items }, now);
+  assert.deepEqual(due.map(item => [item.id, item.daysSaved]), [['bm2', 30], ['bm1', 10]]);
+});
+
+test('copy.lark / copy.tabs / copy.watch / copy.bookmark：清洗不可信文本、控制长度，非法输入返回 null', () => {
+  assert.deepEqual(
+    Core.copy.lark({ count: 3, chats: [{ name: '架构讨论群' }], senders: ['张三', '李四'] }),
+    { title: '飞书有人 @你', text: '3 条新 @我（来自「架构讨论群」 · 张三、李四）' }
+  );
+  assert.equal(Core.copy.lark({ count: 0 }), null);
+  assert.deepEqual(
+    Core.copy.tabs({ count: 6, oldestDays: 4, domains: ['github.com', 'v8.dev'] }),
+    { title: '标签页有点挤', text: '有 6 个标签页超过 4 天没打开了（github.com、v8.dev 等），去整理一下？' }
+  );
+  assert.deepEqual(
+    Core.copy.watch({ platformLabel: 'B 站', title: 'Rust 异步编程', percent: 62 }),
+    { title: '上次没看完', text: 'B 站《Rust 异步编程》看到 62%，接着看吗？' }
+  );
+  assert.deepEqual(
+    Core.copy.bookmark({ title: 'V8 垃圾回收', daysSaved: 30 }, 3),
+    { title: '深海拾贝', text: '「V8 垃圾回收」收藏 30 天了（共 3 条到期），打捞起来看看？' }
+  );
 });

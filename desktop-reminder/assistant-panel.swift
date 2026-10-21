@@ -33,6 +33,7 @@ final class AssistantController: NSObject, NSTextFieldDelegate {
     var send: (([String: Any]) -> Void)?
     /// 水母右键菜单项标题变化（nil 表示没有菜单项）。
     var onMenuTitle: ((String?) -> Void)?
+    var onShowInteraction: ((AssistantModel.State) -> Bool)?
 
     let panel: AssistantPanelWindow
     let hotkey = AssistantHotkey()
@@ -46,6 +47,14 @@ final class AssistantController: NSObject, NSTextFieldDelegate {
     private let bodyView = AssistantBodyView()
     private let bodyScroll = NSScrollView()
     private let footer = NSTextField(labelWithString: "")
+    private let completionMenu = NSStackView()
+    private var catalog: AssistantModel.Catalog?
+    private var completion: AssistantModel.Completion?
+    private var completionIndex = 0
+    private var composing = false
+    private var newConversation = false
+    private var newButton: NSButton!
+    private var interactionButton: NSButton!
     private var sendButton: NSButton!, stopButton: NSButton!, workspaceButton: NSButton!, closeButton: NSButton!
 
     // —— 来自 Chrome 的内容（不持久化，不自行推算）——
@@ -61,6 +70,7 @@ final class AssistantController: NSObject, NSTextFieldDelegate {
         var text: String?                          // 提交的文字（重试判断用）
         var rawInput: String?                      // 发出时输入框里的原文（成功后只在没被改过时才清空）
         var stateSeq: Int
+        var newConversation = false
         var stale = false                          // 8 秒没有回执：解除锁定，但迟到的匹配回执仍然算数
     }
     private var pending: Pending?
@@ -129,6 +139,12 @@ final class AssistantController: NSObject, NSTextFieldDelegate {
         input.setAccessibilityLabel("向 AI 助手描述需求")
 
         sendButton = NSButton(title: "发送", target: self, action: #selector(submit))
+        newButton = NSButton(title: "新需求", target: self, action: #selector(startNew))
+        newButton.bezelStyle = .rounded
+        interactionButton = NSButton(title: "查看确认卡", target: self, action: #selector(showInteraction))
+        interactionButton.bezelStyle = .rounded
+        completionMenu.orientation = .vertical; completionMenu.alignment = .leading; completionMenu.spacing = 2
+        completionMenu.setAccessibilityLabel("应用与动作候选，方向键选择，Tab或回车补全，Esc关闭")
         stopButton = NSButton(title: "停止", target: self, action: #selector(stop))
         workspaceButton = NSButton(title: "在 Chrome 中查看", target: self, action: #selector(openWorkspace))
         closeButton = NSButton(image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "收起 AI 助手面板")!, target: self, action: #selector(closeTapped))
@@ -147,10 +163,11 @@ final class AssistantController: NSObject, NSTextFieldDelegate {
         bodyScroll.drawsBackground = false; bodyScroll.hasVerticalScroller = true; bodyScroll.autohidesScrollers = true; bodyScroll.borderType = .noBorder
         bodyScroll.documentView = bodyView
 
-        for view in [caption, closeButton!, input, sendButton!, you, statusIcon, statusLabel, stopButton!, bodyScroll, workspaceButton!, footer] as [NSView] { glass.addSubview(view) }
+        for view in [caption, closeButton!, newButton!, input, sendButton!, completionMenu, you, statusIcon, statusLabel, stopButton!, interactionButton!, bodyScroll, workspaceButton!, footer] as [NSView] { glass.addSubview(view) }
         hotkey.onPressed = { [weak self] in self?.toggle() }
         NotificationCenter.default.addObserver(self, selector: #selector(panelBecameKey), name: NSWindow.didBecomeKeyNotification, object: panel)
         NotificationCenter.default.addObserver(self, selector: #selector(noteKeyboard), name: NSApplication.didBecomeActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(editorSelectionChanged(_:)), name: NSTextView.didChangeSelectionNotification, object: nil)
         refresh()
     }
 
@@ -216,6 +233,22 @@ final class AssistantController: NSObject, NSTextFieldDelegate {
         keyboardSinceShow = false
         activateAndFocus()
         scheduleFocusCheck()
+    }
+
+    /// 水母收到拖拽投喂时调用：已启用且未锁定时把清洗好的提示词填进输入框并弹出面板（不自动提交）。
+    @discardableResult
+    func prefillAndShow(_ text: String) -> Bool {
+        guard enabled, !locked else { return false }
+        let clipped = String(text.prefix(AssistantModel.maxInput))
+        guard case .ok = AssistantModel.checkInput(clipped) else { return false }
+        input.stringValue = clipped
+        note = nil
+        show()
+        if let editor = panel.firstResponder as? NSTextView, editor.delegate === input {
+            editor.setSelectedRange(NSRange(location: (input.stringValue as NSString).length, length: 0))
+        }
+        controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
+        return true
     }
 
     /// 收起面板（任务继续在 Chrome 里执行，不取消）。键盘还在面板里时把前台还给唤出前的应用。
@@ -296,7 +329,7 @@ final class AssistantController: NSObject, NSTextFieldDelegate {
         pending = nil
         let ok = (message["ok"] as? Bool) == true
         note = AssistantModel.resultNote(kind: current.kind, ok: ok, error: message["error"], stateChangedSince: stateSeq != current.stateSeq)
-        if ok, current.kind == .submit, let raw = current.rawInput, input.stringValue == raw { input.stringValue = "" }
+        if ok, current.kind == .submit, let raw = current.rawInput, input.stringValue == raw { input.stringValue = ""; newConversation = false; completion = nil }
         refresh()
         if panel.isKeyWindow && !isEditing { panel.makeFirstResponder(input) }
     }
@@ -305,13 +338,72 @@ final class AssistantController: NSObject, NSTextFieldDelegate {
 
     private var locked: Bool { pending != nil && pending?.stale == false }
 
+    @discardableResult
+    func updateCatalog(_ raw: Any?) -> Bool {
+        guard let next = AssistantModel.parseCatalog(raw) else { return false }
+        if let current = catalog, next.revision < current.revision { return false }
+        if let current = catalog, next.revision == current.revision && next != current { return false }
+        catalog = next
+        updateCompletion() // 只刷新显示，绝不改写文字或自动选中。
+        refresh()
+        return true
+    }
+
+    @objc private func startNew() {
+        guard !locked, !AssistantModel.canStop(state) else { return }
+        newConversation.toggle()
+        refresh(); panel.makeFirstResponder(input)
+    }
+
+    @objc private func showInteraction() {
+        guard !locked, let state = state else { return }
+        if onShowInteraction?(state) != true {
+            note = AssistantModel.Note(text: "当前交互卡已失效或不可用，请在 Chrome 工作台查看。", bad: false)
+            refresh()
+        }
+    }
+
+    private func updateCompletion() {
+        guard let editor = input.currentEditor() as? NSTextView, !editor.hasMarkedText() else { completion = nil; return }
+        completion = AssistantModel.completion(input.stringValue, caret: editor.selectedRange().location, catalog: catalog)
+        completionIndex = 0
+    }
+
+    // Some IMEs update marked text without sending NSControl.textDidChange
+    // until commit. Observe this field editor only, so its old @ candidates do
+    // not remain visible over the IME's own candidate window while composing.
+    @objc private func editorSelectionChanged(_ notification: Notification) {
+        guard let editor = notification.object as? NSTextView, editor === input.currentEditor() else { return }
+        let marked = editor.hasMarkedText()
+        guard marked != composing else { return }
+        composing = marked
+        if marked { completion = nil } else { updateCompletion() }
+        refresh()
+    }
+
+    private func acceptCompletion() {
+        guard let value = completion, !value.items.isEmpty, value.items.indices.contains(completionIndex), let editor = input.currentEditor() as? NSTextView, !editor.hasMarkedText() else { return }
+        let replacement = value.marker + value.items[completionIndex].id + " "
+        // NSTextView 的编辑 API 保留系统撤销/重做，不直接覆盖用户正文。
+        if editor.shouldChangeText(in: value.range, replacementString: replacement) {
+            editor.textStorage?.replaceCharacters(in: value.range, with: replacement)
+            editor.didChangeText()
+            editor.setSelectedRange(NSRange(location: value.range.location + (replacement as NSString).length, length: 0))
+        }
+        completion = nil; refresh()
+    }
+
+    @objc private func pickCompletion(_ sender: NSButton) { completionIndex = sender.tag; acceptCompletion() }
+
     @objc private func submit() {
         guard enabled, !locked else { return }
+        if (input.currentEditor() as? NSTextView)?.hasMarkedText() == true { return }
+        if completion != nil { acceptCompletion(); return }
         let check = AssistantModel.checkInput(input.stringValue)
         guard case .ok(let text) = check else { note = AssistantModel.inputNote(check); refresh(); return }
         // 8 秒没有回执后用同一段文字重试：沿用同一个 actionId，Chrome 侧已处理过会只重复回执，不会再提交一次
         var reuse: String?
-        if let stale = pending, stale.stale, stale.kind == .submit, stale.text == text { reuse = stale.actionId }
+        if let stale = pending, stale.stale, stale.kind == .submit, stale.text == text, stale.newConversation == newConversation { reuse = stale.actionId }
         begin(.submit, actionId: reuse ?? UUID().uuidString, text: text, rawInput: input.stringValue)
     }
 
@@ -328,9 +420,10 @@ final class AssistantController: NSObject, NSTextFieldDelegate {
     private func begin(_ kind: AssistantModel.PendingKind, actionId: String, text: String? = nil, rawInput: String? = nil) {
         var event: [String: Any] = ["type": "assistantAction", "actionId": actionId, "action": kind == .stop ? "cancel" : kind.rawValue]
         if let text = text { event["text"] = text }
+        if kind == .submit { event["newConversation"] = newConversation }
         // 与浏览器工作台一致：带上面板所见的任务与版本（提交时用来走原有的“第 2 个”引用与过期检查，停止时必须匹配）
         if kind != .open, let state = state { event["taskId"] = state.taskId; event["version"] = state.version }
-        pending = Pending(kind: kind, actionId: actionId, text: text, rawInput: rawInput, stateSeq: stateSeq)
+        pending = Pending(kind: kind, actionId: actionId, text: text, rawInput: rawInput, stateSeq: stateSeq, newConversation: newConversation)
         note = nil
         focusFailed = false
         refresh()
@@ -349,13 +442,24 @@ final class AssistantController: NSObject, NSTextFieldDelegate {
     // MARK: NSTextFieldDelegate
 
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
-        if commandSelector == #selector(NSResponder.cancelOperation(_:)) { hide(); return true }
+        if textView.hasMarkedText() { return false }
+        if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
+            if completion != nil { completion = nil; refresh() } else { hide() }; return true
+        }
+        if let value = completion {
+            if commandSelector == #selector(NSResponder.moveUp(_:)) || commandSelector == #selector(NSResponder.moveDown(_:)) {
+                if !value.items.isEmpty { completionIndex = (completionIndex + (commandSelector == #selector(NSResponder.moveUp(_:)) ? -1 : 1) + value.items.count) % value.items.count }
+                refresh(); return true
+            }
+            if commandSelector == #selector(NSResponder.insertTab(_:)) || commandSelector == #selector(NSResponder.insertNewline(_:)) { acceptCompletion(); return true }
+        }
         return false
     }
 
     func controlTextDidChange(_ notification: Notification) {
         guard !locked else { return }
         let check = AssistantModel.checkInput(input.stringValue)
+        updateCompletion()
         if case .tooLong = check { note = AssistantModel.inputNote(check) } else if note != nil { note = nil }
         refresh()
     }
@@ -389,6 +493,28 @@ final class AssistantController: NSObject, NSTextFieldDelegate {
 
     /// 把当前内容放到控件上、必要时改面板高度（顶边不动）并重新排版。
     func refresh(reposition: Bool = false) {
+        caption.stringValue = "桌面 AI 助手 · " + (newConversation ? "新需求" : state?.scopeLabel.isEmpty == false ? state!.scopeLabel : "自动识别")
+        newButton.title = newConversation ? "取消新需求" : "新需求"
+        newButton.isEnabled = !locked && !AssistantModel.canStop(state)
+        interactionButton.isHidden = state.map { ![.review, .waiting, .clarify].contains($0.status) } ?? true
+        interactionButton.isEnabled = !locked
+        interactionButton.title = state?.status == .review ? "查看确认卡" : "处理当前事项"
+        for view in completionMenu.arrangedSubviews { completionMenu.removeArrangedSubview(view); view.removeFromSuperview() }
+        if let value = completion {
+            let start = max(0, completionIndex - 5)
+            for index in start..<min(value.items.count, start + 6) {
+                let item = value.items[index]
+                let button = NSButton(title: (index == completionIndex ? "› " : "  ") + item.name + " · " + item.description, target: self, action: #selector(pickCompletion(_:)))
+                button.tag = index; button.isBordered = false; button.alignment = .left
+                button.cell?.lineBreakMode = .byTruncatingTail
+                button.widthAnchor.constraint(lessThanOrEqualToConstant: AssistantModel.panelWidth - 2 * margin).isActive = true
+                button.font = .systemFont(ofSize: 12, weight: index == completionIndex ? .semibold : .regular)
+                button.setAccessibilityLabel(item.name + (index == completionIndex ? "，已选中" : "") + "，" + item.description)
+                completionMenu.addArrangedSubview(button)
+            }
+            let hint = NSTextField(labelWithString: value.matchingUnavailable ? "匹配组件不可用或输入过长，请使用完整中文命令" : value.items.isEmpty ? (catalog == nil ? "目录暂不可用，可继续手输完整命令" : "无匹配项，请修改命令") : "↑↓ 选择 · Tab / Enter 补全 · Esc 关闭")
+            hint.font = .systemFont(ofSize: 11); hint.textColor = .secondaryLabelColor; completionMenu.addArrangedSubview(hint)
+        }
         let line = currentLine()
         statusTone = line.tone
         statusLabel.stringValue = line.text
@@ -430,12 +556,18 @@ final class AssistantController: NSObject, NSTextFieldDelegate {
             guard let total = total else { return }
             view.frame = NSRect(x: x, y: total - (y + dy + h), width: w, height: h)
         }
-        place(caption, x: margin, w: inner - 28, h: 16)
+        place(caption, x: margin, w: inner - 128, h: 16)
+        place(newButton, x: width - margin - 120, w: 94, h: 24, dy: -4)
         place(closeButton, x: width - margin - 20, w: 20, h: 20, dy: -2)
         y += 16 + 8
         place(input, x: margin, w: inner - 92, h: inputHeight)
         place(sendButton, x: width - margin - 84, w: 84, h: 30, dy: 2)
         y += inputHeight + 10
+        completionMenu.isHidden = completion == nil
+        if let value = completion {
+            let menuHeight = CGFloat(min(6, value.items.count) * 24 + 24)
+            place(completionMenu, x: margin, w: inner, h: menuHeight); y += menuHeight + 8
+        }
         let youShown = !you.stringValue.isEmpty
         you.isHidden = !youShown
         if youShown { place(you, x: margin, w: inner, h: 16); y += 16 + 4 }
@@ -447,6 +579,7 @@ final class AssistantController: NSObject, NSTextFieldDelegate {
         place(statusLabel, x: margin + iconWidth, w: statusWidth, h: statusHeight)
         place(stopButton, x: width - margin - 56, w: 56, h: 24, dy: -2)
         y += statusHeight + 8
+        if !interactionButton.isHidden { place(interactionButton, x: margin, w: 120, h: 26); y += 32 }
         let bodyShown = !bodyView.string.isEmpty
         bodyScroll.isHidden = !bodyShown
         if bodyShown {
@@ -540,6 +673,12 @@ final class AssistantController: NSObject, NSTextFieldDelegate {
             controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
             return true
         case "submit": guard enabled, panel.isVisible else { return false }; submit(); return true
+        case "new": guard enabled, panel.isVisible else { return false }; startNew(); return true
+        case "completion-key":
+            guard enabled, panel.isVisible, let editor = input.currentEditor() as? NSTextView else { return false }
+            let commands: [String: Selector] = ["tab": #selector(NSResponder.insertTab(_:)), "enter": #selector(NSResponder.insertNewline(_:)), "escape": #selector(NSResponder.cancelOperation(_:)), "down": #selector(NSResponder.moveDown(_:)), "up": #selector(NSResponder.moveUp(_:))]
+            guard let command = commands[text ?? ""] else { return false }
+            return control(input, textView: editor, doCommandBy: command)
         case "stop": guard enabled, panel.isVisible, AssistantModel.canStop(state), !locked else { return false }; stop(); return true
         case "open": guard enabled, panel.isVisible, !locked else { return false }; openWorkspace(); return true
         case "close": guard panel.isVisible else { return false }; closeTapped(); return true
