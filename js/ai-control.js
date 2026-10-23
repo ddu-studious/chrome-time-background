@@ -14,6 +14,26 @@
   const names = { pending: '处理中', ready: '解析完成', needs_clarification: '等待补充', failed: '失败', complete: '完成', cancelled: '已取消' };
   function render(data) {
     state = data;
+    if ($('remote-fields')) {
+      $('remote-fields').disabled = !data.remote;
+      const remote = data.remote;
+      $('remote-status').textContent = remote ? `DeepSeek：${({ off: '已关闭', auto: '自动兜底', remote: '始终使用外部模型' })[remote.mode]} · ${remote.model} · 密钥${remote.keyConfigured ? '已保存' : '未配置'}` : '请更新并重启本机服务，以使用外部模型兜底';
+      if (remote) {
+        if (Array.isArray(remote.models)) {
+          $('remote-model').replaceChildren();
+          for (const model of remote.models.slice(0, 8)) {
+            const option = document.createElement('option'); option.value = model.id; option.textContent = model.name; $('remote-model').append(option);
+          }
+        }
+        if (![...$('remote-model').options].some(option => option.value === remote.model)) {
+          const option = document.createElement('option'); option.value = remote.model; option.textContent = `当前配置：${remote.model}`; $('remote-model').append(option);
+        }
+        $('remote-mode').value = remote.mode; $('remote-model').value = remote.model;
+        $('remote-cpu').value = remote.cpuPercent; $('remote-memory').value = remote.minFreeMemoryMb;
+        $('remote-context').value = remote.contextLength; $('remote-context-fallback').checked = remote.contextFallback;
+        $('remote-key').placeholder = remote.keyConfigured ? '已保存，留空保留' : '填写 DeepSeek API Key';
+      }
+    }
     if ($('speech-health')) $('speech-health').textContent = `语音输入：${data.speech?.configured ? '已就绪' : '尚未配置 Whisper'} · 回答朗读：${data.synthesis?.configured ? (data.scenes?.find(scene => scene.id === 'speech.synthesize')?.modelEnabled ? '已就绪' : '已安装，待开启场景') : '尚未安装本机语音组件'}${data.synthesis?.configured ? ' · StepAudio 中文示例音色' : ''}`;
     if ($('laya-health')) {
       const usage = data.laya?.usage?.scenes?.['assistant.prefetch'];
@@ -73,7 +93,7 @@
     render(await send('ai_control_get'));
     try { const health = await send('local_ai_status');
       for (const model of health.models || []) { if ([...$('model').options].some(option => option.value === model.id)) continue; const option = document.createElement('option'); option.value = model.id; option.textContent = model.name || model.id; $('model').append(option); }
-       $('health').textContent = `模型：${health.model} · 状态：${({ ready: '就绪', busy: '忙碌', not_loaded: '尚未加载', model_missing: '未找到模型' })[health.state] || health.state}`; }
+       $('health').textContent = health.state === 'remote_ready' ? `工作台将使用外部模型：${health.remote?.model}（密钥已配置，尚未验证外部连接）` : `模型：${health.model} · 状态：${({ ready: '就绪', busy: '忙碌', not_loaded: '尚未加载', model_missing: '未找到模型' })[health.state] || health.state}`; }
     catch (error) { $('health').textContent = error.message; }
     try {
       const result = await send('music_sleep_get');
@@ -90,6 +110,17 @@
   }
   $('connection').addEventListener('submit', event => { event.preventDefault(); void perform(async () => { await send('local_ai_configure', { token: $('token').value }); $('token').value = ''; await refresh(); }); });
   $('refresh').addEventListener('click', () => perform(refresh));
+  $('remote-form')?.addEventListener('submit', event => { event.preventDefault(); if (!state?.remote) return; void perform(async () => {
+    const apiKey = $('remote-key').value;
+    const result = await send('ai_remote_save', { expectedRevision: state.remote.revision, config: {
+      mode: $('remote-mode').value, provider: 'deepseek', model: $('remote-model').value.trim(), apiKey,
+      clearKey: $('remote-clear-key').checked, cpuPercent: Number($('remote-cpu').value),
+      minFreeMemoryMb: Number($('remote-memory').value), contextLength: Number($('remote-context').value),
+      contextFallback: $('remote-context-fallback').checked
+    } });
+    $('remote-key').value = ''; $('remote-clear-key').checked = false; render(result);
+    notice('外部模型配置已保存，旧请求已取消；仅工作台规划与上下文整理使用此配置');
+  }); });
   $('policy').addEventListener('submit', event => { event.preventDefault(); if (!state) return; void perform(async () => {
     const disabledScenes = [...$('scenes').querySelectorAll('input')].filter(input => !input.checked).map(input => input.value);
     const speechSynthesisEnabled = Boolean($('scenes').querySelector('input[value="speech.synthesize"]')?.checked);

@@ -49,6 +49,9 @@
     backdrop-filter: blur(18px) saturate(135%);
     font-size: 13px;
     line-height: 1.4;
+    /* 15 个鱼种按钮会排成好几行：面板底边就是 .aq-ui 的底边（离视口底 130px），再留 24px 余量，窗口矮时在面板里滚动，不顶出屏幕 */
+    max-height: calc(100vh - 154px);
+    overflow-y: auto;
 }
 .aq-panel[hidden] { display: none; }
 

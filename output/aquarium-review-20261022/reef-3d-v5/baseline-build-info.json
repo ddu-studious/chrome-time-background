@@ -1,0 +1,31 @@
+{
+  "sources": {
+    "fish-motion.mjs": "c72a433b7a3bfd90b91067dc2ef412bc23d4098d75e7a41a19a84da1bbb27f21",
+    "clown-appearance.mjs": "6c9cd1246352a7e0106fd4c70e26f11fd54300ce5e8143739bedf8dd71acc63d",
+    "moon-jelly.mjs": "e87820a94b8517c7029e6c8d24f9216451a07ab97d756f1a2fa8aa40106100cf",
+    "specimen-view.mjs": "f2f682bddad0324a9e8102bbf51212ea05f3a320d52d98174368391e1b39afdb",
+    "full-navigation.mjs": "2698421056cc03145b4ba77a3cbe957f838dcc4209d28ab49a36b1d2a5b3b629",
+    "assets/navigation/full-reef.json": "4231b48e0a17ad6efe2d3becaa60aef6fb4631cb4314735a35f3d3d16f42470b",
+    "assets/navigation/full-reef-scenarios.json": "b92916db5888bf97b6d325d53b232d9f1459e1c86cb6a7adb59bca7bcd5d932d",
+    "controller.mjs": "5674da940a152081c7ecf460cfd94f2098bad30716141ee5ba462b7bd34f179f",
+    "world.mjs": "e2d7e8f35b602e7bde8705935128072114935efd15081a240f12929618596bd4",
+    "navigation.mjs": "5818e506b9895aacde5dd92cf8a043b9b7f9966e5ab4c159ef45f3e99a3c852c",
+    "habitat.mjs": "a08c4232fe8a358acd650ce052fb24c513f7d6adf5b185cdbba0746034c3bd9f",
+    "spatial.mjs": "39e18c3f201fcc6a374016c94695be00598a2f30e0605876dab3e13831d5b89f",
+    "view.mjs": "960bd33adc1445cc7e46667085bd9c309fa760a4c9a9262b644e807c78e80963",
+    "jelly-3d.mjs": "99957f11a21ba68407f03f4cf6d02659dc1f45eb355a2e74222e5587ce8534ea",
+    "jelly-render-adapter.mjs": "c25bc9f20232cfaa784f4caa3ec1d68c33b5dd6cac603c87c47f99a8e8da7650",
+    "bootstrap.mjs": "09aefe53fabf26c6d95750fd45d81ae7f2ebe6f9ce53aef816f5365be03676ba",
+    "index.html": "10e3da0101f41d7da327cee95f05ec85a39eaa79ef00156fc7877276e87e82fd",
+    "app.css": "6ac11545c6bfc59125a8b4aae595c7214203bf49f35b52ecf2ee908204d1db2b",
+    "../../../js/jellyfish.js": "c9ff3502783323dce8cde8982647fd0661ff80c19fff9a0a7c58d759e00a7630",
+    "../../../js/jellyfish-core.js": "83932fdedea49c267f18a59e5b78efb43578a2147eb51c898bae4a8e485e1e28",
+    "../../../js/background-experience.js": "b5542f8f06e98d09f567c4fae56d1375224c9a2099184cd8c04ed73772dacbd4"
+  },
+  "esbuild": "0.28.1",
+  "three": "0.180.0",
+  "yuka": "0.7.8",
+  "bvh": "0.9.16",
+  "bytes": 959296,
+  "sha256": "ac5e8e87cb4705dc79d5c0890a2f8aa38273333a7742384bbcf14ceba6411692"
+}

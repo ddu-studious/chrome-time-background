@@ -144,12 +144,15 @@ function occupied() {
     socket.once('connect',()=>finish(true));socket.once('error',()=>finish(false));socket.setTimeout(1000,()=>finish(false));
   });
 }
+export function gatewayHealthy(response, data) {
+  return response.ok === true && data?.ok === true && data.version === 1 && Array.isArray(data.scenes);
+}
 async function health() {
   try {
     const token = readFileSync(resolve(STATE,'token'),'utf8').trim();
     const response = await fetch('http://127.0.0.1:19841/v1/control', { headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(1500) });
     const data = await response.json();
-    return response.ok && data.ok === true && data.localOnly === true;
+    return gatewayHealthy(response, data);
   } catch { return false; }
 }
 export async function memoryHealth(request = fetch, token = readFileSync(resolve(STATE, 'token'), 'utf8').trim()) {

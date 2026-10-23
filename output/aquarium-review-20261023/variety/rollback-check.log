@@ -1,0 +1,15 @@
+{
+ "oldCodeHasNewSpecies": false,
+ "entriesReadByOldCode": [],
+ "addResult": {
+  "ok": false,
+  "reason": "storage"
+ },
+ "removeResult": {
+  "ok": false,
+  "reason": "storage"
+ },
+ "storageWrites": 0,
+ "storedIntact": true
+}
+ROLLBACK_CHECK_OK

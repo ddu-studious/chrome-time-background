@@ -1,0 +1,27 @@
+{
+  "sources": {
+    "full-navigation.mjs": "2698421056cc03145b4ba77a3cbe957f838dcc4209d28ab49a36b1d2a5b3b629",
+    "assets/navigation/full-reef.json": "4231b48e0a17ad6efe2d3becaa60aef6fb4631cb4314735a35f3d3d16f42470b",
+    "assets/navigation/full-reef-scenarios.json": "b92916db5888bf97b6d325d53b232d9f1459e1c86cb6a7adb59bca7bcd5d932d",
+    "controller.mjs": "614f7a10d17262743278890431703c7cdd1743492e4222a5def537f9e067095f",
+    "world.mjs": "d6844e3f10763da88e9b7b0fc19f52e42cd08b96f692d6e777e26b6cb975bf20",
+    "navigation.mjs": "5818e506b9895aacde5dd92cf8a043b9b7f9966e5ab4c159ef45f3e99a3c852c",
+    "habitat.mjs": "a08c4232fe8a358acd650ce052fb24c513f7d6adf5b185cdbba0746034c3bd9f",
+    "spatial.mjs": "39e18c3f201fcc6a374016c94695be00598a2f30e0605876dab3e13831d5b89f",
+    "view.mjs": "54b886fa9e0878597324f37c93579720593bfd560b04447e895c1ac44ab8584f",
+    "jelly-3d.mjs": "5fae85bbef9cecf94c86643711611c3b4508379f1aaeeadeb6d4222b01e958e0",
+    "jelly-render-adapter.mjs": "c25bc9f20232cfaa784f4caa3ec1d68c33b5dd6cac603c87c47f99a8e8da7650",
+    "bootstrap.mjs": "de1ae0c9ee692133c56da567dd6c88d9199958efb6f3dfb32745663b7c24b8e3",
+    "index.html": "67d59c67a99486b221393b72a62a5a79910bae34eca4c83e04c76c91a702c76a",
+    "app.css": "bf05de408419ad0b33470d8bb947b1b1e6c74c807135d930c2993606cb015fb8",
+    "../../../js/jellyfish.js": "c9ff3502783323dce8cde8982647fd0661ff80c19fff9a0a7c58d759e00a7630",
+    "../../../js/jellyfish-core.js": "83932fdedea49c267f18a59e5b78efb43578a2147eb51c898bae4a8e485e1e28",
+    "../../../js/background-experience.js": "b5542f8f06e98d09f567c4fae56d1375224c9a2099184cd8c04ed73772dacbd4"
+  },
+  "esbuild": "0.28.1",
+  "three": "0.180.0",
+  "yuka": "0.7.8",
+  "bvh": "0.9.16",
+  "bytes": 942022,
+  "sha256": "0dc759c237eed99a7a71ecb0d7fc022027079c63e627c1a23cc2be7287abe729"
+}

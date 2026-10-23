@@ -1,0 +1,14 @@
+{
+  "crevice": {
+    "phase": "小鱼：巡游 · 大鱼：巡游",
+    "events": "61.8s 结束追击 shelter-fish\n83.7s 结束追击 shelter-fish\n93.5s 选择掩体 shelter-fish\n96.7s 进入躲藏 shelter-fish\n99.5s 到达搜索出口 hunter\n101.1s 结束追击 shelter-fish\n105.4s 离开掩体 shelter-fish",
+    "diagnostics": "Three r180 · 三角形 53484 · 3D 水母 3 · 几何 81 · 纹理 10 · 帧率 29.8 · CPU 提交 3.5 ms（不含 GPU） · 帧 4421 · 世界 107.0 s · 错误 0"
+  },
+  "fullSceneStats": "Three r180 · 三角形 1531078 · 3D 水母 3 · 几何 96 · 纹理 11 · 帧率 28.3 · CPU 提交 7.3 ms（不含 GPU） · 帧 5461 · 世界 142.6 s · 错误 0",
+  "afterOff": {
+    "status": "固定造景已关闭，颜色、深度和碰撞同时撤除。",
+    "phase": "小鱼：巡游 · 大鱼：巡游",
+    "diagnostics": "Three r180 · 三角形 51580 · 3D 水母 3 · 几何 96 · 纹理 11 · 帧率 28.2 · CPU 提交 4.5 ms（不含 GPU） · 帧 5475 · 世界 143.1 s · 错误 0"
+  },
+  "console": []
+}

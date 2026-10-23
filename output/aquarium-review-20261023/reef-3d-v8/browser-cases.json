@@ -1,0 +1,124 @@
+[
+  {
+    "case": "fish-turn",
+    "state": {
+      "gait": "turn",
+      "mode": "fish-compare",
+      "status": "弯身转向 · 43.4 s · 同一 7.4 cm 个体，近景放大观察"
+    },
+    "phase": "initial-v8-before-boundary-fix"
+  },
+  {
+    "case": "jelly-soft",
+    "state": {
+      "status": "缓慢舒张 · 103.1 s · 相同伞径，对照形态与脉动",
+      "style": "soft"
+    },
+    "phase": "initial-v8-before-boundary-fix"
+  },
+  {
+    "case": "drag-feed",
+    "state": {
+      "counts": "游动 6 / 居民 6 · 已吃饲料 0 · 追逐 0 · 捕获 0 · 放弃 0",
+      "status": "已在松手处投放 6 粒饲料；实际吃到会单独计数。"
+    },
+    "phase": "initial-v8-before-boundary-fix"
+  },
+  {
+    "case": "task-failure",
+    "state": {
+      "diagnostics": "Three r180 · 三角形 84344 · 3D 水母 1 · 几何 57 · 纹理 4 · 帧率 28.8 · CPU 提交 2.6 ms（不含 GPU） · 帧 4722 · 世界 58.4 s · 错误 0",
+      "result": "演示回执失败：任务保留，水母放回。",
+      "tasks": "○ 观察海月水母"
+    },
+    "phase": "initial-v8-before-boundary-fix"
+  },
+  {
+    "case": "task-success-and-eating",
+    "state": {
+      "counts": "游动 6 / 居民 6 · 已吃饲料 0 · 追逐 0 · 捕获 0 · 放弃 0",
+      "result": "已完成 1/1 项演示任务",
+      "tasks": "✓ 观察海月水母"
+    },
+    "phase": "initial-v8-before-boundary-fix"
+  },
+  {
+    "case": "fish-drag",
+    "state": {
+      "counts": "游动 6 / 居民 6 · 已吃饲料 0 · 追逐 0 · 捕获 0 · 放弃 0",
+      "status": "选中 clown-2：总长 3.2 cm，年龄未知。"
+    },
+    "phase": "initial-v8-before-boundary-fix"
+  },
+  {
+    "case": "task-failure",
+    "phase": "final-v8",
+    "state": {
+      "diagnostics": "Three r180 · 三角形 83864 · 3D 水母 1 · 几何 31 · 纹理 4 · 帧率 29.0 · CPU 提交 1.8 ms（不含 GPU） · 帧 531 · 世界 18.3 s · 错误 0",
+      "task": "演示回执失败：任务保留，水母放回。"
+    }
+  },
+  {
+    "case": "task-success",
+    "phase": "final-v8",
+    "state": {
+      "task": "已完成 1/1 项演示任务",
+      "tasks": "✓ 观察海月水母"
+    }
+  },
+  {
+    "case": "reef-loaded",
+    "phase": "final-v8",
+    "state": {
+      "busy": "false",
+      "counts": "游动 6 / 居民 6 · 已吃饲料 0 · 追逐 0 · 捕获 0 · 放弃 0",
+      "diagnostics": "Three r180 · 三角形 1510050 · 3D 水母 0 · 几何 39 · 纹理 8 · 帧率 29.0 · CPU 提交 1.5 ms（不含 GPU） · 帧 4964 · 世界 170.2 s · 错误 0",
+      "scene": "完整浅礁 · 造景 32%",
+      "tasks": "已完成 1/1 项演示任务"
+    }
+  },
+  {
+    "case": "full-reef-drill",
+    "phase": "final-v8",
+    "state": {
+      "counts": "游动 2 / 居民 2 · 已吃饲料 0 · 追逐 4 · 捕获 0 · 放弃 4",
+      "diagnostics": "Three r180 · 三角形 1688454 · 3D 水母 0 · 几何 40 · 纹理 11 · 帧率 28.3 · CPU 提交 1.0 ms（不含 GPU） · 帧 6351 · 世界 47.7 s · 错误 0",
+      "drill": "小鱼：停留警戒 · 大鱼：沿礁巡游",
+      "events": "37.7s 离开掩体 shelter-fish\n41.7s 选择掩体 shelter-fish\n43.4s 到达搜索出口 hunter\n44.5s 进入躲藏 shelter-fish\n45.0s 结束追击 shelter-fish",
+      "status": "中部石拱：4.0 cm / 25 cm。按实际净空与可见性选路。"
+    }
+  },
+  {
+    "case": "scenery-off",
+    "phase": "final-v8",
+    "state": {
+      "navigation": "造景导航已关闭",
+      "reef": false,
+      "scene": "自由水域 · 固定造景已关闭"
+    }
+  },
+  {
+    "case": "console",
+    "phase": "final-v8",
+    "logs": []
+  },
+  {
+    "case": "ordinary-feed",
+    "phase": "final-v8",
+    "state": {
+      "counts": "游动 6 / 居民 6 · 已吃饲料 1 · 追逐 0 · 捕获 0 · 放弃 0",
+      "status": "已在上方投放 6 粒饲料；实际吃到会单独计数。",
+      "task": "1 项演示任务 · 与正式数据隔离"
+    }
+  },
+  {
+    "case": "final-closeup",
+    "phase": "final-v8",
+    "state": {
+      "mode": "jelly-compare",
+      "status": "缓慢舒张 · 44.8 s · 相同伞径，对照形态与脉动",
+      "style": "soft"
+    },
+    "logs": []
+  }
+]

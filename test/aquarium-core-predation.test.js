@@ -42,9 +42,9 @@ const setup = (species, seed = 3, settle = 0.5) => {
 
 // ---------- 物种表 ----------
 
-test('物种表的饮食：只有小锤头鲨是捕食者（gape 0.3），霓虹灯鱼、蓝吊、小丑鱼、神仙鱼是猎物，河豚、海龟、蝠鲼、鲸鲨什么都不是', () => {
+test('物种表的饮食：只有小锤头鲨是捕食者（gape 0.3），霓虹灯鱼、蓝吊、小丑鱼、神仙鱼是猎物，河豚、海龟、蝠鲼、鲸鲨与 6 种新小鱼什么都不是', () => {
     const expected = { neon: 'prey', tang: 'prey', clown: 'prey', angel: 'prey', hammer: 'predator' };      // 独立的字面量：不从被测表里推
-    assert.equal(Core.SPECIES.length, 9);
+    assert.equal(Core.SPECIES.length, 15, '2026-10-23 有意更新：9 → 15（新种没有 diet，expected 里查不到就必须是 undefined）');
     for (const s of Core.SPECIES) {
         assert.equal(s.diet, expected[s.id], `${s.id}.diet`);
         if (s.id === 'hammer') assert.equal(s.gape, 0.3, '小锤头鲨只吃自己体长三成以内的鱼');
@@ -367,7 +367,9 @@ test('补回的出生状态（右侧入场、没有同伴）：位置在右边�
     assert.equal(w.fish.length, 1);
     assert.equal(w.nextId, 41);
     const f = w.fish[0];
-    assert.deepEqual(Object.keys(f).sort(), ['alpha', 'ang', 'cooldown', 'entry', 'flip', 'flipTo', 'glide', 'held', 'id', 'len', 'phase', 'seed', 'species', 'state', 't', 'turn', 'vx', 'vy', 'x', 'y', 'z']);
+    // 2026-10-23 有意更新：鱼多了个体大小字段 size（世界没开 sizes 时恒为 1，与其余字段的值一字不变，见 aquarium-variety.test.js）
+    assert.deepEqual(Object.keys(f).sort(), ['alpha', 'ang', 'cooldown', 'entry', 'flip', 'flipTo', 'glide', 'held', 'id', 'len', 'phase', 'seed', 'size', 'species', 'state', 't', 'turn', 'vx', 'vy', 'x', 'y', 'z']);
+    assert.equal(f.size, 1);
     near(f.x, W + len * 0.3, 'x');
     near(f.y, 300 + (0.75 - 0.5) * P.REFILL_Y_SPREAD * 1.5, 'y');
     near(f.vx, Math.cos(angle) * speed, 'vx');

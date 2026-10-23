@@ -1,0 +1,104 @@
+[
+  {
+    "case": "mixed-eleven",
+    "state": {
+      "counts": "游动 15 / 居民 15 · 已吃饲料 0 · 追逐 63 · 捕获 4 · 放弃 58 · 鱼种 10/10",
+      "diagnostics": "Three r180 · 三角形 1586406 · 3D 水母 1 · 几何 72 · 纹理 36 · 帧率 26.6 · CPU 提交 5.4 ms（不含 GPU） · 帧 29304 · 世界 993.8 s · 错误 0",
+      "residents": "真小丑鱼 · 2.5 cm捞出真小丑鱼 · 3.2 cm捞出真小丑鱼 · 4.0 cm捞出真小丑鱼 · 4.8 cm捞出真小丑鱼 · 6.0 cm捞出真小丑鱼 · 7.4 cm捞出青绿光鳃鱼 · 5.5 cm捞出金花鲈 · 8.5 cm捞出蓝吊 · 10.5 cm捞出皇家伽玛 · 6.0 cm捞出镰鱼 · 11.0 cm捞出蝴蝶鱼 · 9.5 cm捞出天竺鲷 · 5.5 cm捞出河豚 · 9.0 cm捞出尖吻鲈（行为测试） · 25.0 cm捞出",
+      "task": "1 项演示任务 · 与正式数据隔离"
+    },
+    "phase": "before-texture-disposal-fix"
+  },
+  {
+    "case": "mixed-final",
+    "phase": "final",
+    "state": {
+      "counts": "游动 15 / 居民 15 · 已吃饲料 0 · 追逐 1 · 捕获 0 · 放弃 0 · 鱼种 10/10",
+      "diagnostics": "Three r180 · 三角形 1586406 · 3D 水母 1 · 几何 72 · 纹理 36 · 帧率 23.3 · CPU 提交 2.4 ms（不含 GPU） · 帧 271 · 世界 9.0 s · 错误 0",
+      "navigation": "完整浅礁三维航路 · 12 个体型图 · 52627 个累计可行节点 · 2 次搜索 · 最大单次规划 10.4 ms · 转动中移动 1353 帧 · 重规划 0 · 路线放弃 0",
+      "residents": "真小丑鱼 · 2.5 cm捞出真小丑鱼 · 3.2 cm捞出真小丑鱼 · 4.0 cm捞出真小丑鱼 · 4.8 cm捞出真小丑鱼 · 6.0 cm捞出真小丑鱼 · 7.4 cm捞出青绿光鳃鱼 · 5.5 cm捞出金花鲈 · 8.5 cm捞出蓝吊 · 10.5 cm捞出皇家伽玛 · 6.0 cm捞出镰鱼 · 11.0 cm捞出蝴蝶鱼 · 9.5 cm捞出天竺鲷 · 5.5 cm捞出河豚 · 9.0 cm捞出尖吻鲈（行为测试） · 25.0 cm捞出"
+    }
+  },
+  {
+    "case": "puffer-resource-baseline",
+    "phase": "final",
+    "state": {
+      "diagnostics": "Three r180 · 三角形 55454 · 3D 水母 1 · 几何 72 · 纹理 17 · 帧率 24.0 · CPU 提交 54.0 ms（不含 GPU） · 帧 658 · 世界 22.2 s · 错误 0"
+    }
+  },
+  {
+    "case": "puffer-drag",
+    "phase": "final",
+    "state": {
+      "diagnostics": "Three r180 · 三角形 55454 · 3D 水母 1 · 几何 72 · 纹理 17 · 帧率 24.2 · CPU 提交 2.2 ms（不含 GPU） · 帧 665 · 世界 22.5 s · 错误 0",
+      "status": "河豚近景：演示居民已重置为单鱼，任务保留；可喂食和拖拽。"
+    },
+    "note": "首次拖动起点被设置面板遮住，未抓取；不计成功。"
+  },
+  {
+    "case": "tang-drag",
+    "phase": "final",
+    "state": {
+      "diagnostics": "Three r180 · 三角形 54654 · 3D 水母 1 · 几何 72 · 纹理 15 · 帧率 13.5 · CPU 提交 17.1 ms（不含 GPU） · 帧 1809 · 世界 58.9 s · 错误 0",
+      "status": "选中 sample-tang：总长 10.5 cm，年龄未知。"
+    }
+  },
+  {
+    "case": "puffer-resource-return",
+    "phase": "final",
+    "state": {
+      "diagnostics": "Three r180 · 三角形 55454 · 3D 水母 1 · 几何 72 · 纹理 17 · 帧率 11.0 · CPU 提交 0.5 ms（不含 GPU） · 帧 1829 · 世界 59.5 s · 错误 0"
+    }
+  },
+  {
+    "case": "task-failure",
+    "phase": "final",
+    "state": {
+      "counts": "游动 1 / 居民 1 · 已吃饲料 0 · 追逐 1 · 捕获 0 · 放弃 1 · 鱼种 1/10",
+      "diagnostics": "Three r180 · 三角形 55454 · 3D 水母 1 · 几何 72 · 纹理 17 · 帧率 26.3 · CPU 提交 0.9 ms（不含 GPU） · 帧 14426 · 世界 492.4 s · 错误 0",
+      "result": "演示回执失败：任务保留，水母放回。"
+    }
+  },
+  {
+    "case": "task-success-and-feeding",
+    "phase": "final",
+    "state": {
+      "counts": "游动 1 / 居民 1 · 已吃饲料 0 · 追逐 1 · 捕获 0 · 放弃 1 · 鱼种 1/10",
+      "diagnostics": "Three r180 · 三角形 55454 · 3D 水母 1 · 几何 72 · 纹理 17 · 帧率 26.9 · CPU 提交 2.3 ms（不含 GPU） · 帧 14844 · 世界 507.0 s · 错误 0",
+      "result": "已完成 1/1 项演示任务"
+    }
+  },
+  {
+    "case": "resource-return-to-mixed",
+    "phase": "final",
+    "state": {
+      "counts": "游动 10 / 居民 10 · 已吃饲料 0 · 追逐 7 · 捕获 1 · 放弃 5 · 鱼种 10/10",
+      "diagnostics": "Three r180 · 三角形 1510774 · 3D 水母 0 · 几何 65 · 纹理 36 · 帧率 28.8 · CPU 提交 1.8 ms（不含 GPU） · 帧 18559 · 世界 635.8 s · 错误 0",
+      "task": "已完成 1/1 项演示任务"
+    }
+  },
+  {
+    "case": "scenery-off",
+    "phase": "final",
+    "state": {
+      "counts": "游动 10 / 居民 10 · 已吃饲料 0 · 追逐 7 · 捕获 1 · 放弃 6 · 鱼种 10/10",
+      "navigation": "造景导航已关闭",
+      "reef": false
+    }
+  },
+  {
+    "case": "console",
+    "phase": "final",
+    "logs": []
+  },
+  {
+    "case": "delivery-population",
+    "phase": "final",
+    "state": {
+      "counts": "游动 15 / 居民 15 · 已吃饲料 0 · 追逐 11 · 捕获 2 · 放弃 9 · 鱼种 10/10",
+      "reef": true,
+      "style": "soft",
+      "task": "1 项演示任务 · 与正式数据隔离"
+    }
+  }
+]

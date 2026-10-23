@@ -185,11 +185,18 @@
     defaultModel = typeof data.model === 'string' ? data.model : '';
     defaultReasoning = Object.hasOwn(reasoningLabels, data.defaultReasoning) ? data.defaultReasoning : 'off';
     modelCatalog = Array.isArray(data.models) ? data.models.filter(model => model && typeof model.id === 'string' && !model.id.includes('://') && /^[a-zA-Z0-9_./:-]{1,160}$/.test(model.id)) : [];
+    if (data.remote?.provider === 'deepseek') {
+      const disabled = data.remote.mode === 'off' || !data.remote.keyConfigured;
+      const models = Array.isArray(data.remote.models) ? data.remote.models.slice(0, 8).filter(model => model && typeof model.selection === 'string' && /^deepseek:(flash|pro)$/.test(model.selection) && typeof model.name === 'string') : [];
+      modelCatalog = [...modelCatalog.filter(model => !model.id.startsWith('deepseek:')), {
+        id: 'deepseek:configured', name: `DeepSeek（按配置：${data.remote.model}）${disabled ? ' · 请先配置并启用' : ''}`, reasoningOptions: ['off'], disabled
+      }, ...models.map(model => ({ id: model.selection, name: model.name + (disabled ? ' · 请先配置并启用' : ''), reasoningOptions: ['off'], disabled }))];
+    }
     const select = $('assistant-model'); select.replaceChildren();
-    const option=document.createElement('option');option.value='';option.textContent=defaultModel ? `默认 · ${defaultModel}` : '服务默认模型';select.append(option);
-    for (const model of modelCatalog) { const item=document.createElement('option');item.value=model.id;item.textContent=`${model.name || model.id}${model.loaded === false ? ' · 未加载' : ''}`;select.append(item); }
+    const option=document.createElement('option');option.value='';option.textContent=data.remote?.mode === 'remote' ? `外部 · ${data.remote.model}` : data.remote?.mode === 'auto' ? `本地优先 · 外部兜底 ${data.remote.model}` : defaultModel ? `默认 · ${defaultModel}` : '服务默认模型';select.append(option);
+    for (const model of modelCatalog) { const item=document.createElement('option');item.value=model.id;item.disabled=model.disabled === true;item.textContent=`${model.name || model.id}${model.loaded === false ? ' · 未加载' : ''}`;select.append(item); }
     if (aiModel && !modelCatalog.some(model => model.id === aiModel)) aiModel = '';
-    select.value = aiModel; capabilitiesReady = true; select.disabled = busy() || !modelCatalog.length; renderReasoningOptions();
+    select.value = aiModel; capabilitiesReady = true; select.disabled = busy() || !modelCatalog.some(model => !model.disabled); renderReasoningOptions();
   }
   async function loadAICapabilities() {
     try { renderModelOptions(await send('local_ai_status')); }
@@ -204,13 +211,13 @@
     if (!layaControl) { note.textContent = '本机控制面未连接或版本过旧；原有工作台不受影响。'; return; }
     const mode = layaControl.policy.layaMode;
     const usage = layaControl.laya?.usage?.scenes?.['assistant.prefetch'];
-    note.textContent = !layaControl.policy.modelEnabled ? '本机模型总开关已关闭；Laya 和 Qwen 均不会调用。'
+    note.textContent = !layaControl.policy.modelEnabled ? '模型总开关已关闭；本地与外部模型均不会调用。'
       : layaControl.laya?.usage?.error ? 'Laya 计数不可用；自动沿用原规划链路。'
       : usage?.blockedUntil > Date.now() ? 'Laya 冷却中；自动沿用原规划链路。'
-      : mode === 'off' ? '原厂 Jev 未接入；Laya 已关闭，Qwen 按原链路规划。'
-      : mode === 'shadow' ? 'Laya 是本机 Jev 类模型；仅观察已选 @ 应用的首轮规划，不改变 Qwen 结果。'
+      : mode === 'off' ? '原厂 Jev 未接入；Laya 已关闭，使用当前选择的模型规划。'
+      : mode === 'shadow' ? 'Laya 是本机 Jev 类模型；仅观察已选 @ 应用的首轮规划，不改变所选模型的结果。'
       : 'Laya 是本机 Jev 类模型；仅为已选 @ 应用预加载工具组，失败自动降级。';
-    note.textContent += ' 切换会取消正在处理的本机 AI 请求。';
+    note.textContent += ' 切换会取消正在处理的 AI 请求。';
   }
   let layaPending = null;
   function loadLayaControl() {
@@ -330,7 +337,7 @@
     $('submit').disabled = busy() || !snapshotReady; input.disabled = busy(); $('new-task').disabled = busy() || !snapshotReady; $('apps').disabled = $('skills').disabled = busy();
     $('submit').title = snapshotReady ? '执行需求' : '正在读取当前任务，可先输入';
     $('cancel').hidden = !['planning', 'running'].includes(task?.status); $('cancel').disabled = sending;
-    $('assistant-model').disabled = busy() || !capabilitiesReady || !modelCatalog.length;
+    $('assistant-model').disabled = busy() || !capabilitiesReady || !modelCatalog.some(model => !model.disabled);
     $('assistant-reasoning').disabled = busy() || !reasoningAvailable;
     $('assistant-laya-mode').disabled = !layaControl || layaSaving;
     $('task').hidden = !task; if (!task) { rendering = ''; $('music-filters').hidden = true; $('music-view').hidden = true; return; }
@@ -409,7 +416,7 @@
     }
     finally { layaSaving = false; renderLayaControl(layaControl); }
   });
-  window.addEventListener('focus', () => { void loadLayaControl(); });
+  window.addEventListener('focus', () => { void loadLayaControl(); void loadAICapabilities(); });
   let snapshotPending = null;
   function refresh() {
     if (snapshotPending) return snapshotPending;

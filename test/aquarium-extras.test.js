@@ -56,10 +56,15 @@ const goldOf = (id, extras) => {
 };
 
 test('黄金画法：没有 extras（缺省、null、空对象、无变亮无拉尾、非法值）时，8 种鱼 5 个场景的每一笔与改动之前一致', () => {
-    for (const spec of Core.SPECIES.filter(item => SHAPES[item.id])) {      // 卡通画法的 8 种；海龟只有写实画法
-        assert.equal(goldOf(spec.id, undefined), GOLD[spec.id], `${spec.id}：没有 extras`);
+    // 2026-10-23 有意更新：物种表多了 6 种新小鱼（共 15 种，卡通画法 14 种），黄金哈希只钉最初的 8 种卡通画法——
+    // 它们的每一笔必须与新增画法特征（twoTone / bars / sail）之前完全相同；新种的画法由 aquarium-variety.test.js 守。
+    const ids = Object.keys(GOLD);
+    assert.equal(ids.length, 8);
+    for (const id of ids) assert.ok(SHAPES[id], `${id} 仍有卡通画法`);
+    for (const id of ids) {
+        assert.equal(goldOf(id, undefined), GOLD[id], `${id}：没有 extras`);
         for (const extras of [null, {}, { pull: null, fed: 0 }, { pull: { x: NaN, y: 1 }, fed: NaN }, { pull: { x: 1 }, fed: 'x' }, { fed: -3 }]) {
-            assert.equal(goldOf(spec.id, extras), GOLD[spec.id], `${spec.id}：${JSON.stringify(extras)}`);
+            assert.equal(goldOf(id, extras), GOLD[id], `${id}：${JSON.stringify(extras)}`);
         }
     }
 });

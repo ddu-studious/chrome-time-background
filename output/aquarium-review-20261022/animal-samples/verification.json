@@ -1,0 +1,10 @@
+{
+  "bundleSha256": "ac5e8e87cb4705dc79d5c0890a2f8aa38273333a7742384bbcf14ceba6411692",
+  "bundleBytes": 959296,
+  "sourceFingerprintMismatches": [],
+  "prototypeTests": 49,
+  "interactionRegressionTests": 368,
+  "productionFilesUnchanged": 9,
+  "newDependencies": 0,
+  "newDownloadedAssets": 0
+}

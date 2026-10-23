@@ -1,0 +1,16 @@
+{
+  "before": {
+    "arrived": true,
+    "seconds": 9.033333333333362,
+    "maxRate": 4.000000000000128,
+    "maxAcceleration": 192.31155350239985,
+    "movingTurns": 223
+  },
+  "after": {
+    "arrived": true,
+    "seconds": 9.833333333333401,
+    "maxRate": 3.0239704581827604,
+    "maxAcceleration": 13.292538136301495,
+    "movingTurns": 293
+  }
+}

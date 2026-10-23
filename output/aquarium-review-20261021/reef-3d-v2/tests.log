@@ -1,0 +1,34 @@
+
+> isolated-reef-3d-lab@0.1.0 test
+> node --test test/*.test.mjs
+
+✔ pinned upstream source and glTF assets match original git blobs (34.014792ms)
+✔ source and npm Three builds are identical; model references only frozen local resources (1.602792ms)
+✔ actual upstream vertices preserve total-length scale and fit the centred conservative capsule (47.33975ms)
+✔ natural pursuit generates both captures and escapes without invoking capture directly (176.335209ms)
+✔ rotation sweep catches a wall even when both endpoint orientations are clear (1.641209ms)
+✔ real source rock BVH rejects invalid poses and world never commits a penetrating move (159.76ms)
+✔ local refuge requires reachable space, body clearance and loss of predator sight (0.604042ms)
+✔ held predator and removed target end active hunts; fish budget stays bounded (0.766833ms)
+✔ real meshes admit the small fish through the crevice and route the predator around (21.547959ms)
+✔ deterministic real stepping: shelter, wait, predator detour and search, release then emerge; no penetration (31.694417ms)
+✔ occluded target movement does not change the predator remembered location or chosen route (21.017ms)
+✔ scene invalidation clears paths and graph cache; held prey cannot be eaten (7.845666ms)
+✔ 3D jelly uses volumetric bell and tubes, with disposable resources (4.432166ms)
+✔ jelly renderer build seam changes only draw dispatch and fails closed on source drift (0.43075ms)
+✔ low scenery coverage does not relocate the drill actors away from their habitat (16.200708ms)
+✔ six stable individual total lengths and reload reproducibility (13.437792ms)
+✔ individual predator size and body depth gate eligibility; tasks are never candidates (0.30325ms)
+✔ feed is bounded and has distinct ingestion receipts (0.265625ms)
+✔ capture requires 3D mouth contact and happens only once; refills preserve resident traits (0.228542ms)
+✔ occluded or held prey cannot be captured; hunting eventually gives up (0.640459ms)
+✔ BVH blocks a swept capsule through thin wall and rejects inside-solid spawns (3.135291ms)
+✔ same aperture admits small body and rejects larger body (0.458791ms)
+ℹ tests 22
+ℹ suites 0
+ℹ pass 22
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 518.315833

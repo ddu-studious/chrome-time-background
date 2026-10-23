@@ -1,0 +1,341 @@
+{
+ "file": "/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/output/aquarium-review-20261023/variety/tray-12entries-1280x560.png",
+ "dpr": 1,
+ "version": "156.0.8078.48",
+ "info": {
+  "state": {
+   "started": true,
+   "failed": false,
+   "loaded": true,
+   "entries": 12,
+   "fish": 28,
+   "grabbing": false,
+   "playFailed": false,
+   "realDrawn": 1,
+   "realFailed": false,
+   "predationFailed": false,
+   "flowFailed": false,
+   "lightFailed": false,
+   "flowLive": false,
+   "raysLive": false,
+   "sizes": true
+  },
+  "sizes": true,
+  "fish": [
+   {
+    "species": "neon",
+    "entry": "neon-lab0",
+    "size": 0.969,
+    "len": 11.1,
+    "x": 432.4,
+    "y": 284.3,
+    "z": 0.86,
+    "ang": 4.17
+   },
+   {
+    "species": "neon",
+    "entry": "neon-lab0",
+    "size": 0.977,
+    "len": 10.7,
+    "x": 441.8,
+    "y": 293.7,
+    "z": 0.74,
+    "ang": 3.8
+   },
+   {
+    "species": "neon",
+    "entry": "neon-lab0",
+    "size": 1.18,
+    "len": 13.6,
+    "x": 451.4,
+    "y": 278.8,
+    "z": 0.88,
+    "ang": 3.94
+   },
+   {
+    "species": "neon",
+    "entry": "neon-lab0",
+    "size": 0.999,
+    "len": 11.6,
+    "x": 413.6,
+    "y": 285.2,
+    "z": 0.92,
+    "ang": 4.15
+   },
+   {
+    "species": "neon",
+    "entry": "neon-lab0",
+    "size": 1.184,
+    "len": 13,
+    "x": 460.9,
+    "y": 299.1,
+    "z": 0.75,
+    "ang": 3.73
+   },
+   {
+    "species": "tang",
+    "entry": "tang-lab1",
+    "size": 0.998,
+    "len": 15.7,
+    "x": 387.1,
+    "y": 196.3,
+    "z": 0.86,
+    "ang": 5.38
+   },
+   {
+    "species": "tang",
+    "entry": "tang-lab1",
+    "size": 1.013,
+    "len": 16.7,
+    "x": 369.1,
+    "y": 167.2,
+    "z": 1,
+    "ang": 5.01
+   },
+   {
+    "species": "tang",
+    "entry": "tang-lab1",
+    "size": 1.083,
+    "len": 17.4,
+    "x": 391,
+    "y": 158,
+    "z": 0.93,
+    "ang": -1.34
+   },
+   {
+    "species": "tang",
+    "entry": "tang-lab1",
+    "size": 0.945,
+    "len": 14.7,
+    "x": 367.6,
+    "y": 204.8,
+    "z": 0.84,
+    "ang": 5.01
+   },
+   {
+    "species": "tang",
+    "entry": "tang-lab1",
+    "size": 1.049,
+    "len": 16.4,
+    "x": 401.3,
+    "y": 179.1,
+    "z": 0.85,
+    "ang": 4.83
+   },
+   {
+    "species": "chromis",
+    "entry": "chromis-lab2",
+    "size": 0.947,
+    "len": 11.3,
+    "x": 668.7,
+    "y": 170.2,
+    "z": 0.68,
+    "ang": 5.34
+   },
+   {
+    "species": "chromis",
+    "entry": "chromis-lab2",
+    "size": 0.832,
+    "len": 10.1,
+    "x": 642.7,
+    "y": 165.3,
+    "z": 0.7,
+    "ang": 5.74
+   },
+   {
+    "species": "chromis",
+    "entry": "chromis-lab2",
+    "size": 1.173,
+    "len": 14,
+    "x": 656.4,
+    "y": 179.2,
+    "z": 0.67,
+    "ang": 5.97
+   },
+   {
+    "species": "chromis",
+    "entry": "chromis-lab2",
+    "size": 1.052,
+    "len": 12.1,
+    "x": 638.4,
+    "y": 180.6,
+    "z": 0.58,
+    "ang": 5.34
+   },
+   {
+    "species": "chromis",
+    "entry": "chromis-lab2",
+    "size": 1.2,
+    "len": 13.7,
+    "x": 653.4,
+    "y": 157,
+    "z": 0.56,
+    "ang": 5.48
+   },
+   {
+    "species": "anthias",
+    "entry": "anthias-lab3",
+    "size": 1.055,
+    "len": 15.1,
+    "x": 320.3,
+    "y": 46.5,
+    "z": 0.62,
+    "ang": -2.69
+   },
+   {
+    "species": "anthias",
+    "entry": "anthias-lab3",
+    "size": 0.958,
+    "len": 14.4,
+    "x": 299.9,
+    "y": 74.4,
+    "z": 0.74,
+    "ang": -2.48
+   },
+   {
+    "species": "anthias",
+    "entry": "anthias-lab3",
+    "size": 1.236,
+    "len": 18.9,
+    "x": 288.2,
+    "y": 48.8,
+    "z": 0.79,
+    "ang": 3.14
+   },
+   {
+    "species": "anthias",
+    "entry": "anthias-lab3",
+    "size": 0.924,
+    "len": 14.2,
+    "x": 303,
+    "y": 58.1,
+    "z": 0.8,
+    "ang": -2.72
+   },
+   {
+    "species": "anthias",
+    "entry": "anthias-lab3",
+    "size": 0.905,
+    "len": 13.5,
+    "x": 319.3,
+    "y": 65.6,
+    "z": 0.73,
+    "ang": 3.54
+   },
+   {
+    "species": "clown",
+    "entry": "clown-lab4",
+    "size": 1.15,
+    "len": 25.6,
+    "x": 764.2,
+    "y": 263,
+    "z": 0.97,
+    "ang": -2.69
+   },
+   {
+    "species": "puffer",
+    "entry": "puffer-lab5",
+    "size": 1.04,
+    "len": 22.1,
+    "x": 199.9,
+    "y": 211,
+    "z": 0.67,
+    "ang": 4.64
+   },
+   {
+    "species": "angel",
+    "entry": "angel-lab6",
+    "size": 0.88,
+    "len": 18,
+    "x": 942,
+    "y": 222.5,
+    "z": 0.43,
+    "ang": -2.15
+   },
+   {
+    "species": "gramma",
+    "entry": "gramma-lab7",
+    "size": 1.214,
+    "len": 20.1,
+    "x": 445.3,
+    "y": 347.6,
+    "z": 0.57,
+    "ang": 4.98
+   },
+   {
+    "species": "idol",
+    "entry": "idol-lab8",
+    "size": 1.003,
+    "len": 21.9,
+    "x": 344,
+    "y": 188.1,
+    "z": 0.59,
+    "ang": -2.48
+   },
+   {
+    "species": "butterfly",
+    "entry": "butterfly-lab9",
+    "size": 1.142,
+    "len": 25.6,
+    "x": 884.6,
+    "y": 191.4,
+    "z": 0.99,
+    "ang": 6.34
+   },
+   {
+    "species": "cardinal",
+    "entry": "cardinal-lab10",
+    "size": 0.839,
+    "len": 13.3,
+    "x": 945,
+    "y": 411.2,
+    "z": 0.66,
+    "ang": 4.08
+   },
+   {
+    "species": "hammer",
+    "entry": "hammer-lab11",
+    "size": 1,
+    "len": 91.3,
+    "x": 966.6,
+    "y": 114.8,
+    "z": 0.63,
+    "ang": 3.12
+   }
+  ],
+  "buttons": [
+   "霓虹灯鱼",
+   "蓝吊",
+   "青绿光鳃鱼",
+   "金花鲈",
+   "小丑鱼",
+   "河豚",
+   "神仙鱼",
+   "皇家伽玛",
+   "镰鱼",
+   "蝴蝶鱼",
+   "天竺鲷",
+   "小锤头鲨",
+   "海龟",
+   "蝠鲼",
+   "鲸鲨"
+  ],
+  "panel": {
+   "top": 24,
+   "bottom": 430,
+   "height": 406,
+   "vh": 560,
+   "scrollH": 507,
+   "clientH": 404,
+   "rows": 5,
+   "overflowY": "auto",
+   "maxH": "406px",
+   "listItems": 12
+  }
+ },
+ "issues": {
+  "pageerror": [],
+  "console": [],
+  "warnings": []
+ }
+}

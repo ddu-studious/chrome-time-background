@@ -122,5 +122,5 @@ test('闹钟中心的提示文字指向桌面水母：倒计时由水母显示�
 
 test('脚本版本钉子已随改动更新（避免旧缓存）：alarm-center.js?v=8、settings-page.js?v=17', () => {
   assert.ok(indexHtml.includes('js/alarm-center.js?v=8'));
-  assert.ok(settingsHtml.includes('js/settings-page.js?v=19'));
+  assert.ok(settingsHtml.includes('js/settings-page.js?v=20'));
 });

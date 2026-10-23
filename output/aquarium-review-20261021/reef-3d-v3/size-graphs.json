@@ -1,0 +1,51 @@
+[
+  {
+    "kind": "clown",
+    "totalLengthCm": 2.5,
+    "roundedClearanceRadiusCm": 2,
+    "nodes": 6521,
+    "directedEdges": 57982
+  },
+  {
+    "kind": "clown",
+    "totalLengthCm": 4,
+    "roundedClearanceRadiusCm": 3,
+    "nodes": 6360,
+    "directedEdges": 56306
+  },
+  {
+    "kind": "clown",
+    "totalLengthCm": 6,
+    "roundedClearanceRadiusCm": 4,
+    "nodes": 5327,
+    "directedEdges": 46634
+  },
+  {
+    "kind": "clown",
+    "totalLengthCm": 7.3999999999999995,
+    "roundedClearanceRadiusCm": 5,
+    "nodes": 5165,
+    "directedEdges": 44776
+  },
+  {
+    "kind": "barramundi",
+    "totalLengthCm": 18,
+    "roundedClearanceRadiusCm": 11,
+    "nodes": 3274,
+    "directedEdges": 28674
+  },
+  {
+    "kind": "barramundi",
+    "totalLengthCm": 25,
+    "roundedClearanceRadiusCm": 15.5,
+    "nodes": 2161,
+    "directedEdges": 18502
+  },
+  {
+    "kind": "barramundi",
+    "totalLengthCm": 45,
+    "roundedClearanceRadiusCm": 27,
+    "nodes": 766,
+    "directedEdges": 6250
+  }
+]

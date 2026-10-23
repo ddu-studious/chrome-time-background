@@ -1,0 +1,61 @@
+
+> isolated-reef-3d-lab@0.1.0 test
+> node --test test/*.test.mjs
+
+✔ pinned upstream source and glTF assets match original git blobs (41.0555ms)
+✔ source and npm Three builds are identical; model references only frozen local resources (2.612375ms)
+✔ actual upstream vertices preserve total-length scale and fit the centred conservative capsule (49.61275ms)
+✔ natural pursuit generates both captures and escapes without invoking capture directly (185.381ms)
+✔ rotation sweep catches a wall even when both endpoint orientations are clear (1.679583ms)
+✔ real source rock BVH rejects invalid poses and world never commits a penetrating move (166.920167ms)
+✔ local refuge requires reachable space, body clearance and loss of predator sight (0.1935ms)
+✔ held predator and removed target end active hunts; fish budget stays bounded (0.548583ms)
+✔ reference anatomy keeps total length and semantic attributes, with independent surface and volume changes (82.572625ms)
+✔ switching legacy restores exact buffers and shader identity without stacking changes (40.069125ms)
+✔ upstream motion attributes and water shader hook remain live after appearance change (31.562333ms)
+✔ adapter leaves other species and separate groups untouched (49.086916ms)
+✔ real meshes admit the small fish through the crevice and route the predator around (22.171083ms)
+✔ deterministic real stepping: shelter, wait, predator detour and search, release then emerge; no penetration (31.626375ms)
+✔ occluded target movement does not change the predator remembered location or chosen route (16.151417ms)
+✔ scene invalidation clears paths and graph cache; held prey cannot be eaten (5.752708ms)
+✔ 3D jelly uses volumetric bell and tubes, with disposable resources (4.115333ms)
+✔ jelly renderer build seam changes only draw dispatch and fails closed on source drift (0.417ms)
+✔ low scenery coverage does not relocate the drill actors away from their habitat (12.55275ms)
+✔ turning has signed body bend, while coast and hover have distinct bounded strokes (1.446375ms)
+✔ stroke phases remain continuous through gait transitions and presentation cannot move the animal (1.118417ms)
+✔ comparison root orientation is continuous across every automatic stage and repeated cycle (3.985666ms)
+✔ new body animation leaves all accepted World trajectories and feeding/holding events identical (39.658791ms)
+✔ active reef gate always uses legacy animation and clears prior free-water bend on the next accepted step (0.862875ms)
+✔ full reef roadmap is bounded and attested to exact source geometry and baker (18.131ms)
+✔ size masks are nested and cached clearances agree with live BVH queries (24.99225ms)
+✔ arch: real 3D reef stepping 0.025/0.18 has shelter, search and no penetration (226.485125ms)
+✔ arch: real 3D reef stepping 0.04/0.25 has shelter, search and no penetration (198.0155ms)
+✔ arch: real 3D reef stepping 0.074/0.45 has shelter, search and no penetration (112.354167ms)
+✔ left: real 3D reef stepping 0.025/0.18 has shelter, search and no penetration (138.848875ms)
+✔ left: real 3D reef stepping 0.04/0.25 has shelter, search and no penetration (98.532042ms)
+✔ left: real 3D reef stepping 0.074/0.45 has shelter, search and no penetration (132.149833ms)
+✔ right: real 3D reef stepping 0.025/0.18 has shelter, search and no penetration (57.463167ms)
+✔ right: real 3D reef stepping 0.04/0.25 has shelter, search and no penetration (81.786125ms)
+✔ right: real 3D reef stepping 0.074/0.45 has shelter, search and no penetration (56.370584ms)
+✔ full reef food eligibility excludes large prey for small predators (9.528459ms)
+✔ layout translation invalidates navigation and disabling scenery clears paths (85.818875ms)
+✔ Aurelia sample separates a shallow umbrella, four oral arms and a dense short fringe (27.779833ms)
+✔ pulse has continuous contraction, longer relaxation and an actual coasting interval (0.098958ms)
+✔ animation bends the margin locally, remains finite and inside its culling bounds (164.388875ms)
+✔ render updates are seekable and do not take ownership of the host transform (12.663667ms)
+✔ all resources are released once and late updates are harmless (10.780958ms)
+✔ six stable individual total lengths and reload reproducibility (15.773666ms)
+✔ individual predator size and body depth gate eligibility; tasks are never candidates (0.287333ms)
+✔ feed is bounded and has distinct ingestion receipts (0.278041ms)
+✔ capture requires 3D mouth contact and happens only once; refills preserve resident traits (0.267875ms)
+✔ occluded or held prey cannot be captured; hunting eventually gives up (0.179208ms)
+✔ BVH blocks a swept capsule through thin wall and rejects inside-solid spawns (2.684334ms)
+✔ same aperture admits small body and rejects larger body (0.41475ms)
+ℹ tests 49
+ℹ suites 0
+ℹ pass 49
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1715.758083

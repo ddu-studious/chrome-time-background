@@ -1,27 +1,41 @@
 if(location.protocol!=='http:'||!['127.0.0.1','localhost'].includes(location.hostname))throw new Error('Loopback demo only');
-const $=id=>document.getElementById(id),report=text=>{$('status').textContent=text;};
-const memory={backgroundExperienceSettings:{enabled:true,visualEffect:'jellyfish',intensity:75,playgroundEnabled:false,jellyfishTasks:true,jellyfishNight:false,jellyfishDance:false,jellyfishGrow:false,aquariumFish:true,aquariumWater:false,aquariumFlow:false,aquariumRays:false,aquariumSound:false},memos:[{id:'task-1',title:'看见鱼的厚度'},{id:'task-2',title:'比较大小个体'},{id:'task-3',title:'观察一次追逃'}]};
+const $=id=>document.getElementById(id),report=text=>{$('status').textContent=$('dock-message').textContent=text;};
+const memory={backgroundExperienceSettings:{enabled:true,visualEffect:'jellyfish',intensity:75,playgroundEnabled:false,jellyfishTasks:true,jellyfishNight:false,jellyfishDance:false,jellyfishGrow:false,aquariumFish:true,aquariumWater:false,aquariumFlow:false,aquariumRays:false,aquariumSound:false},memos:[{id:'task-1',title:'观察海月水母'}]};
 const listeners=new Set(),clone=v=>v===undefined?undefined:structuredClone(v);
 const area=name=>({async get(key,cb){const value={};for(const k of typeof key==='string'?[key]:Object.keys(memory))value[k]=clone(memory[k]);cb?.(value);return value;},async set(items){const changes={};for(const [key,value]of Object.entries(items)){if(!['memos','backgroundExperienceSettings'].includes(key))throw new Error('Demo key not allowed');changes[key]={oldValue:clone(memory[key]),newValue:clone(value)};memory[key]=clone(value);}for(const fn of listeners)fn(changes,name);}});
 window.chrome={storage:{local:area('local'),sync:area('sync'),onChanged:{addListener:fn=>listeners.add(fn),removeListener:fn=>listeners.delete(fn)}},runtime:{sendMessage:async()=>({ok:false,reason:'demo-only'})}};
 function tasks(){const list=$('tasks');list.replaceChildren(...memory.memos.map(t=>{const li=document.createElement('li');li.textContent=(t.completed?'✓ ':'○ ')+t.title;li.classList.toggle('done',!!t.completed);return li;}));}
-window.memoManager={async completeTaskById(id){const t=memory.memos.find(v=>v.id===id);if(!t||t.completed)return {ok:false};await chrome.storage.local.set({memos:memory.memos.map(v=>v.id===id?{...v,completed:true}:v)});tasks();$('task-result').textContent=`已完成 ${memory.memos.filter(t=>t.completed).length}/3 项演示任务`;return {ok:true};}};tasks();
+window.memoManager={async completeTaskById(id){const t=memory.memos.find(v=>v.id===id);if(!t||t.completed)return {ok:false};if($('task-failure').checked){$('task-result').textContent='演示回执失败：任务保留，水母放回。';return {ok:false};}await chrome.storage.local.set({memos:memory.memos.map(v=>v.id===id?{...v,completed:true}:v)});tasks();$('task-result').textContent=`已完成 ${memory.memos.filter(t=>t.completed).length}/${memory.memos.length} 项演示任务`;return {ok:true};}};tasks();
 function load(name){return new Promise((resolve,reject)=>{const s=document.createElement('script'),timer=setTimeout(()=>reject(new Error('Script timeout')),15000);s.src='/js/'+name;s.onload=()=>{clearTimeout(timer);resolve();};s.onerror=()=>{clearTimeout(timer);reject(new Error('Script load failed: '+name));};document.head.append(s);});}
-for(const name of ['task-crumple-core.js','task-crumple.js','jellyfish-core.js','jellyfish.js'])await load(name);
+for(const name of ['task-crumple-core.js','task-crumple.js','jellyfish-core.js'])await load(name);
 const {createOcean}=await import('./ocean.bundle.mjs');
 const ocean=createOcean($('ocean-canvas'),report);window.Aquarium=ocean;window.AquariumWater=null;
 await load('background-experience.js');
-$('reef').addEventListener('change',e=>void ocean.setReef(e.target.checked));
+$('habitat-scene').addEventListener('change',e=>void ocean.setScene(e.target.value).catch(error=>report('栖息地未就绪：'+error.message)));
+$('full-drill').addEventListener('click',()=>{if($('pause').getAttribute('aria-pressed')==='true')$('pause').click();void ocean.fullDrill($('reef-region').value,Number($('prey-size').value),Number($('pred-size').value)).catch(error=>report('完整浅礁演练未就绪：'+error.message));});
+$('crevice-drill').addEventListener('click',()=>{if($('pause').getAttribute('aria-pressed')==='true')$('pause').click();void ocean.drill().catch(error=>report('演练未就绪：'+error.message));});
+$('reef').addEventListener('change',e=>void ocean.setReef(e.target.checked).catch(error=>report('造景未就绪：'+error.message)));
 $('coverage').addEventListener('input',e=>{$('coverage-value').textContent=e.target.value+'%';ocean.setCoverage(Number(e.target.value)/100);});
-$('view-mode').addEventListener('change',e=>{ocean.setMode(e.target.value);$('angles').hidden=e.target.value!=='turntable';$('depth-controls').hidden=e.target.value!=='depth';$('feed').disabled=$('add-fish').disabled=e.target.value!=='natural';});
+$('view-mode').addEventListener('change',e=>ocean.setMode(e.target.value));
+$('animal-style').addEventListener('change',e=>ocean.setAnimalStyle(e.target.value));
+$('specimen-gait').addEventListener('change',e=>ocean.setSpecimenGait(e.target.value));
+$('specimen-restart').addEventListener('click',()=>ocean.restartSpecimen());
+$('sample-experience').addEventListener('click',()=>void ocean.sampleExperience());
+for(const button of document.querySelectorAll('[data-experience]'))button.addEventListener('click',()=>void ocean.experience(button.dataset.experience));
+$('observe-animals').addEventListener('click',()=>{ocean.setMode('jelly-compare');ocean.setAngle('-45');for(const button of document.querySelectorAll('[data-angle]'))button.setAttribute('aria-pressed',String(button.dataset.angle==='-45'));});
+function quietView(on){document.body.classList.toggle('immersive',on);$('quiet-view').textContent=on?'显示面板':'沉浸观察';$('quiet-view').setAttribute('aria-pressed',String(on));}
+$('quiet-view').addEventListener('click',()=>quietView(!document.body.classList.contains('immersive')));
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.body.classList.contains('immersive')){quietView(false);$('quiet-view').focus();}});
 for(const button of document.querySelectorAll('[data-angle]'))button.addEventListener('click',()=>{ocean.setAngle(button.dataset.angle);for(const other of document.querySelectorAll('[data-angle]'))other.setAttribute('aria-pressed',String(other===button));});
 for(const button of document.querySelectorAll('[data-depth]'))button.addEventListener('click',()=>ocean.setDepth(button.dataset.depth));
 $('zoom').addEventListener('input',e=>ocean.setZoom(Number(e.target.value)));
-$('feed').addEventListener('click',()=>ocean.feed());$('add-fish').addEventListener('click',()=>ocean.add());
+$('add-fish').addEventListener('click',()=>void ocean.add($('resident-species').value));
+$('inspect-resident').addEventListener('click',()=>void ocean.sampleExperience($('resident-species').value));
+$('community-scene').addEventListener('click',()=>void ocean.community());
 $('predation').addEventListener('change',e=>void ocean.setPredator(e.target.checked,Number($('pred-size').value)));
 $('pred-size').addEventListener('change',()=>{if($('predation').checked)void ocean.setPredator(true,Number($('pred-size').value));});
 let paused=false;
-$('pause').addEventListener('click',()=>{paused=!paused;window.backgroundExperience.setSuspended(paused||document.hidden);$('pause').textContent=paused?'继续游动':'暂停';$('pause').setAttribute('aria-pressed',String(paused));$('feed').disabled=$('add-fish').disabled=paused||$('view-mode').value!=='natural';});
+$('pause').addEventListener('click',()=>{paused=!paused;window.backgroundExperience.setSuspended(paused||document.hidden);$('pause').textContent=paused?'继续游动':'暂停';$('pause').setAttribute('aria-pressed',String(paused));ocean.updateUI();});
 document.addEventListener('visibilitychange',()=>window.backgroundExperience.setSuspended(paused||document.hidden));
 $('guide').addEventListener('change',e=>ocean.setGuide(e.target.checked));
 $('background').addEventListener('change',e=>$('wallpaper').dataset.background=e.target.value);
@@ -31,4 +45,4 @@ const timer=setInterval(()=>{ocean.updateUI();$('clock').textContent=new Intl.Da
 window.oceanLab={diagnostics:()=>({...ocean.diagnostics(),completed:memory.memos.filter(t=>t.completed).length,paused})};
 window.addEventListener('pagehide',()=>{clearInterval(timer);ocean.dispose();window.JellyfishSkin.stop();},{once:true});
 window.addEventListener('pageshow',e=>{if(e.persisted)location.reload();});
-report('真三维居民已就绪；固定造景默认关闭。');
+ocean.setMode('natural');$('view-mode').disabled=false;

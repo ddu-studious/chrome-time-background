@@ -1,0 +1,2347 @@
+{
+  "seconds": 30,
+  "dt": 0.016666666666666666,
+  "seed": 73,
+  "rows": [
+    {
+      "region": "arch",
+      "preyLength": 0.025,
+      "predatorLength": 0.18,
+      "eligible": true,
+      "hidden": 2,
+      "emerged": 2,
+      "searched-exit": 2,
+      "capture": 0,
+      "escape": 2,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.004419622155673123,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 3,
+        "captures": 0,
+        "escapes": 2,
+        "blocked": 6,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 627
+      },
+      "searches": 0,
+      "maxPlanMs": 1.1391660000000456,
+      "cpuMs": 597.284083,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.025,
+          "envelope": {
+            "radiusM": 0.009875000000000002,
+            "halfLengthM": 0.007000000000000001,
+            "rotationRadiusM": 0.016875,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 5.7666666666666515,
+          "routeStoppedSeconds": 1.566666666666666,
+          "routeTravelM": 0.9945951547043312,
+          "stopTransitions": 0,
+          "maxTurnRate": 3.999974680817521,
+          "maxAcceleration": 3.7644740805951344,
+          "maxBend": 0.4199944470688368
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.18,
+          "envelope": {
+            "radiusM": 0.0576,
+            "halfLengthM": 0.0504,
+            "rotationRadiusM": 0.108,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 5.716666666666652,
+          "routeStoppedSeconds": 2.8166666666666615,
+          "routeTravelM": 2.8988555625235204,
+          "stopTransitions": 0,
+          "maxTurnRate": 1.500000000013362,
+          "maxAcceleration": 0.59840000000001,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "arch",
+      "preyLength": 0.025,
+      "predatorLength": 0.25,
+      "eligible": true,
+      "hidden": 2,
+      "emerged": 2,
+      "searched-exit": 2,
+      "capture": 0,
+      "escape": 2,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.004622953790992747,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 3,
+        "captures": 0,
+        "escapes": 2,
+        "blocked": 0,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 893
+      },
+      "searches": 4,
+      "maxPlanMs": 8.745750000000044,
+      "cpuMs": 563.670083,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.025,
+          "envelope": {
+            "radiusM": 0.009875000000000002,
+            "halfLengthM": 0.007000000000000001,
+            "rotationRadiusM": 0.016875,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 6.949999999999981,
+          "routeStoppedSeconds": 1.266666666666667,
+          "routeTravelM": 1.1163583500365832,
+          "stopTransitions": 0,
+          "maxTurnRate": 3.9999677468367922,
+          "maxAcceleration": 0.19500000000000267,
+          "maxBend": 0.4128177313426165
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.25,
+          "envelope": {
+            "radiusM": 0.08,
+            "halfLengthM": 0.07,
+            "rotationRadiusM": 0.15000000000000002,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 9.533333333333387,
+          "routeStoppedSeconds": 1.4999999999999996,
+          "routeTravelM": 4.361065584748482,
+          "stopTransitions": 0,
+          "maxTurnRate": 1.5000000000112301,
+          "maxAcceleration": 0.6600000000000031,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "arch",
+      "preyLength": 0.025,
+      "predatorLength": 0.45,
+      "eligible": true,
+      "hidden": 1,
+      "emerged": 1,
+      "searched-exit": 3,
+      "capture": 0,
+      "escape": 3,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.005728624431839802,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 3,
+        "captures": 0,
+        "escapes": 3,
+        "blocked": 36,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 675
+      },
+      "searches": 1,
+      "maxPlanMs": 85.39058399999999,
+      "cpuMs": 2212.1105,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.025,
+          "envelope": {
+            "radiusM": 0.009875000000000002,
+            "halfLengthM": 0.007000000000000001,
+            "rotationRadiusM": 0.016875,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 8.399999999999997,
+          "routeStoppedSeconds": 1.0666666666666678,
+          "routeTravelM": 0.7766957147944307,
+          "stopTransitions": 0,
+          "maxTurnRate": 3.9999999377792905,
+          "maxAcceleration": 0.1950000000000006,
+          "maxBend": 0.4199999954885433
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.45,
+          "envelope": {
+            "radiusM": 0.14400000000000002,
+            "halfLengthM": 0.12600000000000003,
+            "rotationRadiusM": 0.27,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 8.683333333333344,
+          "routeStoppedSeconds": 3.1499999999999937,
+          "routeTravelM": 3.9526366570077536,
+          "stopTransitions": 1,
+          "maxTurnRate": 1.500000000020823,
+          "maxAcceleration": 5.440065715969938,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "arch",
+      "preyLength": 0.04,
+      "predatorLength": 0.18,
+      "eligible": true,
+      "hidden": 2,
+      "emerged": 2,
+      "searched-exit": 2,
+      "capture": 0,
+      "escape": 2,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.004187933017057979,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 3,
+        "captures": 0,
+        "escapes": 2,
+        "blocked": 7,
+        "refills": 0,
+        "routeRetries": 1,
+        "routeAbandons": 0,
+        "movingTurns": 865
+      },
+      "searches": 4,
+      "maxPlanMs": 11.270000000000437,
+      "cpuMs": 742.9270420000003,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.04,
+          "envelope": {
+            "radiusM": 0.0158,
+            "halfLengthM": 0.011200000000000002,
+            "rotationRadiusM": 0.027000000000000003,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 6.249999999999983,
+          "routeStoppedSeconds": 1.3333333333333335,
+          "routeTravelM": 0.9135097705333767,
+          "stopTransitions": 0,
+          "maxTurnRate": 3.9999970238922424,
+          "maxAcceleration": 0.22800000000000153,
+          "maxBend": 0.41999385727028266
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.18,
+          "envelope": {
+            "radiusM": 0.0576,
+            "halfLengthM": 0.0504,
+            "rotationRadiusM": 0.108,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 9.05000000000003,
+          "routeStoppedSeconds": 2.8166666666666615,
+          "routeTravelM": 2.8431921557762685,
+          "stopTransitions": 1,
+          "maxTurnRate": 1.5000000000101643,
+          "maxAcceleration": 0.5984000000000067,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "arch",
+      "preyLength": 0.04,
+      "predatorLength": 0.25,
+      "eligible": true,
+      "hidden": 2,
+      "emerged": 2,
+      "searched-exit": 2,
+      "capture": 0,
+      "escape": 2,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.004608988282796882,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 3,
+        "captures": 0,
+        "escapes": 2,
+        "blocked": 31,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 685
+      },
+      "searches": 1,
+      "maxPlanMs": 7.474667000000409,
+      "cpuMs": 360.0169999999998,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.04,
+          "envelope": {
+            "radiusM": 0.0158,
+            "halfLengthM": 0.011200000000000002,
+            "rotationRadiusM": 0.027000000000000003,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 3.899999999999991,
+          "routeStoppedSeconds": 1.6333333333333324,
+          "routeTravelM": 0.9260116339435894,
+          "stopTransitions": 0,
+          "maxTurnRate": 3.999988197561744,
+          "maxAcceleration": 0.22800000000000153,
+          "maxBend": 0.41920572710084036
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.25,
+          "envelope": {
+            "radiusM": 0.08,
+            "halfLengthM": 0.07,
+            "rotationRadiusM": 0.15000000000000002,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 8.099999999999982,
+          "routeStoppedSeconds": 1.5999999999999992,
+          "routeTravelM": 4.176005972486971,
+          "stopTransitions": 0,
+          "maxTurnRate": 1.5000000000144278,
+          "maxAcceleration": 0.6599999999999998,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "arch",
+      "preyLength": 0.04,
+      "predatorLength": 0.45,
+      "eligible": true,
+      "hidden": 1,
+      "emerged": 1,
+      "searched-exit": 3,
+      "capture": 0,
+      "escape": 3,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.005728715798618546,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 3,
+        "captures": 0,
+        "escapes": 3,
+        "blocked": 83,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 640
+      },
+      "searches": 1,
+      "maxPlanMs": 68.39979099999982,
+      "cpuMs": 2144.2086249999993,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.04,
+          "envelope": {
+            "radiusM": 0.0158,
+            "halfLengthM": 0.011200000000000002,
+            "rotationRadiusM": 0.027000000000000003,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 7.416666666666646,
+          "routeStoppedSeconds": 1.6333333333333324,
+          "routeTravelM": 0.7604425338309192,
+          "stopTransitions": 1,
+          "maxTurnRate": 3.9999999907487367,
+          "maxAcceleration": 0.22800000000000029,
+          "maxBend": 0.4199678884179459
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.45,
+          "envelope": {
+            "radiusM": 0.14400000000000002,
+            "halfLengthM": 0.12600000000000003,
+            "rotationRadiusM": 0.27,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 8.65000000000001,
+          "routeStoppedSeconds": 3.1166666666666605,
+          "routeTravelM": 3.9553996686565243,
+          "stopTransitions": 1,
+          "maxTurnRate": 1.5000000000144278,
+          "maxAcceleration": 5.439721921615085,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "arch",
+      "preyLength": 0.06,
+      "predatorLength": 0.18,
+      "eligible": false,
+      "hidden": 0,
+      "emerged": 0,
+      "searched-exit": 0,
+      "capture": 0,
+      "escape": 0,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.004170656406263562,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 0,
+        "captures": 0,
+        "escapes": 0,
+        "blocked": 0,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 385
+      },
+      "searches": 0,
+      "maxPlanMs": 0.05999999999949068,
+      "cpuMs": 49.3252080000002,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.06,
+          "envelope": {
+            "radiusM": 0.0237,
+            "halfLengthM": 0.016800000000000002,
+            "rotationRadiusM": 0.0405,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 0,
+          "routeStoppedSeconds": 0,
+          "routeTravelM": 0,
+          "stopTransitions": 0,
+          "maxTurnRate": 4.00000000000065,
+          "maxAcceleration": 0,
+          "maxBend": 0.41999999999999976
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.18,
+          "envelope": {
+            "radiusM": 0.0576,
+            "halfLengthM": 0.0504,
+            "rotationRadiusM": 0.108,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 6.599999999999982,
+          "routeStoppedSeconds": 2.366666666666663,
+          "routeTravelM": 3.9938104673150683,
+          "stopTransitions": 1,
+          "maxTurnRate": 1.5000000000144278,
+          "maxAcceleration": 0.5984000000000026,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "arch",
+      "preyLength": 0.06,
+      "predatorLength": 0.25,
+      "eligible": true,
+      "hidden": 2,
+      "emerged": 2,
+      "searched-exit": 3,
+      "capture": 0,
+      "escape": 2,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.004621065502493934,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 3,
+        "captures": 0,
+        "escapes": 2,
+        "blocked": 131,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 748
+      },
+      "searches": 3,
+      "maxPlanMs": 7.524750000000495,
+      "cpuMs": 392.30791599999975,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.06,
+          "envelope": {
+            "radiusM": 0.0237,
+            "halfLengthM": 0.016800000000000002,
+            "rotationRadiusM": 0.0405,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 5.8499999999999845,
+          "routeStoppedSeconds": 1.5166666666666662,
+          "routeTravelM": 1.1075817861771007,
+          "stopTransitions": 0,
+          "maxTurnRate": 3.999969667824796,
+          "maxAcceleration": 0.2720000000000025,
+          "maxBend": 0.4120921164975587
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.25,
+          "envelope": {
+            "radiusM": 0.08,
+            "halfLengthM": 0.07,
+            "rotationRadiusM": 0.15000000000000002,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 7.24999999999998,
+          "routeStoppedSeconds": 1.6166666666666658,
+          "routeTravelM": 4.227832829292651,
+          "stopTransitions": 0,
+          "maxTurnRate": 1.5000000000101643,
+          "maxAcceleration": 0.6600000000000018,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "arch",
+      "preyLength": 0.06,
+      "predatorLength": 0.45,
+      "eligible": true,
+      "hidden": 2,
+      "emerged": 2,
+      "searched-exit": 3,
+      "capture": 0,
+      "escape": 2,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.005728624941704615,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 3,
+        "captures": 0,
+        "escapes": 2,
+        "blocked": 286,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 746
+      },
+      "searches": 1,
+      "maxPlanMs": 61.034999999999854,
+      "cpuMs": 1641.8625419999998,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.06,
+          "envelope": {
+            "radiusM": 0.0237,
+            "halfLengthM": 0.016800000000000002,
+            "rotationRadiusM": 0.0405,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 6.433333333333316,
+          "routeStoppedSeconds": 1.649999999999999,
+          "routeTravelM": 0.8618098515326188,
+          "stopTransitions": 0,
+          "maxTurnRate": 3.999999412606416,
+          "maxAcceleration": 0.27200000000000046,
+          "maxBend": 0.4197668311285059
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.45,
+          "envelope": {
+            "radiusM": 0.14400000000000002,
+            "halfLengthM": 0.12600000000000003,
+            "rotationRadiusM": 0.27,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 8.733333333333347,
+          "routeStoppedSeconds": 4.016666666666658,
+          "routeTravelM": 4.0917258954168725,
+          "stopTransitions": 2,
+          "maxTurnRate": 1.5000000000229545,
+          "maxAcceleration": 5.439211033103319,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "arch",
+      "preyLength": 0.074,
+      "predatorLength": 0.18,
+      "eligible": false,
+      "hidden": 0,
+      "emerged": 0,
+      "searched-exit": 0,
+      "capture": 0,
+      "escape": 0,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.004170656406263562,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 0,
+        "captures": 0,
+        "escapes": 0,
+        "blocked": 0,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 385
+      },
+      "searches": 0,
+      "maxPlanMs": 0.055791999999200925,
+      "cpuMs": 44.08625000000029,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.074,
+          "envelope": {
+            "radiusM": 0.02923,
+            "halfLengthM": 0.020720000000000002,
+            "rotationRadiusM": 0.04995,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 0,
+          "routeStoppedSeconds": 0,
+          "routeTravelM": 0,
+          "stopTransitions": 0,
+          "maxTurnRate": 4.00000000000065,
+          "maxAcceleration": 0,
+          "maxBend": 0.41999999999999976
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.18,
+          "envelope": {
+            "radiusM": 0.0576,
+            "halfLengthM": 0.0504,
+            "rotationRadiusM": 0.108,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 6.599999999999982,
+          "routeStoppedSeconds": 2.366666666666663,
+          "routeTravelM": 3.9938104673150683,
+          "stopTransitions": 1,
+          "maxTurnRate": 1.5000000000144278,
+          "maxAcceleration": 0.5984000000000026,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "arch",
+      "preyLength": 0.074,
+      "predatorLength": 0.25,
+      "eligible": false,
+      "hidden": 0,
+      "emerged": 0,
+      "searched-exit": 0,
+      "capture": 0,
+      "escape": 0,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.0045812787638669465,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 0,
+        "captures": 0,
+        "escapes": 0,
+        "blocked": 0,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 441
+      },
+      "searches": 1,
+      "maxPlanMs": 13.855457999999999,
+      "cpuMs": 155.40745900000002,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.074,
+          "envelope": {
+            "radiusM": 0.02923,
+            "halfLengthM": 0.020720000000000002,
+            "rotationRadiusM": 0.04995,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 0,
+          "routeStoppedSeconds": 0,
+          "routeTravelM": 0,
+          "stopTransitions": 0,
+          "maxTurnRate": 4.00000000000065,
+          "maxAcceleration": 0,
+          "maxBend": 0.41999999999999976
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.25,
+          "envelope": {
+            "radiusM": 0.08,
+            "halfLengthM": 0.07,
+            "rotationRadiusM": 0.15000000000000002,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 8.700000000000012,
+          "routeStoppedSeconds": 3.133333333333327,
+          "routeTravelM": 4.353407887829338,
+          "stopTransitions": 0,
+          "maxTurnRate": 1.5000000000154936,
+          "maxAcceleration": 0.6600000000000023,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "arch",
+      "preyLength": 0.074,
+      "predatorLength": 0.45,
+      "eligible": true,
+      "hidden": 2,
+      "emerged": 2,
+      "searched-exit": 3,
+      "capture": 0,
+      "escape": 2,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.005728717956912131,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 3,
+        "captures": 0,
+        "escapes": 2,
+        "blocked": 204,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 702
+      },
+      "searches": 1,
+      "maxPlanMs": 66.27474999999868,
+      "cpuMs": 1631.9123749999999,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.074,
+          "envelope": {
+            "radiusM": 0.02923,
+            "halfLengthM": 0.020720000000000002,
+            "rotationRadiusM": 0.04995,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 4.599999999999989,
+          "routeStoppedSeconds": 2.083333333333331,
+          "routeTravelM": 0.9065811863295075,
+          "stopTransitions": 0,
+          "maxTurnRate": 3.9999947855320324,
+          "maxAcceleration": 0.3028000000000011,
+          "maxBend": 0.41979439642477256
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.45,
+          "envelope": {
+            "radiusM": 0.14400000000000002,
+            "halfLengthM": 0.12600000000000003,
+            "rotationRadiusM": 0.27,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 8.700000000000012,
+          "routeStoppedSeconds": 4.016666666666658,
+          "routeTravelM": 4.0903888926224905,
+          "stopTransitions": 2,
+          "maxTurnRate": 1.5000000000144278,
+          "maxAcceleration": 5.438821815364814,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "left",
+      "preyLength": 0.025,
+      "predatorLength": 0.18,
+      "eligible": true,
+      "hidden": 2,
+      "emerged": 2,
+      "searched-exit": 2,
+      "capture": 0,
+      "escape": 2,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.004182338010755351,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 3,
+        "captures": 0,
+        "escapes": 2,
+        "blocked": 60,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 628
+      },
+      "searches": 10,
+      "maxPlanMs": 11.88170799999898,
+      "cpuMs": 321.9452079999992,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.025,
+          "envelope": {
+            "radiusM": 0.009875000000000002,
+            "halfLengthM": 0.007000000000000001,
+            "rotationRadiusM": 0.016875,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 6.349999999999983,
+          "routeStoppedSeconds": 1.9666666666666646,
+          "routeTravelM": 0.8722911283088937,
+          "stopTransitions": 0,
+          "maxTurnRate": 3.9999506800978444,
+          "maxAcceleration": 0.19500000000000017,
+          "maxBend": 0.4180915541690982
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.18,
+          "envelope": {
+            "radiusM": 0.0576,
+            "halfLengthM": 0.0504,
+            "rotationRadiusM": 0.108,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 5.549999999999986,
+          "routeStoppedSeconds": 2.8666666666666614,
+          "routeTravelM": 3.5016419851818514,
+          "stopTransitions": 0,
+          "maxTurnRate": 1.5000000000154936,
+          "maxAcceleration": 0.26642295959809653,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "left",
+      "preyLength": 0.025,
+      "predatorLength": 0.25,
+      "eligible": true,
+      "hidden": 2,
+      "emerged": 1,
+      "searched-exit": 3,
+      "capture": 0,
+      "escape": 3,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.0045970308763467055,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 3,
+        "captures": 0,
+        "escapes": 3,
+        "blocked": 7,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 727
+      },
+      "searches": 14,
+      "maxPlanMs": 10.799667000001136,
+      "cpuMs": 589.7042919999985,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.025,
+          "envelope": {
+            "radiusM": 0.009875000000000002,
+            "halfLengthM": 0.007000000000000001,
+            "rotationRadiusM": 0.016875,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 4.29999999999999,
+          "routeStoppedSeconds": 0.6833333333333338,
+          "routeTravelM": 0.5112381143024627,
+          "stopTransitions": 0,
+          "maxTurnRate": 3.9999506800978444,
+          "maxAcceleration": 0.19500000000000017,
+          "maxBend": 0.4180809048058686
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.25,
+          "envelope": {
+            "radiusM": 0.08,
+            "halfLengthM": 0.07,
+            "rotationRadiusM": 0.15000000000000002,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 9.650000000000059,
+          "routeStoppedSeconds": 3.26666666666666,
+          "routeTravelM": 3.3880236922784324,
+          "stopTransitions": 0,
+          "maxTurnRate": 1.5000000000122962,
+          "maxAcceleration": 0.6600000000000006,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "left",
+      "preyLength": 0.025,
+      "predatorLength": 0.45,
+      "eligible": true,
+      "hidden": 2,
+      "emerged": 2,
+      "searched-exit": 3,
+      "capture": 0,
+      "escape": 2,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.0054979740920223326,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 3,
+        "captures": 0,
+        "escapes": 2,
+        "blocked": 80,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 859
+      },
+      "searches": 3,
+      "maxPlanMs": 58.008332999999766,
+      "cpuMs": 3145.4509579999994,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.025,
+          "envelope": {
+            "radiusM": 0.009875000000000002,
+            "halfLengthM": 0.007000000000000001,
+            "rotationRadiusM": 0.016875,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 4.34999999999999,
+          "routeStoppedSeconds": 1.566666666666666,
+          "routeTravelM": 0.7559470504158118,
+          "stopTransitions": 0,
+          "maxTurnRate": 3.999996090110135,
+          "maxAcceleration": 0.19500000000000184,
+          "maxBend": 0.41902095388989397
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.45,
+          "envelope": {
+            "radiusM": 0.14400000000000002,
+            "halfLengthM": 0.12600000000000003,
+            "rotationRadiusM": 0.27,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 12.183333333333518,
+          "routeStoppedSeconds": 2.466666666666663,
+          "routeTravelM": 3.9720084742933954,
+          "stopTransitions": 1,
+          "maxTurnRate": 1.5000000000154936,
+          "maxAcceleration": 4.5919600365641555,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "left",
+      "preyLength": 0.04,
+      "predatorLength": 0.18,
+      "eligible": true,
+      "hidden": 3,
+      "emerged": 1,
+      "searched-exit": 3,
+      "capture": 0,
+      "escape": 2,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.004182338010755351,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 3,
+        "captures": 0,
+        "escapes": 2,
+        "blocked": 15,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 767
+      },
+      "searches": 4,
+      "maxPlanMs": 6.325999999999112,
+      "cpuMs": 286.51087499999994,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.04,
+          "envelope": {
+            "radiusM": 0.0158,
+            "halfLengthM": 0.011200000000000002,
+            "rotationRadiusM": 0.027000000000000003,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 7.266666666666646,
+          "routeStoppedSeconds": 0.9833333333333347,
+          "routeTravelM": 1.048698303651494,
+          "stopTransitions": 0,
+          "maxTurnRate": 3.9999989383453967,
+          "maxAcceleration": 0.22800000000000029,
+          "maxBend": 0.4177739237878186
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.18,
+          "envelope": {
+            "radiusM": 0.0576,
+            "halfLengthM": 0.0504,
+            "rotationRadiusM": 0.108,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 6.833333333333314,
+          "routeStoppedSeconds": 2.9499999999999944,
+          "routeTravelM": 3.2808859044363046,
+          "stopTransitions": 1,
+          "maxTurnRate": 1.5000000000122962,
+          "maxAcceleration": 0.5984000000000009,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "left",
+      "preyLength": 0.04,
+      "predatorLength": 0.25,
+      "eligible": true,
+      "hidden": 2,
+      "emerged": 1,
+      "searched-exit": 2,
+      "capture": 0,
+      "escape": 2,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.0045970308763467055,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 2,
+        "captures": 0,
+        "escapes": 2,
+        "blocked": 0,
+        "refills": 0,
+        "routeRetries": 1,
+        "routeAbandons": 0,
+        "movingTurns": 878
+      },
+      "searches": 4,
+      "maxPlanMs": 5.957457999998951,
+      "cpuMs": 449.2214590000003,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.04,
+          "envelope": {
+            "radiusM": 0.0158,
+            "halfLengthM": 0.011200000000000002,
+            "rotationRadiusM": 0.027000000000000003,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 8.083333333333314,
+          "routeStoppedSeconds": 1.949999999999998,
+          "routeTravelM": 1.1158515104113274,
+          "stopTransitions": 0,
+          "maxTurnRate": 3.9999717493931226,
+          "maxAcceleration": 0.22800000000000153,
+          "maxBend": 0.41999004759525155
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.25,
+          "envelope": {
+            "radiusM": 0.08,
+            "halfLengthM": 0.07,
+            "rotationRadiusM": 0.15000000000000002,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 8.283333333333324,
+          "routeStoppedSeconds": 3.383333333333326,
+          "routeTravelM": 3.5602442071589295,
+          "stopTransitions": 0,
+          "maxTurnRate": 1.5000000000144278,
+          "maxAcceleration": 0.22703632822310138,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "left",
+      "preyLength": 0.04,
+      "predatorLength": 0.45,
+      "eligible": true,
+      "hidden": 2,
+      "emerged": 1,
+      "searched-exit": 2,
+      "capture": 0,
+      "escape": 2,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.0054979740920223326,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 3,
+        "captures": 0,
+        "escapes": 2,
+        "blocked": 21,
+        "refills": 0,
+        "routeRetries": 1,
+        "routeAbandons": 0,
+        "movingTurns": 1148
+      },
+      "searches": 4,
+      "maxPlanMs": 59.833707999998296,
+      "cpuMs": 2324.613292000002,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.04,
+          "envelope": {
+            "radiusM": 0.0158,
+            "halfLengthM": 0.011200000000000002,
+            "rotationRadiusM": 0.027000000000000003,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 8.466666666666667,
+          "routeStoppedSeconds": 2.6499999999999955,
+          "routeTravelM": 0.9550846563310527,
+          "stopTransitions": 0,
+          "maxTurnRate": 3.9999812070389376,
+          "maxAcceleration": 0.22800000000000153,
+          "maxBend": 0.4199712574876896
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.45,
+          "envelope": {
+            "radiusM": 0.14400000000000002,
+            "halfLengthM": 0.12600000000000003,
+            "rotationRadiusM": 0.27,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 12.116666666666848,
+          "routeStoppedSeconds": 2.9499999999999944,
+          "routeTravelM": 3.9253745704721297,
+          "stopTransitions": 1,
+          "maxTurnRate": 1.5000000000165594,
+          "maxAcceleration": 4.5919600365641555,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "left",
+      "preyLength": 0.06,
+      "predatorLength": 0.18,
+      "eligible": false,
+      "hidden": 0,
+      "emerged": 0,
+      "searched-exit": 0,
+      "capture": 0,
+      "escape": 0,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.004170621435975945,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 0,
+        "captures": 0,
+        "escapes": 0,
+        "blocked": 0,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 362
+      },
+      "searches": 0,
+      "maxPlanMs": 0.051707999999052845,
+      "cpuMs": 48.8482920000024,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.06,
+          "envelope": {
+            "radiusM": 0.0237,
+            "halfLengthM": 0.016800000000000002,
+            "rotationRadiusM": 0.0405,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 0,
+          "routeStoppedSeconds": 0,
+          "routeTravelM": 0,
+          "stopTransitions": 0,
+          "maxTurnRate": 4.00000000000065,
+          "maxAcceleration": 0,
+          "maxBend": 0.41999999999999976
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.18,
+          "envelope": {
+            "radiusM": 0.0576,
+            "halfLengthM": 0.0504,
+            "rotationRadiusM": 0.108,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 6.183333333333317,
+          "routeStoppedSeconds": 2.8166666666666615,
+          "routeTravelM": 3.9180807038655687,
+          "stopTransitions": 1,
+          "maxTurnRate": 1.5000000000112301,
+          "maxAcceleration": 0.5984000000000034,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "left",
+      "preyLength": 0.06,
+      "predatorLength": 0.25,
+      "eligible": true,
+      "hidden": 2,
+      "emerged": 1,
+      "searched-exit": 2,
+      "capture": 0,
+      "escape": 2,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.0045970308763467055,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 2,
+        "captures": 0,
+        "escapes": 2,
+        "blocked": 28,
+        "refills": 0,
+        "routeRetries": 1,
+        "routeAbandons": 0,
+        "movingTurns": 794
+      },
+      "searches": 3,
+      "maxPlanMs": 4.932958000001236,
+      "cpuMs": 424.0416669999977,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.06,
+          "envelope": {
+            "radiusM": 0.0237,
+            "halfLengthM": 0.016800000000000002,
+            "rotationRadiusM": 0.0405,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 6.883333333333314,
+          "routeStoppedSeconds": 3.0666666666666607,
+          "routeTravelM": 1.0846210518643622,
+          "stopTransitions": 1,
+          "maxTurnRate": 3.9999527702392874,
+          "maxAcceleration": 0.2720000000000017,
+          "maxBend": 0.41703832327642326
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.25,
+          "envelope": {
+            "radiusM": 0.08,
+            "halfLengthM": 0.07,
+            "rotationRadiusM": 0.15000000000000002,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 9.183333333333369,
+          "routeStoppedSeconds": 2.966666666666661,
+          "routeTravelM": 3.9998319886122484,
+          "stopTransitions": 0,
+          "maxTurnRate": 1.5000000000112301,
+          "maxAcceleration": 0.21378474997517882,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "left",
+      "preyLength": 0.06,
+      "predatorLength": 0.45,
+      "eligible": true,
+      "hidden": 2,
+      "emerged": 2,
+      "searched-exit": 2,
+      "capture": 0,
+      "escape": 2,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.0054979740920223326,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 3,
+        "captures": 0,
+        "escapes": 2,
+        "blocked": 74,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 1041
+      },
+      "searches": 5,
+      "maxPlanMs": 50.796667000002344,
+      "cpuMs": 3835.804,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.06,
+          "envelope": {
+            "radiusM": 0.0237,
+            "halfLengthM": 0.016800000000000002,
+            "rotationRadiusM": 0.0405,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 6.649999999999982,
+          "routeStoppedSeconds": 1.7499999999999987,
+          "routeTravelM": 1.454754316303043,
+          "stopTransitions": 0,
+          "maxTurnRate": 3.999983493306701,
+          "maxAcceleration": 0.272,
+          "maxBend": 0.41935530705024504
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.45,
+          "envelope": {
+            "radiusM": 0.14400000000000002,
+            "halfLengthM": 0.12600000000000003,
+            "rotationRadiusM": 0.27,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 12.516666666666868,
+          "routeStoppedSeconds": 3.1499999999999937,
+          "routeTravelM": 4.1422098104996214,
+          "stopTransitions": 1,
+          "maxTurnRate": 1.5000000000122962,
+          "maxAcceleration": 4.5919600365641555,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "left",
+      "preyLength": 0.074,
+      "predatorLength": 0.18,
+      "eligible": false,
+      "hidden": 0,
+      "emerged": 0,
+      "searched-exit": 0,
+      "capture": 0,
+      "escape": 0,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.004170621435975945,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 0,
+        "captures": 0,
+        "escapes": 0,
+        "blocked": 0,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 362
+      },
+      "searches": 0,
+      "maxPlanMs": 0.05699999999706051,
+      "cpuMs": 44.62195799999972,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.074,
+          "envelope": {
+            "radiusM": 0.02923,
+            "halfLengthM": 0.020720000000000002,
+            "rotationRadiusM": 0.04995,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 0,
+          "routeStoppedSeconds": 0,
+          "routeTravelM": 0,
+          "stopTransitions": 0,
+          "maxTurnRate": 4.00000000000065,
+          "maxAcceleration": 0,
+          "maxBend": 0.41999999999999976
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.18,
+          "envelope": {
+            "radiusM": 0.0576,
+            "halfLengthM": 0.0504,
+            "rotationRadiusM": 0.108,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 6.183333333333317,
+          "routeStoppedSeconds": 2.8166666666666615,
+          "routeTravelM": 3.9180807038655687,
+          "stopTransitions": 1,
+          "maxTurnRate": 1.5000000000112301,
+          "maxAcceleration": 0.5984000000000034,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "left",
+      "preyLength": 0.074,
+      "predatorLength": 0.25,
+      "eligible": false,
+      "hidden": 0,
+      "emerged": 0,
+      "searched-exit": 0,
+      "capture": 0,
+      "escape": 0,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.004580504541871185,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 0,
+        "captures": 0,
+        "escapes": 0,
+        "blocked": 0,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 394
+      },
+      "searches": 0,
+      "maxPlanMs": 0.722249999998894,
+      "cpuMs": 83.90004100000078,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.074,
+          "envelope": {
+            "radiusM": 0.02923,
+            "halfLengthM": 0.020720000000000002,
+            "rotationRadiusM": 0.04995,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 0,
+          "routeStoppedSeconds": 0,
+          "routeTravelM": 0,
+          "stopTransitions": 0,
+          "maxTurnRate": 4.00000000000065,
+          "maxAcceleration": 0,
+          "maxBend": 0.41999999999999976
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.25,
+          "envelope": {
+            "radiusM": 0.08,
+            "halfLengthM": 0.07,
+            "rotationRadiusM": 0.15000000000000002,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 7.916666666666644,
+          "routeStoppedSeconds": 3.4499999999999926,
+          "routeTravelM": 4.316550064629278,
+          "stopTransitions": 1,
+          "maxTurnRate": 1.5000000000112301,
+          "maxAcceleration": 0.6600000000000031,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "left",
+      "preyLength": 0.074,
+      "predatorLength": 0.45,
+      "eligible": true,
+      "hidden": 2,
+      "emerged": 1,
+      "searched-exit": 2,
+      "capture": 0,
+      "escape": 2,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.0054979740920223326,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 3,
+        "captures": 0,
+        "escapes": 2,
+        "blocked": 21,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 1304
+      },
+      "searches": 5,
+      "maxPlanMs": 52.09191599999758,
+      "cpuMs": 3760.1108749999985,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.074,
+          "envelope": {
+            "radiusM": 0.02923,
+            "halfLengthM": 0.020720000000000002,
+            "rotationRadiusM": 0.04995,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 10.283333333333424,
+          "routeStoppedSeconds": 1.1666666666666674,
+          "routeTravelM": 1.668339786663062,
+          "stopTransitions": 0,
+          "maxTurnRate": 3.9999900522505065,
+          "maxAcceleration": 0.3028000000000036,
+          "maxBend": 0.41985992953585416
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.45,
+          "envelope": {
+            "radiusM": 0.14400000000000002,
+            "halfLengthM": 0.12600000000000003,
+            "rotationRadiusM": 0.27,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 13.666666666666925,
+          "routeStoppedSeconds": 3.1499999999999937,
+          "routeTravelM": 3.9822359131545126,
+          "stopTransitions": 1,
+          "maxTurnRate": 1.5000000000154936,
+          "maxAcceleration": 4.5919600365641555,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "right",
+      "preyLength": 0.025,
+      "predatorLength": 0.18,
+      "eligible": true,
+      "hidden": 2,
+      "emerged": 2,
+      "searched-exit": 2,
+      "capture": 0,
+      "escape": 2,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.00411345143650602,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 3,
+        "captures": 0,
+        "escapes": 2,
+        "blocked": 13,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 939
+      },
+      "searches": 1,
+      "maxPlanMs": 6.9088749999973516,
+      "cpuMs": 223.68516699999964,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.025,
+          "envelope": {
+            "radiusM": 0.009875000000000002,
+            "halfLengthM": 0.007000000000000001,
+            "rotationRadiusM": 0.016875,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 8.966666666666692,
+          "routeStoppedSeconds": 1.7499999999999987,
+          "routeTravelM": 0.6474756308547733,
+          "stopTransitions": 0,
+          "maxTurnRate": 3.999999932339834,
+          "maxAcceleration": 0.19500000000000142,
+          "maxBend": 0.41999975368281167
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.18,
+          "envelope": {
+            "radiusM": 0.0576,
+            "halfLengthM": 0.0504,
+            "rotationRadiusM": 0.108,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 10.616666666666774,
+          "routeStoppedSeconds": 1.2500000000000004,
+          "routeTravelM": 2.5482585627202003,
+          "stopTransitions": 0,
+          "maxTurnRate": 1.5000000000154936,
+          "maxAcceleration": 0.5984000000000017,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "right",
+      "preyLength": 0.025,
+      "predatorLength": 0.25,
+      "eligible": true,
+      "hidden": 2,
+      "emerged": 1,
+      "searched-exit": 2,
+      "capture": 0,
+      "escape": 2,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.004593243571216568,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 2,
+        "captures": 0,
+        "escapes": 2,
+        "blocked": 1,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 718
+      },
+      "searches": 3,
+      "maxPlanMs": 4.163832999998704,
+      "cpuMs": 318.3102910000016,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.025,
+          "envelope": {
+            "radiusM": 0.009875000000000002,
+            "halfLengthM": 0.007000000000000001,
+            "rotationRadiusM": 0.016875,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 8.600000000000007,
+          "routeStoppedSeconds": 2.249999999999997,
+          "routeTravelM": 0.9928982529821552,
+          "stopTransitions": 0,
+          "maxTurnRate": 3.999999932339834,
+          "maxAcceleration": 0.1950000000000006,
+          "maxBend": 0.41999975368281167
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.25,
+          "envelope": {
+            "radiusM": 0.08,
+            "halfLengthM": 0.07,
+            "rotationRadiusM": 0.15000000000000002,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 8.283333333333324,
+          "routeStoppedSeconds": 2.2666666666666635,
+          "routeTravelM": 3.6290505768815686,
+          "stopTransitions": 0,
+          "maxTurnRate": 1.5000000000112301,
+          "maxAcceleration": 0.6600000000000023,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "right",
+      "preyLength": 0.025,
+      "predatorLength": 0.45,
+      "eligible": true,
+      "hidden": 2,
+      "emerged": 2,
+      "searched-exit": 3,
+      "capture": 0,
+      "escape": 2,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.005650489260191481,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 3,
+        "captures": 0,
+        "escapes": 2,
+        "blocked": 0,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 893
+      },
+      "searches": 1,
+      "maxPlanMs": 74.66708300000028,
+      "cpuMs": 2557.371084000002,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.025,
+          "envelope": {
+            "radiusM": 0.009875000000000002,
+            "halfLengthM": 0.007000000000000001,
+            "rotationRadiusM": 0.016875,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 10.550000000000104,
+          "routeStoppedSeconds": 1.7499999999999987,
+          "routeTravelM": 0.8136886297443329,
+          "stopTransitions": 0,
+          "maxTurnRate": 3.9999999377792905,
+          "maxAcceleration": 0.195000000000001,
+          "maxBend": 0.4199999954885433
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.45,
+          "envelope": {
+            "radiusM": 0.14400000000000002,
+            "halfLengthM": 0.12600000000000003,
+            "rotationRadiusM": 0.27,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 9.733333333333396,
+          "routeStoppedSeconds": 4.466666666666656,
+          "routeTravelM": 3.8458701346837625,
+          "stopTransitions": 0,
+          "maxTurnRate": 1.5000000000122962,
+          "maxAcceleration": 0.26177623689565555,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "right",
+      "preyLength": 0.04,
+      "predatorLength": 0.18,
+      "eligible": true,
+      "hidden": 2,
+      "emerged": 2,
+      "searched-exit": 2,
+      "capture": 0,
+      "escape": 2,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.004113771016143603,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 3,
+        "captures": 0,
+        "escapes": 2,
+        "blocked": 34,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 805
+      },
+      "searches": 3,
+      "maxPlanMs": 6.2054170000010345,
+      "cpuMs": 233.75545899999997,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.04,
+          "envelope": {
+            "radiusM": 0.0158,
+            "halfLengthM": 0.011200000000000002,
+            "rotationRadiusM": 0.027000000000000003,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 8.766666666666682,
+          "routeStoppedSeconds": 2.366666666666663,
+          "routeTravelM": 0.7405525717756998,
+          "stopTransitions": 0,
+          "maxTurnRate": 3.999999985107004,
+          "maxAcceleration": 0.22800000000000153,
+          "maxBend": 0.41993745517852116
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.18,
+          "envelope": {
+            "radiusM": 0.0576,
+            "halfLengthM": 0.0504,
+            "rotationRadiusM": 0.108,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 8.133333333333317,
+          "routeStoppedSeconds": 1.8499999999999983,
+          "routeTravelM": 2.6643818872167344,
+          "stopTransitions": 1,
+          "maxTurnRate": 1.5000000000122962,
+          "maxAcceleration": 0.5984000000000017,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "right",
+      "preyLength": 0.04,
+      "predatorLength": 0.25,
+      "eligible": true,
+      "hidden": 2,
+      "emerged": 1,
+      "searched-exit": 3,
+      "capture": 0,
+      "escape": 2,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.004542042424988992,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 3,
+        "captures": 0,
+        "escapes": 2,
+        "blocked": 20,
+        "refills": 0,
+        "routeRetries": 1,
+        "routeAbandons": 0,
+        "movingTurns": 779
+      },
+      "searches": 2,
+      "maxPlanMs": 4.3489580000023125,
+      "cpuMs": 298.4325830000016,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.04,
+          "envelope": {
+            "radiusM": 0.0158,
+            "halfLengthM": 0.011200000000000002,
+            "rotationRadiusM": 0.027000000000000003,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 8.066666666666647,
+          "routeStoppedSeconds": 3.016666666666661,
+          "routeTravelM": 0.9757901242208288,
+          "stopTransitions": 0,
+          "maxTurnRate": 3.999999985107004,
+          "maxAcceleration": 0.2280000000000007,
+          "maxBend": 0.4199402444739053
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.25,
+          "envelope": {
+            "radiusM": 0.08,
+            "halfLengthM": 0.07,
+            "rotationRadiusM": 0.15000000000000002,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 9.333333333333377,
+          "routeStoppedSeconds": 1.8333333333333317,
+          "routeTravelM": 3.5340182759536423,
+          "stopTransitions": 0,
+          "maxTurnRate": 1.5000000000165594,
+          "maxAcceleration": 0.6600000000000023,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "right",
+      "preyLength": 0.04,
+      "predatorLength": 0.45,
+      "eligible": true,
+      "hidden": 2,
+      "emerged": 2,
+      "searched-exit": 3,
+      "capture": 0,
+      "escape": 2,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.005650604224474325,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 3,
+        "captures": 0,
+        "escapes": 2,
+        "blocked": 50,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 902
+      },
+      "searches": 2,
+      "maxPlanMs": 85.7623339999991,
+      "cpuMs": 2638.8177080000023,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.04,
+          "envelope": {
+            "radiusM": 0.0158,
+            "halfLengthM": 0.011200000000000002,
+            "rotationRadiusM": 0.027000000000000003,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 10.100000000000081,
+          "routeStoppedSeconds": 1.8999999999999981,
+          "routeTravelM": 0.9390275339589902,
+          "stopTransitions": 0,
+          "maxTurnRate": 3.9999999907487367,
+          "maxAcceleration": 0.22800000000000029,
+          "maxBend": 0.4199678884179459
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.45,
+          "envelope": {
+            "radiusM": 0.14400000000000002,
+            "halfLengthM": 0.12600000000000003,
+            "rotationRadiusM": 0.27,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 9.750000000000064,
+          "routeStoppedSeconds": 4.466666666666656,
+          "routeTravelM": 3.84573885537174,
+          "stopTransitions": 0,
+          "maxTurnRate": 1.500000000013362,
+          "maxAcceleration": 0.2617035566126902,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "right",
+      "preyLength": 0.06,
+      "predatorLength": 0.18,
+      "eligible": false,
+      "hidden": 0,
+      "emerged": 0,
+      "searched-exit": 0,
+      "capture": 0,
+      "escape": 0,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.004170543605671264,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 0,
+        "captures": 0,
+        "escapes": 0,
+        "blocked": 0,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 379
+      },
+      "searches": 0,
+      "maxPlanMs": 0.051499999997759005,
+      "cpuMs": 39.48716699999932,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.06,
+          "envelope": {
+            "radiusM": 0.0237,
+            "halfLengthM": 0.016800000000000002,
+            "rotationRadiusM": 0.0405,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 0,
+          "routeStoppedSeconds": 0,
+          "routeTravelM": 0,
+          "stopTransitions": 0,
+          "maxTurnRate": 4.00000000000065,
+          "maxAcceleration": 0,
+          "maxBend": 0.41999999999999976
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.18,
+          "envelope": {
+            "radiusM": 0.0576,
+            "halfLengthM": 0.0504,
+            "rotationRadiusM": 0.108,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 6.333333333333316,
+          "routeStoppedSeconds": 1.9333333333333313,
+          "routeTravelM": 4.223955058832949,
+          "stopTransitions": 0,
+          "maxTurnRate": 1.5000000000154936,
+          "maxAcceleration": 0.5984,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "right",
+      "preyLength": 0.06,
+      "predatorLength": 0.25,
+      "eligible": true,
+      "hidden": 2,
+      "emerged": 1,
+      "searched-exit": 3,
+      "capture": 0,
+      "escape": 2,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.0044869602348696965,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 3,
+        "captures": 0,
+        "escapes": 2,
+        "blocked": 83,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 761
+      },
+      "searches": 3,
+      "maxPlanMs": 4.37658399999782,
+      "cpuMs": 246.18516700000328,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.06,
+          "envelope": {
+            "radiusM": 0.0237,
+            "halfLengthM": 0.016800000000000002,
+            "rotationRadiusM": 0.0405,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 7.116666666666647,
+          "routeStoppedSeconds": 1.866666666666665,
+          "routeTravelM": 1.4308966517943116,
+          "stopTransitions": 0,
+          "maxTurnRate": 3.9999931656511625,
+          "maxAcceleration": 0.27200000000000046,
+          "maxBend": 0.4197668311285059
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.25,
+          "envelope": {
+            "radiusM": 0.08,
+            "halfLengthM": 0.07,
+            "rotationRadiusM": 0.15000000000000002,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 8.24999999999999,
+          "routeStoppedSeconds": 1.483333333333333,
+          "routeTravelM": 3.849884275539976,
+          "stopTransitions": 0,
+          "maxTurnRate": 1.5000000000154936,
+          "maxAcceleration": 0.6600000000000056,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "right",
+      "preyLength": 0.06,
+      "predatorLength": 0.45,
+      "eligible": true,
+      "hidden": 2,
+      "emerged": 2,
+      "searched-exit": 3,
+      "capture": 0,
+      "escape": 2,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.005713360513801951,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 3,
+        "captures": 0,
+        "escapes": 2,
+        "blocked": 185,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 675
+      },
+      "searches": 0,
+      "maxPlanMs": 6.2175829999978305,
+      "cpuMs": 947.2137499999953,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.06,
+          "envelope": {
+            "radiusM": 0.0237,
+            "halfLengthM": 0.016800000000000002,
+            "rotationRadiusM": 0.0405,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 6.349999999999983,
+          "routeStoppedSeconds": 1.9833333333333312,
+          "routeTravelM": 1.0848137044633075,
+          "stopTransitions": 0,
+          "maxTurnRate": 3.999999940427263,
+          "maxAcceleration": 0.27200000000000046,
+          "maxBend": 0.4197668311285059
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.45,
+          "envelope": {
+            "radiusM": 0.14400000000000002,
+            "halfLengthM": 0.12600000000000003,
+            "rotationRadiusM": 0.27,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 7.19999999999998,
+          "routeStoppedSeconds": 3.4499999999999926,
+          "routeTravelM": 4.471944776430975,
+          "stopTransitions": 1,
+          "maxTurnRate": 1.5000000000101643,
+          "maxAcceleration": 0.8360000000000078,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "right",
+      "preyLength": 0.074,
+      "predatorLength": 0.18,
+      "eligible": false,
+      "hidden": 0,
+      "emerged": 0,
+      "searched-exit": 0,
+      "capture": 0,
+      "escape": 0,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.004170543605671264,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 0,
+        "captures": 0,
+        "escapes": 0,
+        "blocked": 0,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 379
+      },
+      "searches": 0,
+      "maxPlanMs": 0.05233399999997346,
+      "cpuMs": 37.62491699999373,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.074,
+          "envelope": {
+            "radiusM": 0.02923,
+            "halfLengthM": 0.020720000000000002,
+            "rotationRadiusM": 0.04995,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 0,
+          "routeStoppedSeconds": 0,
+          "routeTravelM": 0,
+          "stopTransitions": 0,
+          "maxTurnRate": 4.00000000000065,
+          "maxAcceleration": 0,
+          "maxBend": 0.41999999999999976
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.18,
+          "envelope": {
+            "radiusM": 0.0576,
+            "halfLengthM": 0.0504,
+            "rotationRadiusM": 0.108,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 6.333333333333316,
+          "routeStoppedSeconds": 1.9333333333333313,
+          "routeTravelM": 4.223955058832949,
+          "stopTransitions": 0,
+          "maxTurnRate": 1.5000000000154936,
+          "maxAcceleration": 0.5984,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "right",
+      "preyLength": 0.074,
+      "predatorLength": 0.25,
+      "eligible": false,
+      "hidden": 0,
+      "emerged": 0,
+      "searched-exit": 0,
+      "capture": 0,
+      "escape": 0,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.004579961089178523,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 0,
+        "captures": 0,
+        "escapes": 0,
+        "blocked": 0,
+        "refills": 0,
+        "routeRetries": 0,
+        "routeAbandons": 0,
+        "movingTurns": 373
+      },
+      "searches": 1,
+      "maxPlanMs": 13.546791000000667,
+      "cpuMs": 157.6937919999982,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.074,
+          "envelope": {
+            "radiusM": 0.02923,
+            "halfLengthM": 0.020720000000000002,
+            "rotationRadiusM": 0.04995,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 0,
+          "routeStoppedSeconds": 0,
+          "routeTravelM": 0,
+          "stopTransitions": 0,
+          "maxTurnRate": 3.9999991316526375,
+          "maxAcceleration": 0,
+          "maxBend": 0.41999999999999976
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.25,
+          "envelope": {
+            "radiusM": 0.08,
+            "halfLengthM": 0.07,
+            "rotationRadiusM": 0.15000000000000002,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 7.499999999999979,
+          "routeStoppedSeconds": 3.133333333333327,
+          "routeTravelM": 4.400995136741486,
+          "stopTransitions": 0,
+          "maxTurnRate": 1.5000000000197569,
+          "maxAcceleration": 0.22571627706906114,
+          "maxBend": 0
+        }
+      ]
+    },
+    {
+      "region": "right",
+      "preyLength": 0.074,
+      "predatorLength": 0.45,
+      "eligible": true,
+      "hidden": 2,
+      "emerged": 1,
+      "searched-exit": 2,
+      "capture": 0,
+      "escape": 2,
+      "penetrations": 0,
+      "sweepViolations": 0,
+      "maxStep": 0.005610830800586374,
+      "stats": {
+        "feeds": 0,
+        "eaten": 0,
+        "hunts": 3,
+        "captures": 0,
+        "escapes": 2,
+        "blocked": 3,
+        "refills": 0,
+        "routeRetries": 2,
+        "routeAbandons": 0,
+        "movingTurns": 1292
+      },
+      "searches": 4,
+      "maxPlanMs": 7.17079200000444,
+      "cpuMs": 687.463291,
+      "actors": [
+        {
+          "id": "shelter-fish",
+          "totalLengthM": 0.074,
+          "envelope": {
+            "radiusM": 0.02923,
+            "halfLengthM": 0.020720000000000002,
+            "rotationRadiusM": 0.04995,
+            "version": "clown-analytic-v1"
+          },
+          "movingTurnSeconds": 14.283333333333623,
+          "routeStoppedSeconds": 1.35,
+          "routeTravelM": 1.4514700709722415,
+          "stopTransitions": 1,
+          "maxTurnRate": 3.9999996034911236,
+          "maxAcceleration": 0.30280000000000196,
+          "maxBend": 0.4194621899780692
+        },
+        {
+          "id": "hunter",
+          "totalLengthM": 0.45,
+          "envelope": {
+            "radiusM": 0.14400000000000002,
+            "halfLengthM": 0.12600000000000003,
+            "rotationRadiusM": 0.27,
+            "version": "predator-legacy-proxy-v1"
+          },
+          "movingTurnSeconds": 9.650000000000059,
+          "routeStoppedSeconds": 3.3166666666666598,
+          "routeTravelM": 3.683727582118593,
+          "stopTransitions": 0,
+          "maxTurnRate": 1.5000000000122962,
+          "maxAcceleration": 0.2615606707298246,
+          "maxBend": 0
+        }
+      ]
+    }
+  ]
+}

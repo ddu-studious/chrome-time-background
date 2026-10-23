@@ -1,0 +1,162 @@
+{
+  "at": "2026-10-23T11:54:50.121Z",
+  "config": {
+    "revision": 2,
+    "mode": "auto",
+    "provider": "deepseek",
+    "model": "deepseek-flash",
+    "contextLength": 32768,
+    "cpuPercent": 85,
+    "minFreeMemoryMb": 1024,
+    "contextFallback": true,
+    "keyConfigured": true
+  },
+  "cases": [
+    {
+      "name": "manual",
+      "ok": true,
+      "status": "ready",
+      "elapsedMs": 1100,
+      "execution": {
+        "requestId": "e502578283590a3d43c878a8f458319d",
+        "scene": "assistant.plan",
+        "source": "model",
+        "status": "ready",
+        "model": "deepseek-flash",
+        "reasoning": "off",
+        "requestedModel": "deepseek:configured",
+        "requestedReasoning": "off",
+        "contextBudget": {
+          "contextLength": 32768,
+          "contextSource": "remote-config",
+          "planningWindow": 32768,
+          "inputBudget": 31056,
+          "outputBudget": 1200,
+          "safetyMargin": 512,
+          "estimatedInputTokens": 5375,
+          "originalEstimatedInputTokens": 5375,
+          "instructionsEstimate": 5081,
+          "inputEstimate": 294,
+          "observationCount": 0,
+          "completedStepCount": 0,
+          "duplicateTurnsRemoved": 0,
+          "compacted": false,
+          "tokenCountSource": "remote-conservative-estimate"
+        },
+        "policyRevision": 9,
+        "elapsedMs": 860,
+        "usage": {
+          "inputTokens": 2083,
+          "outputTokens": 30
+        },
+        "routing": {
+          "provider": "deepseek",
+          "model": "deepseek-flash",
+          "reason": "manual",
+          "configRevision": 2
+        },
+        "attempts": [
+          {
+            "index": 1,
+            "reasoning": "off",
+            "maxOutputTokens": 1200,
+            "timeoutMs": 90000,
+            "startedAt": 1792756490174,
+            "status": "succeeded",
+            "contextLength": 32768,
+            "contextSource": "remote-config",
+            "usage": {
+              "inputTokens": 2083,
+              "outputTokens": 30
+            },
+            "elapsedMs": 784
+          }
+        ],
+        "effectiveReasoning": "off",
+        "usageComplete": true
+      }
+    },
+    {
+      "name": "automatic",
+      "ok": true,
+      "status": "ready",
+      "elapsedMs": 3240,
+      "execution": {
+        "requestId": "7f4ac0aaa0f2f4b71ae79d47a41da433",
+        "scene": "assistant.plan",
+        "source": "model",
+        "status": "ready",
+        "model": "deepseek-flash",
+        "reasoning": "off",
+        "requestedModel": "acceptance/intentionally-missing-local-model",
+        "requestedReasoning": "off",
+        "contextBudget": {
+          "contextLength": 32768,
+          "contextSource": "remote-config",
+          "planningWindow": 32768,
+          "inputBudget": 31056,
+          "outputBudget": 1200,
+          "safetyMargin": 512,
+          "estimatedInputTokens": 5375,
+          "originalEstimatedInputTokens": 5375,
+          "instructionsEstimate": 5081,
+          "inputEstimate": 294,
+          "observationCount": 0,
+          "completedStepCount": 0,
+          "duplicateTurnsRemoved": 0,
+          "compacted": false,
+          "tokenCountSource": "remote-conservative-estimate"
+        },
+        "policyRevision": 9,
+        "elapsedMs": 2855,
+        "usage": {
+          "inputTokens": 2083,
+          "outputTokens": 30
+        },
+        "routing": {
+          "provider": "deepseek",
+          "model": "deepseek-flash",
+          "reason": "memory",
+          "configRevision": 2,
+          "resource": {
+            "cpuPercent": 98,
+            "freeMemoryMb": 749
+          }
+        },
+        "attempts": [
+          {
+            "index": 1,
+            "reasoning": "off",
+            "maxOutputTokens": 1200,
+            "timeoutMs": 90000,
+            "startedAt": 1792756492253,
+            "status": "succeeded",
+            "contextLength": 32768,
+            "contextSource": "remote-config",
+            "usage": {
+              "inputTokens": 2083,
+              "outputTokens": 30
+            },
+            "elapsedMs": 1797
+          }
+        ],
+        "effectiveReasoning": "off",
+        "usageComplete": true
+      }
+    }
+  ],
+  "after": {
+    "remote": {
+      "revision": 2,
+      "mode": "auto",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "contextLength": 32768,
+      "cpuPercent": 85,
+      "minFreeMemoryMb": 1024,
+      "contextFallback": true,
+      "keyConfigured": true
+    },
+    "usageAdmitted": 3
+  }
+}

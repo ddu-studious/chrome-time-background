@@ -1,0 +1,196 @@
+{
+  "version": "clown-analytic-v1",
+  "sources": {
+    "upstream/scenes/reefscape/src/fish-model.js": "a41e43340f06c51622ca8312c1e97dd6f8ad4c9b7d34d8823e0b95a9c4a75cc4",
+    "clown-appearance.mjs": "6c9cd1246352a7e0106fd4c70e26f11fd54300ce5e8143739bedf8dd71acc63d",
+    "fish-motion.mjs": "c72a433b7a3bfd90b91067dc2ef412bc23d4098d75e7a41a19a84da1bbb27f21",
+    "fish-envelope.mjs": "b8cb2a8b0b356fbc50470621b502d12c0c5ea7d06bc5de92aba1c2e3c3611af3"
+  },
+  "contract": {
+    "version": "clown-analytic-v1",
+    "modelTL": 1.25,
+    "modelCenterOffset": 0.085,
+    "upstreamSha256": "a41e43340f06c51622ca8312c1e97dd6f8ad4c9b7d34d8823e0b95a9c4a75cc4",
+    "appearanceSha256": "6c9cd1246352a7e0106fd4c70e26f11fd54300ce5e8143739bedf8dd71acc63d",
+    "motionSha256": "c72a433b7a3bfd90b91067dc2ef412bc23d4098d75e7a41a19a84da1bbb27f21",
+    "radiusRatio": 0.395,
+    "halfLengthRatio": 0.28,
+    "tailMaximum": 0.117,
+    "bendMaximum": 0.42,
+    "rowingMaximum": 0.85,
+    "combinedFlexMaximum": 0.495,
+    "flexStart": 0.3,
+    "flexLength": 1.14,
+    "rowHingeGain": 3.4,
+    "rowAxial": 0.034,
+    "rowLateral": 0.05
+  },
+  "geometries": [
+    {
+      "variant": "legacy",
+      "lod": "FULL",
+      "version": "clown-analytic-v1",
+      "vertices": 6646,
+      "maximumRaw": 0.4872325687972684,
+      "radiusRaw": 0.49375,
+      "halfLengthRaw": 0.35000000000000003,
+      "reserveRaw": 0.006517431202731627,
+      "maximumRatio": 0.3897860550378147,
+      "reserveRatio": 0.005213944962185302,
+      "witness": {
+        "index": 4887,
+        "x": -0.7072293758392334,
+        "y": -0.057344771921634674,
+        "z": 0.013584424741566181,
+        "part": 1,
+        "xMin": -0.6222293758392334,
+        "xMax": -0.6222293758392334,
+        "zMin": -0.3728290507116337,
+        "zMax": 0.39999790019476605,
+        "distanceBound": 0.4872325687972684
+      }
+    },
+    {
+      "variant": "legacy",
+      "lod": "FAR",
+      "version": "clown-analytic-v1",
+      "vertices": 2884,
+      "maximumRaw": 0.4872325687972684,
+      "radiusRaw": 0.49375,
+      "halfLengthRaw": 0.35000000000000003,
+      "reserveRaw": 0.006517431202731627,
+      "maximumRatio": 0.3897860550378147,
+      "reserveRatio": 0.005213944962185302,
+      "witness": {
+        "index": 1871,
+        "x": -0.7072293758392334,
+        "y": -0.057344771921634674,
+        "z": 0.013584424741566181,
+        "part": 1,
+        "xMin": -0.6222293758392334,
+        "xMax": -0.6222293758392334,
+        "zMin": -0.3728290507116337,
+        "zMax": 0.39999790019476605,
+        "distanceBound": 0.4872325687972684
+      }
+    },
+    {
+      "variant": "reference",
+      "lod": "FULL",
+      "version": "clown-analytic-v1",
+      "vertices": 6646,
+      "maximumRaw": 0.48723662871213785,
+      "radiusRaw": 0.49375,
+      "halfLengthRaw": 0.35000000000000003,
+      "reserveRaw": 0.006513371287862169,
+      "maximumRatio": 0.38978930296971026,
+      "reserveRatio": 0.0052106970302897345,
+      "witness": {
+        "index": 4887,
+        "x": -0.7072293758392334,
+        "y": -0.057344771921634674,
+        "z": 0.01358937006443739,
+        "part": 1,
+        "xMin": -0.6222293758392334,
+        "xMax": -0.6222293758392334,
+        "zMin": -0.3728241053887625,
+        "zMax": 0.40000284551763726,
+        "distanceBound": 0.48723662871213785
+      }
+    },
+    {
+      "variant": "reference",
+      "lod": "FAR",
+      "version": "clown-analytic-v1",
+      "vertices": 2884,
+      "maximumRaw": 0.48723662871213785,
+      "radiusRaw": 0.49375,
+      "halfLengthRaw": 0.35000000000000003,
+      "reserveRaw": 0.006513371287862169,
+      "maximumRatio": 0.38978930296971026,
+      "reserveRatio": 0.0052106970302897345,
+      "witness": {
+        "index": 1871,
+        "x": -0.7072293758392334,
+        "y": -0.057344771921634674,
+        "z": 0.01358937006443739,
+        "part": 1,
+        "xMin": -0.6222293758392334,
+        "xMax": -0.6222293758392334,
+        "zMin": -0.3728241053887625,
+        "zMax": 0.40000284551763726,
+        "distanceBound": 0.48723662871213785
+      }
+    }
+  ],
+  "sizes": [
+    {
+      "totalLengthM": 0.025,
+      "radiusM": 0.009875000000000002,
+      "halfLengthM": 0.007000000000000001,
+      "rotationRadiusM": 0.016875,
+      "version": "clown-analytic-v1",
+      "minimumAnalyticReserveM": 0.00013026742575724336,
+      "previous": {
+        "radiusM": 0.009500000000000001,
+        "halfLengthM": 0.007000000000000001,
+        "rotationRadiusM": 0.0165
+      },
+      "radiusIncreaseM": 0.00037500000000000033,
+      "rotationIncreaseM": 0.0003749999999999986
+    },
+    {
+      "totalLengthM": 0.04,
+      "radiusM": 0.0158,
+      "halfLengthM": 0.011200000000000002,
+      "rotationRadiusM": 0.027000000000000003,
+      "version": "clown-analytic-v1",
+      "minimumAnalyticReserveM": 0.0002084278812115894,
+      "previous": {
+        "radiusM": 0.0152,
+        "halfLengthM": 0.011200000000000002,
+        "rotationRadiusM": 0.0264
+      },
+      "radiusIncreaseM": 0.0006000000000000016,
+      "rotationIncreaseM": 0.0006000000000000016
+    },
+    {
+      "totalLengthM": 0.06,
+      "radiusM": 0.0237,
+      "halfLengthM": 0.016800000000000002,
+      "rotationRadiusM": 0.0405,
+      "version": "clown-analytic-v1",
+      "minimumAnalyticReserveM": 0.00031264182181738406,
+      "previous": {
+        "radiusM": 0.0228,
+        "halfLengthM": 0.016800000000000002,
+        "rotationRadiusM": 0.0396
+      },
+      "radiusIncreaseM": 0.000899999999999998,
+      "rotationIncreaseM": 0.000899999999999998
+    },
+    {
+      "totalLengthM": 0.074,
+      "radiusM": 0.02923,
+      "halfLengthM": 0.020720000000000002,
+      "rotationRadiusM": 0.04995,
+      "version": "clown-analytic-v1",
+      "minimumAnalyticReserveM": 0.00038559158024144036,
+      "previous": {
+        "radiusM": 0.02812,
+        "halfLengthM": 0.020720000000000002,
+        "rotationRadiusM": 0.04884
+      },
+      "radiusIncreaseM": 0.0011099999999999999,
+      "rotationIncreaseM": 0.0011099999999999999
+    }
+  ],
+  "proof": [
+    "Legacy states: tail<=.117, bend=0, row<=.85. Reference targets: tail<=.075, |bend|<=.42, row<=.8.",
+    "Same blend coefficient for tail and bend preserves tail+|bend|<=.495 by convexity. Runtime rejects violations without clipping.",
+    "For every vertex and every real phase, abs(flex)<=.495*q^2, abs(finX)<=.85*h^2*.034, abs(finZ)<=.85*h*.05.",
+    "Raw vertex X is shifted by +.085 before metre conversion TL/1.25. Interval maximum distance to [-.35,.35] is checked for every FULL/FAR vertex.",
+    "Each capsule is convex. Every GPU triangle lies in the convex hull of its deformed vertices, so complete vertex coverage covers its surface.",
+    "This proves bounded shape containment at any pose; swept translation/rotation and terrain collision remain separate runtime checks."
+  ]
+}

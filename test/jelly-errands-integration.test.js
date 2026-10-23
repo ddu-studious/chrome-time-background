@@ -469,6 +469,6 @@ test('设置页状态提示：没常驻、没连上、组件版本过旧、v8 �
 });
 
 test('脚本版本钉子：settings-page.js?v=17，且仍在 chrome-shim 之后加载', () => {
-  assert.ok(settingsHtml.includes('js/settings-page.js?v=19'));
-  assert.ok(settingsHtml.indexOf('js/chrome-shim.js?v=5') < settingsHtml.indexOf('js/settings-page.js?v=19'));
+  assert.ok(settingsHtml.includes('js/settings-page.js?v=20'));
+  assert.ok(settingsHtml.indexOf('js/chrome-shim.js?v=5') < settingsHtml.indexOf('js/settings-page.js?v=20'));
 });

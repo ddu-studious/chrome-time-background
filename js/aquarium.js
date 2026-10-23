@@ -64,9 +64,18 @@
 
     // ---------- 画法 ----------
     // 每种鱼：half 是 5 个站位（头 → 尾）的半宽（占体长的比例）；tail 是尾鳍形状与长度；dorsal 是背鳍高度；其余是各种的特征。
+    // 2026-10-23 起多了三个可选特征：twoTone（身体前后两色，值是分界位置）、bars（竖向黑带 [位置, 宽度]，只画在身体里）、sail（背鳍引出的白色长丝）；没有这些字段的旧种，每一笔与之前完全相同。
     const SHAPES = Object.freeze({
         neon: { half: [0.02, 0.11, 0.13, 0.08, 0.03], tail: 'fork', tailLen: 0.3, dorsal: 0.06, stripe: true },
         tang: { half: [0.03, 0.16, 0.2, 0.12, 0.04], tail: 'fork', tailLen: 0.32, dorsal: 0.2 },
+        // 六种新小鱼（颜色与花纹是示意，不是写实）：青绿光鳃鱼——苗条的叉尾小鱼；金花鲈——体侧一道洋红纵纹、背鳍与长叉尾；
+        // 皇家伽玛——前半身洋红、后半身黄、圆尾；镰鱼——高圆盘身体、两条黑带、向后掠的旗状高背鳍与白色长丝；蝴蝶鱼——圆盘身体、一条穿眼黑带；天竺鲷——椭圆身体、大眼睛、尾柄一道窄黑带
+        chromis: { half: [0.03, 0.12, 0.16, 0.11, 0.035], tail: 'fork', tailLen: 0.32, dorsal: 0.12, anal: 0.07, sweep: -0.04, eye: 0.034 },
+        anthias: { half: [0.03, 0.1, 0.125, 0.085, 0.03], tail: 'fork', tailLen: 0.36, dorsal: 0.2, anal: 0.08, sweep: -0.06, stripe: true, eye: 0.036 },
+        gramma: { half: [0.04, 0.12, 0.145, 0.105, 0.04], tail: 'round', tailLen: 0.24, dorsal: 0.14, anal: 0.08, sweep: -0.03, twoTone: 0.5, pectoral: true, eye: 0.04 },
+        idol: { half: [0.05, 0.31, 0.4, 0.31, 0.08], tail: 'fork', tailLen: 0.22, dorsal: 0.42, anal: 0.1, sweep: -0.12, bars: [[0.26, 0.1], [0.7, 0.14]], sail: true, eye: 0.03 },
+        butterfly: { half: [0.06, 0.29, 0.36, 0.29, 0.09], tail: 'round', tailLen: 0.2, dorsal: 0.16, anal: 0.1, sweep: -0.05, bars: [[0.15, 0.1]], eye: 0.036 },
+        cardinal: { half: [0.06, 0.18, 0.22, 0.16, 0.06], tail: 'fork', tailLen: 0.24, dorsal: 0.14, anal: 0.1, sweep: -0.02, bars: [[0.8, 0.06]], eye: 0.058 },
         // 小丑鱼：圆胖的橙色身体 + 3 条带黑边的白带（只画在身体里）+ 圆尾与胸鳍
         clown: { half: [0.06, 0.22, 0.26, 0.18, 0.07], tail: 'round', tailLen: 0.3, dorsal: 0.36, bands: 3, pectoral: true, eye: 0.04 },
         // 河豚：接近圆球、浅色肚皮、短刺一圈、小圆尾与胸鳍
@@ -96,6 +105,21 @@
         const i = Math.min(spine.length - 2, Math.floor(t));
         const f = t - i;
         return { x: lerp(spine[i].x, spine[i + 1].x, f), y: lerp(spine[i].y, spine[i + 1].y, f) };
+    }
+
+    /**
+     * 镰鱼旗状背鳍的三个点（纯函数，鱼本地 px）：前底 p0（脊柱 u=0.3 的背上）、后底 p2（u=0.55）、尖端 tip（沿体长 u=0.72，高出身体 height 倍体长）。
+     * 鳍的轮廓与背鳍引出的长丝都用它，所以长丝接在鳍尖上。
+     */
+    function sailPoints(spine, half, len, height) {
+        const front = spineAt(spine, 0.3);
+        const rear = spineAt(spine, 0.55);
+        const tipBase = spineAt(spine, 0.72);
+        return {
+            p0: { x: front.x, y: front.y - halfAt(half, 0.3) * len * 0.95 },
+            p2: { x: rear.x, y: rear.y - halfAt(half, 0.55) * len * 0.95 },
+            tip: { x: tipBase.x, y: tipBase.y - (halfAt(half, 0.72) + height) * len },
+        };
     }
 
     /** n 条带/纹在身体中段 0.2…0.8 之间等距排开（n 为 1 时在正中）。 */
@@ -302,14 +326,40 @@
                 ctx.fill();
             }
         }
-        if (shape.dorsal > 0 && !far) { drawFin(ctx, spine, half, len, shape.dorsal, -1, shape.sweep); ctx.fill(); }
+        if (shape.dorsal > 0 && !far) {
+            if (shape.sail) {
+                // 镰鱼的背鳍：高高竖起、尖端向后掠的旗状鳍（颜色比别的鳍浅），尖端再引出一条白色长丝（见下面的 sail 特征）；dorsal 是鳍尖高出身体的倍数
+                const s = sailPoints(spine, half, len, shape.dorsal);
+                ctx.fillStyle = rgba(mixColor(accent, [255, 255, 255], 0.45), A * 0.7);
+                ctx.beginPath();
+                ctx.moveTo(s.p0.x, s.p0.y);
+                ctx.quadraticCurveTo(s.p0.x - len * 0.06, s.tip.y + (s.p0.y - s.tip.y) * 0.15, s.tip.x, s.tip.y);
+                ctx.quadraticCurveTo(s.tip.x + len * 0.04, s.p2.y + (s.tip.y - s.p2.y) * 0.3, s.p2.x, s.p2.y);
+                ctx.closePath();
+                ctx.fill();
+                ctx.fillStyle = rgba(accent, A * 0.55);           // 还原：臀鳍与尾仍是普通鳍的颜色
+            } else {
+                drawFin(ctx, spine, half, len, shape.dorsal, -1, shape.sweep);
+                ctx.fill();
+            }
+        }
         if (shape.anal && !far) { drawFin(ctx, spine, half, len, shape.anal, 1, shape.sweep); ctx.fill(); }
         drawTail(ctx, shape, spine[4], len);
         ctx.fill();
 
         // 身体
         if (far) {
-            ctx.fillStyle = rgba(main, A * 0.8);
+            // 前后两色的鱼（皇家伽玛）远处平涂取两色的中间色，免得远看只剩一种颜色
+            ctx.fillStyle = rgba(shape.twoTone ? mixColor(main, accent, 0.5) : main, A * 0.8);
+        } else if (shape.twoTone) {
+            // 沿体长的水平渐变：头段主色（略提亮）、尾段点缀色，分界处前后各 6% 的过渡；这种鱼没有竖向的明暗渐变
+            const cut = clamp(shape.twoTone, 0.2, 0.8);
+            const g = ctx.createLinearGradient(len * 0.5, 0, -len * 0.5, 0);
+            g.addColorStop(0, rgba(mixColor(main, [255, 255, 255], 0.2), A * 0.85));
+            g.addColorStop(cut - 0.06, rgba(main, A * 0.85));
+            g.addColorStop(cut + 0.06, rgba(accent, A * 0.85));
+            g.addColorStop(1, rgba(mixColor(accent, [255, 255, 255], 0.15), A * 0.75));
+            ctx.fillStyle = g;
         } else {
             const w = half[2] * len;
             const g = ctx.createLinearGradient(0, -w, 0, w);
@@ -360,6 +410,20 @@
             }
             ctx.restore();
         }
+        if (shape.bars && !far) {
+            // 镰鱼、蝴蝶鱼的黑带：bars 是 [位置 u, 宽度（占体长）]，只画在身体里（按身体轮廓裁剪），深色须用 source-over 才看得见
+            ctx.save();
+            ctx.globalCompositeOperation = 'source-over';
+            bodyPath(ctx, spine, half, len);
+            ctx.clip();
+            ctx.fillStyle = rgba([24, 18, 30], A * 0.88);
+            for (const [u, width] of shape.bars) {
+                const p = spineAt(spine, u);
+                const h = halfAt(half, u) * len * 1.2;
+                ctx.fillRect(p.x - width * len / 2, p.y - h, width * len, h * 2);
+            }
+            ctx.restore();
+        }
         if (shape.stripes && !far) {
             // 神仙鱼的竖纹：同样只画在身体里，深色须用 source-over 才看得见
             ctx.save();
@@ -392,6 +456,18 @@
                 ctx.quadraticCurveTo(p.x - len * (0.1 + k * 0.05), p.y + h + len * 0.16, p.x - len * (0.2 + k * 0.08) + sway, p.y + h + len * (0.34 + k * 0.08));
                 ctx.stroke();
             }
+        }
+        if (shape.sail && !far) {
+            // 镰鱼背鳍尖端引出的白色长丝：向后飘出身体之外，随摆动轻荡
+            const { tip } = sailPoints(spine, half, len, shape.dorsal);
+            const sway = Math.sin(fish.phase * 0.8 - 0.6) * len * 0.05;
+            ctx.strokeStyle = rgba([255, 255, 255], A * 0.8);
+            ctx.lineWidth = Math.max(0.8, len * 0.014);
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(tip.x, tip.y);
+            ctx.quadraticCurveTo(tip.x - len * 0.3, tip.y + len * 0.02 + sway * 0.5, tip.x - len * 0.7, tip.y + len * 0.2 + sway);
+            ctx.stroke();
         }
         if (shape.pectoral && !far) {
             const p = spineAt(spine, 0.3);
@@ -560,8 +636,8 @@
         const storage = () => (chromeApi && chromeApi.storage && chromeApi.storage.local) || null;
 
         /**
-         * 读取并整理。返回 { ok, entries }：读取抛错或是未来版本的数据（v 不是 1）时 ok:false，这时不得写入，免得覆盖看不懂的原数据；
-         * 没有数据或明显不是我们写的东西当空（写入会替换它）。读取阶段从不写存储。
+         * 读取并整理。返回 { ok, entries }：读取抛错或是看不懂的版本的数据（v 是数字但不在 Core.STORAGE_VERSIONS 里，即不是 1 或 2）时 ok:false，
+         * 这时不得写入，免得覆盖看不懂的原数据；没有数据或明显不是我们写的东西当空（写入会替换它）。读取阶段从不写存储。
          */
         async function readStored() {
             const area = storage();
@@ -576,7 +652,7 @@
 
         function parseValue(value) {
             if (value === undefined || value === null) return { ok: true, entries: [] };
-            if (typeof value === 'object' && !Array.isArray(value) && typeof value.v === 'number' && value.v !== 1) return { ok: false, entries: [] };
+            if (typeof value === 'object' && !Array.isArray(value) && typeof value.v === 'number' && !Core.STORAGE_VERSIONS.includes(value.v)) return { ok: false, entries: [] };
             if (typeof value !== 'object' || Array.isArray(value) || !Array.isArray(value.fish)) return { ok: true, entries: [] };
             return { ok: true, entries: Core.normalizeEntries(value.fish, false).entries };
         }
@@ -596,7 +672,8 @@
                 const outcome = fn(stored.entries);
                 if (outcome.reason) return { ok: false, reason: outcome.reason };
                 const area = storage();
-                try { await area.set({ [STORAGE_KEY]: { v: 1, fish: outcome.entries } }); } catch { return { ok: false, reason: 'storage' }; }
+                // 版本号按名单内容定：只有原有物种时仍写 v:1（旧版本照常读写），有新种才写 v:2（旧版本看到会“看不懂就不碰”，不会覆盖）
+                try { await area.set({ [STORAGE_KEY]: { v: Core.storageVersionOf(outcome.entries), fish: outcome.entries } }); } catch { return { ok: false, reason: 'storage' }; }
                 if (gen === generation) applyEntries(outcome.entries, options);
                 return { ok: true };
             });
@@ -1070,8 +1147,10 @@
             try {
                 if (!loaded) return true;
                 const low = !!lowPower;
-                if (!world || world.lowPower !== low) {
-                    world = Core.createWorld({ width, height, random, lowPower: low });
+                // options.sizes：设置里的“个体大小差异”。只有明确为 true 才开（宿主的设置默认开；没传的调用方与此前逐位一致）；与省流量一样，切换时重建世界——个体大小只在鱼出生时定，大小由条目 id 决定，所以切回来是同样的大小
+                const sizes = options.sizes === true;
+                if (!world || world.lowPower !== low || world.sizes !== sizes) {
+                    world = Core.createWorld({ width, height, random, lowPower: low, sizes });
                     play = null;
                     pred = null;
                     flow = null; flowPad = null;
@@ -1154,7 +1233,8 @@
             isGrabbing: () => !!session,
             entries: () => entries.map(item => ({ id: item.id, species: item.species, addedAt: item.addedAt })),
             // realDrawn：上一帧用写实画法画出的鱼数；realFailed：写实画法抛过异常、本页面已改用卡通（验收诊断，业务路径不读）
-            state: () => ({ started, failed, loaded, entries: entries.length, fish: world ? world.fish.length : 0, grabbing: !!session, playFailed, realDrawn, realFailed: realBroken, predationFailed: predFailed, flowFailed, lightFailed, flowLive: !!flow, raysLive: !!light }),
+            // sizes：世界里个体大小差异是否开着（验收诊断，业务路径不读）
+            state: () => ({ started, failed, loaded, entries: entries.length, fish: world ? world.fish.length : 0, grabbing: !!session, playFailed, realDrawn, realFailed: realBroken, predationFailed: predFailed, flowFailed, lightFailed, flowLive: !!flow, raysLive: !!light, sizes: world ? world.sizes : false }),
             _world: () => world,
             _play: () => play,
             _pred: () => pred,

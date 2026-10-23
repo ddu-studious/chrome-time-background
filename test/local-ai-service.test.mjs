@@ -1,12 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {renderPlist,LABEL,memoryHealth} from '../local-ai/scripts/service.mjs';
+import {renderPlist,LABEL,memoryHealth,gatewayHealthy} from '../local-ai/scripts/service.mjs';
 import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 const script = fileURLToPath(new URL('../local-ai/service.sh', import.meta.url));
+test('本机网关健康检查允许已启用外部模型，同时检查接口身份与结构', () => {
+ for (const localOnly of [true, false]) assert.equal(gatewayHealthy({ok:true},{ok:true,version:1,scenes:[],localOnly}),true);
+ for (const data of [{ok:true,localOnly:true},{ok:true,version:2,scenes:[]},{ok:false,version:1,scenes:[]},{ok:true,version:1,scenes:{}}]) assert.equal(gatewayHealthy({ok:true},data),false);
+ assert.equal(gatewayHealthy({ok:false},{ok:true,version:1,scenes:[]}),false);
+});
 test('统一脚本从任意目录提供帮助和参数校验，不执行服务操作', () => {
  for (const flag of ['help', '-h', '--help']) {
   const result=spawnSync('/bin/bash',[script,flag],{cwd:tmpdir(),encoding:'utf8'});

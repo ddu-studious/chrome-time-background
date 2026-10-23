@@ -1,0 +1,44 @@
+import * as THREE from 'three';
+import {createFishSchool} from './upstream/scenes/reefscape/src/fish-model.js';
+import {applyClownAppearance} from './clown-appearance.mjs';
+import {applyAnimalStyle,projectFishStyle} from './animal-style.mjs';
+import {createMoonJellyModel} from './moon-jelly.mjs';
+import {createSpecimenState,stepSpecimen} from './fish-motion.mjs';
+
+export class SpecimenView{
+  constructor(view){
+    this.view=view;this.state=createSpecimenState();this.selection='cycle';this.kind='fish';this.root=new THREE.Group();view.scene.add(this.root);
+    this.fish=[0,1].map(i=>{const group=new THREE.Group();this.root.add(group);const record={kind:'clown',position:new THREE.Vector3(),size:.074/.125,yaw:0,pitch:0,roll:0,phase:0,tailAmplitude:0,pectoral:0,rowing:0,bend:0,rank:0};
+      const school=createFishSchool(group,{fish:[record]});school.setQuality('balanced');applyClownAppearance(group,{variant:'reference'});applyAnimalStyle(group,i?view.animalStyle:'reference');return {group,record,school,clock:{}};});
+    this.jellies=[createMoonJellyModel(0xa1bed2),createMoonJellyModel(0xa1bed2,view.animalStyle)];this.jellies.forEach(j=>this.root.add(j.group));this.root.visible=false;
+  }
+  step(dt){stepSpecimen(this.state,dt,this.selection);}
+  reset(){this.state=createSpecimenState();this.fish.forEach(f=>f.clock={});}
+  update(kind){
+    const {view,state}=this;this.kind=kind;this.root.visible=true;
+    const panel=document.getElementById('panel').getBoundingClientRect(),left=Math.min(panel.right+30,view.width*.48),available=view.width-left-25;
+    const stacked=available<460,centers=stacked?[[left+available/2,view.height*.34],[left+available/2,view.height*.72]]:[[left+available*.25,view.height*.48],[left+available*.75,view.height*.48]];
+    const labels=document.querySelectorAll('#specimen-headings article');
+    labels[0].querySelector('h2').textContent='自然参考';labels[1].querySelector('h2').textContent=view.animalStyle==='soft'?'自然系轻动漫':'自然参考';
+    labels[0].querySelector('p').textContent='同一形体 · 原有质感与节奏';
+    labels[1].querySelector('p').textContent=view.animalStyle==='soft'?(kind==='jelly'?'柔软舒张 · 淡彩珠光':'暖橙奶白 · 柔和高光'):'保留自然质感';
+    centers.forEach(([x,y],i)=>{
+      const anchor=view.pointerPlane(x,y,new THREE.Vector3())?.multiplyScalar(10);if(!anchor)return;
+      labels[i].style.left=x+'px';labels[i].style.top=(stacked?y-115:view.height*.22)+'px';
+      const fish=this.fish[i],jelly=this.jellies[i],anim=state.reference;
+      fish.group.visible=kind==='fish';jelly.group.visible=kind==='jelly';
+      if(kind==='fish'){
+        const r=fish.record;r.position.copy(anchor);r.yaw=view.angle+state.cue.yaw;r.pitch=0;r.roll=view.top?Math.PI/2:0;
+        // Inspection magnification is shared. 7.4 cm TL remains unchanged between columns.
+        r.size=.074/.125;const axis=new THREE.Vector3(1,0,0).applyEuler(new THREE.Euler(r.roll,r.yaw,r.pitch,'YZX'));r.position.addScaledVector(axis,.074*10*.068);
+        applyAnimalStyle(fish.group,i?view.animalStyle:'reference');Object.assign(r,projectFishStyle(anim,fish.clock,i?view.animalStyle:'reference'));fish.school.update();
+      }else{
+        jelly.group.position.copy(anchor);jelly.group.scale.setScalar(stacked?.21:.32);jelly.group.rotation.set(view.top?Math.PI/2:.35,view.angle,0);
+        jelly.update(state.time,{phase:0,alpha:1,style:i?view.animalStyle:'reference'});
+      }
+    });
+    this.status=kind==='fish'?`${state.reference.motionLabel} · ${state.time.toFixed(1)} s · 同一 7.4 cm 个体，近景放大观察`:`${({contract:'伞缘收缩',relax:'缓慢舒张',coast:'间歇漂移'})[this.jellies[1].pulse?.stage]||'收缩 → 舒张 → 间歇'} · ${state.time.toFixed(1)} s · 相同伞径，对照形态与脉动`;
+  }
+  hide(){this.root.visible=false;}
+  dispose(){const geos=new Set(),mats=new Set();for(const f of this.fish)f.group.traverse(o=>{if(o.geometry)geos.add(o.geometry);if(o.material)mats.add(o.material);});geos.forEach(g=>g.dispose());mats.forEach(m=>m.dispose());this.jellies.forEach(j=>j.dispose());this.root.removeFromParent();}
+}

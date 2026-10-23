@@ -6,6 +6,7 @@
   actions.add('ai_history_get'); actions.add('ai_history_write');
   actions.add('ai_memory_get'); actions.add('ai_memory_write');
   actions.add('ai_approval_evaluate');
+  actions.add('ai_remote_save');
   // Only the worker-owned assistant voice bridge may submit text for synthesis.
   // Likewise only the worker-owned assistant tool may submit code for the read-only compute sandbox; pages cannot.
   const internalActions = new Set(['speech_ai_synthesize', 'ai_compute_submit', 'lark_sentinel_check']);
@@ -62,16 +63,16 @@
         await chrome.storage.local.set({ [KEY]: { token, reasoning } });
         return { ok: true };
       }
-      if (['ai_control_get', 'ai_control_save', 'ai_control_rollback', 'ai_job_cancel'].includes(message.action)) {
+      if (['ai_control_get', 'ai_control_save', 'ai_control_rollback', 'ai_job_cancel', 'ai_remote_save'].includes(message.action)) {
         if (!config.token) throw new Error('请先保存本地 AI 连接令牌');
         const cancel = message.action === 'ai_job_cancel';
         if (cancel && !/^[a-f0-9]{32}$/.test(message.jobId)) throw new Error('任务编号无效');
         const read = message.action === 'ai_control_get';
-        const path = cancel ? `/v1/ai/jobs/${message.jobId}/cancel` : message.action === 'ai_control_rollback' ? '/v1/control/rollback' : '/v1/control';
+        const path = cancel ? `/v1/ai/jobs/${message.jobId}/cancel` : message.action === 'ai_remote_save' ? '/v1/control/remote' : message.action === 'ai_control_rollback' ? '/v1/control/rollback' : '/v1/control';
         const response = await fetch(BASE + path, {
           method: read ? 'GET' : 'POST', redirect: 'error', signal: AbortSignal.timeout(7000),
           headers: { Authorization: `Bearer ${config.token}`, 'Content-Type': 'application/json' },
-          ...(read ? {} : { body: JSON.stringify(cancel ? {} : { policy: message.policy, revision: message.revision, expectedRevision: message.expectedRevision }) })
+          ...(read ? {} : { body: JSON.stringify(cancel ? {} : message.action === 'ai_remote_save' ? { config: message.config, expectedRevision: message.expectedRevision } : { policy: message.policy, revision: message.revision, expectedRevision: message.expectedRevision }) })
         });
         const data = await response.json();
         if (!response.ok || !data.ok) throw new Error(data.error || '控制面请求失败');

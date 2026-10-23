@@ -1,0 +1,39 @@
+[
+  {
+    "case": "reference-toggle",
+    "status": "自然参考版：保留更接近原型的材质与动作节奏。"
+  },
+  {
+    "case": "soft-task-failure",
+    "result": "演示回执失败：任务保留，水母放回。",
+    "tasks": "○ 观察海月水母"
+  },
+  {
+    "case": "soft-task-success",
+    "result": "已完成 1/1 项演示任务"
+  },
+  {
+    "case": "fish-drag",
+    "status": "选中 sample-clown：总长 7.4 cm，年龄未知。"
+  },
+  {
+    "case": "feeding",
+    "counts": "游动 1 / 居民 1 · 已吃饲料 0 · 追逐 0 · 捕获 0 · 放弃 0"
+  },
+  {
+    "case": "scenery-off",
+    "status": "固定造景已关闭，颜色、深度和碰撞同时撤除。"
+  },
+  {
+    "case": "group-feeding",
+    "counts": "游动 4 / 居民 4 · 已吃饲料 2 · 追逐 0 · 捕获 0 · 放弃 0"
+  },
+  {
+    "case": "soft-full-reef",
+    "counts": "游动 2 / 居民 2 · 已吃饲料 0 · 追逐 7 · 捕获 0 · 放弃 6",
+    "diagnostics": "Three r180 · 三角形 1688454 · 3D 水母 0 · 几何 68 · 纹理 11 · 帧率 29.5 · CPU 提交 2.0 ms（不含 GPU） · 帧 32448 · 世界 99.7 s · 错误 0",
+    "drill-state": "小鱼：钻入礁缝 · 大鱼：绕礁追击",
+    "event-log": "84.2s 结束追击 shelter-fish\n86.8s 进入躲藏 shelter-fish\n93.8s 离开掩体 shelter-fish\n97.9s 选择掩体 shelter-fish",
+    "status": "中部石拱：4.0 cm / 25 cm。按实际净空与可见性选路。"
+  }
+]

@@ -36,6 +36,18 @@ function fixture({ saveAlarm, prepare } = {}) {
 }
 const reply = (task, text = '创建吧', extra = {}) => ({ text, taskId: task.id, version: task.version, app: 'alarm', inheritedScope: true, ...extra });
 
+test('选择 DeepSeek 规划时，本地提醒解释器不接收外部模型标识且仍保留确认', async () => {
+  for (const model of ['deepseek:configured', 'deepseek:flash', 'deepseek:pro']) {
+    const f = fixture();
+    await f.engine.submit({ text: '40分钟之后提醒我开会', origin: 'desktop', ai: { model, reasoning: 'off' } });
+    const task = await f.engine.settled();
+    assert.equal(task.status, 'review', task.message); assert.equal(f.saves.length, 0);
+    const interpreted = f.aiCalls.find(row => row.action === 'smart_alarm_interpret');
+    assert.ok(interpreted); assert.equal(interpreted.selection?.model, undefined);
+    assert.equal(task.input.ai.model, model);
+  }
+});
+
 test('创建吧复用当前确认卡调用保存，保持原时间、会话、用户原文及真实执行轨迹', async () => {
   const f = fixture(), before = await f.ready();
   assert.equal(before.status, 'review'); assert.equal(f.saves.length, 0);

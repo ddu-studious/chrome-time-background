@@ -194,7 +194,11 @@
         try { return await awaitAI(action, body, { ...child, inModelCall: true }); }
         catch (error) { if (error.execution && child.modelCall) await child.modelCall(error.execution); throw error; }
       }, 'operation');
-      ctx.guard(); const selection = ctx.task.input?.ai;
+      ctx.guard(); let selection = ctx.task.input?.ai;
+      // DeepSeek is a planner selection; independent local-only interpretation scenes keep their local provider.
+      if (selection?.model?.startsWith('deepseek:') && !['assistant.plan', 'assistant.compact'].includes(body.scene)) {
+        selection = selection.reasoning ? { reasoning: selection.reasoning } : null;
+      }
       let response = await ai({ action, ...body, ...(selection ? { selection } : {}), trace: { conversationId: ctx.task.conversationId || ctx.task.id, turnId: ctx.task.turnId || ctx.task.id, toolCallId: ctx.spanId, startedAt: ctx.task.startedAt, userManaged: true } });
       const jobId = response?.jobId;
       if (jobId) {

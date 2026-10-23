@@ -26,6 +26,7 @@
         aquariumWater: true,
         aquariumRealistic: true,
         aquariumPredation: true,
+        aquariumSizes: true,
         aquariumFlow: false,
         aquariumRays: false,
         aquariumSound: false,
@@ -79,6 +80,8 @@
             aquariumRealistic: source.aquariumRealistic !== false,
             // 大鱼吃小鱼（js/aquarium-predation-core.js）：放了小锤头鲨时它偶尔追一条小鱼并吃掉，被吃的鱼过一会儿游回来（只发生在画面里，不改鱼的存储）；只有明确 false 才关，省流量模式一律不开。
             aquariumPredation: source.aquariumPredation !== false,
+            // 个体大小差异（js/aquarium-core.js 的 sizeOf）：小鱼每条大小略有不同（标准体长的 75%–125%，由条目 id 决定、不存储）；大鱼按真实比例不参与；纯视觉；只有明确 false 才关。
+            aquariumSizes: source.aquariumSizes !== false,
             // 水流与海洋雪（js/aquarium-flow-core.js）：大鱼游过留下水流尾迹、水里飘着海洋雪；纯视觉、不存储；默认关，只有明确 true 才开，省流量模式一律不开。
             aquariumFlow: source.aquariumFlow === true,
             // 水下光束（js/aquarium-light-core.js）：水面斜射下来的淡淡光束，写实动物远处先失去红色；纯视觉、不存储；默认关，只有明确 true 才开（光束在省流量模式下不画）。
@@ -299,7 +302,7 @@
                 const skin = this.skin();
                 aq.frame({
                     ctx: this.ctx, width: this.width, height: this.height, dt, amount,
-                    pointer: this.jellyfishPointer(), lowPower: this.saveData, night: this.settings.jellyfishNight, realistic: this.settings.aquariumRealistic, predation: this.settings.aquariumPredation, flow: this.settings.aquariumFlow, rays: this.settings.aquariumRays,
+                    pointer: this.jellyfishPointer(), lowPower: this.saveData, night: this.settings.jellyfishNight, realistic: this.settings.aquariumRealistic, predation: this.settings.aquariumPredation, sizes: this.settings.aquariumSizes, flow: this.settings.aquariumFlow, rays: this.settings.aquariumRays,
                     bells: skin && typeof skin.bells === 'function' ? skin.bells() : [], shore,
                 });
             }

@@ -1,0 +1,24 @@
+{
+  "sources": {
+    "controller.mjs": "98bdc8c7e8f48d95230227a88666c5dcc1c1703a0a9bcf70d1e6716f3bc5117b",
+    "world.mjs": "431f20417c8e72a4c9b900f7985492e8ce685d38ab24afae22f272cda6d89d86",
+    "navigation.mjs": "5818e506b9895aacde5dd92cf8a043b9b7f9966e5ab4c159ef45f3e99a3c852c",
+    "habitat.mjs": "a08c4232fe8a358acd650ce052fb24c513f7d6adf5b185cdbba0746034c3bd9f",
+    "spatial.mjs": "c151597807c1e55054a9d80d82a71a0ab185a39fdf0e9d417fc693a0fde9affc",
+    "view.mjs": "6eb3dab79c98c244564307cf488edffa92a5ec889b2779410e0b54ec4c7c53d2",
+    "jelly-3d.mjs": "5fae85bbef9cecf94c86643711611c3b4508379f1aaeeadeb6d4222b01e958e0",
+    "jelly-render-adapter.mjs": "c25bc9f20232cfaa784f4caa3ec1d68c33b5dd6cac603c87c47f99a8e8da7650",
+    "bootstrap.mjs": "d69ac923a9470afd35b9ed4d952fa1b27b03e50f2b08e3df4eaac99c1d4520c8",
+    "index.html": "d3486ce624c1239bc493543d9751b21e189e664338919c6290c44cd0ba03e9d7",
+    "app.css": "89ec3672be5c16e6c8be857f24ed9bd9e538193e929a9997602f73428afde47a",
+    "../../../js/jellyfish.js": "c9ff3502783323dce8cde8982647fd0661ff80c19fff9a0a7c58d759e00a7630",
+    "../../../js/jellyfish-core.js": "83932fdedea49c267f18a59e5b78efb43578a2147eb51c898bae4a8e485e1e28",
+    "../../../js/background-experience.js": "b5542f8f06e98d09f567c4fae56d1375224c9a2099184cd8c04ed73772dacbd4"
+  },
+  "esbuild": "0.28.1",
+  "three": "0.180.0",
+  "yuka": "0.7.8",
+  "bvh": "0.9.16",
+  "bytes": 929262,
+  "sha256": "b924620f130e2bda4fb19dda4bf47b89ad03218ad8cadec54482078be70fc6d3"
+}

@@ -1,0 +1,230 @@
+{
+ "chrome": "156.0.8078.48",
+ "note": "无头软件渲染下单条鱼每次 drawFish 的平均微秒（含 clearRect，N=3000，预热 300）；calls 是一次 drawFish 的 Canvas 方法调用数。只是相对成本的代理。",
+ "rows": [
+  {
+   "id": "neon",
+   "name": "霓虹灯鱼",
+   "near": {
+    "calls": 53,
+    "us": 5.6
+   },
+   "night": {
+    "calls": 57,
+    "us": 23.5
+   },
+   "far": {
+    "calls": 43,
+    "us": 3.1
+   }
+  },
+  {
+   "id": "tang",
+   "name": "蓝吊",
+   "near": {
+    "calls": 49,
+    "us": 4.1
+   },
+   "night": {
+    "calls": 53,
+    "us": 4.8
+   },
+   "far": {
+    "calls": 39,
+    "us": 2.4
+   }
+  },
+  {
+   "id": "chromis",
+   "name": "青绿光鳃鱼",
+   "near": {
+    "calls": 54,
+    "us": 4.3
+   },
+   "night": {
+    "calls": 58,
+    "us": 5.1
+   },
+   "far": {
+    "calls": 39,
+    "us": 2.5
+   }
+  },
+  {
+   "id": "anthias",
+   "name": "金花鲈",
+   "near": {
+    "calls": 58,
+    "us": 4.6
+   },
+   "night": {
+    "calls": 62,
+    "us": 5.3
+   },
+   "far": {
+    "calls": 43,
+    "us": 2.6
+   }
+  },
+  {
+   "id": "clown",
+   "name": "小丑鱼",
+   "near": {
+    "calls": 89,
+    "us": 8.4
+   },
+   "night": {
+    "calls": 93,
+    "us": 9.3
+   },
+   "far": {
+    "calls": 38,
+    "us": 2.5
+   }
+  },
+  {
+   "id": "puffer",
+   "name": "河豚",
+   "near": {
+    "calls": 99,
+    "us": 6.8
+   },
+   "night": {
+    "calls": 103,
+    "us": 7.3
+   },
+   "far": {
+    "calls": 38,
+    "us": 2.9
+   }
+  },
+  {
+   "id": "angel",
+   "name": "神仙鱼",
+   "near": {
+    "calls": 102,
+    "us": 7.9
+   },
+   "night": {
+    "calls": 106,
+    "us": 8.4
+   },
+   "far": {
+    "calls": 38,
+    "us": 2.4
+   }
+  },
+  {
+   "id": "gramma",
+   "name": "皇家伽玛",
+   "near": {
+    "calls": 56,
+    "us": 5.4
+   },
+   "night": {
+    "calls": 60,
+    "us": 6.1
+   },
+   "far": {
+    "calls": 38,
+    "us": 2.6
+   }
+  },
+  {
+   "id": "idol",
+   "name": "镰鱼",
+   "near": {
+    "calls": 90,
+    "us": 7.7
+   },
+   "night": {
+    "calls": 94,
+    "us": 8.2
+   },
+   "far": {
+    "calls": 39,
+    "us": 2.4
+   }
+  },
+  {
+   "id": "butterfly",
+   "name": "蝴蝶鱼",
+   "near": {
+    "calls": 83,
+    "us": 6.1
+   },
+   "night": {
+    "calls": 87,
+    "us": 8.4
+   },
+   "far": {
+    "calls": 38,
+    "us": 4.6
+   }
+  },
+  {
+   "id": "cardinal",
+   "name": "天竺鲷",
+   "near": {
+    "calls": 84,
+    "us": 7.5
+   },
+   "night": {
+    "calls": 88,
+    "us": 6.8
+   },
+   "far": {
+    "calls": 39,
+    "us": 2.4
+   }
+  },
+  {
+   "id": "hammer",
+   "name": "小锤头鲨",
+   "near": {
+    "calls": 53,
+    "us": 4.6
+   },
+   "night": {
+    "calls": 57,
+    "us": 5.4
+   },
+   "far": {
+    "calls": 43,
+    "us": 2.9
+   }
+  },
+  {
+   "id": "manta",
+   "name": "蝠鲼",
+   "near": {
+    "calls": 70,
+    "us": 5.2
+   },
+   "night": {
+    "calls": 74,
+    "us": 5.9
+   },
+   "far": {
+    "calls": 52,
+    "us": 2.9
+   }
+  },
+  {
+   "id": "whaleshark",
+   "name": "鲸鲨",
+   "near": {
+    "calls": 68,
+    "us": 4.9
+   },
+   "night": {
+    "calls": 72,
+    "us": 5.7
+   },
+   "far": {
+    "calls": 40,
+    "us": 4.7
+   }
+  }
+ ]
+}

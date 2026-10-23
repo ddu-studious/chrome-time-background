@@ -2,6 +2,7 @@
   'use strict';
   const labels = { planning:'理解中', running:'执行中', succeeded:'成功', completed:'已完成', waiting:'等待选择', review:'待确认', clarify:'待补充', failed:'失败', cancelled:'已停止', interrupted:'中断' };
   const duration = ms => !Number.isFinite(ms) ? '耗时未确认' : ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} 秒`;
+  const routeReason = reason => ({ manual: '按配置使用外部模型', cpu: 'CPU 持续超过阈值', memory: '空闲内存低于阈值', context: '本地上下文容量不足', 'local-busy': '本地模型忙碌', 'local-unavailable': '本地模型不可用' })[reason] || reason;
   const layaLabel = value => ({ disabled: '未调用', observing: '只观察，不影响规划', observed: '只观察，不影响规划', applied: '已参与工具组预加载', abstained: '建议过宽，沿用原工具目录', fallback: '不可用，已沿用原规划链路' })[value?.status] || '状态未确认';
   // A round can reuse thinking-off from an earlier round of the same executor turn. Follow the links to the call that
   // actually started it, so the history says whether it came from the analysis start or from a real timeout recovery.
@@ -105,6 +106,7 @@
         if (row.parentId) detail.append(element('p', `属于：${byId.get(row.parentId)?.title || '已超出显示范围的步骤'}`));
         const model = (value.modelCalls || []).find(call => call.toolCallId === row.id);
         if (model) detail.append(element('p', model.model ? `${model.model} · 思考：${model.reasoning ?? '未返回'} · ${duration(model.elapsedMs)}` : model.source === 'rules' ? '本地规则处理，未调用模型' : model.requestedModel ? `规划准备 · ${model.requestedModel} · 尚未调用模型` : '未返回模型信息'));
+        if (model?.routing) detail.append(element('p', `外部模型 DeepSeek · ${model.routing.model} · ${routeReason(model.routing.reason)}`));
         if (model?.layaPrefetch && model.layaPrefetch.mode !== 'off') detail.append(element('p', `Laya 决策辅助：${layaLabel(model.layaPrefetch)}${model.layaPrefetch.code ? `（${model.layaPrefetch.code}）` : ''}`));
         if (model?.recoveryFromRequestId) detail.append(element('p', offOrigin(value.modelCalls || [], model)?.startReason === 'outline-off'
           ? '清单分析已用关闭思考完成，本执行轮后续规划沿用关闭思考；选择或确认后的新执行轮按所选等级重新判断；未更改默认设置。'
@@ -168,7 +170,7 @@
       $('execution-panel').dataset.state = value.status;
       const calls = (value.modelCalls || []).filter(call => call.turnId === value.turnId), model = calls.findLast(call => call.model);
       const callCount = calls.filter(c => c.model).reduce((count, call) => count + (call.attempts?.length ?? 1), 0);
-      $('trace-meta').textContent = model ? `本机 · ${model.model} · 思考：${model.reasoning ?? '未返回'}${model.recoveryFromRequestId ? (offOrigin(value.modelCalls || [], model)?.startReason === 'outline-off' ? ' → 关闭（沿用清单分析）' : ' → 关闭（沿用本轮恢复）') : model.startReason === 'adaptive-receipts' ? ' → 关闭（已有回执，自适应）' : model.startReason === 'outline-off' ? ' → 关闭（清单分析起步）' : model.attempts?.length > 1 ? ' → 关闭（重试）' : ''} · ${callCount} 次模型调用` : calls.length && calls.every(c => c.source === 'rules') ? '本轮由本地规则处理' : '实时动作 · 展开步骤查看详情';
+      $('trace-meta').textContent = model ? `${model.routing ? '外部 DeepSeek' : '本机'} · ${model.model} · 思考：${model.reasoning ?? '未返回'}${model.recoveryFromRequestId ? (offOrigin(value.modelCalls || [], model)?.startReason === 'outline-off' ? ' → 关闭（沿用清单分析）' : ' → 关闭（沿用本轮恢复）') : model.startReason === 'adaptive-receipts' ? ' → 关闭（已有回执，自适应）' : model.startReason === 'outline-off' ? ' → 关闭（清单分析起步）' : model.attempts?.length > 1 ? ' → 关闭（重试）' : ''} · ${callCount} 次模型调用` : calls.length && calls.every(c => c.source === 'rules') ? '本轮由本地规则处理' : '实时动作 · 展开步骤查看详情';
       const laya = calls.findLast(call => call.layaPrefetch)?.layaPrefetch;
       if (laya && laya.mode !== 'off') $('trace-meta').textContent += ` · Laya：${layaLabel(laya)}`;
       if (value.recoveryCount) $('trace-meta').textContent += ` · 错误恢复 ${value.recoveryCount}/3`;

@@ -1,3 +1,11 @@
+import {validateRoadmap,fullReefSites} from './full-navigation.mjs';
+import {createCreviceHabitat} from './habitat.mjs';
+import {bodyEnvelope} from './fish-envelope.mjs';
+import {applyAnimalStyle,projectFishStyle,normalizeAnimalStyle} from './animal-style.mjs';
+import {SpecimenView} from './specimen-view.mjs';
+import {applyClownAppearance} from './clown-appearance.mjs';
+import {EXTRA_FISH,GLB_KINDS} from './community-catalog.mjs';
+import {CommunityView} from './community-view.mjs';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { createFishSchool } from './upstream/scenes/reefscape/src/fish-model.js';
@@ -12,12 +20,12 @@ function disposeGroup(group,textures=false){
 }
 export class OceanView{
   constructor(canvas,world,spatial,report){
-    this.canvas=canvas;this.world=world;this.spatial=spatial;this.report=report;this.mode='natural';this.angle=0;this.coverage=.32;this.zoom=1.6;
-    this.reefVisible=false;this.reefReady=false;this.reefPromise=null;this.disposed=false;this.renderRevision=-1;this.records=[];this.frames=0;this.cpuMs=0;this.acc=0;
+    this.canvas=canvas;this.world=world;this.spatial=spatial;this.report=report;this.sceneKind='crevice';this.spatialByKind={};this.mode='natural';this.angle=0;this.coverage=.32;this.zoom=1.6;
+    this.reefVisible=false;this.reefReady=false;this.reefPromise=null;this.disposed=false;this.renderRevision=-1;this.records=[];this.frames=0;this.cpuMs=0;this.acc=0;this.realisticAnimals=true;this.animalStyle='soft';this.world.realisticMotion=true;
     this.renderer=new THREE.WebGLRenderer({canvas,alpha:true,antialias:true,powerPreference:'low-power'});
     this.renderer.setClearColor(0,0);this.renderer.setPixelRatio(1);this.renderer.outputColorSpace=THREE.SRGBColorSpace;
     this.renderer.toneMapping=THREE.NeutralToneMapping;this.renderer.toneMappingExposure=1.7;
-    this.scene=new THREE.Scene();this.camera=new THREE.PerspectiveCamera(34,1,.01,120);
+    this.scene=new THREE.Scene();this.community=new CommunityView(this.scene);this.camera=new THREE.PerspectiveCamera(34,1,.01,120);this.perspectiveCamera=this.camera;this.comparisonCamera=new THREE.OrthographicCamera(-1,1,1.25,-1.25,.01,120);
     this.fishGroup=new THREE.Group();this.heldGroup=new THREE.Group();this.reefGroup=new THREE.Group();this.reefGroup.visible=false;this.scene.add(this.fishGroup,this.heldGroup,this.reefGroup);
     this.testStone=new THREE.Mesh(new THREE.IcosahedronGeometry(.4,2),new THREE.MeshStandardMaterial({color:0x8b9e92,roughness:.85}));this.testStone.visible=false;this.scene.add(this.testStone);this.depthSide='front';
     this.scene.add(new THREE.HemisphereLight('#89b8dc','#a28f6d',.8));
@@ -36,22 +44,37 @@ export class OceanView{
   resize(width,height){
     this.width=width;this.height=height;const ratio=Math.min(devicePixelRatio||1,1.25,Math.sqrt(1700000/(width*height)));
     this.renderer.setSize(Math.max(1,Math.round(width*ratio)),Math.max(1,Math.round(height*ratio)),false);this.canvas.style.width=width+'px';this.canvas.style.height=height+'px';
-    this.camera.aspect=width/height;this.configureCamera();
+    this.camera.aspect=width/height;this.configureCamera();if(this.reefReady)this.reconcileSceneChange();
   }
   configureCamera(){
+    this.perspectiveCamera.aspect=this.width/this.height;this.camera=this.mode.endsWith('-compare')?this.comparisonCamera:this.perspectiveCamera;
+    this.comparisonCamera.left=-1.25*this.width/this.height;this.comparisonCamera.right=1.25*this.width/this.height;
     this.camera.up.set(0,1,0);
-    if(this.mode==='turntable'){this.camera.up.set(0,1,0);if(this.top){this.camera.position.set(0,2.5,.01);this.camera.up.set(0,0,-1);}else this.camera.position.set(0,.45,2.5);this.camera.lookAt(0,0,0);this.camera.fov=35;}
+    if(this.mode.endsWith('-compare')){this.camera.position.set(0,0,4);this.camera.lookAt(0,0,0);this.camera.fov=35;}
+    else if(this.mode==='jelly'){this.camera.position.set(0,this.top?5:.4,this.top?.01:5);if(this.top)this.camera.up.set(0,0,-1);this.camera.lookAt(0,-.45,0);this.camera.fov=35;}
+    else if(this.mode==='turntable'){this.camera.up.set(0,1,0);if(this.top){this.camera.position.set(0,2.5,.01);this.camera.up.set(0,0,-1);}else this.camera.position.set(0,.45,2.5);this.camera.lookAt(0,0,0);this.camera.fov=35;}
     else if(this.mode==='depth'){this.camera.up.set(0,1,0);this.camera.position.set(0,0,4);this.camera.lookAt(0,0,0);this.camera.fov=35;}
     else if(this.mode==='scale'){this.camera.position.set(0,3.5,11);this.camera.lookAt(0,3.5,0);this.camera.fov=25;}
     else{this.camera.position.set(0,4.3,this.zoom*10);this.camera.lookAt(0,3.5,0);this.camera.fov=34;}
-    if(!this.top||this.mode!=='turntable')this.camera.up.set(0,1,0);this.camera.updateProjectionMatrix();this.camera.updateMatrixWorld();this.layoutReef();
+    if(!this.top||!['turntable','jelly'].includes(this.mode))this.camera.up.set(0,1,0);this.camera.updateProjectionMatrix();this.camera.updateMatrixWorld();this.layoutReef();
   }
-  setMode(mode){this.mode=['natural','scale','turntable','depth'].includes(mode)?mode:'natural';this.renderRevision=-1;this.spatial.setActive(this.reefVisible&&this.mode==='natural');this.configureCamera();}
+  setMode(mode){this.mode=['natural','scale','turntable','depth','jelly','fish-compare','jelly-compare'].includes(mode)?mode:'natural';this.renderRevision=-1;this.spatial.setActive(this.reefVisible&&this.mode==='natural');if(this.mode.endsWith('-compare'))this.specimen??=new SpecimenView(this);this.configureCamera();this.reconcileSceneChange();}
+  setAnimalStyle(value){this.animalStyle=normalizeAnimalStyle(value);applyAnimalStyle(this.fishGroup,this.animalStyle);applyAnimalStyle(this.heldGroup,this.animalStyle);this.updateTaskJellyStyle?.();this.render(true);}
   setAngle(degrees){this.top=degrees==='top';this.angle=this.top?0:Number(degrees)*Math.PI/180;this.configureCamera();}
-  setZoom(value){this.zoom=Math.max(1,Math.min(2.4,value));this.configureCamera();}
+  setZoom(value){this.zoom=Math.max(1,Math.min(2.4,value));this.configureCamera();this.reconcileSceneChange();}
   setCoverage(value){this.coverage=Math.max(.2,Math.min(.42,value));this.layoutReef();this.reconcileSceneChange();}
+  async loadFullNavigation(){
+    if(this.fullRoadmap)return;if(this.fullNavigationPromise)return this.fullNavigationPromise;
+    this.fullNavigationPromise=(async()=>{const [roadmap,scenarios]=await Promise.all(['full-reef.json','full-reef-scenarios.json'].map(async name=>{const response=await fetch(new URL('./assets/navigation/'+name,import.meta.url),{signal:AbortSignal.timeout(12000)});if(!response.ok)throw new Error('完整浅礁导航资料加载失败');return response.json();}));
+      this.fullRoadmap=validateRoadmap(roadmap);if(scenarios.version!==1||scenarios.scenarios?.length!==3||scenarios.scenarios.some(s=>!['arch','left','right'].includes(s.id)||[s.prey,s.predator].some(p=>p?.length!==3||p.some(v=>!Number.isFinite(v)||Math.abs(v)>2))))throw new Error('完整浅礁演练资料无效');this.fullScenarios=scenarios.scenarios;
+    })().catch(error=>{this.fullRoadmap=null;throw error;}).finally(()=>{this.fullNavigationPromise=null;});return this.fullNavigationPromise;
+  }
+  async setScene(kind){const next=['crevice','full'].includes(kind)?kind:'crevice',request=this.sceneRequest=(this.sceneRequest||0)+1;if(next==='full')await this.loadFullNavigation();if(this.disposed||request!==this.sceneRequest)return;this.sceneKind=next;this.layoutReef();this.reconcileSceneChange();this.render(true);}
   async setReef(on){
-    this.reefVisible=on===true;
+    const wanted=on===true,request=this.reefRequest=(this.reefRequest||0)+1;
+    if(wanted&&this.sceneKind==='full')await this.loadFullNavigation();
+    if(this.disposed||request!==this.reefRequest)return;
+    this.reefVisible=wanted;this.renderRevision=-1;this.world.realisticMotion=true;
     if(this.reefVisible&&!this.reefReady&&!this.reefPromise){
       this.reefError=null;
       this.report('载入真实礁石与碰撞查询…');
@@ -59,31 +82,44 @@ export class OceanView{
         const terrain=await createTerrain(this.reefGroup);if(this.disposed){disposeGroup(this.reefGroup,true);return;}
         const terrainMeshes=this.reefGroup.children.filter(x=>x.isMesh);
         const corals=createCorals(this.reefGroup);corals.setQuality('eco');const anemone=createAnemone(this.reefGroup);anemone.setQuality('eco');
-        this.reefReady=true;this.reefBoxes=this.reefGroup.children.map(child=>new THREE.Box3().setFromObject(child));this.layoutReef();
-        this.spatial.setMeshes(terrainMeshes.map(mesh=>({mesh,solid:mesh===terrain.rockSurface})));this.reconcileSceneChange();
+        this.habitat=createCreviceHabitat(terrain.rockSurface.material);this.scene.add(this.habitat.group);this.terrainMeshes=terrainMeshes.map(mesh=>({mesh,solid:mesh===terrain.rockSurface}));this.reefReady=true;this.reefBoxes=this.reefGroup.children.map(child=>new THREE.Box3().setFromObject(child));this.layoutReef();
+        this.reconcileSceneChange();
       })().catch(error=>{this.reefError=error;this.reefVisible=false;this.reefGroup.visible=false;this.spatial.setActive(false);this.report('造景未就绪：'+error.message);console.error(error);}).finally(()=>{this.reefPromise=null;});
     }
     await this.reefPromise;
+    if(this.disposed||request!==this.reefRequest)return;
     if(this.reefError)return false;
-    this.reefGroup.visible=this.reefVisible&&this.reefReady&&this.mode==='natural';this.spatial.setActive(this.reefGroup.visible);this.sun.castShadow=this.reefGroup.visible;this.renderer.shadowMap.enabled=this.reefGroup.visible;
+    this.layoutReef();this.sun.castShadow=this.reefVisible&&this.mode==='natural';this.renderer.shadowMap.enabled=this.sun.castShadow;
     this.renderer.shadowMap.autoUpdate=true;this.report(this.reefVisible?'固定造景已开启，鱼与礁石共享深度。':'固定造景已关闭，颜色、深度和碰撞同时撤除。');
     this.reconcileSceneChange();
   }
   layoutReef(){
-    if(!this.reefReady)return;this.reefGroup.visible=this.reefVisible&&this.mode==='natural';if(this.mode!=='natural')return;
-    let lo=-35,hi=5;const target=1-this.coverage;
-    // Keep each object's own height/depth pair: the tall fan is not as close as the sand.
-    const topAt=offset=>{let top=2;for(const b of this.reefBoxes)for(const x of [b.min.x,b.max.x])for(const z of [b.min.z,b.max.z]){const p=new THREE.Vector3(x,b.max.y+offset,z).project(this.camera);if(p.z>=-1&&p.z<=1)top=Math.min(top,(1-p.y)/2);}return top;};
+    if(!this.reefReady)return;
+    const on=this.reefVisible&&this.mode==='natural',crevice=this.sceneKind==='crevice';
+    this.reefGroup.visible=on&&!crevice;this.habitat.group.visible=on&&crevice;
+    if(this.mode!=='natural')return;
+    const boxes=crevice?[this.habitat.box]:this.reefBoxes,group=crevice?this.habitat.group:this.reefGroup;let lo=-35,hi=5;const target=1-this.coverage;
+    const topAt=offset=>{let top=2;for(const b of boxes)for(const x of [b.min.x,b.max.x])for(const z of [b.min.z,b.max.z]){const p=new THREE.Vector3(x,b.max.y+offset,z).project(this.camera);if(p.z>=-1&&p.z<=1)top=Math.min(top,(1-p.y)/2);}return top;};
     for(let i=0;i<24;i++){const mid=(lo+hi)/2;if(topAt(mid)>target)lo=mid;else hi=mid;}
-    this.reefGroup.position.y=(lo+hi)/2;this.reefGroup.updateMatrixWorld(true);this.spatial.updateMatrices();this.sun.shadow.needsUpdate=true;
+    group.position.y=(lo+hi)/2;group.updateMatrixWorld(true);this.spatial.updateMatrices();this.sun.shadow.needsUpdate=true;
   }
-  reconcileSceneChange(){this.spatial.setActive(this.reefVisible&&this.reefReady&&this.mode==='natural');for(const f of this.world.fish){this.world.findLegal(f);f.goalAt=0;if(f.hunt)this.world.endHunt(f,'scenery-change');}}
+  reconcileSceneChange(){
+    this.world.realisticMotion=true;
+    const active=this.reefVisible&&this.reefReady&&this.mode==='natural';
+    if(this.reefReady){if(!this.spatialByKind[this.sceneKind]){this.spatial.setMeshes(this.sceneKind==='crevice'?this.habitat.meshes.map(mesh=>({mesh})):this.terrainMeshes);this.spatialByKind[this.sceneKind]=this.spatial.entries;}else this.spatial.entries=this.spatialByKind[this.sceneKind];this.spatial.updateMatrices();}
+    this.spatial.setActive(active);this.world.navigation?.configure(active?(this.sceneKind==='crevice'?this.habitat.sites():this.fullRoadmap?fullReefSites(this.fullRoadmap,this.reefGroup.position.y*.1):null):null);this.world.clearRoutes();
+    for(const f of this.world.fish){this.world.findLegal(f);f.goalAt=0;if(f.hunt)this.world.endHunt(f,'scenery-change');}
+  }
   rebuildFish(){
-    disposeGroup(this.fishGroup);disposeGroup(this.heldGroup);const live=this.world.fish.filter(f=>f.kind==='clown'&&f.life==='alive');
-    const source=['turntable','depth'].includes(this.mode)?[live.at(-1)].filter(Boolean):this.mode==='scale'?live.slice(0,6):live;
-    this.records=source.map((f,i)=>({id:f.id,fish:f,kind:'clown',size:f.profile.totalLengthM/.125,position:new THREE.Vector3(),yaw:0,pitch:0,roll:0,phase:0,tailAmplitude:.02,pectoral:0,rowing:.4,bend:0,rank:i}));
+    const live=this.world.fish.filter(f=>(f.kind==='clown'||EXTRA_FISH[f.kind]?.renderer==='school')&&f.life==='alive');
+    const source=this.mode==='jelly'||this.mode.endsWith('-compare')?[]:['turntable','depth'].includes(this.mode)?[live.at(-1)].filter(Boolean):this.mode==='scale'?live.slice(0,6):live;
+    const signature=this.mode+'|'+source.map(f=>`${f.id}:${f.kind}:${f.profile.totalLengthM}:${f.held}`).join('|');
+    if(this.school&&this.schoolSignature===signature&&source.every((f,i)=>this.records[i]?.fish===f)){this.renderRevision=this.world.revision;return;}
+    disposeGroup(this.fishGroup);disposeGroup(this.heldGroup);this.schoolSignature=signature;
+    this.records=source.map((f,i)=>({id:f.id,fish:f,kind:f.kind,modelTL:EXTRA_FISH[f.kind]?.shape.length||1.25,modelCenter:new THREE.Vector3(...(EXTRA_FISH[f.kind]?.shape.center||[-.085,0,0])),size:f.profile.totalLengthM/.125,position:new THREE.Vector3(),yaw:0,pitch:0,roll:0,phase:0,tailAmplitude:.02,pectoral:0,rowing:.4,bend:0,rank:f.kind==='clown'?i:1}));
     this.school=createFishSchool(this.fishGroup,{fish:this.records.filter(r=>!r.fish.held)});this.school.setQuality('balanced');
     this.heldSchool=createFishSchool(this.heldGroup,{fish:this.records.filter(r=>r.fish.held)});this.heldSchool.setQuality('balanced');
+    if(this.realisticAnimals){applyClownAppearance(this.fishGroup,{variant:'reference'});applyClownAppearance(this.heldGroup,{variant:'reference'});applyAnimalStyle(this.fishGroup,this.animalStyle);applyAnimalStyle(this.heldGroup,this.animalStyle);}
     this.heldGroup.traverse(o=>{if(o.isMesh){o.renderOrder=100;for(const m of Array.isArray(o.material)?o.material:[o.material]){m.depthTest=false;m.depthWrite=false;}}});this.renderRevision=this.world.revision;
   }
   async loadPredator(){
@@ -108,35 +144,38 @@ export class OceanView{
   render(force=false){
     if(this.disposed||this.failed)return;const before=performance.now();if(!force&&before-(this.lastRender||0)<32)return;if(this.lastRender){this.fpsWindow=this.fpsWindow||[];this.fpsWindow.push(before-this.lastRender);if(this.fpsWindow.length>120)this.fpsWindow.shift();}this.lastRender=before;if(this.renderRevision!==this.world.revision)this.rebuildFish();
     const euler=new THREE.Euler(0,0,0,'YZX');
-    this.records.forEach((r,i)=>{const f=r.fish;r.size=f.profile.totalLengthM/.125;
+    this.records.forEach((r,i)=>{const f=r.fish;r.size=f.profile.totalLengthM*10/r.modelTL;
       if(this.mode==='natural'){r.position.copy(f.position).multiplyScalar(10);euler.setFromQuaternion(f.quaternion,'YZX');r.roll=euler.x;r.yaw=euler.y;r.pitch=euler.z;}
       else if(this.mode==='scale'){r.position.set(-2.45+i*1.1,3.5,0);r.roll=r.yaw=r.pitch=0;}
       else if(this.mode==='depth'){r.position.set(this.depthSide==='partial'?.35:0,0,this.depthSide==='front'?.75:-.75);r.roll=r.yaw=r.pitch=0;}
       else{r.position.set(0,0,0);r.roll=0;r.yaw=this.angle;r.pitch=0;}
       // Raw model x bounds are [-.71,.54]; align their centre to the physical entity.
-      r.center=r.position.clone();const axis=new THREE.Vector3(1,0,0).applyEuler(new THREE.Euler(r.roll,r.yaw,r.pitch,'YZX'));r.position.addScaledVector(axis,f.profile.totalLengthM*10*.068);
-      r.phase=f.phase;r.tailAmplitude=this.mode==='natural'?f.tailAmplitude:0;r.pectoral=f.pectoral;r.rowing=this.mode==='natural'?f.rowing:0;r.bend=f.bend;
+      r.center=r.position.clone();r.position.sub(r.modelCenter.clone().applyEuler(new THREE.Euler(r.roll,r.yaw,r.pitch,'YZX')).multiplyScalar(r.size));
+      r.phase=f.phase;r.tailAmplitude=this.mode==='natural'?f.tailAmplitude:0;r.pectoral=f.pectoral;r.rowing=this.mode==='natural'?f.rowing:0;r.bend=this.mode==='natural'?f.bend:0;
+      if(this.mode==='natural')Object.assign(r,projectFishStyle(f,r.styleClock??={},this.animalStyle));
     });
     this.school.update(this.camera);this.heldSchool.update(this.camera);this.testStone.visible=this.mode==='depth';
+    this.community.update(this.world,this.mode==='natural',this.animalStyle);
+    if(this.mode.endsWith('-compare'))this.specimen.update(this.mode==='fish-compare'?'fish':'jelly');else this.specimen?.hide();
     const pred=this.world.fish.find(f=>f.kind==='barramundi');
     if(this.predator){this.predator.visible=!!pred&&this.mode==='natural'&&pred.life==='alive';if(pred){this.predator.material.depthTest=!pred.held;this.predator.material.depthWrite=!pred.held;this.predator.renderOrder=pred.held?100:0;this.predator.position.copy(pred.position).multiplyScalar(10);this.predator.quaternion.copy(pred.quaternion);this.predator.scale.setScalar(pred.profile.totalLengthM*10/this.predatorModelLength);this.predatorUniforms.phase.value=pred.phase;this.predatorUniforms.amplitude.value=this.predatorModelLength*(.008+Math.min(.025,pred.velocity.length()*.04));}}
     this.foodMesh.count=this.mode==='natural'?this.world.pellets.length:0;
     this.world.pellets.forEach((p,i)=>{this.dummy.position.copy(p.position).multiplyScalar(10);this.dummy.scale.setScalar(1);this.dummy.updateMatrix();this.foodMesh.setMatrixAt(i,this.dummy.matrix);});this.foodMesh.instanceMatrix.needsUpdate=true;
     this.ruler.visible=this.mode==='scale';this.ruler.position.set(0,3.5,0);
     waterTime.value=this.world.time;if(before-(this.lastCaustics||0)>95){this.caustics.render(this.renderer);this.lastCaustics=before;}this.renderer.setRenderTarget(null);this.renderer.clear();this.renderer.render(this.scene,this.camera);
-    if(this.reefGroup.visible)this.renderer.shadowMap.autoUpdate=false;
+    if(this.reefGroup.visible||this.habitat?.group.visible)this.renderer.shadowMap.autoUpdate=false;
     this.frames++;this.cpuMs=performance.now()-before;
   }
   project(f){const p=(this.records.find(r=>r.id===f.id)?.center||f.position.clone().multiplyScalar(10)).clone().project(this.camera);return {x:(p.x+1)*this.width/2,y:(1-p.y)*this.height/2,visible:p.z>=-1&&p.z<=1};}
   ray(x,y){this.raycaster.setFromCamera(new THREE.Vector2(x/this.width*2-1,1-y/this.height*2),this.camera);return new THREE.Ray(this.raycaster.ray.origin.clone().multiplyScalar(.1),this.raycaster.ray.direction.clone());}
   pick(x,y){
-    if(this.mode!=='natural')return null;const ray=this.ray(x,y),wall=this.spatial.firstHit(ray);let result=null;
-    for(const f of this.world.fish){if(!this.world.active(f))continue;const r=f.profile.radiusM,half=Math.max(f.profile.totalLengthM*.28,f.profile.totalLengthM*.5-r),a=f.position.clone().addScaledVector(f.direction,-half),b=f.position.clone().addScaledVector(f.direction,half),onRay=new THREE.Vector3(),onBody=new THREE.Vector3();
+    if(this.mode!=='natural')return null;const ray=this.ray(x,y),wall=this.spatial.firstHit(ray);let result=this.community.pick(this.raycaster,this.world);if(result&&wall&&result.distance>=wall.distance-.001)result=null;
+    for(const f of this.world.fish){if(!this.world.active(f)||GLB_KINDS.includes(f.kind))continue;const envelope=bodyEnvelope(f),r=EXTRA_FISH[f.kind]?f.profile.totalLengthM*.3:envelope.radiusM,half=EXTRA_FISH[f.kind]?f.profile.totalLengthM*.28:envelope.halfLengthM,a=f.position.clone().addScaledVector(f.direction,-half),b=f.position.clone().addScaledVector(f.direction,half),onRay=new THREE.Vector3(),onBody=new THREE.Vector3();
       const d2=ray.distanceSqToSegment(a,b,onRay,onBody),depth=onRay.distanceTo(ray.origin),pad=Math.min(.008,depth*.005);
       if(d2<=(r+pad)**2&&(!wall||depth<wall.distance-.001)&&(!result||depth<result.distance))result={fish:f,distance:depth,point:onRay};
     }return result;
   }
   pointerPlane(x,y,point){const normal=this.camera.getWorldDirection(new THREE.Vector3()),plane=new THREE.Plane().setFromNormalAndCoplanarPoint(normal,point);return this.ray(x,y).intersectPlane(plane,new THREE.Vector3());}
-  diagnostics(){return {frames:this.frames,fps:this.fpsWindow?.length?1000*this.fpsWindow.length/this.fpsWindow.reduce((a,b)=>a+b,0):0,cpuMs:this.cpuMs,mode:this.mode,reefVisible:this.reefVisible,reefReady:this.reefReady,coverage:this.coverage,three:THREE.REVISION,queries:this.spatial.queryCount,shaderErrors:this.shaderErrors.slice(),triangles:this.renderer.info.render.triangles,geometries:this.renderer.info.memory.geometries,textures:this.renderer.info.memory.textures};}
-  dispose(){this.disposed=true;disposeGroup(this.fishGroup);disposeGroup(this.heldGroup);disposeGroup(this.reefGroup,true);if(this.predator){for(const v of Object.values(this.predator.material))if(v?.isTexture)v.dispose();this.predator.geometry.dispose();this.predator.material.dispose();}this.testStone.geometry.dispose();this.testStone.material.dispose();this.foodMesh.geometry.dispose();this.foodMesh.material.dispose();disposeGroup(this.ruler);this.caustics.dispose();this.environment.dispose();this.spatial.dispose();this.renderer.dispose();}
+  diagnostics(){return {frames:this.frames,jellies:this.jellyCount||0,sceneKind:this.sceneKind,navigation:this.world.navigation?.status?.(),fps:this.fpsWindow?.length?1000*this.fpsWindow.length/this.fpsWindow.reduce((a,b)=>a+b,0):0,cpuMs:this.cpuMs,mode:this.mode,reefVisible:this.reefVisible,reefReady:this.reefReady,coverage:this.coverage,three:THREE.REVISION,queries:this.spatial.queryCount,shaderErrors:this.shaderErrors.slice(),triangles:this.renderer.info.render.triangles,geometries:this.renderer.info.memory.geometries,textures:this.renderer.info.memory.textures};}
+  dispose(){this.disposed=true;this.community.dispose();this.specimen?.dispose();disposeGroup(this.fishGroup);disposeGroup(this.heldGroup);if(this.habitat){this.habitat.meshes.forEach(m=>m.geometry.dispose());this.habitat.group.removeFromParent();}disposeGroup(this.reefGroup,true);if(this.predator){for(const v of Object.values(this.predator.material))if(v?.isTexture)v.dispose();this.predator.geometry.dispose();this.predator.material.dispose();}this.testStone.geometry.dispose();this.testStone.material.dispose();this.foodMesh.geometry.dispose();this.foodMesh.material.dispose();disposeGroup(this.ruler);this.caustics.dispose();this.environment.dispose();this.spatial.dispose();this.renderer.dispose();}
 }

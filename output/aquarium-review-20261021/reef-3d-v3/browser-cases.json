@@ -1,0 +1,24 @@
+[
+  {
+    "case": "arch-4-25",
+    "status": "中部石拱：4.0 cm / 25 cm。按实际净空与可见性选路。",
+    "phase": "小鱼：巡游 · 大鱼：沿礁巡游",
+    "events": "45.1s 结束追击 shelter-fish\n47.4s 进入躲藏 shelter-fish\n58.2s 离开掩体 shelter-fish\n60.2s 到达搜索出口 hunter\n61.8s 结束追击 shelter-fish",
+    "navigation": "完整浅礁三维航路 · 2 个体型图 · 8521 个累计可行节点 · 5 次搜索 · 最大单次规划 103.5 ms · 最近未成路原因 body-clearance",
+    "render": "Three r180 · 三角形 1731078 · 3D 水母 3 · 几何 94 · 纹理 11 · 帧率 29.9 · CPU 提交 11.7 ms（不含 GPU） · 帧 3006 · 世界 69.9 s · 错误 0"
+  },
+  {
+    "case": "arch-7.4-18",
+    "status": "中部石拱：7.4 cm / 18 cm。该组合不符合捕食资格，保持巡游。",
+    "counts": "游动 2 / 居民 2 · 已吃饲料 0 · 追逐 0 · 捕获 0 · 放弃 0",
+    "phase": "小鱼：巡游 · 大鱼：沿礁巡游"
+  },
+  {
+    "case": "right-2.5-45",
+    "status": "选中 hunter：总长 45.0 cm，年龄未知。",
+    "counts": "游动 2 / 居民 2 · 已吃饲料 0 · 追逐 32 · 捕获 1 · 放弃 31",
+    "phase": "小鱼：沿礁巡游 · 大鱼：沿礁巡游",
+    "events": "541.7s 结束追击 shelter-fish\n541.9s 进入躲藏 shelter-fish\n553.2s 离开掩体 shelter-fish\n555.3s 到达搜索出口 hunter\n556.9s 结束追击 shelter-fish",
+    "navigation": "完整浅礁三维航路 · 2 个体型图 · 7287 个累计可行节点 · 9 次搜索 · 最大单次规划 89.9 ms"
+  }
+]

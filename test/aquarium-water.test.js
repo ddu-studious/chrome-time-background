@@ -691,11 +691,11 @@ test('样式：海水画布固定在页面底部、高度等于核心的 BAND、
 test('index.html：三个水体脚本先于宿主、核心先于着色器先于控制器；样式钉子已更新', () => {
     const html = read('index.html');
     const idx = s => { const i = html.indexOf(s); assert.ok(i >= 0, s); return i; };
-    assert.ok(idx('js/aquarium.js?v=8') < idx('js/aquarium-water-core.js?v=3'));
+    assert.ok(idx('js/aquarium.js?v=9') < idx('js/aquarium-water-core.js?v=3'));
     assert.ok(idx('js/aquarium-water-core.js?v=3') < idx('js/aquarium-water-shader.js?v=3'));
     assert.ok(idx('js/aquarium-water-shader.js?v=3') < idx('js/aquarium-water.js?v=3'));
-    assert.ok(idx('js/aquarium-water.js?v=3') < idx('js/background-experience.js?v=20'));
-    idx('css/aquarium.css?v=6');
+    assert.ok(idx('js/aquarium-water.js?v=3') < idx('js/background-experience.js?v=21'));
+    idx('css/aquarium.css?v=7');
     for (const file of ['js/aquarium-water-core.js', 'js/aquarium-water-shader.js', 'js/aquarium-water.js']) assert.ok(fs.existsSync(path.join(root, file)), file);
 });
 

@@ -1,0 +1,11 @@
+[
+  {
+    "case": "final-full-reef-4-25",
+    "counts": "游动 2 / 居民 2 · 已吃饲料 0 · 追逐 4 · 捕获 0 · 放弃 3",
+    "diagnostics": "Three r180 · 三角形 1741766 · 3D 水母 1 · 几何 59 · 纹理 11 · 帧率 27.4 · CPU 提交 1.9 ms（不含 GPU） · 帧 1377 · 世界 49.0 s · 错误 0",
+    "drill-state": "小鱼：钻入礁缝 · 大鱼：绕礁追击",
+    "event-log": "30.5s 选择掩体 shelter-fish\n33.2s 进入躲藏 shelter-fish\n33.5s 结束追击 shelter-fish\n40.2s 离开掩体 shelter-fish\n44.3s 选择掩体 shelter-fish",
+    "motion-info": "鱼体态：全礁参考版 · 弯身 0.238 · 尾幅 0.010 · 胸鳍 0.659",
+    "navigation-info": "完整浅礁三维航路 · 7 个体型图 · 37314 个累计可行节点 · 5 次搜索 · 最大单次规划 95.2 ms · 转动中移动 1085 帧 · 重规划 1 · 路线放弃 1"
+  }
+]

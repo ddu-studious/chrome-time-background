@@ -1,0 +1,118 @@
+{
+  "before": [
+    {
+      "seed": 1,
+      "seconds": 120,
+      "feeds": 0,
+      "eaten": 0,
+      "hunts": 7,
+      "captures": 2,
+      "escapes": 5,
+      "blocked": 410,
+      "refills": 1,
+      "routeRetries": 0,
+      "routeAbandons": 0,
+      "movingTurns": 0
+    },
+    {
+      "seed": 7,
+      "seconds": 120,
+      "feeds": 0,
+      "eaten": 0,
+      "hunts": 3,
+      "captures": 2,
+      "escapes": 1,
+      "blocked": 647,
+      "refills": 2,
+      "routeRetries": 0,
+      "routeAbandons": 0,
+      "movingTurns": 0
+    },
+    {
+      "seed": 73,
+      "seconds": 120,
+      "feeds": 0,
+      "eaten": 0,
+      "hunts": 7,
+      "captures": 1,
+      "escapes": 5,
+      "blocked": 2787,
+      "refills": 1,
+      "routeRetries": 0,
+      "routeAbandons": 0,
+      "movingTurns": 0
+    },
+    {
+      "seed": 123,
+      "seconds": 120,
+      "feeds": 0,
+      "eaten": 0,
+      "hunts": 4,
+      "captures": 2,
+      "escapes": 2,
+      "blocked": 453,
+      "refills": 2,
+      "routeRetries": 0,
+      "routeAbandons": 0,
+      "movingTurns": 0
+    }
+  ],
+  "after": [
+    {
+      "seed": 1,
+      "seconds": 120,
+      "feeds": 0,
+      "eaten": 0,
+      "hunts": 7,
+      "captures": 2,
+      "escapes": 5,
+      "blocked": 570,
+      "refills": 1,
+      "routeRetries": 0,
+      "routeAbandons": 0,
+      "movingTurns": 0
+    },
+    {
+      "seed": 7,
+      "seconds": 120,
+      "feeds": 0,
+      "eaten": 0,
+      "hunts": 4,
+      "captures": 2,
+      "escapes": 2,
+      "blocked": 238,
+      "refills": 2,
+      "routeRetries": 0,
+      "routeAbandons": 0,
+      "movingTurns": 0
+    },
+    {
+      "seed": 73,
+      "seconds": 120,
+      "feeds": 0,
+      "eaten": 0,
+      "hunts": 7,
+      "captures": 1,
+      "escapes": 6,
+      "blocked": 800,
+      "refills": 1,
+      "routeRetries": 0,
+      "routeAbandons": 0,
+      "movingTurns": 0
+    },
+    {
+      "seed": 123,
+      "seconds": 120,
+      "feeds": 0,
+      "eaten": 0,
+      "hunts": 5,
+      "captures": 2,
+      "escapes": 3,
+      "blocked": 706,
+      "refills": 2,
+      "routeRetries": 0,
+      "routeAbandons": 0,
+      "movingTurns": 0
+    }
+  ]
+}

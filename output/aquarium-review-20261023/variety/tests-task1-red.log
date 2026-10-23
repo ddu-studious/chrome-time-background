@@ -1,0 +1,186 @@
+✖ 个体大小：同一条目同一序号永远得到同一个值，不依赖随机数与调用次数 (0.781667ms)
+✖ 个体大小：4000 个条目全落在 [0.75, 1.25]，均值≈1，两头都取得到，分布是以 1 为中心的三角形（不是均匀分布） (0.0985ms)
+✖ 个体大小：同一条目的 5 条鱼至少 4 个不同的大小；大鱼、没有 size 的种与空种恒为 1 (0.070875ms)
+✖ 个体大小：只有原有 5 种小鱼带 size 范围，4 种大动物没有（保持真实比例） (0.078875ms)
+✖ 世界：sizes 默认关，关着时每条鱼 size 恒为 1 (0.627792ms)
+✖ 世界：开着 sizes 与关着相比，位置、速度、朝向、深度、相位、种子逐位相同（没有消耗随机数），只有体长按 size 变 (0.666792ms)
+✖ 世界：同一个群（5 条霓虹灯鱼）开着 sizes 时彼此大小不同，关着时全一样 (8.650958ms)
+✖ 世界：resize 之后体长与大小的比值不变（f.len 本来就是唯一的体长来源） (0.343333ms)
+✖ 补员：开着 sizes，被吃掉的鱼补回来时大小不变；空缺多出 size 字段，关着时空缺形状仍是 {entry, species, due} (1.187167ms)
+✖ enterOne：第四个参数是个体大小；缺省、非有限与非正数一律按 1 (0.867333ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 0
+ℹ fail 10
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 140.963583
+
+✖ failing tests:
+
+test at test/aquarium-variety.test.js:34:1
+✖ 个体大小：同一条目同一序号永远得到同一个值，不依赖随机数与调用次数 (0.781667ms)
+  TypeError: Core.sizeOf is not a function
+      at TestContext.<anonymous> (/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/test/aquarium-variety.test.js:36:24)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.start (node:internal/test_runner/test:1096:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:385:17)
+
+test at test/aquarium-variety.test.js:45:1
+✖ 个体大小：4000 个条目全落在 [0.75, 1.25]，均值≈1，两头都取得到，分布是以 1 为中心的三角形（不是均匀分布） (0.0985ms)
+  TypeError: Core.sizeOf is not a function
+      at /Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/test/aquarium-variety.test.js:47:64
+      at Array.from (<anonymous>)
+      at TestContext.<anonymous> (/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/test/aquarium-variety.test.js:47:26)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3)
+
+test at test/aquarium-variety.test.js:58:1
+✖ 个体大小：同一条目的 5 条鱼至少 4 个不同的大小；大鱼、没有 size 的种与空种恒为 1 (0.070875ms)
+  TypeError: Core.sizeOf is not a function
+      at /Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/test/aquarium-variety.test.js:60:59
+      at Array.from (<anonymous>)
+      at TestContext.<anonymous> (/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/test/aquarium-variety.test.js:60:24)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7)
+
+test at test/aquarium-variety.test.js:68:1
+✖ 个体大小：只有原有 5 种小鱼带 size 范围，4 种大动物没有（保持真实比例） (0.078875ms)
+  TypeError: Core.speciesById.size is not iterable
+      at TestContext.<anonymous> (/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/test/aquarium-variety.test.js:69:79)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7)
+
+test at test/aquarium-variety.test.js:73:1
+✖ 世界：sizes 默认关，关着时每条鱼 size 恒为 1 (0.627792ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - false
+  
+      at TestContext.<anonymous> (/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/test/aquarium-variety.test.js:75:12)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/aquarium-variety.test.js:84:1
+✖ 世界：开着 sizes 与关着相比，位置、速度、朝向、深度、相位、种子逐位相同（没有消耗随机数），只有体长按 size 变 (0.666792ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  undefined !== 1
+  
+      at TestContext.<anonymous> (/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/test/aquarium-variety.test.js:96:16)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/aquarium-variety.test.js:111:1
+✖ 世界：同一个群（5 条霓虹灯鱼）开着 sizes 时彼此大小不同，关着时全一样 (8.650958ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok(new Set(on.fish.map(f => f.size)).size >= 4)
+  
+      at TestContext.<anonymous> (/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/test/aquarium-variety.test.js:118:12)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test/aquarium-variety.test.js:122:1
+✖ 世界：resize 之后体长与大小的比值不变（f.len 本来就是唯一的体长来源） (0.343333ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok(Math.abs(f.len / f.size / w.scale - before[i].base) < 1e-9)
+  
+      at /Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/test/aquarium-variety.test.js:129:16
+      at Array.forEach (<anonymous>)
+      at TestContext.<anonymous> (/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/test/aquarium-variety.test.js:127:12)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test/aquarium-variety.test.js:133:1
+✖ 补员：开着 sizes，被吃掉的鱼补回来时大小不变；空缺多出 size 字段，关着时空缺形状仍是 {entry, species, due} (1.187167ms)
+  TypeError: Core.sizeOf is not a function
+      at TestContext.<anonymous> (/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/test/aquarium-variety.test.js:137:60)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7)
+
+test at test/aquarium-variety.test.js:162:1
+✖ enterOne：第四个参数是个体大小；缺省、非有限与非正数一律按 1 (0.867333ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  undefined !== 1.2
+  
+      at TestContext.<anonymous> (/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/test/aquarium-variety.test.js:167:12)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 1.2,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

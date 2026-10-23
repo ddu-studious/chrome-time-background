@@ -1,0 +1,15 @@
+chrome 156.0.8078.48
+neon       near    5.6 µs/  53 calls | night   23.5 µs/  57 | far    3.1 µs/  43
+tang       near    4.1 µs/  49 calls | night    4.8 µs/  53 | far    2.4 µs/  39
+chromis    near    4.3 µs/  54 calls | night    5.1 µs/  58 | far    2.5 µs/  39
+anthias    near    4.6 µs/  58 calls | night    5.3 µs/  62 | far    2.6 µs/  43
+clown      near    8.4 µs/  89 calls | night    9.3 µs/  93 | far    2.5 µs/  38
+puffer     near    6.8 µs/  99 calls | night    7.3 µs/ 103 | far    2.9 µs/  38
+angel      near    7.9 µs/ 102 calls | night    8.4 µs/ 106 | far    2.4 µs/  38
+gramma     near    5.4 µs/  56 calls | night    6.1 µs/  60 | far    2.6 µs/  38
+idol       near    7.7 µs/  90 calls | night    8.2 µs/  94 | far    2.4 µs/  39
+butterfly  near    6.1 µs/  83 calls | night    8.4 µs/  87 | far    4.6 µs/  38
+cardinal   near    7.5 µs/  84 calls | night    6.8 µs/  88 | far    2.4 µs/  39
+hammer     near    4.6 µs/  53 calls | night    5.4 µs/  57 | far    2.9 µs/  43
+manta      near    5.2 µs/  70 calls | night    5.9 µs/  74 | far    2.9 µs/  52
+whaleshark near    4.9 µs/  68 calls | night    5.7 µs/  72 | far    4.7 µs/  40

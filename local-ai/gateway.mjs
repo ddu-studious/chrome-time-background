@@ -21,6 +21,7 @@ import { interpret as interpretMusic, validateInput as validateMusic } from './m
 import { plan as planAssistant, validateInput as validateAssistant } from './assistant-service.mjs';
 import { interpret as runCompute, validateInput as validateComputeBody } from './compute-service.mjs';
 import contract from '../js/assistant-contract.js';
+import { createModelRoute } from './model-routing.mjs';
 
 const SCENES = Object.freeze({
   'assistant.compact': Object.freeze({ name: '上下文整理（pi SDK）', version: 1, validate: validateCompaction, run: compactHistory }),
@@ -52,11 +53,12 @@ function resolveSelection(value, sceneId, policy, fallbackModel) {
   const model = value.model ?? policy.model ?? fallbackModel, reasoning = value.reasoning ?? policy.reasoning;
   if (model != null && (typeof model !== 'string' || model.includes('://') || !/^[a-zA-Z0-9_./:-]{1,160}$/.test(model))) throw fail('模型标识无效', 400);
   if (!['off', 'low', 'medium', 'high', 'xhigh', 'on'].includes(reasoning)) throw fail('思考强度无效', 400);
+  if (model?.startsWith('deepseek:') && !['assistant.plan', 'assistant.compact'].includes(sceneId)) throw fail('DeepSeek 选择仅适用于 AI 工作台规划与上下文整理', 400);
   return { model, reasoning };
 }
 
 // Business callers choose a registered scene, never a URL, prompt or provider.
-export function createGateway({ provider, speechProvider, synthesisProvider, computeProvider = null, layaProvider = null, history = createHistoryStore(), admission = createAdmission(), layaAdmission = createAdmission(), modelEnabled = true, disabledScenes = [], control = createControlStore({ modelEnabled, disabledScenes }) }) {
+export function createGateway({ provider, remoteConfig = null, sampleMachine, remoteFactory, speechProvider, synthesisProvider, computeProvider = null, layaProvider = null, history = createHistoryStore(), admission = createAdmission(), layaAdmission = createAdmission(), modelEnabled = true, disabledScenes = [], control = createControlStore({ modelEnabled, disabledScenes }) }) {
   const records = [];
   return {
     describe() {
@@ -64,7 +66,7 @@ export function createGateway({ provider, speechProvider, synthesisProvider, com
       let layaUsage;
       try { layaUsage = layaAdmission.describe(); }
       catch { layaUsage = { admitted: 0, scenes: {}, error: 'Laya 使用记录不可用' }; }
-      return { version: 1, usage: admission.describe(), laya: { mode: state.policy.layaMode, configured: Boolean(layaProvider), usage: layaUsage }, speech: speechProvider?.describe?.() || { configured: false, localOnly: true, maxSeconds: 30 }, synthesis: synthesisProvider?.describe?.() || { configured: false, localOnly: true }, compute: computeProvider?.describe?.() || { configured: false, localOnly: true }, ...state, modelEnabled: state.policy.modelEnabled, localOnly: true,
+      return { version: 1, remote: remoteConfig?.snapshot() || null, usage: admission.describe(), laya: { mode: state.policy.layaMode, configured: Boolean(layaProvider), usage: layaUsage }, speech: speechProvider?.describe?.() || { configured: false, localOnly: true, maxSeconds: 30 }, synthesis: synthesisProvider?.describe?.() || { configured: false, localOnly: true }, compute: computeProvider?.describe?.() || { configured: false, localOnly: true }, ...state, modelEnabled: state.policy.modelEnabled, localOnly: !remoteConfig || remoteConfig.snapshot().mode === 'off',
         scenes: [...Object.entries(SCENES).map(([id, scene]) => ({ id, name: scene.name, version: scene.version, modelEnabled: state.policy.modelEnabled && !state.policy.disabledScenes.includes(id) && (id !== 'speech.synthesize' || state.policy.speechSynthesisEnabled) && (id !== 'assistant.compute' || state.policy.computeEnabled) }))],
         historyInfo: history.info(), records: structuredClone(records) };
     },
@@ -83,19 +85,24 @@ export function createGateway({ provider, speechProvider, synthesisProvider, com
       const scene = Object.hasOwn(SCENES, sceneId) ? SCENES[sceneId] : null;
       const record = { requestId, scene: scene ? sceneId : 'unknown', startedAt: started, status: 'pending', source: null,
         ...(trace?.userManaged && trace.conversationId && trace.turnId ? { conversationId: trace.conversationId, turnId: trace.turnId } : {}) };
-      const execution = () => ({ requestId, scene: record.scene, source: record.source, status: record.status, model: record.model || null, reasoning: record.reasoning ?? null, requestedModel: record.requestedModel || null, requestedReasoning: record.requestedReasoning ?? null, contextBudget: record.contextBudget || null, policyRevision: record.policyRevision ?? null, elapsedMs: Date.now() - started, usage: record.usage || null, ...(record.layaPrefetch ? { layaPrefetch: { ...record.layaPrefetch } } : {}), ...(record.speech ? { speech: { ...record.speech } } : {}), ...(record.compute ? { compute: { ...record.compute } } : {}), ...(record.recoveryFromRequestId ? { recoveryFromRequestId: record.recoveryFromRequestId } : {}), ...(record.startReason ? { startReason: record.startReason } : {}), ...(record.planIssue ? { planIssue: record.planIssue } : {}), ...(record.attempts ? { attempts: structuredClone(record.attempts), effectiveReasoning: record.effectiveReasoning, usageComplete: record.attempts.every(attempt => Boolean(attempt.usage)) } : {}) });
+      let route = null, modelProvider = provider;
+      const assertRevision = () => { if (control.snapshot().revision !== state.revision || (route && route.currentRevision !== route.revision)) throw fail('控制策略已更新，请重新提交请求', 409); };
+      const execution = () => ({ requestId, scene: record.scene, source: record.source, status: record.status, model: record.model || null, reasoning: record.reasoning ?? null, requestedModel: record.requestedModel || null, requestedReasoning: record.requestedReasoning ?? null, contextBudget: record.contextBudget || null, policyRevision: record.policyRevision ?? null, elapsedMs: Date.now() - started, usage: record.usage || null, ...(record.routing ? { routing: structuredClone(record.routing) } : {}), ...(record.layaPrefetch ? { layaPrefetch: { ...record.layaPrefetch } } : {}), ...(record.speech ? { speech: { ...record.speech } } : {}), ...(record.compute ? { compute: { ...record.compute } } : {}), ...(record.recoveryFromRequestId ? { recoveryFromRequestId: record.recoveryFromRequestId } : {}), ...(record.startReason ? { startReason: record.startReason } : {}), ...(record.planIssue ? { planIssue: record.planIssue } : {}), ...(record.attempts ? { attempts: structuredClone(record.attempts), effectiveReasoning: record.effectiveReasoning, usageComplete: record.attempts.every(attempt => Boolean(attempt.usage)) } : {}) });
       records.push(record);
       if (records.length > 100) records.shift();
       try {
         if (!scene) throw fail('未登记的 AI 场景', 400);
         const selected = resolveSelection(selection, sceneId, state.policy, provider.model);
+        route = createModelRoute({ local: provider, config: remoteConfig, scene: sceneId, requestedModel: selected.model, signal, sample: sampleMachine, remoteFactory,
+          onRoute: value => { record.routing = value; delete record.recoveryFromRequestId; delete record.startReason; } });
+        modelProvider = route || provider;
         record.requestedModel = selected.model;
         record.requestedReasoning = selected.reasoning;
         // Reuse a successful recovery only within this executor turn and policy.
         // Operational records are bounded; no persistent preference is changed.
         const previous = sceneId === 'assistant.plan' && record.turnId && selected.reasoning !== 'off'
           ? records.findLast(row => row !== record && row.scene === sceneId && row.conversationId === record.conversationId && row.turnId === record.turnId) : null;
-        const recovered = previous?.status === 'ready' && previous.policyRevision === state.revision &&
+        const recovered = previous?.status === 'ready' && !previous.routing && previous.policyRevision === state.revision &&
           previous.requestedModel === selected.model && previous.requestedReasoning === selected.reasoning &&
           previous.effectiveReasoning === 'off' && previous.attempts?.at(-1)?.status === 'succeeded' &&
           previous.startReason !== 'adaptive-receipts';
@@ -118,21 +125,23 @@ export function createGateway({ provider, speechProvider, synthesisProvider, com
         historyTicket = history.begin(record, input, standalone ? { ...trace, conversationId } : trace);
         event('user', input.text);
         const controlledProvider = {
-          model: selected.model, reasoning: planningReasoning, prefetchMode: state.policy.layaMode,
+          get model() { return route?.remote ? route.model : selected.model; },
+          get reasoning() { return route?.remote ? 'off' : planningReasoning; }, prefetchMode: state.policy.layaMode,
           // Whether the planner may even be told about compute.run. The same three conditions guard the run itself
           // (below); a mid-task change of the switch is caught there and by the policy revision check.
           computeEnabled: sceneId === 'assistant.plan' && state.policy.modelEnabled && state.policy.computeEnabled === true && !state.policy.disabledScenes.includes('assistant.compute') && computeProvider?.describe?.().configured === true,
           compactionEnabled: state.policy.contextCompaction === 'hybrid' && (sceneId === 'assistant.compact' || !state.policy.disabledScenes.includes('assistant.compact')),
-          ...(provider.countContextTokens ? { countContextTokens: async options => {
+          ...(modelProvider.countContextTokens ? { countContextTokens: async options => {
             signal?.throwIfAborted();
             if (!state.policy.modelEnabled || state.policy.disabledScenes.includes(sceneId)) throw fail('此场景的模型调用已关闭，仍可使用简单指令或手动设置', 403);
             if (control.snapshot().revision !== state.revision) throw fail('控制策略已更新，请重新提交请求', 409);
-            const counted = await provider.countContextTokens({ ...options, model: selected.model,
+            assertRevision();
+            const counted = await modelProvider.countContextTokens({ ...options, model: selected.model,
               reasoning: sceneId === 'assistant.compact' ? 'off' : planningReasoning, signal,
               timeoutMs: Math.min(5000, state.policy.timeoutMs) });
             signal?.throwIfAborted();
             if (control.snapshot().revision !== state.revision) throw fail('控制策略已更新，请重新提交请求', 409);
-            return counted;
+            assertRevision(); return counted;
           } } : {}),
           async prefetchToolGroups({ text, app, groups }) {
             const mode = state.policy.layaMode;
@@ -182,10 +191,11 @@ export function createGateway({ provider, speechProvider, synthesisProvider, com
           async planningContext({ maxOutputTokens }) {
             signal?.throwIfAborted();
             if (!state.policy.modelEnabled || state.policy.disabledScenes.includes(sceneId)) throw fail('此场景的模型调用已关闭，仍可使用简单指令或手动设置', 403);
-            const capacity = await provider.planningContext?.({ model: selected.model, signal }) || {};
+            assertRevision();
+            const capacity = await modelProvider.planningContext?.({ model: selected.model, signal, maxOutputTokens: Math.min(state.policy.maxOutputTokens, maxOutputTokens) }) || {};
             signal?.throwIfAborted();
             if (control.snapshot().revision !== state.revision) throw fail('控制策略已更新，请重新提交请求', 409);
-            return { ...capacity, maxOutputTokens: Math.min(state.policy.maxOutputTokens, maxOutputTokens) };
+            assertRevision(); return { ...capacity, maxOutputTokens: Math.min(state.policy.maxOutputTokens, maxOutputTokens) };
           },
           async embed(input) {
             signal?.throwIfAborted();
@@ -256,23 +266,24 @@ export function createGateway({ provider, speechProvider, synthesisProvider, com
             signal?.throwIfAborted();
             if (!state.policy.modelEnabled || state.policy.disabledScenes.includes(sceneId)) throw fail('此场景的模型调用已关闭，仍可使用简单指令或手动设置', 403);
             record.source = 'model';
-            record.model = selected.model;
-            record.reasoning = sceneId === 'assistant.compact' ? 'off' : selected.reasoning;
+            record.model = route?.remote ? route.model : selected.model;
+            record.reasoning = route?.remote || sceneId === 'assistant.compact' ? 'off' : selected.reasoning;
             record.policyRevision = state.revision;
             record.maxOutputTokens = Math.min(state.policy.maxOutputTokens, options.maxOutputTokens ?? 4096, sceneId === 'alarm.interpret' && selected.reasoning === 'off' ? 650 : 4096);
             record.timeoutMs = state.policy.timeoutMs;
             if (options.contextBudget) record.contextBudget = options.contextBudget;
             record.attempts = [];
             const deadline = Date.now() + state.policy.timeoutMs;
-            const canRetry = sceneId === 'assistant.plan' && planningReasoning !== 'off';
+            const canRetry = sceneId === 'assistant.plan' && planningReasoning !== 'off' && !route?.remote;
             const retryCodes = new Set(['MODEL_REASONING_BUDGET_EXHAUSTED', 'MODEL_NO_FINAL_OUTPUT', 'MODEL_RESPONSE_TIMEOUT']);
             let retryReason;
             for (let index = 0; index < (canRetry ? 2 : 1); index++) {
               signal?.throwIfAborted();
               if (control.snapshot().revision !== state.revision) throw fail('控制策略已更新，请重新提交请求', 409);
+              assertRevision();
               const remaining = deadline - Date.now();
               if (remaining <= 0) throw Object.assign(new Error('本地模型响应超时，请关闭思考后重试'), { code: 'MODEL_RESPONSE_TIMEOUT' });
-              const reasoning = sceneId === 'assistant.compact' || index ? 'off' : planningReasoning;
+              const reasoning = route?.remote || sceneId === 'assistant.compact' || index ? 'off' : planningReasoning;
               // Prefill alone can take 30s on the local 27B model. Give recovery
               // the larger share, keeping both attempts inside the same deadline.
               const timeoutMs = index === 0 && canRetry ? Math.max(1, Math.min(remaining, Math.floor(state.policy.timeoutMs / 3))) : remaining;
@@ -283,9 +294,10 @@ export function createGateway({ provider, speechProvider, synthesisProvider, com
               record.effectiveReasoning = reasoning;
               history.finish(historyTicket, record);
               try {
-                const generate = sceneId === 'assistant.compact' ? provider.generateText : provider.generateObject;
+                const generate = sceneId === 'assistant.compact' ? modelProvider.generateText : modelProvider.generateObject;
                 if (!generate) throw fail('模型入口不支持文本摘要', 503);
-                const value = await generate.call(provider, { ...options, signal, model: selected.model, reasoning, timeoutMs, maxOutputTokens,
+                const value = await generate.call(modelProvider, { ...options, signal, model: selected.model, reasoning, timeoutMs, maxOutputTokens,
+                  beforeRequest: assertRevision,
                   input: index ? { ...options.input, reasoning: 'off' } : options.input,
                   onMetadata: metadata => { attempt.contextLength = metadata.contextLength; attempt.contextSource = metadata.contextSource; if (metadata.contextBudget) record.contextBudget = metadata.contextBudget; },
                   onUsage: usage => {
@@ -295,6 +307,7 @@ export function createGateway({ provider, speechProvider, synthesisProvider, com
                   }
                 });
                 signal?.throwIfAborted();
+                assertRevision();
                 attempt.status = 'succeeded';
                 return value;
               } catch (error) {
@@ -319,6 +332,7 @@ export function createGateway({ provider, speechProvider, synthesisProvider, com
         result = await scene.run(input, controlledProvider);
         signal?.throwIfAborted();
         if (['model', 'speech', 'compute'].includes(record.source) && control.snapshot().revision !== state.revision) throw fail('控制策略已更新，请重新提交请求', 409);
+        if (route?.used) assertRevision();
         if (ticket) admission.finish(ticket, true, state.policy);
         record.source = result.source;
         record.status = result.status;

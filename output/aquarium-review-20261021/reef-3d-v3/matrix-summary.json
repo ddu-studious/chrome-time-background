@@ -1,0 +1,11 @@
+{
+  "cases": 36,
+  "eligible": 27,
+  "ineligible": 9,
+  "withHidden": 27,
+  "withSearchArrival": 27,
+  "penetrations": 0,
+  "maxStepM": 0.005684405925380792,
+  "maxPlanMs": 61.85312499999998,
+  "cpuTotalMs": 2972.6794590000004
+}

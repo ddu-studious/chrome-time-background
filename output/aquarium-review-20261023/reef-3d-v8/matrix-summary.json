@@ -1,0 +1,15 @@
+{
+  "cases": 36,
+  "eligible": 27,
+  "eligibleWithHiding": 27,
+  "eligibleWithSearch": 27,
+  "penetratingPoses": 0,
+  "sweepViolations": 0,
+  "maxStep": 0.005728717956912131,
+  "totalCpuMs": 31407.67908000001,
+  "maxPlanMs": 73.06354099999953,
+  "movingTurnSeconds": 508.70000000000135,
+  "routeStoppedSeconds": 147.8999999999998,
+  "routeRetries": 7,
+  "routeAbandons": 0
+}

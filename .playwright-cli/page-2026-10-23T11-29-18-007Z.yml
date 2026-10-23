@@ -1,0 +1,142 @@
+- generic [active] [ref=e1]:
+  - paragraph [ref=e2]: 隔离预览：配置仅在内存中，不调用模型，不连接扩展。
+  - generic [ref=e3]:
+    - status [ref=e4]: 控制策略已刷新
+    - article [ref=e5]:
+      - heading "本机连接" [level=2] [ref=e6]
+      - paragraph [ref=e7]: 连接到本机 AI 服务。令牌保存在扩展本地存储，不会回显。
+      - generic [ref=e8]:
+        - generic [ref=e9]:
+          - text: 连接令牌
+          - textbox "连接令牌" [ref=e10]:
+            - /placeholder: 已保存时可留空
+        - button "保存连接" [ref=e11] [cursor=pointer]
+        - button "刷新状态" [ref=e12] [cursor=pointer]
+      - paragraph [ref=e13]: 模型：隔离预览模型 · 状态：就绪
+      - paragraph [ref=e14]: 语音输入：尚未配置 Whisper · 回答朗读：尚未安装本机语音组件
+      - paragraph [ref=e15]: Laya 预加载：关闭 · 今日 0 次，失败 0 次。
+    - article [ref=e16]:
+      - heading "外部模型兜底" [level=2] [ref=e17]
+      - paragraph [ref=e18]: 仅用于 AI 工作台的规划、回答和上下文整理。启用后，当前请求所需的用户输入、会话背景和工具回执会发送给 DeepSeek，可能产生 API 费用。默认关闭；语音、向量、代码计算仍在本机。总开关、场景开关、请求预算与确认卡继续生效。
+      - group [ref=e20]:
+        - generic [ref=e21]:
+          - generic [ref=e22]:
+            - text: 调用方式
+            - combobox "调用方式" [ref=e23]:
+              - option "关闭（只用本机）" [selected]
+              - option "自动兜底"
+              - option "始终使用外部模型"
+          - generic [ref=e24]:
+            - text: DeepSeek 模型
+            - textbox "DeepSeek 模型" [ref=e25]: deepseek-flash
+          - generic [ref=e26]:
+            - text: API Key
+            - textbox "API Key" [ref=e27]:
+              - /placeholder: 填写 DeepSeek API Key
+          - generic [ref=e28]:
+            - text: CPU 阈值（%）
+            - spinbutton "CPU 阈值（%）" [ref=e29]: "85"
+          - generic [ref=e30]:
+            - text: 空闲内存低于（MiB）
+            - spinbutton "空闲内存低于（MiB）" [ref=e31]: "1024"
+          - generic [ref=e32]:
+            - text: 外部上下文预算（token）
+            - spinbutton "外部上下文预算（token）" [ref=e33]: "32768"
+        - generic [ref=e34]:
+          - checkbox "本地上下文容量不足时使用外部模型" [checked] [ref=e35]
+          - text: 本地上下文容量不足时使用外部模型
+        - generic [ref=e36]:
+          - checkbox "清除已保存密钥（需同时关闭兜底）" [ref=e37]
+          - text: 清除已保存密钥（需同时关闭兜底）
+        - paragraph [ref=e38]: 自动模式在发送请求前检测：两段连续 500 毫秒的整机 CPU 使用率均达到阈值、空闲内存不足、本地模型忙碌或不可用时切换。macOS 空闲内存不等同于系统内存压力，可按机器情况调整阈值。外部模型固定关闭思考；上下文预算使用保守估算，最大 32768 token。密钥仅存于本机服务，不回显、不进入扩展存储和历史；不填则保留。
+        - button "保存外部模型配置" [ref=e39] [cursor=pointer]
+      - paragraph [ref=e40]: DeepSeek：已关闭 · deepseek-flash · 密钥未配置
+    - article [ref=e41]:
+      - heading "调用策略 版本 1" [level=2] [ref=e42]
+      - group [ref=e44]:
+        - generic [ref=e45]:
+          - checkbox "允许调用模型（本地与外部）" [checked] [ref=e46]
+          - text: 允许调用模型（本地与外部）
+        - generic [ref=e47]:
+          - text: Laya（Jev 类）工具预加载
+          - combobox "Laya（Jev 类）工具预加载" [ref=e48]:
+            - option "关闭（默认）" [selected]
+            - option "只观察，不影响规划"
+            - option "参与工具组预加载"
+        - paragraph [ref=e49]: 仅为 Qwen 提前展示当前应用的工具组；Laya 故障、超时或冷却时自动沿用原规划。切换策略会取消旧请求。
+        - paragraph [ref=e50]: 关闭后停止模型请求，规则识别和手动操作继续可用。保存策略会取消尚未消费的旧请求。
+        - generic [ref=e51]:
+          - generic [ref=e52]:
+            - checkbox "助手规划" [checked] [ref=e53]
+            - text: 助手规划
+          - generic [ref=e54]:
+            - checkbox "智能闹钟" [checked] [ref=e55]
+            - text: 智能闹钟
+        - paragraph [ref=e56]: 代码计算（默认关闭）：开启后，助手可在本机沙箱里运行模型临时写的只读 JavaScript，对已读取的数据做统计、筛选、排序和日期数值运算；不能联网、不能读写文件，也不能执行播放、添加、删除等任何操作。每次运行都会在执行过程里展示代码与输出，并计入每日请求预算。
+        - generic [ref=e57]:
+          - generic [ref=e58]:
+            - text: 每日请求预算
+            - spinbutton "每日请求预算" [ref=e59]: "200"
+          - generic [ref=e60]:
+            - text: 连续失败阈值
+            - spinbutton "连续失败阈值" [ref=e61]: "3"
+          - generic [ref=e62]:
+            - text: 熔断冷却（秒）
+            - spinbutton "熔断冷却（秒）" [ref=e63]: "60"
+          - generic [ref=e64]:
+            - text: 本地模型
+            - combobox "本地模型" [ref=e65]:
+              - option "服务默认模型" [selected]
+          - generic [ref=e66]:
+            - text: 向量模型
+            - textbox "向量模型" [ref=e67]: text-embedding-nomic-embed-text-v1.5
+          - generic [ref=e68]:
+            - text: 推理等级
+            - combobox "推理等级" [ref=e69]:
+              - option "off" [selected]
+              - option "low"
+              - option "medium"
+              - option "high"
+              - option "xhigh"
+              - option "on"
+          - generic [ref=e70]:
+            - text: 超时（秒）
+            - spinbutton "超时（秒）" [ref=e71]: "90"
+          - generic [ref=e72]:
+            - text: 上下文整理
+            - combobox "上下文整理" [ref=e73]:
+              - option "自动精简与 pi 摘要" [selected]
+              - option "仅精简，不调用摘要模型"
+          - generic [ref=e74]:
+            - text: 规划思考起步
+            - combobox "规划思考起步" [ref=e75]:
+              - option "严格按上方思考设置（默认）" [selected]
+              - option "已有执行回执时自动关闭思考"
+          - generic [ref=e76]:
+            - text: 输出预算（token）
+            - spinbutton "输出预算（token）" [ref=e77]: "4096"
+        - paragraph [ref=e78]: 模型列表来自本机服务。推理等级按模型能力校验，不支持时明确报错。闹钟关闭推理时最多 650 token；内容场景使用配置预算。 助手规划按整轮最终失败累计冷却阈值；内部重试仍计入每日预算和失败总数。“规划思考起步”选自适应时，仅助手已拿到真实工具回执的后续规划轮从关闭思考开始，所选等级仍是上限，不修改默认设置。无论选哪种起步，助手的清单分析（先拆分完整待办）固定从关闭思考开始，同一执行轮内的后续规划沿用关闭思考；选择或确认后的新执行轮，仍按上方设置起步。
+        - button "保存策略" [ref=e79] [cursor=pointer]
+    - article [ref=e80]:
+      - heading "配置版本" [level=2] [ref=e81]
+      - paragraph [ref=e82]: 回滚会创建一个新版本，保留最近 20 个历史版本。
+      - generic [ref=e83]: 暂无历史版本
+    - article [ref=e84]:
+      - heading "音乐定时状态" [level=2] [ref=e85]
+      - paragraph [ref=e86]: 没有音乐定时任务
+    - article [ref=e87]:
+      - heading "正在处理" [level=2] [ref=e88]
+      - generic [ref=e89]: 暂无任务
+    - article [ref=e90]:
+      - heading "今日 AI 使用" [level=2] [ref=e91]
+      - paragraph [ref=e92]: 已受理 0 / 200 次（已接入场景，含失败和取消，按本机日期统计；不是费用）
+    - article [ref=e93]:
+      - heading "对话与调用历史" [level=2] [ref=e94]
+      - paragraph [ref=e95]: 正在读取本机历史记录…
+    - group [ref=e96]:
+      - generic "最近运行记录（服务内存）" [ref=e97]
+    - article [ref=e98]:
+      - heading "集成验收状态" [level=2] [ref=e99]
+      - paragraph [ref=e100]: 代码入口已迁移，以下实机验收仍未完成。
+      - list [ref=e101]:
+        - listitem [ref=e102]: 真实麦克风移至下一期；部分新增页面等待本期验收

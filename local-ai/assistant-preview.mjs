@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { readFileSync } from 'node:fs';
 import { ASSISTANT_SCRIPTS } from './scripts/build-assistant-ui.mjs';
+import { REMOTE_MODELS } from './remote-config.mjs';
 const port = Number(process.env.ASSISTANT_PREVIEW_PORT) || 18765;
 const files = new Set(['/js/quick-capture.js', '/js/app-video.js', '/js/assistant-context-state.js', '/js/assistant-memory.js', '/css/assistant.css', '/vendor/pinyin-match/pinyin-match.js', '/js/assistant-match.js', '/js/assistant-music.js', '/js/assistant-contract.js', '/js/assistant-engine.js', '/js/assistant-management.js', '/js/alarm-core.js', '/js/assistant-tools.js', '/js/assistant-background.js', '/js/assistant.js', '/js/music-intent.js', '/js/music-search.js', '/js/alarm-intent.js', '/test/fixtures/assistant-mvp-preview.js']);
 for (const path of [...ASSISTANT_SCRIPTS, 'js/music-queue-policy.js']) files.add('/' + path);
@@ -12,6 +13,9 @@ http.createServer((req, res) => {
   }
   if (path === '/' || path === '/assistant-preview.html' || path === '/assistant.html') {
     let html = readFileSync(new URL('../assistant.html', import.meta.url), 'utf8');
+    if (new URL(req.url, 'http://localhost').searchParams.get('remote') === '1') {
+      html = html.replace('<body>', `<body><script>window.__assistantRemoteFixture=${JSON.stringify({ provider: 'deepseek', mode: 'auto', model: 'deepseek-flash', keyConfigured: true, models: REMOTE_MODELS })};</script>`);
+    }
     // This business fixture must insert its Chrome substitutes before the UI
     // entry. Expand the same source list; production still loads one bundle.
     html = html.replace(/<script src="js\/assistant-workbench\.bundle\.js[^"]*"><\/script>/,

@@ -78,7 +78,7 @@ const countCalls = fn => { const g = (...args) => { g.calls++; return fn(...args
 
 // ---------- 规则表 ----------
 
-test('谁能吃谁：9×9 全部组合，只有小锤头鲨吃霓虹灯鱼、蓝吊、小丑鱼、神仙鱼', () => {
+test('谁能吃谁：15×15 全部组合（2026-10-23 起新增 6 种小鱼，原来是 9×9），只有小锤头鲨吃霓虹灯鱼、蓝吊、小丑鱼、神仙鱼', () => {
     const eats = { hammer: ['neon', 'tang', 'clown', 'angel'] };                 // 独立的字面量：不从被测的表里推
     for (const a of Core.SPECIES) {
         for (const b of Core.SPECIES) {

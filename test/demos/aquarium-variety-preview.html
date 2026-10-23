@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>水族馆物种图集（调美术用，产品不加载）</title>
+<style>
+    :root { color-scheme: dark; }
+    body { margin: 0; background: #0b1622; color: #dbe9f6; font: 12px/1.4 -apple-system, "PingFang SC", "Helvetica Neue", sans-serif; }
+    body.has-wall { background-size: cover; background-position: center; }
+    header { padding: 8px 14px; background: rgba(0, 0, 0, .55); position: sticky; top: 0; z-index: 2; display: flex; gap: 14px; flex-wrap: wrap; align-items: baseline; }
+    header b { font-size: 13px; }
+    .row { display: flex; gap: 10px; align-items: flex-end; padding: 8px 14px; border-bottom: 1px solid rgba(255, 255, 255, .08); flex-wrap: wrap; }
+    .row.strip { padding-top: 2px; border-bottom: 2px solid rgba(255, 255, 255, .14); }
+    .name { width: 112px; font-size: 13px; align-self: center; text-shadow: 0 0 3px #000; }
+    .name small { display: block; color: rgba(255, 255, 255, .65); font-size: 10px; }
+    .cell { position: relative; }
+    .cell.night { background: rgba(4, 12, 34, .66); }
+    .cell small { position: absolute; left: 4px; top: 2px; color: rgba(255, 255, 255, .78); font-size: 10px; text-shadow: 0 0 2px #000; pointer-events: none; }
+    canvas { display: block; }
+    #ruler { height: 0; border-top: 1px solid rgba(255, 255, 255, .55); margin: 4px 14px; width: 100px; }
+</style>
+</head>
+<body>
+<header><b>水族馆物种图集</b><span id="info">加载中…</span></header>
+<main id="atlas"></main>
+<!-- 打开方式：在仓库根目录运行 python3 -m http.server，再访问 /test/demos/aquarium-variety-preview.html（下面用 fetch 读 ../../js/aquarium.js，file:// 下一般读不到）。
+     参数见脚本开头的注释（species / zoom / only / ovr / wall 等）；本页只给调美术与截图用，产品不加载。 -->
+<!-- 与 index.html 同序的依赖脚本（UMD，挂到 window）；aquarium.js 本身下面用 CommonJS 包装取 drawFish，产品代码一行不改 -->
+<script src="../../js/jelly-species-shapes.js"></script>
+<script src="../../js/marine-rig.js"></script>
+<script src="../../js/marine-rig-canvas.js"></script>
+<script src="../../js/marine-rig-data.js"></script>
+<script src="../../js/aquarium-yaw.js"></script>
+<script src="../../js/aquarium-core.js"></script>
+<script src="../../js/aquarium-play-core.js"></script>
+<script src="../../js/aquarium-play.js"></script>
+<script src="../../js/aquarium-predation-core.js"></script>
+<script src="../../js/aquarium-flow-core.js"></script>
+<script src="../../js/aquarium-light-core.js"></script>
+<script src="../../js/aquarium-ambient.js"></script>
+<script src="../../js/aquarium-real.js"></script>
+<script>
+(async function () {
+    'use strict';
+    // 参数：species=a,b（缺省 = 全部有卡通画法的种） zoom=4 amount=0.8 real=0|1 wall=图片地址（缺省无） only=near|far|night|strip|scale（缺省全部）
+    //       ovr=idol:2,5;butterfly:5,2  临时把某种的色位换成 [主色, 点缀色]（只为选色：把该种的调色板按色位重映射，不改产品里的物种表）
+    const q = new URLSearchParams(location.search);
+    const zoom = Number(q.get('zoom')) > 0 ? Number(q.get('zoom')) : 4;
+    const amount = Number(q.get('amount')) > 0 ? Number(q.get('amount')) : 0.8;
+    const real = q.get('real') === '1';
+    const only = q.get('only') || '';
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const wall = q.get('wall');
+    if (wall) { document.body.classList.add('has-wall'); document.body.style.backgroundImage = `url(${wall})`; }
+
+    const src = await (await fetch('../../js/aquarium.js')).text();
+    const mod = { exports: {} };
+    const deps = {
+        './aquarium-core.js': window.AquariumCore, './aquarium-play-core.js': window.AquariumPlayCore, './aquarium-play.js': window.AquariumPlay,
+        './aquarium-real.js': window.AquariumReal, './aquarium-predation-core.js': window.AquariumPredationCore,
+        './aquarium-flow-core.js': window.AquariumFlowCore, './aquarium-light-core.js': window.AquariumLightCore, './aquarium-ambient.js': window.AquariumAmbient,
+    };
+    new Function('module', 'exports', 'require', src)(mod, mod.exports, name => deps[name]);
+    const A = mod.exports;
+    const Core = window.AquariumCore;
+    const PALETTE = [[255, 100, 92], [255, 150, 56], [240, 222, 70], [88, 228, 100], [79, 239, 194], [112, 205, 255], [170, 111, 255], [245, 105, 225]];
+    const wanted = (q.get('species') || '').split(',').filter(Boolean);
+    const overrides = Object.fromEntries((q.get('ovr') || '').split(';').filter(Boolean).map(item => { const [id, pair] = item.split(':'); return [id, pair.split(',').map(Number)]; }));
+    function paletteFor(spec) {
+        const o = overrides[spec.id];
+        if (!o) return PALETTE;
+        const out = PALETTE.slice();
+        out[spec.colors[0]] = PALETTE[o[0]];
+        out[spec.colors[1]] = PALETTE[o[1]];
+        return out;
+    }
+    const specs = Core.SPECIES.filter(spec => (wanted.length ? wanted.includes(spec.id) : (A.SHAPES[spec.id] || real)));
+    const farFactor = z => 1 - Core.PARAMS.Z_SIZE + Core.PARAMS.Z_SIZE * z;
+
+    function draw(spec, { z = 1, night = 0, flip = 1, phase = 0, scale = zoom, label = '', turn = 0, size = 1 }) {
+        const len = spec.len * scale * farFactor(z) * size;
+        const w = Math.round(Math.max(len * 2.1, 90));          // 2.1：镰鱼的长丝向后飘出 0.9 倍体长
+        const h = Math.round(Math.max(len * (spec.id === 'manta' ? 1.5 : 1.7), 56));          // 1.7：镰鱼等带高背鳍的鱼，鳍尖与长丝在身体中线上方 0.7 倍体长处，画布矮了会被裁掉
+        const host = document.createElement('div');
+        host.className = 'cell' + (night ? ' night' : '');
+        const canvas = document.createElement('canvas');
+        canvas.width = w * dpr; canvas.height = h * dpr; canvas.style.width = `${w}px`; canvas.style.height = `${h}px`;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        ctx.globalCompositeOperation = 'screen';              // 与宿主画布一致：整张画布在 screen 下画，深色细节由 drawFish 自己切 source-over
+        const fish = { species: spec.id, x: w / 2, y: h / 2, ang: 0, z, len, alpha: 1, phase, turn, flip, xs: 1 };
+        A.drawFish(ctx, fish, paletteFor(spec), { amount, night, lowPower: false, scale: 1, real }, undefined);
+        const tag = document.createElement('small');
+        tag.textContent = `${label} · ${Math.round(len)}px`;
+        host.append(canvas, tag);
+        return host;
+    }
+
+    const atlas = document.getElementById('atlas');
+    for (const spec of specs) {
+        const row = document.createElement('div');
+        row.className = 'row';
+        const name = document.createElement('div');
+        name.className = 'name';
+        name.textContent = spec.name;
+        const sub = document.createElement('small');
+        sub.textContent = `${spec.id} · len ${spec.len}px · ${spec.meters} m`;
+        name.appendChild(sub);
+        row.appendChild(name);
+        if (!only || only === 'near') row.appendChild(draw(spec, { label: '近·朝右', phase: 0.6 }));
+        if (!only || only === 'near') row.appendChild(draw(spec, { label: '近·翻面', flip: -1, phase: 2.4 }));
+        if (!only || only === 'night') row.appendChild(draw(spec, { label: '夜晚', night: 1, phase: 1.2 }));
+        if (!only || only === 'far') row.appendChild(draw(spec, { label: '远·z0.35', z: 0.35, scale: zoom, phase: 0.6 }));
+        if (!only || only === 'turn') row.appendChild(draw(spec, { label: '转弯', turn: 0.9, phase: 1.8 }));
+        atlas.appendChild(row);
+        if (!only || only === 'strip') {
+            const strip = document.createElement('div');
+            strip.className = 'row strip';
+            const pad = document.createElement('div');
+            pad.className = 'name';
+            strip.appendChild(pad);
+            for (let i = 0; i < 6; i++) strip.appendChild(draw(spec, { label: `相位${i}`, phase: i * 1.05, scale: zoom * 0.75 }));
+            atlas.appendChild(strip);
+        }
+    }
+    if (!only || only === 'scale') {
+        // 真实比例行：每种按标准体长（不放大）排成一行，旁边 100 px 的标尺——看相对大小与“在 1440 宽屏幕上其实多大”
+        const row = document.createElement('div');
+        row.className = 'row';
+        const name = document.createElement('div');
+        name.className = 'name';
+        name.textContent = '真实比例';
+        const sub = document.createElement('small');
+        sub.textContent = '标准体长，不放大';
+        name.appendChild(sub);
+        row.appendChild(name);
+        for (const spec of specs) row.appendChild(draw(spec, { label: spec.name, scale: 1, phase: 0.6 }));
+        atlas.appendChild(row);
+        const ruler = document.createElement('div');
+        ruler.id = 'ruler';
+        atlas.appendChild(ruler);
+    }
+    document.getElementById('info').textContent = `${specs.length} 种 · zoom ${zoom} · ${real ? '写实画法开' : '卡通画法'} · 本页只用于调美术，产品不加载`;
+    window.__atlasReady = true;
+})().catch(error => { document.getElementById('info').textContent = `出错：${error && error.stack ? error.stack : error}`; window.__atlasError = String(error && error.stack || error); });
+</script>
+</body>
+</html>

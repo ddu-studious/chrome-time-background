@@ -165,6 +165,7 @@
         aquariumWater: true,
         aquariumRealistic: true,
         aquariumPredation: true,
+        aquariumSizes: true,
         aquariumFlow: false,
         aquariumRays: false,
         aquariumSound: false,
@@ -213,6 +214,7 @@
             aquariumWater: stored.aquariumWater !== false,
             aquariumRealistic: stored.aquariumRealistic !== false,
             aquariumPredation: stored.aquariumPredation !== false,
+            aquariumSizes: stored.aquariumSizes !== false,
             aquariumFlow: stored.aquariumFlow === true,
             aquariumRays: stored.aquariumRays === true,
             aquariumSound: stored.aquariumSound === true,
@@ -265,6 +267,7 @@
         const aquariumWater = document.getElementById('set-bgAquariumWater');
         const aquariumRealistic = document.getElementById('set-bgAquariumRealistic');
         const aquariumPredation = document.getElementById('set-bgAquariumPredation');
+        const aquariumSizes = document.getElementById('set-bgAquariumSizes');
         const aquariumFlow = document.getElementById('set-bgAquariumFlow');
         const aquariumRays = document.getElementById('set-bgAquariumRays');
         const aquariumSound = document.getElementById('set-bgAquariumSound');
@@ -281,6 +284,7 @@
         if (aquariumWater) aquariumWater.checked = bgExperienceSettings.aquariumWater;
         if (aquariumRealistic) aquariumRealistic.checked = bgExperienceSettings.aquariumRealistic;
         if (aquariumPredation) aquariumPredation.checked = bgExperienceSettings.aquariumPredation;
+        if (aquariumSizes) aquariumSizes.checked = bgExperienceSettings.aquariumSizes;
         if (aquariumFlow) aquariumFlow.checked = bgExperienceSettings.aquariumFlow;
         if (aquariumRays) aquariumRays.checked = bgExperienceSettings.aquariumRays;
         if (aquariumSound) aquariumSound.checked = bgExperienceSettings.aquariumSound;
@@ -304,6 +308,7 @@
             ['set-bgAquariumWater', 'aquariumWater', element => element.checked],
             ['set-bgAquariumRealistic', 'aquariumRealistic', element => element.checked],
             ['set-bgAquariumPredation', 'aquariumPredation', element => element.checked],
+            ['set-bgAquariumSizes', 'aquariumSizes', element => element.checked],
             ['set-bgAquariumFlow', 'aquariumFlow', element => element.checked],
             ['set-bgAquariumRays', 'aquariumRays', element => element.checked],
             ['set-bgAquariumSound', 'aquariumSound', element => element.checked],

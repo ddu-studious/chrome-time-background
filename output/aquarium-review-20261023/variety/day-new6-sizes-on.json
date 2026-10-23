@@ -1,0 +1,199 @@
+{
+ "file": "/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/output/aquarium-review-20261023/variety/day-new6-sizes-on.png",
+ "version": "156.0.8078.48",
+ "info": {
+  "state": {
+   "started": true,
+   "failed": false,
+   "loaded": true,
+   "entries": 9,
+   "fish": 25,
+   "grabbing": false,
+   "playFailed": false,
+   "realDrawn": 0,
+   "realFailed": false,
+   "predationFailed": false,
+   "flowFailed": false,
+   "lightFailed": false,
+   "flowLive": false,
+   "raysLive": false,
+   "sizes": true
+  },
+  "sizes": true,
+  "fish": [
+   {
+    "species": "chromis",
+    "entry": "chromis-lab0",
+    "size": 0.897,
+    "len": 12.9
+   },
+   {
+    "species": "chromis",
+    "entry": "chromis-lab0",
+    "size": 1.069,
+    "len": 16.2
+   },
+   {
+    "species": "chromis",
+    "entry": "chromis-lab0",
+    "size": 1.133,
+    "len": 16.6
+   },
+   {
+    "species": "chromis",
+    "entry": "chromis-lab0",
+    "size": 1.047,
+    "len": 15.7
+   },
+   {
+    "species": "chromis",
+    "entry": "chromis-lab0",
+    "size": 0.863,
+    "len": 13.1
+   },
+   {
+    "species": "anthias",
+    "entry": "anthias-lab1",
+    "size": 1.043,
+    "len": 18.2
+   },
+   {
+    "species": "anthias",
+    "entry": "anthias-lab1",
+    "size": 0.894,
+    "len": 16.3
+   },
+   {
+    "species": "anthias",
+    "entry": "anthias-lab1",
+    "size": 1.082,
+    "len": 19
+   },
+   {
+    "species": "anthias",
+    "entry": "anthias-lab1",
+    "size": 0.914,
+    "len": 16
+   },
+   {
+    "species": "anthias",
+    "entry": "anthias-lab1",
+    "size": 0.958,
+    "len": 17
+   },
+   {
+    "species": "gramma",
+    "entry": "gramma-lab2",
+    "size": 0.988,
+    "len": 22.6
+   },
+   {
+    "species": "idol",
+    "entry": "idol-lab3",
+    "size": 0.931,
+    "len": 25.8
+   },
+   {
+    "species": "butterfly",
+    "entry": "butterfly-lab4",
+    "size": 0.877,
+    "len": 21.4
+   },
+   {
+    "species": "cardinal",
+    "entry": "cardinal-lab5",
+    "size": 0.884,
+    "len": 15.1
+   },
+   {
+    "species": "neon",
+    "entry": "neon-lab6",
+    "size": 1.083,
+    "len": 12.9
+   },
+   {
+    "species": "neon",
+    "entry": "neon-lab6",
+    "size": 1.052,
+    "len": 12.5
+   },
+   {
+    "species": "neon",
+    "entry": "neon-lab6",
+    "size": 1.128,
+    "len": 13.2
+   },
+   {
+    "species": "neon",
+    "entry": "neon-lab6",
+    "size": 0.964,
+    "len": 10.8
+   },
+   {
+    "species": "neon",
+    "entry": "neon-lab6",
+    "size": 1.1,
+    "len": 12.3
+   },
+   {
+    "species": "tang",
+    "entry": "tang-lab7",
+    "size": 0.905,
+    "len": 16.5
+   },
+   {
+    "species": "tang",
+    "entry": "tang-lab7",
+    "size": 1.086,
+    "len": 19.4
+   },
+   {
+    "species": "tang",
+    "entry": "tang-lab7",
+    "size": 0.92,
+    "len": 15.9
+   },
+   {
+    "species": "tang",
+    "entry": "tang-lab7",
+    "size": 0.939,
+    "len": 16.2
+   },
+   {
+    "species": "tang",
+    "entry": "tang-lab7",
+    "size": 0.963,
+    "len": 17.1
+   },
+   {
+    "species": "clown",
+    "entry": "clown-lab8",
+    "size": 0.947,
+    "len": 21.5
+   }
+  ],
+  "buttons": [
+   "霓虹灯鱼",
+   "蓝吊",
+   "青绿光鳃鱼",
+   "金花鲈",
+   "小丑鱼",
+   "河豚",
+   "神仙鱼",
+   "皇家伽玛",
+   "镰鱼",
+   "蝴蝶鱼",
+   "天竺鲷",
+   "小锤头鲨",
+   "海龟",
+   "蝠鲼",
+   "鲸鲨"
+  ],
+  "panel": null
+ },
+ "issues": {
+  "pageerror": [],
+  "console": [],
+  "warnings": []
+ }
+}

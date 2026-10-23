@@ -1,0 +1,299 @@
+[
+  {
+    "case": "default",
+    "state": {
+      "counts": "游动 6 / 居民 6 · 已吃饲料 0 · 追逐 0 · 捕获 0 · 放弃 0",
+      "diagnostics": "Three r180 · 三角形 83864 · 3D 水母 1 · 几何 31 · 纹理 4 · 帧率 25.3 · CPU 提交 1.2 ms（不含 GPU） · 帧 694 · 世界 23.7 s · 错误 0",
+      "residents": "小丑鱼 · 2.5 cm捞出小丑鱼 · 3.2 cm捞出小丑鱼 · 4.0 cm捞出小丑鱼 · 4.8 cm捞出小丑鱼 · 6.0 cm捞出小丑鱼 · 7.4 cm捞出",
+      "scene": "自由水域 · 固定造景已关闭",
+      "style": "soft",
+      "task": "1 项演示任务 · 与正式数据隔离"
+    }
+  },
+  {
+    "case": "reef-shortcut",
+    "state": {
+      "counts": "游动 6 / 居民 6 · 已吃饲料 1 · 追逐 0 · 捕获 0 · 放弃 0",
+      "diagnostics": "Three r180 · 三角形 1563762 · 3D 水母 1 · 几何 46 · 纹理 8 · 帧率 22.1 · CPU 提交 0.6 ms（不含 GPU） · 帧 1003 · 世界 34.2 s · 错误 0",
+      "reef": true,
+      "residents": "小丑鱼 · 2.5 cm捞出小丑鱼 · 3.2 cm捞出小丑鱼 · 4.0 cm捞出小丑鱼 · 4.8 cm捞出小丑鱼 · 6.0 cm捞出小丑鱼 · 7.4 cm捞出",
+      "scene": "完整浅礁 · 造景 32%",
+      "task": "1 项演示任务 · 与正式数据隔离"
+    }
+  },
+  {
+    "case": "reef-loaded",
+    "state": {
+      "busy": "false",
+      "counts": "游动 6 / 居民 6 · 已吃饲料 2 · 追逐 0 · 捕获 0 · 放弃 0",
+      "diagnostics": "Three r180 · 三角形 1563362 · 3D 水母 1 · 几何 46 · 纹理 8 · 帧率 27.5 · CPU 提交 4.6 ms（不含 GPU） · 帧 1426 · 世界 48.7 s · 错误 0",
+      "reef": true,
+      "residents": "小丑鱼 · 2.5 cm捞出小丑鱼 · 3.2 cm捞出小丑鱼 · 4.0 cm捞出小丑鱼 · 4.8 cm捞出小丑鱼 · 6.0 cm捞出小丑鱼 · 7.4 cm捞出",
+      "scene": "完整浅礁 · 造景 32%",
+      "task": "1 项演示任务 · 与正式数据隔离"
+    }
+  },
+  {
+    "case": "immersive-escape",
+    "state": {
+      "button": "沉浸观察",
+      "immersive": false,
+      "scene": "完整浅礁 · 造景 32%"
+    }
+  },
+  {
+    "case": "pause",
+    "state": {
+      "feedDisabled": true,
+      "paused": "true",
+      "scene": "自由水域 · 固定造景已关闭"
+    }
+  },
+  {
+    "case": "task-failure",
+    "state": {
+      "result": "演示回执失败：任务保留，水母放回。",
+      "tasks": "○ 观察海月水母"
+    }
+  },
+  {
+    "case": "task-success",
+    "state": {
+      "result": "已完成 1/1 项演示任务",
+      "tasks": "✓ 观察海月水母"
+    }
+  },
+  {
+    "case": "650px-layout",
+    "state": {
+      "buttons": [
+        {
+          "box": {
+            "bottom": 838.25,
+            "height": 33,
+            "left": 160,
+            "right": 226,
+            "top": 805.25,
+            "width": 66,
+            "x": 160,
+            "y": 805.25
+          },
+          "text": "自由水域"
+        },
+        {
+          "box": {
+            "bottom": 838.25,
+            "height": 33,
+            "left": 231,
+            "right": 297,
+            "top": 805.25,
+            "width": 66,
+            "x": 231,
+            "y": 805.25
+          },
+          "text": "浅礁漫游"
+        },
+        {
+          "box": {
+            "bottom": 838.25,
+            "height": 33,
+            "left": 302,
+            "right": 368,
+            "top": 805.25,
+            "width": 66,
+            "x": 302,
+            "y": 805.25
+          },
+          "text": "动物近景"
+        },
+        {
+          "box": {
+            "bottom": 839,
+            "height": 34.5,
+            "left": 373,
+            "right": 419,
+            "top": 804.5,
+            "width": 46,
+            "x": 373,
+            "y": 804.5
+          },
+          "text": "喂食"
+        },
+        {
+          "box": {
+            "bottom": 838.25,
+            "height": 33,
+            "left": 424,
+            "right": 490,
+            "top": 805.25,
+            "width": 66,
+            "x": 424,
+            "y": 805.25
+          },
+          "text": "沉浸观察"
+        }
+      ],
+      "dock": {
+        "bottom": 872,
+        "height": 98.5,
+        "left": 14,
+        "right": 636,
+        "top": 773.5,
+        "width": 622,
+        "x": 14,
+        "y": 773.5
+      }
+    }
+  },
+  {
+    "case": "390px-before-fix",
+    "note": "工具栏可用；任务面板与左侧设置部分重叠，已记录待修正"
+  },
+  {
+    "case": "390px-final",
+    "state": {
+      "buttons": [
+        {
+          "box": {
+            "bottom": 782.5,
+            "height": 34,
+            "left": 30,
+            "right": 96,
+            "top": 748.5,
+            "width": 66,
+            "x": 30,
+            "y": 748.5
+          },
+          "text": "自由水域"
+        },
+        {
+          "box": {
+            "bottom": 782.5,
+            "height": 34,
+            "left": 101,
+            "right": 167,
+            "top": 748.5,
+            "width": 66,
+            "x": 101,
+            "y": 748.5
+          },
+          "text": "浅礁漫游"
+        },
+        {
+          "box": {
+            "bottom": 782.5,
+            "height": 34,
+            "left": 172,
+            "right": 238,
+            "top": 748.5,
+            "width": 66,
+            "x": 172,
+            "y": 748.5
+          },
+          "text": "动物近景"
+        },
+        {
+          "box": {
+            "bottom": 783,
+            "height": 35,
+            "left": 243,
+            "right": 289,
+            "top": 748,
+            "width": 46,
+            "x": 243,
+            "y": 748
+          },
+          "text": "喂食"
+        },
+        {
+          "box": {
+            "bottom": 782.5,
+            "height": 34,
+            "left": 294,
+            "right": 360,
+            "top": 748.5,
+            "width": 66,
+            "x": 294,
+            "y": 748.5
+          },
+          "text": "显示面板"
+        }
+      ],
+      "dock": {
+        "bottom": 816,
+        "height": 99,
+        "left": 14,
+        "right": 376,
+        "top": 717,
+        "width": 362,
+        "x": 14,
+        "y": 717
+      },
+      "immersive": true
+    }
+  },
+  {
+    "case": "final-fish-drag",
+    "state": {
+      "counts": "游动 6 / 居民 6 · 已吃饲料 0 · 追逐 0 · 捕获 0 · 放弃 0",
+      "diagnostics": "Three r180 · 三角形 83864 · 3D 水母 1 · 几何 31 · 纹理 4 · 帧率 27.9 · CPU 提交 1.5 ms（不含 GPU） · 帧 1808 · 世界 65.4 s · 错误 0",
+      "status": "选中 clown-1：总长 2.5 cm，年龄未知。"
+    }
+  },
+  {
+    "case": "final-drag-feed-accepted",
+    "state": {
+      "counts": "游动 6 / 居民 6 · 已吃饲料 0 · 追逐 0 · 捕获 0 · 放弃 0",
+      "feedback": "已在松手处投放 6 粒饲料；实际吃到会单独计数。",
+      "ghosts": 0
+    }
+  },
+  {
+    "case": "final-reject-outside-water",
+    "state": {
+      "diagnostics": "Three r180 · 三角形 83864 · 3D 水母 1 · 几何 31 · 纹理 4 · 帧率 24.6 · CPU 提交 2.3 ms（不含 GPU） · 帧 2409 · 世界 86.8 s · 错误 0",
+      "feedback": "这里是水域之外或被礁石遮挡，请拖到鱼附近的开阔水域。",
+      "ghosts": 0,
+      "zoom": "2.4"
+    }
+  },
+  {
+    "case": "final-task-failure",
+    "state": {
+      "result": "演示回执失败：任务保留，水母放回。",
+      "tasks": "○ 观察海月水母"
+    }
+  },
+  {
+    "case": "final-task-success",
+    "state": {
+      "result": "已完成 1/1 项演示任务",
+      "tasks": "✓ 观察海月水母"
+    }
+  },
+  {
+    "case": "final-completed-task-survives-reef-shortcut",
+    "state": {
+      "busy": "false",
+      "counts": "游动 6 / 居民 6 · 已吃饲料 2 · 追逐 0 · 捕获 0 · 放弃 0",
+      "diagnostics": "Three r180 · 三角形 1510050 · 3D 水母 0 · 几何 39 · 纹理 8 · 帧率 23.8 · CPU 提交 1.1 ms（不含 GPU） · 帧 4583 · 世界 167.8 s · 错误 0",
+      "residents": "小丑鱼 · 2.5 cm捞出小丑鱼 · 3.2 cm捞出小丑鱼 · 4.0 cm捞出小丑鱼 · 4.8 cm捞出小丑鱼 · 6.0 cm捞出小丑鱼 · 7.4 cm捞出",
+      "result": "已完成 1/1 项演示任务",
+      "scene": "完整浅礁 · 造景 32%",
+      "tasks": "✓ 观察海月水母"
+    }
+  },
+  {
+    "case": "final-animal-closeup",
+    "state": {
+      "diagnostics": "Three r180 · 三角形 1510050 · 3D 水母 0 · 几何 39 · 纹理 8 · 帧率 23.8 · CPU 提交 1.1 ms（不含 GPU） · 帧 4583 · 世界 167.8 s · 错误 0",
+      "feedDisabled": true,
+      "mode": "jelly-compare",
+      "style": "soft"
+    }
+  },
+  {
+    "case": "console-final",
+    "logs": []
+  }
+]

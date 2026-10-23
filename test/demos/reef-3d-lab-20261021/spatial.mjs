@@ -1,5 +1,6 @@
 import { Vector3,Matrix4,Line3,Box3,Ray,DoubleSide } from 'three';
 import { MeshBVH } from 'three-mesh-bvh';
+import {bodyEnvelope} from './fish-envelope.mjs';
 
 const AXIS=new Vector3(1,0,0),V=()=>new Vector3();
 // BVH provides geometry traversal/closest-point/ray queries. This adapter supplies a
@@ -15,8 +16,31 @@ export class ReefSpatial{
   }
   updateMatrices(){for(const e of this.entries){e.mesh.updateWorldMatrix(true,false);e.inverse.copy(e.mesh.matrixWorld).invert();}}
   setActive(value){this.active=value===true;}
+  distanceToSurface(point,maxDistance=.5){
+    let nearest=maxDistance;
+    for(const e of this.entries){
+      const local=point.clone().multiplyScalar(10).applyMatrix4(e.inverse);
+      const hit=e.bvh.closestPointToPoint(local,{},0,nearest*10);this.queryCount++;
+      if(hit)nearest=Math.min(nearest,hit.point.clone().applyMatrix4(e.mesh.matrixWorld).multiplyScalar(.1).distanceTo(point));
+    }
+    return nearest;
+  }
+  clearCorridor(a,b,radius){
+    if(!this.active)return true;
+    for(const e of this.entries){
+      const start=a.clone().multiplyScalar(10).applyMatrix4(e.inverse),end=b.clone().multiplyScalar(10).applyMatrix4(e.inverse);
+      const scale=new Vector3().setFromMatrixScale(e.inverse),r=radius*10*Math.max(scale.x,scale.y,scale.z),segment=new Line3(start,end),box=new Box3().setFromPoints([start,end]).expandByScalar(r);
+      if(!e.mesh.geometry.boundingBox.intersectsBox(box))continue;
+      let blocked=false;this.queryCount++;
+      const direction=end.clone().sub(start),length=direction.length(),ray=new Ray(start,direction.normalize()),expanded=new Box3(),hit=V();
+      const nearBounds=bounds=>{if(!bounds.intersectsBox(box))return false;if(length<1e-9)return bounds.distanceToPoint(start)<r;expanded.copy(bounds).expandByScalar(r);if(expanded.containsPoint(start)||expanded.containsPoint(end))return true;if(length<1e-9)return false;return !!ray.intersectBox(expanded,hit)&&hit.distanceTo(start)<=length;};
+      e.bvh.shapecast({intersectsBounds:nearBounds,intersectsTriangle:tri=>{if(tri.closestPointToSegment(segment,V(),V())<r){blocked=true;return true;}return false;}});
+      if(blocked)return false;
+    }
+    return true;
+  }
   capsule(f,position,quaternion,entry,inflation=1){
-    const radius=f.profile.radiusM,inset=Math.max(f.profile.totalLengthM*.28,f.profile.totalLengthM*.5-radius),dir=AXIS.clone().applyQuaternion(quaternion);
+    const body=bodyEnvelope(f),radius=body.radiusM,inset=body.halfLengthM,dir=AXIS.clone().applyQuaternion(quaternion);
     const a=position.clone().addScaledVector(dir,-inset).multiplyScalar(10).applyMatrix4(entry.inverse);
     const b=position.clone().addScaledVector(dir,inset).multiplyScalar(10).applyMatrix4(entry.inverse);
     const scale=new Vector3().setFromMatrixScale(entry.inverse);const r=radius*10*Math.max(scale.x,scale.y,scale.z)*inflation;
@@ -28,7 +52,9 @@ export class ReefSpatial{
       const c=this.capsule(f,position,quaternion,e,inflation);this.queryCount++;
       if(!e.mesh.geometry.boundingBox.intersectsBox(c.box))continue;
       let blocked=false;
-      e.bvh.shapecast({intersectsBounds:box=>box.intersectsBox(c.box),intersectsTriangle:tri=>{
+      const delta=c.segment.end.clone().sub(c.segment.start),length=delta.length(),ray=new Ray(c.segment.start,delta.normalize()),expanded=new Box3(),hit=V();
+      const nearBounds=box=>{if(!box.intersectsBox(c.box))return false;if(length<1e-9)return box.distanceToPoint(c.segment.start)<c.radius;expanded.copy(box).expandByScalar(c.radius);if(expanded.containsPoint(c.segment.start)||expanded.containsPoint(c.segment.end))return true;return !!ray.intersectBox(expanded,hit)&&hit.distanceTo(c.segment.start)<=length;};
+      e.bvh.shapecast({intersectsBounds:nearBounds,intersectsTriangle:tri=>{
         if(tri.closestPointToSegment(c.segment,V(),V())<c.radius){blocked=true;return true;}return false;
       }});
       if(blocked){this.blockedCount++;return false;}
@@ -44,10 +70,14 @@ export class ReefSpatial{
   }
   clearMotion(f,from,to,qa,qb){
     if(!this.active)return true;
-    const travel=from.distanceTo(to)+f.profile.totalLengthM*.5*qa.angleTo(qb);
-    const n=Math.max(1,Math.ceil(travel/Math.max(.0005,f.profile.radiusM*.30)));
+    const body=bodyEnvelope(f),travel=from.distanceTo(to)+body.rotationRadiusM*qa.angleTo(qb);
+    const n=Math.max(1,Math.ceil(travel/Math.max(.0003,body.radiusM*.20)));
     if(n>24){this.blockedCount++;return false;}
-    for(let i=1;i<=n;i++)if(!this.clearPose(f,from.clone().lerp(to,i/n),qa.clone().slerp(qb,i/n),1.06))return false;
+    // Every point of a translating/rotating capsule moves at most travel/n per
+    // interval. Inflate both interval endpoints by half that distance: the full
+    // interpolated sweep is covered, including rotations and the starting pose.
+    const inflation=body.radiusM>0?1+(travel/(2*n)+.000001)/body.radiusM:1;
+    for(let i=0;i<=n;i++)if(!this.clearPose(f,from.clone().lerp(to,i/n),qa.clone().slerp(qb,i/n),inflation))return false;
     return true;
   }
   lineOfSight(a,b){
@@ -69,7 +99,7 @@ export class ReefSpatial{
   avoidance(f){
     const force=new Vector3();if(!this.active)return force;
     for(const e of this.entries){
-      const local=f.position.clone().multiplyScalar(10).applyMatrix4(e.inverse),near=f.profile.radiusM*2.2+.015;
+      const local=f.position.clone().multiplyScalar(10).applyMatrix4(e.inverse),near=bodyEnvelope(f).radiusM*2.2+.015;
       if(e.mesh.geometry.boundingBox.distanceToPoint(local)>near*10)continue;
       const hit=e.bvh.closestPointToPoint(local,{},0,near*10);if(!hit)continue;
       const point=hit.point.clone().applyMatrix4(e.mesh.matrixWorld).multiplyScalar(.1),delta=f.position.clone().sub(point),distance=delta.length();

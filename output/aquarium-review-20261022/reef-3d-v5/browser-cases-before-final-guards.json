@@ -1,0 +1,29 @@
+[
+  {
+    "case": "arch-4-25",
+    "counts": "游动 2 / 居民 2 · 已吃饲料 0 · 追逐 5 · 捕获 0 · 放弃 5",
+    "diagnostics": "Three r180 · 三角形 1741766 · 3D 水母 1 · 几何 84 · 纹理 11 · 帧率 29.1 · CPU 提交 0.5 ms（不含 GPU） · 帧 3019 · 世界 66.2 s · 错误 0",
+    "drill-state": "小鱼：沿礁巡游 · 大鱼：沿礁巡游",
+    "event-log": "40.5s 离开掩体 shelter-fish\n48.1s 到达搜索出口 hunter\n49.7s 结束追击 shelter-fish\n62.2s 结束追击 shelter-fish",
+    "motion-info": "鱼体态：全礁参考版 · 弯身 0.000 · 尾幅 0.035 · 胸鳍 0.605",
+    "navigation-info": "完整浅礁三维航路 · 2 个体型图 · 8521 个累计可行节点 · 0 次搜索 · 最大单次规划 0.1 ms · 转动中移动 1469 帧 · 重规划 0 · 路线放弃 0"
+  },
+  {
+    "case": "left-2.5-18",
+    "counts": "游动 3 / 居民 3 · 已吃饲料 0 · 追逐 5 · 捕获 0 · 放弃 4",
+    "diagnostics": "Three r180 · 三角形 1746858 · 3D 水母 1 · 几何 84 · 纹理 11 · 帧率 27.7 · CPU 提交 1.7 ms（不含 GPU） · 帧 4891 · 世界 64.2 s · 错误 0",
+    "drill-state": "小鱼：巡游 · 大鱼：沿礁巡游",
+    "event-log": "51.7s 选择掩体 shelter-fish\n52.8s 进入躲藏 shelter-fish\n53.1s 到达搜索出口 hunter\n54.7s 结束追击 shelter-fish\n59.1s 离开掩体 shelter-fish",
+    "motion-info": "鱼体态：全礁参考版 · 弯身 -0.046 · 尾幅 0.019 · 胸鳍 0.453",
+    "navigation-info": "完整浅礁三维航路 · 3 个体型图 · 16237 个累计可行节点 · 4 次搜索 · 最大单次规划 3.5 ms · 转动中移动 1856 帧 · 重规划 0 · 路线放弃 0"
+  },
+  {
+    "case": "right-7.4-45-before-final-guards",
+    "counts": "游动 2 / 居民 2 · 已吃饲料 0 · 追逐 31 · 捕获 0 · 放弃 31",
+    "diagnostics": "Three r180 · 三角形 1741766 · 3D 水母 1 · 几何 84 · 纹理 11 · 帧率 27.5 · CPU 提交 1.8 ms（不含 GPU） · 帧 17127 · 世界 432.8 s · 错误 0",
+    "drill-state": "小鱼：巡游 · 大鱼：沿礁巡游",
+    "event-log": "414.6s 到达搜索出口 hunter\n416.2s 结束追击 shelter-fish\n428.3s 到达搜索出口 hunter\n429.9s 结束追击 shelter-fish",
+    "motion-info": "鱼体态：全礁参考版 · 弯身 -0.000 · 尾幅 0.003 · 胸鳍 0.240",
+    "navigation-info": "完整浅礁三维航路 · 2 个体型图 · 5931 个累计可行节点 · 6 次搜索 · 最大单次规划 28.6 ms · 转动中移动 8941 帧 · 重规划 1 · 路线放弃 0"
+  }
+]

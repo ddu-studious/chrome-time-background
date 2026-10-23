@@ -1,0 +1,48 @@
+import * as THREE from 'three';
+import JellySkin from '../../../js/jellyfish.js';
+import {tube} from './upstream/scenes/reefscape/src/geometry.js';
+import {createMoonJellyModel} from './moon-jelly.mjs';
+const palette=[0xff807c,0xffbc72,0xf3df81,0x83d8a2,0x78e0cf,0x9bdbff,0xb8a3ff,0xefb1e6];
+export function createJellyModel(color=0x9bdbff){
+ const group=new THREE.Group(),bellGroup=new THREE.Group();group.add(bellGroup);
+ const points=[];for(let i=0;i<=24;i++){const a=i/24*Math.PI/2;points.push(new THREE.Vector2(Math.cos(a),Math.sin(a)*.8));}
+ const material=new THREE.MeshPhysicalMaterial({color,emissive:color,emissiveIntensity:.16,roughness:.24,metalness:.03,transparent:true,opacity:.48,side:THREE.DoubleSide,depthWrite:false,clearcoat:1});
+ const bell=new THREE.Mesh(new THREE.LatheGeometry(points,48),material);bellGroup.add(bell);
+ const inner=new THREE.Mesh(bell.geometry,material.clone());inner.scale.set(.86,.86,.86);inner.material.opacity=.15;bellGroup.add(inner);
+ const rim=new THREE.Mesh(new THREE.TorusGeometry(.99,.025,6,64),new THREE.MeshStandardMaterial({color,emissive:color,emissiveIntensity:.6,transparent:true,opacity:.85,depthWrite:false}));rim.rotation.x=Math.PI/2;bellGroup.add(rim);
+ const tissue=new THREE.MeshStandardMaterial({color,emissive:color,emissiveIntensity:.25,roughness:.4,transparent:true,opacity:.62,depthWrite:false});
+ for(let i=0;i<4;i++){const a=i*Math.PI/2,organ=new THREE.Mesh(new THREE.TorusGeometry(.18,.045,7,24),tissue);organ.position.set(Math.cos(a)*.24,.24,Math.sin(a)*.24);organ.rotation.x=Math.PI/2;organ.scale.y=.65;bellGroup.add(organ);}
+ const limbs=new THREE.Group();group.add(limbs);const phase={value:0};
+ const filament=tissue.clone();filament.onBeforeCompile=shader=>{shader.uniforms.jellyPhase=phase;shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nuniform float jellyPhase;').replace('#include <begin_vertex>','#include <begin_vertex>\nfloat u=max(0.,-position.y);transformed.x+=sin(jellyPhase*1.8+u*2.5+position.z*4.)*u*.08;transformed.z+=cos(jellyPhase*1.3+u*2.1+position.x*5.)*u*.065;');};filament.customProgramCacheKey=()=> 'ocean-jelly-filament-v2';
+ for(let i=0;i<12;i++){const a=i/12*Math.PI*2,pts=[],radii=[],length=i%3===0?2.9:2.1+(i%3)*.25;
+  for(let j=0;j<=24;j++){const u=j/24;pts.push(new THREE.Vector3(Math.cos(a)*(.84+u*.12)+Math.sin(u*5+a)*u*.12,-u*length,Math.sin(a)*(.84+u*.12)));radii.push((i%3===0?.023:.012)*(1-u*.75));}
+  limbs.add(new THREE.Mesh(tube(pts,radii,5),filament));
+ }
+ return {group,bellGroup,limbs,phase,materials:[material,inner.material,rim.material,tissue,filament],dispose(){const geometries=new Set();group.traverse(o=>{if(o.geometry)geometries.add(o.geometry);});geometries.forEach(g=>g.dispose());this.materials.forEach(m=>m.dispose());group.removeFromParent();}};
+}
+export function createTaskJellies(view){
+ const models=new Map(),labels=document.getElementById('jelly-labels');let lastDraw=-Infinity;
+ view.updateTaskJellyStyle=()=>{for(const model of models.values())model.setStyle(view.animalStyle);};
+ function drawFrame(ctx,world){
+  const now=performance.now();if(now-lastDraw<32)return;lastDraw=now;
+  const active=new Set(world.jellies.map(j=>j.taskKey||j.id));for(const [key,model] of models)if(!active.has(key)){model.dispose();models.delete(key);}
+  const text=[];let n=0;
+  for(const j of world.jellies){const key=j.taskKey||j.id;let model=models.get(key);if(!model){model=createMoonJellyModel(palette[j.color%palette.length],view.animalStyle);models.set(key,model);view.scene.add(model.group);}
+   const inspect=view.mode==='jelly',visible=inspect?n===0:view.mode==='natural';model.group.visible=visible;n++;
+   if(!visible)continue;
+   const center=inspect?new THREE.Vector3():view.pointerPlane(j.x,j.y,new THREE.Vector3(0,0,.78)),edge=inspect?new THREE.Vector3(1,0,0):view.pointerPlane(j.x+j.r,j.y,new THREE.Vector3(0,0,.78));
+   if(!center||!edge)continue;
+   const scale=inspect?.48:center.distanceTo(edge)*10;
+   model.group.position.copy(inspect?new THREE.Vector3(0,.15,0):center.multiplyScalar(10));model.group.scale.setScalar(scale);
+   model.group.rotation.set(.32+.06*Math.sin(world.time*.5+j.color),inspect?view.angle:Math.sin(world.time*.25+j.color)*.25,(j.tilt||0)*-1);
+   const held=['held','busy','eating'].includes(j.state);
+   const flow=new THREE.Vector3(Number.isFinite(j.vx)?j.vx:0,Number.isFinite(j.vy)?-j.vy:0,0).multiplyScalar(1/(Math.max(12,j.r)*3)).clampLength(0,1).applyQuaternion(view.camera.quaternion).applyQuaternion(model.group.quaternion.clone().invert());
+   model.update(world.time,{phase:j.color*.137,alpha:j.alpha,held,style:view.animalStyle,flow});
+   if(!inspect&&j.label&&j.alpha>.2){const label=document.createElement('span');label.textContent=j.label+(j.state==='busy'?' · 等待回执':'');label.dataset.taskId=String(j.taskId);label.style.left=j.x+'px';label.style.top=(j.y-j.r*.55-22)+'px';text.push(label);}
+  }
+  labels.replaceChildren(...text);view.jellyCount=models.size;view.render();
+ }
+ const skin=JellySkin.create({drawFrame});const originalStop=skin.stop;
+ skin.stop=()=>{originalStop();for(const model of models.values())model.dispose();models.clear();labels.replaceChildren();view.jellyCount=0;};
+ return skin;
+}

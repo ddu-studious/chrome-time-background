@@ -1,0 +1,34 @@
+[
+  {
+    "case": "final-arch-7.4-45",
+    "counts": "游动 2 / 居民 2 · 已吃饲料 0 · 追逐 7 · 捕获 0 · 放弃 7",
+    "diagnostics": "Three r180 · 三角形 1741766 · 3D 水母 1 · 几何 59 · 纹理 11 · 帧率 27.2 · CPU 提交 2.0 ms（不含 GPU） · 帧 2296 · 世界 80.9 s · 错误 0",
+    "drill-state": "小鱼：巡游 · 大鱼：沿礁巡游",
+    "event-log": "67.1s 结束追击 shelter-fish\n67.4s 进入躲藏 shelter-fish\n76.1s 离开掩体 shelter-fish\n78.3s 到达搜索出口 hunter\n80.0s 结束追击 shelter-fish",
+    "motion-info": "鱼体态：全礁参考版 · 弯身 -0.216 · 尾幅 0.006 · 胸鳍 0.312",
+    "navigation-info": "完整浅礁三维航路 · 7 个体型图 · 35919 个累计可行节点 · 6 次搜索 · 最大单次规划 61.5 ms · 转动中移动 1947 帧 · 重规划 1 · 路线放弃 0"
+  },
+  {
+    "case": "task-failure",
+    "result": "演示回执失败：任务保留，水母放回。",
+    "tasks": "○ 观察海月水母"
+  },
+  {
+    "case": "task-success",
+    "result": "已完成 1/1 项演示任务",
+    "tasks": "✓ 观察海月水母"
+  },
+  {
+    "case": "scenery-off",
+    "status": "固定造景已关闭，颜色、深度和碰撞同时撤除。"
+  },
+  {
+    "case": "feeding",
+    "counts": "游动 1 / 居民 1 · 已吃饲料 1 · 追逐 11 · 捕获 0 · 放弃 11"
+  },
+  {
+    "case": "fish-drag",
+    "status": "选中 sample-clown：总长 7.4 cm，年龄未知。",
+    "counts": "游动 1 / 居民 1 · 已吃饲料 1 · 追逐 11 · 捕获 0 · 放弃 11"
+  }
+]

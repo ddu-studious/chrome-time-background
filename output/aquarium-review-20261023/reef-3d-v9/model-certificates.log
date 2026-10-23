@@ -1,0 +1,214 @@
+{
+  "tang": {
+    "kind": "tang",
+    "title": "Blue Tang",
+    "page": "https://poly.pizza/m/TQaMo8GTJl",
+    "url": "https://static.poly.pizza/f282d1d7-cf41-48e0-bbdc-a9dd0472b2cf.glb",
+    "bytes": 148440,
+    "sha256": "c1572e188ffa73ed61b2512acf1ee2231b83dc18b7f4d8b326edac320dfcbd93",
+    "author": "Quaternius",
+    "license": "CC0-1.0",
+    "licenseSource": "https://poly.pizza/bundle/Animated-Fish-Bundle-44zhHN1UbT",
+    "bundleUpdated": "2022-07-11",
+    "length": 4.673617995803305,
+    "center": [
+      -0.06569186293691409,
+      0.06989027387685243,
+      0.06808767897625168
+    ],
+    "alignedCenter": [
+      0.06808767897625168,
+      0.06989027387685243,
+      0.06569186293691409
+    ],
+    "radiusRatio": 1.488,
+    "depthRatio": 0.6129181535225466,
+    "widthRatio": 0.6906733910333104,
+    "vertices": 1985,
+    "triangles": 1342,
+    "meshes": 4,
+    "clip": "Fish_Armature|Swimming_Normal",
+    "proof": "all-rotation-skin-chain-sphere-v1"
+  },
+  "gramma": {
+    "kind": "gramma",
+    "title": "Royal Gramma",
+    "page": "https://poly.pizza/m/e8u2OQ9Quz",
+    "url": "https://static.poly.pizza/9e280929-a963-4f31-ae64-cf4a7f4bafe8.glb",
+    "bytes": 148208,
+    "sha256": "3d811bd8d331eff1c6f8a80e27d4ddcd1d2cb4ca0afc5832ee8b9ea3c47fff50",
+    "author": "Quaternius",
+    "license": "CC0-1.0",
+    "licenseSource": "https://poly.pizza/bundle/Animated-Fish-Bundle-44zhHN1UbT",
+    "bundleUpdated": "2022-07-11",
+    "length": 4.351887559321867,
+    "center": [
+      -0.10886611151814707,
+      0.017454879104014942,
+      -0.5573843741048089
+    ],
+    "alignedCenter": [
+      -0.5573843741048089,
+      0.017454879104014942,
+      0.10886611151814704
+    ],
+    "radiusRatio": 1.455,
+    "depthRatio": 0.44602601763819566,
+    "widthRatio": 0.6020328953735191,
+    "vertices": 1976,
+    "triangles": 1378,
+    "meshes": 4,
+    "clip": "Fish_Armature|Swimming_Normal",
+    "proof": "all-rotation-skin-chain-sphere-v1"
+  },
+  "idol": {
+    "kind": "idol",
+    "title": "Moorish Idol",
+    "page": "https://poly.pizza/m/M0UX3rVvNX",
+    "url": "https://static.poly.pizza/a1acb05a-2186-4b3c-aa03-5c4e5aab9d17.glb",
+    "bytes": 154404,
+    "sha256": "c3d0a6f7f71f22ff1474abc792512c7b202970bfbf5d6776ca3f868d408455ac",
+    "author": "Quaternius",
+    "license": "CC0-1.0",
+    "licenseSource": "https://poly.pizza/bundle/Animated-Fish-Bundle-44zhHN1UbT",
+    "bundleUpdated": "2022-07-11",
+    "length": 4.298068691548461,
+    "center": [
+      -0.09365266457048627,
+      0.11033326135980492,
+      -0.21908219541491414
+    ],
+    "alignedCenter": [
+      -0.21908219541491414,
+      0.11033326135980492,
+      0.09365266457048625
+    ],
+    "radiusRatio": 1.556,
+    "depthRatio": 0.6783712895746129,
+    "widthRatio": 0.7639732626174469,
+    "vertices": 2128,
+    "triangles": 1428,
+    "meshes": 3,
+    "clip": "Fish_Armature|Swimming_Normal",
+    "proof": "all-rotation-skin-chain-sphere-v1"
+  },
+  "butterfly": {
+    "kind": "butterfly",
+    "title": "Butterfly Fish",
+    "page": "https://poly.pizza/m/s2MkBeSzGy",
+    "url": "https://static.poly.pizza/180f002b-9a9c-4ec8-9460-7aca6f05a6e7.glb",
+    "bytes": 151748,
+    "sha256": "d43e7f55ae3fff23dd48c09661382836b1498f773c561f486d9a0277d0590853",
+    "author": "Quaternius",
+    "license": "CC0-1.0",
+    "licenseSource": "https://poly.pizza/bundle/Animated-Fish-Bundle-44zhHN1UbT",
+    "bundleUpdated": "2022-07-11",
+    "length": 4.657753592298406,
+    "center": [
+      0.08072950351906139,
+      0.032120893005862294,
+      -0.1378220009153246
+    ],
+    "alignedCenter": [
+      -0.1378220009153246,
+      0.032120893005862294,
+      -0.0807295035190614
+    ],
+    "radiusRatio": 1.458,
+    "depthRatio": 0.615743507673772,
+    "widthRatio": 0.7108171732938926,
+    "vertices": 2050,
+    "triangles": 1374,
+    "meshes": 4,
+    "clip": "Fish_Armature|Swimming_Normal",
+    "proof": "all-rotation-skin-chain-sphere-v1"
+  },
+  "cardinal": {
+    "kind": "cardinal",
+    "title": "Cardinal Fish",
+    "page": "https://poly.pizza/m/YyZyVhg2Jq",
+    "url": "https://static.poly.pizza/635431b0-7855-4f60-bd33-e79ade18ee6a.glb",
+    "bytes": 150832,
+    "sha256": "33753dc7fbff96825b2e2721cd659c11289598e0474f1d26130dfdcff67647bb",
+    "author": "Quaternius",
+    "license": "CC0-1.0",
+    "licenseSource": "https://poly.pizza/bundle/Animated-Fish-Bundle-44zhHN1UbT",
+    "bundleUpdated": "2022-07-11",
+    "length": 5.5079064762533205,
+    "center": [
+      -0.10708885657811806,
+      -0.028374807970502514,
+      -1.0017346683239272
+    ],
+    "alignedCenter": [
+      -1.0017346683239272,
+      -0.028374807970502514,
+      0.10708885657811801
+    ],
+    "radiusRatio": 1.631,
+    "depthRatio": 0.6058890179987194,
+    "widthRatio": 0.46311108610803164,
+    "vertices": 2029,
+    "triangles": 1388,
+    "meshes": 4,
+    "clip": "Fish_Armature|Swimming_Normal",
+    "proof": "all-rotation-skin-chain-sphere-v1"
+  },
+  "puffer": {
+    "kind": "puffer",
+    "title": "Puffer",
+    "page": "https://poly.pizza/m/UKHtgpxTOk",
+    "url": "https://static.poly.pizza/2b8ee3e9-9fa3-458a-91a8-3d356dc8e6a5.glb",
+    "bytes": 238584,
+    "sha256": "6495c2e5197323838449587677b0a29f1301677c259d875efb968701f0eeded7",
+    "author": "Quaternius",
+    "license": "CC0-1.0",
+    "licenseSource": "https://poly.pizza/bundle/Animated-Fish-Bundle-44zhHN1UbT",
+    "bundleUpdated": "2022-07-11",
+    "length": 3.93825917316269,
+    "center": [
+      -0.02898638100801254,
+      0.07771602249480736,
+      -0.5175959992824503
+    ],
+    "alignedCenter": [
+      -0.5175959992824503,
+      0.07771602249480736,
+      0.02898638100801251
+    ],
+    "radiusRatio": 1.546,
+    "depthRatio": 0.6838425506743431,
+    "widthRatio": 0.8745441333193937,
+    "vertices": 3696,
+    "triangles": 2142,
+    "meshes": 6,
+    "clip": "Fish_Armature|Swimming_Normal",
+    "proof": "all-rotation-skin-chain-sphere-v1"
+  },
+  "chromis": {
+    "length": 1.14000004529953,
+    "center": [
+      -0.030000001192092896,
+      0.001343563199043274,
+      0.013438399881124496
+    ],
+    "radiusRatio": 0.606,
+    "depthRatio": 0.43323733674536796,
+    "widthRatio": 0.15390325837143282,
+    "vertices": 9480,
+    "proof": "deskworlds-full-far-interval-sphere-v1"
+  },
+  "anthias": {
+    "length": 1.5400000214576721,
+    "center": [
+      -0.22999998927116394,
+      -0.002176225185394287,
+      0.01886449009180069
+    ],
+    "radiusRatio": 0.754,
+    "depthRatio": 0.35058526535271456,
+    "widthRatio": 0.12882734868519316,
+    "vertices": 9454,
+    "proof": "deskworlds-full-far-interval-sphere-v1"
+  }
+}

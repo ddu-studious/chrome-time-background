@@ -121,19 +121,29 @@
     // 只有大型动物（鲨鱼、蝠鲼、海龟）按这个比例；小鱼按真实体长会小到看不见（霓虹灯鱼 4 cm ≈ 2 px），保持各自可看清的体长，len 一律不小于按比例的值。
     const PX_PER_M = 56;
 
-    // 9 种动物（8 种鱼 + 海龟）。len 是体长（px，视口缩放 1 时；大型动物按 PX_PER_M 由真实体长 meters 换算），speed 是巡航速度（px/s），
+    // 15 种动物（14 种鱼 + 海龟；顺序就是托盘按钮的顺序：群居小鱼、单条小鱼、大动物。原有 9 种之间的相对顺序不变，2026-10-23 在中间插入 6 种小鱼，带 since: 2——存储版本，见 storageVersionOf）。
+    // 6 种新小鱼的 meters 取 3D 浅礁实验的默认体长（test/demos/reef-3d-lab-20261021/community-catalog.mjs），不是经核实的生物统计；它们没有 diet，既不吃也不被吃，也没有 hit（命中沿用默认椭圆）。
+    // len 是体长（px，视口缩放 1 时；大型动物按 PX_PER_M 由真实体长 meters 换算），speed 是巡航速度（px/s），
     // band 是本种活动的纵向带（占屏高的比例，0 在顶），half 是游动时上下方向的半幅（占体长的比例：头鳍/翼/鳍肢展开后的量值，用来让身体上缘不探出屏幕顶部、下缘不碰岸线），
     // top 为真表示俯视的动物（蝠鲼、海龟：没有“背鳍朝上”，被抓着时朝向不限俯仰），hit 是抓取椭圆的半轴（占体长的比例，缺省 [0.6, 0.35]；大型动物的身体比这个椭圆窄得多，要收紧）。
     // colors 是调色板色位 [主色, 点缀色]（色位编号沿用首页 JellyfishSkin.PALETTE 的色相环顺序：红橙黄绿薄荷冰蓝紫洋红）。
     // 速度按“真实速度 × PX_PER_M”取：鲸鲨约 1 m/s、蝠鲼约 0.9 m/s、小锤头鲨约 1 m/s，海龟沿用原来的 0.54 m/s（真实的绿海龟巡航约 0.7–0.8 m/s，慢一点更从容）。
     // diet 是捕食关系的数据（规则在 aquarium-predation-core.js 的 canEat）：predator 小锤头鲨是唯一的捕食者，gape 是它能吞下的猎物占自己真实体长（meters，不是像素体长）的比例上限；
-    // prey 是霓虹灯鱼、蓝吊、小丑鱼、神仙鱼；没有 diet 的（河豚、海龟、蝠鲼、鲸鲨）既不捕食也不被吃。水母不在这张表里——它们是首页任务的投影，结构上进不了捕食规则。
+    // prey 是霓虹灯鱼、蓝吊、小丑鱼、神仙鱼；没有 diet 的（河豚、海龟、蝠鲼、鲸鲨与 6 种新小鱼）既不捕食也不被吃。水母不在这张表里——它们是首页任务的投影，结构上进不了捕食规则。
+    // size 是个体大小范围（占种类标准体长的比例，[最小, 最大]；世界开着 sizes 才用，见 sizeOf）：只有小鱼带它，小锤头鲨、海龟、蝠鲼、鲸鲨按真实比例、没有 size。
+    const SIZE_RANGE = Object.freeze([0.75, 1.25]);
     const SPECIES = Object.freeze([
-        Object.freeze({ id: 'neon', name: '霓虹灯鱼', kind: 'school', group: 5, len: 16, meters: 0.04, half: 0.2, speed: 80, band: Object.freeze([0.25, 0.85]), colors: Object.freeze([4, 0]), diet: 'prey' }),
-        Object.freeze({ id: 'tang', name: '蓝吊', kind: 'school', group: 5, len: 22, meters: 0.2, half: 0.3, speed: 66, band: Object.freeze([0.3, 0.9]), colors: Object.freeze([5, 2]), diet: 'prey' }),
-        Object.freeze({ id: 'clown', name: '小丑鱼', kind: 'solo', group: 1, len: 30, meters: 0.11, half: 0.25, speed: 52, band: Object.freeze([0.5, 0.92]), colors: Object.freeze([1, 1]), diet: 'prey' }),
-        Object.freeze({ id: 'puffer', name: '河豚', kind: 'solo', group: 1, len: 32, meters: 0.3, half: 0.3, speed: 34, band: Object.freeze([0.35, 0.8]), colors: Object.freeze([2, 4]) }),
-        Object.freeze({ id: 'angel', name: '神仙鱼', kind: 'solo', group: 1, len: 34, meters: 0.15, half: 0.4, speed: 40, band: Object.freeze([0.3, 0.8]), colors: Object.freeze([6, 5]), diet: 'prey' }),
+        Object.freeze({ id: 'neon', name: '霓虹灯鱼', kind: 'school', group: 5, len: 16, meters: 0.04, half: 0.2, speed: 80, band: Object.freeze([0.25, 0.85]), colors: Object.freeze([4, 0]), diet: 'prey', size: SIZE_RANGE }),
+        Object.freeze({ id: 'tang', name: '蓝吊', kind: 'school', group: 5, len: 22, meters: 0.2, half: 0.3, speed: 66, band: Object.freeze([0.3, 0.9]), colors: Object.freeze([5, 2]), diet: 'prey', size: SIZE_RANGE }),
+        Object.freeze({ id: 'chromis', name: '青绿光鳃鱼', kind: 'school', group: 5, len: 18, meters: 0.055, half: 0.22, speed: 74, band: Object.freeze([0.2, 0.7]), colors: Object.freeze([3, 4]), size: SIZE_RANGE, since: 2 }),
+        Object.freeze({ id: 'anthias', name: '金花鲈', kind: 'school', group: 5, len: 22, meters: 0.085, half: 0.22, speed: 70, band: Object.freeze([0.15, 0.65]), colors: Object.freeze([1, 7]), size: SIZE_RANGE, since: 2 }),
+        Object.freeze({ id: 'clown', name: '小丑鱼', kind: 'solo', group: 1, len: 30, meters: 0.11, half: 0.25, speed: 52, band: Object.freeze([0.5, 0.92]), colors: Object.freeze([1, 1]), diet: 'prey', size: SIZE_RANGE }),
+        Object.freeze({ id: 'puffer', name: '河豚', kind: 'solo', group: 1, len: 32, meters: 0.3, half: 0.3, speed: 34, band: Object.freeze([0.35, 0.8]), colors: Object.freeze([2, 4]), size: SIZE_RANGE }),
+        Object.freeze({ id: 'angel', name: '神仙鱼', kind: 'solo', group: 1, len: 34, meters: 0.15, half: 0.4, speed: 40, band: Object.freeze([0.3, 0.8]), colors: Object.freeze([6, 5]), diet: 'prey', size: SIZE_RANGE }),
+        Object.freeze({ id: 'gramma', name: '皇家伽玛', kind: 'solo', group: 1, len: 26, meters: 0.06, half: 0.24, speed: 44, band: Object.freeze([0.55, 0.92]), colors: Object.freeze([7, 2]), size: SIZE_RANGE, since: 2 }),
+        Object.freeze({ id: 'idol', name: '镰鱼', kind: 'solo', group: 1, len: 34, meters: 0.11, half: 0.46, speed: 38, band: Object.freeze([0.35, 0.85]), colors: Object.freeze([2, 1]), size: SIZE_RANGE, since: 2 }),
+        Object.freeze({ id: 'butterfly', name: '蝴蝶鱼', kind: 'solo', group: 1, len: 30, meters: 0.095, half: 0.42, speed: 42, band: Object.freeze([0.4, 0.9]), colors: Object.freeze([4, 2]), size: SIZE_RANGE, since: 2 }),
+        Object.freeze({ id: 'cardinal', name: '天竺鲷', kind: 'solo', group: 1, len: 24, meters: 0.055, half: 0.26, speed: 36, band: Object.freeze([0.6, 0.93]), colors: Object.freeze([0, 1]), size: SIZE_RANGE, since: 2 }),
         Object.freeze({ id: 'hammer', name: '小锤头鲨', kind: 'solo', group: 1, len: 140, meters: 2.5, half: 0.3, speed: 58, band: Object.freeze([0.15, 0.65]), colors: Object.freeze([5, 6]), diet: 'predator', gape: 0.3 }),
         Object.freeze({ id: 'turtle', name: '海龟', kind: 'solo', group: 1, len: 70, meters: 1.25, half: 0.63, top: true, speed: 30, band: Object.freeze([0.3, 0.8]), colors: Object.freeze([3, 1]) }),
         Object.freeze({ id: 'manta', name: '蝠鲼', kind: 'large', group: 1, len: 258, meters: 4.6, half: 0.52, top: true, hit: Object.freeze([0.55, 0.45]), speed: 52, band: Object.freeze([0.1, 0.6]), colors: Object.freeze([6, 7]) }),
@@ -154,6 +164,45 @@
 
     function speciesById(id) {
         return typeof id === 'string' && Object.prototype.hasOwnProperty.call(BY_ID, id) ? BY_ID[id] : null;
+    }
+
+    // ---------- 存储版本 ----------
+
+    // 水族馆名单（chrome.storage.local.aquariumV1）的版本号：v:1 是最初的 9 种；v:2 起名单里可以有 since: 2 的新种。
+    // 只在名单里真有新种时才写 v:2，其余仍写 v:1——这样退回旧版本（它只认 v:1，看到别的版本号“看不懂就不碰”）时，
+    // 旧代码不会把带新种的名单当成损坏的数据读成空、再在下一次放入/捞出时覆盖掉；新种全部捞出后版本号回到 1，旧版本又能读。
+    // 新代码认 STORAGE_VERSIONS 里的版本；更大（以后的版本写的）或别的数字同样“看不懂就不碰”。
+    const STORAGE_VERSIONS = Object.freeze([1, 2]);
+
+    /** 这份名单写进存储时应当用的版本号：含任何 since: 2 的物种得 2，否则 1；非数组、坏条目与未知种类不算。 */
+    function storageVersionOf(list) {
+        if (!Array.isArray(list)) return 1;
+        for (const item of list) {
+            const spec = item && typeof item === 'object' ? speciesById(item.species) : null;
+            if (spec && spec.since === 2) return 2;
+        }
+        return 1;
+    }
+
+    // ---------- 个体大小 ----------
+
+    // 稳定的字符串哈希（FNV-1a 32 位 + 雪崩混合）→ [0, 1)：个体大小不用 world.random（随机序列不变），也不需要存储——同一个条目 id 永远是同样的大小。
+    function hash01(text) {
+        let h = 0x811c9dc5;
+        for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+        h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
+        return (h >>> 0) / 4294967296;
+    }
+
+    /**
+     * 条目 entryId 里第 index 条鱼的个体大小（占种类标准体长的比例）。没有 size 范围的种（小锤头鲨、海龟、蝠鲼、鲸鲨）与未知种恒为 1。
+     * 两个独立哈希取平均：以区间中点为中心的三角分布——大多数接近标准，两头偶尔有明显更小/更大的个体，比均匀分布自然。
+     */
+    function sizeOf(entryId, index, spec) {
+        if (!spec || !spec.size) return 1;
+        const [lo, hi] = spec.size;
+        const u = (hash01(`${entryId}|${index}|a`) + hash01(`${entryId}|${index}|b`)) / 2;
+        return lo + (hi - lo) * u;
     }
 
     // ---------- 条目：白名单与上限 ----------
@@ -237,9 +286,10 @@
         return clamp(Math.min(width, height) / PARAMS.SCALE_BASE, PARAMS.SCALE_MIN, PARAMS.SCALE_MAX);
     }
 
-    function createWorld({ width = 1280, height = 720, random = Math.random, lowPower = false } = {}) {
+    // sizes 为真时小鱼每条大小不同（见 sizeOf）；默认关，关着时与没有这个选项之前逐位一致（不消耗随机数、体长与原来相同、空缺形状不变）
+    function createWorld({ width = 1280, height = 720, random = Math.random, lowPower = false, sizes = false } = {}) {
         return {
-            width, height, random, lowPower: !!lowPower,
+            width, height, random, lowPower: !!lowPower, sizes: !!sizes,
             scale: scaleFor(width, height), time: 0, nextId: 1,
             shoreY: null,                    // 岸线（海水层此刻水线能到的最高处，px，从屏幕顶往下量）：每步由 step 的 input.shore 写入，null 表示海水层没开，鱼不避岸线
             fish: [],
@@ -335,7 +385,8 @@
         const big = spec.len * world.scale > world.width * PARAMS.BIG_ENTRY;
         for (let i = 0; i < spec.group; i++) {
             const z = clamp(baseZ + (world.random() - 0.5) * 0.2, PARAMS.Z_MIN, PARAMS.Z_MAX);
-            const len = lengthOf(world, spec, z);
+            const size = world.sizes ? sizeOf(item.id, i, spec) : 1;       // 体长之后的所有计算都读 f.len，所以个体大小只需要在这里（与 enterOne）乘一次
+            const len = lengthOf(world, spec, z) * size;
             let x; let y; let entryAngle = null;
             if (instant) {
                 x = clamp(group.hx + (world.random() - 0.5) * spread, 0, world.width);
@@ -362,7 +413,7 @@
             world.fish.push({
                 id: world.nextId++, entry: item.id, species: item.species,
                 x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, ang: angle,
-                z, len, phase: world.random() * TAU, seed: world.random(), t: instant ? PARAMS.ENTER_S : 0,
+                z, len, size, phase: world.random() * TAU, seed: world.random(), t: instant ? PARAMS.ENTER_S : 0,
                 alpha: instant ? 1 : 0, state: instant ? 'alive' : 'entering',
                 held: null, cooldown: 0, turn: 0, glide: 0,
                 flip: Math.cos(angle) < 0 ? -1 : 1, flipTo: Math.cos(angle) < 0 ? -1 : 1,
@@ -373,15 +424,17 @@
     /**
      * 补回一条被捕食者吃掉的鱼：从左或右边缘、群的家的高度游进来，淡入 ENTER_S（与大个子入场同一条路径）。
      * 同群还有活着的鱼时，深度跟着它们（同群的鱼一直在一起）；群的家已经不在（条目被捞出或移除过）、种类不认识时什么都不做，返回是否补上了。
+     * size 是补回的这条鱼的个体大小（被吃掉的那条的大小，见 consume）：缺省、非有限数或非正数按 1。
      */
-    function enterOne(world, entryId, speciesId) {
+    function enterOne(world, entryId, speciesId, size = 1) {
         const spec = speciesById(speciesId);
         const group = world.groups[entryId];
         if (!spec || !group) return false;
+        const scale = Number.isFinite(size) && size > 0 ? size : 1;
         const mates = world.fish.filter(f => f.entry === entryId && f.state !== 'leaving');
         const baseZ = mates.length ? mates.reduce((sum, f) => sum + f.z, 0) / mates.length : lerp(PARAMS.Z_MIN, PARAMS.Z_MAX, world.random());
         const z = clamp(baseZ + (world.random() - 0.5) * 0.2, PARAMS.Z_MIN, PARAMS.Z_MAX);
-        const len = lengthOf(world, spec, z);
+        const len = lengthOf(world, spec, z) * scale;
         const right = world.random() < 0.5;
         const x = right ? world.width + len * 0.3 : -len * 0.3;
         const y = clamp(group.hy + (world.random() - 0.5) * PARAMS.REFILL_Y_SPREAD * world.scale, 0, world.height);
@@ -390,7 +443,7 @@
         world.fish.push({
             id: world.nextId++, entry: entryId, species: speciesId,
             x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, ang: angle,
-            z, len, phase: world.random() * TAU, seed: world.random(), t: 0,
+            z, len, size: scale, phase: world.random() * TAU, seed: world.random(), t: 0,
             alpha: 0, state: 'entering',
             held: null, cooldown: 0, turn: 0, glide: 0,
             flip: Math.cos(angle) < 0 ? -1 : 1, flipTo: Math.cos(angle) < 0 ? -1 : 1,
@@ -413,7 +466,9 @@
         fish.scoopT = 0;
         fish.leaveS = PARAMS.EAT_S;
         fish.eaten = true;
-        world.vacancies.push({ entry: fish.entry, species: fish.species, due: world.time + delayS });
+        const vacancy = { entry: fish.entry, species: fish.species, due: world.time + delayS };
+        if (world.sizes) vacancy.size = Number.isFinite(fish.size) ? fish.size : 1;       // 补回的鱼与被吃的同样大；关着时空缺形状不变
+        world.vacancies.push(vacancy);
         return true;
     }
 
@@ -423,7 +478,7 @@
         if (i < 0) return;
         const v = world.vacancies[i];
         world.vacancies.splice(i, 1);
-        enterOne(world, v.entry, v.species);
+        enterOne(world, v.entry, v.species, v.size);
     }
 
     /**
@@ -1037,7 +1092,7 @@
     }
 
     return {
-        PARAMS, PX_PER_M, SPECIES, speciesById, normalizeEntries, canAdd, renderCount, capacity,
+        PARAMS, PX_PER_M, SPECIES, SIZE_RANGE, STORAGE_VERSIONS, speciesById, storageVersionOf, sizeOf, normalizeEntries, canAdd, renderCount, capacity,
         createWorld, resize, reconcile, dismiss, step, hitTest, grab, release, cruiseSpeed, seabedOf, agileOf, isHeavySide,
         consume, enterOne,
         clamp, lerp, angleDiff, updateFlip,

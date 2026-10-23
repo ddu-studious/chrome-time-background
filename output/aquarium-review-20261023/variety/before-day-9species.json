@@ -1,0 +1,137 @@
+{
+ "file": "/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/output/aquarium-review-20261023/variety/before-day-9species.png",
+ "version": "156.0.8078.48",
+ "info": {
+  "state": {
+   "started": true,
+   "failed": false,
+   "loaded": true,
+   "entries": 8,
+   "fish": 16,
+   "grabbing": false,
+   "playFailed": false,
+   "realDrawn": 3,
+   "realFailed": false,
+   "predationFailed": false,
+   "flowFailed": false,
+   "lightFailed": false,
+   "flowLive": false,
+   "raysLive": false
+  },
+  "fish": [
+   {
+    "species": "neon",
+    "entry": "neon-lab0",
+    "size": null,
+    "len": 14.8
+   },
+   {
+    "species": "neon",
+    "entry": "neon-lab0",
+    "size": null,
+    "len": 14.5
+   },
+   {
+    "species": "neon",
+    "entry": "neon-lab0",
+    "size": null,
+    "len": 14.6
+   },
+   {
+    "species": "neon",
+    "entry": "neon-lab0",
+    "size": null,
+    "len": 13.9
+   },
+   {
+    "species": "neon",
+    "entry": "neon-lab0",
+    "size": null,
+    "len": 14.2
+   },
+   {
+    "species": "tang",
+    "entry": "tang-lab1",
+    "size": null,
+    "len": 23.2
+   },
+   {
+    "species": "tang",
+    "entry": "tang-lab1",
+    "size": null,
+    "len": 22.4
+   },
+   {
+    "species": "tang",
+    "entry": "tang-lab1",
+    "size": null,
+    "len": 22.8
+   },
+   {
+    "species": "tang",
+    "entry": "tang-lab1",
+    "size": null,
+    "len": 23.7
+   },
+   {
+    "species": "tang",
+    "entry": "tang-lab1",
+    "size": null,
+    "len": 23.6
+   },
+   {
+    "species": "clown",
+    "entry": "clown-lab2",
+    "size": null,
+    "len": 28.1
+   },
+   {
+    "species": "puffer",
+    "entry": "puffer-lab3",
+    "size": null,
+    "len": 31.9
+   },
+   {
+    "species": "angel",
+    "entry": "angel-lab4",
+    "size": null,
+    "len": 31.6
+   },
+   {
+    "species": "hammer",
+    "entry": "hammer-lab5",
+    "size": null,
+    "len": 127.3
+   },
+   {
+    "species": "turtle",
+    "entry": "turtle-lab6",
+    "size": null,
+    "len": 59.4
+   },
+   {
+    "species": "manta",
+    "entry": "manta-lab7",
+    "size": null,
+    "len": 227.2
+   }
+  ],
+  "buttons": [
+   "霓虹灯鱼",
+   "蓝吊",
+   "小丑鱼",
+   "河豚",
+   "神仙鱼",
+   "小锤头鲨",
+   "海龟",
+   "蝠鲼",
+   "鲸鲨"
+  ],
+  "panel": null
+ },
+ "issues": {
+  "pageerror": [],
+  "console": [],
+  "warnings": []
+ }
+}

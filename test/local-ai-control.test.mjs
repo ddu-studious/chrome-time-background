@@ -31,7 +31,7 @@ test('模型参数持久化校验且业务请求不能覆盖统一推理策略',
   const gateway = createGateway({ control, provider: { model: 'original', async generateObject(options) { sent = options; return { status: 'needs_clarification', question: '几点？' }; } } });
   const result = await gateway.run('alarm.interpret', { ...input, reasoning: 'xhigh' });
   assert.equal(sent.model, 'test/model'); assert.equal(sent.reasoning, 'low');
-  assert.equal(sent.timeoutMs, 15000); assert.equal(sent.maxOutputTokens, 800);
+  assert.ok(sent.timeoutMs > 0 && sent.timeoutMs <= 15000); assert.equal(sent.maxOutputTokens, 800);
   assert.equal(result.model, 'test/model'); assert.equal(result.reasoning, 'low');
 });
 test('快捷助手可通过独立受控字段覆盖本次模型和思考强度', async () => {

@@ -30,7 +30,7 @@
   // Isolated control-plane substitute for checking the workbench's Laya UI.
   chrome.runtime.onMessage.addListener((message, _sender, respond) => {
     if (message.action === 'local_ai_status') {
-      respond({ ok: true, model: 'qwen/qwen3.8-27b', defaultReasoning: 'low', models: [{ id: 'qwen/qwen3.8-27b', name: 'Qwen3.8 27B', loaded: true, reasoningOptions: ['off', 'low'] }] });
+      respond({ ok: true, model: 'qwen/qwen3.8-27b', defaultReasoning: 'low', models: [{ id: 'qwen/qwen3.8-27b', name: 'Qwen3.8 27B', loaded: true, reasoningOptions: ['off', 'low'] }], ...(window.__assistantRemoteFixture ? { remote: window.__assistantRemoteFixture } : {}) });
       return true;
     }
     if (!['ai_control_get', 'ai_control_save'].includes(message.action)) return;

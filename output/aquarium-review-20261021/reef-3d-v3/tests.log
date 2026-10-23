@@ -1,0 +1,47 @@
+
+> isolated-reef-3d-lab@0.1.0 test
+> node --test test/*.test.mjs
+
+✔ pinned upstream source and glTF assets match original git blobs (30.90375ms)
+✔ source and npm Three builds are identical; model references only frozen local resources (3.326625ms)
+✔ actual upstream vertices preserve total-length scale and fit the centred conservative capsule (48.7745ms)
+✔ natural pursuit generates both captures and escapes without invoking capture directly (168.957ms)
+✔ rotation sweep catches a wall even when both endpoint orientations are clear (2.502416ms)
+✔ real source rock BVH rejects invalid poses and world never commits a penetrating move (163.115625ms)
+✔ local refuge requires reachable space, body clearance and loss of predator sight (0.188458ms)
+✔ held predator and removed target end active hunts; fish budget stays bounded (0.266459ms)
+✔ real meshes admit the small fish through the crevice and route the predator around (20.516959ms)
+✔ deterministic real stepping: shelter, wait, predator detour and search, release then emerge; no penetration (26.923833ms)
+✔ occluded target movement does not change the predator remembered location or chosen route (16.319334ms)
+✔ scene invalidation clears paths and graph cache; held prey cannot be eaten (5.426583ms)
+✔ 3D jelly uses volumetric bell and tubes, with disposable resources (5.02475ms)
+✔ jelly renderer build seam changes only draw dispatch and fails closed on source drift (0.48775ms)
+✔ low scenery coverage does not relocate the drill actors away from their habitat (13.607209ms)
+✔ full reef roadmap is bounded and attested to exact source geometry and baker (13.327292ms)
+✔ size masks are nested and cached clearances agree with live BVH queries (34.077625ms)
+✔ arch: real 3D reef stepping 0.025/0.18 has shelter, search and no penetration (231.742875ms)
+✔ arch: real 3D reef stepping 0.04/0.25 has shelter, search and no penetration (195.029917ms)
+✔ arch: real 3D reef stepping 0.074/0.45 has shelter, search and no penetration (108.966375ms)
+✔ left: real 3D reef stepping 0.025/0.18 has shelter, search and no penetration (144.560292ms)
+✔ left: real 3D reef stepping 0.04/0.25 has shelter, search and no penetration (96.358375ms)
+✔ left: real 3D reef stepping 0.074/0.45 has shelter, search and no penetration (127.890042ms)
+✔ right: real 3D reef stepping 0.025/0.18 has shelter, search and no penetration (50.420667ms)
+✔ right: real 3D reef stepping 0.04/0.25 has shelter, search and no penetration (80.653875ms)
+✔ right: real 3D reef stepping 0.074/0.45 has shelter, search and no penetration (43.761625ms)
+✔ full reef food eligibility excludes large prey for small predators (13.772333ms)
+✔ layout translation invalidates navigation and disabling scenery clears paths (70.685708ms)
+✔ six stable individual total lengths and reload reproducibility (15.246ms)
+✔ individual predator size and body depth gate eligibility; tasks are never candidates (0.279709ms)
+✔ feed is bounded and has distinct ingestion receipts (0.259917ms)
+✔ capture requires 3D mouth contact and happens only once; refills preserve resident traits (0.223709ms)
+✔ occluded or held prey cannot be captured; hunting eventually gives up (0.152833ms)
+✔ BVH blocks a swept capsule through thin wall and rejects inside-solid spawns (3.096334ms)
+✔ same aperture admits small body and rejects larger body (0.758959ms)
+ℹ tests 35
+ℹ suites 0
+ℹ pass 35
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1656.389709

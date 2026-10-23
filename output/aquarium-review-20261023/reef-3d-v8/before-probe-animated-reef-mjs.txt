@@ -1,0 +1,44 @@
+import {readFile,writeFile,mkdir} from 'node:fs/promises';
+import {loadFullReefFixture} from './full-reef-fixture.mjs';
+import {fullReefSites} from './full-navigation.mjs';
+import {OceanWorld} from './world.mjs';
+import {bodyEnvelope,assertClownMotionEnvelope} from './fish-envelope.mjs';
+const {nav,spatial,roadmap}=await loadFullReefFixture();
+const {scenarios}=JSON.parse(await readFile(new URL('./assets/navigation/full-reef-scenarios.json',import.meta.url),'utf8'));
+const rows=[],traces={},dt=1/60,seconds=30;
+for(const scene of scenarios)for(const preyLength of [.025,.04,.06,.074])for(const predatorLength of [.18,.25,.45]){
+  nav.configure(fullReefSites(roadmap,0));const world=new OceanWorld({empty:true,spatial});world.navigation=nav;
+  world.startFullDrill(scene,preyLength,predatorLength);const eligible=world.canEat(world.fish[1],world.fish[0]);
+  const previous=world.fish.map(f=>({p:f.position.clone(),q:f.quaternion.clone(),speed:f.velocity.length(),life:f.life})),trace=[];
+  const actors=world.fish.map(f=>({id:f.id,totalLengthM:f.profile.totalLengthM,envelope:bodyEnvelope(f),movingTurnSeconds:0,routeStoppedSeconds:0,routeTravelM:0,stopTransitions:0,maxTurnRate:0,maxAcceleration:0,maxBend:0}));
+  let penetrations=0,sweepViolations=0,maxStep=0;const before=performance.now();
+  for(let i=0;i<seconds/dt;i++){
+    world.step(dt);
+    for(let k=0;k<world.fish.length;k++){
+      const f=world.fish[k],last=previous[k],a=actors[k],speed=f.velocity.length();
+      if(f.kind==='clown')assertClownMotionEnvelope(f);
+      if(f.life==='alive'){
+        if(!spatial.clearPose(f,f.position,f.quaternion))penetrations++;
+        if(last.life==='alive'&&!spatial.clearMotion(f,last.p,f.position,last.q,f.quaternion))sweepViolations++;
+        const distance=last.life==='alive'?last.p.distanceTo(f.position):0,angle=last.q.angleTo(f.quaternion);maxStep=Math.max(maxStep,distance);
+        a.maxBend=Math.max(a.maxBend,Math.abs(f.bend));a.maxTurnRate=Math.max(a.maxTurnRate,angle/dt);
+        if(f.route){a.routeTravelM+=distance;if(speed<.003)a.routeStoppedSeconds+=dt;if(speed<.003&&last.speed>=.006)a.stopTransitions++;if(speed>.005&&angle>.002)a.movingTurnSeconds+=dt;}
+        if(f.route&&!['hiding','searching'].includes(f.behavior))a.maxAcceleration=Math.max(a.maxAcceleration,Math.abs(speed-last.speed)/dt);
+      }
+      last.p.copy(f.position);last.q.copy(f.quaternion);last.speed=speed;last.life=f.life;
+    }
+    if(i%6===0)trace.push({time:world.time,fish:world.fish.map(f=>({id:f.id,position:f.position.toArray(),quaternion:f.quaternion.toArray(),speed:f.velocity.length(),bend:f.bend,behavior:f.behavior,route:f.route?.index??null,life:f.life}))});
+  }
+  const events=world.events,kinds=Object.fromEntries(['hidden','emerged','searched-exit','capture','escape'].map(type=>[type,events.filter(e=>e.type===type).length]));
+  const row={region:scene.id,preyLength,predatorLength,eligible,...kinds,penetrations,sweepViolations,maxStep,stats:{...world.stats},searches:nav.searches,maxPlanMs:nav.maxPlanMs,cpuMs:performance.now()-before,actors};rows.push(row);
+  if(preyLength===.04&&predatorLength===.25)traces[scene.id]={events,trace};
+  console.log(JSON.stringify({region:scene.id,preyLength,predatorLength,eligible,...kinds,penetrations,sweepViolations,stopped:actors.map(a=>+a.routeStoppedSeconds.toFixed(2)),movingTurns:actors.map(a=>+a.movingTurnSeconds.toFixed(2)),retries:world.stats.routeRetries,abandoned:world.stats.routeAbandons}));
+}
+const out=new URL('../../../output/aquarium-review-20261022/reef-3d-v5/',import.meta.url);await mkdir(out,{recursive:true});
+const summary={cases:rows.length,eligible:rows.filter(r=>r.eligible).length,eligibleWithHiding:rows.filter(r=>r.eligible&&r.hidden>0).length,eligibleWithSearch:rows.filter(r=>r.eligible&&r['searched-exit']>0).length,
+  penetratingPoses:rows.reduce((n,r)=>n+r.penetrations,0),sweepViolations:rows.reduce((n,r)=>n+r.sweepViolations,0),maxStep:Math.max(...rows.map(r=>r.maxStep)),totalCpuMs:rows.reduce((n,r)=>n+r.cpuMs,0),maxPlanMs:Math.max(...rows.map(r=>r.maxPlanMs)),
+  movingTurnSeconds:rows.reduce((n,r)=>n+r.actors.reduce((s,a)=>s+a.movingTurnSeconds,0),0),routeStoppedSeconds:rows.reduce((n,r)=>n+r.actors.reduce((s,a)=>s+a.routeStoppedSeconds,0),0),routeRetries:rows.reduce((n,r)=>n+r.stats.routeRetries,0),routeAbandons:rows.reduce((n,r)=>n+r.stats.routeAbandons,0)};
+await writeFile(new URL('size-matrix.json',out),JSON.stringify({seconds,dt,seed:73,rows},null,2)+'\n');await writeFile(new URL('representative-traces.json',out),JSON.stringify(traces));await writeFile(new URL('matrix-summary.json',out),JSON.stringify(summary,null,2)+'\n');
+const md=['# 新体态完整浅礁体型矩阵','',`每组 ${seconds} 秒；固定步长 1/60 秒；种子 73。净空验证包含新形体和全部允许身体动画的解析包围。`,``,`| 区域 | 小鱼 cm | 大鱼 cm | 捕食资格 | 躲藏 | 搜索出口 | 离开 | 穿透姿态 | 扫掠违规 | 路线停滞秒（小/大） |`,`|---|---:|---:|---|---:|---:|---:|---:|---:|---|`,...rows.map(r=>`| ${r.region} | ${r.preyLength*100} | ${r.predatorLength*100} | ${r.eligible?'是':'否'} | ${r.hidden} | ${r['searched-exit']} | ${r.emerged} | ${r.penetrations} | ${r.sweepViolations} | ${r.actors.map(a=>a.routeStoppedSeconds.toFixed(2)).join(' / ')} |`),'','路线停滞只计有活动路线且速度低于 0.003 m/s，未把业务躲藏/搜索等待计入；反向起步和安全受阻仍可短暂停留。不是野生成功率或普遍物理正确性的证明。'];
+await writeFile(new URL('size-matrix.md',out),md.join('\n')+'\n');console.log(JSON.stringify(summary));
+if(summary.penetratingPoses||summary.sweepViolations)process.exitCode=1;

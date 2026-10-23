@@ -14,9 +14,18 @@ test('natural pursuit generates both captures and escapes without invoking captu
   assert.ok(w.stats.captures<=6);assert.equal(w.fish.length,7);assert.ok(w.events.length<=80);
  }
 });
+test('natural close pursuit reaches mouth contact for three prey sizes without directly calling capture',()=>{
+ for(const length of [.025,.04,.06]){
+  const w=new OceanWorld({empty:true,seed:73}),prey=w.add('clown',length,{position:new Vector3(.15,.4,.3)}),pred=w.add('barramundi',.45,{position:new Vector3(-.15,.4,.3)});
+  prey.goal.set(.8,.4,.3);prey.goalAt=100;pred.nextHunt=0;w.setPredation(true);
+  assert.ok(w.mouth(pred).distanceTo(prey.position)>.1,'starts outside the contact radius');
+  for(let i=0;i<300&&!w.stats.captures;i++)w.step(1/60);
+  assert.equal(w.stats.captures,1);assert.equal(prey.life,'absent');assert.ok(w.time>.2&&w.time<5);assert.equal(w.fish.length,2);
+ }
+});
 test('rotation sweep catches a wall even when both endpoint orientations are clear',()=>{
  const s=new ReefSpatial(),wall=new Mesh(new BoxGeometry(.03,.3,.03),new MeshBasicMaterial());wall.position.set(.165,0,.165);s.setMeshes([{mesh:wall}]);s.setActive(true);
- const f={profile:{...profile('thin','clown',.06),radiusM:.004}},a=new Quaternion(),b=new Quaternion().setFromAxisAngle(new Vector3(0,1,0),-Math.PI/2),p=new Vector3();
+ const f={profile:{totalLengthM:.06,radiusM:.004}},a=new Quaternion(),b=new Quaternion().setFromAxisAngle(new Vector3(0,1,0),-Math.PI/2),p=new Vector3();
  assert.equal(s.clearPose(f,p,a),true);assert.equal(s.clearPose(f,p,b),true);assert.equal(s.clearMotion(f,p,p,a,b),false);
 });
 test('real source rock BVH rejects invalid poses and world never commits a penetrating move',()=>{

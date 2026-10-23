@@ -12,3 +12,40 @@ aside{position:fixed;z-index:10;background:#102b35e6;border:1px solid #b3dad02c;
 #depth-controls{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:16px}#depth-controls[hidden]{display:none}
 
 #interaction-log,#event-log{display:block;font:10px/1.5 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere;color:#9abbb5}
+
+#jelly-labels{position:fixed;inset:0;z-index:5;pointer-events:none}#jelly-labels span{position:absolute;transform:translateX(-50%);font-size:12px;color:#e2f4f4;text-shadow:0 1px 5px #0b2532;background:#0c27394d;border-radius:10px;padding:4px 9px}.drill-note{display:block;font-size:10px;color:#a3bfba;margin:7px 0 14px}.inspection #jelly-labels{display:none}
+
+#drill-state{font-size:11px;line-height:1.7;color:#cae7db}
+
+.full-drill-controls{border-top:1px solid #ffffff20;padding-top:14px}#navigation-info{display:block;font:10px/1.6 ui-monospace,monospace;overflow-wrap:anywhere;color:#b0d9cd}
+
+/* Comparison stays transparent over the original wallpaper. */
+#specimen-controls[hidden],#specimen-headings[hidden]{display:none}.comparison #tasks-panel,.comparison .ecosystem-controls,.comparison #counts,.comparison #drill-state{display:none}#specimen-status{font-size:11px;line-height:1.8;color:#c7e7da;font-variant-numeric:tabular-nums}.reference-link{display:inline-block;color:#b4dfd2;font-size:11px;margin-bottom:14px;text-decoration:none}#sample-experience{width:100%;margin-top:10px;border-color:#97c8b9}#specimen-headings{position:fixed;inset:0;pointer-events:none;z-index:6}#specimen-headings article{position:absolute;transform:translateX(-50%);text-align:center;width:260px}#specimen-headings article small{font-size:10px;letter-spacing:3px;color:#bad1ce}#specimen-headings h2{font-size:22px;font-weight:400;margin:12px 0}#specimen-headings article p{font-size:12px;letter-spacing:1px;color:#bed7d3}#specimen-headings article:last-of-type h2{color:#d9f1e4}#specimen-caption{position:absolute;bottom:90px;left:calc(50% + 160px);transform:translateX(-50%);font-size:12px;letter-spacing:2px;color:#c2dcd6;text-align:center}.comparison #panel-body{max-height:calc(100vh - 205px)}@media(max-width:760px){#specimen-headings article{width:180px}#specimen-headings h2{font-size:16px;margin:6px 0}#specimen-headings article p{font-size:10px}#specimen-caption{font-size:10px;left:72%;bottom:45px;max-width:200px}}
+
+#motion-info{display:block;font:10px/1.7 ui-monospace,monospace;color:#b0d9cd;margin-top:8px}
+
+/* Leave room for macOS overlay scrollbars so right-edge toggles remain clickable. */
+#panel-body{padding-right:14px}
+
+.style-note{font-size:10px;line-height:1.6;color:#bcdad5;margin:-5px 0 16px}
+
+/* The small dock remains reachable with the panels hidden. No full-screen tint. */
+#experience-dock{position:fixed;z-index:12;left:50%;bottom:26px;transform:translateX(-50%);padding:11px 16px 10px;background:#102b35e6;border:1px solid #b3dad03b;border-radius:18px;backdrop-filter:blur(14px);box-shadow:0 12px 35px #07182033;text-align:center;max-width:calc(100vw - 28px)}
+#scene-summary{display:block;font-size:10px;color:#c1dbd4;letter-spacing:1px;margin-bottom:9px}
+.dock-actions{display:flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap}
+.dock-actions button{font-size:12px;border-radius:10px;padding:8px 12px}
+.dock-actions button[aria-pressed=true]{border-color:#a9ddc77a;background:#a5d9c524}
+.dock-separator{height:20px;border-left:1px solid #b3dad02c;margin:0 2px}
+#feed-control{display:flex}#feed{font-size:12px;border-radius:10px}
+#feed-hint{display:block;font-size:10px;color:#a7c6bd;margin-top:8px}
+#dock-message{display:none;position:absolute;bottom:calc(100% + 12px);left:50%;transform:translateX(-50%);width:max-content;max-width:min(440px,calc(100vw - 36px));padding:9px 14px;border-radius:12px;background:#102b35df;border:1px solid #b3dad030;color:#d2e8dc;font-size:11px;line-height:1.7;margin:0}
+.immersive #dock-message{display:block}
+#ecology-tests{margin-bottom:18px}#ecology-tests[open] summary{margin-bottom:12px}
+#ecology-tests .full-drill-controls{margin-top:14px}
+#panel-body{max-height:calc(100vh - 230px)}
+.immersive #panel,.immersive #tasks-panel,.immersive header,.immersive footer{display:none}
+.immersive #experience-dock{background:#102b35bf}
+.comparison #specimen-caption{bottom:162px}
+@media(max-width:1050px){footer{bottom:8px;font-size:8px}#experience-dock{bottom:28px}.dock-actions{gap:5px}.dock-actions button{padding:8px 10px}}
+@media(max-width:700px){#experience-dock{width:calc(100vw - 28px);padding:10px}.dock-actions{flex-wrap:wrap;white-space:normal}.dock-actions button{font-size:11px}.dock-separator{display:none}#scene-summary{margin-bottom:6px}#tasks-panel{bottom:155px}footer{display:none}#panel-body,.comparison #panel-body{max-height:calc(100vh - 300px)}.comparison #specimen-caption{bottom:170px}.immersive .time-container{left:50%}}
+@media(max-width:500px){#panel{width:min(225px,calc(100vw - 164px))}#tasks-panel{width:120px;padding:12px}#tasks-panel h2{font-size:13px}.field{display:block}.field>span{display:block;margin-bottom:6px}.field select{max-width:100%}.switch{gap:6px}.switch small{max-width:140px}}

@@ -1,0 +1,19 @@
+{
+  "prototypeTests": 78,
+  "interactionRegressionTests": 368,
+  "productionFilesUnchanged": 9,
+  "unchangedPhysicalSources": [
+    "world.mjs",
+    "fish-motion.mjs",
+    "clown-appearance.mjs",
+    "fish-envelope.mjs",
+    "spatial.mjs",
+    "navigation.mjs",
+    "full-navigation.mjs",
+    "route-following.mjs",
+    "assets/navigation/full-reef.json"
+  ],
+  "bundleBytes": 968370,
+  "bundleSha256": "90fff7d89e82c49cd376d778bded484485a0b4bbe455d7b1ad73fcb727fb8e2f",
+  "sourceFingerprints": "match"
+}

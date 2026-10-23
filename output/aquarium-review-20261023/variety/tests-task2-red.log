@@ -1,0 +1,351 @@
+✔ 选水母且水族馆开着（默认）：启动水族馆一次；关闭开关、换皮肤、切到减少动态效果都停掉它 (20.787792ms)
+✔ 水族馆脚本缺席或皮肤缺席：宿主不抛错、水母照常 (6.334459ms)
+✔ 每帧先画鱼再画水母；鱼拿到宿主的画布、尺寸、时间步、强度、指针、省流量、夜晚开关与水母钟罩（只读） (7.072875ms)
+✔ 皮肤没有 bells 方法（旧皮肤、替身）时宿主照常画鱼：钟罩是空数组，不抛错、不影响水母 (1.712959ms)
+✔ 水族馆自己停用（画法出错）后宿主不再调用它，水母不受影响 (1.631ms)
+✔ 页面被隐藏或被工作台遮挡：不再调用鱼层；恢复后继续 (1.877333ms)
+✔ 只有鱼：悬停时光标变手；按下抓鱼；松手交给水族馆（不碰水母）；拖过则吞掉随后的 click (3.995708ms)
+✔ 重叠时水母优先：水母抓到了就不再问鱼；松手交给水母 (5.136625ms)
+✔ 不抢任务条等非空白目标；非主键/非主指针不抓；水族馆关闭或页面隐藏时不抓鱼 (5.821916ms)
+✔ 水族馆开关是抓鱼的独立条件：即便水族馆对象还在运行，设置关着也不抓、不悬停 (1.560167ms)
+✔ 关掉“水母任务名与抓取”不影响抓鱼（鱼不绑任务）；反过来关掉水族馆开关会放开正抓着的鱼 (1.383708ms)
+✔ Esc、失焦、指针取消、页面隐藏、在窗口外放开：放开鱼且不落网兜 (8.293666ms)
+✔ 鱼与水母都不在指针下：背景玩法照常开始（不被吞掉） (2.775958ms)
+✔ 整链路：真实水族馆读到存储里的鱼，画在宿主画布上；真实水母提供钟罩位置；换皮肤后鱼停 (21.986459ms)
+✔ 整链路：存储里没有鱼时鱼层一笔不画 (4.20925ms)
+✔ 整链路：点一下真实的鱼 = 戳（涟漪画在宿主画布上、鱼窜开、不吞随后的 click）；拖过 6 px 不算戳 (8.630583ms)
+✔ 整链路：按在后半身 = 拉尾抓取接通宿主指针；没有落点时拖过 6 px 就原样放回，不留拉尾状态 (4.958791ms)
+✔ 整链路：玩法脚本缺席（加载失败）时鱼层照常工作，点一下鱼与原来一样 (5.810834ms)
+✔ 海水层：选水母皮肤且设置开着（默认）才启动；关开关、换皮肤、减少动态效果都会停；脚本缺席时宿主照常 (11.461083ms)
+✔ 海水层：每帧先于鱼与水母；拿到页面尺寸、宿主时间戳、强度、省流量与夜晚开关 (3.865167ms)
+✔ 海水层：把此刻的岸线（水线能到的最高处，占页面高度的比例、从页面底边往上量）交给鱼层的 shore 选项；水体没在显示、没有 shore 方法或返回 null 时为 null，鱼不避岸线 (5.704ms)
+✔ 海水层：自己停用（失败）后宿主不再调用；页面被隐藏或工作台遮挡时不调用，恢复后继续；水母不受影响 (2.800584ms)
+✔ 海水层：设置规范化——只有明确 false 才关，缺省与怪值都开 (7.200083ms)
+✔ 写实动物：宿主把设置传给鱼层——缺省与怪值都开，只有明确 false 才关；每一帧都传 (8.336875ms)
+✔ 写实动物：改设置立即生效（applySettings 之后下一帧带新值），不需要重启鱼层 (1.368084ms)
+✔ 写实动物：鱼层脚本里没有 AquariumReal（加载失败）时，真实水族馆照常画卡通鱼，不抛错 (5.369875ms)
+✔ 大鱼吃小鱼：宿主把设置传给鱼层——缺省与怪值都开，只有明确 false 才关；每一帧都传 (8.0505ms)
+✔ 大鱼吃小鱼：改设置立即生效（applySettings 之后下一帧带新值），不需要重启鱼层 (1.200791ms)
+✔ 大鱼吃小鱼：真实整链路——默认开（有捕食状态，鲨鱼已登记为捕食者）；设置里关掉后状态丢弃；省流量模式不开；捕食脚本缺席时照常画 (59.354709ms)
+✖ 个体大小：宿主把设置传给鱼层——缺省与怪值都开，只有明确 false 才关；每一帧都传 (1.8935ms)
+✖ 个体大小：改设置立即生效（applySettings 之后下一帧带新值），不需要重启鱼层 (1.84525ms)
+✖ 个体大小：真实整链路——默认开（小鱼大小各不相同、大鱼为 1）；设置里关掉后下一帧全部回到标准体长；名单与存储不变 (6.186583ms)
+✔ 源码合同：鱼层不自建 RAF/定时器/画布，不 innerHTML/eval/联网，不碰任务/备忘录存储；只写 aquariumV1 (1.903959ms)
+✔ 解耦：水母代码不认识水族馆（鱼读水母，水母不读鱼）；宿主只多出设置、鱼层调用与抓取路由 (2.742291ms)
+✔ index.html：脚本顺序与版本钉子（核心、玩法核心、玩法画法先于控制器，都在水母之后宿主之前）、样式已链接 (0.64375ms)
+✔ 设置页：有“写实动物”开关，默认开，保存键 aquariumRealistic，文案如实写明范围；鱼名单里有海龟 (1.103334ms)
+✔ 设置页：有“大鱼吃小鱼”开关，默认开，保存键 aquariumPredation，文案如实写明谁吃谁、多久一次、怎么补回、什么不参与；宿主三处与设置页四处都接上 (0.914125ms)
+✔ 设置页：有“水流与海洋雪”“水下光束”开关，默认关，只有明确 true 才开；宿主与设置页四处都接上 (1.14925ms)
+✔ 设置页：有“水下环境音”开关，默认关；宿主接上；须用户手势；脚本已挂 (1.305459ms)
+✔ 设置页：有水族馆开关，默认开，保存键 aquariumFish，脚本版本已更新 (0.380833ms)
+✔ 设置页文案：视觉风格叫“水族馆”（取值仍是 jellyfish），说明里不再出现“深海水母”；小鱼的名字与数字跟鱼种表和上限一致，没有旧叫法 (0.584375ms)
+✔ 样式：托盘、面板、网兜类名与源码里的类名一致；网兜不接收事件 (1.103917ms)
+✔ 样式：喂食按钮可拖（touch-action: none）、禁用有样式；拖出去的饲料团不接收事件且比托盘高 (0.320375ms)
+✔ 样式：网兜不遮挡被拖着的鱼——没有磨砂模糊、实心底色几乎透明、网线不粗，提示文字单独成胶囊浮在网兜上方 (0.657166ms)
+✔ 个体大小：同一条目同一序号永远得到同一个值，不依赖随机数与调用次数 (1.6945ms)
+✔ 个体大小：4000 个条目全落在 [0.75, 1.25]，均值≈1，两头都取得到，分布是以 1 为中心的三角形（不是均匀分布） (5.467625ms)
+✔ 个体大小：同一条目的 5 条鱼至少 4 个不同的大小；大鱼、没有 size 的种与空种恒为 1 (0.131458ms)
+✔ 个体大小：只有原有 5 种小鱼带 size 范围，4 种大动物没有（保持真实比例） (0.099833ms)
+✔ 世界：sizes 默认关，关着时每条鱼 size 恒为 1 (0.624291ms)
+✔ 世界：开着 sizes 与关着相比，位置、速度、朝向、深度、相位、种子逐位相同（没有消耗随机数），只有体长按 size 变 (0.380584ms)
+✔ 世界：同一个群（5 条霓虹灯鱼）开着 sizes 时彼此大小不同，关着时全一样 (0.135416ms)
+✔ 世界：resize 之后体长与大小的比值不变（f.len 本来就是唯一的体长来源） (0.143375ms)
+✔ 补员：开着 sizes，被吃掉的鱼补回来时大小不变；空缺多出 size 字段，关着时空缺形状仍是 {entry, species, due} (1.580417ms)
+✔ enterOne：第四个参数是个体大小；缺省、非有限与非正数一律按 1 (0.636708ms)
+✖ 控制器：frame({ sizes: true }) 建出开着个体大小的世界，鱼的大小取自 sizeOf；没传、false 与任何怪值都是关着（只认明确的 true） (24.335208ms)
+✖ 控制器：sizes 在帧之间切换会重建世界（与省流量切换同一做法）；没变不重建；同一条鱼的大小稳定，名单与存储一字不动 (8.151791ms)
+✔ 控制器：省流量与 sizes 同时切换只重建一次；世界重建后条目、群与家重新按名单生成 (3.320875ms)
+✖ 设置页：有“个体大小差异”开关，默认开，保存键 aquariumSizes，文案如实写明范围与不参与的动物；宿主与设置页各处都接上；水母不认识它 (1.009292ms)
+ℹ tests 58
+ℹ suites 0
+ℹ pass 52
+ℹ fail 6
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 347.806292
+
+✖ failing tests:
+
+test at test/aquarium-integration.test.js:738:1
+✖ 个体大小：宿主把设置传给鱼层——缺省与怪值都开，只有明确 false 才关；每一帧都传 (1.8935ms)
+  AssertionError [ERR_ASSERTION]: undefined
+  + actual - expected
+  
+  + undefined
+  - true
+  
+      at TestContext.<anonymous> (/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/test/aquarium-integration.test.js:743:16)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/aquarium-integration.test.js:749:1
+✖ 个体大小：改设置立即生效（applySettings 之后下一帧带新值），不需要重启鱼层 (1.84525ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - true
+  
+      at TestContext.<anonymous> (/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/test/aquarium-integration.test.js:752:12)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/aquarium-integration.test.js:761:1
+✖ 个体大小：真实整链路——默认开（小鱼大小各不相同、大鱼为 1）；设置里关掉后下一帧全部回到标准体长；名单与存储不变 (6.186583ms)
+  AssertionError [ERR_ASSERTION]: 默认开
+  
+  false !== true
+  
+      at TestContext.<anonymous> (/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/test/aquarium-integration.test.js:767:12)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/aquarium-variety.test.js:238:1
+✖ 控制器：frame({ sizes: true }) 建出开着个体大小的世界，鱼的大小取自 sizeOf；没传、false 与任何怪值都是关着（只认明确的 true） (24.335208ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  false !== true
+  
+      at TestContext.<anonymous> (/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/test/aquarium-variety.test.js:241:12)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/aquarium-variety.test.js:253:1
+✖ 控制器：sizes 在帧之间切换会重建世界（与省流量切换同一做法）；没变不重建；同一条鱼的大小稳定，名单与存储一字不动 (8.151791ms)
+  AssertionError [ERR_ASSERTION]: 切换要重建
+      at TestContext.<anonymous> (/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/test/aquarium-variety.test.js:259:12)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Object],
+    expected: [Object],
+    operator: 'notStrictEqual',
+    diff: 'simple'
+  }
+
+test at test/aquarium-variety.test.js:286:1
+✖ 设置页：有“个体大小差异”开关，默认开，保存键 aquariumSizes，文案如实写明范围与不参与的动物；宿主与设置页各处都接上；水母不认识它 (1.009292ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /id="set-bgAquariumSizes" checked/. Input:
+  
+  '<!DOCTYPE html>\n' +
+    '<html lang="zh-CN">\n' +
+    '<head>\n' +
+    '    <meta charset="UTF-8">\n' +
+    '    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n' +
+    '    <title>设置 - 中国风景时钟</title>\n' +
+    '    <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css">\n' +
+    '    <link rel="stylesheet" href="css/settings-page.css">\n' +
+    '    <link rel="stylesheet" href="css/product-ui-v4.css">\n' +
+    '    <link rel="stylesheet" href="css/settings-v5.css?v=7">\n' +
+    '    <link rel="stylesheet" href="css/shortcut-help.css?v=3">\n' +
+    '    <link rel="stylesheet" href="css/huya-icon.css?v=1">\n' +
+    '    <link rel="stylesheet" href="css/ai-control.css?v=4">\n' +
+    '</head>\n' +
+    '<body>\n' +
+    '    <div class="sp-layout">\n' +
+    '        <!-- 左侧导航 -->\n' +
+    '        <nav class="sp-sidebar">\n' +
+    '            <div class="sp-logo">\n' +
+    '                <img src="icons/icon48.png" alt="中国风景时钟" class="sp-logo-img">\n' +
+    '                <div class="sp-logo-text">\n' +
+    '                    <h1>中国风景时钟</h1>\n' +
+    '                    <span class="sp-version" id="sp-version">v3.8.0</span>\n' +
+    '                </div>\n' +
+    '            </div>\n' +
+    '\n' +
+    '            <div class="sp-nav-section">\n' +
+    '                <div class="sp-nav-label">常规</div>\n' +
+    '                <a class="sp-nav-item active" data-page="time" href="#time">\n' +
+    '                    <i class="fas fa-clock"></i> 时间与日期\n' +
+    '                </a>\n' +
+    '                <a class="sp-nav-item" data-page="weather" href="#weather">\n' +
+    '                    <i class="fas fa-cloud-sun"></i> 天气设置\n' +
+    '                </a>\n' +
+    '                <a class="sp-nav-item" data-page="background" href="#background">\n' +
+    '                    <i class="fas fa-image"></i> 背景壁纸\n' +
+    '                </a>\n' +
+    '                <a class="sp-nav-item" data-page="info" href="#info">\n' +
+    '                    <i class="fas fa-newspaper"></i> 信息展示\n' +
+    '                </a>\n' +
+    '            </div>\n' +
+    '\n' +
+    '            <div class="sp-nav-section">\n' +
+    '                <div class="sp-nav-label">效率</div>\n' +
+    '                <a class="sp-nav-item" data-page="schedule" href="#schedule">\n' +
+    '                    <i class="fas fa-calendar-check"></i> 每日计划\n' +
+    '                </a>\n' +
+    '                <a class="sp-nav-item" data-page="worklog" href="#worklog">\n' +
+    '                    <i class="fas fa-clipboard-list"></i> 工作日志\n' +
+    '                </a>\n' +
+    '            </div>\n' +
+    '\n' +
+    '            <div class="sp-nav-section">\n' +
+    '                <div class="sp-nav-label">个性化</div>\n' +
+    '                <a class="sp-nav-item" data-page="appearance" href="#appearance">\n' +
+    '                    <i class="fas fa-palette"></i> 外观主题\n' +
+    '                </a>\n' +
+    '                <a class="sp-nav-item" data-page="performance" href="#performance">\n' +
+    '                    <i class="fas fa-bolt"></i> 性能与省电\n' +
+    '                </a>\n' +
+    '            </div>\n' +
+    '\n' +
+    '            <div class="sp-nav-section">\n' +
+    '                <div class="sp-nav-label">帮助</div>\n' +
+    '                <a class="sp-nav-item" data-page="guide" href="#guide">\n' +
+    '                    <i class="fas fa-book"></i> 使用说明\n' +
+    '                </a>\n' +
+    '                <a class="sp-nav-item" data-page="about" href="#about">\n' +
+    '                    <i class="fas fa-info-circle"></i> 关于\n' +
+    '                </a>\n' +
+    '            </div>\n' +
+    '        </nav>\n' +
+    '\n' +
+    '        <!-- 右侧内容 -->\n' +
+    '        <main class="sp-main">\n' +
+    '            <!-- 时间与日期 -->\n' +
+    '            <section class="sp-page active" id="page-time">\n' +
+    '                <div class="sp-page-header">\n' +
+    '                    <h2>时间与日期</h2>\n' +
+    '                    <p>配置时钟显示格式、日期和节假日</p>\n' +
+    '                </div>\n' +
+    '\n' +
+    '                <div class="sp-card">\n' +
+    '                    <h3 class="sp-card-title">时钟格式</h3>\n' +
+    '                    <div class="sp-field">\n' +
+    '                        <div class="sp-field-info">\n' +
+    '                            <span class="sp-field-label">时间格式</span>\n' +
+    '                        </div>\n' +
+    '                        <select name="timeFormat" class="sp-select" id="set-timeFormat">\n' +
+    '                            <option value="12">12小时制</option>\n' +
+    '                            <option value="24">24小时制</option>\n' +
+    '                        </select>\n' +
+    '                    </div>\n' +
+    '                    <div class="sp-field">\n' +
+    '                        <div class="sp-field-info">\n' +
+    '                            <span class="sp-field-label">显示秒数</span>\n' +
+    '                        </div>\n' +
+    '                        <label class="sp-toggle">\n' +
+    '                            <input type="checkbox" name="showSeconds" id="set-showSeconds">\n' +
+    '                            <span class="sp-toggle-slider"></span>\n' +
+    '                        </label>\n' +
+    '                    </div>\n' +
+    '                </div>\n' +
+    '\n' +
+    '                <div class="sp-card">\n' +
+    '                    <h3 class="sp-card-title">日期与节假日</h3>\n' +
+    '                    <div class="sp-field">\n' +
+    '                        <div class="sp-field-info">\n' +
+    '                            <span class="sp-field-label">显示日期</span>\n' +
+    '                        </div>\n' +
+    '                        <label class="sp-toggle">\n' +
+    '                            <input type="checkbox" name="showDate" id="set-showDate">\n' +
+    '                            <span class="sp-toggle-slider"></span>\n' +
+    '                        </label>\n' +
+    '                    </div>\n' +
+    '                    <div class="sp-field">\n' +
+    '                        <div class="sp-field-info">\n' +
+    '                            <span class="sp-field-label">显示节假日</span>\n' +
+    '                            <span class="sp-field-hint">在时钟区域显示即将到来的节假日和调休信息</span>\n' +
+    '                        </div>\n' +
+    '                        <label class="sp-toggle">\n' +
+    '                            <input type="checkbox" name="showHolidays" id="set-showHolidays">\n' +
+    '                            <span class="sp-toggle-slider"></span>\n' +
+    '                        </label>\n' +
+    '                    </div>\n' +
+    '                </div>\n' +
+    '            </section>\n' +
+    '\n' +
+    '            <!-- 背景体验（v2 视觉 + v3 玩法） -->\n' +
+    '            <section class="sp-page" id="page-background-experience">\n' +
+    '                <div class="sp-page-header">\n' +
+    '                    <h2>背景体验</h2>\n' +
+    '                    <p>组合 v2 视觉氛围与 v3 手势物理世界</p>\n' +
+    '                </div>\n' +
+    '                <div class="sp-card" id="sp-background-experience-card">\n' +
+    '                    <h3 class="sp-card-title">视觉与玩法</h3>\n' +
+    '                    <p class="sp-card-desc">v2 负责视觉氛围，v3 负责可主动唤醒的手势物理世界。玩法只响应背景空白区域，不影响 Dock、卡片和输入控件。</p>\n' +
+    '                    <div class="sp-field">\n' +
+    '                        <div class="sp-field-info"><span class="sp-field-label">启用背景体验</span><span class="sp-field-hint">关闭后只保留原始壁纸或视频</span></div>\n' +
+    '                        <label class="sp-toggle"><input type="checkbox" id="set-bgExperienceEnabled" checked><span class="sp-toggle-slider"></span></label>\n' +
+    '                    </div>\n' +
+    '                    <div class="sp-field">\n' +
+    '                        <div class="sp-field-info"><span class="sp-field-label">v2 视觉风格</span><span class="sp-field-hint">一次只启用一种主视觉，避免互相抢夺注意力。“水族馆”：漂浮的水母数量等于未完成的任务数（最多 8 只，没有待办时只剩浮游光点），一只水母对应一个任务；每只主色都不一样（红橙黄绿青蓝紫粉），有纯色，也有双色、渐变和七彩的；完成一个任务就有一只游走；水母随首页时钟的秒数收缩，鼠标快速划过会惊动附近的水母；右下角还有一个小鱼按钮，可以往背景里放装饰性的小鱼（不绑任务，开关在下面的“水族馆小鱼”）。系统开启“减少动态效果”时不显示</span></div>\n' +
+    '                        <select class="sp-select" id="set-bgVisualEffect">\n' +
+    '                            <option value="depth">活体景深</option><option value="weather">天气导演</option><option value="memory">记忆显影</option><option value="liquid">液态色场</option><option value="time">时间光色</option><option value="jellyfish">水族馆</option><option value="none">关闭视觉皮肤</option>\n' +
+    '                        </select>\n' +
+    '                    </div>\n' +
+    '                    <div class="sp-field">\n' +
+    '                        <div class="sp-field-info"><span class="sp-field-label">效果强度</span><span class="sp-field-hint">降低强度会同时减少光效、运动幅度和对象数量</span></div>\n' +
+    '                        <div class="sp-bg-experience-range"><input type="range" id="set-bgEffectIntensity" min="10" max="100" step="5" value="65"><output id="set-bgEffectIntensityOutput">65%</output></div>\n' +
+    '                    </div>\n' +
+    '                    <div class="sp-field">\n' +
+    '                        <div class="sp-field-info"><span class="sp-field-label">启用 v3 手势世界</span><span class="sp-field-hint">首页右下角出现唤醒按钮；12 秒无操作后自动休眠</span></div>\n' +
+    '                        <label class="sp-toggle"><input type="checkbox" id="set-bgPlaygroundEnabled" checked><span class="sp-toggle-slider"></span></label>\n' +
+    '                    </div>\n' +
+    '                    <div class="sp-field">\n' +
+    '                        <div class="sp-field-info"><span class="sp-field-label">手势声音</span><span class="sp-field-hint">默认关闭；启用后仍需点击唤醒按钮才会创建声音上下文</span></div>\n' +
+    '                        <label class="sp-toggle"><input type="checkbox" id="set-bgExperienceSound"><span class="sp-toggle-slider"></span></label>\n' +
+    '                    </div>\n' +
+    '                    <div class="sp-field">\n' +
+    '                        <div class="sp-field-info"><span class="sp-field-label">自动休眠</span><span class="sp-field-hint">离开背景后自动收起 HUD 并停止玩法反馈</span></div>\n' +
+    '                        <select class="sp-select" id="set-bgAutoCalmSeconds"><option value="8">8 秒</option><option value="12" selected>12 秒</option><option value="20">20 秒</option><option value="0">不自动休眠</option></select>\n' +
+    '                    </div>\n' +
+    '                </div>\n' +
+    '                <div class="sp-card" id="sp-touch-feel-card">\n' +
+    '                    <h3 class="sp-card-title">触感实验</h3>\n' +
+    '                    <p class="sp-card-desc">几个只在首页出现的小效果。受上方“启用背景体验”总开关控制；系统开启“减少动态效果”或省流量模式时自动关闭。</p>\n' +
+    '                    <div class="sp-field">\n' +
+    '                        <div class="sp-field-info"><span class="sp-field-label">壁纸切换效果</span><span class="sp-field-hint">轮换静态壁纸时播放转场：编织、水波、旋涡、马赛克、水墨、穿越、百叶窗、方块翻转，默认每次随机一种（不连续重复），也可固定一种；视频壁纸和不允许跨域读取的图源会直接切换</span></div>\n' +
+    '                        <select class="sp-select" id="set-bgWallpaperTransition"><option value="random" selected>每次随机（推荐）</option><option value="none">直接切换（不播放转场）</option></select>\n' +
+    '                    </div>\n' +
+    '                    <div class="sp-field">\n' +
+    '                        <div class="sp-field-info"><span class="sp-field-label">液态时钟</span><span class="sp-field-hint">鼠标快速划过首页时钟，数字会像压在液态玻璃下被涂抹，停手后自动恢复；空闲时不占资源</span></div>\n' +
+    '                        <label class="sp-toggle"><input type="checkbox" id="set-bgClockLiquid" checked><span class="sp-toggle-slider"></span></label>\n' +
+    '                    </div>\n' +
+    '                    <div class="sp-field">\n' +
+    '                       '... 70440 more characters
+  
+      at TestContext.<anonymous> (/Users/liuqingwen/Firm/Private/work-space/ai-coding/chrome-extensions/chrome-time-background/test/aquarium-variety.test.js:288:12)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n    <meta charset="UTF-8">\n    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n    <title>设置 - 中国风景时钟</title>\n    <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css">\n    <link rel="stylesheet" href="css/settings-page.css">\n    <link rel="stylesheet" href="css/product-ui-v4.css">\n    <link rel="stylesheet" href="css/settings-v5.css?v=7">\n    <link rel="stylesheet" href="css/shortcut-help.css?v=3">\n    <link rel="stylesheet" href="css/huya-icon.css?v=1">\n    <link rel="stylesheet" href="css/ai-control.css?v=4">\n</head>\n<body>\n    <div class="sp-layout">\n        <!-- 左侧导航 -->\n        <nav class="sp-sidebar">\n            <div class="sp-logo">\n                <img src="icons/icon48.png" alt="中国风景时钟" class="sp-logo-img">\n                <div class="sp-logo-text">\n                    <h1>中国风景时钟</h1>\n                    <span class="sp-version" id="sp-version">v3.8.0</span>\n                </div>\n            </div>\n\n            <div class="sp-nav-section">\n                <div class="sp-nav-label">常规</div>\n                <a class="sp-nav-item active" data-page="time" href="#time">\n                    <i class="fas fa-clock"></i> 时间与日期\n                </a>\n                <a class="sp-nav-item" data-page="weather" href="#weather">\n                    <i class="fas fa-cloud-sun"></i> 天气设置\n                </a>\n                <a class="sp-nav-item" data-page="background" href="#background">\n                    <i class="fas fa-image"></i> 背景壁纸\n                </a>\n                <a class="sp-nav-item" data-page="info" href="#info">\n                    <i class="fas fa-newspaper"></i> 信息展示\n                </a>\n            </div>\n\n            <div class="sp-nav-section">\n                <div class="sp-nav-label">效率</div>\n                <a class="sp-nav-item" data-page="schedule" href="#schedule">\n                    <i class="fas fa-calendar-check"></i> 每日计划\n                </a>\n                <a class="sp-nav-item" data-page="worklog" href="#worklog">\n                    <i class="fas fa-clipboard-list"></i> 工作日志\n                </a>\n            </div>\n\n            <div class="sp-nav-section">\n                <div class="sp-nav-label">个性化</div>\n                <a class="sp-nav-item" data-page="appearance" href="#appearance">\n                    <i class="fas fa-palette"></i> 外观主题\n                </a>\n                <a class="sp-nav-item" data-page="performance" href="#performance">\n                    <i class="fas fa-bolt"></i> 性能与省电\n                </a>\n            </div>\n\n            <div class="sp-nav-section">\n                <div class="sp-nav-label">帮助</div>\n                <a class="sp-nav-item" data-page="guide" href="#guide">\n                    <i class="fas fa-book"></i> 使用说明\n                </a>\n                <a class="sp-nav-item" data-page="about" href="#about">\n                    <i class="fas fa-info-circle"></i> 关于\n                </a>\n            </div>\n        </nav>\n\n        <!-- 右侧内容 -->\n        <main class="sp-main">\n            <!-- 时间与日期 -->\n            <section class="sp-page active" id="page-time">\n                <div class="sp-page-header">\n                    <h2>时间与日期</h2>\n                    <p>配置时钟显示格式、日期和节假日</p>\n                </div>\n\n                <div class="sp-card">\n                    <h3 class="sp-card-title">时钟格式</h3>\n                    <div class="sp-field">\n                        <div class="sp-field-info">\n                            <span class="sp-field-label">时间格式</span>\n                        </div>\n                        <select name="timeFormat" class="sp-select" id="set-timeFormat">\n                            <option value="12">12小时制</option>\n                            <option value="24">24小时制</option>\n                        </select>\n                    </div>\n                    <div class="sp-field">\n                        <div class="sp-field-info">\n                            <span class="sp-field-label">显示秒数</span>\n                        </div>\n                        <label class="sp-toggle">\n                            <input type="checkbox" name="showSeconds" id="set-showSeconds">\n                            <span class="sp-toggle-slider"></span>\n                        </label>\n                    </div>\n                </div>\n\n                <div class="sp-card">\n                    <h3 class="sp-card-title">日期与节假日</h3>\n                    <div class="sp-field">\n                        <div class="sp-field-info">\n                            <span class="sp-field-label">显示日期</span>\n                        </div>\n                        <label class="sp-toggle">\n                            <input type="checkbox" name="showDate" id="set-showDate">\n                            <span class="sp-toggle-slider"></span>\n                        </label>\n                    </div>\n                    <div class="sp-field">\n                        <div class="sp-field-info">\n                            <span class="sp-field-label">显示节假日</span>\n                            <span class="sp-field-hint">在时钟区域显示即将到来的节假日和调休信息</span>\n                        </div>\n                        <label class="sp-toggle">\n                            <input type="checkbox" name="showHolidays" id="set-showHolidays">\n                            <span class="sp-toggle-slider"></span>\n                        </label>\n                    </div>\n                </div>\n            </section>\n\n            <!-- 背景体验（v2 视觉 + v3 玩法） -->\n            <section class="sp-page" id="page-background-experience">\n                <div class="sp-page-header">\n                    <h2>背景体验</h2>\n                    <p>组合 v2 视觉氛围与 v3 手势物理世界</p>\n                </div>\n                <div class="sp-card" id="sp-background-experience-card">\n                    <h3 class="sp-card-title">视觉与玩法</h3>\n                    <p class="sp-card-desc">v2 负责视觉氛围，v3 负责可主动唤醒的手势物理世界。玩法只响应背景空白区域，不影响 Dock、卡片和输入控件。</p>\n                    <div class="sp-field">\n                        <div class="sp-field-info"><span class="sp-field-label">启用背景体验</span><span class="sp-field-hint">关闭后只保留原始壁纸或视频</span></div>\n                        <label class="sp-toggle"><input type="checkbox" id="set-bgExperienceEnabled" checked><span class="sp-toggle-slider"></span></label>\n                    </div>\n                    <div class="sp-field">\n                        <div class="sp-field-info"><span class="sp-field-label">v2 视觉风格</span><span class="sp-field-hint">一次只启用一种主视觉，避免互相抢夺注意力。“水族馆”：漂浮的水母数量等于未完成的任务数（最多 8 只，没有待办时只剩浮游光点），一只水母对应一个任务；每只主色都不一样（红橙黄绿青蓝紫粉），有纯色，也有双色、渐变和七彩的；完成一个任务就有一只游走；水母随首页时钟的秒数收缩，鼠标快速划过会惊动附近的水母；右下角还有一个小鱼按钮，可以往背景里放装饰性的小鱼（不绑任务，开关在下面的“水族馆小鱼”）。系统开启“减少动态效果”时不显示</span></div>\n                        <select class="sp-select" id="set-bgVisualEffect">\n                            <option value="depth">活体景深</option><option value="weather">天气导演</option><option value="memory">记忆显影</option><option value="liquid">液态色场</option><option value="time">时间光色</option><option value="jellyfish">水族馆</option><option value="none">关闭视觉皮肤</option>\n                        </select>\n                    </div>\n                    <div class="sp-field">\n                        <div class="sp-field-info"><span class="sp-field-label">效果强度</span><span class="sp-field-hint">降低强度会同时减少光效、运动幅度和对象数量</span></div>\n                        <div class="sp-bg-experience-range"><input type="range" id="set-bgEffectIntensity" min="10" max="100" step="5" value="65"><output id="set-bgEffectIntensityOutput">65%</output></div>\n                    </div>\n                    <div class="sp-field">\n                        <div class="sp-field-info"><span class="sp-field-label">启用 v3 手势世界</span><span class="sp-field-hint">首页右下角出现唤醒按钮；12 秒无操作后自动休眠</span></div>\n                        <label class="sp-toggle"><input type="checkbox" id="set-bgPlaygroundEnabled" checked><span class="sp-toggle-slider"></span></label>\n                    </div>\n                    <div class="sp-field">\n                        <div class="sp-field-info"><span class="sp-field-label">手势声音</span><span class="sp-field-hint">默认关闭；启用后仍需点击唤醒按钮才会创建声音上下文</span></div>\n                        <label class="sp-toggle"><input type="checkbox" id="set-bgExperienceSound"><span class="sp-toggle-slider"></span></label>\n                    </div>\n                    <div class="sp-field">\n                        <div class="sp-field-info"><span class="sp-field-label">自动休眠</span><span class="sp-field-hint">离开背景后自动收起 HUD 并停止玩法反馈</span></div>\n                        <select class="sp-select" id="set-bgAutoCalmSeconds"><option value="8">8 秒</option><option value="12" selected>12 秒</option><option value="20">20 秒</option><option value="0">不自动休眠</option></select>\n                    </div>\n                </div>\n                <div class="sp-card" id="sp-touch-feel-card">\n                    <h3 class="sp-card-title">触感实验</h3>\n                    <p class="sp-card-desc">几个只在首页出现的小效果。受上方“启用背景体验”总开关控制；系统开启“减少动态效果”或省流量模式时自动关闭。</p>\n                    <div class="sp-field">\n                        <div class="sp-field-info"><span class="sp-field-label">壁纸切换效果</span><span class="sp-field-hint">轮换静态壁纸时播放转场：编织、水波、旋涡、马赛克、水墨、穿越、百叶窗、方块翻转，默认每次随机一种（不连续重复），也可固定一种；视频壁纸和不允许跨域读取的图源会直接切换</span></div>\n                        <select class="sp-select" id="set-bgWallpaperTransition"><option value="random" selected>每次随机（推荐）</option><option value="none">直接切换（不播放转场）</option></select>\n                    </div>\n                    <div class="sp-field">\n                        <div class="sp-field-info"><span class="sp-field-label">液态时钟</span><span class="sp-field-hint">鼠标快速划过首页时钟，数字会像压在液态玻璃下被涂抹，停手后自动恢复；空闲时不占资源</span></div>\n                        <label class="sp-toggle"><input type="checkbox" id="set-bgClockLiquid" checked><span class="sp-toggle-slider"></span></label>\n                    </div>\n                    <div class="sp-field">\n                       '... 70440 more characters,
+    expected: /id="set-bgAquariumSizes" checked/,
+    operator: 'match',
+    diff: 'simple'
+  }

@@ -1,0 +1,43 @@
+[
+  {
+    "case": "fish-turn",
+    "status": "弯身转向 · 13.7 s · 同一 7.4 cm 个体，近景放大观察",
+    "motion": "鱼体态：参考改进版 · 弯身 -0.126 · 尾幅 0.018 · 胸鳍 0.507",
+    "diagnostics": "Three r180 · 三角形 24320 · 3D 水母 1 · 几何 36 · 纹理 4 · 帧率 29.6 · CPU 提交 0.6 ms（不含 GPU） · 帧 410 · 世界 0.0 s · 错误 0"
+  },
+  {
+    "case": "pause",
+    "status": "弯身转向 · 27.5 s · 同一 7.4 cm 个体，近景放大观察"
+  },
+  {
+    "case": "moon-pulse-1",
+    "status": "伞缘收缩 · 13.1 s · 相同伞径，对照形态与脉动"
+  },
+  {
+    "case": "moon-pulse-2",
+    "status": "伞缘收缩 · 13.1 s · 相同伞径，对照形态与脉动"
+  },
+  {
+    "case": "task-failure",
+    "result": "演示回执失败：任务保留，水母放回。",
+    "tasks": "○ 观察海月水母"
+  },
+  {
+    "case": "fish-grab-release",
+    "status": "选中 sample-clown：总长 7.4 cm，年龄未知。",
+    "counts": "游动 1 / 居民 1 · 已吃饲料 0 · 追逐 0 · 捕获 0 · 放弃 0"
+  },
+  {
+    "case": "task-success",
+    "result": "已完成 1/1 项演示任务",
+    "tasks": "✓ 观察海月水母"
+  },
+  {
+    "case": "feed-submitted",
+    "status": "已投放 6 粒饲料；实际吃到会单独计数。"
+  },
+  {
+    "case": "feeding-eaten",
+    "counts": "游动 1 / 居民 1 · 已吃饲料 1 · 追逐 0 · 捕获 0 · 放弃 0"
+  }
+]

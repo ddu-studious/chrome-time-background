@@ -1,0 +1,13 @@
+{
+  "kind": "tang",
+  "title": "Blue Tang",
+  "page": "https://poly.pizza/m/TQaMo8GTJl",
+  "url": "https://static.poly.pizza/f282d1d7-cf41-48e0-bbdc-a9dd0472b2cf.glb",
+  "bytes": 148440,
+  "sha256": "c1572e188ffa73ed61b2512acf1ee2231b83dc18b7f4d8b326edac320dfcbd93",
+  "author": "Quaternius",
+  "license": "CC0-1.0",
+  "licenseSource": "https://poly.pizza/bundle/Animated-Fish-Bundle-44zhHN1UbT",
+  "bundleUpdated": "2022-07-11",
+  "acquisition": "public asset UUID from bundle thumbnail; GLB signature and internal model name verified separately"
+}

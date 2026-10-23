@@ -30,13 +30,13 @@ export class LMStudioProvider {
           /(?:input|prompt|context).{0,60}(?:exceeds?|exceeded|too long|larger than).{0,40}(?:context|window|length|tokens|capacity)/i.test(detail) ||
           /maximum context length.{0,120}(?:requested|resulted)/i.test(detail);
         throw Object.assign(new Error(overflow ? '模型确认输入超过上下文容量' : `LM Studio 请求失败（HTTP ${response.status}），请检查模型和服务设置`),
-          overflow ? { code: 'MODEL_CONTEXT_WINDOW_EXCEEDED' } : {});
+          overflow ? { code: 'MODEL_CONTEXT_WINDOW_EXCEEDED' } : response.status >= 500 ? { code: 'MODEL_UNAVAILABLE' } : {});
       }
       return await response.json();
     } catch (error) {
       if (signal?.aborted) throw signal.reason;
       if (['TimeoutError', 'AbortError'].includes(error.name)) throw Object.assign(new Error('本地模型响应超时，请稍后重试或关闭思考'), { code: 'MODEL_RESPONSE_TIMEOUT' });
-      if (error instanceof TypeError) throw new Error('无法连接 LM Studio，请检查本地服务是否启动');
+      if (error instanceof TypeError) throw Object.assign(new Error('无法连接 LM Studio，请检查本地服务是否启动'), { code: 'MODEL_UNAVAILABLE' });
       throw error;
     }
   }

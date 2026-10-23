@@ -151,7 +151,8 @@ test('start：损坏或含未知种类的数据只丢弃坏条目，不写回；
     const t = await make({ stored: { v: 1, fish: [entry('neon', 'a1'), { id: 'x', species: 'dragon', addedAt: 1 }, null, entry('puffer', 'a1')] } });
     assert.deepEqual(t.aq.entries().map(e => e.id), ['a1']);
     assert.equal(t.fc.state.sets.length, 0, '读取阶段绝不写存储');
-    for (const bad of ['oops', 42, [], { v: 1 }, { v: 1, fish: 'x' }, { v: 2, fish: [entry('neon', 'z')] }]) {
+    // 2026-10-23 有意更新：v:2 现在是合法版本（名单里有新种时写它），“未来版本”的例子改成 v:3
+    for (const bad of ['oops', 42, [], { v: 1 }, { v: 1, fish: 'x' }, { v: 3, fish: [entry('neon', 'z')] }]) {
         const b = await make({ stored: bad });
         assert.deepEqual(b.aq.entries(), [], `坏数据 ${JSON.stringify(bad)} 当空`);
         assert.equal(b.fc.state.sets.length, 0);
@@ -333,8 +334,9 @@ test('describeBlock：没有限制时为空；满了说明上限数字；大型�
     assert.match(r.text, /最多 40 条/);
     const partial = Aquarium.describeBlock(Array.from({ length: 7 }, (_, i) => entry('neon', `n${i}`)).concat(entry('clown', 'c1'), entry('clown', 'c2'), entry('clown', 'c3')), false);
     assert.deepEqual(partial.reasons, ['render'], '38 条：再放一个 5 条的群居会超出，单条还能放');
-    assert.deepEqual([...partial.blocked].sort(), ['neon', 'tang']);
-    assert.match(partial.text, /^霓虹灯鱼、蓝吊放不下：/);
+    // 2026-10-23 有意更新：群居小鱼从 2 种变成 4 种（新增青绿光鳃鱼、金花鲈），点名顺序就是物种表的顺序
+    assert.deepEqual([...partial.blocked].sort(), ['anthias', 'chromis', 'neon', 'tang']);
+    assert.match(partial.text, /^霓虹灯鱼、蓝吊、青绿光鳃鱼、金花鲈放不下：/);
 });
 
 test('托盘：显示容量（已放 n/上限 · 大型鱼 m/2）；省流量时用较低的上限并注明', async () => {
@@ -698,8 +700,9 @@ test('storage.onChanged：只认 local 区；别的区的同名键不影响', as
     assert.deepEqual(t.aq.entries().map(e => e.id), ['c1']);
 });
 
-test('存储里是未来版本（v 不是 1）的数据：看不懂就不碰——放入/捞出都拒绝，也不写', async () => {
-    const future = { v: 2, fish: [entry('clown', 'c1')], extra: 'x' };
+test('存储里是未来版本（v 不是 1 或 2）的数据：看不懂就不碰——放入/捞出都拒绝，也不写', async () => {
+    // 2026-10-23 有意更新：原来用 v:2 当“未来版本”；现在 v:2 是名单带新种时写的合法版本，所以改用 v:3（v:2 的行为见 aquarium-variety.test.js）
+    const future = { v: 3, fish: [entry('clown', 'c1')], extra: 'x' };
     const t = await make({ stored: future });
     assert.deepEqual(t.aq.entries(), []);
     assert.deepEqual(await t.aq.add('neon'), { ok: false, reason: 'storage' });

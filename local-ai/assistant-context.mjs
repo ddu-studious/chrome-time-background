@@ -69,9 +69,10 @@ export async function prepareModelContext(options, provider) {
     if (counted == null) { prepared.budget.tokenCountSource = 'cold-model-estimate'; return; }
     if (!Number.isSafeInteger(counted.inputTokens) || counted.inputTokens < 0 || !Number.isSafeInteger(counted.contextLength) || counted.contextLength < 1) throw Object.assign(new Error('模型分词计数无效，本次未发送生成请求'), { code: 'MODEL_TOKENIZATION_FAILED' });
     const window = Math.min(counted.contextLength, MAX_PLANNING_WINDOW);
-    Object.assign(prepared.budget, { contextLength: counted.contextLength, contextSource: 'loaded-model', planningWindow: window,
+    Object.assign(prepared.budget, { contextLength: counted.contextLength, contextSource: counted.contextSource || 'loaded-model', planningWindow: window,
       inputBudget: Math.max(0, window - prepared.budget.outputBudget - prepared.budget.safetyMargin),
-      measuredInputTokens: counted.inputTokens, tokenCountSource: 'lmstudio-sdk', tokenCountMs: counted.elapsedMs,
+      ...(counted.estimated ? { estimatedInputTokens: counted.inputTokens } : { measuredInputTokens: counted.inputTokens }),
+      tokenCountSource: counted.tokenCountSource || 'lmstudio-sdk', tokenCountMs: counted.elapsedMs,
       ...(counted.fingerprint ? { tokenCountFingerprint: counted.fingerprint } : {}) });
   };
   await measure();

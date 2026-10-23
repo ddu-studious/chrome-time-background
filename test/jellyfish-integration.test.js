@@ -476,7 +476,7 @@ test('index.html：先核心、再皮肤、最后宿主；没有远程脚本，�
     const tags = html.slice(core - 20, host + 80).match(/<script[^>]*>/g);
     assert.ok(tags.every(tag => !/https?:/.test(tag)), '不引用远程脚本');
     assert.match(html, /css\/background-experience\.css\?v=7/);
-    assert.match(html, /js\/background-experience\.js\?v=20/);
+    assert.match(html, /js\/background-experience\.js\?v=21/);
 });
 
 test('CSS：水母色调层只在 data-visual=jellyfish 时出现，用宿主的强度变量，不引入外部资源', () => {
@@ -1090,7 +1090,7 @@ test('settings.html：有“水母夜晚荧光”开关（默认勾选且只出�
     assert.match(field, /只读本机时钟/);
     assert.match(field, /昼夜一个样/);
     const index = read('index.html');
-    for (const [file, version] of [['jellyfish-core.js', 6], ['jellyfish.js', 6], ['background-experience.js', 20]]) {
+    for (const [file, version] of [['jellyfish-core.js', 6], ['jellyfish.js', 6], ['background-experience.js', 21]]) {
         assert.ok(index.includes(`js/${file}?v=${version}`), `${file} 版本号`);
     }
 });

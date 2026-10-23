@@ -733,6 +733,55 @@ test('大鱼吃小鱼：真实整链路——默认开（有捕食状态，鲨�
     assert.ok((missing.calls.get('fill') || 0) > 0, '鱼照常画');
 });
 
+// ---------- 个体大小差异（aquarium-core.js 的 sizeOf）与宿主的接线 ----------
+
+test('个体大小：宿主把设置传给鱼层——缺省与怪值都开，只有明确 false 才关；每一帧都传', async () => {
+    for (const [value, expected] of [[undefined, true], [true, true], [false, false], [0, true], [null, true], ['false', true], ['', true]]) {
+        const f = await hostFixture({ settings: { aquariumSizes: value } });
+        f.render(116);
+        f.render(132);
+        assert.equal(f.experience.settings.aquariumSizes, expected, String(value));
+        assert.ok(f.spyAq.frames.length >= 1, String(value));
+        for (const frame of f.spyAq.frames) assert.equal(frame.sizes, expected, `${String(value)}：每一帧都带着设置`);
+    }
+});
+
+test('个体大小：改设置立即生效（applySettings 之后下一帧带新值），不需要重启鱼层', async () => {
+    const f = await hostFixture();
+    f.render(116);
+    assert.equal(f.spyAq.frames.at(-1).sizes, true);
+    f.experience.settings.aquariumSizes = false;
+    f.experience.applySettings();
+    f.render(132);
+    assert.equal(f.spyAq.frames.at(-1).sizes, false);
+    assert.equal(f.spyAq.stops, 0, '只是开关大小差异，鱼层没有停过');
+    assert.equal(f.spyAq.active, true);
+});
+
+test('个体大小：真实整链路——默认开（小鱼大小各不相同、大鱼为 1）；设置里关掉后下一帧全部回到标准体长；名单与存储不变', async () => {
+    const stored = { aquariumV1: { v: 1, fish: [{ id: 'h1', species: 'hammer', addedAt: 1 }, { id: 'c1', species: 'clown', addedAt: 2 }, { id: 'n1', species: 'neon', addedAt: 3 }] } };
+    const on = await hostFixture({ skin: 'real', aquarium: 'real', localData: stored });
+    await tick(); await tick();
+    for (let i = 0; i < 6; i++) on.render(116 + i * 16);
+    const before = on.win.Aquarium._world();
+    assert.equal(before.sizes, true, '默认开');
+    assert.equal(on.win.Aquarium.state().sizes, true);
+    const neon = before.fish.filter(f => f.species === 'neon');
+    assert.equal(neon.length, 5);
+    assert.ok(new Set(neon.map(f => f.size)).size >= 4, '同一群里每条大小不同');
+    assert.equal(before.fish.find(f => f.species === 'hammer').size, 1, '小锤头鲨按真实比例');
+    assert.notEqual(before.fish.find(f => f.species === 'clown').size, 1, '这个小丑鱼条目的大小不是正好 1（由条目 id 决定）');
+    on.experience.settings.aquariumSizes = false;
+    on.experience.applySettings();
+    on.render(116 + 7 * 16);
+    const after = on.win.Aquarium._world();
+    assert.notEqual(after, before, '切换重建世界');
+    assert.equal(after.sizes, false);
+    assert.ok(after.fish.every(f => f.size === 1), '关掉：全部回到标准体长');
+    assert.equal(on.win.Aquarium.state().sizes, false);
+    assert.deepEqual(Array.from(on.win.Aquarium.entries(), e => e.id), ['h1', 'c1', 'n1'], '名单不变（Array.from 转成本测试的 Array，跨 vm 上下文比较原型会不同）');
+});
+
 // ---------- 静态契约 ----------
 
 test('源码合同：鱼层不自建 RAF/定时器/画布，不 innerHTML/eval/联网，不碰任务/备忘录存储；只写 aquariumV1', () => {
@@ -775,31 +824,31 @@ test('解耦：水母代码不认识水族馆（鱼读水母，水母不读鱼�
 test('index.html：脚本顺序与版本钉子（核心、玩法核心、玩法画法先于控制器，都在水母之后宿主之前）、样式已链接', () => {
     const html = read('index.html');
     const idx = s => { const i = html.indexOf(s); assert.ok(i >= 0, s); return i; };
-    assert.ok(idx('js/jellyfish.js?v=6') < idx('js/aquarium-core.js?v=7'));
-    assert.ok(idx('js/aquarium-core.js?v=7') < idx('js/aquarium-play-core.js?v=3'));
+    assert.ok(idx('js/jellyfish.js?v=6') < idx('js/aquarium-core.js?v=8'));
+    assert.ok(idx('js/aquarium-core.js?v=8') < idx('js/aquarium-play-core.js?v=3'));
     assert.ok(idx('js/aquarium-play-core.js?v=3') < idx('js/aquarium-play.js?v=1'));
-    assert.ok(idx('js/aquarium-play.js?v=1') < idx('js/aquarium.js?v=8'));
+    assert.ok(idx('js/aquarium-play.js?v=1') < idx('js/aquarium.js?v=9'));
     // 捕食核心依赖核心与玩法核心（用它的嘴位置与泡），先于控制器
     assert.ok(idx('js/aquarium-play-core.js?v=3') < idx('js/aquarium-predation-core.js?v=1'));
-    assert.ok(idx('js/aquarium-predation-core.js?v=1') < idx('js/aquarium.js?v=8'));
+    assert.ok(idx('js/aquarium-predation-core.js?v=1') < idx('js/aquarium.js?v=9'));
     // 水流/海洋雪与光束：纯逻辑先于画法，画法先于控制器；都在捕食之后、写实之前
     assert.ok(idx('js/aquarium-predation-core.js?v=1') < idx('js/aquarium-flow-core.js?v=1'));
     assert.ok(idx('js/aquarium-flow-core.js?v=1') < idx('js/aquarium-light-core.js?v=1'));
     assert.ok(idx('js/aquarium-light-core.js?v=1') < idx('js/aquarium-ambient.js?v=1'));
-    assert.ok(idx('js/aquarium-ambient.js?v=1') < idx('js/aquarium.js?v=8'));
+    assert.ok(idx('js/aquarium-ambient.js?v=1') < idx('js/aquarium.js?v=9'));
     assert.ok(idx('js/aquarium-ambient.js?v=1') < idx('js/aquarium-sound-core.js?v=1'));
     assert.ok(idx('js/aquarium-sound-core.js?v=1') < idx('js/aquarium-sound.js?v=1'));
-    assert.ok(idx('js/aquarium-sound.js?v=1') < idx('js/background-experience.js?v=20'));
-    assert.ok(idx('js/aquarium.js?v=8') < idx('js/background-experience.js?v=20'));
+    assert.ok(idx('js/aquarium-sound.js?v=1') < idx('js/background-experience.js?v=21'));
+    assert.ok(idx('js/aquarium.js?v=9') < idx('js/background-experience.js?v=21'));
     // 写实动物：路径工具 → 骨架求值 → 画笔 → 骨架数据 → 写实画法，全部先于控制器
     assert.ok(idx('js/jelly-species-shapes.js?v=4') < idx('js/marine-rig.js?v=1'));
     assert.ok(idx('js/marine-rig.js?v=1') < idx('js/marine-rig-canvas.js?v=2'));
     assert.ok(idx('js/marine-rig-canvas.js?v=2') < idx('js/marine-rig-data.js?v=1'));
     assert.ok(idx('js/marine-rig-data.js?v=1') < idx('js/aquarium-real.js?v=4'));
     assert.ok(idx('js/aquarium-yaw.js?v=1') < idx('js/aquarium-real.js?v=4'), '侧视转身的伪 3D 投影是纯几何、没有依赖，先于写实画法');
-    assert.ok(idx('js/aquarium-real.js?v=4') < idx('js/aquarium.js?v=8'));
-    assert.ok(idx('js/aquarium-core.js?v=7') < idx('js/aquarium-real.js?v=4'), '写实画法按核心的物种表工作，核心先加载');
-    idx('css/aquarium.css?v=6');
+    assert.ok(idx('js/aquarium-real.js?v=4') < idx('js/aquarium.js?v=9'));
+    assert.ok(idx('js/aquarium-core.js?v=8') < idx('js/aquarium-real.js?v=4'), '写实画法按核心的物种表工作，核心先加载');
+    idx('css/aquarium.css?v=7');
     for (const file of ['css/aquarium.css', 'js/aquarium-play-core.js', 'js/aquarium-play.js', 'js/aquarium-predation-core.js', 'js/aquarium-yaw.js', 'js/aquarium-flow-core.js', 'js/aquarium-light-core.js', 'js/aquarium-ambient.js']) assert.ok(fs.existsSync(path.join(root, file)), file);
 });
 
@@ -900,13 +949,13 @@ test('设置页：有“水下环境音”开关，默认关；宿主接上；�
     assert.ok(idx.includes('js/aquarium-sound-core.js?v=1'));
     assert.ok(idx.includes('js/aquarium-sound.js?v=1'));
     assert.ok(idx.indexOf('js/aquarium-sound-core.js?v=1') < idx.indexOf('js/aquarium-sound.js?v=1'));
-    assert.ok(idx.indexOf('js/aquarium-sound.js?v=1') < idx.indexOf('js/background-experience.js?v=20'));
+    assert.ok(idx.indexOf('js/aquarium-sound.js?v=1') < idx.indexOf('js/background-experience.js?v=21'));
 });
 
 test('设置页：有水族馆开关，默认开，保存键 aquariumFish，脚本版本已更新', () => {
     const html = read('settings.html');
     assert.match(html, /id="set-bgAquariumFish" checked/);
-    assert.ok(html.includes('js/settings-page.js?v=19'));
+    assert.ok(html.includes('js/settings-page.js?v=20'));
     const page = read('js/settings-page.js');
     assert.match(page, /aquariumFish: true,/);
     assert.match(page, /aquariumFish: stored\.aquariumFish !== false/);

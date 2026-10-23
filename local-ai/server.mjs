@@ -15,8 +15,9 @@ import { createHistoryStore } from './history-store.mjs';
 import { createMemoryStore } from './memory-store.mjs';
 import { evaluateApproval } from './assistant-approval.mjs';
 import { LarkSentinel } from './lark-sentinel.mjs';
+import { createRemoteConfig } from './remote-config.mjs';
 
-export function createServer({ token, provider = new LMStudioProvider(), allowedOrigins = [], modelEnabled = true, disabledScenes = [], controlFile, speechProvider = new WhisperProvider(), synthesisProvider = new StepAudioProvider(), computeProvider = new ComputeProvider(), layaProvider = new LayaPrefetchProvider(), larkSentinel = new LarkSentinel(), usageFile, historyFile, memoryFile, jobRetentionMs = 300000, speechRetentionMs = 60000 }) {
+export function createServer({ token, provider = new LMStudioProvider(), allowedOrigins = [], modelEnabled = true, disabledScenes = [], controlFile, remoteFile, remoteConfig = createRemoteConfig({ file: remoteFile }), sampleMachine, remoteFactory, speechProvider = new WhisperProvider(), synthesisProvider = new StepAudioProvider(), computeProvider = new ComputeProvider(), layaProvider = new LayaPrefetchProvider(), larkSentinel = new LarkSentinel(), usageFile, historyFile, memoryFile, jobRetentionMs = 300000, speechRetentionMs = 60000 }) {
   if (typeof token !== 'string' || token.length < 32) throw new Error('本地入口令牌至少需要 32 字符');
   const jobs = new Map();
   const admission = createAdmission({file:usageFile});
@@ -40,12 +41,12 @@ export function createServer({ token, provider = new LMStudioProvider(), allowed
     return memory;
   };
   memory?.restrictRetention(history.info().settings.retentionDays);
-  const gateway = createGateway({ provider, control, speechProvider, synthesisProvider, computeProvider, layaProvider, admission, layaAdmission, history });
+  const gateway = createGateway({ provider, remoteConfig, sampleMachine, remoteFactory, control, speechProvider, synthesisProvider, computeProvider, layaProvider, admission, layaAdmission, history });
   // Audio results live only in bounded jobs; expiry also runs when no client polls.
   const expireJobs = () => { for (const [id, job] of jobs) if (Date.now() >= job.expiresAt) { job.controller.abort(); job.result = null; jobs.delete(id); } };
   const expiryTimer = setInterval(expireJobs, Math.max(10, Math.min(5000, jobRetentionMs, speechRetentionMs)));
   expiryTimer.unref();
-  const describe = () => ({ ...gateway.describe(), localOnly: true, jobs: [...jobs.values()].filter(job => !job.result).map(job => ({ jobId: job.id, startedAt: job.started })) });
+  const describe = () => ({ ...gateway.describe(), jobs: [...jobs.values()].filter(job => !job.result).map(job => ({ jobId: job.id, startedAt: job.started })) });
   const server = http.createServer(async (req, res) => {
     const send = (code, result) => {
       res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
@@ -91,13 +92,18 @@ export function createServer({ token, provider = new LMStudioProvider(), allowed
         return job ? send(200, job.result || { ok: true, status: 'pending', jobId: job.id }) : send(404, { error: '解析结果已过期，请重新输入' });
       }
       if (req.method === 'GET' && ['/health', '/models'].includes(req.url)) {
-        const models = await provider.models();
         const policy = control.snapshot().policy;
+        const remote = remoteConfig.snapshot();
+        let models = [], localUnavailable = false;
+        if (remote.mode !== 'remote') {
+          try { models = await provider.models(); }
+          catch (error) { if (remote.mode !== 'auto' || !remote.keyConfigured) throw error; localUnavailable = true; }
+        }
         const selectedModel = policy.model || provider.model;
         const selected = models.find(m => m.id === selectedModel);
-        return send(200, { ok: true, model: selectedModel, defaultReasoning: policy.reasoning || 'off', reasoningOptions: selected?.reasoningOptions || [], state: provider.busy ? 'busy' : !selected ? 'model_missing' : selected.loaded ? 'ready' : 'not_loaded', models });
+        return send(200, { ok: true, model: selectedModel, defaultReasoning: policy.reasoning || 'off', reasoningOptions: selected?.reasoningOptions || [], state: remote.mode === 'remote' || localUnavailable ? 'remote_ready' : provider.busy ? 'busy' : !selected ? 'model_missing' : selected.loaded ? 'ready' : 'not_loaded', models, remote });
       }
-      if (req.method !== 'POST' || !['/v1/assistant/approval', '/v1/alarms/interpret', '/v1/ai/interpret', '/v1/control', '/v1/control/rollback', '/v1/speech/transcribe', '/v1/speech/synthesize', '/v1/history', '/v1/memory'].includes(req.url)) return send(404, { error: '接口不存在' });
+      if (req.method !== 'POST' || !['/v1/assistant/approval', '/v1/alarms/interpret', '/v1/ai/interpret', '/v1/control', '/v1/control/remote', '/v1/control/rollback', '/v1/speech/transcribe', '/v1/speech/synthesize', '/v1/history', '/v1/memory'].includes(req.url)) return send(404, { error: '接口不存在' });
       if (!/^application\/json(?:;|$)/i.test(req.headers['content-type'] || '')) return send(415, { error: '需要 JSON 请求' });
       let size = 0, chunks = [];
       for await (const chunk of req) {
@@ -133,8 +139,9 @@ export function createServer({ token, provider = new LMStudioProvider(), allowed
         else return send(400, { ok: false, error: '历史操作无效' });
         return send(200, { ok: true, ...history.snapshot() });
       }
-      if (req.url === '/v1/control' || req.url === '/v1/control/rollback') {
-        if (req.url.endsWith('/rollback')) control.rollback(body?.revision, body?.expectedRevision);
+      if (['/v1/control', '/v1/control/rollback', '/v1/control/remote'].includes(req.url)) {
+        if (req.url.endsWith('/remote')) remoteConfig.update(body?.config, body?.expectedRevision);
+        else if (req.url.endsWith('/rollback')) control.rollback(body?.revision, body?.expectedRevision);
         else control.update(body?.policy, body?.expectedRevision);
         for (const job of jobs.values()) {
           job.controller.abort();
@@ -170,7 +177,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const token = readFileSync(tokenFile, 'utf8').trim();
   const port = Number(process.env.LOCAL_AI_PORT || 19841);
   const provider = new LMStudioProvider({ baseUrl: process.env.LM_STUDIO_URL, model: process.env.LOCAL_AI_MODEL, reasoning: process.env.LOCAL_AI_REASONING, token: process.env.LM_STUDIO_TOKEN });
-  const server = createServer({ token, provider, controlFile: resolve(directory, 'control.json'), usageFile: resolve(directory, 'usage.json'), historyFile: resolve(directory, 'history.json'), memoryFile: resolve(directory, 'memory.db'), modelEnabled: process.env.LOCAL_AI_MODEL_ENABLED !== 'false', disabledScenes: (process.env.LOCAL_AI_DISABLED_SCENES || '').split(',').map(s => s.trim()).filter(Boolean) });
+  const server = createServer({ token, provider, controlFile: resolve(directory, 'control.json'), remoteFile: resolve(directory, 'remote.json'), usageFile: resolve(directory, 'usage.json'), historyFile: resolve(directory, 'history.json'), memoryFile: resolve(directory, 'memory.db'), modelEnabled: process.env.LOCAL_AI_MODEL_ENABLED !== 'false', disabledScenes: (process.env.LOCAL_AI_DISABLED_SCENES || '').split(',').map(s => s.trim()).filter(Boolean) });
   server.requestTimeout = 15000;
   server.headersTimeout = 10000;
   server.on('error', error => { console.error(`本地 AI 服务启动失败：${error.message}`); process.exitCode = 1; });
